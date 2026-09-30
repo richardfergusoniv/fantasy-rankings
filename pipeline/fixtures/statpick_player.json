@@ -1,0 +1,100 @@
+{
+ "player": {
+  "playerId": 63,
+  "playerSlug": "matthew-stafford",
+  "playerName": "Matthew Stafford",
+  "firstName": "Matthew",
+  "lastName": "Stafford",
+  "position": "Quarterback",
+  "headshotUrl": "https://a.espncdn.com/i/headshots/nfl/players/full/12483.png",
+  "teamId": 32,
+  "teamName": "Los Angeles Rams",
+  "teamAbbr": "LAR",
+  "teamSlug": "los-angeles-rams"
+ },
+ "nextGame": {
+  "date": "2026-09-27",
+  "dateAndTime": "2026-09-28T00:20:00.000Z",
+  "opponentAbbr": "DEN",
+  "opponentName": "Denver Broncos",
+  "isHome": false,
+  "gameUrl": "/teams/nfl/denver-broncos",
+  "isToday": false,
+  "venue": "Empower Field at Mile High"
+ },
+ "season": 2026,
+ "stats": [
+  {
+   "statSlug": "passing-yards",
+   "displayName": "Passing Yards",
+   "shortLabel": "PASS YDS",
+   "line": {
+    "line": 240.5,
+    "overOdds": -114,
+    "underOdds": -115,
+    "bookCount": 5,
+    "isLive": false,
+    "asOfDate": "2026-09-21"
+   },
+   "l10": {
+    "window": "l10",
+    "hits": 1,
+    "games": 2,
+    "pct": 50,
+    "avg": 241
+   },
+   "seasonAvg": 241,
+   "seasonAvgYear": 2026,
+   "twoSeason": {
+    "current": {
+     "season": 2026,
+     "value": 241,
+     "games": 2
+    },
+    "prior": {
+     "season": 2025,
+     "value": 276.9,
+     "games": 17
+    },
+    "priorSeasonProminent": true,
+    "effectiveSeason": 2026
+   }
+  },
+  {
+   "statSlug": "anytime-td",
+   "displayName": "Anytime Touchdown",
+   "shortLabel": "ATD",
+   "line": {
+    "line": 0.5,
+    "overOdds": 2200,
+    "underOdds": null,
+    "bookCount": 6,
+    "isLive": false,
+    "asOfDate": "2026-09-21"
+   },
+   "l10": {
+    "window": "l10",
+    "hits": 0,
+    "games": 2,
+    "pct": 0,
+    "avg": 0
+   },
+   "seasonAvg": 0,
+   "seasonAvgYear": 2026,
+   "twoSeason": {
+    "current": {
+     "season": 2026,
+     "value": 0,
+     "games": 2
+    },
+    "prior": {
+     "season": 2025,
+     "value": 0,
+     "games": 17
+    },
+    "priorSeasonProminent": true,
+    "effectiveSeason": 2026
+   }
+  }
+ ]
+}
