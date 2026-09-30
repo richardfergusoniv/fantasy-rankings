@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-cvm/
+.space-build/
+.bun-cache/
+*.db
+*.db-journal
+.env
+.env.local
+__pycache__/
+*.pyc
+.DS_Store
