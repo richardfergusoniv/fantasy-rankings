@@ -11,6 +11,8 @@ import {
   parseUsableDashboard,
   type Dashboard,
 } from "./_lib/dashboard-schemas.js";
+import { resolveSleeperUserId } from "./_lib/auth.js";
+import { loadOrBuildUserDashboard } from "./_lib/dashboard-build.js";
 import { z } from "zod";
 
 /**
@@ -21,12 +23,15 @@ import { z } from "zod";
  * via a vercel.json rewrite (?__section=1).
  *
  * GET /api/dashboard
- *   Returns the last saved dashboard snapshot, or a `partial` shell when
- *   none exists. `force=true` is not yet supported (Phase 3 cron rebuild).
+ *   Signed-in users with a connected Sleeper account get their own
+ *   dashboard (per-user cache in `source_cache`, built on miss;
+ *   `force=true` rebuilds). Unauthenticated requests keep the Phase 1
+ *   behaviour: the last saved global snapshot, or a `partial` shell.
  *
  * GET /api/dashboard/section?section=meta|team|players|league|analytics
- *   Returns a small projection of the last complete snapshot for one view,
- *   so a slow refresh never blocks a section read.
+ *   Returns a small projection of the same dashboard the caller would get
+ *   from /api/dashboard (per-user when signed in, global snapshot
+ *   otherwise), so a slow refresh never blocks a section read.
  */
 
 async function getCached(): Promise<Dashboard | null> {
@@ -86,9 +91,17 @@ async function handleDashboard(req: Request): Promise<Response> {
   const url = new URL(req.url, "https://localhost");
   const force = queryBool(url, "force", false);
 
+  // Phase 2: a signed-in user with a connected Sleeper account gets their
+  // own dashboard (per-user cache, built on miss; `force=true` rebuilds).
+  const sleeperUserId = await resolveSleeperUserId(req);
+  if (sleeperUserId) {
+    const dashboard = await loadOrBuildUserDashboard(sleeperUserId, force);
+    return json({ dashboard });
+  }
+
   if (force) {
-    // Phase 2: the live rebuild is not yet migrated. It becomes
-    // POST /api/cron/refresh-dashboard (Vercel Cron) in Phase 3.
+    // Unauthenticated requests keep the Phase 1 behaviour: the live rebuild
+    // is only available to signed-in users (their own build) for now.
     return badRequest(
       "force=true is not supported yet. The live dashboard rebuild moves to the cron endpoint in Phase 3.",
     );
@@ -96,6 +109,25 @@ async function handleDashboard(req: Request): Promise<Response> {
 
   const dashboard = await getCached();
   return json({ dashboard: dashboard ?? partialShell() });
+}
+
+/**
+ * Dashboard source for section reads. Signed-in users with a connected
+ * Sleeper account read from their own per-user build (cached; built on a
+ * cold cache so first load works). Everyone else gets the Phase 1 global
+ * snapshot. A failed per-user build with no cache reads as `null`, matching
+ * the sections' existing "no snapshot available" contract.
+ */
+async function getSectionDashboard(req: Request): Promise<Dashboard | null> {
+  const sleeperUserId = await resolveSleeperUserId(req);
+  if (sleeperUserId) {
+    try {
+      return await loadOrBuildUserDashboard(sleeperUserId, false);
+    } catch {
+      return null;
+    }
+  }
+  return getCached();
 }
 
 const sectionParam = z.enum(["meta", "team", "players", "league", "analytics"]);
@@ -108,7 +140,7 @@ async function handleSection(req: Request): Promise<Response> {
   }
   const section = parsed.data;
 
-  const cached = await getCached();
+  const cached = await getSectionDashboard(req);
 
   if (section === "meta") {
     return json({
