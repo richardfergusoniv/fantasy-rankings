@@ -135,7 +135,7 @@ export const rosterAssignmentSchema = z.object({
 
 export const tradeValuationSchema = z.object({
   unsupportedSettings: z.array(z.string()),
-  projectionAsOf: z.string(),
+  projectionAsOf: z.string().nullable(),
   optimizerVersion: z.literal("lineup-dp-v1"),
 });
 

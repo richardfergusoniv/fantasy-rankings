@@ -177,6 +177,15 @@ export async function fetchJson<T>(url: string): Promise<T> {
   })(), SOURCE_TIMEOUT_MS, () => controller.abort());
 }
 
+export async function fetchText(url: string, timeoutMs = SOURCE_TIMEOUT_MS): Promise<string> {
+  const controller = new AbortController();
+  return await withDeadline((async () => {
+    const response = await fetch(url, { headers: { Accept: "text/html" }, signal: controller.signal });
+    if (!response.ok) throw new Error(`Source returned ${response.status}`);
+    return await response.text();
+  })(), timeoutMs, () => controller.abort());
+}
+
 // ---------------------------------------------------------------------------
 // String / number helpers
 // ---------------------------------------------------------------------------
@@ -223,6 +232,7 @@ export function scoreProjectedPlayerStats(
   position: string,
   stats: Record<string, number>,
   settings: Record<string, number> | undefined,
+  opts?: { recFdProxy?: boolean },
 ): number {
   const directKeys = [
     "pass_yd", "pass_td", "pass_int", "pass_cmp", "pass_att", "pass_inc", "pass_sack", "pass_fd", "pass_2pt",
@@ -243,6 +253,17 @@ export function scoreProjectedPlayerStats(
   ];
   for (const [settingKey, statKey, threshold] of bonuses) {
     if ((stats[statKey] ?? 0) >= threshold) total += settingValue(settings, settingKey);
+  }
+
+  if (opts?.recFdProxy) {
+    // PPR proxy for point-per-first-down leagues (approved by Richard 2026-09-23):
+    // prop markets don't price first downs, so each projected reception proxies
+    // one receiving first down and earns rec_fd on top of rec. rush_fd stays
+    // omitted: no rushing-attempts market exists. Only the Vegas weekly path
+    // passes this flag — Sleeper projections and historical actuals carry real
+    // first-down stats and must not double-count.
+    const recFd = settingValue(settings, "rec_fd");
+    if (recFd) total += (stats.rec ?? 0) * recFd;
   }
 
   if (position === "K") {
