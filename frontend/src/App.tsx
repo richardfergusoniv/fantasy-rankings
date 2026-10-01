@@ -40,10 +40,10 @@ type HistoricalTrades = ApiResponse<typeof api, "getHistoricalTrades">;
 type HistoricalTrade = HistoricalTrades["trades"][number];
 type HistoricalTradeTeam = HistoricalTrade["teams"][number];
 type BoomBustHistory = ApiResponse<typeof api, "getBoomBustHistory">;
-type PfnTables = ApiResponse<typeof api, "getpfntables">["tables"];
+type PfnTables = ApiResponse<typeof api, "getPfnTables">["tables"];
 type PfnTable = NonNullable<PfnTables[keyof PfnTables]>;
 type PfnRow = PfnTable["rows"][number];
-type TeamSituational = NonNullable<ApiResponse<typeof api, "getpfntables">["teamSituational"]>;
+type TeamSituational = NonNullable<ApiResponse<typeof api, "getPfnTables">["teamSituational"]>;
 type TeamSituationalRow = TeamSituational["rows"][number];
 type BasePosition = "QB" | "RB" | "WR" | "TE" | "K" | "DEF";
 type BoomBustPosition = Extract<BasePosition, "QB" | "RB" | "WR" | "TE">;
@@ -515,7 +515,7 @@ type PfnContextStat = {
 function PlayerTeamContext({ player }: { player: PlayerSearchResult }) {
   const query = useQuery({
     queryKey: ["pfn-tables"],
-    queryFn: () => api.getpfntables({}),
+    queryFn: () => api.getPfnTables({}),
     staleTime: 60 * 60 * 1000,
     retry: false,
   });
@@ -631,7 +631,7 @@ function MatchupDataModal({ matchup, season, week, onClose }: { matchup: Matchup
   useDialogFocusTrap(dialogRef, onClose);
   const tablesQuery = useQuery({
     queryKey: ["pfn-tables"],
-    queryFn: () => api.getpfntables({}),
+    queryFn: () => api.getPfnTables({}),
     staleTime: 60 * 60 * 1000,
     retry: false,
   });
@@ -1870,7 +1870,7 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
   const isSeasonLong = rankingMode !== "week";
   const pfnTablesQuery = useQuery({
     queryKey: ["pfn-tables"],
-    queryFn: () => api.getpfntables({}),
+    queryFn: () => api.getPfnTables({}),
     enabled: isSeasonLong,
     staleTime: 60 * 60 * 1000,
     retry: false,
