@@ -154,5 +154,33 @@ export default async function handler(req: Request): Promise<Response> {
       return internalError(err);
     }
   }
-  return methodNotAllowed(["GET", "POST"]);
+  if (req.method === "DELETE") {
+    try {
+      return await handleDelete(req);
+    } catch (err) {
+      return internalError(err);
+    }
+  }
+  return methodNotAllowed(["GET", "POST", "DELETE"]);
+}
+
+/**
+ * DELETE /api/chart-views?id=xxx — delete the caller's saved chart view by id.
+ * (Merged from /api/chart-views/[id] to stay within Vercel Hobby function limits.)
+ */
+async function handleDelete(req: Request): Promise<Response> {
+  const user = await getRequestUser(req);
+  if (!user) return unauthorized("Saved chart views require sign-in.");
+
+  const url = new URL(req.url);
+  const id = url.searchParams.get("id") ?? "";
+  if (!id) return badRequest("Missing chart view id.");
+
+  const rowFilter = and(eq(schema.savedChartViews.id, id), eq(schema.savedChartViews.userId, user.id));
+  const rows = await db.select({ id: schema.savedChartViews.id }).from(schema.savedChartViews).where(rowFilter).limit(1);
+  const deleted = Boolean(rows[0]);
+  if (deleted) {
+    await db.delete(schema.savedChartViews).where(rowFilter);
+  }
+  return json({ ok: true, deleted });
 }
