@@ -12,7 +12,7 @@ type ToolDataset = "advanced" | "projections";
 type PlotLimit = "24" | "40" | "all";
 type SavedChartView = ApiResponse<typeof api, "listSavedChartViews">["views"][number];
 type SavedChartConfig = Pick<SavedChartView, "dataset" | "position" | "xMetric" | "yMetric" | "window" | "showQuadrants" | "xPercentile" | "yPercentile" | "plotLimit">;
-type PfnTables = ApiResponse<typeof api, "getpfntables">["tables"];
+type PfnTables = ApiResponse<typeof api, "getPfnTables">["tables"];
 type AnalyticsEntity = Dashboard["analytics"]["entities"][number];
 type AnalyticsWindow = "season" | "rolling17";
 type Metric = { key: string; label: string; short: string; unit?: string; lowerIsBetter?: boolean; sourceKey?: string };
@@ -1846,7 +1846,7 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
 }) {
   const pfnQuery = useQuery({
     queryKey: ["pfn-tables"],
-    queryFn: () => api.getpfntables({}),
+    queryFn: () => api.getPfnTables({}),
     staleTime: 60 * 60 * 1000,
     retry: false,
   });
@@ -2107,7 +2107,7 @@ function pfnValue(value: number | string | null | undefined): string {
 function PfnTableView({ tableKey }: { tableKey: PfnTableKey }) {
   const query = useQuery({
     queryKey: ["pfn-tables"],
-    queryFn: () => api.getpfntables({}),
+    queryFn: () => api.getPfnTables({}),
     staleTime: 60 * 60 * 1000,
     retry: false,
   });
