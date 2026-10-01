@@ -35,11 +35,5 @@
       "maxDuration": 60
     }
   },
-  "outputDirectory": "frontend/dist",
-  "rewrites": [
-    {
-      "destination": "/index.html",
-      "source": "/((?!api/).*)"
-    }
-  ]
+  "outputDirectory": "frontend/dist"
 }
