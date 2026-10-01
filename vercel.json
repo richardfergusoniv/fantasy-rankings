@@ -52,5 +52,6 @@
       "destination": "/index.html",
       "source": "/((?!api/).*)"
     }
-  ]
+  ],
+  "_deployTrigger": "fix-build-20260930"
 }
