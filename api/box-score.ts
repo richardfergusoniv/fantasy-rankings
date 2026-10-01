@@ -6,8 +6,8 @@ import {
   isAdminUserId,
   json,
   methodNotAllowed,
-} from "./_lib/api-utils";
-import { canonicalTeam, fetchJson } from "./_lib/sleeper";
+} from "./_lib/api-utils.js";
+import { canonicalTeam, fetchJson } from "./_lib/sleeper.js";
 
 /**
  * GET /api/box-score?team=&opponent=&season=&week=

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db, schema } from "./db";
+import { db, schema } from "./db.js";
 
 /**
  * Shared Sleeper API helpers and fantasy-stat scoring functions.

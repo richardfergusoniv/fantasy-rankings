@@ -8,7 +8,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  * - All handlers use the Web API format: `export default async function handler(req: Request): Promise<Response>`
  * - Validate input with zod `safeParse`; return 400 on failure
  * - Return consistent JSON: `{ ok: true, ... }` or `{ ok: false, error: "..." }`
- * - DB via `import { db } from "./db"` (relative to api/ dir)
+ * - DB via `import { db } from "./db.js"` (relative to api/ dir)
  */
 
 // ---------------------------------------------------------------------------

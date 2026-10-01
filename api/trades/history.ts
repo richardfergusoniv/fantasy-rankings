@@ -6,8 +6,8 @@ import {
   methodNotAllowed,
   queryBool,
   queryInt,
-} from "../_lib/api-utils";
-import { historicalTradesResponse, loadHistoricalTrades } from "../_lib/trades";
+} from "../_lib/api-utils.js";
+import { historicalTradesResponse, loadHistoricalTrades } from "../_lib/trades.js";
 
 /**
  * GET /api/trades/history?leagueId=&refresh=&season=

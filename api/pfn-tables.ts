@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
-import { db, schema } from "./_lib/db";
-import { internalError, json, methodNotAllowed } from "./_lib/api-utils";
+import { db, schema } from "./_lib/db.js";
+import { internalError, json, methodNotAllowed } from "./_lib/api-utils.js";
 
 /**
  * GET /api/pfn-tables

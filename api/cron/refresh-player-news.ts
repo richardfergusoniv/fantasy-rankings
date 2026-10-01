@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
-import { db, schema } from "../_lib/db";
+import { db, schema } from "../_lib/db.js";
 import {
   forbidden,
   hasCronSecret,
   internalError,
   json,
   methodNotAllowed,
-} from "../_lib/api-utils";
+} from "../_lib/api-utils.js";
 import {
   PLAYER_NEWS_LEAGUES,
   PLAYER_NEWS_SNAPSHOT_KEY,
@@ -18,7 +18,7 @@ import {
   withDeadline,
   type SleeperPlayer,
   type SleeperRoster,
-} from "../_lib/sleeper";
+} from "../_lib/sleeper.js";
 
 /**
  * POST /api/cron/refresh-player-news

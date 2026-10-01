@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db, schema } from "./db";
+import { db, schema } from "./db.js";
 
 /**
  * Historical trades logic, extracted from app/server/src/actions.ts.
