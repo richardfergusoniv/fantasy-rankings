@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { AuthGate } from "./Auth";
 import "./theme.css";
 
 const rootEl = document.getElementById("root");
@@ -25,7 +26,9 @@ createRoot(rootEl).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <div className="hatch-space-root" data-hatch-space-root>
-        <App />
+        <AuthGate>
+          <App />
+        </AuthGate>
       </div>
     </QueryClientProvider>
   </StrictMode>,

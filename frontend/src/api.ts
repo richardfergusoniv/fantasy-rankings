@@ -8,6 +8,8 @@
  *   api.getDashboard({ force: true }) → GET /api/dashboard?force=true
  */
 
+import { getAccessToken } from "./supabase";
+
 type JsonValue =
   | string
   | number
@@ -17,9 +19,15 @@ type JsonValue =
   | { [key: string]: JsonValue };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Attach the signed-in user's Supabase token (when available) so the API
+  // can scope data per user (Phase 2). Harmless while routes ignore it.
+  const token = await getAccessToken();
+  const headers = new Headers(init?.headers);
+  if (!headers.has("content-type")) headers.set("content-type", "application/json");
+  if (token && !headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
   const res = await fetch(path, {
-    headers: { "content-type": "application/json" },
     ...init,
+    headers,
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");

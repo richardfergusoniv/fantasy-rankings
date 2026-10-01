@@ -2221,3 +2221,118 @@ a:active { color: var(--accent-pressed); }
   align-items: flex-end;
   padding-bottom: var(--player-stack-nudge);
 }
+
+/* ---- Phase 2 auth ---- */
+.auth-screen {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: #f6f5f3;
+}
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.auth-title {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0;
+  color: #1a1a1a;
+}
+.auth-subtitle {
+  margin: 0;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.75);
+}
+.auth-field input {
+  padding: 11px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 8px;
+  font-size: 15px;
+  background: #ffffff;
+  color: #1a1a1a;
+}
+.auth-field input:focus {
+  outline: 2px solid #ff692d;
+  outline-offset: 1px;
+  border-color: transparent;
+}
+.auth-error {
+  margin: 0;
+  color: #b3261e;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.auth-notice {
+  margin: 0;
+  color: #1e7a34;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.auth-submit {
+  margin-top: 4px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 999px;
+  background: #ff692d;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.auth-switch {
+  background: none;
+  border: none;
+  padding: 4px;
+  color: #ff692d;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.auth-loading {
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 15px;
+}
+.auth-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #1a1a1a;
+  color: #f6f5f3;
+  font-size: 13px;
+}
+.auth-bar-signout {
+  background: none;
+  border: 1px solid rgba(246, 245, 243, 0.35);
+  border-radius: 999px;
+  color: #f6f5f3;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
