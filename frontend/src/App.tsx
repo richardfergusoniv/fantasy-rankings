@@ -1,5 +1,21 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
-import { SafeAreaTopScrim } from "@hatch/space-sdk/client";
+import React from "react";
+// Local replacement for @hatch/space-sdk's SafeAreaTopScrim (removed during
+// Vercel migration). Renders a top scrim respecting the device safe area.
+function SafeAreaTopScrim({ backgroundColor }: { backgroundColor?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        height: "env(safe-area-inset-top, 0px)",
+        backgroundColor: backgroundColor ?? "transparent",
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
+      }}
+    />
+  );
+}
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api, type ApiResponse } from "./api";
