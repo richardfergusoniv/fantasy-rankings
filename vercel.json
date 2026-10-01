@@ -31,7 +31,7 @@
     "api/trades/history.ts": {
       "maxDuration": 60
     },
-    "api/dashboard/[[...slug]].ts": {
+    "api/dashboard.ts": {
       "maxDuration": 60
     }
   },
@@ -40,6 +40,10 @@
     {
       "destination": "/index.html",
       "source": "/((?!api/).*)"
+    },
+    {
+      "source": "/api/dashboard/section",
+      "destination": "/api/dashboard?__section=1"
     }
   ]
 }

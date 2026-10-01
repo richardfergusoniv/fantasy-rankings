@@ -1,23 +1,24 @@
 import { desc, eq, like } from "drizzle-orm";
-import { db, schema } from "../_lib/db.js";
+import { db, schema } from "./_lib/db.js";
 import {
   badRequest,
   internalError,
   json,
   queryBool,
-} from "../_lib/api-utils.js";
+} from "./_lib/api-utils.js";
 import {
   CACHE_KEY,
   parseUsableDashboard,
   type Dashboard,
-} from "../_lib/dashboard-schemas.js";
+} from "./_lib/dashboard-schemas.js";
 import { z } from "zod";
 
 /**
  * /api/dashboard  and  /api/dashboard/section
  *
- * Combined route (optional catch-all) replacing the former dashboard.ts +
- * dashboard/section.ts pair to stay within Vercel's function limit.
+ * Combined route replacing the former dashboard.ts + dashboard/section.ts
+ * pair to stay within Vercel's function limit. The /section path arrives
+ * via a vercel.json rewrite (?__section=1).
  *
  * GET /api/dashboard
  *   Returns the last saved dashboard snapshot, or a `partial` shell when
@@ -230,7 +231,9 @@ async function handleSection(req: Request): Promise<Response> {
 export async function GET(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url, "https://localhost");
-    if (url.pathname.endsWith("/section")) {
+    // /api/dashboard/section is rewritten to /api/dashboard?__section=1
+    // (see vercel.json) so both paths share this one function.
+    if (url.searchParams.has("__section")) {
       return await handleSection(req);
     }
     return await handleDashboard(req);
