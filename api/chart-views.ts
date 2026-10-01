@@ -172,7 +172,7 @@ async function handleDelete(req: Request): Promise<Response> {
   const user = await getRequestUser(req);
   if (!user) return unauthorized("Saved chart views require sign-in.");
 
-  const url = new URL(req.url);
+  const url = new URL(req.url, "https://localhost");
   const id = url.searchParams.get("id") ?? "";
   if (!id) return badRequest("Missing chart view id.");
 

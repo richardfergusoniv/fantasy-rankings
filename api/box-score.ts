@@ -79,7 +79,7 @@ export default async function handler(req: Request): Promise<Response> {
       return json(matchupBoxScoreResponse.parse({ status: "owner_required", game: null }));
     }
 
-    const url = new URL(req.url);
+    const url = new URL(req.url, "https://localhost");
     const parsed = querySchema.safeParse({
       team: url.searchParams.get("team") ?? undefined,
       opponent: url.searchParams.get("opponent") ?? undefined,

@@ -28,7 +28,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "GET") return methodNotAllowed(["GET"]);
 
   try {
-    const url = new URL(req.url);
+    const url = new URL(req.url, "https://localhost");
     const parsed = querySchema.safeParse({
       leagueId: url.searchParams.get("leagueId") ?? "",
       refresh: queryBool(url, "refresh", false),
