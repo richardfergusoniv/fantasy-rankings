@@ -1,1 +1,56 @@
-{"$schema":"https://openapi.vercel.sh/vercel.json","buildCommand":"npm run build","crons":[{"path":"/api/cron/refresh-dashboard","schedule":"0 10 * * *"},{"path":"/api/cron/fantasycalc-refresh","schedule":"22 13 * * *"},{"path":"/api/cron/player-news","schedule":"22 14 * * 1-6"},{"path":"/api/cron/player-news","schedule":"15 23 * * 1-6"},{"path":"/api/cron/player-news","schedule":"0 16 * * 0"},{"path":"/api/cron/player-news","schedule":"5 19 * * 0"},{"path":"/api/cron/player-news","schedule":"20 23 * * 0"}],"framework":null,"functions":{"api/cron/refresh-dashboard.ts":{"maxDuration":300},"api/dashboard.ts":{"maxDuration":120},"api/draft-center.ts":{"maxDuration":60},"api/trades/history.ts":{"maxDuration":120}},"outputDirectory":"frontend/dist","rewrites":[{"destination":"/index.html","source":"/((?!api/).*)"}]}
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "crons": [
+    {
+      "path": "/api/cron/refresh-dashboard",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/fantasycalc-refresh",
+      "schedule": "22 13 * * *"
+    },
+    {
+      "path": "/api/cron/player-news",
+      "schedule": "22 14 * * 1-6"
+    },
+    {
+      "path": "/api/cron/player-news",
+      "schedule": "15 23 * * 1-6"
+    },
+    {
+      "path": "/api/cron/player-news",
+      "schedule": "0 16 * * 0"
+    },
+    {
+      "path": "/api/cron/player-news",
+      "schedule": "5 19 * * 0"
+    },
+    {
+      "path": "/api/cron/player-news",
+      "schedule": "20 23 * * 0"
+    }
+  ],
+  "framework": null,
+  "functions": {
+    "api/cron/refresh-dashboard.ts": {
+      "maxDuration": 60
+    },
+    "api/dashboard.ts": {
+      "maxDuration": 60
+    },
+    "api/draft-center.ts": {
+      "maxDuration": 60
+    },
+    "api/trades/history.ts": {
+      "maxDuration": 60
+    }
+  },
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    {
+      "destination": "/index.html",
+      "source": "/((?!api/).*)"
+    }
+  ]
+}
