@@ -3,40 +3,43 @@
   "buildCommand": "npm run build",
   "crons": [
     {
-      "path": "/api/cron/refresh-player-news",
+      "path": "/api/player-news",
       "schedule": "22 14 * * 1-6"
     },
     {
-      "path": "/api/cron/refresh-player-news",
+      "path": "/api/player-news",
       "schedule": "15 23 * * 1-6"
     },
     {
-      "path": "/api/cron/refresh-player-news",
+      "path": "/api/player-news",
       "schedule": "0 16 * * 0"
     },
     {
-      "path": "/api/cron/refresh-player-news",
+      "path": "/api/player-news",
       "schedule": "5 19 * * 0"
     },
     {
-      "path": "/api/cron/refresh-player-news",
+      "path": "/api/player-news",
       "schedule": "20 23 * * 0"
     }
   ],
   "framework": null,
   "functions": {
-    "api/dashboard.ts": {
-      "maxDuration": 60
-    },
     "api/draft-center.ts": {
       "maxDuration": 60
     },
     "api/trades/history.ts": {
       "maxDuration": 60
     },
-    "api/**/*.ts": {
-      "includeFiles": "lib/**"
+    "api/dashboard/[[...slug]].ts": {
+      "maxDuration": 60
     }
   },
-  "outputDirectory": "frontend/dist"
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    {
+      "destination": "/index.html",
+      "source": "/((?!api/).*)"
+    }
+  ]
 }
