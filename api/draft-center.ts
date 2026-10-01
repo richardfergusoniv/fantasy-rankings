@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db, schema } from "../lib/db";
+import { db, schema } from "./_lib/db";
 import {
   internalError,
   json,
   methodNotAllowed,
   queryBool,
-} from "../lib/api-utils";
+} from "./_lib/api-utils";
 import {
   DRAFT_MARKET_CACHE_KEY,
   DRAFT_MARKET_CACHE_MS,
@@ -30,7 +30,7 @@ import {
   type SleeperLeague,
   type SleeperPlayer,
   type SleeperTrend,
-} from "../lib/sleeper";
+} from "./_lib/sleeper";
 
 /**
  * GET /api/draft-center?force=

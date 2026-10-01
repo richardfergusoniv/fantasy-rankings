@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, asc, eq } from "drizzle-orm";
-import { db, schema } from "../lib/db";
+import { db, schema } from "./_lib/db";
 import {
   badRequest,
   getRequestUser,
@@ -8,7 +8,7 @@ import {
   json,
   methodNotAllowed,
   unauthorized,
-} from "../lib/api-utils";
+} from "./_lib/api-utils";
 
 /**
  * GET /api/chart-views — list the caller's saved chart views.

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
-import { db, schema } from "../lib/db";
-import { internalError, json, methodNotAllowed } from "../lib/api-utils";
+import { db, schema } from "./_lib/db";
+import { internalError, json, methodNotAllowed } from "./_lib/api-utils";
 
 /**
  * GET /api/player-news

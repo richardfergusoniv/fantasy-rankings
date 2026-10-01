@@ -1,17 +1,17 @@
 import { desc, eq, like } from "drizzle-orm";
-import { db, schema } from "../lib/db";
+import { db, schema } from "./_lib/db";
 import {
   badRequest,
   internalError,
   json,
   methodNotAllowed,
   queryBool,
-} from "../lib/api-utils";
+} from "./_lib/api-utils";
 import {
   CACHE_KEY,
   parseUsableDashboard,
   type Dashboard,
-} from "../lib/dashboard-schemas";
+} from "./_lib/dashboard-schemas";
 
 /**
  * GET /api/dashboard

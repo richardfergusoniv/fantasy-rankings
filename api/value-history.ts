@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { db, schema } from "../lib/db";
+import { db, schema } from "./_lib/db";
 import {
   badRequest,
   internalError,
   json,
   methodNotAllowed,
-} from "../lib/api-utils";
+} from "./_lib/api-utils";
 import {
   FANTASY_CALC_HISTORY_URL,
   FANTASY_CALC_VALUES_URL,
@@ -14,7 +14,7 @@ import {
   type FantasyCalcHistoryResponse,
   type FantasyCalcRow,
   type SeasonLongFormat,
-} from "../lib/sleeper";
+} from "./_lib/sleeper";
 
 /**
  * GET /api/value-history?formatKey=&playerIds=a,b,c

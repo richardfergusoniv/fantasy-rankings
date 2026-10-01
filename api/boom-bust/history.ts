@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db, schema } from "../../lib/db";
+import { db, schema } from "../_lib/db";
 import {
   badRequest,
   internalError,
   json,
   methodNotAllowed,
-} from "../../lib/api-utils";
+} from "../_lib/api-utils";
 import {
   BOOM_BUST_SEASONS,
   SLEEPER_BASE,
@@ -19,7 +19,7 @@ import {
   sleeperActualStats,
   sleeperGameLogStats,
   type SleeperLeague,
-} from "../../lib/sleeper";
+} from "../_lib/sleeper";
 
 /**
  * GET /api/boom-bust/history?leagueId=&playerId=&position=&view=
