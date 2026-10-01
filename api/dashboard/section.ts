@@ -50,9 +50,7 @@ async function getCached(): Promise<Dashboard | null> {
   return null;
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== "GET") return methodNotAllowed(["GET"]);
-
+export async function GET(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url, "https://localhost");
     const parsed = sectionParam.safeParse(url.searchParams.get("section"));

@@ -70,9 +70,7 @@ function espnWeekParams(week: number): { seasontype: number; week: number } {
   return { seasontype: 2, week };
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== "GET") return methodNotAllowed(["GET"]);
-
+export async function GET(req: Request): Promise<Response> {
   try {
     const user = await getRequestUser(req);
     if (!isAdminUserId(user?.id)) {

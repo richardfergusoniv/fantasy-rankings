@@ -386,9 +386,7 @@ async function fetchLiveDrafts(players: Record<string, SleeperPlayer>): Promise<
 // Handler
 // ---------------------------------------------------------------------------
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== "GET") return methodNotAllowed(["GET"]);
-
+export async function GET(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url, "https://localhost");
     const force = queryBool(url, "force", false);

@@ -70,9 +70,7 @@ async function loadScoringSettings(leagueId: string): Promise<Record<string, num
   return scoringSettings;
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== "GET") return methodNotAllowed(["GET"]);
-
+export async function GET(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url, "https://localhost");
     const rawPlayerIds = url.searchParams.get("playerIds") ?? "";

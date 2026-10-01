@@ -71,9 +71,7 @@ async function loadTeamSituationalSnapshot(): Promise<z.infer<typeof teamSituati
   }
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== "GET") return methodNotAllowed(["GET"]);
-
+export async function GET(req: Request): Promise<Response> {
   try {
     const keys = pfnTableKeys.map((tableKey) => `pfn:${tableKey}`);
     const rows = await db

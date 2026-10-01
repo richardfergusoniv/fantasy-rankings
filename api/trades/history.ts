@@ -24,9 +24,7 @@ const querySchema = z.object({
   season: z.number().int().positive().optional(),
 });
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== "GET") return methodNotAllowed(["GET"]);
-
+export async function GET(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url, "https://localhost");
     const parsed = querySchema.safeParse({

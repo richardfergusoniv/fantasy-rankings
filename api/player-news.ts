@@ -36,9 +36,7 @@ function parseNewsAvailability(payload: string | null): z.infer<typeof playerNew
   }
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== "GET") return methodNotAllowed(["GET"]);
-
+export async function GET(req: Request): Promise<Response> {
   try {
     const [runs, items, checkedRows] = await Promise.all([
       db.select().from(schema.playerNewsRuns).orderBy(desc(schema.playerNewsRuns.checkedAt)).limit(60),

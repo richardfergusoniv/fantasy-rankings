@@ -139,29 +139,28 @@ async function handlePost(req: Request): Promise<Response> {
   return json({ view: serializeSavedChartView(values) });
 }
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method === "GET") {
-    try {
-      return await handleGet(req);
-    } catch (err) {
-      return internalError(err);
-    }
+export async function GET(req: Request): Promise<Response> {
+  try {
+    return await handleGet(req);
+  } catch (err) {
+    return internalError(err);
   }
-  if (req.method === "POST") {
-    try {
-      return await handlePost(req);
-    } catch (err) {
-      return internalError(err);
-    }
+}
+
+export async function POST(req: Request): Promise<Response> {
+  try {
+    return await handlePost(req);
+  } catch (err) {
+    return internalError(err);
   }
-  if (req.method === "DELETE") {
-    try {
-      return await handleDelete(req);
-    } catch (err) {
-      return internalError(err);
-    }
+}
+
+export async function DELETE(req: Request): Promise<Response> {
+  try {
+    return await handleDelete(req);
+  } catch (err) {
+    return internalError(err);
   }
-  return methodNotAllowed(["GET", "POST", "DELETE"]);
 }
 
 /**

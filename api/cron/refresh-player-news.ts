@@ -89,7 +89,7 @@ async function buildRosterContext(): Promise<{
   return { active: true, season, week: state.week, players: rosteredPlayers };
 }
 
-export default async function handler(req: Request): Promise<Response> {
+export async function POST(req: Request): Promise<Response> {
   if (req.method !== "POST") return methodNotAllowed(["POST"]);
   if (!hasCronSecret(req)) return forbidden("Invalid cron secret.");
 
