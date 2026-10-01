@@ -14,3 +14,5 @@ Fantasy football rankings app with Vegas projections, Sleeper integration, and a
 ## License
 
 TBD
+
+<!-- deploy-trigger: 7f77b6b6 -->
