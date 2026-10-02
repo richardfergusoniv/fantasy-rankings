@@ -135,7 +135,11 @@ function AuthScreen() {
     setNotice(null);
     try {
       if (mode === "signup") {
-        const { error: signUpError } = await supabase.auth.signUp({ email, password });
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: window.location.origin },
+        });
         if (signUpError) throw signUpError;
         setNotice("Check your email to confirm your account, then sign in.");
         setMode("signin");
