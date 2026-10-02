@@ -1,40 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
-  "crons": [
-    {
-      "path": "/api/player-news",
-      "schedule": "22 14 * * 1-6"
-    },
-    {
-      "path": "/api/player-news",
-      "schedule": "15 23 * * 1-6"
-    },
-    {
-      "path": "/api/player-news",
-      "schedule": "0 16 * * 0"
-    },
-    {
-      "path": "/api/player-news",
-      "schedule": "5 19 * * 0"
-    },
-    {
-      "path": "/api/player-news",
-      "schedule": "20 23 * * 0"
-    },
-    {
-      "path": "/api/cron/jobs?job=refresh-fantasycalc",
-      "schedule": "30 11 * * *"
-    },
-    {
-      "path": "/api/cron/jobs?job=rebuild-dashboard",
-      "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/cron/jobs?job=rebuild-dashboard",
-      "schedule": "0 23 * * 0"
-    }
-  ],
   "framework": null,
   "functions": {
     "api/draft-center.ts": {
