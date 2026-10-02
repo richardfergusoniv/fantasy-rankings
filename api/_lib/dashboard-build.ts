@@ -2063,19 +2063,9 @@ export function userDashboardCacheKey(sleeperUserId: string): string {
  */
 export async function loadOrBuildUserDashboard(sleeperUserId: string, force = false): Promise<Dashboard> {
   const cacheKey = userDashboardCacheKey(sleeperUserId);
-  const rows = await db
-    .select()
-    .from(schema.sourceCache)
-    .where(eq(schema.sourceCache.cacheKey, cacheKey))
-    .limit(1);
-  const cachedRow = rows[0];
-  const cachedDashboard = cachedRow ? parseUsableDashboard(cachedRow.payload) : null;
-  if (
-    !force
-    && cachedDashboard
-    && cachedRow
-    && Date.now() - cachedRow.fetchedAt.getTime() < USER_DASHBOARD_CACHE_MS
-  ) {
+  const cached = await readUserDashboardCache(sleeperUserId);
+  const cachedDashboard = cached?.dashboard ?? null;
+  if (!force && cachedDashboard && cached?.fresh) {
     return cachedDashboard;
   }
 
@@ -2085,16 +2075,72 @@ export async function loadOrBuildUserDashboard(sleeperUserId: string, force = fa
     // against an unhandled rejection when it eventually settles.
     buildPromise.catch(() => undefined);
     const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
-    await db
-      .insert(schema.sourceCache)
-      .values({ cacheKey, payload: JSON.stringify(dashboard), fetchedAt: new Date() })
-      .onConflictDoUpdate({
-        target: schema.sourceCache.cacheKey,
-        set: { payload: JSON.stringify(dashboard), fetchedAt: new Date() },
-      });
+    await writeUserDashboardCache(cacheKey, dashboard);
     return dashboard;
   } catch (error) {
     if (cachedDashboard) return cachedDashboard; // stale beats an error
     throw error;
   }
+}
+
+async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): Promise<void> {
+  await db
+    .insert(schema.sourceCache)
+    .values({ cacheKey, payload: JSON.stringify(dashboard), fetchedAt: new Date() })
+    .onConflictDoUpdate({
+      target: schema.sourceCache.cacheKey,
+      set: { payload: JSON.stringify(dashboard), fetchedAt: new Date() },
+    });
+}
+
+/**
+ * Read the per-user cache without building. `fresh` is true when the cached
+ * dashboard is inside USER_DASHBOARD_CACHE_MS. Returns null when no usable
+ * cache exists (first-ever load for this user).
+ */
+export async function readUserDashboardCache(
+  sleeperUserId: string,
+): Promise<{ dashboard: Dashboard; fresh: boolean } | null> {
+  const rows = await db
+    .select()
+    .from(schema.sourceCache)
+    .where(eq(schema.sourceCache.cacheKey, userDashboardCacheKey(sleeperUserId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  const dashboard = parseUsableDashboard(row.payload);
+  if (!dashboard) return null;
+  return {
+    dashboard,
+    fresh: Date.now() - row.fetchedAt.getTime() < USER_DASHBOARD_CACHE_MS,
+  };
+}
+
+// Single-flight guard so concurrent section reads (and dashboard reads) for
+// the same user share one background build per function instance.
+const inFlightBuilds = new Map<string, Promise<void>>();
+
+/**
+ * Start (or join) a background build for this user that caches its result
+ * when done. Never rejects — pair with `waitUntil` at the route so Vercel
+ * keeps the function alive until the cache write lands. Section reads use
+ * this so a cold cache answers immediately with "no data yet" while the
+ * first build (~30s) runs behind the response.
+ */
+export function kickUserDashboardBuild(sleeperUserId: string): Promise<void> {
+  const existing = inFlightBuilds.get(sleeperUserId);
+  if (existing) return existing;
+  const build = (async () => {
+    try {
+      const dashboard = await buildUserDashboard(sleeperUserId);
+      await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
+    } catch {
+      // Background build failed; the next read retries. The client keeps
+      // polling and eventually surfaces its error state.
+    } finally {
+      inFlightBuilds.delete(sleeperUserId);
+    }
+  })();
+  inFlightBuilds.set(sleeperUserId, build);
+  return build;
 }

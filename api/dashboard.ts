@@ -12,7 +12,12 @@ import {
   type Dashboard,
 } from "./_lib/dashboard-schemas.js";
 import { resolveSleeperUserId } from "./_lib/auth.js";
-import { loadOrBuildUserDashboard } from "./_lib/dashboard-build.js";
+import {
+  kickUserDashboardBuild,
+  loadOrBuildUserDashboard,
+  readUserDashboardCache,
+} from "./_lib/dashboard-build.js";
+import { waitUntil } from "@vercel/functions";
 import { z } from "zod";
 
 /**
@@ -31,7 +36,8 @@ import { z } from "zod";
  * GET /api/dashboard/section?section=meta|team|players|league|analytics
  *   Returns a small projection of the same dashboard the caller would get
  *   from /api/dashboard (per-user when signed in, global snapshot
- *   otherwise), so a slow refresh never blocks a section read.
+ *   otherwise). Never blocks on a build: a cold per-user cache returns
+ *   `data: null` and rebuilds in the background; the client polls.
  */
 
 async function getCached(): Promise<Dashboard | null> {
@@ -112,17 +118,22 @@ async function handleDashboard(req: Request): Promise<Response> {
 }
 
 /**
- * Dashboard source for section reads. Signed-in users with a connected
- * Sleeper account read from their own per-user build (cached; built on a
- * cold cache so first load works). Everyone else gets the Phase 1 global
- * snapshot. A failed per-user build with no cache reads as `null`, matching
- * the sections' existing "no snapshot available" contract.
+ * Dashboard source for section reads. Section reads never block on a build:
+ * signed-in users get whatever is in their per-user cache right away, and a
+ * cold or stale cache kicks off a background build (kept alive with
+ * `waitUntil`) while the read returns immediately — `null` on a first-ever
+ * load, which the client polls through with its loading shell. Everyone
+ * else gets the Phase 1 global snapshot.
  */
 async function getSectionDashboard(req: Request): Promise<Dashboard | null> {
   const sleeperUserId = await resolveSleeperUserId(req);
   if (sleeperUserId) {
     try {
-      return await loadOrBuildUserDashboard(sleeperUserId, false);
+      const cached = await readUserDashboardCache(sleeperUserId);
+      if (!cached || !cached.fresh) {
+        waitUntil(kickUserDashboardBuild(sleeperUserId));
+      }
+      return cached?.dashboard ?? null;
     } catch {
       return null;
     }

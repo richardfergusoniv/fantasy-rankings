@@ -4131,6 +4131,13 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
 const BROWSER_DASHBOARD_CACHE_KEY = "fantasy-rankings-dashboard-v7";
 const BROWSER_DASHBOARD_MAX_AGE_MS = 2 * 60 * 1000;
 const DASHBOARD_DEADLINE_MS = 115_000;
+// While a section answers `data: null` (signed-in user's first dashboard is
+// still building in the background), poll until the build lands.
+const SECTION_BUILD_POLL_MS = 4_000;
+function pollWhileSectionBuilding(query: { state: { data?: unknown } }): number | false {
+  const data = query.state.data as { data?: unknown } | undefined;
+  return data !== undefined && data.data == null ? SECTION_BUILD_POLL_MS : false;
+}
 
 function dashboardTimestamp(dashboard: Dashboard | undefined): number {
   if (!dashboard) return 0;
@@ -4280,12 +4287,14 @@ export function App() {
     queryFn: () => withClientDeadline(api.getDashboardSection({ section: "meta" }), 8_000),
     staleTime: 90_000,
     retry: false,
+    refetchInterval: pollWhileSectionBuilding,
   });
   const teamQuery = useQuery({
     queryKey: ["dashboard-section", "team"],
     queryFn: () => withClientDeadline(api.getDashboardSection({ section: "team" }), 8_000),
     staleTime: 90_000,
     retry: false,
+    refetchInterval: pollWhileSectionBuilding,
   });
   const playerSectionActive = tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "charts" || tab === "comparison" || tab === "strengthOfSchedule";
   const playersQuery = useQuery({
@@ -4294,6 +4303,7 @@ export function App() {
     staleTime: 90_000,
     retry: false,
     enabled: playerSectionActive,
+    refetchInterval: pollWhileSectionBuilding,
   });
   const leagueQuery = useQuery({
     queryKey: ["dashboard-section", "league"],
@@ -4301,6 +4311,7 @@ export function App() {
     staleTime: 90_000,
     retry: false,
     enabled: tab === "power",
+    refetchInterval: pollWhileSectionBuilding,
   });
   const analyticsQuery = useQuery({
     queryKey: ["dashboard-section", "analytics"],
@@ -4308,6 +4319,7 @@ export function App() {
     staleTime: 90_000,
     retry: false,
     enabled: tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison",
+    refetchInterval: pollWhileSectionBuilding,
   });
   const dashboardQuery = useQuery({
     queryKey: ["fantasy-dashboard"],
@@ -4493,7 +4505,25 @@ export function App() {
     || (tab === "strengthOfSchedule" && playersQuery.isPending)
   );
 
-  if (!dashboard && (metaQuery.isPending || teamQuery.isPending)) {
+  // A signed-in user's first-ever dashboard builds in the background
+  // (~30s) while sections answer `data: null`. Hold the loading shell and
+  // let the section queries poll until it lands; only surface the error
+  // state if nothing arrives after a generous wait.
+  const waitingForFirstBuild =
+    metaQuery.isSuccess
+    && metaQuery.data?.section === "meta"
+    && metaQuery.data.data == null;
+  const [firstBuildTimedOut, setFirstBuildTimedOut] = useState(false);
+  useEffect(() => {
+    if (!waitingForFirstBuild || dashboard) {
+      setFirstBuildTimedOut(false);
+      return;
+    }
+    const timer = setTimeout(() => setFirstBuildTimedOut(true), 150_000);
+    return () => clearTimeout(timer);
+  }, [waitingForFirstBuild, dashboard]);
+
+  if (!dashboard && (metaQuery.isPending || teamQuery.isPending || (waitingForFirstBuild && !firstBuildTimedOut))) {
     return <ProgressiveShell tab={tab} onTab={setTab} />;
   }
 
