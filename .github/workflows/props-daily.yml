@@ -7,12 +7,26 @@ name: Props daily pull
 # is scheduled at both 10:00 and 11:00 UTC and a guard step lets it run
 # only when it is 03:xx in America/Los_Angeles (3 AM Pacific year-round).
 # Manual dispatches always run.
+#
+# First Down fallback: if Vegas validation fails on the player-count
+# minimum alone (validator exit 3, i.e. fewer than 200 players), the run
+# scrapes First Down Studio's rankings, builds fallback projections
+# (source "first_down", >= 150 players, K rows copied from the Vegas
+# build), validates and stages those instead, and pushes normally.
+# Any other validation failure is a hard fail. A manual dispatch can
+# force the fallback path with the force_fallback input (used to test
+# the fallback end to end).
 
 on:
   schedule:
     - cron: "0 10 * * *"
     - cron: "0 11 * * *"
   workflow_dispatch:
+    inputs:
+      force_fallback:
+        description: "Force the First Down fallback path (testing)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -72,14 +86,66 @@ jobs:
       - name: Validate projections
         id: validate
         if: steps.guard.outputs.go == 'true'
+        env:
+          FORCE_FALLBACK: ${{ inputs.force_fallback }}
         run: |
           FILE=$(ls -t pipeline/data/projections_2026_w*.json | head -1)
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          WEEK=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["week"])' "$FILE")
+          echo "week=$WEEK" >> "$GITHUB_OUTPUT"
+          if [ "$FORCE_FALLBACK" = "true" ]; then
+            echo "force_fallback set: bypassing Vegas validation, using First Down fallback"
+            echo "use_fallback=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
           python3 pipeline/scripts/validate_projections.py "$FILE"
+          CODE=$?
+          set -e
+          if [ "$CODE" = "0" ]; then
+            echo "use_fallback=false" >> "$GITHUB_OUTPUT"
+          elif [ "$CODE" = "3" ]; then
+            echo "Vegas yielded fewer than 200 players: engaging First Down fallback"
+            echo "use_fallback=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Validation failed with code $CODE (not a player-count failure); failing the run"
+            exit 1
+          fi
+
+      - name: Build First Down fallback projections
+        id: fallback
+        if: steps.guard.outputs.go == 'true' && steps.validate.outputs.use_fallback == 'true'
+        run: |
+          WEEK="${{ steps.validate.outputs.week }}"
+          python3 - <<'EOF'
+          import urllib.request
+          from pathlib import Path
+          cache = Path('pipeline/data/sleeper_players_cache.json')
+          if not cache.exists():
+              req = urllib.request.Request(
+                  'https://api.sleeper.app/v1/players/nfl',
+                  headers={'User-Agent': 'fantasy-rankings-pipeline'})
+              cache.write_bytes(urllib.request.urlopen(req, timeout=120).read())
+              print('fetched Sleeper players cache for name matching')
+          EOF
+          python3 pipeline/scripts/fetch_firstdown_rows.py \
+            --week "$WEEK" --season 2026 \
+            --out pipeline/data/firstdown_rows.json
+          python3 pipeline/scripts/build_firstdown_projections.py \
+            --rows pipeline/data/firstdown_rows.json \
+            --week "$WEEK" --season 2026
+          FD="pipeline/data/projections_firstdown_2026_w${WEEK}.json"
+          python3 pipeline/scripts/validate_projections.py --min-players 150 "$FD"
+          echo "file=$FD" >> "$GITHUB_OUTPUT"
 
       - name: Stage projections
         if: steps.guard.outputs.go == 'true'
-        run: cp "${{ steps.validate.outputs.file }}" pipeline/data/staged_for_push.json
+        run: |
+          if [ "${{ steps.validate.outputs.use_fallback }}" = "true" ]; then
+            cp "${{ steps.fallback.outputs.file }}" pipeline/data/staged_for_push.json
+          else
+            cp "${{ steps.validate.outputs.file }}" pipeline/data/staged_for_push.json
+          fi
 
       - name: Push projections to Vercel
         if: steps.guard.outputs.go == 'true'

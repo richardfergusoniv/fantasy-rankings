@@ -12,8 +12,10 @@ Checks (mirrors the props-twice-daily-pull cron rules):
     regression this used to guard against is still caught by the
     "Josh Palmer" ban here and in verify_dashboard.py.
 
-Usage: validate_projections.py <projections_file>
-Exit 0 on pass, 1 on fail (message printed).
+Usage: validate_projections.py [--min-players N] <projections_file>
+Exit 0 on pass, 1 on fail (message printed), 3 when the failure is the
+player-count minimum (the props workflow treats exit 3 as the trigger
+for the First Down Studio fallback; other failures stay hard fails).
 """
 from __future__ import annotations
 
@@ -28,10 +30,18 @@ MAX_AGE_SECS = 3600
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: validate_projections.py <projections_file>", file=sys.stderr)
+    argv = sys.argv[1:]
+    min_players = MIN_PLAYERS
+    if argv[:1] == ["--min-players"]:
+        if len(argv) < 3:
+            print("usage: validate_projections.py [--min-players N] <projections_file>", file=sys.stderr)
+            return 2
+        min_players = int(argv[1])
+        argv = argv[2:]
+    if len(argv) != 1:
+        print("usage: validate_projections.py [--min-players N] <projections_file>", file=sys.stderr)
         return 2
-    path = Path(sys.argv[1])
+    path = Path(argv[0])
     if not path.exists():
         print(f"FAIL: file missing: {path}")
         return 1
@@ -41,9 +51,9 @@ def main() -> int:
         return 1
     data = json.loads(path.read_text())
     projections = data.get("projections", [])
-    if len(projections) < MIN_PLAYERS:
-        print(f"FAIL: only {len(projections)} players (min {MIN_PLAYERS})")
-        return 1
+    if len(projections) < min_players:
+        print(f"FAIL: only {len(projections)} players (min {min_players})")
+        return 3
     for p in projections:
         leagues = p.get("leagues", {})
         if len(leagues) != EXPECTED_LEAGUES:

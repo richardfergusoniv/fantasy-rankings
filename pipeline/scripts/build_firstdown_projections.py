@@ -119,7 +119,8 @@ def main():
         "projections": projections,
     }
     out_path = DATA / f"projections_firstdown_{args.season}_w{args.week}.json"
-    json.dump(out, out_path)
+    with open(out_path, "w") as f:
+        json.dump(out, f)
     pos_counts = {}
     for p in projections:
         pos_counts[p["position"]] = pos_counts.get(p["position"], 0) + 1

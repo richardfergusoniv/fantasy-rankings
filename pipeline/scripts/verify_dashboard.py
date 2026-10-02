@@ -3,8 +3,12 @@
 
 This is the programmatic diff from the props-twice-daily-pull cron, encoded:
   - every staged player/league pair is present in the dashboard rankings
-  - QB/RB/WR/TE are tagged `vegas` and their raw stats (expected_stats and
-    TD probability) match the dashboard's projectionComponents exactly
+  - QB/RB/WR/TE are tagged with the staged file's source (`vegas` for a
+    vegas-consensus file, `first_down` for a First Down fallback file)
+  - Vegas files only: raw stats (expected_stats and TD probability)
+    match the dashboard's projectionComponents exactly. The fallback's
+    contract is points-only (a single replicated projection per
+    player), so stat-level checks do not apply to it
   - point totals may differ by at most 0.011: the pipeline pre-computes
     points while the app re-scores raw stats per league, and the two
     rounding paths diverge by one cent on ~3% of pairs (verified
@@ -21,7 +25,8 @@ This is the programmatic diff from the props-twice-daily-pull cron, encoded:
     K values are never exact-matched (the app scores Sleeper's raw
     K stats through each league's settings at display time)
   - Joshua Palmer present, Josh Palmer absent
-  - no `vegas`-tagged dashboard players outside the staged file
+  - no dashboard players tagged with the staged file's source tag
+    outside the staged file
   - all 192 defenses carry a pregame projection
   - the analytics section is present
   - strengthOfSchedule: 6 entries, 32 teams x 4 positions, clean 1-32
@@ -67,6 +72,7 @@ def main() -> int:
     rankings = dash["rankings"]
     by_key = {(r["leagueId"], r["name"]): r for r in rankings}
     league_ids = [l["league_id"] for l in staged["leagues"]]
+    expected_tag = "first_down" if staged.get("source") == "first_down" else "vegas"
     staged_names = set()
 
     # Staged pairs: presence, tags, stat-level exactness, point tolerance.
@@ -84,26 +90,28 @@ def main() -> int:
                 if r["leagueProjection"] not in (0, None):
                     errors.append(f"OUT {p['player']} {lid}: leagueProjection {r['leagueProjection']} (expected 0)")
                 continue
-            if r["projectionSource"] != "vegas":
-                errors.append(f"TAG {p['player']} {lid}: {r['projectionSource']}")
+            if r["projectionSource"] != expected_tag:
+                errors.append(f"TAG {p['player']} {lid}: {r['projectionSource']} (expected {expected_tag})")
             if r["leagueProjection"] is None or abs(r["leagueProjection"] - val) > POINT_TOLERANCE:
                 errors.append(f"VALUE {p['player']} {lid}: dash={r['leagueProjection']} staged={val}")
         # Stat-level check once per player (components are league-independent).
-        r0 = by_key.get((league_ids[0], p["player"]))
-        if r0 is not None and r0.get("injuryStatus") != "Out":
-            comp = r0.get("projectionComponents")
-            if not comp:
-                errors.append(f"NO COMP {p['player']}")
-            else:
-                for sk, dk in STAT_MAP.items():
-                    if sk in p["expected_stats"]:
-                        dv = comp.get(dk)
-                        if dv is None or abs(dv - p["expected_stats"][sk]) > 1e-9:
-                            errors.append(f"STAT {p['player']} {sk}: dash={dv} staged={p['expected_stats'][sk]}")
-                td_key = "rec_td" if p["position"] in ("WR", "TE") else "rush_td"
-                dv = comp.get(td_key)
-                if dv is None or abs(dv - p["td_probability"]) > 1e-9:
-                    errors.append(f"TD {p['player']} {td_key}: dash={dv} staged={p['td_probability']}")
+        # Vegas only: the First Down fallback is points-only by contract.
+        if expected_tag == "vegas":
+            r0 = by_key.get((league_ids[0], p["player"]))
+            if r0 is not None and r0.get("injuryStatus") != "Out":
+                comp = r0.get("projectionComponents")
+                if not comp:
+                    errors.append(f"NO COMP {p['player']}")
+                else:
+                    for sk, dk in STAT_MAP.items():
+                        if sk in p["expected_stats"]:
+                            dv = comp.get(dk)
+                            if dv is None or abs(dv - p["expected_stats"][sk]) > 1e-9:
+                                errors.append(f"STAT {p['player']} {sk}: dash={dv} staged={p['expected_stats'][sk]}")
+                    td_key = "rec_td" if p["position"] in ("WR", "TE") else "rush_td"
+                    dv = comp.get(td_key)
+                    if dv is None or abs(dv - p["td_probability"]) > 1e-9:
+                        errors.append(f"TD {p['player']} {td_key}: dash={dv} staged={p['td_probability']}")
 
     # K: never vegas/first_down; mostly sleeper; fallback-with-no-projection
     # allowed for pool kickers with no data from any source.
@@ -130,9 +138,9 @@ def main() -> int:
     # Sleeper pool, but a player can leave the pool (or the staged file)
     # legitimately. The hard rule is the wrong-name ban above.
 
-    extra = [r["name"] for r in rankings if r["projectionSource"] == "vegas" and r["name"] not in staged_names]
+    extra = [r["name"] for r in rankings if r["projectionSource"] == expected_tag and r["name"] not in staged_names]
     if extra:
-        errors.append(f"VEGAS EXTRA: {sorted(set(extra))[:10]}")
+        errors.append(f"{expected_tag.upper()} EXTRA: {sorted(set(extra))[:10]}")
 
     defs = dash["defenses"]
     if len(defs) != 192:
