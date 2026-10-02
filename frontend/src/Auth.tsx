@@ -31,6 +31,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [connection, setConnection] = useState<SleeperConnection>(null);
   const [connLoading, setConnLoading] = useState(false);
+  const [connChecked, setConnChecked] = useState(false);
 
   const refreshConnection = useCallback(async () => {
     setConnLoading(true);
@@ -38,6 +39,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setConnection(await fetchConnection());
     } finally {
       setConnLoading(false);
+      setConnChecked(true);
     }
   }, []);
 
@@ -64,9 +66,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (session) {
+      setConnChecked(false);
       void refreshConnection();
     } else {
       setConnection(null);
+      setConnChecked(false);
     }
   }, [session, refreshConnection]);
 
@@ -84,6 +88,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!session) {
     return <AuthScreen />;
+  }
+
+  // Session exists but the Sleeper connection check has not come back yet
+  // (e.g. a cold home-screen launch). Hold the loading screen instead of
+  // flashing the connect screen at users who are already connected.
+  if (!connection && !connChecked) {
+    return (
+      <div className="auth-screen">
+        <p className="auth-loading">Loading…</p>
+      </div>
+    );
   }
 
   if (!connection) {
