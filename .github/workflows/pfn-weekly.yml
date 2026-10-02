@@ -1,0 +1,81 @@
+name: PFN weekly pull
+
+# Weekly Pro Football Network table scrape -> push to the Fantasy
+# Rankings Vercel app when the data changed. Mirrors the local
+# pfn-weekly-pull cron (Wednesdays 7:22 AM Pacific).
+#
+# GitHub cron is UTC-only, so the job is scheduled at both 14:22 and
+# 15:22 UTC on Wednesdays and a guard step lets it run only when it is
+# Wednesday 07:xx in America/Los_Angeles. Manual dispatches always run.
+#
+# Change-detection state (.last_hash.json, latest.json, snapshots) lives
+# in pipeline/pfn/data inside the repo; after a changed run the workflow
+# commits the refreshed state back so the next run can diff against it.
+
+on:
+  schedule:
+    - cron: "22 14 * * 3"
+    - cron: "22 15 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pfn-weekly
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PFN_DATA_DIR: ${{ github.workspace }}/pipeline/pfn/data
+      PROPS_DATA_DIR: ${{ github.workspace }}/pipeline/data
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pacific-time guard (scheduled runs only)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            DOW=$(TZ=America/Los_Angeles date +%u)
+            HOUR=$(TZ=America/Los_Angeles date +%H)
+            if [ "$DOW" != "3" ] || [ "$HOUR" != "07" ]; then
+              echo "Skipping: Pacific is weekday $DOW hour $HOUR, not Wed 07."
+              echo "go=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        if: steps.guard.outputs.go == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Scrape PFN tables
+        id: scrape
+        if: steps.guard.outputs.go == 'true'
+        run: |
+          python3 pipeline/pfn/scrape.py | tee /tmp/pfn_scrape.log
+          if grep -q "^status: changed" /tmp/pfn_scrape.log; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push PFN tables to Vercel (only when changed)
+        if: steps.guard.outputs.go == 'true' && steps.scrape.outputs.changed == 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: python3 pipeline/scripts/push_ingest.py pfn-tables
+
+      - name: Commit refreshed PFN state back to the repo
+        if: steps.guard.outputs.go == 'true' && steps.scrape.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pipeline/pfn/data
+          git commit -m "PFN tables update $(date -u +%Y-%m-%d)"
+          git push

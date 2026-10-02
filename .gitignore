@@ -10,3 +10,7 @@ dist-cvm/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Pipeline run outputs (regenerated every run; PFN state is tracked, see pipeline/pfn/data)
+pipeline/data/*
+!pipeline/data/.gitkeep

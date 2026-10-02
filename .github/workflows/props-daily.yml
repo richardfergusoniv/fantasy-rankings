@@ -1,0 +1,145 @@
+name: Props daily pull
+
+# Daily Vegas props pull -> consensus projections -> push to the Fantasy
+# Rankings Vercel app. Mirrors the local props-twice-daily-pull cron.
+#
+# GitHub cron is UTC-only and does not follow daylight saving, so the job
+# is scheduled at both 10:00 and 11:00 UTC and a guard step lets it run
+# only when it is 03:xx in America/Los_Angeles (3 AM Pacific year-round).
+# Manual dispatches always run.
+
+on:
+  schedule:
+    - cron: "0 10 * * *"
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: props-daily
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PROPS_DATA_DIR: ${{ github.workspace }}/pipeline/data
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pacific-time guard (scheduled runs only)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            HOUR=$(TZ=America/Los_Angeles date +%H)
+            if [ "$HOUR" != "03" ]; then
+              echo "Skipping: Pacific hour is $HOUR, not 03."
+              echo "go=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        if: steps.guard.outputs.go == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Install pipeline dependencies
+        if: steps.guard.outputs.go == 'true'
+        run: pip install -r pipeline/requirements.txt
+
+      - uses: actions/setup-node@v4
+        if: steps.guard.outputs.go == 'true'
+        with:
+          node-version: "20"
+
+      - name: Pull providers and build projections
+        if: steps.guard.outputs.go == 'true'
+        env:
+          PROPLINE_API_KEY: ${{ secrets.PROPLINE_API_KEY }}
+          SHARPAPI_API_KEY: ${{ secrets.SHARPAPI_API_KEY }}
+          PARLAYAPI_API_KEY: ${{ secrets.PARLAYAPI_API_KEY }}
+          SPORTSGAMEODDS_API_KEY: ${{ secrets.SPORTSGAMEODDS_API_KEY }}
+          MONEYLINE_API_KEY: ${{ secrets.MONEYLINE_API_KEY }}
+        run: |
+          mkdir -p pipeline/data
+          bash pipeline/run_twice_daily.sh
+
+      - name: Validate projections
+        id: validate
+        if: steps.guard.outputs.go == 'true'
+        run: |
+          FILE=$(ls -t pipeline/data/projections_2026_w*.json | head -1)
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          python3 pipeline/scripts/validate_projections.py "$FILE"
+
+      - name: Stage projections
+        if: steps.guard.outputs.go == 'true'
+        run: cp "${{ steps.validate.outputs.file }}" pipeline/data/staged_for_push.json
+
+      - name: Push projections to Vercel
+        if: steps.guard.outputs.go == 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          python3 pipeline/scripts/push_ingest.py projections | tee /tmp/push_projections.json
+          python3 - <<'EOF'
+          import json
+          result = json.load(open('/tmp/push_projections.json'))
+          staged = json.load(open('pipeline/data/staged_for_push.json'))
+          expected = len(staged['projections'])
+          assert result.get('ok') is True, f"push not ok: {result}"
+          assert result.get('status') == 'committed', f"unexpected push status: {result}"
+          assert result.get('savedProjections') == expected, \
+              f"savedProjections {result.get('savedProjections')} != staged {expected}"
+          print(f"push verified: committed, savedProjections={expected}")
+          EOF
+
+      - name: Build strength of schedule
+        if: steps.guard.outputs.go == 'true'
+        run: node pipeline/build_matchup_grades.mjs
+
+      - name: Validate strength of schedule
+        if: steps.guard.outputs.go == 'true'
+        run: python3 pipeline/scripts/validate_matchup_grades.py pipeline/data/staged_matchup_grades.json
+
+      - name: Push strength of schedule
+        if: steps.guard.outputs.go == 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          python3 pipeline/scripts/push_ingest.py matchup-grades | tee /tmp/push_sos.json
+          python3 - <<'EOF'
+          import json
+          result = json.load(open('/tmp/push_sos.json'))
+          assert result.get('ok') is True, f"push not ok: {result}"
+          assert result.get('status') in ('committed', 'ignored'), f"unexpected status: {result}"
+          print(f"SoS push verified: {result['status']}, throughWeek {result.get('throughWeek')}")
+          EOF
+
+      - name: Force dashboard rebuild
+        if: steps.guard.outputs.go == 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -s -H "Authorization: Bearer $CRON_SECRET" \
+            "https://fantasy-rankings-rdfergus15.vercel.app/api/cron/jobs?job=rebuild-dashboard" \
+            | tee /tmp/rebuild.json
+          python3 - <<'EOF'
+          import json
+          result = json.load(open('/tmp/rebuild.json'))
+          assert result.get('ok') is True and result.get('status') == 'ok', f"rebuild failed: {result}"
+          assert result.get('leagues') == 6, f"rebuild leagues: {result}"
+          print(f"rebuild verified: week {result.get('week')}, asOf {result.get('asOf')}")
+          EOF
+
+      - name: Verify public dashboard against staged files
+        if: steps.guard.outputs.go == 'true'
+        run: |
+          python3 pipeline/scripts/verify_dashboard.py \
+            pipeline/data/staged_for_push.json \
+            pipeline/data/staged_matchup_grades.json

@@ -33,7 +33,9 @@ import os from "node:os";
 
 const SEASON = 2026;
 const POSITIONS = ["QB", "RB", "WR", "TE"];
-const DATA_DIR = path.join(os.homedir(), "workspace", "props-aggregator", "data");
+const DATA_DIR = process.env.PROPS_DATA_DIR
+  ? path.resolve(process.env.PROPS_DATA_DIR)
+  : path.join(os.homedir(), "workspace", "props-aggregator", "data");
 const STAGED_FILE = path.join(DATA_DIR, "staged_matchup_grades.json");
 const PLAYERS_CACHE = path.join(DATA_DIR, "sleeper_players_cache.json");
 const GAMES_CACHE = path.join(DATA_DIR, "nflverse_games_cache.csv");

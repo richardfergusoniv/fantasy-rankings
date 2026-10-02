@@ -3,10 +3,20 @@
 # Week numbering: 2026 Week 1 Thursday = 2026-09-10; each NFL week is
 # treated as Tuesday->Monday so the week flips the day after Monday
 # Night Football (i.e. Tuesday morning starts the new game week).
+#
+# Location-independent: runs from its own directory (works in the local
+# workspace and in a GitHub Actions checkout). Uses .venv/bin/python
+# when a venv exists (local), otherwise python3 from PATH (CI).
 set -euo pipefail
-cd ~/workspace/props-aggregator
+cd "$(dirname "$0")"
 
-WEEK=$(python3 -c "
+if [ -x .venv/bin/python ]; then
+  PY=.venv/bin/python
+else
+  PY=python3
+fi
+
+WEEK=$($PY -c "
 from datetime import date
 anchor = date(2026, 9, 10)  # Week 1 Thursday
 days = (date.today() - anchor).days
@@ -15,7 +25,7 @@ print(max(1, min(18, w)))
 ")
 
 echo "pulling all providers for 2026 week ${WEEK}..."
-.venv/bin/python -m props_aggregator.cli pull --all --week "${WEEK}" --season 2026
+$PY -m props_aggregator.cli pull --all --week "${WEEK}" --season 2026
 echo "building Vegas fantasy projections for week ${WEEK}..."
-.venv/bin/python -m props_aggregator.cli --data-dir data project --week "${WEEK}" --season 2026
+$PY -m props_aggregator.cli --data-dir data project --week "${WEEK}" --season 2026
 echo "done."
