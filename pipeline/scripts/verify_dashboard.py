@@ -11,8 +11,15 @@ This is the programmatic diff from the props-twice-daily-pull cron, encoded:
     2026-10-02; raw stats matching exactly is the data check)
   - a staged player the app marks Out is expected to be suppressed by the
     app (leagueProjection 0, source fallback); that is intended behavior
-  - K players are present in every league and tagged `sleeper` (the app
-    sources K projections from Sleeper; K values are never exact-matched)
+  - K players must never be tagged `vegas` or `first_down` (the app
+    sources K projections from Sleeper). Most K entries are tagged
+    `sleeper`; a K tagged `fallback` with no projection at all is a
+    pool kicker with no Sleeper projection and no Vegas line (e.g.
+    practice-squad kickers) and is allowed. At least 28 K entries per
+    league must be `sleeper`-tagged, which guards against a wholesale
+    Sleeper-projection failure hiding behind the fallback allowance.
+    K values are never exact-matched (the app scores Sleeper's raw
+    K stats through each league's settings at display time)
   - Joshua Palmer present, Josh Palmer absent
   - no `vegas`-tagged dashboard players outside the staged file
   - all 192 defenses carry a pregame projection
@@ -98,14 +105,23 @@ def main() -> int:
                 if dv is None or abs(dv - p["td_probability"]) > 1e-9:
                     errors.append(f"TD {p['player']} {td_key}: dash={dv} staged={p['td_probability']}")
 
-    # K present in every league, tagged sleeper.
+    # K: never vegas/first_down; mostly sleeper; fallback-with-no-projection
+    # allowed for pool kickers with no data from any source.
     for lid in league_ids:
         ks = [r for r in rankings if r["leagueId"] == lid and r["position"] == "K"]
         if not ks:
             errors.append(f"K MISSING in {lid}")
-        bad = [r["name"] for r in ks if r["projectionSource"] != "sleeper"]
-        if bad:
-            errors.append(f"K TAG {lid}: {bad}")
+            continue
+        wrong_source = [r["name"] for r in ks if r["projectionSource"] in ("vegas", "first_down")]
+        if wrong_source:
+            errors.append(f"K SOURCE {lid}: {wrong_source}")
+        ghost = [r["name"] for r in ks
+                 if r["projectionSource"] == "fallback" and r["leagueProjection"] is not None]
+        if ghost:
+            errors.append(f"K FALLBACK-WITH-PROJECTION {lid}: {ghost}")
+        sleeper_count = sum(1 for r in ks if r["projectionSource"] == "sleeper")
+        if sleeper_count < 28:
+            errors.append(f"K SLEEPER COUNT {lid}: {sleeper_count} (expected >= 28)")
 
     names = {r["name"] for r in rankings}
     if "Joshua Palmer" not in names:
