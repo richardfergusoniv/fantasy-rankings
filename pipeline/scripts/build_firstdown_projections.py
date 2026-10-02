@@ -109,7 +109,7 @@ def main():
     out = {
         "season": args.season,
         "week": args.week,
-        "built_at": datetime.now(timezone.utc).isoformat(),
+        "built_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": "first_down",
         "method": ("First Down Studio current-week Vegas fantasy rankings; projected "
                    "fantasy points replicated identically across all 6 leagues (single "
