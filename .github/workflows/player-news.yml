@@ -1,0 +1,72 @@
+name: Player news
+
+# Timer for the Fantasy Rankings player-news refresh. The work lives in
+# the app's /api/player-news endpoint; this workflow only calls it on
+# schedule with the CRON_SECRET bearer header (the same call Vercel Cron
+# used to make). Moved off Vercel Cron 2026-10-02 so every scheduled job
+# lives in GitHub Actions and survives a change of app host: to retarget,
+# set the APP_BASE_URL repository variable.
+#
+# Intended Pacific slots: Mon-Sat 07:22 and 16:15; Sun 09:00, 12:05,
+# 16:20. GitHub cron is UTC-only and does not follow daylight saving, so
+# every slot is scheduled at both of its UTC offsets and a guard step
+# runs the call only when the Pacific hour (and weekday) matches a slot.
+# Manual dispatches always run.
+
+on:
+  schedule:
+    - cron: "22 14 * * 1-6" # Mon-Sat 07:22 PDT
+    - cron: "22 15 * * 1-6" # Mon-Sat 07:22 PST
+    - cron: "15 23 * * 1-6" # Mon-Sat 16:15 PDT
+    - cron: "15 0 * * 0,2-6" # Mon-Sat 16:15 PST (next UTC day)
+    - cron: "0 16 * * 0" # Sun 09:00 PDT
+    - cron: "0 17 * * 0" # Sun 09:00 PST
+    - cron: "5 19 * * 0" # Sun 12:05 PDT
+    - cron: "5 20 * * 0" # Sun 12:05 PST
+    - cron: "20 23 * * 0" # Sun 16:20 PDT
+    - cron: "20 0 * * 1" # Sun 16:20 PST (Mon UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: player-news
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Pacific-time guard (scheduled runs only)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            DOW=$(TZ=America/Los_Angeles date +%u)
+            HOUR=$(TZ=America/Los_Angeles date +%H)
+            GO=false
+            if [ "$DOW" -le 6 ] && { [ "$HOUR" = "07" ] || [ "$HOUR" = "16" ]; }; then GO=true; fi
+            if [ "$DOW" = "7" ] && { [ "$HOUR" = "09" ] || [ "$HOUR" = "12" ] || [ "$HOUR" = "16" ]; }; then GO=true; fi
+            if [ "$GO" != "true" ]; then
+              echo "Skipping: Pacific day $DOW hour $HOUR is not a player-news slot."
+              echo "go=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
+      - name: Call player-news refresh
+        if: steps.guard.outputs.go == 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-rdfergus15.vercel.app' }}
+        run: |
+          curl -s --max-time 300 -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/player-news" | tee /tmp/news.json
+          python3 - <<'EOF'
+          import json
+          result = json.load(open('/tmp/news.json'))
+          assert result.get('ok') is True, f"player-news not ok: {result}"
+          print(f"player-news verified: {result}")
+          EOF

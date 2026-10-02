@@ -1,0 +1,60 @@
+name: FantasyCalc refresh
+
+# Timer for the daily FantasyCalc preset-cache refresh. The work lives in
+# the app's /api/cron/jobs endpoint; this workflow only calls it on
+# schedule with the CRON_SECRET bearer header (the same call Vercel Cron
+# used to make). Moved off Vercel Cron 2026-10-02 so every scheduled job
+# lives in GitHub Actions and survives a change of app host: to retarget,
+# set the APP_BASE_URL repository variable.
+#
+# Intended Pacific slot: daily 04:30. Scheduled at both UTC offsets with
+# a Pacific-hour guard, following the props-daily pattern. Manual
+# dispatches always run. Runs before the dashboard rebuild so the
+# rebuild reads the fresh cache.
+
+on:
+  schedule:
+    - cron: "30 11 * * *" # 04:30 PDT
+    - cron: "30 12 * * *" # 04:30 PST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fantasycalc-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Pacific-time guard (scheduled runs only)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            HOUR=$(TZ=America/Los_Angeles date +%H)
+            if [ "$HOUR" != "04" ]; then
+              echo "Skipping: Pacific hour is $HOUR, not 04."
+              echo "go=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
+      - name: Call FantasyCalc refresh
+        if: steps.guard.outputs.go == 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-rdfergus15.vercel.app' }}
+        run: |
+          curl -s --max-time 300 -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/cron/jobs?job=refresh-fantasycalc" | tee /tmp/fc.json
+          python3 - <<'EOF'
+          import json
+          result = json.load(open('/tmp/fc.json'))
+          assert result.get('ok') is True, f"refresh not ok: {result}"
+          assert result.get('job') == 'refresh-fantasycalc', f"unexpected job: {result}"
+          print(f"FantasyCalc refresh verified: {result}")
+          EOF

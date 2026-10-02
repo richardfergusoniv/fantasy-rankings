@@ -1,0 +1,66 @@
+name: Dashboard rebuild
+
+# Timer for the global dashboard rebuild. The work lives in the app's
+# /api/cron/jobs endpoint; this workflow only calls it on schedule with
+# the CRON_SECRET bearer header (the same call Vercel Cron used to
+# make). Moved off Vercel Cron 2026-10-02 so every scheduled job lives
+# in GitHub Actions and survives a change of app host: to retarget, set
+# the APP_BASE_URL repository variable.
+#
+# Intended Pacific slots: daily 05:00 (after the props pull and the
+# FantasyCalc refresh) plus Sun 16:00. Scheduled at both UTC offsets
+# with a Pacific guard, following the props-daily pattern. Manual
+# dispatches always run.
+
+on:
+  schedule:
+    - cron: "0 12 * * *" # daily 05:00 PDT
+    - cron: "0 13 * * *" # daily 05:00 PST
+    - cron: "0 23 * * 0" # Sun 16:00 PDT
+    - cron: "0 0 * * 1" # Sun 16:00 PST (Mon UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-rebuild
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Pacific-time guard (scheduled runs only)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            DOW=$(TZ=America/Los_Angeles date +%u)
+            HOUR=$(TZ=America/Los_Angeles date +%H)
+            GO=false
+            if [ "$HOUR" = "05" ]; then GO=true; fi
+            if [ "$DOW" = "7" ] && [ "$HOUR" = "16" ]; then GO=true; fi
+            if [ "$GO" != "true" ]; then
+              echo "Skipping: Pacific day $DOW hour $HOUR is not a rebuild slot."
+              echo "go=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
+      - name: Call dashboard rebuild
+        if: steps.guard.outputs.go == 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-rdfergus15.vercel.app' }}
+        run: |
+          curl -s --max-time 600 -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/cron/jobs?job=rebuild-dashboard" | tee /tmp/rebuild.json
+          python3 - <<'EOF'
+          import json
+          result = json.load(open('/tmp/rebuild.json'))
+          assert result.get('ok') is True and result.get('status') == 'ok', f"rebuild failed: {result}"
+          assert result.get('leagues') == 6, f"rebuild leagues: {result}"
+          print(f"rebuild verified: week {result.get('week')}, asOf {result.get('asOf')}")
+          EOF
