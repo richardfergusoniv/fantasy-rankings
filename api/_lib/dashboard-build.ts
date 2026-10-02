@@ -74,6 +74,7 @@ const BUILD_DEADLINE_MS = 55_000; // stay inside the 60s function budget
 const NFLVERSE_PLAYER_STATS_2026_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.csv";
 const NFLVERSE_PLAYER_STATS_2025_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2025.csv";
 const MIN_VEGAS_PLAYER_COVERAGE = 200;
+const MIN_FIRST_DOWN_PLAYER_COVERAGE = 150;
 const STRENGTH_OF_SCHEDULE_CACHE_PREFIX = "strength-of-schedule-v1";
 
 // ---------------------------------------------------------------------------
@@ -1192,10 +1193,18 @@ function mergeVegasPlayerProjections(
     // The consensus feed supplies projected football stats. Score those stats
     // here through this league's exact Sleeper scoring rules so weekly roster
     // utility never falls back to FantasyCalc market value or a generic PPR total.
+    // A First Down fallback snapshot is the exception: it is points-only by
+    // contract (its projected total is replicated across leagues and its stat
+    // lines carry no TD split to rescore), so use its staged per-league total
+    // verbatim and tag it with its real source.
+    const isFirstDownSnapshot = snapshot?.source === "first_down";
     let leaguePoints: number | null = null;
     let vegasPoints: number | null = null;
     let projectionComponents: Record<string, number> | null = null;
-    if (useVegasPrimary && feed) {
+    if (useVegasPrimary && feed && isFirstDownSnapshot) {
+      const stagedPoints = feed.leagues[leagueId] ?? feed.expected_stats.projected_points;
+      leaguePoints = typeof stagedPoints === "number" && Number.isFinite(stagedPoints) ? stagedPoints : null;
+    } else if (useVegasPrimary && feed) {
       const scorerStats = adaptVegasStatsForScorer(base.position, feed.expected_stats, feed.td_probability);
       leaguePoints = scoreProjectedPlayerStats(base.position, scorerStats, scoringSettings, { recFdProxy: true });
       // League-independent Vegas baseline: same stats through canonical PPR so
@@ -1216,7 +1225,7 @@ function mergeVegasPlayerProjections(
         leagueProjection: leaguePoints,
         vegasProjection: vegasPoints,
         sleeperProjection: validSleeperPoints,
-        projectionSource: "vegas",
+        projectionSource: isFirstDownSnapshot ? "first_down" : "vegas",
         projectionComponents,
       }];
     }
@@ -1611,7 +1620,9 @@ export async function buildUserDashboard(sleeperUserId: string): Promise<Dashboa
   } else sourceErrors.push("NFL game status is unavailable; player rows are showing projections.");
 
   const vegasProjectionCount = vegasProjectionSnapshot?.projections.length ?? 0;
-  const useVegasPrimary = vegasProjectionCount >= MIN_VEGAS_PLAYER_COVERAGE;
+  const isFirstDownSnapshot = vegasProjectionSnapshot?.source === "first_down";
+  const minProjectionCoverage = isFirstDownSnapshot ? MIN_FIRST_DOWN_PLAYER_COVERAGE : MIN_VEGAS_PLAYER_COVERAGE;
+  const useVegasPrimary = vegasProjectionCount >= minProjectionCoverage;
   let defenses: z.infer<typeof defenseSchema>[] = [];
   let analytics: z.infer<typeof analyticsSchema> = {
     asOf: null,
@@ -1713,7 +1724,7 @@ export async function buildUserDashboard(sleeperUserId: string): Promise<Dashboa
   const weeklyChartRankings = [...weeklyChartRankingsByLeagueId.values()].flat();
   defenses = [...defensesByLeagueId.values()].flat();
   if (!useVegasPrimary) {
-    sourceErrors.push(`Vegas player coverage is ${vegasProjectionCount}/${MIN_VEGAS_PLAYER_COVERAGE} required; weekly skill-position projections are unavailable in this snapshot.`);
+    sourceErrors.push(`${isFirstDownSnapshot ? "First Down" : "Vegas"} player coverage is ${vegasProjectionCount}/${minProjectionCoverage} required; weekly skill-position projections are unavailable in this snapshot.`);
   }
   const missingDefenseProjections = defenses.filter((row) => row.pregameProjection === null).length;
   if (missingDefenseProjections > 0) {
