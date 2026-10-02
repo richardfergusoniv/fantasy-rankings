@@ -5,7 +5,11 @@ Checks (mirrors the props-twice-daily-pull cron rules):
   - file was modified within the last hour (i.e. it is from this run)
   - at least 200 players
   - every projection carries all 6 leagues
-  - Joshua Palmer present, Josh Palmer absent
+  - "Josh Palmer" never appears (canonical name is Joshua Palmer)
+  - Joshua Palmer, when the books are offering him (present in the
+    sibling consensus file), must survive the builder into projections;
+    if no provider is offering him, his absence is legitimate and only
+    warns (his lines can be pulled intraday)
 
 Usage: validate_projections.py <projections_file>
 Exit 0 on pass, 1 on fail (message printed).
@@ -45,12 +49,22 @@ def main() -> int:
             print(f"FAIL: {p.get('player')} carries {len(leagues)} leagues (expected {EXPECTED_LEAGUES})")
             return 1
     names = {p.get("player") for p in projections}
-    if "Joshua Palmer" not in names:
-        print("FAIL: Joshua Palmer missing")
-        return 1
     if "Josh Palmer" in names:
         print("FAIL: 'Josh Palmer' present (must be Joshua Palmer)")
         return 1
+    if "Joshua Palmer" not in names:
+        # Legitimate only if no provider offered him this run. The
+        # consensus file sits next to the projections file and carries
+        # raw provider names (he appears there as "Josh Palmer").
+        consensus_path = path.parent / f"consensus_{data.get('season')}_w{data.get('week')}.json"
+        offered = False
+        if consensus_path.exists():
+            rows = json.loads(consensus_path.read_text()).get("consensus", [])
+            offered = any("palmer" in (r.get("player") or "").lower() for r in rows)
+        if offered:
+            print("FAIL: Palmer was offered by providers but is missing from projections (builder dropped him)")
+            return 1
+        print("WARN: Joshua Palmer not offered by any provider this run; absence accepted")
     print(f"PASS: {len(projections)} players, all {EXPECTED_LEAGUES} leagues, week {data.get('week')}, source {data.get('source')}")
     return 0
 
