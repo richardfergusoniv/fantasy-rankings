@@ -20,3 +20,5 @@ TBD
 <!-- deploy-trigger-2: seed endpoint -->
 
 <!-- deploy trigger: history scrub -->
+
+<!-- deploy trigger: cron secret rotation -->
