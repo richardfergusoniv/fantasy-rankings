@@ -20,6 +20,7 @@ import {
   tradeValuationSchema,
   type Dashboard,
 } from "./dashboard-schemas.js";
+import { CACHE_KEY } from "./dashboard-schemas.js";
 import {
   DRAFT_MARKET_CACHE_KEY,
   DYNASTICAL_CUCKS_LEAGUE_ID,
@@ -845,11 +846,45 @@ const FANTASY_CALC_PRESETS: Array<{ format: SeasonLongFormat; url: string }> = [
   },
 ];
 
-async function loadPreset(
-  { format, url }: (typeof FANTASY_CALC_PRESETS)[number],
+// ---------------------------------------------------------------------------
+// FantasyCalc season-long rankings (with a daily cache in `source_cache`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Daily cache of raw FantasyCalc API rows, one entry per preset key.
+ * Refreshed by the `refresh-fantasycalc` cron job; dashboard builds read
+ * from it when fresh so 12 external API calls collapse to one DB read.
+ */
+const FANTASYCALC_CACHE_KEY = "fantasycalc:presets";
+const FANTASYCALC_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+async function readFantasyCalcCache(): Promise<{
+  presets: Record<string, FantasyCalcRow[]>;
+  fetchedAt: Date;
+} | null> {
+  const rows = await db
+    .select()
+    .from(schema.sourceCache)
+    .where(eq(schema.sourceCache.cacheKey, FANTASYCALC_CACHE_KEY))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  try {
+    const payload = JSON.parse(row.payload) as {
+      presets?: Record<string, FantasyCalcRow[]>;
+    };
+    if (!payload.presets || typeof payload.presets !== "object") return null;
+    return { presets: payload.presets, fetchedAt: row.fetchedAt };
+  } catch {
+    return null;
+  }
+}
+
+function mapPresetRows(
+  rows: FantasyCalcRow[],
+  format: (typeof FANTASY_CALC_PRESETS)[number]["format"],
   sleeperPlayers: Record<string, SleeperPlayer>,
-): Promise<SeasonLongRanking[]> {
-  const rows = await fetchJson<FantasyCalcRow[]>(url);
+): SeasonLongRanking[] {
   const positions = new Set(format.isDynasty ? ["QB", "RB", "WR", "TE", "PICK"] : ["QB", "RB", "WR", "TE"]);
   return rows.flatMap((row) => {
     const playerId = row.player?.sleeperId;
@@ -870,7 +905,66 @@ async function loadPreset(
   });
 }
 
+async function loadPreset(
+  { format, url }: (typeof FANTASY_CALC_PRESETS)[number],
+  sleeperPlayers: Record<string, SleeperPlayer>,
+): Promise<SeasonLongRanking[]> {
+  const rows = await fetchJson<FantasyCalcRow[]>(url);
+  return mapPresetRows(rows, format, sleeperPlayers);
+}
+
+/**
+ * Fetch every FantasyCalc preset raw (with one retry) and store the rows in
+ * `source_cache` for dashboard builds to consume. Called by the cron job.
+ */
+export async function refreshFantasyCalcCache(): Promise<{
+  presets: number;
+  rows: number;
+  failed: number;
+  asOf: string;
+}> {
+  const presets: Record<string, FantasyCalcRow[]> = {};
+  let failed = 0;
+  for (const preset of FANTASY_CALC_PRESETS) {
+    let rows: FantasyCalcRow[] | undefined;
+    for (let attempt = 0; attempt < 2 && !rows; attempt += 1) {
+      try {
+        rows = await fetchJson<FantasyCalcRow[]>(preset.url);
+      } catch {
+        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+    }
+    if (rows) presets[preset.format.key] = rows;
+    else failed += 1;
+  }
+  const rowCount = Object.values(presets).reduce((total, rows) => total + rows.length, 0);
+  const fetchedAt = new Date();
+  await db
+    .insert(schema.sourceCache)
+    .values({
+      cacheKey: FANTASYCALC_CACHE_KEY,
+      payload: JSON.stringify({ presets }),
+      fetchedAt,
+    })
+    .onConflictDoUpdate({
+      target: schema.sourceCache.cacheKey,
+      set: { payload: JSON.stringify({ presets }), fetchedAt },
+    });
+  return { presets: Object.keys(presets).length, rows: rowCount, failed, asOf: fetchedAt.toISOString() };
+}
+
 async function fetchFantasyCalcRankings(sleeperPlayers: Record<string, SleeperPlayer>): Promise<{ rows: SeasonLongRanking[]; failedPresets: number }> {
+  // Prefer the daily cache (refreshed by cron) over 12 live API calls.
+  const cached = await readFantasyCalcCache();
+  if (cached && Date.now() - cached.fetchedAt.getTime() < FANTASYCALC_CACHE_TTL_MS) {
+    const rows = FANTASY_CALC_PRESETS.flatMap((preset) => {
+      const raw = cached.presets[preset.format.key];
+      return raw ? mapPresetRows(raw, preset.format, sleeperPlayers) : [];
+    });
+    if (rows.length > 0) return { rows, failedPresets: 0 };
+    // Cache parsed but yielded nothing usable; fall through to live fetch.
+  }
+
   const results = await Promise.allSettled(FANTASY_CALC_PRESETS.map((preset) => loadPreset(preset, sleeperPlayers)));
   const rowsByPreset: Array<SeasonLongRanking[] | undefined> = results.map((result) => result.status === "fulfilled" ? result.value : undefined);
   const failedPresetIndexes = results.flatMap((result, index) => result.status === "rejected" ? [index] : []);
@@ -2091,6 +2185,15 @@ async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): 
       target: schema.sourceCache.cacheKey,
       set: { payload: JSON.stringify(dashboard), fetchedAt: new Date() },
     });
+}
+
+/**
+ * Write a freshly built dashboard as the global snapshot (the cache key the
+ * unauthenticated /api/dashboard serves). Used by the dashboard-rebuild cron
+ * for the owner's Sleeper account.
+ */
+export async function writeGlobalDashboardSnapshot(dashboard: Dashboard): Promise<void> {
+  await writeUserDashboardCache(CACHE_KEY, dashboard);
 }
 
 /**

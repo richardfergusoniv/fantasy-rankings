@@ -21,6 +21,18 @@
     {
       "path": "/api/player-news",
       "schedule": "20 23 * * 0"
+    },
+    {
+      "path": "/api/cron/jobs?job=refresh-fantasycalc",
+      "schedule": "30 11 * * *"
+    },
+    {
+      "path": "/api/cron/jobs?job=rebuild-dashboard",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/jobs?job=rebuild-dashboard",
+      "schedule": "0 23 * * 0"
     }
   ],
   "framework": null,
@@ -32,6 +44,12 @@
       "maxDuration": 60
     },
     "api/dashboard.ts": {
+      "maxDuration": 60
+    },
+    "api/cron/jobs.ts": {
+      "maxDuration": 60
+    },
+    "api/ingest/[target].ts": {
       "maxDuration": 60
     }
   },
