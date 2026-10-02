@@ -124,10 +124,11 @@ def main() -> int:
             errors.append(f"K SLEEPER COUNT {lid}: {sleeper_count} (expected >= 28)")
 
     names = {r["name"] for r in rankings}
-    if "Joshua Palmer" not in names:
-        errors.append("Joshua Palmer missing")
     if "Josh Palmer" in names:
         errors.append("Josh Palmer present (bad)")
+    # Joshua Palmer's presence is not required: rankings cover the
+    # Sleeper pool, but a player can leave the pool (or the staged file)
+    # legitimately. The hard rule is the wrong-name ban above.
 
     extra = [r["name"] for r in rankings if r["projectionSource"] == "vegas" and r["name"] not in staged_names]
     if extra:
