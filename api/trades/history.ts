@@ -15,7 +15,7 @@ import { historicalTradesResponse, loadHistoricalTrades } from "../_lib/trades.j
  * Replaces `getHistoricalTrades`.
  *
  * May be slow (walks the Sleeper previous_league chain for dynasty leagues);
- * vercel.json sets maxDuration: 120 for this route.
+ * vercel.json sets maxDuration: 60 for this route (Hobby plan cap).
  */
 
 const querySchema = z.object({
@@ -49,4 +49,4 @@ export async function GET(req: Request): Promise<Response> {
   }
 }
 
-export const config = { maxDuration: 120 };
+export const config = { maxDuration: 60 };

@@ -4130,7 +4130,8 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
 
 const BROWSER_DASHBOARD_CACHE_KEY = "fantasy-rankings-dashboard-v7";
 const BROWSER_DASHBOARD_MAX_AGE_MS = 2 * 60 * 1000;
-const DASHBOARD_DEADLINE_MS = 115_000;
+// Stay under the 60s Hobby function cap. The server build deadline is 55s.
+const DASHBOARD_DEADLINE_MS = 58_000;
 // While a section answers `data: null` (signed-in user's first dashboard is
 // still building in the background), poll until the build lands.
 const SECTION_BUILD_POLL_MS = 4_000;

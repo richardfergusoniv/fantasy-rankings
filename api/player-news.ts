@@ -11,6 +11,7 @@ import {
   PLAYER_NEWS_LEAGUES,
   PLAYER_NEWS_SNAPSHOT_KEY,
   SLEEPER_BASE,
+  REFRESH_TIMEOUT_MS,
   SLEEPER_USER_ID,
   fetchJson,
   parseInjurySnapshot,
@@ -36,7 +37,6 @@ import {
  */
 
 const PLAYER_NEWS_CHECK_KEY = "player-news-last-check-v1";
-const REFRESH_TIMEOUT_MS = 110_000;
 
 const playerNewsAvailabilitySchema = z.object({
   leagueId: z.string(),

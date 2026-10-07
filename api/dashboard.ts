@@ -285,5 +285,5 @@ export async function GET(req: Request): Promise<Response> {
   }
 }
 
-// Vercel function config: allow up to 120s for future force-refresh support.
-export const config = { maxDuration: 120 };
+// Hobby plan caps maxDuration at 60s. vercel.json is the source of truth.
+export const config = { maxDuration: 60 };
