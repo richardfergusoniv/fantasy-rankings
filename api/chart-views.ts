@@ -94,17 +94,9 @@ async function handlePost(req: Request): Promise<Response> {
   const args = parsed.data;
 
   const name = args.name.trim();
-  const matches = await db.select().from(schema.savedChartViews).where(and(
-    eq(schema.savedChartViews.userId, user.id),
-    eq(schema.savedChartViews.dataset, args.dataset),
-    eq(schema.savedChartViews.name, name),
-  )).limit(1);
-  const existing = matches[0];
   const now = new Date();
-  const id = existing?.id ?? crypto.randomUUID();
-  const createdAt = existing?.createdAt ?? now;
-  const values = {
-    id,
+  await db.insert(schema.savedChartViews).values({
+    id: crypto.randomUUID(),
     userId: user.id,
     name,
     dataset: args.dataset,
@@ -116,15 +108,15 @@ async function handlePost(req: Request): Promise<Response> {
     xPercentile: args.xPercentile,
     yPercentile: args.yPercentile,
     plotLimit: args.plotLimit,
-    createdAt,
+    createdAt: now,
     updatedAt: now,
-  };
-  await db.insert(schema.savedChartViews).values(values).onConflictDoUpdate({
-    target: schema.savedChartViews.id,
+  }).onConflictDoUpdate({
+    target: [
+      schema.savedChartViews.userId,
+      schema.savedChartViews.dataset,
+      schema.savedChartViews.name,
+    ],
     set: {
-      userId: user.id,
-      name,
-      dataset: args.dataset,
       position: args.position,
       xMetric: args.xMetric,
       yMetric: args.yMetric,
@@ -136,7 +128,14 @@ async function handlePost(req: Request): Promise<Response> {
       updatedAt: now,
     },
   });
-  return json({ view: serializeSavedChartView(values) });
+
+  const [saved] = await db.select().from(schema.savedChartViews).where(and(
+    eq(schema.savedChartViews.userId, user.id),
+    eq(schema.savedChartViews.dataset, args.dataset),
+    eq(schema.savedChartViews.name, name),
+  )).limit(1);
+  if (!saved) return internalError(new Error("Failed to persist chart view."));
+  return json({ view: serializeSavedChartView(saved) });
 }
 
 export async function GET(req: Request): Promise<Response> {

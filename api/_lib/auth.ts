@@ -1,13 +1,12 @@
 /**
  * Shared Supabase auth + Sleeper-connection lookup for API routes.
  *
- * Mirrors the pattern already used by `api/user.ts` (kept as-is): verify the
- * caller's Supabase JWT with the anon-key client, then read their row from
- * `sleeper_connections` with the service database connection.
+ * Verify the caller's Supabase JWT with the anon-key client, then read their
+ * row from `sleeper_connections` with the service database connection.
  */
 import { createClient } from "@supabase/supabase-js";
-import { sql } from "drizzle-orm";
-import { getDb } from "./db.js";
+import { eq } from "drizzle-orm";
+import { getDb, schema } from "./db.js";
 
 export type AuthUser = { id: string; email?: string | null };
 
@@ -36,14 +35,15 @@ export type SleeperConnection = { sleeperUserId: string; sleeperUsername: string
 
 export async function getSleeperConnection(userId: string): Promise<SleeperConnection | null> {
   const db = getDb();
-  const result = await db.execute(sql`
-    SELECT sleeper_user_id, sleeper_username FROM sleeper_connections WHERE user_id = ${userId}
-  `);
-  if (result.length === 0) return null;
-  return {
-    sleeperUserId: result[0].sleeper_user_id as string,
-    sleeperUsername: result[0].sleeper_username as string,
-  };
+  const [row] = await db
+    .select({
+      sleeperUserId: schema.sleeperConnections.sleeperUserId,
+      sleeperUsername: schema.sleeperConnections.sleeperUsername,
+    })
+    .from(schema.sleeperConnections)
+    .where(eq(schema.sleeperConnections.userId, userId))
+    .limit(1);
+  return row ?? null;
 }
 
 /**

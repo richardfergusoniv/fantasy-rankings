@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -27,6 +28,12 @@ import {
  *   (drizzle-orm/pg-core supports the `enum` option on text()).
  */
 
+/**
+ * Key/value cache for dashboard snapshots and external source payloads.
+ * Some rows are multi‑MB JSON text (players dump, full dashboards). Keep
+ * reads keyed by `cache_key`; longer-term, large blobs should move to object
+ * storage or compressed/chunked payloads rather than growing this table.
+ */
 export const sourceCache = pgTable("source_cache", {
   cacheKey: text("cache_key").primaryKey(),
   payload: text("payload").notNull(),
@@ -49,15 +56,21 @@ export const historicalTrades = pgTable(
   ],
 );
 
-export const vegasProjectionSnapshots = pgTable("vegas_projection_snapshots", {
-  id: text("id").primaryKey(),
-  season: integer("season").notNull(),
-  week: integer("week").notNull(),
-  builtAt: timestamp("built_at", { withTimezone: true, mode: "date" }).notNull(),
-  source: text("source").notNull(),
-  payload: text("payload").notNull(),
-  storedAt: timestamp("stored_at", { withTimezone: true, mode: "date" }).notNull(),
-});
+export const vegasProjectionSnapshots = pgTable(
+  "vegas_projection_snapshots",
+  {
+    id: text("id").primaryKey(),
+    season: integer("season").notNull(),
+    week: integer("week").notNull(),
+    builtAt: timestamp("built_at", { withTimezone: true, mode: "date" }).notNull(),
+    source: text("source").notNull(),
+    payload: text("payload").notNull(),
+    storedAt: timestamp("stored_at", { withTimezone: true, mode: "date" }).notNull(),
+  },
+  (table) => [
+    index("vegas_projection_snapshots_season_week_idx").on(table.season, table.week),
+  ],
+);
 
 export const vegasProjectionUploadChunks = pgTable("vegas_projection_upload_chunks", {
   id: text("id").primaryKey(),
@@ -73,16 +86,26 @@ export const vegasProjectionUploadChunks = pgTable("vegas_projection_upload_chun
   storedAt: timestamp("stored_at", { withTimezone: true, mode: "date" }).notNull(),
 });
 
-export const playerValueSnapshots = pgTable("player_value_snapshots", {
-  id: text("id").primaryKey(),
-  snapshotDate: text("snapshot_date").notNull(),
-  formatKey: text("format_key").notNull(),
-  playerId: text("player_id").notNull(),
-  playerName: text("player_name").notNull(),
-  position: text("position").notNull(),
-  value: integer("value").notNull(),
-  capturedAt: timestamp("captured_at", { withTimezone: true, mode: "date" }).notNull(),
-});
+export const playerValueSnapshots = pgTable(
+  "player_value_snapshots",
+  {
+    id: text("id").primaryKey(),
+    snapshotDate: text("snapshot_date").notNull(),
+    formatKey: text("format_key").notNull(),
+    playerId: text("player_id").notNull(),
+    playerName: text("player_name").notNull(),
+    position: text("position").notNull(),
+    value: integer("value").notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true, mode: "date" }).notNull(),
+  },
+  (table) => [
+    index("player_value_snapshots_format_player_date_idx").on(
+      table.formatKey,
+      table.playerId,
+      table.snapshotDate,
+    ),
+  ],
+);
 
 export const projectionAccuracy = pgTable("projection_accuracy", {
   id: text("id").primaryKey(),
@@ -122,6 +145,11 @@ export const savedChartViews = pgTable(
   (table) => [
     index("saved_chart_views_dataset_idx").on(table.dataset),
     index("saved_chart_views_user_id_idx").on(table.userId),
+    uniqueIndex("saved_chart_views_user_dataset_name_uidx").on(
+      table.userId,
+      table.dataset,
+      table.name,
+    ),
   ],
 );
 
@@ -131,22 +159,39 @@ export const playerNewsRuns = pgTable("player_news_runs", {
   itemCount: integer("item_count").notNull(),
 });
 
-export const playerNewsItems = pgTable("player_news_items", {
-  id: text("id").primaryKey(),
-  runId: text("run_id")
-    .notNull()
-    .references(() => playerNewsRuns.id, { onDelete: "cascade" }),
-  playerId: text("player_id").notNull(),
-  player: text("player").notNull(),
-  team: text("team").notNull(),
-  change: text("change").notNull(),
-  leaguesJson: text("leagues_json").notNull(),
-  newsType: text("news_type", { enum: ["roster", "waiver", "headline"] })
-    .notNull()
-    .default("roster"),
-  availabilityJson: text("availability_json"),
-  roleContext: text("role_context").notNull(),
-  sourceLabel: text("source_label").notNull(),
-  sourceUrl: text("source_url").notNull(),
-  sourcePublishedAt: timestamp("source_published_at", { withTimezone: true, mode: "date" }),
-});
+export const playerNewsItems = pgTable(
+  "player_news_items",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => playerNewsRuns.id, { onDelete: "cascade" }),
+    playerId: text("player_id").notNull(),
+    player: text("player").notNull(),
+    team: text("team").notNull(),
+    change: text("change").notNull(),
+    leaguesJson: text("leagues_json").notNull(),
+    newsType: text("news_type", { enum: ["roster", "waiver", "headline"] })
+      .notNull()
+      .default("roster"),
+    availabilityJson: text("availability_json"),
+    roleContext: text("role_context").notNull(),
+    sourceLabel: text("source_label").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    sourcePublishedAt: timestamp("source_published_at", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [index("player_news_items_run_id_idx").on(table.runId)],
+);
+
+/** Links a Supabase Auth user to their Sleeper account (one connection per user). */
+export const sleeperConnections = pgTable(
+  "sleeper_connections",
+  {
+    userId: uuid("user_id").primaryKey(),
+    sleeperUserId: text("sleeper_user_id").notNull(),
+    sleeperUsername: text("sleeper_username").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [index("sleeper_connections_sleeper_user_id_idx").on(table.sleeperUserId)],
+);
