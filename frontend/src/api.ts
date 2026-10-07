@@ -82,7 +82,10 @@ export const api = {
     formatKey: string;
     playerIds: string[];
   }): Promise<JsonValue> =>
-    request("/api/value-history", { method: "POST", body: JSON.stringify(args) }),
+    request(`/api/value-history${qs({
+      formatKey: args.formatKey,
+      playerIds: args.playerIds.join(","),
+    })}`),
 
   getHistoricalTrades: (args: {
     leagueId: string;
