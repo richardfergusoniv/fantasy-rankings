@@ -25,7 +25,9 @@ import {
   DRAFT_MARKET_CACHE_KEY,
   DYNASTICAL_CUCKS_LEAGUE_ID,
   FANTASY_CALC_VALUES_URL,
+  REFRESH_TIMEOUT_MS,
   SLEEPER_BASE,
+  SOURCE_TIMEOUT_MS,
   SLEEPER_PROJECTIONS_BASE,
   canonicalTeam,
   fetchJson,
@@ -69,7 +71,7 @@ import {
  */
 
 export const USER_DASHBOARD_CACHE_MS = 10 * 60 * 1000; // 10 minutes
-const BUILD_DEADLINE_MS = 55_000; // stay inside the 60s function budget
+export const BUILD_DEADLINE_MS = 55_000; // stay inside the 60s function budget
 
 const NFLVERSE_PLAYER_STATS_2026_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.csv";
 const NFLVERSE_PLAYER_STATS_2025_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2025.csv";
@@ -926,7 +928,14 @@ export async function refreshFantasyCalcCache(): Promise<{
 }> {
   const presets: Record<string, FantasyCalcRow[]> = {};
   let failed = 0;
+  // Leave room for one timed-out fetch before the 60s Hobby cap.
+  // Stopping here skips the cache write, so the previous snapshot stays.
+  const presetBudgetMs = SOURCE_TIMEOUT_MS + 5_000;
+  const deadlineAt = Date.now() + REFRESH_TIMEOUT_MS;
   for (const preset of FANTASY_CALC_PRESETS) {
+    if (deadlineAt - Date.now() < presetBudgetMs) {
+      throw new Error("FantasyCalc refresh stopped early to stay within the 60s hosting limit.");
+    }
     let rows: FantasyCalcRow[] | undefined;
     for (let attempt = 0; attempt < 2 && !rows; attempt += 1) {
       try {

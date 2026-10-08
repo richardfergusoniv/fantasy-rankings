@@ -7,10 +7,12 @@ import {
   methodNotAllowed,
 } from "../_lib/api-utils.js";
 import {
+  BUILD_DEADLINE_MS,
   buildUserDashboard,
   refreshFantasyCalcCache,
   writeGlobalDashboardSnapshot,
 } from "../_lib/dashboard-build.js";
+import { withDeadline } from "../_lib/sleeper.js";
 
 /**
  * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc
@@ -30,7 +32,9 @@ import {
 const OWNER_SLEEPER_USER_ID = "739931264659927040";
 
 async function handleRebuildDashboard(): Promise<Response> {
-  const dashboard = await buildUserDashboard(OWNER_SLEEPER_USER_ID);
+  const buildPromise = buildUserDashboard(OWNER_SLEEPER_USER_ID);
+  buildPromise.catch(() => undefined);
+  const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
   await writeGlobalDashboardSnapshot(dashboard);
   return json({
     ok: true,
