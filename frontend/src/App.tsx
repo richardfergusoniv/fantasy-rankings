@@ -4200,7 +4200,7 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
       </div>
       {filteredRows.slice(0, visibleDraftCount).map((row) => {
         const isSpecialist = row.position === "K" || row.position === "DEF";
-        const secondary = draftSecondaryLine(row.position, row.team);
+        const secondary = row.team?.trim() || null;
         return (
           <div className="draft-row" role="listitem" key={`${row.format}-${row.playerId ?? row.name}`}>
             <button type="button" className={`draft-player-open${secondary ? "" : " is-single-line"}`} onClick={() => openDraftPlayer(row)} disabled={!row.playerId} aria-label={`View ${row.name} details and news`}>
