@@ -3475,19 +3475,21 @@ function TradeHistoryView({ dashboard, league, onOpenPlayer }: { dashboard: Dash
     <div className="trade-history-view">
       <label className="trade-history-filter">
         <span>Season</span>
-        <select
-          aria-label="Trade history season"
-          value={selectedSeason}
-          onChange={(event) => {
-            const nextSeason = event.target.value === "all" ? "all" : Number(event.target.value);
-            setSelectedSeason(nextSeason);
-            setSelectedTradeId(null);
-            refreshRequested.current = null;
-          }}
-        >
-          {tradesQuery.data.seasons.map((season) => <option key={season} value={season}>{season}</option>)}
-          <option value="all">All seasons</option>
-        </select>
+        <span className="select-control-field">
+          <select
+            aria-label="Trade history season"
+            value={selectedSeason}
+            onChange={(event) => {
+              const nextSeason = event.target.value === "all" ? "all" : Number(event.target.value);
+              setSelectedSeason(nextSeason);
+              setSelectedTradeId(null);
+              refreshRequested.current = null;
+            }}
+          >
+            {tradesQuery.data.seasons.map((season) => <option key={season} value={season}>{season}</option>)}
+            <option value="all">All seasons</option>
+          </select>
+        </span>
       </label>
       {tradesQuery.data.sourceErrors.length ? <p className="trade-history-source-note">{tradesQuery.data.sourceErrors.join(" ")}</p> : null}
       {!tradesQuery.data.trades.length ? (
