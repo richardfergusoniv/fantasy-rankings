@@ -40,7 +40,7 @@
 
 ### 🔲 Todo (after unblocked)
 
-- [ ] Schema changes follow [Database migrations](#database-migrations). `npm run db:migrate` applies `0001_baseline` only.
+- [ ] Schema changes follow [Database migrations](#database-migrations). `npm run db:migrate` applies `0001_baseline` only. Do not run it against production.
 - [ ] `npm install` + `npm run typecheck` (validate the scaffold compiles)
 - [ ] `npm run build` (validate Vite build works)
 - [ ] Push to GitHub
@@ -135,9 +135,13 @@ Scripts in `package.json`:
 
 `db:migrate` applies only entries in `drizzle-pg/meta/_journal.json`. That journal lists `0001_baseline` and nothing else.
 
-`drizzle-pg/0002_chart_views_user_id.sql` and `drizzle-pg/0003_phase2_users.sql` are hand-written. They are not journal entries, so `db:migrate` does not run them. Apply them yourself (Supabase SQL editor or `psql`) after `0001`. Both files are safe to re-run (`IF EXISTS` / `IF NOT EXISTS`).
+`drizzle-pg/0002_chart_views_user_id.sql`, `drizzle-pg/0003_phase2_users.sql`, and `drizzle-pg/0004_db_hardening.sql` are hand-written. They are not journal entries, so `db:migrate` does not run them. Production already has `0001` through `0004` applied by hand (Supabase SQL editor). `0004_db_hardening.sql` was applied on 2026-10-07. Drizzle has never run `db:migrate` on production: there is no `drizzle.__drizzle_migrations` table.
 
-`db:push` diffs `lib/schema.ts` against the database. `sleeper_connections` is created by `0003_phase2_users.sql` and is not declared in `lib/schema.ts`, so `db:push` will not create that table.
+Do not run `npm run db:migrate` against production. `0001_baseline` creates `saved_chart_views_owner_idx` on `owner_source` and `owner_key`. `0002` dropped those columns and that index. Running `0001` again fails on that `CREATE INDEX`, and Drizzle rolls the migration back.
+
+`0002` is safe to re-run (`IF EXISTS` / `IF NOT EXISTS`). `0003` is not. Its `CREATE POLICY` statements have no `IF NOT EXISTS`, so a second run fails because those policies already exist. `0004` was applied by hand on 2026-10-07; it adds the hot-path indexes (including `player_value_snapshots` on `snapshot_date DESC`), the `saved_chart_views` unique `(user_id, dataset, name)` index, owner RLS, the `auth.uid()` initplan fix, and `REVOKE TRUNCATE`.
+
+`sleeper_connections` is declared in `api/_lib/schema.ts`, which is the schema the live routes import through `api/_lib/db.ts`. `lib/schema.ts` matches that file. `drizzle.config.ts` still reads `lib/schema.ts`. `db:push` diffs `lib/schema.ts` against the database, and production already has this table plus the `0004` indexes and policies. Do not run `db:push` or `db:migrate` against production.
 
 `npm run typecheck` runs `tsc --noEmit -p frontend/tsconfig.json`. It typechecks `frontend/` only.
 
