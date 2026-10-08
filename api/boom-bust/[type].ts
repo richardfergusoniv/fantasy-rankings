@@ -5,7 +5,6 @@ import {
   badRequest,
   internalError,
   json,
-  methodNotAllowed,
 } from "../_lib/api-utils.js";
 import {
   BOOM_BUST_SEASONS,
@@ -61,6 +60,8 @@ const boomBustHistoryResponse = boomBustSeriesSchema.extend({
   seasonTotals: z.record(z.string(), z.number()),
   coverageNote: z.string().nullable(),
 });
+
+export type BoomBustHistory = z.infer<typeof boomBustHistoryResponse>;
 
 const querySchema = z.object({
   leagueId: z.string().min(1).max(80),
@@ -218,6 +219,8 @@ const boomBustRangesResponse = z.object({
   })),
   unavailablePlayerIds: z.array(z.string()),
 });
+
+export type BoomBustRanges = z.infer<typeof boomBustRangesResponse>;
 
 async function loadRangesScoringSettings(leagueId: string): Promise<Record<string, number> | null> {
   const cacheKey = `sleeper-league-settings-v1:${leagueId}`;
