@@ -45,10 +45,9 @@ export function methodNotAllowed(allowed: string[]): Response {
 }
 
 export function internalError(err: unknown): Response {
-  // Never leak stack traces to the client in production
   const message = err instanceof Error ? err.message : "Internal server error";
   console.error("[api]", message, err instanceof Error ? err.stack : err);
-  return json({ ok: false, error: message }, 500);
+  return json({ ok: false, error: "Internal server error" }, 500);
 }
 
 // ---------------------------------------------------------------------------
