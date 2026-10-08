@@ -183,7 +183,7 @@ export function PowerRankings({
             <strong>{player.name}</strong>
             {scope === "week" && player.isStarter ? <span className="power-slot-chip">{(player.lineupSlot ?? player.position).replaceAll("_", " ")}</span> : null}
           </span>
-          <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span>{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} /></span></span>
+          <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span className="ranking-meta-position">{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} /></span></span>
         </span>
         <span className="ranking-proj"><strong>{metric}</strong><span>{metricLabel}</span></span>
       </button>
