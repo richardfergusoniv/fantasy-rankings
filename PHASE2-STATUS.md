@@ -43,8 +43,9 @@
 | `GET /api/chart-views` | `api/chart-views.ts` | `listSavedChartViews` | Supabase JWT auth; scoped to `user_id` |
 | `POST /api/chart-views` | `api/chart-views.ts` | `saveChartView` | Supabase JWT auth; upsert by dataset+name |
 | `DELETE /api/chart-views?id=` | `api/chart-views.ts` | `deleteChartView` | Supabase JWT auth. There is no `chart-views/[id].ts`. |
-| migration | `drizzle-pg/0002_chart_views_user_id.sql` | — | Hand-written SQL, not in the drizzle-kit journal. Drops `owner_source`/`owner_key`, adds `user_id`. See `MIGRATION-STATUS.md`. |
-| migration | `drizzle-pg/0003_phase2_users.sql` | — | Hand-written SQL, not in the journal. Creates `sleeper_connections` and its RLS policies. |
+| migration | `drizzle-pg/0002_chart_views_user_id.sql` | — | Hand-written SQL, not in the drizzle-kit journal. Applied by hand. Drops `owner_source`/`owner_key`, adds `user_id`. Safe to re-run. See `MIGRATION-STATUS.md`. |
+| migration | `drizzle-pg/0003_phase2_users.sql` | — | Hand-written SQL, not in the journal. Applied by hand. Creates `sleeper_connections` (also declared in `api/_lib/schema.ts`) and its RLS policies. Not safe to re-run: `CREATE POLICY` has no `IF NOT EXISTS`. |
+| migration | `drizzle-pg/0004_db_hardening.sql` | — | Hand-written SQL, not in the journal. Applied by hand to production on 2026-10-07. Indexes, chart-view unique key, owner RLS, `auth.uid()` initplan fix, revoke `TRUNCATE`. |
 
 ## ✅ Completed: Shared libraries
 
