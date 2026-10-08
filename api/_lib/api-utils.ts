@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /**

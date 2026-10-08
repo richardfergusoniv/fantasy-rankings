@@ -51,12 +51,12 @@
 
 | File | Purpose |
 |------|---------|
-| `lib/api-utils.ts` | Response helpers, `CRON_SECRET` check, `ADMIN_USER_IDS` check, Supabase JWT helper, query param parsers |
-| `lib/dashboard-schemas.ts` | Full dashboard zod schemas (verbatim from actions.ts, plain zod) |
-| `lib/trades.ts` | Historical trades logic (~700 lines: Sleeper fetching, draft pick resolution, kicker-chain logic) |
-| `lib/sleeper.ts` | Shared Sleeper helpers: fetch/deadline utils, stat scoring, weekly-stats cache, league formats, availability, injury snapshots |
-
-Route handlers import the copies under `api/_lib/`. `drizzle.config.ts` reads `lib/schema.ts`.
+| `api/_lib/api-utils.ts` | Response helpers, `CRON_SECRET` check, `ADMIN_USER_IDS` check, Supabase JWT helper, query param parsers |
+| `api/_lib/dashboard-schemas.ts` | Full dashboard zod schemas (verbatim from actions.ts, plain zod) |
+| `api/_lib/trades.ts` | Historical trades logic (~700 lines: Sleeper fetching, draft pick resolution, kicker-chain logic) |
+| `api/_lib/sleeper.ts` | Shared Sleeper helpers: fetch/deadline utils, stat scoring, weekly-stats cache, league formats, availability, injury snapshots |
+| `api/_lib/schema.ts` | Drizzle schema. `drizzle.config.ts` reads this file. |
+| `api/_lib/db.ts` | postgres-js client (`prepare: false`) used by the route handlers |
 
 ---
 

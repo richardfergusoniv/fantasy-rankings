@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
 import { db, schema } from "./_lib/db.js";
-import { internalError, json, methodNotAllowed } from "./_lib/api-utils.js";
+import { internalError, json } from "./_lib/api-utils.js";
 
 /**
  * GET /api/pfn-tables
@@ -22,6 +22,7 @@ const pfnRowSchema = z
   })
   .catchall(pfnMetricValueSchema);
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- type-only schema
 const storedPfnTableSchema = z.object({
   fetched_at: z.string(),
   label: z.string(),
@@ -76,7 +77,7 @@ async function loadTeamSituationalSnapshot(): Promise<z.infer<typeof teamSituati
   }
 }
 
-export async function GET(req: Request): Promise<Response> {
+export async function GET(_req: Request): Promise<Response> {
   try {
     const keys = pfnTableKeys.map((tableKey) => `pfn:${tableKey}`);
     const rows = await db

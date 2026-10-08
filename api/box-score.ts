@@ -5,7 +5,6 @@ import {
   internalError,
   isAdminUserId,
   json,
-  methodNotAllowed,
 } from "./_lib/api-utils.js";
 import { canonicalTeam, fetchJson } from "./_lib/sleeper.js";
 

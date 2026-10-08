@@ -69,6 +69,8 @@
 - [x] `lib/dashboard-schemas.ts` — dashboard zod schemas (plain zod)
 - [x] `lib/trades.ts` — historical trades Sleeper logic (~700 lines)
 
+The `lib/` copies listed above were removed. Live code is `api/_lib/`, including `api/_lib/schema.ts`.
+
 See `PHASE2-STATUS.md` for full details. `app/` is unmodified. `npm run typecheck` covers `frontend/` only.
 
 ### ✅ Shipped since the list above
@@ -123,7 +125,7 @@ Per ANALYSIS.md §5, §10:
 
 Postgres migrations live in `drizzle-pg/`. `app/drizzle/` is the Hatch SQLite history and is not applied to Supabase.
 
-`drizzle.config.ts` reads `lib/schema.ts`, writes SQL to `drizzle-pg/`, and connects with `DATABASE_URL`. `lib/schema.ts` and `api/_lib/schema.ts` match. Route handlers use `api/_lib/db.ts`; drizzle-kit does not.
+`drizzle.config.ts` reads `api/_lib/schema.ts`, writes SQL to `drizzle-pg/`, and connects with `DATABASE_URL`. Route handlers use that same schema through `api/_lib/db.ts`.
 
 Scripts in `package.json`:
 
@@ -141,7 +143,7 @@ Do not run `npm run db:migrate` against production. `0001_baseline` creates `sav
 
 `0002` is safe to re-run (`IF EXISTS` / `IF NOT EXISTS`). `0003` is not. Its `CREATE POLICY` statements have no `IF NOT EXISTS`, so a second run fails because those policies already exist. `0004` was applied by hand on 2026-10-07; it adds the hot-path indexes (including `player_value_snapshots` on `snapshot_date DESC`), the `saved_chart_views` unique `(user_id, dataset, name)` index, owner RLS, the `auth.uid()` initplan fix, and `REVOKE TRUNCATE`.
 
-`sleeper_connections` is declared in `api/_lib/schema.ts`, which is the schema the live routes import through `api/_lib/db.ts`. `lib/schema.ts` matches that file. `drizzle.config.ts` still reads `lib/schema.ts`. `db:push` diffs `lib/schema.ts` against the database, and production already has this table plus the `0004` indexes and policies. Do not run `db:push` or `db:migrate` against production.
+`sleeper_connections` is declared in `api/_lib/schema.ts`. `db:push` diffs that file against the database. Production already has this table plus the `0004` indexes and policies. Do not run `db:push` or `db:migrate` against production.
 
 `npm run typecheck` runs `tsc --noEmit -p frontend/tsconfig.json`. It typechecks `frontend/` only.
 
