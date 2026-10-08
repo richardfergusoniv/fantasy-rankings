@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type Ref } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Customized, ReferenceLine, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -396,9 +396,11 @@ type SavedViewControlsProps = {
   onApplySavedView: (view: SavedChartView) => void;
   onApplyBuiltIn: (preset: ChartPreset) => void;
   onChooseCustom: () => void;
+  advancedControlsRef: Ref<HTMLDetailsElement>;
+  children: ReactNode;
 };
 
-function SavedViewControls({ dataset, presets, validPositions, config, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, onChooseCustom }: SavedViewControlsProps) {
+function SavedViewControls({ dataset, presets, validPositions, config, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, onChooseCustom, advancedControlsRef, children }: SavedViewControlsProps) {
   const queryClient = useQueryClient();
   const [isNaming, setIsNaming] = useState(false);
   const [name, setName] = useState("");
@@ -510,6 +512,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
   }
 
   return (
+    <>
     <div className="saved-view-block">
       <div className="saved-view-row">
         <label className="chart-preset-select">
@@ -542,10 +545,6 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
             <option value="custom">Custom axes</option>
           </select>
         </label>
-        <div className="saved-view-actions">
-          <Button type="button" variant="outline" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessageIsError(false); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</Button>
-          {selectedSavedView ? <button type="button" className="saved-view-delete" onClick={() => setPendingDelete(selectedSavedView)} disabled={deleteMutation.isPending}>Delete “{selectedSavedView.name}”</button> : null}
-        </div>
       </div>
       {matchingPreset?.research ? (
         <div className="chart-research-note">
@@ -553,16 +552,27 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
           <a href={matchingPreset.research.sourceUrl} target="_blank" rel="noreferrer">Research: {matchingPreset.research.source} ↗<span className="sr-only"> (opens in a new tab)</span></a>
         </div>
       ) : null}
-      {isNaming ? (
-        <form className="saved-view-form" onSubmit={submitName}>
-          <label htmlFor={`${dataset}-saved-view-name`}>View name</label>
-          <div>
-            <input ref={nameRef} id={`${dataset}-saved-view-name`} name="view-name" autoComplete="off" spellCheck={false} value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="RB receiving upside…" />
-            <button type="submit" disabled={saveMutation.isPending} aria-busy={saveMutation.isPending}>Save{saveMutation.isPending ? <span className="sr-only"> Saving…</span> : null}</button>
-          </div>
-        </form>
-      ) : null}
-      {viewsQuery.isError ? <p className="saved-view-status" role="alert">Saved views couldn’t be loaded.</p> : message ? <p className="saved-view-status" role={messageIsError ? "alert" : "status"}>{message}</p> : null}
+    </div>
+    <details className="chart-advanced-controls" ref={advancedControlsRef}>
+      <summary>Advanced chart controls</summary>
+      <div>
+        <div className="saved-view-actions">
+          <Button type="button" variant="outline" size="sm" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessageIsError(false); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</Button>
+          {selectedSavedView ? <button type="button" className="saved-view-delete" onClick={() => setPendingDelete(selectedSavedView)} disabled={deleteMutation.isPending}>Delete “{selectedSavedView.name}”</button> : null}
+        </div>
+        {isNaming ? (
+          <form className="saved-view-form" onSubmit={submitName}>
+            <label htmlFor={`${dataset}-saved-view-name`}>View name</label>
+            <div>
+              <input ref={nameRef} id={`${dataset}-saved-view-name`} name="view-name" autoComplete="off" spellCheck={false} value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="RB receiving upside…" />
+              <button type="submit" disabled={saveMutation.isPending} aria-busy={saveMutation.isPending}>Save{saveMutation.isPending ? <span className="sr-only"> Saving…</span> : null}</button>
+            </div>
+          </form>
+        ) : null}
+        {viewsQuery.isError ? <p className="saved-view-status" role="alert">Saved views couldn’t be loaded.</p> : message ? <p className="saved-view-status" role={messageIsError ? "alert" : "status"}>{message}</p> : null}
+        {children}
+      </div>
+    </details>
       <Dialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
         <DialogContent>
           <DialogHeader>
@@ -587,7 +597,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
           <DialogCloseButton />
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
 
@@ -1178,11 +1188,8 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
         onApplySavedView={applySavedView}
         onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); closeAdvancedControls(); }}
         onChooseCustom={openAdvancedControls}
-      />
-
-      <details className="chart-advanced-controls" ref={advancedControlsRef}>
-        <summary>Advanced chart controls</summary>
-        <div>
+        advancedControlsRef={advancedControlsRef}
+      >
           <SegmentedControl
             className="lineup-mode-toggle analytics-window-toggle"
             value={window}
@@ -1198,8 +1205,7 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
             <PercentileCutoffSelect axis="Y" value={yPercentile} onChange={(value) => { setYPercentile(value); setSelectedSavedViewId(null); }} />
           </div>
           <label className="chart-checkbox"><input type="checkbox" checked={showQuadrants} onChange={(event) => { setShowQuadrants(event.target.checked); setSelectedSavedViewId(null); }} /><span>Show quadrant guides and percentile cutoffs</span></label>
-        </div>
-      </details>
+      </SavedViewControls>
 
       <button type="button" className="chart-open-button" onClick={() => setIsChartOpen(true)}>View chart</button>
       <ChartDialog
@@ -1631,10 +1637,8 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
         onApplySavedView={applySavedView}
         onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); closeAdvancedControls(); }}
         onChooseCustom={openAdvancedControls}
-      />
-      <details className="chart-advanced-controls" ref={advancedControlsRef}>
-        <summary>Advanced chart controls</summary>
-        <div>
+        advancedControlsRef={advancedControlsRef}
+      >
           <div className="analytics-selectors advanced-only-selectors">
             <label><span>X axis</span><select aria-label="Choose weekly horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setSelectedSavedViewId(null); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
             <label><span>Y axis</span><select aria-label="Choose weekly vertical axis" value={selectedY.key} onChange={(event) => { setYMetric(event.target.value); setSelectedSavedViewId(null); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
@@ -1643,8 +1647,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
             <PercentileCutoffSelect axis="Y" value={yPercentile} onChange={(value) => { setYPercentile(value); setSelectedSavedViewId(null); }} />
           </div>
           <label className="chart-checkbox"><input type="checkbox" checked={showQuadrants} onChange={(event) => { setShowQuadrants(event.target.checked); setSelectedSavedViewId(null); }} /><span>Show quadrant guides and percentile cutoffs</span></label>
-        </div>
-      </details>
+      </SavedViewControls>
       <button type="button" className="chart-open-button" onClick={() => setIsChartOpen(true)}>View chart</button>
       <ChartDialog
         isOpen={isChartOpen}

@@ -1355,7 +1355,15 @@ function PlayerDetailSheet({
 }
 
 function MatchupPlayer({ player, side, sosEntry, isSwappedIn = false, isDemoted = false, onOpen, onOpenMatchup }: { player: RosterPlayer | undefined; side: "mine" | "theirs"; sosEntry?: StrengthOfScheduleEntryLike; isSwappedIn?: boolean; isDemoted?: boolean; onOpen?: (player: RosterPlayer) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
-  if (!player) return <div className={`matchup-player ${side} empty-player`}>—</div>;
+  if (!player) {
+    return (
+      <div className={`matchup-player ${side} empty-player`} aria-hidden="true">
+        <span className="matchup-player-open" />
+        <span className="matchup-meta" />
+        <span className="matchup-number matchup-player-score"><b>—</b></span>
+      </div>
+    );
+  }
   const score = playerScore(player);
   const openPlayer = () => onOpen?.(player);
   const position = player.position === "DEF" ? "DST" : player.position;
