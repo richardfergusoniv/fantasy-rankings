@@ -1531,6 +1531,21 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
   padding: 0;
   line-height: 1;
 }
+.power-team-card-roster .ranking-row { align-items: center; }
+.power-team-card-roster .ranking-player {
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 0;
+}
+.power-team-card-roster .ranking-name-line,
+.power-team-card-roster .ranking-meta-line {
+  align-items: center;
+  margin-top: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.power-team-card-roster .ranking-name-line { min-height: 22px; }
+.power-team-card-roster .ranking-meta-line { min-height: 18px; }
 .power-roster-player { font-variant-numeric: tabular-nums; }
 .power-slot-chip { flex: none; max-width: 74px; overflow: hidden; padding: 2px 4px 1px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); line-height: 1.2; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .power-bench-heading { min-height: 27px; display: flex; align-items: center; padding: 0 10px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
