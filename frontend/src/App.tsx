@@ -3847,9 +3847,9 @@ function readDraftPlayerIds(storageKey: string): string[] {
   catch { return []; }
 }
 
-function draftSecondaryLine(position: string, team: string | null | undefined, extra?: string): string | null {
+function draftSecondaryLine(position: string, team: string | null | undefined): string | null {
   const positionLabel = position === "DEF" ? "DST" : position.trim();
-  const parts = [positionLabel, team?.trim() ?? "", extra?.trim() ?? ""].filter((part) => part.length > 0);
+  const parts = [positionLabel, team?.trim() ?? ""].filter((part) => part.length > 0);
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
@@ -4158,7 +4158,7 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
             <span className="sr-only">Actions</span>
           </div>
           {myTeamPlayers.map((player) => {
-            const secondary = draftSecondaryLine(player.position, player.team, player.livePick ? "Sleeper pick" : undefined);
+            const secondary = draftSecondaryLine(player.position, player.team);
             return (
               <div className="draft-row draft-my-team-row" role="listitem" key={player.playerId}>
                 <button type="button" className={`draft-player-open${secondary ? "" : " is-single-line"}`} onClick={() => openDraftPlayer(player)} aria-label={`View ${player.name} details and news`}>
@@ -4265,7 +4265,7 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
   return (
     <section className="draft-center">
       <div className="draft-heading">
-        <div><h2>Draft Room</h2><p>{league.seasonLongFormat.label} · {league.seasonLongFormat.numTeams} teams{league.seasonLongFormat.isDynasty ? ` · ${isRookieBoard ? "Rookie board" : "Startup board"}` : ""}</p></div>
+        <h2>Draft Room</h2>
         <button className="refresh-button" type="button" onClick={onRefresh} disabled={refreshing} aria-label="Refresh draft data"><RefreshIcon spinning={refreshing} /></button>
       </div>
       <SegmentedControl
