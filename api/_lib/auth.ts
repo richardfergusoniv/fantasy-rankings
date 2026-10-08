@@ -7,6 +7,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { sql } from "drizzle-orm";
+import { readSupabasePublicEnv } from "./api-utils.js";
 import { getDb } from "./db.js";
 
 export type AuthUser = { id: string; email?: string | null };
@@ -16,11 +17,10 @@ export async function getAuthUser(req: Request): Promise<AuthUser | null> {
   if (!authHeader?.startsWith("Bearer ")) return null;
   const token = authHeader.slice(7);
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey) return null;
+  const supabaseEnv = readSupabasePublicEnv();
+  if (!supabaseEnv) return null;
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createClient(supabaseEnv.url, supabaseEnv.anonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
 
