@@ -401,7 +401,6 @@ main { padding: 12px 16px 0; }
 .optimized-gain { display: inline-flex; min-height: 20px; align-items: center; padding: 1px 6px 0; border-radius: var(--radius-sm); background: var(--stat-strength-soft); color: var(--stat-strength-readable); font-size: var(--type-caption); font-style: normal; font-weight: 700; white-space: nowrap; }
 .optimized-gain span { color: inherit; }
 .versus { display: grid; place-items: center; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.matchup-context { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 10px; padding: 6px 12px; border-top: 1px solid var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 
 .lineup-section, .bench-section { margin-top: 14px; }
 .section-heading, .bench-section summary, .news-run-heading {
@@ -423,11 +422,10 @@ main { padding: 12px 16px 0; }
 .bench-section summary svg { margin-left: auto; color: var(--link); transition: transform .16s ease; }
 .bench-section[open] summary svg { transform: rotate(180deg); }
 
-.matchup-column-key { display: grid; grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr); gap: 6px; padding: 5px 8px 4px; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.matchup-column-key span:nth-child(2) { text-align: center; }
-.matchup-column-key span:last-child { text-align: right; overflow-wrap: anywhere; }
-.matchup-column-key span:first-child { overflow-wrap: anywhere; }
 .matchup-list, .trade-results, .quadrant-list, .player-list, .trade-side-list { overflow: hidden; border: 0; border-radius: 0; background: var(--surface); }
+/* The frame owns the radius. Clip the list to that curve so the first row
+   stays rounded after the column-key header is gone, without a second border. */
+.matchup-section .data-table-frame > .matchup-list { overflow: clip; border: 0; border-radius: inherit; background: transparent; }
 .matchup-row { display: grid; grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); gap: 0; min-height: 80px; align-items: stretch; border-bottom: 1px solid var(--hairline); transition: background-color .18s ease; }
 .matchup-row:hover { background: color-mix(in srgb, var(--accent-soft) 54%, var(--surface)); }
 .matchup-row:last-child, .ranking-row:last-child, .trade-result-row:last-child, .quadrant-list > div:last-child, .player-row:last-child, .trade-asset-row:last-child, .power-table > .power-list-item:last-child .power-row, .power-team-card-roster .power-row:last-child { border-bottom: 0; }
@@ -493,7 +491,7 @@ main { padding: 12px 16px 0; }
 .position-filter-rows { display: grid; gap: 5px; margin-top: 7px; }
 .position-tabs { min-height: 44px; }
 .position-tabs button { min-height: 44px; padding-inline: 3px; font-size: var(--type-caption); }
-.rankings-note { display: flex; justify-content: space-between; gap: 10px; margin: 10px 2px 6px; color: var(--dim); font-size: var(--type-caption); }
+.rankings-note { display: flex; justify-content: flex-end; gap: 10px; margin: 10px 2px 6px; color: var(--dim); font-size: var(--type-caption); }
 .ranking-row { display: grid; width: 100%; grid-template-columns: minmax(0,1fr) 62px; gap: 8px; min-height: 52px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--hairline); background: var(--surface); color: var(--text); text-align: left; }
 .ranking-row-button { cursor: pointer; touch-action: pan-y; }
 .ranking-row-button:active { background: var(--surface-2); }
@@ -531,11 +529,17 @@ main { padding: 12px 16px 0; }
 }
 .ranking-row .matchup-reference-button.matchup-reference-tag {
   min-height: 44px;
-  margin-block: -6px;
+  margin-block: 0;
   align-items: flex-start;
+  overflow: visible;
   color: var(--dim);
   font-size: var(--type-caption);
   font-weight: 600;
+}
+.ranking-row .matchup-reference-button-label {
+  overflow: visible;
+  padding-block: 1px;
+  line-height: 1.25;
 }
 .ranking-row .matchup-reference-tag {
   border-color: var(--hairline);
@@ -551,7 +555,7 @@ main { padding: 12px 16px 0; }
 .ranking-row .matchup-reference-button.sos-tough {
   background: transparent;
 }
-.ranking-football-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranking-football-meta { min-width: 0; overflow: visible; white-space: nowrap; }
 .season-team-pill { flex: none; }
 .ranking-row .season-team-pill:not(.matchup-reference-button),
 .ranking-row .season-team-pill .matchup-reference-button-label { overflow: hidden; border-radius: 4px; }
@@ -736,8 +740,6 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .section-error.compact { min-height: 96px; padding: 16px 8px; }
 
 .trade-subnav { width: min(100%, 280px); margin: 0 0 16px; }
-.trade-format-line { display: flex; justify-content: space-between; gap: 12px; margin: 1px 2px 8px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.trade-format-line span:last-child { flex: none; color: var(--text); }
 .trade-history-view { min-width: 0; }
 .trade-history-filter { display: grid; width: min(100%, 180px); gap: 5px; margin: 0 0 14px auto; }
 .trade-history-filter > span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
@@ -1581,7 +1583,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .tools-subview-tabs { width: 520px; }
   main { padding: 10px 32px 30px; }
   .matchup-score, .lineup-section, .bench-section { max-width: 860px; }
-  .matchup-row, .matchup-column-key { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
+  .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
   .rankings-view, .trade-view, .advanced-stats-view, .analytics-view, .weekly-projections-view, .comparison-view, .power-view { max-width: 920px; }
   .comparison-cards { max-width: 620px; gap: 20px; }
   .comparison-selector-card .comparison-cards { grid-template-columns: minmax(0, 1fr); }
@@ -1626,9 +1628,6 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .draft-source-warning li + li { margin-top: 3px; }
 .draft-controls { display: grid; gap: 10px; }
 .draft-controls input { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); padding: 11px 12px; font-size: 16px; }
-.position-pills { display: flex; flex-wrap: wrap; gap: 6px; }
-.position-pills button { min-height: 44px; border: 0; border-radius: var(--radius); background: var(--surface); color: var(--dim); padding: 7px 10px; font: 700 var(--type-caption)/1 inherit; }
-.position-pills button.active { background: var(--accent-soft); color: var(--link); }
 .draft-my-team { display: grid; gap: 9px; padding-block: 2px 4px; border-bottom: 1px solid var(--hairline); }
 .draft-my-team .section-heading { margin-top: 0; }
 .draft-my-team-list { background: var(--surface); border-top: 1px solid var(--hairline); }
@@ -1643,24 +1642,25 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .drafted-elsewhere button > span { display: grid; min-width: 0; }
 .drafted-elsewhere button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-body); }
 .drafted-elsewhere button small { color: var(--dim); font-size: var(--type-caption); }
-.draft-board { border-top: 1px solid var(--hairline); font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
-.draft-list-pagination { border-bottom-color: var(--hairline); }
-.draft-row { display: grid; grid-template-columns: minmax(0, 1fr) 28px 32px 42px 54px 82px; align-items: center; gap: 5px; min-height: 46px; padding-block: 1px; border-bottom: 1px solid var(--hairline); font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
-.draft-row > span:nth-child(n+2) { text-align: right; font-size: var(--type-body); }
+.draft-board { border: 0; background: transparent; font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
+.draft-list-pagination { border-bottom: 0; }
+.draft-row { display: grid; grid-template-columns: minmax(0, 1fr) 28px 32px 42px 54px 82px; align-items: center; gap: 5px; min-height: 72px; padding: 0 10px; border-bottom: 1px solid var(--hairline); background: var(--surface); font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
+.draft-row > span:nth-child(n+2) { text-align: right; font-size: var(--type-body); font-weight: 600; }
 .draft-row > span:nth-child(5) { display: grid; min-width: 0; }
-.draft-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-body); }
+.draft-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; line-height: 1.08; }
+.draft-row > span strong { font-size: var(--type-body); font-weight: 700; line-height: 1.25; }
 .draft-row small { color: var(--dim); font-size: var(--type-caption); }
-.draft-row button.draft-player-open { display: grid; min-width: 0; width: auto; height: auto; justify-items: start; padding: 0; border: 0; border-radius: 0; color: var(--text); text-align: left; }
-.draft-player-name-line { display: flex; min-width: 0; max-width: 100%; align-items: center; gap: 5px; }
-.draft-player-name-line strong { min-width: 0; }
+.draft-row button.draft-player-open { display: grid; min-width: 0; width: auto; height: auto; justify-items: start; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text); text-align: left; }
+.draft-row .draft-player-name-line { display: flex; min-width: 0; max-width: 100%; min-height: 36px; align-items: center; gap: 5px; padding-bottom: 0; }
+.draft-row .draft-player-name-line strong { min-width: 0; color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.08; }
+.draft-row .draft-player-meta { min-height: 32px; align-items: flex-start; overflow: visible; padding-top: 1px; line-height: 1.25; }
 .draft-row-actions { display: flex !important; align-items: center; justify-content: flex-end; gap: 8px; }
 .draft-row-actions .draft-taken-link { min-height: 44px; flex: none; padding: 6px 2px; border: 0; background: transparent; color: var(--dim); font-size: var(--type-caption); font-weight: 600; cursor: pointer; }
 .draft-row-actions .draft-taken-link:disabled { opacity: .35; }
-.draft-table-head { min-height: 28px; padding-block: 0; color: var(--dim); font-size: var(--type-caption); line-height: 1; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
-.draft-table-head > span:nth-child(n+2) { font-size: var(--type-caption); font-weight: 700; }
+.draft-table-head { min-height: 32px; padding: 5px 10px; background: var(--surface); color: var(--dim); font-size: var(--type-caption); line-height: 1.25; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.draft-table-head > span:nth-child(n+2) { font-size: var(--type-caption); font-weight: 700; letter-spacing: 0; text-transform: none; }
 .draft-table-head span:first-child { display: block; }
 .draft-board-view, .live-draft-view { display: grid; gap: 18px; }
-.live-draft-status { display: flex; align-items: center; gap: 7px; color: var(--dim); font-size: var(--type-caption); }
 .draft-plain-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--hairline); color: var(--dim); font-size: var(--type-caption); }
 .draft-live-empty { display: grid; gap: 6px; padding: 34px 0; text-align: center; }
 .draft-live-empty span { color: var(--dim); font-size: var(--type-body); }
@@ -1847,7 +1847,6 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 }
 .matchup-page .score-line small { font-size: var(--type-caption); font-weight: 600; }
 .matchup-page .versus { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.matchup-page .matchup-context { padding: 9px 2px; color: var(--dim); font-size: var(--type-caption); font-weight: 400; }
 .matchup-page .lineup-section { margin-top: 16px; }
 .matchup-page .section-heading {
   min-height: 38px;
@@ -1856,15 +1855,6 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   background: var(--bg);
 }
 .matchup-page .section-heading h2 { color: var(--foreground); font-size: var(--type-section); font-weight: 600; }
-.matchup-page .matchup-column-key {
-  grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr);
-  gap: 4px;
-  padding: 9px 5px 7px;
-  border-bottom: 1px solid var(--hairline);
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 600;
-}
 .matchup-page .matchup-list { background: transparent; }
 .matchup-page .matchup-row {
   grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr);
@@ -2015,7 +2005,6 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .team-card-source a { color: var(--link); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 
 @media (min-width: 760px) {
-  .matchup-page .matchup-column-key { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
   .matchup-page .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
   .matchup-data-card .comparison-metric-row { grid-template-columns: 76px minmax(0, 1fr); }
 }
@@ -2079,10 +2068,12 @@ h3 { font-size: var(--type-section); font-weight: 600; }
   box-shadow: var(--shadow-modal);
 }
 
-/* Primary actions use the Monarch orange pill; secondary actions use paper and a warm border. */
-.trade-calculate-button,
-.chart-open-button,
-.trade-add-player,
+/* Primary actions use the Monarch orange pill; secondary actions use paper and a warm border.
+   `button:not([data-slot])` sets `color: inherit`, so these selectors include the
+   element and beat it. White on --action stays APCA-readable for the label and icons. */
+button.trade-calculate-button,
+button.chart-open-button,
+button.trade-add-player,
 .saved-view-actions button.saved-view-save-trigger,
 .saved-view-form button,
 .empty-state button,
@@ -2092,6 +2083,15 @@ h3 { font-size: var(--type-section); font-weight: 600; }
   background: var(--action);
   color: var(--on-accent);
   font-weight: 600;
+}
+button.trade-calculate-button svg,
+button.chart-open-button svg,
+button.trade-add-player svg,
+.saved-view-actions button.saved-view-save-trigger svg,
+.saved-view-form button svg,
+.empty-state button svg,
+.integration-row form button svg {
+  color: var(--on-accent);
 }
 .trade-calculate-button:hover:not(:disabled),
 .chart-open-button:hover:not(:disabled),
@@ -2314,10 +2314,10 @@ a:active { color: var(--link-active); }
 }
 
 .draft-row button.draft-player-open {
-  min-height: 44px;
-  grid-template-rows: auto auto;
+  min-height: 68px;
+  grid-template-rows: 36px 32px;
   align-content: center;
-  gap: 1px;
+  gap: 0;
 }
 .trade-asset-name {
   height: var(--player-box-half);
