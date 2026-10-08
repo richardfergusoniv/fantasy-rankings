@@ -4209,7 +4209,11 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
         value={effectiveDraftPosition}
         onChange={(value) => publishDraftFilters({ position: value })}
         label="Draft position filter"
-        options={draftPositionOptions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
+        options={draftPositionOptions.map((item) => ({
+          value: item,
+          label: item === "DEF" ? "DST" : item === "ROOKIES" ? "Rook" : item,
+          ariaLabel: item === "ROOKIES" ? "Rookies" : undefined,
+        }))}
       />
     </div>
   );

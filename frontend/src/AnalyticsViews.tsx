@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type Ref } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Customized, ReferenceLine, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -398,11 +398,12 @@ type SavedViewControlsProps = {
   onSelectedSavedViewIdChange: (id: string | null) => void;
   onApplySavedView: (view: SavedChartView) => void;
   onApplyBuiltIn: (preset: ChartPreset) => void;
-  advancedControlsRef: Ref<HTMLDetailsElement>;
+  advancedOpen: boolean;
+  onAdvancedOpenChange: (open: boolean) => void;
   children: ReactNode;
 };
 
-function SavedViewControls({ dataset, presets, validPositions, config, pickerMode, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, advancedControlsRef, children }: SavedViewControlsProps) {
+function SavedViewControls({ dataset, presets, validPositions, config, pickerMode, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, advancedOpen, onAdvancedOpenChange, children }: SavedViewControlsProps) {
   const queryClient = useQueryClient();
   const [isNaming, setIsNaming] = useState(false);
   const [name, setName] = useState("");
@@ -560,9 +561,14 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
         </div>
       ) : null}
     </div>
-    <details className="chart-advanced-controls" ref={advancedControlsRef}>
-      <summary>Advanced chart controls</summary>
-      <div>
+    <Button type="button" variant="outline" className="chart-advanced-trigger" aria-haspopup="dialog" onClick={() => onAdvancedOpenChange(true)}>Advanced chart controls</Button>
+    <Dialog open={advancedOpen} onOpenChange={onAdvancedOpenChange}>
+      <DialogContent className="chart-advanced-dialog">
+        <DialogHeader>
+          <DialogTitle>Advanced chart controls</DialogTitle>
+          <DialogDescription className="sr-only">Adjust axes, players shown, and display options for this chart.</DialogDescription>
+        </DialogHeader>
+        <DialogCloseButton label="Close advanced chart controls" />
         <div className="saved-view-actions">
           <Button type="button" variant="outline" size="sm" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessageIsError(false); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</Button>
           {selectedSavedView ? <button type="button" className="saved-view-delete" onClick={() => setPendingDelete(selectedSavedView)} disabled={deleteMutation.isPending}>Delete “{selectedSavedView.name}”</button> : null}
@@ -578,8 +584,8 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
         ) : null}
         {viewsQuery.isError ? <p className="saved-view-status" role="alert">Saved views couldn’t be loaded.</p> : message ? <p className="saved-view-status" role={messageIsError ? "alert" : "status"}>{message}</p> : null}
         {children}
-      </div>
-    </details>
+      </DialogContent>
+    </Dialog>
       <Dialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
         <DialogContent>
           <DialogHeader>
@@ -1069,7 +1075,7 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
   // views are not in the URL, so the picker stays blank until the user chooses.
   const [pickerMode, setPickerMode] = useState<ChartPickerMode>("blank");
   const [isChartOpen, setIsChartOpen] = useState(false);
-  const advancedControlsRef = useRef<HTMLDetailsElement>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
   const metrics = analyticsMetricsForLeague(position, league);
   const presets = analyticsPresets[position];
@@ -1088,7 +1094,7 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
   };
 
   function closeAdvancedControls() {
-    if (advancedControlsRef.current?.open) advancedControlsRef.current.open = false;
+    setAdvancedOpen(false);
   }
 
   function choosePosition(nextPosition: BasePosition) {
@@ -1196,7 +1202,8 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
         onSelectedSavedViewIdChange={setSelectedSavedViewId}
         onApplySavedView={applySavedView}
         onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); setPickerMode("derived"); closeAdvancedControls(); }}
-        advancedControlsRef={advancedControlsRef}
+        advancedOpen={advancedOpen}
+        onAdvancedOpenChange={setAdvancedOpen}
       >
           <SegmentedControl
             className="lineup-mode-toggle analytics-window-toggle"
@@ -1408,7 +1415,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   // views are not in the URL, so the picker stays blank until the user chooses.
   const [pickerMode, setPickerMode] = useState<ChartPickerMode>("blank");
   const [isChartOpen, setIsChartOpen] = useState(false);
-  const advancedControlsRef = useRef<HTMLDetailsElement>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
   const selected = selectedPlayer ? entities.find((entity) => isSamePlayer(entity, selectedPlayer)) : undefined;
   const matches = useMemo(() => {
@@ -1483,7 +1490,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   };
 
   function closeAdvancedControls() {
-    if (advancedControlsRef.current?.open) advancedControlsRef.current.open = false;
+    setAdvancedOpen(false);
   }
 
   function choosePosition(nextPosition: BasePosition) {
@@ -1646,7 +1653,8 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
         onSelectedSavedViewIdChange={setSelectedSavedViewId}
         onApplySavedView={applySavedView}
         onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); setPickerMode("derived"); closeAdvancedControls(); }}
-        advancedControlsRef={advancedControlsRef}
+        advancedOpen={advancedOpen}
+        onAdvancedOpenChange={setAdvancedOpen}
       >
           <div className="analytics-selectors advanced-only-selectors">
             <label><span>X axis</span><select aria-label="Choose weekly horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>

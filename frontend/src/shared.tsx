@@ -70,7 +70,7 @@ export function useDialogFocusTrap(dialogRef: RefObject<HTMLElement | null>, onC
   }, [dialogRef, enabled]);
 }
 
-export type SegmentOption<T extends string> = { value: T; label: string };
+export type SegmentOption<T extends string> = { value: T; label: string; ariaLabel?: string };
 
 export function SegmentedControl<T extends string>({
   value,
@@ -101,6 +101,7 @@ export function SegmentedControl<T extends string>({
           className={value === option.value ? "active" : ""}
           onClick={() => onChange(option.value)}
           aria-pressed={value === option.value}
+          aria-label={option.ariaLabel}
         >
           {option.label}
         </button>
