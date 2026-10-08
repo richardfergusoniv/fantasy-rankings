@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CartesianGrid, Customized, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Customized, ReferenceLine, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
+import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
 import type { MatchupSelection } from "./App";
 import { MatchupTag, ModalPortal, SegmentedControl, shortLeagueName, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
@@ -677,9 +680,9 @@ function ScatterPlot({ others, leadersWithoutSelectedTeam, selectedTeamPlayers, 
   return (
     <div className="scatter-frame" role="group" aria-label={ariaLabel}>
       <p className="sr-only">{ariaLabel}. {plottedData.map((point) => `${point.name}, ${point.team}: ${xAxis.short} ${point.x}, ${yAxis.short} ${point.y}`).join("; ")}</p>
-      <div aria-hidden="true">
+      <div aria-hidden="true" className="h-full">
       {showQuadrants ? <div className="quadrant-label high-high">SMASH SPOT</div> : null}
-      <ResponsiveContainer width="100%" height={430}>
+      <ChartContainer config={{ field: { label: "Field", color: "var(--chart-2)" }, team: { label: "My team", color: "var(--chart-1)" } }} className="aspect-auto h-full">
         <ScatterChart margin={{ top: 28, right: 12, bottom: 50, left: 2 }}>
           <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" />
           <XAxis
@@ -705,15 +708,15 @@ function ScatterPlot({ others, leadersWithoutSelectedTeam, selectedTeamPlayers, 
             axisLine={{ stroke: "var(--border)" }}
             label={{ value: `${yAxis.short}${yAxis.titleSuffix}`, angle: -90, position: "insideLeft", fill: "var(--text)", fontSize: "var(--type-caption)", fontWeight: 700 }}
           />
-          <Tooltip cursor={{ stroke: "var(--text)", strokeDasharray: "3 3" }} contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: "var(--type-caption)" }} />
+          <Tooltip cursor={{ stroke: "var(--foreground)", strokeDasharray: "3 3" }} contentStyle={chartTooltipStyle} />
           {showQuadrants ? <ReferenceLine x={xCutoff} stroke="var(--text)" strokeWidth={1.2} /> : null}
           {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--text)" strokeWidth={1.2} /> : null}
-          <Scatter name="Field" data={others} fill="var(--dim)" fillOpacity={0.72} />
-          <Scatter name="Smash spots" data={leadersWithoutSelectedTeam} fill="var(--dim)" fillOpacity={0.72} />
-          <Scatter name="My team" data={selectedTeamPlayers} fill="var(--roster-highlight)" stroke="var(--roster-highlight)" strokeWidth={1.5} />
+          <Scatter name="Field" data={others} fill="var(--chart-2)" fillOpacity={0.72} />
+          <Scatter name="Smash spots" data={leadersWithoutSelectedTeam} fill="var(--chart-2)" fillOpacity={0.72} />
+          <Scatter name="My team" data={selectedTeamPlayers} fill="var(--chart-1)" stroke="var(--chart-1)" strokeWidth={1.5} />
           {labelData.length ? <Customized component={<AdaptiveChartLabels data={labelData} leaderIds={leaderIds} selectedTeamIds={selectedTeamIds} />} /> : null}
         </ScatterChart>
-      </ResponsiveContainer>
+      </ChartContainer>
       </div>
     </div>
   );
@@ -2196,42 +2199,42 @@ function PfnTableView({ tableKey }: { tableKey: PfnTableKey }) {
         <span>Updated {pfnUpdatedDate(table.fetched_at)}</span>
       </div>
       <div className="pfn-table-wrap" role="region" aria-label={`${table.label} team rankings`} tabIndex={0}>
-        <table className="pfn-table">
-          <thead>
-            <tr>
-              <th scope="col" className="pfn-rank-col" aria-sort={ariaSort("rank")}>
+        <Table className="pfn-table">
+          <TableHeader>
+            <TableRow>
+              <TableHead scope="col" className="pfn-rank-col" aria-sort={ariaSort("rank")}>
                 <button type="button" className="pfn-sort-button" aria-label="Sort by rank" onClick={() => changeSort("rank")}>
                   <span className="pfn-header-label">Rank</span> {sortIndicator("rank")}
                 </button>
-              </th>
-              <th scope="col" className="pfn-team-col" aria-sort={ariaSort("team")}>
+              </TableHead>
+              <TableHead scope="col" className="pfn-team-col" aria-sort={ariaSort("team")}>
                 <button type="button" className="pfn-sort-button" onClick={() => changeSort("team")}>
                   Team {sortIndicator("team")}
                 </button>
-              </th>
+              </TableHead>
               {orderedColumns.map((column) => (
-                <th scope="col" className={column === "grade" ? "pfn-grade-col" : undefined} key={column} aria-sort={ariaSort(column)}>
+                <TableHead scope="col" className={column === "grade" ? "pfn-grade-col" : undefined} key={column} aria-sort={ariaSort(column)}>
                   <button type="button" className="pfn-sort-button" onClick={() => changeSort(column)}>
                     {column === "grade" ? "Grade" : (table.column_labels[column] ?? column)} {sortIndicator(column)}
                   </button>
-                </th>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.map((row) => (
-              <tr key={row.team}>
-                <td className="pfn-rank-col"><strong>{row.rank}</strong></td>
-                <th scope="row" className="pfn-team-col">{row.team}</th>
+              <TableRow key={row.team}>
+                <TableCell className="pfn-rank-col"><strong>{row.rank}</strong></TableCell>
+                <TableHead scope="row" className="pfn-team-col">{row.team}</TableHead>
                 {orderedColumns.map((column) => (
-                  <td className={column === "grade" ? "pfn-grade-col" : undefined} key={column}>
+                  <TableCell className={column === "grade" ? "pfn-grade-col" : undefined} key={column}>
                     {column === "grade" ? <strong>{pfnValue(row[column])}</strong> : pfnValue(row[column])}
-                  </td>
+                  </TableCell>
                 ))}
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </section>
   );
@@ -2241,19 +2244,15 @@ export function TablesTool({ dashboard, league, sosLoadFailed, onRetrySos, sosRe
   const [dataset, setDataset] = useState<TablesDataset>("sos");
   return (
     <section className="tables-tool" aria-label="Team data tables">
-      <div className="tables-dataset-tabs" role="group" aria-label="Choose table">
-        {tableDatasets.map((item) => (
-          <button
-            type="button"
-            key={item.key}
-            className={dataset === item.key ? "active" : ""}
-            aria-pressed={dataset === item.key}
-            onClick={() => setDataset(item.key)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={dataset} onValueChange={(value) => setDataset(value as TablesDataset)} className="tables-dataset-tabs">
+        <TabsList aria-label="Choose table" className="grid grid-cols-5">
+          {tableDatasets.map((item) => (
+            <TabsTrigger key={item.key} value={item.key}>
+              {item.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
       {dataset === "sos"
         ? <StrengthOfScheduleTool dashboard={dashboard} league={league} loadFailed={sosLoadFailed} onRetry={onRetrySos} retrying={sosRetrying} />
         : <PfnTableView tableKey={dataset} />}
@@ -2312,45 +2311,45 @@ export function StrengthOfScheduleTool({ dashboard, league, loadFailed = false, 
       </div>
       {entry && teams.length > 0 ? (
         <div className="sos-table-wrap" role="region" aria-label="Defense versus position ranks" tabIndex={0}>
-          <table className="sos-table">
+          <Table className="sos-table">
             <colgroup>
               <col className="sos-column" />
               {sosPositions.map((position) => <col className="sos-column" key={position} />)}
             </colgroup>
-            <thead>
-              <tr>
-                <th scope="col" className="sos-team-col" aria-sort={sort.key === "team" ? "ascending" : "none"}>
+            <TableHeader>
+              <TableRow>
+                <TableHead scope="col" className="sos-team-col" aria-sort={sort.key === "team" ? "ascending" : "none"}>
                   <button type="button" onClick={() => sortBy("team")} aria-label="Sort teams alphabetically">Team<span aria-hidden="true">{indicator("team")}</span></button>
-                </th>
+                </TableHead>
                 {sosPositions.map((position: SosPosition) => (
-                  <th key={position} scope="col" aria-sort={sort.key === position ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+                  <TableHead key={position} scope="col" aria-sort={sort.key === position ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
                     <button type="button" onClick={() => sortBy(position)} aria-label={`Sort ${position} matchups ${sort.key === position && sort.direction === "asc" ? "toughest first" : "softest first"}`}>
                       {position}<span aria-hidden="true">{indicator(position)}</span>
                     </button>
-                  </th>
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {teams.map((team) => (
-                <tr key={team}>
-                  <th scope="row" className="sos-team-col">{team}</th>
+                <TableRow key={team}>
+                  <TableHead scope="row" className="sos-team-col">{team}</TableHead>
                   {sosPositions.map((position: SosPosition) => {
                     const cell = entry.table[team]?.[position];
                     return (
-                      <td
+                      <TableCell
                         key={position}
                         className={`sos-cell${sosCellTone(cell?.rank ?? null)}`}
                         aria-label={cell ? `${team} ${position} matchup rank ${cell.rank}${cell.rank <= 10 ? ", soft matchup" : cell.rank >= 23 ? ", tough matchup" : ""}` : `${team} ${position} matchup unavailable`}
                       >
                         {cell ? cell.rank : "—"}
-                      </td>
+                      </TableCell>
                     );
                   })}
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       ) : loadFailed ? (
         <div className="section-error compact" role="alert">
