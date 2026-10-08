@@ -21,6 +21,7 @@ import {
   type Dashboard,
 } from "./dashboard-schemas.js";
 import { CACHE_KEY } from "./dashboard-schemas.js";
+import { readNflState, readUserLeagues } from "./user-leagues.js";
 import {
   DRAFT_MARKET_CACHE_KEY,
   DYNASTICAL_CUCKS_LEAGUE_ID,
@@ -1558,15 +1559,22 @@ async function saveProjectionAccuracy(dashboard: Dashboard): Promise<void> {
  * Build a dashboard from scratch for one Sleeper user. Ported from the
  * original `buildDashboard(ctx)` with the Sleeper account parameterized.
  */
-export async function buildUserDashboard(sleeperUserId: string): Promise<Dashboard> {
+export async function buildUserDashboard(sleeperUserId: string, fresh = false): Promise<Dashboard> {
   const sourceErrors: string[] = [];
-  const state = await fetchJson<{ season: string; week: number }>(`${SLEEPER_BASE}/state/nfl`);
-  const season = Number(state.season);
-  const week = state.week;
+  let season: number;
+  let week: number;
+  try {
+    const state = await readNflState(fresh);
+    season = state.season;
+    week = state.week;
+  } catch (err) {
+    console.error("[dashboard] NFL state lookup failed", err instanceof Error ? err.stack : err);
+    throw new Error("Sleeper leagues are unavailable");
+  }
   const vegasProjectionSnapshot = await loadVegasProjectionSnapshot(season, week);
 
   const [leagueResult, playersResult, sleeperProjectionResult, scheduleResult, currentStatsResult, previousStatsResult, kickoffResult] = await Promise.allSettled([
-    fetchJson<SleeperLeague[]>(`${SLEEPER_BASE}/user/${sleeperUserId}/leagues/nfl/${season}`),
+    readUserLeagues(sleeperUserId, fresh),
     fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`),
     fetchJson<SleeperProjection[]>(`${SLEEPER_PROJECTIONS_BASE}/projections/nfl/${season}/${week}?season_type=regular&order_by=pts_ppr`),
     fetchJson<SleeperGame[]>(`${SLEEPER_BASE.replace("/v1", "")}/schedule/nfl/regular/${season}`),
@@ -1575,7 +1583,12 @@ export async function buildUserDashboard(sleeperUserId: string): Promise<Dashboa
     fetchJson<EspnScoreboard>(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&dates=${season}`),
   ]);
 
-  if (leagueResult.status === "rejected") throw new Error("Sleeper leagues are unavailable");
+  if (leagueResult.status === "rejected") {
+    console.error("[dashboard] league lookup failed", leagueResult.reason);
+    throw new Error("Sleeper leagues are unavailable");
+  }
+  const sleeperLeagues = leagueResult.value.leagues;
+  if (sleeperLeagues.length === 0) sourceErrors.push("No Sleeper leagues for this season.");
   if (playersResult.status === "rejected") throw new Error("Sleeper player data is unavailable");
 
   const vegasTeamTotals = new Map<string, number>();
@@ -1702,7 +1715,7 @@ export async function buildUserDashboard(sleeperUserId: string): Promise<Dashboa
   // retired opportunity-weight projection model cannot reappear in tools.
   const weeklyChartRankingsByLeagueId = new Map<string, Ranking[]>();
   const defensesByLeagueId = new Map<string, z.infer<typeof defenseSchema>[]>();
-  for (const league of leagueResult.value) {
+  for (const league of sleeperLeagues) {
     const rankingField: "ppr" | "halfPpr" = isDynasticalPpfdLeague(league) || (league.scoring_settings?.rec ?? 0) >= 1 ? "ppr" : "halfPpr";
     const leagueDefenses = buildDefenses(
       league.league_id,
@@ -1749,7 +1762,7 @@ export async function buildUserDashboard(sleeperUserId: string): Promise<Dashboa
   // Fetch the required roster before optional league enrichments and bound
   // concurrency. The previous 24-request fan-out could throttle every roster
   // request, yielding a schema-valid dashboard with zero usable leagues.
-  const leagues = await mapWithConcurrency(leagueResult.value, 2, async (league) => {
+  const leagues = await mapWithConcurrency(sleeperLeagues, 2, async (league) => {
     let rosters: SleeperRoster[];
     try {
       rosters = await fetchJson<SleeperRoster[]>(`${SLEEPER_BASE}/league/${league.league_id}/rosters`);
@@ -2184,7 +2197,7 @@ export async function loadOrBuildUserDashboard(sleeperUserId: string, force = fa
   }
 
   try {
-    const buildPromise = buildUserDashboard(sleeperUserId);
+    const buildPromise = buildUserDashboard(sleeperUserId, force);
     // If the deadline wins the race, the build keeps running detached; guard
     // against an unhandled rejection when it eventually settles.
     buildPromise.catch(() => undefined);

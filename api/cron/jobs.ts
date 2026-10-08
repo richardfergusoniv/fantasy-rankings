@@ -36,7 +36,7 @@ async function handleRebuildDashboard(): Promise<Response> {
     console.error("[cron] OWNER_SLEEPER_USER_ID is not set");
     return json({ ok: false, error: "Owner Sleeper user is not configured." }, 500);
   }
-  const buildPromise = buildUserDashboard(ownerId);
+  const buildPromise = buildUserDashboard(ownerId, true);
   buildPromise.catch(() => undefined);
   const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
   await writeGlobalDashboardSnapshot(dashboard);

@@ -276,7 +276,7 @@ function ConnectSleeper({
             required
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="e.g. rdfergus15"
+            placeholder="e.g. sleepername"
           />
         </label>
         {error ? <p className="auth-error">{error}</p> : null}

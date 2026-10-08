@@ -3,9 +3,12 @@ name: Player news
 # Timer for the Fantasy Rankings player-news refresh. The work lives in
 # the app's /api/player-news endpoint; this workflow only calls it on
 # schedule with the CRON_SECRET bearer header (the same call Vercel Cron
-# used to make). Moved off Vercel Cron 2026-10-02 so every scheduled job
-# lives in GitHub Actions and survives a change of app host: to retarget,
-# set the APP_BASE_URL repository variable.
+# used to make). The refresh records injury changes for fantasy players
+# league-wide. Each signed-in user is filtered against their own leagues
+# when they open the app, so this job does not take OWNER_SLEEPER_USER_ID.
+# Moved off Vercel Cron 2026-10-02 so every scheduled job lives in GitHub
+# Actions and survives a change of app host: to retarget, set the
+# APP_BASE_URL repository variable.
 #
 # Intended Pacific slots: Mon-Sat 07:22 and 16:15; Sun 09:00, 12:05,
 # 16:20. GitHub cron is UTC-only and does not follow daylight saving, so

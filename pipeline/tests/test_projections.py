@@ -88,6 +88,13 @@ def test_display_name_uses_sleeper_canonical():
     assert p["player"] == "Joshua Palmer"
 
 
+def test_sleeper_user_leagues_url_uses_the_owner_and_season():
+    from props_aggregator.projections import sleeper_user_leagues_url
+    assert sleeper_user_leagues_url("42", 2026) == (
+        "https://api.sleeper.app/v1/user/42/leagues/nfl/2026"
+    )
+
+
 def test_display_name_falls_back_to_raw_when_unknown():
     rows = _wr_rows("Some Obscure Guy")
     positions = {"some obscure guy": {"position": "WR", "team": None,
