@@ -4228,7 +4228,10 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
         return (
           <div className="draft-row" role="listitem" key={`${row.format}-${row.playerId ?? row.name}`}>
             <button type="button" className={`draft-player-open${secondary ? "" : " is-single-line"}`} onClick={() => openDraftPlayer(row)} disabled={!row.playerId} aria-label={`View ${row.name} details and news`}>
-              <span className="draft-player-name-line"><strong>{row.name}</strong></span>
+              <span className="draft-player-name-line">
+                <strong>{row.name}</strong>
+                {row.rookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" tone="positive" /> : null}
+              </span>
               {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
             </button>
             <span>{row.position === "DEF" ? "DST" : row.position}</span>
