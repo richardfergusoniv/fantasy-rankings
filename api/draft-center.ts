@@ -144,6 +144,8 @@ const draftCenterResponse = z.object({
   sourceErrors: z.array(z.string()),
 });
 
+export type DraftCenter = z.infer<typeof draftCenterResponse>;
+
 type CachedDraftMarket = {
   adpAsOf: string | null;
   adp: z.infer<typeof adpRowSchema>[];

@@ -44,6 +44,29 @@ const playerNewsAvailabilitySchema = z.object({
   status: z.enum(["available", "your_roster", "other_roster", "unknown"]),
 });
 
+export type PlayerNews = {
+  lastCheckedAt: string | null;
+  runs: Array<{
+    id: string;
+    checkedAt: string;
+    items: Array<{
+      id: string;
+      playerId: string;
+      player: string;
+      team: string;
+      change: string;
+      leagueIds: string[];
+      newsType: "roster" | "waiver" | "headline";
+      leagues: string[];
+      availability: Array<z.infer<typeof playerNewsAvailabilitySchema>>;
+      roleContext: string;
+      sourceLabel: string;
+      sourceUrl: string;
+      sourcePublishedAt: string | null;
+    }>;
+  }>;
+};
+
 function parseNewsAvailability(payload: string | null): z.infer<typeof playerNewsAvailabilitySchema>[] {
   if (!payload) return [];
   try {

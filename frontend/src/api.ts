@@ -1,26 +1,31 @@
 /**
  * Typed fetch client for the Vercel API routes.
  *
- * Phase 1 stub — Phase 2 replaces this with one typed function per route,
- * generated from the zod request/response schemas (see ANALYSIS.md §8).
+ * Return types are the payloads the route handlers validate with zod.
+ * `ApiResponse<typeof api, "getDashboard">` is that method's resolved value,
+ * which is how the UI names dashboard, news, and chart data.
  *
- * The call-site shape is intentionally close to the old action client:
  *   api.getDashboard({ force: true }) → GET /api/dashboard?force=true
  */
 
+import type { BoomBustHistory, BoomBustRanges } from "../../api/boom-bust/[type]";
+import type { MatchupBoxScore } from "../../api/box-score";
+import type { SavedChartView, SavedChartViewInput } from "../../api/chart-views";
+import type { Dashboard, DashboardSection } from "../../api/_lib/dashboard-schemas";
+import type { DraftCenter } from "../../api/draft-center";
+import type { PfnTables } from "../../api/pfn-tables";
+import type { PlayerNews } from "../../api/player-news";
+import type { HistoricalTrades } from "../../api/_lib/trades";
+import type { ValueHistory } from "../../api/value-history";
 import { getAccessToken } from "./supabase";
 
-type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+type ApiMethod<T> = T extends (...args: never[]) => Promise<infer R> ? R : never;
+
+export type ApiResponse<TApi, K extends keyof TApi> = ApiMethod<TApi[K]>;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   // Attach the signed-in user's Supabase token (when available) so the API
-  // can scope data per user (Phase 2). Harmless while routes ignore it.
+  // can scope data per user. Harmless while a route ignores it.
   const token = await getAccessToken();
   const headers = new Headers(init?.headers);
   if (!headers.has("content-type")) headers.set("content-type", "application/json");
@@ -45,29 +50,27 @@ function qs(params: Record<string, string | number | boolean | undefined>): stri
   return s ? `?${s}` : "";
 }
 
-// ---------------------------------------------------------------------------
-// Route stubs — signatures mirror the Hatch actions; implementations hit
-// the Vercel routes defined in /api. Filled in during Phase 2.
-// ---------------------------------------------------------------------------
+// Call sites still pass `{}` for no-argument reads. The value is ignored.
+type EmptyArgs = Record<string, never>;
 
 export const api = {
-  getDashboard: async (args: { force?: boolean } = {}): Promise<JsonValue> => {
-    const body = await request<{ dashboard: JsonValue }>(`/api/dashboard${qs({ force: args.force })}`);
+  getDashboard: async (args: { force?: boolean } = {}): Promise<Dashboard> => {
+    const body = await request<{ dashboard: Dashboard }>(`/api/dashboard${qs({ force: args.force })}`);
     return body.dashboard;
   },
 
   getDashboardSection: (args: {
-    section: "meta" | "team" | "players" | "league" | "analytics";
-  }): Promise<JsonValue> => request(`/api/dashboard/section${qs(args)}`),
+    section: DashboardSection["section"];
+  }): Promise<DashboardSection> => request(`/api/dashboard/section${qs(args)}`),
 
-  getDraftCenter: (args: { force?: boolean } = {}): Promise<JsonValue> =>
+  getDraftCenter: (args: { force?: boolean } = {}): Promise<DraftCenter> =>
     request(`/api/draft-center${qs({ force: args.force })}`),
 
   getBoomBustRanges: (args: {
     leagueId: string;
     position: string;
     playerIds: string[];
-  }): Promise<JsonValue> =>
+  }): Promise<BoomBustRanges> =>
     request(`/api/boom-bust/ranges${qs({
       leagueId: args.leagueId,
       position: args.position,
@@ -79,12 +82,12 @@ export const api = {
     playerId: string;
     position: string;
     view: "season" | "last3";
-  }): Promise<JsonValue> => request(`/api/boom-bust/history${qs(args)}`),
+  }): Promise<BoomBustHistory> => request(`/api/boom-bust/history${qs(args)}`),
 
   getValueHistory: (args: {
     formatKey: string;
     playerIds: string[];
-  }): Promise<JsonValue> =>
+  }): Promise<ValueHistory> =>
     request(`/api/value-history${qs({
       formatKey: args.formatKey,
       playerIds: args.playerIds.join(","),
@@ -94,24 +97,24 @@ export const api = {
     leagueId: string;
     refresh?: boolean;
     season?: number;
-  }): Promise<JsonValue> => request(`/api/trades/history${qs(args)}`),
+  }): Promise<HistoricalTrades> => request(`/api/trades/history${qs(args)}`),
 
-  listSavedChartViews: (): Promise<JsonValue[]> => request("/api/chart-views"),
+  listSavedChartViews: (_args?: EmptyArgs): Promise<{ views: SavedChartView[] }> => request("/api/chart-views"),
 
-  saveChartView: (args: JsonValue): Promise<JsonValue> =>
+  saveChartView: (args: SavedChartViewInput): Promise<{ view: SavedChartView }> =>
     request("/api/chart-views", { method: "POST", body: JSON.stringify(args) }),
 
-  deleteChartView: (args: { id: string }): Promise<JsonValue> =>
+  deleteChartView: (args: { id: string }): Promise<{ ok: true; deleted: boolean }> =>
     request(`/api/chart-views${qs(args)}`, { method: "DELETE" }),
 
-  getPfnTables: (): Promise<JsonValue> => request("/api/pfn-tables"),
+  getPfnTables: (_args?: EmptyArgs): Promise<PfnTables> => request("/api/pfn-tables"),
 
   getMatchupBoxScore: (args: {
     team: string;
     opponent: string;
     season: number;
     week: number;
-  }): Promise<JsonValue> => request(`/api/box-score${qs(args)}`),
+  }): Promise<MatchupBoxScore> => request(`/api/box-score${qs(args)}`),
 
-  getPlayerNews: (): Promise<JsonValue> => request("/api/player-news"),
+  getPlayerNews: (_args?: EmptyArgs): Promise<PlayerNews> => request("/api/player-news"),
 };

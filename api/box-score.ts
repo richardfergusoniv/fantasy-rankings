@@ -44,6 +44,8 @@ const matchupBoxScoreResponse = z.object({
   }).nullable(),
 });
 
+export type MatchupBoxScore = z.infer<typeof matchupBoxScoreResponse>;
+
 type EspnScoreboard = {
   season?: { year?: number };
   events?: Array<{
