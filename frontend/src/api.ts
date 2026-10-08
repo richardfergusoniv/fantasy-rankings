@@ -41,7 +41,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-function qs(params: Record<string, string | number | boolean | undefined>): string {
+export function buildQuery(params: Record<string, string | number | boolean | undefined>): string {
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined) sp.set(k, String(v));
@@ -55,23 +55,23 @@ type EmptyArgs = Record<string, never>;
 
 export const api = {
   getDashboard: async (args: { force?: boolean } = {}): Promise<Dashboard> => {
-    const body = await request<{ dashboard: Dashboard }>(`/api/dashboard${qs({ force: args.force })}`);
+    const body = await request<{ dashboard: Dashboard }>(`/api/dashboard${buildQuery({ force: args.force })}`);
     return body.dashboard;
   },
 
   getDashboardSection: (args: {
     section: DashboardSection["section"];
-  }): Promise<DashboardSection> => request(`/api/dashboard/section${qs(args)}`),
+  }): Promise<DashboardSection> => request(`/api/dashboard/section${buildQuery(args)}`),
 
   getDraftCenter: (args: { force?: boolean } = {}): Promise<DraftCenter> =>
-    request(`/api/draft-center${qs({ force: args.force })}`),
+    request(`/api/draft-center${buildQuery({ force: args.force })}`),
 
   getBoomBustRanges: (args: {
     leagueId: string;
     position: string;
     playerIds: string[];
   }): Promise<BoomBustRanges> =>
-    request(`/api/boom-bust/ranges${qs({
+    request(`/api/boom-bust/ranges${buildQuery({
       leagueId: args.leagueId,
       position: args.position,
       playerIds: args.playerIds.join(","),
@@ -82,13 +82,13 @@ export const api = {
     playerId: string;
     position: string;
     view: "season" | "last3";
-  }): Promise<BoomBustHistory> => request(`/api/boom-bust/history${qs(args)}`),
+  }): Promise<BoomBustHistory> => request(`/api/boom-bust/history${buildQuery(args)}`),
 
   getValueHistory: (args: {
     formatKey: string;
     playerIds: string[];
   }): Promise<ValueHistory> =>
-    request(`/api/value-history${qs({
+    request(`/api/value-history${buildQuery({
       formatKey: args.formatKey,
       playerIds: args.playerIds.join(","),
     })}`),
@@ -97,7 +97,7 @@ export const api = {
     leagueId: string;
     refresh?: boolean;
     season?: number;
-  }): Promise<HistoricalTrades> => request(`/api/trades/history${qs(args)}`),
+  }): Promise<HistoricalTrades> => request(`/api/trades/history${buildQuery(args)}`),
 
   listSavedChartViews: (_args?: EmptyArgs): Promise<{ views: SavedChartView[] }> => request("/api/chart-views"),
 
@@ -105,7 +105,7 @@ export const api = {
     request("/api/chart-views", { method: "POST", body: JSON.stringify(args) }),
 
   deleteChartView: (args: { id: string }): Promise<{ ok: true; deleted: boolean }> =>
-    request(`/api/chart-views${qs(args)}`, { method: "DELETE" }),
+    request(`/api/chart-views${buildQuery(args)}`, { method: "DELETE" }),
 
   getPfnTables: (_args?: EmptyArgs): Promise<PfnTables> => request("/api/pfn-tables"),
 
@@ -114,7 +114,7 @@ export const api = {
     opponent: string;
     season: number;
     week: number;
-  }): Promise<MatchupBoxScore> => request(`/api/box-score${qs(args)}`),
+  }): Promise<MatchupBoxScore> => request(`/api/box-score${buildQuery(args)}`),
 
   getPlayerNews: (_args?: EmptyArgs): Promise<PlayerNews> => request("/api/player-news"),
 };

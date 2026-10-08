@@ -5,7 +5,6 @@ import {
   badRequest,
   internalError,
   json,
-  methodNotAllowed,
 } from "../_lib/api-utils.js";
 import {
   BOOM_BUST_SEASONS,
