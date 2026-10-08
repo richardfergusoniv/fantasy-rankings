@@ -3,11 +3,14 @@ name: Props daily pull
 # Daily Vegas props pull -> consensus projections -> push to the Fantasy
 # Rankings Vercel app. Mirrors the local props-twice-daily-pull cron.
 #
-# GitHub cron is UTC-only and does not follow daylight saving, so the job
-# is scheduled at both 10:17 and 11:17 UTC (off the on-the-hour pileup,
-# after a week of 4.5-9h delivery delays at minute :00) and a guard step lets it run
-# only when it is 03:xx in America/Los_Angeles (3 AM Pacific year-round).
-# Manual dispatches always run.
+# GitHub cron is UTC-only and scheduled runs often start hours after the
+# cron minute. The job is registered at both 10:17 and 11:17 UTC. On
+# schedule, the guard asks the Actions API whether this workflow already
+# completed the "Pull providers and build projections" step on today's
+# America/Los_Angeles date. A late run still pulls when that step has not
+# succeeded today. The second cron skips when the first one did. Manual
+# dispatches always run. The concurrency group keeps the two crons from
+# overlapping so the later run can see the earlier run's result.
 #
 # First Down fallback: if Vegas validation fails on the player-count
 # minimum alone (validator exit 3, i.e. fewer than 200 players), the run
@@ -31,8 +34,10 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
+  # Shared by both UTC crons and workflow_dispatch so two pulls cannot overlap.
   group: props-daily
   cancel-in-progress: false
 
@@ -46,18 +51,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Pacific-time guard (scheduled runs only)
+      # python3 is preinstalled on the runner. setup-python stays behind
+      # this step so a skip does not install the pipeline.
+      - name: Skip if today's pull already succeeded
         id: guard
-        run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            HOUR=$(TZ=America/Los_Angeles date +%H)
-            if [ "$HOUR" != "03" ]; then
-              echo "Skipping: Pacific hour is $HOUR, not 03."
-              echo "go=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          fi
-          echo "go=true" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/props_daily_guard.py
 
       - uses: actions/setup-python@v5
         if: steps.guard.outputs.go == 'true'
@@ -73,6 +73,7 @@ jobs:
         with:
           node-version: "20"
 
+      # props_daily_guard.py treats a success of this exact step as today's pull.
       - name: Pull providers and build projections
         if: steps.guard.outputs.go == 'true'
         env:
