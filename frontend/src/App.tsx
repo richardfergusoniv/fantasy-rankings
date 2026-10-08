@@ -1597,16 +1597,11 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
           <span>{opponent?.name ?? "OPPONENT"}</span>
           <div className="score-line"><strong>{formatProjectionPoints(opponent?.teamActual ?? null)}</strong><small>{forecastPoints(opponent?.teamProjection ?? null, opponent?.starters ?? [])}<span className="sr-only"> projected points</span></small></div>
         </div>
-        <div className="matchup-context">
-          <span>{league.record.wins}-{league.record.losses}{league.record.ties ? `-${league.record.ties}` : ""} record</span>
-          <span>{league.scoringLabel}</span>
-        </div>
       </Card>
 
       <section className="lineup-section matchup-section">
         <div className="section-heading"><h2>Starters</h2></div>
         <div className="data-table-frame">
-        <div className="matchup-column-key"><span>{userTeamName}</span><span>SLOT</span><span>{opponent?.name ?? "OPP"}</span></div>
         <div className="matchup-list">
           {rows.map(({ mine: myPlayer, theirs }, index) => (
             <div className="matchup-row" key={`${myPlayer?.playerId ?? "empty"}-${theirs?.playerId ?? "empty"}-${index}`}>
@@ -1636,7 +1631,6 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
       <section className="lineup-section matchup-section bench-matchup-section" aria-label="Bench matchup">
         <div className="section-heading"><h2>Bench</h2></div>
         <div className="data-table-frame">
-        <div className="matchup-column-key"><span>{userTeamName}</span><span>BENCH</span><span>{opponent?.name ?? "OPP"}</span></div>
         <div className="matchup-list">
           {benchRows.map(({ mine: myPlayer, theirs }, index) => (
             <div className="matchup-row" key={`${myPlayer?.playerId ?? "empty"}-${theirs?.playerId ?? "empty"}-bench-${index}`}>
@@ -2329,11 +2323,6 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
               : [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season Long" }]}
           />
           <div className="rankings-note">
-            <span>{isSeasonLong
-              ? `${availableOnly ? "Available · " : ""}${effectiveHorizon === "dynasty"
-                ? league.seasonLongFormat.label
-                : `Redraft · ${league.seasonLongFormat.numTeams}-team · ${league.seasonLongFormat.numQbs === 2 ? "Superflex / 2QB" : "1QB"} · ${league.seasonLongFormat.ppr === 1 ? "PPR" : league.seasonLongFormat.ppr === 0.5 ? "Half PPR" : "Standard"}`}`
-              : availableOnly ? `Available · ${league.scoringLabel}` : league.scoringLabel}</span>
             {!isSeasonLong && effectivePosition === "DEF"
               ? <span>Actual shown after final</span>
               : !isSeasonLong && effectivePosition === "K"
@@ -3544,7 +3533,6 @@ function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashb
   const selectedPlayerIds = [...selectedIds].filter((id) => assetById.get(id)?.position !== "PICK").sort();
   const historyQuery = useQuery({ queryKey: ["fantasycalc-value-history", league.seasonLongFormat.key, selectedPlayerIds], queryFn: () => api.getValueHistory({ formatKey: league.seasonLongFormat.key, playerIds: selectedPlayerIds }), enabled: selectedPlayerIds.length > 0 });
   const historyByPlayerId = useMemo(() => new Map((historyQuery.data?.series ?? []).map((series) => [series.playerId, series])), [historyQuery.data]);
-  const hasPickValues = league.seasonLongFormat.isDynasty && assets.some((asset) => asset.position === "PICK");
   const mine = userTeam;
   const theirs = league.tradeTeams.find((team) => team.rosterId === theirRosterId && team.rosterId !== mine?.rosterId) ?? league.tradeTeams.find((team) => team.rosterId !== mine?.rosterId);
   const unrestrictedAssets = assets.filter((asset) => !selectedIds.has(asset.playerId));
@@ -3602,7 +3590,6 @@ function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashb
         className="trade-subnav"
       />
       {tradeView === "history" ? <TradeHistoryView dashboard={dashboard} league={league} onOpenPlayer={onOpenPlayer} /> : <>
-      <div className="trade-format-line"><span>{league.seasonLongFormat.label}</span><span>{hasPickValues ? "Players + draft picks" : "Player values"}</span></div>
       <div className="trade-valuation-controls">
         <SegmentedControl value={valuationMode} options={[{ value: "league", label: "League-adjusted" }, { value: "market", label: "Market" }]} onChange={setValuationMode} label="Trade valuation mode" className="trade-valuation-toggle" />
       </div>
@@ -3899,7 +3886,6 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
   const liveDraft = leagueDrafts.find((draft) => draft.status === "drafting") ?? null;
   const completedDraft = leagueDrafts.find((draft) => draft.status === "complete") ?? null;
   const syncedDraft = liveDraft ?? completedDraft;
-  const matchingDraft = liveDraft ?? leagueDrafts.find((draft) => draft.status === "pre_draft") ?? completedDraft ?? leagueDrafts[0] ?? null;
   const syncedBoardMode = data?.boardModes.find((item) => item.leagueId === league.id)?.mode;
   // Only a positively identified new dynasty gets the startup pool. If Sleeper
   // history is temporarily unavailable, defaulting a dynasty to rookies avoids
@@ -4214,14 +4200,18 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
   const draftFilters = (
     <div className="draft-controls">
       <label><span className="sr-only">Search draft players</span><input type="search" name="draft-search" autoComplete="off" spellCheck={false} value={query} onChange={(event) => publishDraftFilters({ query: event.target.value })} placeholder="Search players…" aria-label="Search draft players" /></label>
-      <div className="position-pills" role="group" aria-label="Draft position filter">
-        {draftPositionOptions.map((item) => <button type="button" className={effectiveDraftPosition === item ? "active" : ""} aria-pressed={effectiveDraftPosition === item} onClick={() => publishDraftFilters({ position: item })} key={item}>{item === "DEF" ? "DST" : item}</button>)}
-      </div>
+      <SegmentedControl
+        className="position-tabs"
+        value={effectiveDraftPosition}
+        onChange={(value) => publishDraftFilters({ position: value })}
+        label="Draft position filter"
+        options={draftPositionOptions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
+      />
     </div>
   );
 
   const draftBoard = loading ? <div className="empty-inline">Loading draft values…</div> : filteredRows.length > 0 ? (
-    <div className="draft-board" role="list" aria-label="Draft player board">
+    <div className="draft-board data-table-frame" role="list" aria-label="Draft player board">
       <div className="draft-row draft-table-head" aria-hidden="true"><span>Player</span><span>Pos</span><span>Tier</span><span>{isRookieBoard ? "ADP / rank" : "ADP"}</span><span>Val</span><span>{liveDraft ? "Add" : "Mock"}</span></div>
       {filteredRows.slice(0, visibleDraftCount).map((row) => {
         const isSpecialist = row.position === "K" || row.position === "DEF";
@@ -4302,7 +4292,6 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
       />
       {mode === "board" ? (
         <div className="draft-board-view">
-          <div className="live-draft-status"><span className={liveDraft ? "live-dot" : ""} />{league.seasonLongFormat.isDynasty ? `${isRookieBoard ? "Rookie board" : "Startup board"} · ` : ""}{liveDraft ? `Live Sleeper sync · ${liveDraft.picks.length} picks recorded` : syncedDraft?.status === "complete" ? `Completed Sleeper sync · ${sleeperDraftedIds.size} picks recorded` : matchingDraft?.startTime ? `Manual board · draft starts ${new Date(matchingDraft.startTime).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "Manual board · no Sleeper draft"}</div>
           {rosterBuild}
           {draftFilters}
           {draftBoard}
