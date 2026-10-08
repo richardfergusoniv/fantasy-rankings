@@ -8,19 +8,13 @@ export default tseslint.config(
       "app/**",
       "drizzle-pg/**",
       "pipeline/**",
-      // Unused copy of api/_lib. lib/schema.ts stays, because drizzle-kit reads it.
-      "lib/api-utils.ts",
-      "lib/dashboard-schemas.ts",
-      "lib/db.ts",
-      "lib/sleeper.ts",
-      "lib/trades.ts",
+      "lib/**",
     ],
   },
   ...tseslint.configs.recommended,
   {
-    // `lib/` besides `schema.ts` is the unused copy of `api/_lib/`.
-    // It is left out here so lint matches the code the routes actually run.
-    files: ["frontend/src/**/*.{ts,tsx}", "api/**/*.ts", "lib/schema.ts"],
+    // `lib/` is the unused copy of `api/_lib/`, including the schema.
+    files: ["frontend/src/**/*.{ts,tsx}", "api/**/*.ts"],
     rules: {
       // `_args` and `_req` are placeholders so call sites can pass `{}` or
       // keep a route signature without using the value.
