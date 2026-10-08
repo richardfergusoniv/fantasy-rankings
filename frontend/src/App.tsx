@@ -438,11 +438,10 @@ function DesignationBadge({
   code: string;
   label: string;
   title: string;
-  tone?: "neutral" | "accent";
+  tone?: "neutral" | "positive";
 }) {
-  const toneClass = tone === "accent" ? "injury injury-accent" : "injury";
   return (
-    <Badge variant={tone === "accent" ? "accent" : "secondary"} size="compact" className={toneClass} aria-label={label} title={title}>
+    <Badge variant={tone === "positive" ? "positive" : "secondary"} size="compact" className="injury" aria-label={label} title={title}>
       {code}
     </Badge>
   );
@@ -2126,6 +2125,10 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
     () => new Map(leagueRankings.map((row) => [row.playerId, row])),
     [leagueRankings],
   );
+  const rookiePlayerIds = useMemo(
+    () => new Set(dashboard.seasonLongRankings.filter((row) => row.isRookie).map((row) => row.playerId)),
+    [dashboard.seasonLongRankings],
+  );
   const rows = useMemo(() => {
     const rostered = new Set(league.rosteredPlayerIds);
     if (isSeasonLong) {
@@ -2155,7 +2158,8 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
             projectionLabel: "VALUE",
             projectionSource: null,
             position: row.position,
-            injuryStatus: null,
+            isRookie: row.isRookie,
+            injuryStatus: weeklyContext?.injuryStatus ?? null,
             movement30Day: movementPercent(row.value, row.trend30Day),
           };
         })
@@ -2182,6 +2186,7 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
             projectionLabel: row.gamePhase === "final" ? "PTS" : "PROJ",
             projectionSource: row.projectionSource,
             position: "DEF",
+            isRookie: false,
             injuryStatus: null,
             movement30Day: null,
           };
@@ -2204,6 +2209,7 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
           projectionLabel: "PROJ",
           projectionSource: row.projectionSource,
           position: row.position,
+          isRookie: rookiePlayerIds.has(row.playerId),
           injuryStatus: row.injuryStatus,
           movement30Day: null,
         };
@@ -2211,7 +2217,7 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
       .sort((a, b) => effectivePosition === "FLEX" || effectivePosition === "SUPER"
         ? (b.projection ?? -1) - (a.projection ?? -1) || a.rank - b.rank
         : a.rank - b.rank);
-  }, [availableOnly, dashboard.seasonLongRankings, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, leagueDefenses, leagueRankings, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
+  }, [availableOnly, dashboard.seasonLongRankings, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, leagueDefenses, leagueRankings, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
   const visibleRows = rows.slice(0, visibleRowCount);
   const hasSearch = query.trim().length > 0;
   const prefetchPlayerPanels = (player: PlayerSearchResult) => {
@@ -2368,14 +2374,14 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
               const accessibleValue = isSeasonLong
                 ? `${Math.round(row.projection ?? 0).toLocaleString()} ${row.projectionLabel}`
                 : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
-              const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${row.rosterTeamName ? `, rostered by ${row.rosterTeamName}` : ""}`;
+              const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${row.rosterTeamName ? `, rostered by ${row.rosterTeamName}` : ""}`;
               const content = (
                 <>
                   <span className="ranking-player">
                     <span className="ranking-name-line">
                       <strong>{row.name}</strong>
-                      {row.meta === "Rookie" ? <DesignationBadge code="R" label="Rookie" title="Rookie" tone="accent" /> : null}
-                      {!isSeasonLong && row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
+                      {row.isRookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" tone="positive" /> : null}
+                      {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
                     </span>
                     <span className="ranking-meta-line">
                       {isSeasonLong ? (

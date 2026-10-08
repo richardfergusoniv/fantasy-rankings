@@ -473,8 +473,7 @@ main { padding: 12px 16px 0; }
 .player-main { min-width: 0; }
 .player-name-line { display: flex; min-width: 0; align-items: center; gap: 5px; }
 .player-name { overflow: hidden; font-size: var(--type-body); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.injury { display: inline; flex: none; padding: 2px 4px; border: 0; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 700; }
-.injury.injury-accent { background: var(--accent-soft); color: var(--ui-accent-foreground); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--link) 32%, var(--border)); }
+.injury { display: inline; flex: none; padding: 2px 4px; border: 0; border-radius: var(--radius-sm); font-size: var(--type-caption); font-weight: 700; white-space: nowrap; }
 .player-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; color: var(--dim); font-size: var(--type-caption); }
 .player-meta span:not(:last-child)::after { content: "·"; margin-left: 4px; opacity: .55; }
 .player-meta .slot { color: var(--text); font-weight: 700; }
@@ -514,7 +513,9 @@ main { padding: 12px 16px 0; }
 .ranking-row .ranking-name-line {
   min-height: 36px;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 3px;
+  overflow: visible;
   padding-bottom: 0;
 }
 .ranking-row .ranking-name-line > strong {
@@ -1499,6 +1500,37 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
   color: var(--stat-weakness-readable);
   font-weight: 700;
 }
+.power-team-card-roster .ranking-meta-line,
+.power-team-card-roster .matchup-meta-group {
+  align-items: center;
+  line-height: 1;
+}
+.power-team-card-roster .ranking-meta-line { padding-top: 0; }
+.power-team-card-roster .matchup-meta-group { flex-wrap: nowrap; gap: 5px; }
+.power-team-card-roster .ranking-meta-position,
+.power-team-card-roster .matchup-reference-tag:not(.matchup-reference-button),
+.power-team-card-roster .matchup-reference-button-label {
+  display: inline-flex;
+  box-sizing: border-box;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 5px;
+  line-height: 1;
+  font-size: var(--type-caption);
+}
+.power-team-card-roster .ranking-meta-position {
+  padding-inline: 0;
+  border: 1px solid transparent;
+  color: var(--dim);
+  font-weight: 600;
+}
+.power-team-card-roster .ranking-row .matchup-reference-button.matchup-reference-tag {
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  line-height: 1;
+}
 .power-roster-player { font-variant-numeric: tabular-nums; }
 .power-slot-chip { flex: none; max-width: 74px; overflow: hidden; padding: 2px 4px 1px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); line-height: 1.2; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .power-bench-heading { min-height: 27px; display: flex; align-items: center; padding: 0 10px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
@@ -1945,7 +1977,6 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .matchup-page .matchup-number b { color: var(--dim); font-weight: 600; }
 .matchup-page .matchup-number.actual b { color: var(--text); font-weight: 700; }
 .matchup-page .injury { background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.matchup-page .injury.injury-accent { background: var(--accent-soft); color: var(--ui-accent-foreground); }
 .matchup-page .optimized-gain { border-radius: var(--radius-sm); background: transparent; color: var(--warning); font-size: var(--type-caption); font-weight: 700; }
 
 /* Matchup badges open this one compact floating layer; its shadow is the view's only depth cue. */
