@@ -4,7 +4,6 @@ import { db, schema } from "./_lib/db.js";
 import {
   internalError,
   json,
-  methodNotAllowed,
   queryBool,
 } from "./_lib/api-utils.js";
 import {

@@ -5,7 +5,6 @@ import {
   badRequest,
   internalError,
   json,
-  methodNotAllowed,
 } from "./_lib/api-utils.js";
 import {
   FANTASY_CALC_HISTORY_URL,

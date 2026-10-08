@@ -6,7 +6,6 @@ import {
   getRequestUser,
   internalError,
   json,
-  methodNotAllowed,
   unauthorized,
 } from "./_lib/api-utils.js";
 
