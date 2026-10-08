@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Card } from "@/components/ui/card";
 import type { api, ApiResponse } from "./api";
+import type { MatchupSelection } from "./App";
 import { MatchupTag, ModalPortal, SegmentedControl, points, shortLeagueName, useDialogFocusTrap } from "./shared";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
@@ -24,19 +25,21 @@ export function PowerRankings({
   dashboard,
   onPlayerIntent,
   onOpenPlayer,
+  onOpenMatchup,
   playerCardOpen,
 }: {
   league: League;
   dashboard: Dashboard;
   onPlayerIntent: (playerId: string) => void;
   onOpenPlayer: (playerId: string) => void;
+  onOpenMatchup?: (matchup: MatchupSelection) => void;
   playerCardOpen: boolean;
 }) {
   const [scope, setScope] = useState<"week" | "restOfSeason">("week");
   const [mode, setMode] = useState<"seasonLong" | "dynasty">("seasonLong");
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const teamDialogRef = useRef<HTMLElement | null>(null);
-  const returnPlayerRowRef = useRef<HTMLButtonElement | null>(null);
+  const returnPlayerRowRef = useRef<HTMLElement | null>(null);
   const wasPlayerCardOpenRef = useRef(false);
   const isDynastyLeague = league.seasonLongFormat.isDynasty;
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
@@ -165,15 +168,34 @@ export function PowerRankings({
       ? points(player.projection)
       : (season?.value ?? 0).toLocaleString();
     const metricLabel = scope === "week" ? "PROJ" : "VALUE";
+    const openMatchup = player.team && player.opponent && onOpenMatchup
+      ? (event: MouseEvent<HTMLButtonElement>) => {
+          event.stopPropagation();
+          onOpenMatchup({
+            team: player.team ?? "",
+            opponent: player.opponent ?? "",
+            isAway: player.isAway,
+            gamePhase: player.gamePhase,
+          });
+        }
+      : undefined;
     return (
-      <button
-        type="button"
+      <div
         className="ranking-row ranking-row-button power-roster-player"
         key={player.playerId}
+        role="button"
+        tabIndex={0}
         aria-label={`Open ${player.name}`}
         onPointerDown={() => onPlayerIntent(player.playerId)}
         onFocus={() => onPlayerIntent(player.playerId)}
-        onClick={(event: MouseEvent<HTMLButtonElement>) => {
+        onClick={(event: MouseEvent<HTMLDivElement>) => {
+          if (event.target instanceof Element && event.target.closest(".matchup-reference-button")) return;
+          returnPlayerRowRef.current = event.currentTarget;
+          onOpenPlayer(player.playerId);
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
+          event.preventDefault();
           returnPlayerRowRef.current = event.currentTarget;
           onOpenPlayer(player.playerId);
         }}
@@ -183,10 +205,10 @@ export function PowerRankings({
             <strong>{player.name}</strong>
             {scope === "week" && player.isStarter ? <span className="power-slot-chip">{(player.lineupSlot ?? player.position).replaceAll("_", " ")}</span> : null}
           </span>
-          <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span>{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} /></span></span>
+          <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span>{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={openMatchup} /></span></span>
         </span>
         <span className="ranking-proj"><strong>{metric}</strong><span>{metricLabel}</span></span>
-      </button>
+      </div>
     );
   };
 

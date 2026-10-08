@@ -1499,6 +1499,14 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
   color: var(--stat-weakness-readable);
   font-weight: 700;
 }
+.power-team-card-roster .matchup-reference-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.power-team-card-roster .matchup-reference-button:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
 .power-roster-player { font-variant-numeric: tabular-nums; }
 .power-slot-chip { flex: none; max-width: 74px; overflow: hidden; padding: 2px 4px 1px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); line-height: 1.2; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .power-bench-heading { min-height: 27px; display: flex; align-items: center; padding: 0 10px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
