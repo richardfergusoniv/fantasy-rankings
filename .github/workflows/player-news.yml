@@ -60,7 +60,7 @@ jobs:
         if: steps.guard.outputs.go == 'true'
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-rdfergus15.vercel.app' }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-ten.vercel.app' }}
         run: |
           curl -s --max-time 300 -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_BASE_URL/api/player-news" | tee /tmp/news.json

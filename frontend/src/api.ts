@@ -51,8 +51,10 @@ function qs(params: Record<string, string | number | boolean | undefined>): stri
 // ---------------------------------------------------------------------------
 
 export const api = {
-  getDashboard: (args: { force?: boolean } = {}): Promise<JsonValue> =>
-    request(`/api/dashboard${qs({ force: args.force })}`),
+  getDashboard: async (args: { force?: boolean } = {}): Promise<JsonValue> => {
+    const body = await request<{ dashboard: JsonValue }>(`/api/dashboard${qs({ force: args.force })}`);
+    return body.dashboard;
+  },
 
   getDashboardSection: (args: {
     section: "meta" | "team" | "players" | "league" | "analytics";
@@ -66,10 +68,11 @@ export const api = {
     position: string;
     playerIds: string[];
   }): Promise<JsonValue> =>
-    request("/api/boom-bust/ranges", {
-      method: "POST",
-      body: JSON.stringify(args),
-    }),
+    request(`/api/boom-bust/ranges${qs({
+      leagueId: args.leagueId,
+      position: args.position,
+      playerIds: args.playerIds.join(","),
+    })}`),
 
   getBoomBustHistory: (args: {
     leagueId: string;
@@ -82,7 +85,10 @@ export const api = {
     formatKey: string;
     playerIds: string[];
   }): Promise<JsonValue> =>
-    request("/api/value-history", { method: "POST", body: JSON.stringify(args) }),
+    request(`/api/value-history${qs({
+      formatKey: args.formatKey,
+      playerIds: args.playerIds.join(","),
+    })}`),
 
   getHistoricalTrades: (args: {
     leagueId: string;
@@ -105,7 +111,7 @@ export const api = {
     opponent: string;
     season: number;
     week: number;
-  }): Promise<JsonValue> => request(`/api/matchup/box-score${qs(args)}`),
+  }): Promise<JsonValue> => request(`/api/box-score${qs(args)}`),
 
   getPlayerNews: (): Promise<JsonValue> => request("/api/player-news"),
 };

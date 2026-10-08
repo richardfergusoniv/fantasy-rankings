@@ -18,7 +18,9 @@ export const SLEEPER_USER_ID = "739931264659927040";
 export const SLEEPER_BASE = "https://api.sleeper.app/v1";
 export const SLEEPER_PROJECTIONS_BASE = "https://api.sleeper.com";
 export const SOURCE_TIMEOUT_MS = 15_000;
-export const REFRESH_TIMEOUT_MS = 110_000;
+// Hobby plan caps a function at 60s. Finish timed work early enough to
+// return a partial result or a clear error before the platform kills it.
+export const REFRESH_TIMEOUT_MS = 45_000;
 
 export const DRAFT_MARKET_CACHE_KEY = "draft-market-signals-v1";
 export const DRAFT_MARKET_CACHE_MS = 24 * 60 * 60 * 1000;

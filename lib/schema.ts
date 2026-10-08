@@ -102,7 +102,7 @@ export const playerValueSnapshots = pgTable(
     index("player_value_snapshots_format_player_date_idx").on(
       table.formatKey,
       table.playerId,
-      table.snapshotDate,
+      table.snapshotDate.desc(),
     ),
   ],
 );

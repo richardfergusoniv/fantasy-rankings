@@ -1,5 +1,7 @@
 -- Database hardening from Supabase advisor + query-path review.
 -- Indexes for hot paths, owner RLS, auth.uid() initplan fix, revoke TRUNCATE.
+-- Hand-applied to production on 2026-10-07. Not a drizzle-kit journal entry.
+-- See MIGRATION-STATUS.md. Do not run db:migrate against production.
 
 -- 1) Unindexed FK used by news reads and ON DELETE CASCADE
 CREATE INDEX IF NOT EXISTS "player_news_items_run_id_idx"

@@ -19,6 +19,7 @@ function SafeAreaTopScrim({ backgroundColor }: { backgroundColor?: string }) {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api, type ApiResponse } from "./api";
+import { supabase } from "./supabase";
 import { MatchupTag, ModalPortal, SegmentedControl, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
@@ -4130,7 +4131,8 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
 
 const BROWSER_DASHBOARD_CACHE_KEY = "fantasy-rankings-dashboard-v7";
 const BROWSER_DASHBOARD_MAX_AGE_MS = 2 * 60 * 1000;
-const DASHBOARD_DEADLINE_MS = 115_000;
+// Stay under the 60s Hobby function cap. The server build deadline is 55s.
+const DASHBOARD_DEADLINE_MS = 58_000;
 // While a section answers `data: null` (signed-in user's first dashboard is
 // still building in the background), poll until the build lands.
 const SECTION_BUILD_POLL_MS = 4_000;
@@ -4331,11 +4333,24 @@ export function App() {
     enabled: false,
   });
   const refresh = useMutation({
-    mutationFn: () => withClientDeadline(api.getDashboard({ force: true }), DASHBOARD_DEADLINE_MS),
+    mutationFn: async () => {
+      if (supabase) {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) throw new Error("Sign in required.");
+      }
+      return withClientDeadline(api.getDashboard({ force: true }), DASHBOARD_DEADLINE_MS);
+    },
     onSuccess: (data) => {
       saveBrowserDashboard(data);
       queryClient.setQueryData(["fantasy-dashboard"], data);
       queryClient.invalidateQueries({ queryKey: ["dashboard-section"] });
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "";
+      const signedOut = message === "Sign in required." || message.includes("API 401");
+      if (!supabase || !signedOut) return;
+      localStorage.removeItem(BROWSER_DASHBOARD_CACHE_KEY);
+      void supabase.auth.signOut();
     },
   });
   const newsQuery = useQuery({

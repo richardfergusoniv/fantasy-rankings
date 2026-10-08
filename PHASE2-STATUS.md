@@ -5,18 +5,18 @@
 
 ---
 
-## ✅ Completed: Read-only routes (5)
+## ✅ Completed: Read-only routes
 
 | Route | File | Replaces | Notes |
 |-------|------|----------|-------|
-| `GET /api/dashboard` | `api/dashboard.ts` | `getDashboard` (non-force) + `getCachedDashboard` | `force=true` returns 400 (moves to cron in Phase 3) |
-| `GET /api/dashboard/section` | `api/dashboard/section.ts` | `getDashboardSection` | All 5 sections (meta/team/players/league/analytics) |
+| `GET /api/dashboard` | `api/dashboard.ts` | `getDashboard` + `getCachedDashboard` | Signed-in Sleeper users get their own dashboard. `force=true` with no resolved Sleeper user returns 401. Other unsigned reads return the global snapshot. |
+| `GET /api/dashboard/section` | `api/dashboard.ts` | `getDashboardSection` | `vercel.json` rewrites this path to `?__section=1`. Sections: meta, team, players, league, analytics. |
 | `GET /api/pfn-tables` | `api/pfn-tables.ts` | `getpfntables` | Includes team-situational snapshot |
-| `GET /api/player-news` | `api/player-news.ts` | `getPlayerNews` | Max 20 populated runs |
-| `GET /api/trades/history` | `api/trades/history.ts` | `getHistoricalTrades` | Full Sleeper chain logic; `maxDuration: 120` |
+| `GET /api/player-news` | `api/player-news.ts` | `getPlayerNews` | GET reads stored news. GET or POST with `CRON_SECRET` runs the refresh. |
+| `GET /api/trades/history` | `api/trades/history.ts` | `getHistoricalTrades` | Full Sleeper chain logic; `maxDuration: 60` |
 | `GET /api/draft-center` | `api/draft-center.ts` | `getDraftCenter` | FFC/MFL ADP, Sleeper trending, live drafts; betting fetches (Polymarket/Kalshi/Action Network) removed per UI removal |
-| `GET /api/boom-bust/ranges` | `api/boom-bust/ranges.ts` | `getBoomBustRanges` | Query: leagueId, position, playerIds (CSV, 1–24) |
-| `GET /api/boom-bust/history` | `api/boom-bust/history.ts` | `getBoomBustHistory` | Query: leagueId, playerId, position, view (season\|last3) |
+| `GET /api/boom-bust/ranges` | `api/boom-bust/[type].ts` | `getBoomBustRanges` | Query: leagueId, position, playerIds (CSV, 1–24) |
+| `GET /api/boom-bust/history` | `api/boom-bust/[type].ts` | `getBoomBustHistory` | Same file. Query: leagueId, playerId, position, view (season\|last3) |
 | `GET /api/value-history` | `api/value-history.ts` | `getValueHistory` | Query: formatKey, playerIds (CSV, max 24); FantasyCalc backfill |
 | `GET /api/box-score` | `api/box-score.ts` | `getMatchupBoxScore` | Admin-only; ESPN public scoreboard API; query: team, opponent, season, week |
 
@@ -24,15 +24,17 @@
 
 | Route | File | Replaces | Notes |
 |-------|------|----------|-------|
-| `POST /api/ingest/projections` | `api/ingest/projections.ts` | `ingeststagedprojections` | Accepts staged JSON in POST body; `CRON_SECRET` auth |
-| `POST /api/ingest/matchup-grades` | `api/ingest/matchup-grades.ts` | `ingeststagedmatchupgrades` | Per-league SoS upsert; skips stale |
-| `POST /api/ingest/pfn-tables` | `api/ingest/pfn-tables.ts` | `ingeststagedpfntables` | Writes 4 `pfn:*` cache rows |
+| `POST /api/ingest/projections` | `api/ingest/[target].ts` | `ingeststagedprojections` | Accepts staged JSON in POST body; `CRON_SECRET` auth |
+| `POST /api/ingest/matchup-grades` | `api/ingest/[target].ts` | `ingeststagedmatchupgrades` | Per-league SoS upsert; skips stale |
+| `POST /api/ingest/pfn-tables` | `api/ingest/[target].ts` | `ingeststagedpfntables` | Writes 4 `pfn:*` cache rows |
 
 ## ✅ Completed: Cron routes
 
 | Route | File | Replaces | Notes |
 |-------|------|----------|-------|
-| `POST /api/cron/refresh-player-news` | `api/cron/refresh-player-news.ts` | `refreshPlayerNews` (simplified) | `CRON_SECRET` auth; Sleeper injury-status diff → `player_news_runs`/`player_news_items`; deep-research half stubbed `{ queued: true }` |
+| `GET /api/cron/jobs?job=rebuild-dashboard` | `api/cron/jobs.ts` | `getDashboard(force:true)` for the owner snapshot | `CRON_SECRET` auth. GitHub Actions call this; there is no `cron/refresh-dashboard.ts`. |
+| `GET /api/cron/jobs?job=refresh-fantasycalc` | `api/cron/jobs.ts` | FantasyCalc daily refresh | Same file. Unknown `job` values return 400. |
+| GET or POST `/api/player-news` | `api/player-news.ts` | `refreshPlayerNews` (simplified) | `CRON_SECRET` auth; Sleeper injury-status diff → `player_news_runs`/`player_news_items`; deep-research half stubbed `{ queued: true }` |
 
 ## ✅ Completed: Chart views (auth-required)
 
@@ -40,8 +42,10 @@
 |-------|------|----------|-------|
 | `GET /api/chart-views` | `api/chart-views.ts` | `listSavedChartViews` | Supabase JWT auth; scoped to `user_id` |
 | `POST /api/chart-views` | `api/chart-views.ts` | `saveChartView` | Supabase JWT auth; upsert by dataset+name |
-| `DELETE /api/chart-views/[id]` | `api/chart-views/[id].ts` | `deleteChartView` | Supabase JWT auth; id from URL path |
-| migration | `drizzle-pg/0002_chart_views_user_id.sql` | — | Drops `owner_source`/`owner_key`, adds `user_id uuid REFERENCES auth.users(id)` |
+| `DELETE /api/chart-views?id=` | `api/chart-views.ts` | `deleteChartView` | Supabase JWT auth. There is no `chart-views/[id].ts`. |
+| migration | `drizzle-pg/0002_chart_views_user_id.sql` | — | Hand-written SQL, not in the drizzle-kit journal. Applied by hand. Drops `owner_source`/`owner_key`, adds `user_id`. Safe to re-run. See `MIGRATION-STATUS.md`. |
+| migration | `drizzle-pg/0003_phase2_users.sql` | — | Hand-written SQL, not in the journal. Applied by hand. Creates `sleeper_connections` (also declared in `api/_lib/schema.ts`) and its RLS policies. Not safe to re-run: `CREATE POLICY` has no `IF NOT EXISTS`. |
+| migration | `drizzle-pg/0004_db_hardening.sql` | — | Hand-written SQL, not in the journal. Applied by hand to production on 2026-10-07. Indexes, chart-view unique key, owner RLS, `auth.uid()` initplan fix, revoke `TRUNCATE`. |
 
 ## ✅ Completed: Shared libraries
 
@@ -52,16 +56,16 @@
 | `lib/trades.ts` | Historical trades logic (~700 lines: Sleeper fetching, draft pick resolution, kicker-chain logic) |
 | `lib/sleeper.ts` | Shared Sleeper helpers: fetch/deadline utils, stat scoring, weekly-stats cache, league formats, availability, injury snapshots |
 
+Route handlers import the copies under `api/_lib/`. `drizzle.config.ts` reads `lib/schema.ts`.
+
 ---
 
 ## 🔲 Remaining (per task scope)
 
 These were **not** in the Phase 2 task list but are tracked for completeness:
 
-### Cron routes (Phase 3)
-- `GET /api/cron/refresh-dashboard` — `getDashboard(force:true)` rebuild
-- `GET /api/cron/fantasycalc-refresh` — FantasyCalc daily refresh
-- Deep-research half of `/api/cron/refresh-player-news` — Brave Search league-wide roundup (currently stubbed)
+### Still stubbed
+- Deep-research half of the player-news refresh — Brave Search league-wide roundup (currently `{ queued: true }`)
 
 ### Explicitly NOT migrating
 - `setVegasProjections` / `setVegasProjectionsChunk` — banned legacy paths
@@ -73,14 +77,14 @@ These were **not** in the Phase 2 task list but are tracked for completeness:
 
 | Hatch | Vercel |
 |-------|--------|
-| `ctx.db<typeof schema>()` | `import { db } from "../lib/db"` |
+| `ctx.db<typeof schema>()` | `import { db } from "./_lib/db.js"` (handlers under `api/`) |
 | `z` from `@hatch/space-sdk` | `z` from `"zod"` |
 | `ctx.viewer.isOwner` | `isAdminUserId()` vs `ADMIN_USER_IDS` |
 | `ctx.executePrivileged` file reads | Webhook POST body |
 | `ctx.agent.spawnTask` | Stub (Phase 3: Vercel Cron) |
 | `ctx.tool.web_search` | Stub (Phase 3: Brave Search API) |
 | `ctx.tool.sports_data` | ESPN scoreboard API (public) |
-| `defineAction` | Default-exported handler `(req: Request) => Promise<Response>` |
+| `defineAction` | Named `GET` / `POST` / `DELETE` exports |
 | `ctx.invalidateQueries()` | Client-side React Query invalidation (no server equivalent needed) |
 
 ---

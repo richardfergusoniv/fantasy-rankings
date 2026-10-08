@@ -1,36 +1,31 @@
 # API Routes (Vercel Serverless Functions)
 
-Phase 2 will implement these routes. Each file exports a default handler.
+Live handlers export named `GET`, `POST`, and `DELETE` functions. Several Hatch actions share one file so the project stays inside Vercel's function limit.
 
-## Planned routes
+## Routes
 
-| File | Method | Replaces |
-|------|--------|----------|
-| `dashboard.ts` | GET | `getDashboard`, `getCachedDashboard` |
-| `dashboard/section.ts` | GET | `getDashboardSection` |
-| `draft-center.ts` | GET | `getDraftCenter` |
-| `boom-bust/ranges.ts` | POST | `getBoomBustRanges` |
-| `boom-bust/history.ts` | GET | `getBoomBustHistory` |
-| `value-history.ts` | POST | `getValueHistory` |
-| `trades/history.ts` | GET | `getHistoricalTrades` |
-| `chart-views.ts` | GET/POST/DELETE | `listSavedChartViews`, `saveChartView`, `deleteChartView` |
-| `pfn-tables.ts` | GET | `getpfntables` |
-| `matchup/box-score.ts` | GET | `getMatchupBoxScore` |
-| `player-news.ts` | GET | `getPlayerNews` |
-| `ingest/projections.ts` | POST | `ingeststagedprojections` (webhook) |
-| `ingest/matchup-grades.ts` | POST | `ingeststagedmatchupgrades` (webhook) |
-| `ingest/pfn-tables.ts` | POST | `ingeststagedpfntables` (webhook) |
-| `cron/refresh-dashboard.ts` | GET | `getDashboard(force:true)` schedule |
-| `cron/fantasycalc-refresh.ts` | GET | `fantasycalc-daily-rankings-refresh` |
-| `cron/player-news.ts` | GET | `fantasy-player-news-*` |
+| File | Methods | Path |
+|------|---------|------|
+| `dashboard.ts` | GET | `/api/dashboard`. `/api/dashboard/section` is rewritten here with `?__section=1` (`vercel.json`). |
+| `draft-center.ts` | GET | `/api/draft-center` |
+| `boom-bust/[type].ts` | GET | `/api/boom-bust/ranges`, `/api/boom-bust/history` |
+| `value-history.ts` | GET | `/api/value-history` |
+| `trades/history.ts` | GET | `/api/trades/history` |
+| `chart-views.ts` | GET, POST, DELETE | `/api/chart-views`. Delete takes `?id=`. |
+| `pfn-tables.ts` | GET | `/api/pfn-tables` |
+| `box-score.ts` | GET | `/api/box-score` |
+| `player-news.ts` | GET, POST | `/api/player-news`. A `CRON_SECRET` bearer on GET runs the refresh; other GETs read stored news. |
+| `ingest/[target].ts` | POST | `/api/ingest/projections`, `/api/ingest/matchup-grades`, `/api/ingest/pfn-tables` |
+| `cron/jobs.ts` | GET | `/api/cron/jobs?job=rebuild-dashboard` or `?job=refresh-fantasycalc` |
+| `user.ts` | GET, POST | `/api/user` |
 
 ## Conventions
 
 - Validate input with zod `safeParse`; return 400 on failure.
-- Import DB via `import { db } from "../../lib/db"`.
-- Auth-required routes: verify Supabase JWT via `@supabase/ssr`.
-- Webhook/cron routes: check `Authorization: Bearer ${process.env.CRON_SECRET}`.
-- Long-running routes: export `config = { maxDuration: 300 }` (Vercel Pro).
+- Route handlers import the database from `api/_lib/db.js`. `drizzle.config.ts` points drizzle-kit at `lib/schema.ts` (same contents as `api/_lib/schema.ts`).
+- Auth-required routes verify the Supabase JWT (`getRequestUser` / `resolveSleeperUserId` in `api/_lib`).
+- Webhook and cron routes check `Authorization: Bearer ${CRON_SECRET}`.
+- Long routes set `maxDuration: 60` in `vercel.json` (Vercel Hobby cap).
 
 ## DO NOT MIGRATE
 

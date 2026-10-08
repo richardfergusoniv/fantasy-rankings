@@ -1,5 +1,8 @@
 -- Phase 2: User accounts and Sleeper connections
 -- Links Supabase Auth users to their Sleeper accounts
+-- Hand-applied to production. Not a drizzle-kit journal entry.
+-- Not safe to re-run: CREATE POLICY below has no IF NOT EXISTS.
+-- See MIGRATION-STATUS.md.
 
 -- Table to store Sleeper account connections
 CREATE TABLE IF NOT EXISTS "sleeper_connections" (

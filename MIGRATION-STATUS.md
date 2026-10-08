@@ -40,7 +40,7 @@
 
 ### 🔲 Todo (after unblocked)
 
-- [ ] Apply `drizzle-pg/0001_baseline.sql` to Supabase (via SQL editor or `db:push`)
+- [ ] Schema changes follow [Database migrations](#database-migrations). `npm run db:migrate` applies `0001_baseline` only. Do not run it against production.
 - [ ] `npm install` + `npm run typecheck` (validate the scaffold compiles)
 - [ ] `npm run build` (validate Vite build works)
 - [ ] Push to GitHub
@@ -69,25 +69,29 @@
 - [x] `lib/dashboard-schemas.ts` — dashboard zod schemas (plain zod)
 - [x] `lib/trades.ts` — historical trades Sleeper logic (~700 lines)
 
-See `PHASE2-STATUS.md` for full details. Typecheck clean; `app/` unmodified.
+See `PHASE2-STATUS.md` for full details. `app/` is unmodified. `npm run typecheck` covers `frontend/` only.
 
-### 🔲 Remaining
+### ✅ Shipped since the list above
 
-**Cron routes (Phase 3):**
-- [ ] `GET /api/cron/refresh-dashboard` — `getDashboard(force:true)` rebuild
-- [ ] `GET /api/cron/fantasycalc-refresh` — FantasyCalc daily refresh
-- [ ] `GET /api/cron/player-news` — news pipeline (replaces `refreshPlayerNews` + `savePlayerNewsRoundup`)
+Early plans named separate files (`dashboard/section.ts`, `boom-bust/ranges.ts`, `cron/refresh-dashboard.ts`, `ingest/projections.ts`, `matchup/box-score.ts`, `chart-views/[id].ts`). Those files are not what deploys. The live map is [`api/README.md`](api/README.md).
 
-**Other actions (future):**
-- [ ] `GET /api/draft-center`, `POST /api/boom-bust/ranges`, `GET /api/boom-bust/history`
-- [ ] `POST /api/value-history`, `GET/POST/DELETE /api/chart-views` (needs Supabase Auth)
-- [ ] `GET /api/matchup/box-score` (ESPN API, admin-only)
-- [ ] Replace `frontend/src/api.ts` stub with full typed client
-- [ ] Wire pipeline webhooks (`pipeline/run_twice_daily.sh` → POST to Vercel)
+- [x] `GET /api/dashboard` and `GET /api/dashboard/section` — `api/dashboard.ts`
+- [x] `GET /api/draft-center` — `api/draft-center.ts`
+- [x] `GET /api/boom-bust/ranges` and `GET /api/boom-bust/history` — `api/boom-bust/[type].ts`
+- [x] `GET /api/value-history` — `api/value-history.ts`
+- [x] `GET` / `POST` / `DELETE /api/chart-views` — `api/chart-views.ts` (`DELETE` uses `?id=`)
+- [x] `GET /api/box-score` — `api/box-score.ts`
+- [x] `GET /api/cron/jobs?job=rebuild-dashboard` and `?job=refresh-fantasycalc` — `api/cron/jobs.ts`
+- [x] `GET` / `POST /api/player-news` — `api/player-news.ts` (refresh when the caller sends `CRON_SECRET`)
+- [x] `POST /api/ingest/projections`, `/api/ingest/matchup-grades`, `/api/ingest/pfn-tables` — `api/ingest/[target].ts`
+- [x] `GET` / `POST /api/user` — `api/user.ts`
+- [x] GitHub Actions in `.github/workflows/` call those routes on a schedule
 
 **Explicitly NOT migrating:**
 - `setVegasProjections` / `setVegasProjectionsChunk` (banned legacy paths)
 - `savePlayerNewsRoundup` as standalone route (folds into cron handler)
+
+The sequence below is the original plan. The handlers that shipped are the combined files in [`api/README.md`](api/README.md), not the separate paths in steps 1–4.
 
 Per ANALYSIS.md §5, §10:
 
@@ -110,14 +114,42 @@ Per ANALYSIS.md §5, §10:
 | DB driver | postgres-js (`prepare: false`) | Supabase pooler requires it |
 | Frontend | Vite SPA (not Next.js) | Minimal change from current React app; API routes handle backend |
 | Migrations | Fresh baseline, not 1:1 conversion | 17 SQLite migrations → 1 Postgres baseline is cleaner |
-| Cron times | UTC in `vercel.json` | Vercel Cron is UTC-only; PDT = UTC-7 (adjust for PST seasonally) |
+| Schedules | GitHub Actions | `.github/workflows/` calls the app routes. `vercel.json` has no cron entries. |
 | Timestamps | `timestamptz` | Drizzle returns `Date` either way; `.getTime()` call sites unaffected |
+
+---
+
+## Database migrations
+
+Postgres migrations live in `drizzle-pg/`. `app/drizzle/` is the Hatch SQLite history and is not applied to Supabase.
+
+`drizzle.config.ts` reads `lib/schema.ts`, writes SQL to `drizzle-pg/`, and connects with `DATABASE_URL`. `lib/schema.ts` and `api/_lib/schema.ts` match. Route handlers use `api/_lib/db.ts`; drizzle-kit does not.
+
+Scripts in `package.json`:
+
+| Script | Command |
+|--------|---------|
+| `npm run db:generate` | `drizzle-kit generate --config=drizzle.config.ts` |
+| `npm run db:migrate` | `drizzle-kit migrate --config=drizzle.config.ts` |
+| `npm run db:push` | `drizzle-kit push --config=drizzle.config.ts` |
+
+`db:migrate` applies only entries in `drizzle-pg/meta/_journal.json`. That journal lists `0001_baseline` and nothing else.
+
+`drizzle-pg/0002_chart_views_user_id.sql`, `drizzle-pg/0003_phase2_users.sql`, and `drizzle-pg/0004_db_hardening.sql` are hand-written. They are not journal entries, so `db:migrate` does not run them. Production already has `0001` through `0004` applied by hand (Supabase SQL editor). `0004_db_hardening.sql` was applied on 2026-10-07. Drizzle has never run `db:migrate` on production: there is no `drizzle.__drizzle_migrations` table.
+
+Do not run `npm run db:migrate` against production. `0001_baseline` creates `saved_chart_views_owner_idx` on `owner_source` and `owner_key`. `0002` dropped those columns and that index. Running `0001` again fails on that `CREATE INDEX`, and Drizzle rolls the migration back.
+
+`0002` is safe to re-run (`IF EXISTS` / `IF NOT EXISTS`). `0003` is not. Its `CREATE POLICY` statements have no `IF NOT EXISTS`, so a second run fails because those policies already exist. `0004` was applied by hand on 2026-10-07; it adds the hot-path indexes (including `player_value_snapshots` on `snapshot_date DESC`), the `saved_chart_views` unique `(user_id, dataset, name)` index, owner RLS, the `auth.uid()` initplan fix, and `REVOKE TRUNCATE`.
+
+`sleeper_connections` is declared in `api/_lib/schema.ts`, which is the schema the live routes import through `api/_lib/db.ts`. `lib/schema.ts` matches that file. `drizzle.config.ts` still reads `lib/schema.ts`. `db:push` diffs `lib/schema.ts` against the database, and production already has this table plus the `0004` indexes and policies. Do not run `db:push` or `db:migrate` against production.
+
+`npm run typecheck` runs `tsc --noEmit -p frontend/tsconfig.json`. It typechecks `frontend/` only.
 
 ---
 
 ## Risk Watch
 
-- `getDashboard(force:true)` needs up to 110s → set `maxDuration: 300` (requires Vercel Pro)
+- Dashboard rebuilds use `maxDuration: 60` in `vercel.json` (Vercel Hobby). In-code deadlines stop before that cap. GitHub Actions start the heavy jobs; the work still runs inside the Vercel function.
 - Dashboard JSON is 2MB+ → under Vercel's 4.5MB limit, but prefer sectioned reads
 - `refreshPlayerNews` agent has no Vercel equivalent → cron + Brave Search API
 - `app.db` (127MB) is NOT in git (see `.gitignore`); seed from it only if history needed

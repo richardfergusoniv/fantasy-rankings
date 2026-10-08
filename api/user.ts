@@ -63,7 +63,11 @@ export async function POST(req: Request): Promise<Response> {
       return Response.json({ error: "Failed to look up Sleeper user" }, { status: 502 });
     }
 
-    const sleeperUser = await sleeperRes.json() as { user_id?: string; username?: string };
+    const sleeperUser = (await sleeperRes.json()) as { user_id?: string; username?: string } | null;
+    // Sleeper returns HTTP 200 with a JSON null body for an unknown username.
+    if (sleeperUser == null) {
+      return Response.json({ error: "Sleeper user not found" }, { status: 404 });
+    }
     if (typeof sleeperUser.user_id !== "string" || typeof sleeperUser.username !== "string") {
       return Response.json({ error: "Invalid Sleeper user response" }, { status: 502 });
     }
