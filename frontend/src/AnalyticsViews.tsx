@@ -391,6 +391,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
   const [isNaming, setIsNaming] = useState(false);
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
+  const nameRef = useRef<HTMLInputElement>(null);
   const viewsQuery = useQuery({
     queryKey: ["saved-chart-views"],
     queryFn: () => api.listSavedChartViews({}),
@@ -429,10 +430,20 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
     onError: () => setMessage("Couldn’t delete this view. Try again."),
   });
 
+  useEffect(() => {
+    if (!isNaming) return;
+    const desktop = window.matchMedia("(pointer: fine) and (min-width: 760px)").matches;
+    if (desktop) nameRef.current?.focus();
+  }, [isNaming]);
+
   function submitName(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      setMessage("Enter a name for this view.");
+      nameRef.current?.focus();
+      return;
+    }
     setMessage("");
     saveMutation.mutate(trimmed);
   }
@@ -477,15 +488,15 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
       {matchingPreset?.research ? (
         <div className="chart-research-note">
           <p>{matchingPreset.research.insight}</p>
-          <a href={matchingPreset.research.sourceUrl} target="_blank" rel="noreferrer">Research: {matchingPreset.research.source} ↗</a>
+          <a href={matchingPreset.research.sourceUrl} target="_blank" rel="noreferrer">Research: {matchingPreset.research.source} ↗<span className="sr-only"> (opens in a new tab)</span></a>
         </div>
       ) : null}
       {isNaming ? (
         <form className="saved-view-form" onSubmit={submitName}>
           <label htmlFor={`${dataset}-saved-view-name`}>View name</label>
           <div>
-            <input id={`${dataset}-saved-view-name`} value={name} onChange={(event) => setName(event.target.value)} maxLength={80} autoFocus placeholder="e.g. RB receiving upside" />
-            <button type="submit" disabled={!name.trim() || saveMutation.isPending}>{saveMutation.isPending ? "Saving…" : "Save"}</button>
+            <input ref={nameRef} id={`${dataset}-saved-view-name`} name="view-name" autoComplete="off" spellCheck={false} value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="RB receiving upside…" />
+            <button type="submit" disabled={saveMutation.isPending} aria-busy={saveMutation.isPending}>Save{saveMutation.isPending ? <span className="sr-only"> Saving…</span> : null}</button>
           </div>
         </form>
       ) : null}
@@ -855,7 +866,7 @@ export function AdvancedStats({ dashboard, league, selectedPlayer, onSelectedPla
       <div className="advanced-player-picker">
         <label htmlFor="advanced-player-search">Player</label>
         <div className="search-field advanced-player-search">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
           <input
             id="advanced-player-search"
             type="search"
@@ -870,7 +881,8 @@ export function AdvancedStats({ dashboard, league, selectedPlayer, onSelectedPla
                 setPlayerQuery("");
               }
             }}
-            placeholder={selected ? `Search to replace ${selected.name}` : "Search players"}
+            name="player-search"
+            placeholder={selected ? `Search to replace ${selected.name}…` : "Search players…"}
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="none"
@@ -1460,7 +1472,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
       <div className="advanced-player-picker">
         <label htmlFor="weekly-player-search">Player</label>
         <div className="search-field advanced-player-search">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
           <input
             id="weekly-player-search"
             type="search"
@@ -1475,7 +1487,8 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
                 setPlayerQuery("");
               }
             }}
-            placeholder={selected ? `Search to replace ${selected.name}` : "Search players"}
+            name="player-search"
+            placeholder={selected ? `Search to replace ${selected.name}…` : "Search players…"}
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="none"
@@ -1782,12 +1795,13 @@ function ComparisonPlayerSlot({ slot, player, playerId, options, sosEntry, onCho
       <div id={`${inputId}-editor`} className="trade-side-search-wrap comparison-slot-editor">
         <label className="sr-only" htmlFor={inputId}>{player ? `Replace player ${slot}` : `Search for player ${slot}`}</label>
         <div className="search-field comparison-slot-search">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
           <input
             id={inputId}
             type="search"
             aria-label={player ? `Search to replace player ${slot}` : `Search players for comparison slot ${slot}`}
-            placeholder={player ? `Replace ${player.name}` : `Add Player ${slot}`}
+            name={`comparison-player-${slot}`}
+            placeholder={player ? `Replace ${player.name}…` : `Add player ${slot}…`}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {

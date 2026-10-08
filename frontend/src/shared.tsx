@@ -5,6 +5,10 @@ export function ModalPortal({ children }: { children: ReactNode }) {
   return createPortal(children, document.body);
 }
 
+export function SkipLink({ href = "#main-content", children = "Skip to content" }: { href?: string; children?: string }) {
+  return <a className="skip-link" href={href}>{children}</a>;
+}
+
 const dialogFocusableSelector = [
   "button:not([disabled])",
   "a[href]",
