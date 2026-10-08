@@ -36,6 +36,11 @@ export default defineConfig(({ mode }: ConfigEnv) => {
   // The build runs from the repo root (`vite build --config
   // frontend/vite.config.ts`), so pin the project root to this directory.
   root: frontendDir,
+  resolve: {
+    alias: {
+      "@": resolve(frontendDir, "src"),
+    },
+  },
   plugins: [react(), tailwindcss()],
   build: {
     outDir: resolve(frontendDir, "dist"),

@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { getAccessToken, isSupabaseConfigured, supabase, type Session } from "./supabase";
 
 /**
@@ -80,8 +84,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="auth-screen">
-        <p className="auth-loading">Loading…</p>
+      <div className="flex min-h-dvh items-center justify-center bg-background px-4 text-sm text-muted-foreground">
+        <p>Loading…</p>
       </div>
     );
   }
@@ -95,8 +99,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   // flashing the connect screen at users who are already connected.
   if (!connection && !connChecked) {
     return (
-      <div className="auth-screen">
-        <p className="auth-loading">Loading…</p>
+      <div className="flex min-h-dvh items-center justify-center bg-background px-4 text-sm text-muted-foreground">
+        <p>Loading…</p>
       </div>
     );
   }
@@ -133,11 +137,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
 function SignedInBar({ username, onSignOut }: { username: string; onSignOut: () => void }) {
   return (
-    <div className="auth-bar">
-      <span className="auth-bar-user">Sleeper: {username}</span>
-      <button type="button" className="auth-bar-signout" onClick={onSignOut}>
+    <div className="flex items-center justify-between gap-3 bg-foreground px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-sm text-background">
+      <span>Sleeper: {username}</span>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background"
+        onClick={onSignOut}
+      >
         Sign out
-      </button>
+      </Button>
     </div>
   );
 }
@@ -178,49 +188,59 @@ function AuthScreen() {
   }
 
   return (
-    <div className="auth-screen">
-      <form className="auth-card" onSubmit={onSubmit}>
-        <h1 className="auth-title">Fantasy Rankings</h1>
-        <p className="auth-subtitle">
-          {mode === "signin" ? "Sign in to see your leagues." : "Create an account to get started."}
-        </p>
-        <label className="auth-field">
-          <span>Email</span>
-          <input
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </label>
-        <label className="auth-field">
-          <span>Password</span>
-          <input
-            type="password"
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
-        {error ? <p className="auth-error">{error}</p> : null}
-        {notice ? <p className="auth-notice">{notice}</p> : null}
-        <button type="submit" className="auth-submit" disabled={busy}>
-          {busy ? "…" : mode === "signin" ? "Sign in" : "Sign up"}
-        </button>
-        <button
-          type="button"
-          className="auth-switch"
-          onClick={() => {
-            setMode(mode === "signin" ? "signup" : "signin");
-            setError(null);
-            setNotice(null);
-          }}
-        >
-          {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
-        </button>
-      </form>
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle className="text-2xl">
+            <h1>Fantasy Rankings</h1>
+          </CardTitle>
+          <CardDescription>
+            {mode === "signin" ? "Sign in to see your leagues." : "Create an account to get started."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="auth-email">Email</Label>
+              <Input
+                id="auth-email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="auth-password">Password</Label>
+              <Input
+                id="auth-password"
+                type="password"
+                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {notice ? <p className="text-sm text-[var(--stat-strength-readable)]">{notice}</p> : null}
+            <Button type="submit" disabled={busy}>
+              {busy ? "…" : mode === "signin" ? "Sign in" : "Sign up"}
+            </Button>
+            <Button
+              type="button"
+              variant="link"
+              onClick={() => {
+                setMode(mode === "signin" ? "signup" : "signin");
+                setError(null);
+                setNotice(null);
+              }}
+            >
+              {mode === "signin" ? "New here? Create an account" : "Already have an account? Sign in"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -268,33 +288,42 @@ function ConnectSleeper({
   }
 
   return (
-    <div className="auth-screen">
-      <form className="auth-card" onSubmit={onSubmit}>
-        <h1 className="auth-title">Connect Sleeper</h1>
-        <p className="auth-subtitle">
-          Signed in as {email}. Enter your Sleeper username and we will pull in your leagues — no
-          Sleeper password needed.
-        </p>
-        <label className="auth-field">
-          <span>Sleeper username</span>
-          <input
-            type="text"
-            autoComplete="username"
-            autoCapitalize="none"
-            required
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="e.g. sleepername"
-          />
-        </label>
-        {error ? <p className="auth-error">{error}</p> : null}
-        <button type="submit" className="auth-submit" disabled={busy || loading}>
-          {busy ? "Connecting…" : "Connect"}
-        </button>
-        <button type="button" className="auth-switch" onClick={onSignOut}>
-          Sign out
-        </button>
-      </form>
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <Card className="w-full max-w-sm">
+        <CardHeader>
+          <CardTitle className="text-2xl">
+            <h1>Connect Sleeper</h1>
+          </CardTitle>
+          <CardDescription>
+            Signed in as {email}. Enter your Sleeper username and we will pull in your leagues — no
+            Sleeper password needed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="sleeper-username">Sleeper username</Label>
+              <Input
+                id="sleeper-username"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="e.g. sleepername"
+              />
+            </div>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            <Button type="submit" disabled={busy || loading}>
+              {busy ? "Connecting…" : "Connect"}
+            </Button>
+            <Button type="button" variant="link" onClick={onSignOut}>
+              Sign out
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

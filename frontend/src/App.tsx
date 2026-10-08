@@ -17,8 +17,16 @@ function SafeAreaTopScrim({ backgroundColor }: { backgroundColor?: string }) {
   );
 }
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
+import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
+import { MatchupTag, ModalPortal, SegmentedControl, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 import { supabase } from "./supabase";
 
 const BROWSER_DASHBOARD_CACHE_KEY = "fantasy-rankings-dashboard-v7";
@@ -37,7 +45,6 @@ function withSignIn<T>(operation: Promise<T>): Promise<T> {
     throw error;
   });
 }
-import { MatchupTag, ModalPortal, SegmentedControl, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
 type League = Dashboard["leagues"][number];
@@ -479,9 +486,9 @@ function SectionError({ title, onRetry, retrying = false, compact = false }: { t
   return (
     <div className={`section-error${compact ? " compact" : ""}`} role="alert">
       <strong>{title}</strong>
-      <button type="button" onClick={onRetry} disabled={retrying}>
+      <Button type="button" variant="outline" onClick={onRetry} disabled={retrying}>
         <RefreshIcon spinning={retrying} /> Retry
-      </button>
+      </Button>
     </div>
   );
 }
@@ -831,37 +838,25 @@ function MatchupDataModal({ matchup, season, week, onClose }: { matchup: Matchup
 }
 
 function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose: () => void }) {
-  const dialogRef = useRef<HTMLElement | null>(null);
-  useDialogFocusTrap(dialogRef, onClose);
   const severity = item.newsType === "headline"
     ? item.playerId === "league" ? "Breaking" : "League news"
     : item.newsType === "waiver" ? "Waiver signal" : "Roster update";
 
   return (
-    <ModalPortal>
-      <div className="news-card-backdrop" onClick={onClose}>
-        <article
-        ref={dialogRef}
-        className="news-card-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ticker-news-headline"
-        tabIndex={-1}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="news-card-header">
-          <div>
-            <span className={`news-severity ${item.newsType}`}>{severity}</span>
-            <time>{item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent"}</time>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="news-card-modal">
+        <DialogCloseButton label="Close news card" />
+        <DialogHeader className="news-card-header pr-8">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={item.newsType === "headline" ? "negative" : "secondary"}>{severity}</Badge>
+            <time className="text-xs text-muted-foreground">{item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent"}</time>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close news card">×</button>
-        </header>
-        <strong id="ticker-news-headline" className="news-card-headline">{item.change}</strong>
-        <p>{item.roleContext}</p>
-          <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceLabel}</a>
-        </article>
-      </div>
-    </ModalPortal>
+        </DialogHeader>
+        <DialogTitle id="ticker-news-headline" className="news-card-headline">{item.change}</DialogTitle>
+        <DialogDescription className="text-sm leading-relaxed text-muted-foreground">{item.roleContext}</DialogDescription>
+        <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceLabel}</a>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1196,22 +1191,13 @@ function PlayerDetailSheet({
             <button type="button" onClick={onClose} aria-label="Close player details">×</button>
           </div>
         </header>
-        <nav className="player-detail-tabs" role="tablist" aria-label={`${player.name} details`}>
-          {([[
-            "overview", "Overview",
-          ], ["season", "Season"], ["advanced", "Advanced"]] as const).map(([tab, label]) => (
-            <button
-              key={tab}
-              id={`player-detail-${tab}-tab`}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab}
-              aria-controls={`player-detail-${tab}-panel`}
-              className={activeTab === tab ? "active" : ""}
-              onClick={() => setActiveTab(tab)}
-            >{label}</button>
-          ))}
-        </nav>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as PlayerDetailTab)} className="player-detail-tabs">
+          <TabsList aria-label={`${player.name} details`}>
+            <TabsTrigger id="player-detail-overview-tab" value="overview" aria-controls="player-detail-overview-panel">Overview</TabsTrigger>
+            <TabsTrigger id="player-detail-season-tab" value="season" aria-controls="player-detail-season-panel">Season</TabsTrigger>
+            <TabsTrigger id="player-detail-advanced-tab" value="advanced" aria-controls="player-detail-advanced-panel">Advanced</TabsTrigger>
+          </TabsList>
+        </Tabs>
         {activeTab === "overview" ? <div id="player-detail-overview-panel" role="tabpanel" aria-labelledby="player-detail-overview-tab">
         {onModeChange ? (
           <SegmentedControl
@@ -1552,7 +1538,7 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
         options={[{ value: "current", label: "Current lineup" }, { value: "optimized", label: "Optimized lineup" }]}
       />
 
-      <section className="matchup-score" aria-label="Head-to-head score">
+      <Card className="matchup-score gap-0 py-0 shadow-sm" aria-label="Head-to-head score">
         <div className="score-team mine">
           <span>{userTeamName}</span>
           <div className="score-line">
@@ -1570,7 +1556,7 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
           <span>{league.record.wins}-{league.record.losses}{league.record.ties ? `-${league.record.ties}` : ""} record</span>
           <span>{league.scoringLabel}</span>
         </div>
-      </section>
+      </Card>
 
       <section className="lineup-section matchup-section">
         <div className="section-heading"><h2>Starters</h2></div>
@@ -2485,15 +2471,15 @@ function PlayerValueTrend({ name, history, isLoading }: { name: string; history:
         <div className="loading-shimmer player-value-trend-loading" aria-hidden="true" />
       ) : points.length ? (
         <div className="player-value-trend-chart" role="img" aria-label={`${name} FantasyCalc value from ${first?.date ?? "first snapshot"} to ${last?.date ?? "latest snapshot"}`}>
-          <ResponsiveContainer width="100%" height={112}>
+          <ChartContainer config={{ value: { label: "Value", color: "var(--chart-1)" } }} className="aspect-auto h-full">
             <LineChart data={points} margin={{ top: 8, right: 8, bottom: 18, left: 0 }}>
-              <CartesianGrid stroke="var(--hairline)" strokeDasharray="2 5" vertical={false} />
-              <XAxis dataKey="date" tickFormatter={formatDateTick} tick={{ fill: "var(--dim)", fontSize: "var(--type-caption)" }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={18} />
-              <YAxis domain={["dataMin", "dataMax"]} width={42} tick={{ fill: "var(--dim)", fontSize: "var(--type-caption)" }} tickLine={false} axisLine={false} />
-              <Tooltip labelFormatter={(label) => formatDateTick(String(label))} contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: "var(--type-caption)" }} />
-              <Line type="monotone" dataKey="value" name="Value" stroke="var(--text)" strokeWidth={2} dot={{ r: points.length === 1 ? 3 : 2, fill: "var(--text)" }} activeDot={{ r: 4 }} connectNulls={false} />
+              <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
+              <XAxis dataKey="date" tickFormatter={formatDateTick} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={18} />
+              <YAxis domain={["dataMin", "dataMax"]} width={42} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={false} />
+              <Tooltip labelFormatter={(label) => formatDateTick(String(label))} contentStyle={chartTooltipStyle} />
+              <Line type="monotone" dataKey="value" name="Value" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: points.length === 1 ? 3 : 2, fill: "var(--chart-1)" }} activeDot={{ r: 4 }} connectNulls={false} />
             </LineChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         </div>
       ) : <div className="player-value-trend-empty">{isLoading ? "Loading daily snapshots…" : "History begins with the next successful daily snapshot."}</div>}
     </section>
@@ -2525,16 +2511,16 @@ function AggregateTradeHistory({ give, get, historyByPlayerId, isLoading }: { gi
       {data.length > 0 && (hasGive || hasGet) ? (
         <>
           <div className="trade-aggregate-chart" role="img" aria-label="Thirty-day FantasyCalc total value for each side of the trade">
-            <ResponsiveContainer width="100%" height={230}>
+            <ChartContainer config={{ give: { label: "You give", color: "var(--chart-4)" }, get: { label: "You get", color: "var(--chart-3)" } }} className="aspect-auto h-full">
               <LineChart data={data} margin={{ top: 14, right: 12, bottom: 18, left: 2 }}>
-                <CartesianGrid stroke="var(--hairline)" strokeDasharray="2 5" vertical={false} />
-                <XAxis dataKey="date" tickFormatter={formatDateTick} tick={{ fill: "var(--dim)", fontSize: "var(--type-caption)" }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={24} />
-                <YAxis width={48} tick={{ fill: "var(--dim)", fontSize: "var(--type-caption)" }} tickLine={false} axisLine={false} />
-                <Tooltip labelFormatter={(label) => formatDateTick(String(label))} formatter={(value, name) => [Number(value).toLocaleString(), name === "give" ? "You give" : "You get"]} contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", fontSize: "var(--type-caption)" }} />
-                {hasGive ? <Line type="monotone" dataKey="give" name="give" stroke="var(--stat-weakness)" strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
-                {hasGet ? <Line type="monotone" dataKey="get" name="get" stroke="var(--stat-strength)" strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
+                <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
+                <XAxis dataKey="date" tickFormatter={formatDateTick} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={24} />
+                <YAxis width={48} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={false} />
+                <Tooltip labelFormatter={(label) => formatDateTick(String(label))} formatter={(value, name) => [Number(value).toLocaleString(), name === "give" ? "You give" : "You get"]} contentStyle={chartTooltipStyle} />
+                {hasGive ? <Line type="monotone" dataKey="give" name="give" stroke="var(--chart-4)" strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
+                {hasGet ? <Line type="monotone" dataKey="get" name="get" stroke="var(--chart-3)" strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
               </LineChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           </div>
           <div className="trade-aggregate-key"><span><i className="give" />You give</span><span><i className="get" />You get</span></div>
         </>
@@ -4291,10 +4277,10 @@ function SectionLoading({ label }: { label: string }) {
   return (
     <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label={label}>
       <span>{label}</span>
-      <div className="loading-section loading-shimmer" />
-      <div className="loading-line wide loading-shimmer" />
-      <div className="loading-line loading-shimmer" />
-      <div className="loading-line loading-shimmer" />
+      <Skeleton className="h-24 w-full" />
+      <Skeleton className="h-4 w-4/5" />
+      <Skeleton className="h-4 w-3/5" />
+      <Skeleton className="h-4 w-2/5" />
     </section>
   );
 }
@@ -4628,7 +4614,7 @@ export function App() {
         <div className="empty-mark">4TH</div>
         <h1>{noLeagues ? "No leagues for this season." : "Data didn’t make it through."}</h1>
         <p>{noLeagues ? "This Sleeper account isn’t in any NFL league for the current season. Join or create a league on Sleeper, then refresh." : "Fantasy data didn’t load. Try again."}</p>
-        <button onClick={() => refresh.mutate()} disabled={refresh.isPending}><RefreshIcon spinning={refresh.isPending} /> {noLeagues ? "Refresh" : "Try again"}</button>
+        <Button type="button" onClick={() => refresh.mutate()} disabled={refresh.isPending}><RefreshIcon spinning={refresh.isPending} /> {noLeagues ? "Refresh" : "Try again"}</Button>
       </main>
     );
   }
@@ -4673,18 +4659,22 @@ export function App() {
           ))}
         </nav>
         {primaryPage === "players" ? (
-          <nav className="subview-tabs" aria-label="Player views">
-            <button className={tab === "rankings" ? "active" : ""} onClick={() => setTab("rankings")} aria-pressed={tab === "rankings"}>Rankings</button>
-            <button className={tab === "waivers" ? "active" : ""} onClick={() => setTab("waivers")} aria-pressed={tab === "waivers"}>Waiver Wire</button>
-          </nav>
+          <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="subview-tabs">
+            <TabsList aria-label="Player views">
+              <TabsTrigger value="rankings">Rankings</TabsTrigger>
+              <TabsTrigger value="waivers">Waiver Wire</TabsTrigger>
+            </TabsList>
+          </Tabs>
         ) : null}
         {primaryPage === "tools" ? (
-          <nav className="subview-tabs tools-subview-tabs" aria-label="Fantasy tools">
-            <button className={tab === "trade" ? "active" : ""} onClick={() => setTab("trade")} aria-pressed={tab === "trade"}>Trade Values</button>
-            <button className={tab === "charts" ? "active" : ""} onClick={() => setTab("charts")} aria-pressed={tab === "charts"}>Charts</button>
-            <button className={tab === "comparison" ? "active" : ""} onClick={() => setTab("comparison")} aria-pressed={tab === "comparison"}>Comparison</button>
-            <button className={tab === "strengthOfSchedule" ? "active" : ""} onClick={() => setTab("strengthOfSchedule")} aria-pressed={tab === "strengthOfSchedule"} aria-label="Strength of Schedule table">Tables</button>
-          </nav>
+          <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="subview-tabs tools-subview-tabs">
+            <TabsList aria-label="Fantasy tools">
+              <TabsTrigger value="trade">Trade Values</TabsTrigger>
+              <TabsTrigger value="charts">Charts</TabsTrigger>
+              <TabsTrigger value="comparison">Comparison</TabsTrigger>
+              <TabsTrigger value="strengthOfSchedule" aria-label="Strength of Schedule table">Tables</TabsTrigger>
+            </TabsList>
+          </Tabs>
         ) : null}
       </header>
 
