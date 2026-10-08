@@ -2973,9 +2973,9 @@ function LeagueTradeSide({
   }, [team.rosterId]);
 
   return (
-    <section className="trade-side league-trade-side" aria-label={title}>
+    <section className="trade-side league-trade-side" aria-label={`${title}, ${team.teamName}`}>
       <div className="trade-side-heading">
-        <div><h2>{title}</h2><span>{team.teamName}</span></div>
+        <div><h2>{title}</h2></div>
         {assets.length ? <button onClick={onClear}>Clear</button> : null}
       </div>
       <div className="trade-side-list">

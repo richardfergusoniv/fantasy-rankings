@@ -863,7 +863,7 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .trade-side-search-results strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trade-side-search-results small { margin-top: 2px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .trade-side-search-results > button > b { flex: none; font-size: var(--type-body); }
-.trade-add-wrap { padding: 12px 0 0; border: 0; background: transparent; }
+.trade-add-wrap { padding: 16px 0 0; border: 0; background: transparent; }
 .trade-add-player { width: 100%; min-height: 44px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; font-size: var(--type-body); font-weight: 600; cursor: pointer; }
 .trade-add-player:hover:not(:disabled) { background: var(--accent-soft); color: var(--link); }
 .trade-add-player:active:not(:disabled) { background: var(--accent-medium); color: var(--link-active); }
