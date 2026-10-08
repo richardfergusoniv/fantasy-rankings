@@ -13,6 +13,16 @@ function positionLabel(position: string): string {
   return position === "DEF" ? "DST" : position;
 }
 
+function normalizedLineupLabel(value: string): string {
+  return value.replaceAll("_", "").toUpperCase().replaceAll("DEF", "DST");
+}
+
+function starterSlotChip(player: RosterPlayer): string | null {
+  const slot = player.lineupSlot ?? player.position;
+  if (normalizedLineupLabel(slot) === normalizedLineupLabel(player.position)) return null;
+  return slot.replaceAll("_", " ");
+}
+
 function formatRecord(record: { wins: number; losses: number; ties: number }): string {
   return `${record.wins}-${record.losses}${record.ties ? `-${record.ties}` : ""}`;
 }
@@ -165,6 +175,7 @@ export function PowerRankings({
       ? points(player.projection)
       : (season?.value ?? 0).toLocaleString();
     const metricLabel = scope === "week" ? "PROJ" : "VALUE";
+    const slotChip = scope === "week" && player.isStarter ? starterSlotChip(player) : null;
     return (
       <button
         type="button"
@@ -181,7 +192,7 @@ export function PowerRankings({
         <span className="ranking-player">
           <span className="ranking-name-line">
             <strong>{player.name}</strong>
-            {scope === "week" && player.isStarter ? <span className="power-slot-chip">{(player.lineupSlot ?? player.position).replaceAll("_", " ")}</span> : null}
+            {slotChip ? <span className="power-slot-chip">{slotChip}</span> : null}
           </span>
           <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span className="ranking-meta-position">{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} /></span></span>
         </span>
