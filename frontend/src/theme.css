@@ -473,7 +473,8 @@ main { padding: 12px 16px 0; }
 .player-main { min-width: 0; }
 .player-name-line { display: flex; min-width: 0; align-items: center; gap: 5px; }
 .player-name { overflow: hidden; font-size: var(--type-body); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.injury { flex: none; padding: 2px 4px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 700; }
+.injury { display: inline; flex: none; padding: 2px 4px; border: 0; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 700; }
+.injury.injury-accent { background: var(--accent-soft); color: var(--ui-accent-foreground); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--link) 32%, var(--border)); }
 .player-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; color: var(--dim); font-size: var(--type-caption); }
 .player-meta span:not(:last-child)::after { content: "·"; margin-left: 4px; opacity: .55; }
 .player-meta .slot { color: var(--text); font-weight: 700; }
@@ -1368,7 +1369,7 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .saved-view-row .chart-preset-select select:focus-visible { border-color: var(--link); box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 28%, transparent); outline: none; }
 .saved-view-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .saved-view-actions button, .saved-view-form button { min-height: 44px; border: 0; border-radius: var(--radius); font-size: var(--type-caption); font-weight: 700; cursor: pointer; }
-.saved-view-save-trigger { padding: 0 12px; background: var(--accent); color: var(--on-accent); }
+.saved-view-save-trigger { padding: 0 12px; }
 .saved-view-delete { padding: 0 10px; background: var(--surface-2); color: var(--text); }
 .saved-view-actions button:disabled, .saved-view-form button:disabled { opacity: .55; cursor: default; }
 .saved-view-form { margin-top: 9px; padding: 10px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface); }
@@ -1484,6 +1485,20 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .power-team-card-positions span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .power-team-card-positions strong { margin-top: 2px; overflow: hidden; font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; }
 .power-team-card-roster .ranking-row:last-child { border-bottom: 0; }
+.power-team-card-roster .matchup-reference-tag.sos-soft:not(.matchup-reference-button),
+.power-team-card-roster .matchup-reference-button.sos-soft .matchup-reference-button-label {
+  border-color: color-mix(in srgb, var(--stat-strength) 18%, var(--hairline));
+  background: var(--stat-strength-soft);
+  color: var(--stat-strength-readable);
+  font-weight: 700;
+}
+.power-team-card-roster .matchup-reference-tag.sos-tough:not(.matchup-reference-button),
+.power-team-card-roster .matchup-reference-button.sos-tough .matchup-reference-button-label {
+  border-color: color-mix(in srgb, var(--stat-weakness) 18%, var(--hairline));
+  background: var(--stat-weakness-soft);
+  color: var(--stat-weakness-readable);
+  font-weight: 700;
+}
 .power-roster-player { font-variant-numeric: tabular-nums; }
 .power-slot-chip { flex: none; max-width: 74px; overflow: hidden; padding: 2px 4px 1px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); line-height: 1.2; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .power-bench-heading { min-height: 27px; display: flex; align-items: center; padding: 0 10px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
@@ -1930,6 +1945,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .matchup-page .matchup-number b { color: var(--dim); font-weight: 600; }
 .matchup-page .matchup-number.actual b { color: var(--text); font-weight: 700; }
 .matchup-page .injury { background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.matchup-page .injury.injury-accent { background: var(--accent-soft); color: var(--ui-accent-foreground); }
 .matchup-page .optimized-gain { border-radius: var(--radius-sm); background: transparent; color: var(--warning); font-size: var(--type-caption); font-weight: 700; }
 
 /* Matchup badges open this one compact floating layer; its shadow is the view's only depth cue. */
@@ -2080,7 +2096,6 @@ h3 { font-size: var(--type-section); font-weight: 600; }
 button.trade-calculate-button,
 button.chart-open-button,
 button.trade-add-player,
-.saved-view-actions button.saved-view-save-trigger,
 .saved-view-form button,
 .empty-state button,
 .integration-row form button {
@@ -2093,7 +2108,6 @@ button.trade-add-player,
 button.trade-calculate-button svg,
 button.chart-open-button svg,
 button.trade-add-player svg,
-.saved-view-actions button.saved-view-save-trigger svg,
 .saved-view-form button svg,
 .empty-state button svg,
 .integration-row form button svg {
@@ -2102,7 +2116,6 @@ button.trade-add-player svg,
 .trade-calculate-button:hover:not(:disabled),
 .chart-open-button:hover:not(:disabled),
 .trade-add-player:hover:not(:disabled),
-.saved-view-actions button.saved-view-save-trigger:hover:not(:disabled),
 .saved-view-form button:hover:not(:disabled),
 .empty-state button:hover:not(:disabled),
 .integration-row form button:hover:not(:disabled) {
@@ -2112,7 +2125,6 @@ button.trade-add-player svg,
 .trade-calculate-button:active:not(:disabled),
 .chart-open-button:active:not(:disabled),
 .trade-add-player:active:not(:disabled),
-.saved-view-actions button.saved-view-save-trigger:active:not(:disabled),
 .saved-view-form button:active:not(:disabled),
 .empty-state button:active:not(:disabled),
 .integration-row form button:active:not(:disabled) {
@@ -2122,12 +2134,20 @@ button.trade-add-player svg,
 .section-error button,
 .trade-picker-header button,
 .trade-pagination button,
-.saved-view-actions button:not(.saved-view-save-trigger) {
+.saved-view-actions button {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
   font-weight: 600;
+}
+.saved-view-actions button:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--link);
+}
+.saved-view-actions button:active:not(:disabled) {
+  background: var(--accent-medium);
+  color: var(--link-active);
 }
 
 /* Selected controls, tappable badges, links, chevrons and focus all share orange. */
