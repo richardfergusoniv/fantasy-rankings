@@ -2307,3 +2307,23 @@ a:active { color: var(--link-active); }
 }
 
 /* Auth screens use the shared card, input, and button components. */
+
+[data-sonner-toaster] {
+  font-family: var(--font-ui);
+}
+[data-sonner-toast][data-styled="true"] {
+  font-family: var(--font-ui);
+}
+[data-sonner-toast][data-styled="true"] [data-button] {
+  height: auto;
+  min-height: 44px;
+  padding-inline: 12px;
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--primary-foreground);
+  font-family: var(--font-ui);
+  font-size: var(--type-caption);
+}
+[data-sonner-toast][data-styled="true"] [data-button]:focus-visible {
+  box-shadow: 0 0 0 2px var(--link);
+}
