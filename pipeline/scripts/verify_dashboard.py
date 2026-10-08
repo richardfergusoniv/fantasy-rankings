@@ -33,7 +33,8 @@ This is the programmatic diff from the props-twice-daily-pull cron, encoded:
     permutations, throughWeek equal to the staged matchup file
 
 Usage: verify_dashboard.py <staged_for_push.json> <staged_matchup_grades.json>
-Fetches the dashboard from $DASHBOARD_URL or the production URL.
+Fetches the dashboard from $DASHBOARD_URL, or from $APP_BASE_URL/api/dashboard,
+or from the production domain.
 Exit 0 on pass, 1 on fail.
 """
 from __future__ import annotations
@@ -44,9 +45,8 @@ import sys
 import urllib.request
 from pathlib import Path
 
-DASHBOARD_URL = os.environ.get(
-    "DASHBOARD_URL", "https://fantasy-rankings-rdfergus15.vercel.app/api/dashboard"
-)
+_APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://fantasy-rankings-ten.vercel.app").rstrip("/")
+DASHBOARD_URL = os.environ.get("DASHBOARD_URL", f"{_APP_BASE_URL}/api/dashboard")
 POINT_TOLERANCE = 0.011
 STAT_MAP = {
     "pass_yards": "pass_yd",

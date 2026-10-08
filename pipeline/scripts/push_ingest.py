@@ -11,9 +11,10 @@ Usage:
   push_ingest.py matchup-grades  # data/staged_matchup_grades.json
   push_ingest.py pfn-tables      # ~/workspace/pfn-pipeline/data/staged_pfn_tables.json
 
-Reads CRON_SECRET and (optionally) INGEST_BASE_URL from the environment
-(the props-aggregator .env is loaded if present). Prints the endpoint's
-JSON response. Exits non-zero on any failure so cron callers stop loudly.
+Reads CRON_SECRET from the environment. The host is INGEST_BASE_URL if set,
+otherwise APP_BASE_URL, otherwise the production domain. The props-aggregator
+.env is loaded if present. Prints the endpoint's JSON response. Exits
+non-zero on any failure so cron callers stop loudly.
 """
 from __future__ import annotations
 
@@ -24,8 +25,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-BASE_URL = os.environ.get(
-    "INGEST_BASE_URL", "https://fantasy-rankings-rdfergus15.vercel.app"
+BASE_URL = (
+    os.environ.get("INGEST_BASE_URL")
+    or os.environ.get("APP_BASE_URL")
+    or "https://fantasy-rankings-ten.vercel.app"
 ).rstrip("/")
 
 # Data dirs: default to the local workspace layout; CI overrides via env.

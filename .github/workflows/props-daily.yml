@@ -41,6 +41,7 @@ jobs:
     timeout-minutes: 40
     env:
       PROPS_DATA_DIR: ${{ github.workspace }}/pipeline/data
+      APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-ten.vercel.app' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -193,7 +194,7 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           curl -s -H "Authorization: Bearer $CRON_SECRET" \
-            "https://fantasy-rankings-rdfergus15.vercel.app/api/cron/jobs?job=rebuild-dashboard" \
+            "$APP_BASE_URL/api/cron/jobs?job=rebuild-dashboard" \
             | tee /tmp/rebuild.json
           python3 - <<'EOF'
           import json
