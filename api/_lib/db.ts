@@ -12,7 +12,7 @@ import * as schema from "./schema.js";
  * use the pooler URL on port 6543 for serverless functions).
  *
  * Usage:
- *   import { db } from "@/lib/db";
+ *   import { db, schema } from "./db.js";
  *   const rows = await db.select().from(schema.sourceCache);
  */
 

@@ -1,7 +1,7 @@
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({
-  schema: "./lib/schema.ts",
+  schema: "./api/_lib/schema.ts",
   out: "./drizzle-pg",
   dialect: "postgresql",
   // Use DATABASE_URL from environment for push/migrate commands.
