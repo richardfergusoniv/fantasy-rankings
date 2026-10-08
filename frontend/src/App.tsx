@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,9 +11,14 @@ import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogHead
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
+import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition } from "./dashboard-url";
+import { useLinkedPlayerSync } from "./linked-player";
 import { formatDecimal, formatPercent } from "./lib/format-number";
 import { MatchupTag, ModalPortal, SegmentedControl, SkipLink, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 import { supabase } from "./supabase";
+import { UNDO_DURATION_MS, clearTradeSide, markDraftPlayerTaken, removeTradePlayer, restoreTradePlayer, undoDraftPlayerTaken } from "./undo";
+import { useUnsavedLeaveWarning } from "./unsaved-input";
+import { useDashboardUrl } from "./use-dashboard-url";
 import { WindowVirtualList } from "./virtual-list";
 
 function SafeAreaTopScrim({ backgroundColor }: { backgroundColor?: string }) {
@@ -51,6 +57,20 @@ type Dashboard = ApiResponse<typeof api, "getDashboard">;
 type League = Dashboard["leagues"][number];
 type RosterPlayer = League["starters"][number];
 type Tab = "team" | "rankings" | "waivers" | "power" | "draft" | "trade" | "charts" | "comparison" | "strengthOfSchedule";
+type PlayerLink = {
+  linkedPlayerId: string | null;
+  onOpenLinkedPlayer: (playerId: string) => void;
+  onCloseLinkedPlayer: () => void;
+  onLinkedPlayerMiss: () => void;
+  onLinkedPlayerFound: () => void;
+};
+
+function showUndoToast(message: string, onUndo: () => void) {
+  toast(message, {
+    duration: UNDO_DURATION_MS,
+    action: { label: "Undo", onClick: onUndo },
+  });
+}
 type PrimaryPage = "team" | "players" | "league" | "draft" | "tools";
 type PlayerNews = ApiResponse<typeof api, "getPlayerNews">;
 type DraftCenterData = ApiResponse<typeof api, "getDraftCenter">;
@@ -1480,14 +1500,14 @@ function forecastTotal(players: RosterPlayer[]): number | null {
   return values.length ? values.reduce((total, value) => total + value, 0) : null;
 }
 
-function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, onOpenMatchup }: { league: League; dashboard: Dashboard; news: PlayerNews | undefined; newsLoading: boolean; newsError: boolean; onRetryNews: () => void; onOpenMatchup: (matchup: MatchupSelection) => void }) {
+function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, onOpenMatchup, linkedPlayerId, onOpenLinkedPlayer, onCloseLinkedPlayer, onLinkedPlayerMiss, onLinkedPlayerFound }: { league: League; dashboard: Dashboard; news: PlayerNews | undefined; newsLoading: boolean; newsError: boolean; onRetryNews: () => void; onOpenMatchup: (matchup: MatchupSelection) => void } & PlayerLink) {
   const [mode, setMode] = useState<"current" | "optimized">("current");
   const playerHistory = usePlayerCardHistory();
   const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(news), [news]);
   const selectedPlayerNews = playerHistory.current ? newsItemsByPlayer.get(playerHistory.current.playerId) ?? [] : [];
-  const openPlayer = (player: RosterPlayer) => {
+  const toLineupPlayer = (player: RosterPlayer): PlayerSearchResult => {
     const season = dashboard.seasonLongRankings.find((row) => row.playerId === player.playerId && row.formatKey === league.seasonLongFormat.key);
-    playerHistory.open({
+    return {
       key: `lineup:${player.playerId}`,
       playerId: player.playerId,
       name: player.name,
@@ -1507,8 +1527,29 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
       gamePhase: player.gamePhase,
       defenseComponents: player.defenseComponents,
       projectionComponents: player.projectionComponents,
-    });
+    };
   };
+  const openPlayer = (player: RosterPlayer) => {
+    playerHistory.open(toLineupPlayer(player));
+    onOpenLinkedPlayer(player.playerId);
+  };
+  const rosterPlayers = useMemo(
+    () => [...league.starters, ...league.bench, ...(league.opponentTeam?.starters ?? []), ...(league.opponentTeam?.bench ?? [])],
+    [league.bench, league.opponentTeam, league.starters],
+  );
+  useLinkedPlayerSync({
+    linkedPlayerId,
+    isOpen: playerHistory.isOpen,
+    currentPlayerId: playerHistory.current?.playerId ?? null,
+    resolve: (playerId) => {
+      const player = rosterPlayers.find((item) => item.playerId === playerId);
+      return player ? toLineupPlayer(player) : null;
+    },
+    open: playerHistory.open,
+    close: playerHistory.close,
+    onMiss: onLinkedPlayerMiss,
+    onFound: onLinkedPlayerFound,
+  });
   const opponent = league.opponentTeam;
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const optimized = useMemo(() => optimizeLineup(league.starters, league.bench), [league.starters, league.bench]);
@@ -1612,7 +1653,7 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
         {benchRows.length === 0 ? <div className="empty-inline compact">No bench players are listed.</div> : null}
         {!opponent ? <div className="empty-inline compact">Sleeper hasn’t posted an opponent for this week.</div> : null}
       </section>
-      {playerHistory.current ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode="details" analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={selectedPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={onRetryNews} onOpenMatchup={onOpenMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={playerHistory.close} /> : null}
+      {playerHistory.current ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode="details" analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={selectedPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={onRetryNews} onOpenMatchup={onOpenMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={() => { playerHistory.close(); onCloseLinkedPlayer(); }} /> : null}
     </>
   );
 }
@@ -1866,16 +1907,18 @@ function TeamDataModal({
   );
 }
 
-function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsError, onRetryNews, draftData, onOpenMatchup }: { dashboard: Dashboard; league: League; availableOnly: boolean; news: PlayerNews | undefined; newsLoading: boolean; newsError: boolean; onRetryNews: () => void; draftData: DraftCenterData | undefined; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
-  const [position, setPosition] = useState<PositionFilter>("QB");
-  const [query, setQuery] = useState("");
+function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsError, onRetryNews, draftData, onOpenMatchup, rankingPosition, rankingHorizon, rankingQuery, onRankingFiltersChange, linkedPlayerId, onOpenLinkedPlayer, onCloseLinkedPlayer, onLinkedPlayerMiss, onLinkedPlayerFound }: { dashboard: Dashboard; league: League; availableOnly: boolean; news: PlayerNews | undefined; newsLoading: boolean; newsError: boolean; onRetryNews: () => void; draftData: DraftCenterData | undefined; onOpenMatchup?: (matchup: MatchupSelection) => void; rankingPosition: RankingPosition | null; rankingHorizon: RankingHorizon | null; rankingQuery: string | null; onRankingFiltersChange: (filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => void } & PlayerLink) {
+  const [position, setPosition] = useState<PositionFilter>(rankingPosition ?? "QB");
+  const [query, setQuery] = useState(rankingQuery ?? "");
   const playerHistory = usePlayerCardHistory();
   const [sheetMode, setSheetMode] = useState<"details" | "chart">("details");
-  const [rankingMode, setRankingMode] = useState<"week" | "ros" | "dynasty">("week");
+  const [rankingMode, setRankingMode] = useState<"week" | "ros" | "dynasty">(rankingHorizon ?? "week");
+  const horizonOptions = league.seasonLongFormat.isDynasty ? ["week", "ros", "dynasty"] as const : ["week", "ros"] as const;
+  const effectiveHorizon = (horizonOptions as readonly string[]).includes(rankingMode) ? rankingMode : "week";
   const [visibleRowCount, setVisibleRowCount] = useState(120);
   const [selectedTeam, setSelectedTeam] = useState<TeamCardSelection | null>(null);
   const queryClient = useQueryClient();
-  const isSeasonLong = rankingMode !== "week";
+  const isSeasonLong = effectiveHorizon !== "week";
   const pfnTablesQuery = useQuery({
     queryKey: ["pfn-tables"],
     queryFn: () => api.getPfnTables({}),
@@ -1899,14 +1942,14 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
     (dashboard.analytics.teamRecords ?? []).map((record) => [canonicalNflTeam(record.team) ?? record.team, record]),
   ), [dashboard.analytics.teamRecords]);
   const redraftFormatKey = `redraft-${league.seasonLongFormat.numQbs}qb-${league.seasonLongFormat.numTeams}t-${league.seasonLongFormat.ppr}ppr`;
-  const seasonFormatKey = rankingMode === "dynasty" ? league.seasonLongFormat.key : redraftFormatKey;
+  const seasonFormatKey = effectiveHorizon === "dynasty" ? league.seasonLongFormat.key : redraftFormatKey;
   const basePositions = basePositionOrder.filter((item) => league.rankingPositions.includes(item) && (!isSeasonLong || ["QB", "RB", "WR", "TE"].includes(item)));
   const positionFilters: PositionFilter[] = [...basePositions];
   const modifierFilters: PositionFilter[] = [
     ...(isSeasonLong ? ["ALL" as const] : []),
     "FLEX",
     ...(league.showSuperFilter ? ["SUPER" as const] : []),
-    ...(rankingMode === "dynasty" ? ["ROOKIES" as const] : []),
+    ...(effectiveHorizon === "dynasty" ? ["ROOKIES" as const] : []),
   ];
   const visiblePositions: PositionFilter[] = [...positionFilters, ...modifierFilters];
   const effectivePosition = visiblePositions.includes(position) ? position : (visiblePositions[0] ?? "QB");
@@ -1920,13 +1963,38 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
   const leagueDefenses = useMemo(() => dashboard.defenses.filter((row) => row.leagueId === league.id), [dashboard.defenses, league.id]);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
 
+  useEffect(() => { setPosition(rankingPosition ?? "QB"); }, [rankingPosition]);
+  useEffect(() => { setRankingMode(rankingHorizon ?? "week"); }, [rankingHorizon]);
+  useEffect(() => { setQuery(rankingQuery ?? ""); }, [rankingQuery]);
+
+  function publishRankingFilters(next: { position?: PositionFilter; horizon?: "week" | "ros" | "dynasty"; query?: string }) {
+    const nextPosition = next.position ?? effectivePosition;
+    const nextHorizon = next.horizon ?? effectiveHorizon;
+    const nextQuery = next.query ?? query;
+    if (next.position !== undefined) setPosition(next.position);
+    if (next.horizon !== undefined) setRankingMode(next.horizon);
+    if (next.query !== undefined) setQuery(next.query);
+    onRankingFiltersChange({
+      position: nextPosition === "QB" ? null : nextPosition,
+      horizon: nextHorizon === "week" ? null : nextHorizon,
+      query: nextQuery.trim() ? nextQuery : null,
+    });
+  }
+
   useEffect(() => {
-    if (position !== effectivePosition) setPosition(effectivePosition);
-  }, [effectivePosition, position]);
+    if (position === effectivePosition && rankingMode === effectiveHorizon) return;
+    setPosition(effectivePosition);
+    setRankingMode(effectiveHorizon);
+    onRankingFiltersChange({
+      position: effectivePosition === "QB" ? null : effectivePosition,
+      horizon: effectiveHorizon === "week" ? null : effectiveHorizon,
+      query: query.trim() ? query : null,
+    });
+  }, [effectiveHorizon, effectivePosition, onRankingFiltersChange, position, query, rankingMode]);
 
   useEffect(() => {
     setVisibleRowCount(120);
-  }, [availableOnly, effectivePosition, league.id, rankingMode]);
+  }, [availableOnly, effectivePosition, league.id, effectiveHorizon]);
 
   const allPlayerDetails = useMemo<PlayerSearchResult[]>(() => {
     const rostered = new Set(league.rosteredPlayerIds);
@@ -2150,7 +2218,21 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
   const selectSearchResult = (player: PlayerSearchResult) => {
     setSheetMode("details");
     playerHistory.open(player);
+    onOpenLinkedPlayer(player.playerId);
   };
+  useLinkedPlayerSync({
+    linkedPlayerId,
+    isOpen: playerHistory.isOpen,
+    currentPlayerId: playerHistory.current?.playerId ?? null,
+    resolve: (playerId) => allPlayerDetailsById.get(playerId) ?? null,
+    open: (player) => {
+      setSheetMode("details");
+      playerHistory.open(player);
+    },
+    close: playerHistory.close,
+    onMiss: onLinkedPlayerMiss,
+    onFound: onLinkedPlayerFound,
+  });
 
   return (
     <section className="rankings-view">
@@ -2161,9 +2243,9 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
             type="search"
             aria-label="Search all players by name"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => publishRankingFilters({ query: event.target.value })}
             onKeyDown={(event) => {
-              if (event.key === "Escape") setQuery("");
+              if (event.key === "Escape") publishRankingFilters({ query: "" });
             }}
             name="player-search"
             placeholder="Search all players…"
@@ -2172,14 +2254,14 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
             autoCapitalize="none"
             spellCheck={false}
           />
-          {hasSearch ? <button className="search-clear" type="button" onClick={() => setQuery("")} aria-label="Clear player search">×</button> : null}
+          {hasSearch ? <button className="search-clear" type="button" onClick={() => publishRankingFilters({ query: "" })} aria-label="Clear player search">×</button> : null}
         </label>
         {!hasSearch ? (
           <div className="position-filter-rows" role="group" aria-label="Position filter">
             <SegmentedControl
               className={`position-tabs${!positionFilters.includes(effectivePosition) ? " no-active" : ""}`}
               value={effectivePosition}
-              onChange={setPosition}
+              onChange={(value) => publishRankingFilters({ position: value })}
               label="Positions"
               options={positionFilters.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
             />
@@ -2187,7 +2269,7 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
               <SegmentedControl
                 className={`position-tabs position-modifier-tabs${!modifierFilters.includes(effectivePosition) ? " no-active" : ""}`}
                 value={effectivePosition}
-                onChange={setPosition}
+                onChange={(value) => publishRankingFilters({ position: value })}
                 label="Position modifiers"
                 options={modifierFilters.map((item) => ({ value: item, label: item }))}
               />
@@ -2235,8 +2317,8 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
         <>
           <SegmentedControl
             className="lineup-mode-toggle rankings-mode-toggle"
-            value={rankingMode}
-            onChange={setRankingMode}
+            value={effectiveHorizon}
+            onChange={(value) => publishRankingFilters({ horizon: value })}
             label={availableOnly ? "Waiver ranking horizon" : "Ranking horizon"}
             options={league.seasonLongFormat.isDynasty
               ? [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
@@ -2244,7 +2326,7 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
           />
           <div className="rankings-note">
             <span>{isSeasonLong
-              ? `${availableOnly ? "Available · " : ""}${rankingMode === "dynasty"
+              ? `${availableOnly ? "Available · " : ""}${effectiveHorizon === "dynasty"
                 ? league.seasonLongFormat.label
                 : `Redraft · ${league.seasonLongFormat.numTeams}-team · ${league.seasonLongFormat.numQbs === 2 ? "Superflex / 2QB" : "1QB"} · ${league.seasonLongFormat.ppr === 1 ? "PPR" : league.seasonLongFormat.ppr === 0.5 ? "Half PPR" : "Standard"}`}`
               : availableOnly ? `Available · ${league.scoringLabel}` : league.scoringLabel}</span>
@@ -2321,6 +2403,7 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
                 if (!detailWithWaiverTrends) return;
                 setSheetMode(mode);
                 playerHistory.open(detailWithWaiverTrends);
+                onOpenLinkedPlayer(detailWithWaiverTrends.playerId);
               };
               return (
                 <div
@@ -2359,7 +2442,7 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
         </>
       )}
 
-      {playerHistory.current ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode={sheetMode} analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={selectedPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={onRetryNews} onModeChange={availableOnly ? setSheetMode : undefined} onOpenMatchup={onOpenMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={playerHistory.close} /> : null}
+      {playerHistory.current ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode={sheetMode} analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={selectedPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={onRetryNews} onModeChange={availableOnly ? setSheetMode : undefined} onOpenMatchup={onOpenMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={() => { playerHistory.close(); onCloseLinkedPlayer(); }} /> : null}
       {selectedTeam ? (
         <TeamDataModal
           selection={selectedTeam}
@@ -3437,6 +3520,7 @@ function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashb
   const [tradeView, setTradeView] = useState<"analyze" | "history">("analyze");
   const [giveIds, setGiveIds] = useState<string[]>([]);
   const [getIds, setGetIds] = useState<string[]>([]);
+  useUnsavedLeaveWarning(giveIds.length + getIds.length > 0);
   const [isResultOpen, setIsResultOpen] = useState(false);
   const [valuationMode, setValuationMode] = useState<ValuationMode>("league");
   const userTeam = league.tradeTeams.find((team) => team.isUser) ?? league.tradeTeams[0];
@@ -3480,6 +3564,28 @@ function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashb
     if (side === "give") setGiveIds((ids) => [...ids, id]);
     else setGetIds((ids) => [...ids, id]);
   };
+  const clearSide = (side: "give" | "get") => {
+    const { next, removedIds } = clearTradeSide({ giveIds, getIds }, side);
+    if (removedIds.length === 0) return;
+    setGiveIds(next.giveIds);
+    setGetIds(next.getIds);
+    showUndoToast(side === "give" ? "Cleared the players you’d give" : "Cleared the players you’d get", () => {
+      if (side === "give") setGiveIds([...removedIds]);
+      else setGetIds([...removedIds]);
+    });
+  };
+  const removeSidePlayer = (side: "give" | "get", id: string) => {
+    const { next, removed } = removeTradePlayer(side === "give" ? giveIds : getIds, id);
+    if (!removed) return;
+    if (side === "give") setGiveIds(next);
+    else setGetIds(next);
+    const name = assetById.get(id)?.name ?? "Player";
+    showUndoToast(`Removed ${name}`, () => {
+      const restore = (current: string[]) => restoreTradePlayer(current, removed);
+      if (side === "give") setGiveIds(restore);
+      else setGetIds(restore);
+    });
+  };
   const balanceCopy = give.length === 0 || get.length === 0 ? "Add at least one asset to each side to compare the deal." : difference === 0 ? "The two sides have the same FantasyCalc market value." : `${giveMarketTotal < getMarketTotal ? "You give" : "You get"} is ${difference.toLocaleString()} market value lower.`;
 
   return (
@@ -3506,13 +3612,13 @@ function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashb
       <div className={`trade-columns${valuationMode === "league" ? " league-adjusted" : ""}`}>
         {valuationMode === "league" && mine && theirs ? (
           <>
-            <LeagueTradeSide title="You give" team={mine} assets={give} assetById={assetById} selectedIds={selectedIds} marketTotal={giveMarketTotal} onAdd={(id) => addAsset(id, "give")} onRemove={(id) => setGiveIds((ids) => ids.filter((item) => item !== id))} onClear={() => setGiveIds([])} onOpenPlayer={onOpenPlayer} />
-            <LeagueTradeSide title="You get" team={theirs} assets={get} assetById={assetById} selectedIds={selectedIds} marketTotal={getMarketTotal} onAdd={(id) => addAsset(id, "get")} onRemove={(id) => setGetIds((ids) => ids.filter((item) => item !== id))} onClear={() => setGetIds([])} onOpenPlayer={onOpenPlayer} />
+            <LeagueTradeSide title="You give" team={mine} assets={give} assetById={assetById} selectedIds={selectedIds} marketTotal={giveMarketTotal} onAdd={(id) => addAsset(id, "give")} onRemove={(id) => removeSidePlayer("give", id)} onClear={() => clearSide("give")} onOpenPlayer={onOpenPlayer} />
+            <LeagueTradeSide title="You get" team={theirs} assets={get} assetById={assetById} selectedIds={selectedIds} marketTotal={getMarketTotal} onAdd={(id) => addAsset(id, "get")} onRemove={(id) => removeSidePlayer("get", id)} onClear={() => clearSide("get")} onOpenPlayer={onOpenPlayer} />
           </>
         ) : (
           <>
-            <TradeSide title="You give" assets={give} availableAssets={unrestrictedAssets} marketTotal={giveMarketTotal} onAdd={(id) => addAsset(id, "give")} onRemove={(id) => setGiveIds((ids) => ids.filter((item) => item !== id))} onClear={() => setGiveIds([])} onOpenPlayer={onOpenPlayer} />
-            <TradeSide title="You get" assets={get} availableAssets={unrestrictedAssets} marketTotal={getMarketTotal} onAdd={(id) => addAsset(id, "get")} onRemove={(id) => setGetIds((ids) => ids.filter((item) => item !== id))} onClear={() => setGetIds([])} onOpenPlayer={onOpenPlayer} />
+            <TradeSide title="You give" assets={give} availableAssets={unrestrictedAssets} marketTotal={giveMarketTotal} onAdd={(id) => addAsset(id, "give")} onRemove={(id) => removeSidePlayer("give", id)} onClear={() => clearSide("give")} onOpenPlayer={onOpenPlayer} />
+            <TradeSide title="You get" assets={get} availableAssets={unrestrictedAssets} marketTotal={getMarketTotal} onAdd={(id) => addAsset(id, "get")} onRemove={(id) => removeSidePlayer("get", id)} onClear={() => clearSide("get")} onOpenPlayer={onOpenPlayer} />
           </>
         )}
       </div>
@@ -3783,7 +3889,7 @@ function summarizeDraftNeeds(slots: string[]): string[] {
   return [...counts].map(([label, count]) => count > 1 ? `${label} ×${count}` : label);
 }
 
-function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, onRetryNews, loading, onRefresh, refreshing, onOpenMatchup }: { dashboard: Dashboard; league: League; data: DraftCenterData | undefined; news: PlayerNews | undefined; newsLoading: boolean; newsError: boolean; onRetryNews: () => void; loading: boolean; onRefresh: () => void; refreshing: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
+function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, onRetryNews, loading, onRefresh, refreshing, onOpenMatchup, draftPosition, draftQuery, draftRoom, onDraftFiltersChange, linkedPlayerId, onOpenLinkedPlayer, onCloseLinkedPlayer, onLinkedPlayerMiss, onLinkedPlayerFound }: { dashboard: Dashboard; league: League; data: DraftCenterData | undefined; news: PlayerNews | undefined; newsLoading: boolean; newsError: boolean; onRetryNews: () => void; loading: boolean; onRefresh: () => void; refreshing: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void; draftPosition: DraftPosition | null; draftQuery: string | null; draftRoom: DraftRoom | null; onDraftFiltersChange: (filters: { draftPosition: DraftPosition | null; draftQuery: string | null; draftRoom: DraftRoom | null }) => void } & PlayerLink) {
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const leagueDrafts = useMemo(() => data?.drafts.filter((draft) => draft.leagueId === league.id) ?? [], [data?.drafts, league.id]);
   const liveDraft = leagueDrafts.find((draft) => draft.status === "drafting") ?? null;
@@ -3796,10 +3902,10 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
   // presenting veterans as eligible in an established league.
   const draftBoardMode = league.seasonLongFormat.isDynasty ? (syncedBoardMode === "startup" ? "startup" : "rookie") : "redraft";
   const isRookieBoard = draftBoardMode === "rookie";
-  const [mode, setMode] = useState<"board" | "myTeam">("board");
+  const [mode, setMode] = useState<"board" | "myTeam">(draftRoom ?? "board");
   const playerHistory = usePlayerCardHistory();
-  const [position, setPosition] = useState<"ALL" | "QB" | "RB" | "WR" | "TE" | "K" | "DEF" | "ROOKIES">("ALL");
-  const [query, setQuery] = useState("");
+  const [position, setPosition] = useState<"ALL" | "QB" | "RB" | "WR" | "TE" | "K" | "DEF" | "ROOKIES">(draftPosition ?? "ALL");
+  const [query, setQuery] = useState(draftQuery ?? "");
   const [visibleDraftCount, setVisibleDraftCount] = useState(160);
   const [myTeamIds, setMyTeamIds] = useState<string[]>(() => readDraftPlayerIds(`fantasy-draft-my-team:${league.id}`));
   const [manualDraftedIds, setManualDraftedIds] = useState<string[]>(() => readDraftPlayerIds(`fantasy-draft-taken:${league.id}`));
@@ -3818,6 +3924,34 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
     ...(league.seasonLongFormat.isDynasty ? ["ROOKIES" as const] : []),
   ];
   const effectiveDraftPosition = draftPositionOptions.includes(position) ? position : "ALL";
+
+  useEffect(() => { setMode(draftRoom ?? "board"); }, [draftRoom]);
+  useEffect(() => { setPosition(draftPosition ?? "ALL"); }, [draftPosition]);
+  useEffect(() => { setQuery(draftQuery ?? ""); }, [draftQuery]);
+
+  function publishDraftFilters(next: { position?: typeof position; query?: string; room?: "board" | "myTeam" }) {
+    const nextPosition = next.position ?? effectiveDraftPosition;
+    const nextQuery = next.query ?? query;
+    const nextRoom = next.room ?? mode;
+    if (next.position !== undefined) setPosition(next.position);
+    if (next.query !== undefined) setQuery(next.query);
+    if (next.room !== undefined) setMode(next.room);
+    onDraftFiltersChange({
+      draftPosition: nextPosition === "ALL" ? null : nextPosition,
+      draftQuery: nextQuery.trim() ? nextQuery : null,
+      draftRoom: nextRoom === "board" ? null : nextRoom,
+    });
+  }
+
+  useEffect(() => {
+    if (position === effectiveDraftPosition) return;
+    setPosition(effectiveDraftPosition);
+    onDraftFiltersChange({
+      draftPosition: effectiveDraftPosition === "ALL" ? null : effectiveDraftPosition,
+      draftQuery: query.trim() ? query : null,
+      draftRoom: mode === "board" ? null : mode,
+    });
+  }, [effectiveDraftPosition, mode, onDraftFiltersChange, position, query]);
 
   useEffect(() => {
     setVisibleDraftCount(160);
@@ -4039,8 +4173,15 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
   }
 
   function markTaken(playerId: string) {
-    setManualDraftedIds((current) => dedupePlayerIds([...current, playerId]));
-    setMyTeamIds((current) => current.filter((id) => id !== playerId));
+    const { next, previous } = markDraftPlayerTaken({ manualDraftedIds, myTeamIds }, playerId);
+    setManualDraftedIds(next.manualDraftedIds);
+    setMyTeamIds(next.myTeamIds);
+    const name = rows.find((row) => row.playerId === playerId)?.name ?? "Player";
+    showUndoToast(`Marked ${name} taken`, () => {
+      const restored = undoDraftPlayerTaken(previous);
+      setManualDraftedIds(restored.manualDraftedIds);
+      setMyTeamIds(restored.myTeamIds);
+    });
   }
 
   function removeFromMyTeam(playerId: string, livePick: boolean) {
@@ -4068,9 +4209,9 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
 
   const draftFilters = (
     <div className="draft-controls">
-      <label><span className="sr-only">Search draft players</span><input type="search" name="draft-search" autoComplete="off" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search players…" aria-label="Search draft players" /></label>
+      <label><span className="sr-only">Search draft players</span><input type="search" name="draft-search" autoComplete="off" spellCheck={false} value={query} onChange={(event) => publishDraftFilters({ query: event.target.value })} placeholder="Search players…" aria-label="Search draft players" /></label>
       <div className="position-pills" role="group" aria-label="Draft position filter">
-        {draftPositionOptions.map((item) => <button type="button" className={effectiveDraftPosition === item ? "active" : ""} aria-pressed={effectiveDraftPosition === item} onClick={() => setPosition(item)} key={item}>{item === "DEF" ? "DST" : item}</button>)}
+        {draftPositionOptions.map((item) => <button type="button" className={effectiveDraftPosition === item ? "active" : ""} aria-pressed={effectiveDraftPosition === item} onClick={() => publishDraftFilters({ position: item })} key={item}>{item === "DEF" ? "DST" : item}</button>)}
       </div>
     </div>
   );
@@ -4101,7 +4242,7 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
     </div>
   ) : <div className="empty-inline">No available players match these filters.</div>;
 
-  function openDraftPlayer(player: DraftPlayerOpenSource) {
+  function openDraftPlayer(player: DraftPlayerOpenSource, publish = true) {
     if (!player.playerId) return;
     const row = rows.find((candidate) => candidate.playerId === player.playerId) ?? player;
     playerHistory.open({
@@ -4125,7 +4266,20 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
       defenseComponents: row.defenseComponents,
       projectionComponents: row.projectionComponents,
     });
+    if (publish) onOpenLinkedPlayer(player.playerId);
   }
+
+  useLinkedPlayerSync({
+    linkedPlayerId,
+    isOpen: playerHistory.isOpen,
+    currentPlayerId: playerHistory.current?.playerId ?? null,
+    resolve: (playerId) => rows.find((row) => row.playerId === playerId) ?? null,
+    open: (row) => openDraftPlayer(row, false),
+    close: playerHistory.close,
+    onMiss: onLinkedPlayerMiss,
+    onFound: onLinkedPlayerFound,
+    ready: !loading || rows.length > 0,
+  });
 
   return (
     <section className="draft-center">
@@ -4135,7 +4289,7 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
       </div>
       <SegmentedControl
         value={mode}
-        onChange={setMode}
+        onChange={(value) => publishDraftFilters({ room: value })}
         label="Draft room view"
         options={[
           { value: "board", label: liveDraft ? "Draft Board · Live" : "Draft Board" },
@@ -4150,7 +4304,7 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
           {draftBoard}
         </div>
       ) : myTeamSection}
-      {playerHistory.current ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode="details" analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={selectedPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={onRetryNews} onOpenMatchup={onOpenMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={playerHistory.close} /> : null}
+      {playerHistory.current ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode="details" analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={selectedPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={onRetryNews} onOpenMatchup={onOpenMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={() => { playerHistory.close(); onCloseLinkedPlayer(); }} /> : null}
     </section>
   );
 }
@@ -4328,7 +4482,13 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
 
 export function App() {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>("team");
+  const dashboardUrl = useDashboardUrl();
+  const tab = dashboardUrl.state.tab;
+  const setTab = useCallback((next: Tab) => {
+    dashboardUrl.commit({ tab: next, playerId: null });
+  }, [dashboardUrl.commit]);
+  const [forceAppSheet, setForceAppSheet] = useState(false);
+  const appliedAppPlayerId = useRef<string | null>(null);
   useEffect(() => {
     const titles: Record<Tab, string> = {
       team: "Matchup",
@@ -4346,7 +4506,7 @@ export function App() {
   const playerHistory = usePlayerCardHistory();
   const [tickerNews, setTickerNews] = useState<PlayerNewsItem | null>(null);
   const [selectedMatchup, setSelectedMatchup] = useState<MatchupSelection | null>(null);
-  const [selectedLeagueId, setSelectedLeagueId] = useState(() => localStorage.getItem("fantasy-rankings-league") ?? "");
+  const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
   const [browserViewerId, setBrowserViewerId] = useState<string | null | undefined>(undefined);
   const [browserDashboard, setBrowserDashboard] = useState<Dashboard | undefined>(undefined);
   useEffect(() => {
@@ -4501,13 +4661,47 @@ export function App() {
   }, [dashboard, browserViewerId]);
 
   useEffect(() => {
-    if (league && league.id !== selectedLeagueId) setSelectedLeagueId(league.id);
-  }, [league, selectedLeagueId]);
+    if (!dashboard?.leagues.length) return;
+    const requested = dashboardUrl.state.league;
+    const requestedIsValid = Boolean(requested && dashboard.leagues.some((item) => item.id === requested));
+    const stored = localStorage.getItem("fantasy-rankings-league") ?? "";
+    const storedIsValid = dashboard.leagues.some((item) => item.id === stored);
+    const resolved = (requestedIsValid ? requested : storedIsValid ? stored : dashboard.leagues[0]?.id) ?? "";
+    if (!resolved) return;
+    if (resolved !== selectedLeagueId) setSelectedLeagueId(resolved);
+    if (requested !== resolved) dashboardUrl.commit({ league: resolved });
+    if (localStorage.getItem("fantasy-rankings-league") !== resolved) localStorage.setItem("fantasy-rankings-league", resolved);
+  }, [dashboard, dashboardUrl.commit, dashboardUrl.state.league, selectedLeagueId]);
 
   function chooseLeague(id: string) {
     setSelectedLeagueId(id);
     localStorage.setItem("fantasy-rankings-league", id);
+    setForceAppSheet(false);
+    dashboardUrl.commit({ league: id, playerId: null });
   }
+
+  const openLinkedPlayer = useCallback((playerId: string) => {
+    setForceAppSheet(false);
+    dashboardUrl.commit({ playerId });
+  }, [dashboardUrl.commit]);
+  const closeLinkedPlayer = useCallback(() => {
+    dashboardUrl.closePlayer();
+  }, [dashboardUrl.closePlayer]);
+  const reportLinkedPlayerMiss = useCallback(() => {
+    setForceAppSheet(true);
+  }, []);
+  const reportLinkedPlayerFound = useCallback(() => {
+    setForceAppSheet(false);
+  }, []);
+  const publishRankingFilters = useCallback((filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => {
+    dashboardUrl.commit(filters);
+  }, [dashboardUrl.commit]);
+  const publishDraftFilters = useCallback((filters: { draftPosition: DraftPosition | null; draftQuery: string | null; draftRoom: DraftRoom | null }) => {
+    dashboardUrl.commit(filters);
+  }, [dashboardUrl.commit]);
+  const publishChartDataset = useCallback((dataset: ChartDataset) => {
+    dashboardUrl.commit({ chartDataset: dataset === "advanced" ? null : dataset });
+  }, [dashboardUrl.commit]);
 
   const primaryPage = primaryPageForTab(tab);
   function choosePrimaryPage(page: PrimaryPage) {
@@ -4580,12 +4774,17 @@ export function App() {
   function openDashboardPlayer(playerId: string): boolean {
     const player = dashboardPlayerDetail(playerId);
     if (!player) return false;
-    playerHistory.open(player);
+    dashboardUrl.commit({ playerId });
     return true;
   }
 
   function openTickerPlayer(playerId: string) {
-    if (!openDashboardPlayer(playerId)) setTab("rankings");
+    const localSheetTab = tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft";
+    if (localSheetTab || dashboardPlayerDetail(playerId)) {
+      dashboardUrl.commit({ playerId });
+      return;
+    }
+    dashboardUrl.commit({ tab: "rankings", playerId });
   }
 
   const isRefreshing = tab === "draft" ? draftRefresh.isPending : refresh.isPending;
@@ -4630,6 +4829,27 @@ export function App() {
     const timer = setTimeout(() => setFirstBuildTimedOut(true), 150_000);
     return () => clearTimeout(timer);
   }, [waitingForFirstBuild, dashboard]);
+
+  const localSheetTab = tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft";
+  useEffect(() => {
+    const playerId = dashboardUrl.state.playerId;
+    if (!playerId) {
+      appliedAppPlayerId.current = null;
+      setForceAppSheet((current) => current ? false : current);
+      if (playerHistory.isOpen) playerHistory.close();
+      return;
+    }
+    if (localSheetTab && !forceAppSheet) {
+      appliedAppPlayerId.current = null;
+      if (playerHistory.isOpen) playerHistory.close();
+      return;
+    }
+    if (appliedAppPlayerId.current === playerId && playerHistory.current?.playerId === playerId) return;
+    const player = dashboardPlayerDetail(playerId);
+    if (!player) return;
+    appliedAppPlayerId.current = playerId;
+    if (playerHistory.current?.playerId !== playerId) playerHistory.open(player);
+  }, [dashboard, dashboardUrl.state.playerId, forceAppSheet, league, localSheetTab, tab]);
 
   if (!dashboard && (metaQuery.isPending || teamQuery.isPending || (waitingForFirstBuild && !firstBuildTimedOut))) {
     return <ProgressiveShell tab={tab} onTab={setTab} />;
@@ -4723,16 +4943,16 @@ export function App() {
         {currentSectionLoading ? <SectionLoading label={`Loading ${primaryPage}…`} />
           : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
           : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
-          : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} news={newsQuery.data} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} onOpenMatchup={setSelectedMatchup} />
+          : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} news={newsQuery.data} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} onOpenMatchup={setSelectedMatchup} linkedPlayerId={dashboardUrl.state.playerId} onOpenLinkedPlayer={openLinkedPlayer} onCloseLinkedPlayer={closeLinkedPlayer} onLinkedPlayerMiss={reportLinkedPlayerMiss} onLinkedPlayerFound={reportLinkedPlayerFound} />
           : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} dashboard={activeDashboard} onPlayerIntent={prefetchDashboardPlayer} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} playerCardOpen={playerHistory.isOpen} /></Suspense>
-          : tab === "draft" ? <DraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} news={newsQuery.data} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} loading={draftQuery.isPending} onRefresh={() => draftRefresh.mutate()} refreshing={draftRefresh.isPending} onOpenMatchup={setSelectedMatchup} />
+          : tab === "draft" ? <DraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} news={newsQuery.data} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} loading={draftQuery.isPending} onRefresh={() => draftRefresh.mutate()} refreshing={draftRefresh.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={dashboardUrl.state.playerId} onOpenLinkedPlayer={openLinkedPlayer} onCloseLinkedPlayer={closeLinkedPlayer} onLinkedPlayerMiss={reportLinkedPlayerMiss} onLinkedPlayerFound={reportLinkedPlayerFound} />
           : tab === "trade" ? <TradeCalculator dashboard={activeDashboard} league={league} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} />
-          : tab === "charts" ? <Suspense fallback={<SectionLoading label="Loading charts…" />}><LazyChartsTool dashboard={activeDashboard} league={league} onOpenMatchup={setSelectedMatchup} /></Suspense>
+          : tab === "charts" ? <Suspense fallback={<SectionLoading label="Loading charts…" />}><LazyChartsTool dashboard={activeDashboard} league={league} dataset={dashboardUrl.state.chartDataset ?? "advanced"} onDatasetChange={publishChartDataset} onOpenMatchup={setSelectedMatchup} /></Suspense>
           : tab === "comparison" ? <Suspense fallback={<SectionLoading label="Loading comparison…" />}><LazyComparisonTool dashboard={activeDashboard} league={league} initialPlayer={null} initialKey={0} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} onOpenMatchup={setSelectedMatchup} /></Suspense>
           : tab === "strengthOfSchedule" ? <Suspense fallback={<SectionLoading label="Loading tables…" />}><LazyTablesTool dashboard={activeDashboard} league={league} sosLoadFailed={playersQuery.isError} onRetrySos={() => { void playersQuery.refetch(); }} sosRetrying={playersQuery.isFetching} /></Suspense>
-          : <PlayerPool dashboard={activeDashboard} league={league} availableOnly={tab === "waivers"} news={newsQuery.data} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} draftData={draftQuery.data} onOpenMatchup={setSelectedMatchup} />}
+          : <PlayerPool dashboard={activeDashboard} league={league} availableOnly={tab === "waivers"} news={newsQuery.data} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} draftData={draftQuery.data} onOpenMatchup={setSelectedMatchup} rankingPosition={dashboardUrl.state.position} rankingHorizon={dashboardUrl.state.horizon} rankingQuery={dashboardUrl.state.query} onRankingFiltersChange={publishRankingFilters} linkedPlayerId={dashboardUrl.state.playerId} onOpenLinkedPlayer={openLinkedPlayer} onCloseLinkedPlayer={closeLinkedPlayer} onLinkedPlayerMiss={reportLinkedPlayerMiss} onLinkedPlayerFound={reportLinkedPlayerFound} />}
       </main>
-      {playerHistory.current ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode="details" analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={tickerPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} onOpenMatchup={setSelectedMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={playerHistory.close} /> : null}
+      {playerHistory.current && (!localSheetTab || forceAppSheet) ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode="details" analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={tickerPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} onOpenMatchup={setSelectedMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={() => { playerHistory.close(); closeLinkedPlayer(); }} /> : null}
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
       {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} /> : null}
     </div>

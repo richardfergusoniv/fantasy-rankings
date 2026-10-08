@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Customized, ReferenceLine, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
+import { Button } from "@/components/ui/button";
 import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
+import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
@@ -16,6 +18,7 @@ import {
 } from "./chart-view-cache";
 import { formatDecimal } from "./lib/format-number";
 import { MatchupTag, ModalPortal, SegmentedControl, shortLeagueName, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { shouldWarnBeforeLeave, useUnsavedLeaveWarning } from "./unsaved-input";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
 type League = Dashboard["leagues"][number];
@@ -401,6 +404,8 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<SavedChartView | null>(null);
+  useUnsavedLeaveWarning(shouldWarnBeforeLeave({ tradeAssetCount: 0, savedViewNaming: isNaming, savedViewName: name }));
   const nameRef = useRef<HTMLInputElement>(null);
   const viewsQuery = useQuery({
     queryKey: SAVED_CHART_VIEWS_QUERY_KEY,
@@ -539,7 +544,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
         </label>
         <div className="saved-view-actions">
           <button type="button" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessageIsError(false); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</button>
-          {selectedSavedView ? <button type="button" className="saved-view-delete" onClick={() => deleteMutation.mutate(selectedSavedView.id)} disabled={deleteMutation.isPending}>Delete “{selectedSavedView.name}”</button> : null}
+          {selectedSavedView ? <button type="button" className="saved-view-delete" onClick={() => setPendingDelete(selectedSavedView)} disabled={deleteMutation.isPending}>Delete “{selectedSavedView.name}”</button> : null}
         </div>
       </div>
       {matchingPreset?.research ? (
@@ -558,6 +563,30 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
         </form>
       ) : null}
       {viewsQuery.isError ? <p className="saved-view-status" role="alert">Saved views couldn’t be loaded.</p> : message ? <p className="saved-view-status" role={messageIsError ? "alert" : "status"}>{message}</p> : null}
+      <Dialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete saved view?</DialogTitle>
+            <DialogDescription>This removes “{pendingDelete?.name ?? "this view"}”. The chart axes stay as they are.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPendingDelete(null)}>Cancel</Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (!pendingDelete) return;
+                deleteMutation.mutate(pendingDelete.id);
+                setPendingDelete(null);
+              }}
+            >
+              Delete view
+            </Button>
+          </DialogFooter>
+          <DialogCloseButton />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1671,11 +1700,10 @@ function ToolDatasetToggle({ value, onChange, label }: { value: ToolDataset; onC
   );
 }
 
-export function ChartsTool({ dashboard, league }: { dashboard: Dashboard; league: League; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
-  const [dataset, setDataset] = useState<ToolDataset>("advanced");
+export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
   return (
     <>
-      <ToolDatasetToggle value={dataset} onChange={setDataset} label="Chart dataset" />
+      <ToolDatasetToggle value={dataset} onChange={(value) => onDatasetChange?.(value)} label="Chart dataset" />
       {dataset === "advanced"
         ? <AnalyticsChart dashboard={dashboard} league={league} />
         : <WeeklyProjections dashboard={dashboard} league={league} view="charts" />}
