@@ -386,7 +386,7 @@ const defaultWeeklyAxes: Record<BasePosition, [string, string]> = {
   DEF: ["opponentTotal", "projection"],
 };
 
-type ChartPickerMode = "blank" | "custom" | "derived";
+type ChartPickerMode = "blank" | "derived";
 
 type SavedViewControlsProps = {
   dataset: ToolDataset;
@@ -398,12 +398,11 @@ type SavedViewControlsProps = {
   onSelectedSavedViewIdChange: (id: string | null) => void;
   onApplySavedView: (view: SavedChartView) => void;
   onApplyBuiltIn: (preset: ChartPreset) => void;
-  onChooseCustom: () => void;
   advancedControlsRef: Ref<HTMLDetailsElement>;
   children: ReactNode;
 };
 
-function SavedViewControls({ dataset, presets, validPositions, config, pickerMode, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, onChooseCustom, advancedControlsRef, children }: SavedViewControlsProps) {
+function SavedViewControls({ dataset, presets, validPositions, config, pickerMode, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, advancedControlsRef, children }: SavedViewControlsProps) {
   const queryClient = useQueryClient();
   const [isNaming, setIsNaming] = useState(false);
   const [name, setName] = useState("");
@@ -423,8 +422,13 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
     .filter((view) => validPositions.includes(view.position));
   const selectedSavedView = views.find((view) => view.id === selectedSavedViewId);
   const matchingPreset = presets.find((preset) => preset.x === config.xMetric && preset.y === config.yMetric);
-  const resolvedPickerValue = selectedSavedView ? `saved:${selectedSavedView.id}` : matchingPreset ? `builtin:${matchingPreset.x}|${matchingPreset.y}` : "custom";
-  const pickerValue = pickerMode === "blank" ? "" : pickerMode === "custom" ? "custom" : resolvedPickerValue;
+  const pickerValue = pickerMode === "blank"
+    ? ""
+    : selectedSavedView
+      ? `saved:${selectedSavedView.id}`
+      : matchingPreset
+        ? `builtin:${matchingPreset.x}|${matchingPreset.y}`
+        : "custom";
 
   const saveMutation = useMutation({
     mutationFn: (viewName: string) => api.saveChartView({ name: viewName, ...config }),
@@ -537,18 +541,15 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
               if (nextValue.startsWith("builtin:")) {
                 const preset = presets.find((item) => `builtin:${item.x}|${item.y}` === nextValue);
                 if (preset) onApplyBuiltIn(preset);
-                return;
               }
-              onSelectedSavedViewIdChange(null);
-              onChooseCustom();
             }}
           >
-            <option value="">Choose a view</option>
+            <option value="" disabled hidden>Choose a view</option>
             <optgroup label="Built-in views">
               {presets.map((preset) => <option key={`${preset.x}-${preset.y}`} value={`builtin:${preset.x}|${preset.y}`}>{preset.label}</option>)}
             </optgroup>
             {views.length > 0 ? <optgroup label="My saved views">{views.map((view) => <option key={view.id} value={`saved:${view.id}`}>{view.name}</option>)}</optgroup> : null}
-            <option value="custom">Custom axes</option>
+            {pickerValue === "custom" ? <option value="custom" disabled hidden>Custom</option> : null}
           </select>
         </label>
       </div>
@@ -1066,7 +1067,6 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
   const [selectedSavedViewId, setSelectedSavedViewId] = useState<string | null>(null);
   // Shareable chart links only carry the dataset (`?chart=`). Axes and saved
   // views are not in the URL, so the picker stays blank until the user chooses.
-  // "custom" stays on Custom axes even when those axes match a built-in preset.
   const [pickerMode, setPickerMode] = useState<ChartPickerMode>("blank");
   const [isChartOpen, setIsChartOpen] = useState(false);
   const advancedControlsRef = useRef<HTMLDetailsElement>(null);
@@ -1086,10 +1086,6 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
     yPercentile,
     plotLimit,
   };
-
-  function openAdvancedControls() {
-    if (advancedControlsRef.current && !advancedControlsRef.current.open) advancedControlsRef.current.open = true;
-  }
 
   function closeAdvancedControls() {
     if (advancedControlsRef.current?.open) advancedControlsRef.current.open = false;
@@ -1200,7 +1196,6 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
         onSelectedSavedViewIdChange={setSelectedSavedViewId}
         onApplySavedView={applySavedView}
         onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); setPickerMode("derived"); closeAdvancedControls(); }}
-        onChooseCustom={() => { setPickerMode("custom"); openAdvancedControls(); }}
         advancedControlsRef={advancedControlsRef}
       >
           <SegmentedControl
@@ -1487,10 +1482,6 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
     plotLimit,
   };
 
-  function openAdvancedControls() {
-    if (advancedControlsRef.current && !advancedControlsRef.current.open) advancedControlsRef.current.open = true;
-  }
-
   function closeAdvancedControls() {
     if (advancedControlsRef.current?.open) advancedControlsRef.current.open = false;
   }
@@ -1655,7 +1646,6 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
         onSelectedSavedViewIdChange={setSelectedSavedViewId}
         onApplySavedView={applySavedView}
         onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); setPickerMode("derived"); closeAdvancedControls(); }}
-        onChooseCustom={() => { setPickerMode("custom"); openAdvancedControls(); }}
         advancedControlsRef={advancedControlsRef}
       >
           <div className="analytics-selectors advanced-only-selectors">
