@@ -5,7 +5,9 @@ import {
   json,
   queryBool,
   queryInt,
+  unauthorized,
 } from "../_lib/api-utils.js";
+import { resolveSleeperUserId } from "../_lib/auth.js";
 import { historicalTradesResponse, loadHistoricalTrades } from "../_lib/trades.js";
 
 /**
@@ -35,7 +37,15 @@ export async function GET(req: Request): Promise<Response> {
       return badRequest("Invalid query params.", parsed.error.issues);
     }
 
-    const result = await loadHistoricalTrades(parsed.data.leagueId, parsed.data.refresh, parsed.data.season);
+    const sleeperUserId = await resolveSleeperUserId(req);
+    if (!sleeperUserId) return unauthorized("Sign in required.");
+
+    const result = await loadHistoricalTrades(
+      parsed.data.leagueId,
+      parsed.data.refresh,
+      sleeperUserId,
+      parsed.data.season,
+    );
 
     // Validate against the response contract before returning.
     const validated = historicalTradesResponse.safeParse(result);

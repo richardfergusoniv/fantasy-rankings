@@ -20,6 +20,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api, type ApiResponse } from "./api";
 import { supabase } from "./supabase";
+
+const BROWSER_DASHBOARD_CACHE_KEY = "fantasy-rankings-dashboard-v7";
+
+function signOutForPersonalData(error: unknown): void {
+  const message = error instanceof Error ? error.message : "";
+  if (!supabase) return;
+  if (message !== "Sign in required." && !message.includes("API 401")) return;
+  localStorage.removeItem(BROWSER_DASHBOARD_CACHE_KEY);
+  void supabase.auth.signOut();
+}
 import { MatchupTag, ModalPortal, SegmentedControl, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
@@ -3233,9 +3243,16 @@ function TradeHistoryView({ dashboard, league, onOpenPlayer }: { dashboard: Dash
   const queryKey = ["historical-trades", league.id, selectedSeason] as const;
   const tradesQuery = useQuery({
     queryKey,
-    queryFn: () => api.getHistoricalTrades(selectedSeason === "all"
-      ? { leagueId: league.id, refresh: false }
-      : { leagueId: league.id, refresh: false, season: selectedSeason }),
+    queryFn: async () => {
+      try {
+        return await api.getHistoricalTrades(selectedSeason === "all"
+          ? { leagueId: league.id, refresh: false }
+          : { leagueId: league.id, refresh: false, season: selectedSeason });
+      } catch (error) {
+        signOutForPersonalData(error);
+        throw error;
+      }
+    },
     staleTime: Infinity,
   });
 
@@ -3247,7 +3264,9 @@ function TradeHistoryView({ dashboard, league, onOpenPlayer }: { dashboard: Dash
       ? { leagueId: league.id, refresh: true }
       : { leagueId: league.id, refresh: true, season: selectedSeason })
       .then((fresh) => queryClient.setQueryData(queryKey, fresh))
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        signOutForPersonalData(error);
+      });
   }, [league.id, queryClient, queryKey, selectedSeason, tradesQuery.data?.isStale]);
 
   useEffect(() => {
@@ -4129,7 +4148,6 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
   );
 }
 
-const BROWSER_DASHBOARD_CACHE_KEY = "fantasy-rankings-dashboard-v7";
 const BROWSER_DASHBOARD_MAX_AGE_MS = 2 * 60 * 1000;
 // Stay under the 60s Hobby function cap. The server build deadline is 55s.
 const DASHBOARD_DEADLINE_MS = 58_000;
@@ -4346,28 +4364,45 @@ export function App() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-section"] });
     },
     onError: (error: unknown) => {
-      const message = error instanceof Error ? error.message : "";
-      const signedOut = message === "Sign in required." || message.includes("API 401");
-      if (!supabase || !signedOut) return;
-      localStorage.removeItem(BROWSER_DASHBOARD_CACHE_KEY);
-      void supabase.auth.signOut();
+      signOutForPersonalData(error);
     },
   });
   const newsQuery = useQuery({
     queryKey: ["player-news"],
-    queryFn: () => withClientDeadline(api.getPlayerNews({}), 8_000),
+    queryFn: async () => {
+      try {
+        return await withClientDeadline(api.getPlayerNews({}), 8_000);
+      } catch (error) {
+        signOutForPersonalData(error);
+        throw error;
+      }
+    },
     staleTime: 60_000,
     retry: false,
   });
   const draftQuery = useQuery({
     queryKey: ["draft-center"],
-    queryFn: () => withClientDeadline(api.getDraftCenter({ force: false }), 24_000),
+    queryFn: async () => {
+      try {
+        return await withClientDeadline(api.getDraftCenter({ force: false }), 24_000);
+      } catch (error) {
+        signOutForPersonalData(error);
+        throw error;
+      }
+    },
     staleTime: 15_000,
     refetchInterval: tab === "draft" ? 15_000 : false,
     retry: false,
   });
   const draftRefresh = useMutation({
-    mutationFn: () => withClientDeadline(api.getDraftCenter({ force: true }), 24_000),
+    mutationFn: async () => {
+      try {
+        return await withClientDeadline(api.getDraftCenter({ force: true }), 24_000);
+      } catch (error) {
+        signOutForPersonalData(error);
+        throw error;
+      }
+    },
     onSuccess: (data) => queryClient.setQueryData(["draft-center"], data),
   });
   const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(newsQuery.data), [newsQuery.data]);

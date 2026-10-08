@@ -56,3 +56,13 @@ export async function resolveSleeperUserId(req: Request): Promise<string | null>
   const connection = await getSleeperConnection(user.id);
   return connection?.sleeperUserId ?? null;
 }
+
+/**
+ * Sleeper user id for scheduled jobs that have no signed-in user.
+ * Set `OWNER_SLEEPER_USER_ID` in the Vercel project and, for the props
+ * pipeline, as a GitHub Actions repository variable. Never hardcode it.
+ */
+export function readOwnerSleeperUserId(): string | null {
+  const id = process.env.OWNER_SLEEPER_USER_ID?.trim();
+  return id ? id : null;
+}

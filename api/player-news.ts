@@ -6,13 +6,14 @@ import {
   hasCronSecret,
   internalError,
   json,
+  unauthorized,
 } from "./_lib/api-utils.js";
+import { readOwnerSleeperUserId, resolveSleeperUserId } from "./_lib/auth.js";
 import {
   PLAYER_NEWS_LEAGUES,
   PLAYER_NEWS_SNAPSHOT_KEY,
   SLEEPER_BASE,
   REFRESH_TIMEOUT_MS,
-  SLEEPER_USER_ID,
   fetchJson,
   parseInjurySnapshot,
   weeklyAvailabilityStatus,
@@ -76,7 +77,22 @@ function parseNewsAvailability(payload: string | null): z.infer<typeof playerNew
   }
 }
 
-async function readPlayerNews(): Promise<Response> {
+async function rosteredPlayerIds(sleeperUserId: string): Promise<Set<string>> {
+  const rosterResults = await Promise.all(PLAYER_NEWS_LEAGUES.map(async (league) => (
+    fetchJson<SleeperRoster[]>(`${SLEEPER_BASE}/league/${league.id}/rosters`)
+  )));
+  const playerIds = new Set<string>();
+  for (const rosters of rosterResults) {
+    const ownRoster = rosters.find((roster) => roster.owner_id === sleeperUserId);
+    for (const playerId of ownRoster?.players ?? []) {
+      if (/^[A-Z]{2,3}$/.test(playerId)) continue;
+      playerIds.add(playerId);
+    }
+  }
+  return playerIds;
+}
+
+async function readPlayerNews(playerIds: Set<string>): Promise<Response> {
   const runs = await db
     .select()
     .from(schema.playerNewsRuns)
@@ -104,7 +120,7 @@ async function readPlayerNews(): Promise<Response> {
 
   const populatedRuns = runs
     .flatMap((run) => {
-      const runItems = itemGroups.get(run.id) ?? [];
+      const runItems = (itemGroups.get(run.id) ?? []).filter((item) => playerIds.has(item.playerId));
       if (runItems.length === 0) return [];
       return [
         {
@@ -155,7 +171,7 @@ type RosterPlayer = {
   leagues: Array<{ id: string; name: string }>;
 };
 
-async function buildRosterContext(): Promise<{
+async function buildRosterContext(sleeperUserId: string): Promise<{
   active: boolean;
   season: number;
   week: number;
@@ -175,7 +191,7 @@ async function buildRosterContext(): Promise<{
   ]);
   const leagueMembership = new Map<string, Array<{ id: string; name: string }>>();
   for (const result of rosterResults) {
-    const ownRoster = result.rosters.find((roster) => roster.owner_id === SLEEPER_USER_ID);
+    const ownRoster = result.rosters.find((roster) => roster.owner_id === sleeperUserId);
     for (const playerId of ownRoster?.players ?? []) {
       if (!players[playerId] || /^[A-Z]{2,3}$/.test(playerId)) continue;
       const memberships = leagueMembership.get(playerId) ?? [];
@@ -200,9 +216,14 @@ async function buildRosterContext(): Promise<{
 }
 
 async function runRefresh(): Promise<Response> {
+  const sleeperUserId = readOwnerSleeperUserId();
+  if (!sleeperUserId) {
+    console.error("[player-news] OWNER_SLEEPER_USER_ID is not set");
+    return json({ ok: false, error: "Owner Sleeper user is not configured." }, 500);
+  }
   let context: Awaited<ReturnType<typeof buildRosterContext>>;
   try {
-    context = await withDeadline(buildRosterContext(), REFRESH_TIMEOUT_MS);
+    context = await withDeadline(buildRosterContext(sleeperUserId), REFRESH_TIMEOUT_MS);
   } catch {
     return json({ ok: false, error: "Sleeper rosters are temporarily unavailable." }, 502);
   }
@@ -283,7 +304,17 @@ export async function GET(req: Request): Promise<Response> {
     if (hasCronSecret(req)) {
       return await runRefresh();
     }
-    return await readPlayerNews();
+    const sleeperUserId = await resolveSleeperUserId(req);
+    if (!sleeperUserId) return unauthorized("Sign in required.");
+    let playerIds: Set<string>;
+    try {
+      playerIds = await rosteredPlayerIds(sleeperUserId);
+    } catch (err) {
+      console.error("[player-news] roster lookup failed", err instanceof Error ? err.stack : err);
+      return json({ ok: false, error: "Sleeper rosters are temporarily unavailable." }, 502);
+    }
+    if (playerIds.size === 0) return json({ lastCheckedAt: null, runs: [] });
+    return await readPlayerNews(playerIds);
   } catch (err) {
     return internalError(err);
   }

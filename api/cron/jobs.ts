@@ -12,6 +12,7 @@ import {
   refreshFantasyCalcCache,
   writeGlobalDashboardSnapshot,
 } from "../_lib/dashboard-build.js";
+import { readOwnerSleeperUserId } from "../_lib/auth.js";
 import { withDeadline } from "../_lib/sleeper.js";
 
 /**
@@ -29,10 +30,13 @@ import { withDeadline } from "../_lib/sleeper.js";
  *   dashboard builds read instead of hitting the FantasyCalc API 12x each.
  */
 
-const OWNER_SLEEPER_USER_ID = "739931264659927040";
-
 async function handleRebuildDashboard(): Promise<Response> {
-  const buildPromise = buildUserDashboard(OWNER_SLEEPER_USER_ID);
+  const ownerId = readOwnerSleeperUserId();
+  if (!ownerId) {
+    console.error("[cron] OWNER_SLEEPER_USER_ID is not set");
+    return json({ ok: false, error: "Owner Sleeper user is not configured." }, 500);
+  }
+  const buildPromise = buildUserDashboard(ownerId);
   buildPromise.catch(() => undefined);
   const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
   await writeGlobalDashboardSnapshot(dashboard);

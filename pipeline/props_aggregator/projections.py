@@ -30,6 +30,7 @@ Known v1 limitations (documented, not silently fudged):
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -142,7 +143,10 @@ def load_leagues(data_dir: Path = DATA_DIR, refresh: bool = False) -> list[dict]
     cache = data_dir / "leagues_2026.json"
     if cache.exists() and not refresh:
         return json.loads(cache.read_text())
-    resp = requests.get(f"{SLEEPER_BASE}/user/739931264659927040/leagues/nfl/2026",
+    owner_id = os.environ.get("OWNER_SLEEPER_USER_ID", "").strip()
+    if not owner_id:
+        raise RuntimeError("OWNER_SLEEPER_USER_ID is not set")
+    resp = requests.get(f"{SLEEPER_BASE}/user/{owner_id}/leagues/nfl/2026",
                         timeout=30)
     resp.raise_for_status()
     leagues = [

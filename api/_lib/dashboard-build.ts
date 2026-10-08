@@ -54,8 +54,8 @@ import {
  * Faithful port of `buildDashboard` from the original Hatch artifact
  * (`app/server/src/actions.ts`), adapted for the Vercel/Supabase runtime:
  *
- * - The Sleeper account is a parameter (`sleeperUserId`) instead of the
- *   hardcoded SLEEPER_USER_ID constant.
+ * - The Sleeper account is a parameter (`sleeperUserId`). Scheduled jobs
+ *   pass `OWNER_SLEEPER_USER_ID`; interactive routes pass the signed-in user.
  * - `ctx.db` reads/writes go through the shared Drizzle client (`./db.js`).
  * - `ctx.viewer` owner checks are gone: the connected user is always the
  *   owner of their own build.
