@@ -3077,26 +3077,27 @@ function LeagueAdjustedTrade({
           <header className="league-roster-heading"><h3>{mine.teamName}</h3></header>
           <LeagueRosterList rows={myRows} selectedIds={selectedGive} onToggle={(id) => onToggle("give", id)} listLabel={`${mine.teamName} assets`} />
         </section>
-        <section className="league-roster-card" aria-label={theirs ? `${theirs.teamName} roster` : "Trade partner"}>
-          <header className="league-roster-heading league-partner-heading">
-            <label className="league-partner-field">
-              <span className="sr-only">Trade partner</span>
-              <span className={`select-control-field${theirs ? "" : " is-placeholder"}`}>
-                <select
-                  value={theirs ? String(theirs.rosterId) : ""}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    onPartnerChange(value === "" ? null : Number(value));
-                  }}
-                >
-                  <option value="">Trade partner</option>
-                  {partners.map((team) => <option key={team.rosterId} value={team.rosterId}>{team.teamName}</option>)}
-                </select>
-              </span>
-            </label>
-          </header>
-          {theirs ? <LeagueRosterList rows={theirRows} selectedIds={selectedGet} onToggle={(id) => onToggle("get", id)} listLabel={`${theirs.teamName} assets`} /> : null}
-        </section>
+        {theirs ? (
+          <section className="league-roster-card" aria-label={`${theirs.teamName} roster`}>
+            <header className="league-roster-heading">
+              <h3>{theirs.teamName}</h3>
+              <button type="button" className="league-partner-change" aria-label="Change trade partner" onClick={() => onPartnerChange(null)}>Change</button>
+            </header>
+            <LeagueRosterList rows={theirRows} selectedIds={selectedGet} onToggle={(id) => onToggle("get", id)} listLabel={`${theirs.teamName} assets`} />
+          </section>
+        ) : (
+          <section className="league-roster-card" aria-label="Trade partners">
+            {partners.length === 0 ? <p className="league-roster-empty">No other teams in this league.</p> : (
+              <ul className="league-roster-list" aria-label="League teams">
+                {partners.map((team) => (
+                  <li key={team.rosterId}>
+                    <button type="button" className="league-team-row" onClick={() => onPartnerChange(team.rosterId)}><span>{team.teamName}</span></button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
       <div className="trade-calculate-wrap">
         <button type="button" className="trade-calculate-button" disabled={!canAnalyze} aria-describedby={canAnalyze ? undefined : hintId} onClick={() => setIsResultOpen(true)}>Analyze trade</button>
