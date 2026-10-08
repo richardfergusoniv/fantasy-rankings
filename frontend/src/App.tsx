@@ -1,7 +1,18 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import React from "react";
-// Local replacement for @hatch/space-sdk's SafeAreaTopScrim (removed during
-// Vercel migration). Renders a top scrim respecting the device safe area.
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
+import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { api, type ApiResponse } from "./api";
+import { MatchupTag, ModalPortal, SegmentedControl, SkipLink, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { supabase } from "./supabase";
+
 function SafeAreaTopScrim({ backgroundColor }: { backgroundColor?: string }) {
   return (
     <div
@@ -16,18 +27,6 @@ function SafeAreaTopScrim({ backgroundColor }: { backgroundColor?: string }) {
     />
   );
 }
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
-import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { api, type ApiResponse } from "./api";
-import { MatchupTag, ModalPortal, SegmentedControl, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
-import { supabase } from "./supabase";
 
 const BROWSER_DASHBOARD_CACHE_KEY = "fantasy-rankings-dashboard-v7";
 
@@ -431,7 +430,7 @@ function groupNewsItemsByPlayer(news: PlayerNews | undefined): Map<string, Playe
 
 function RefreshIcon({ spinning = false }: { spinning?: boolean }) {
   return (
-    <svg className={spinning ? "spin" : ""} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg className={spinning ? "spin" : ""} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M18.3 9A7 7 0 0 0 6.5 6.5L4 9m16 6-2.5 2.5A7 7 0 0 1 5.7 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
@@ -455,7 +454,7 @@ function NavigationIcon({ page }: { page: PrimaryPage }) {
     tools: <><path d="M14.5 6.5a4 4 0 0 0-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-3 3-3-3 3-3Z" /></>,
   };
   return (
-    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <g stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[page]}</g>
     </svg>
   );
@@ -755,7 +754,7 @@ function MatchupDataModal({ matchup, season, week, onClose }: { matchup: Matchup
                   <span>Final</span>
                   <strong>{score.game.score}</strong>
                   <small>{score.game.title}</small>
-                  {score.game.sourceUrl ? <a href={score.game.sourceUrl} target="_blank" rel="noreferrer">{score.game.sourceLabel ?? "Box score source"}</a> : null}
+                  {score.game.sourceUrl ? <a href={score.game.sourceUrl} target="_blank" rel="noreferrer">{score.game.sourceLabel ?? "Box score source"}<span className="sr-only"> (opens in a new tab)</span></a> : null}
                 </section>
               )
           ) : tablesQuery.isPending ? (
@@ -854,7 +853,7 @@ function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose: () =>
         </DialogHeader>
         <DialogTitle id="ticker-news-headline" className="news-card-headline">{item.change}</DialogTitle>
         <DialogDescription className="text-sm leading-relaxed text-muted-foreground">{item.roleContext}</DialogDescription>
-        <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceLabel}</a>
+        <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceLabel}<span className="sr-only"> (opens in a new tab)</span></a>
       </DialogContent>
     </Dialog>
   );
@@ -1281,7 +1280,7 @@ function PlayerDetailSheet({
               <div><span className={`news-severity ${item.newsType}`}>{item.newsType === "headline" ? "League news" : item.newsType === "waiver" ? "Waiver signal" : "Roster update"}</span><time>{item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent"}</time></div>
               <strong>{item.change}</strong>
               <p>{item.roleContext}</p>
-              <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceLabel}<span className="sr-only"> (opens in new tab)</span></a>
+              <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceLabel}<span className="sr-only"> (opens in a new tab)</span></a>
             </article>
           )) : <div className="empty-inline compact">No recent news for this player.</div>}
         </section>
@@ -1851,7 +1850,7 @@ function TeamDataModal({
             </div>
             {situationalSource ? (
               <p className="team-card-source">
-                Situational rates · <a href={situationalSource.sourceUrl} target="_blank" rel="noreferrer">Sportskeeda</a> · fetched {pfnDateLabel(situationalSource.fetchedAt)}
+                Situational rates · <a href={situationalSource.sourceUrl} target="_blank" rel="noreferrer"><span translate="no">Sportskeeda</span><span className="sr-only"> (opens in a new tab)</span></a> · fetched {pfnDateLabel(situationalSource.fetchedAt)}
               </p>
             ) : null}
           </section>
@@ -2152,7 +2151,7 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
     <section className="rankings-view">
       <div className="rankings-toolbar">
         <label className="search-field">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
           <input
             type="search"
             aria-label="Search all players by name"
@@ -2161,7 +2160,8 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
             onKeyDown={(event) => {
               if (event.key === "Escape") setQuery("");
             }}
-            placeholder="Search all players"
+            name="player-search"
+            placeholder="Search all players…"
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="none"
@@ -2710,7 +2710,7 @@ function TradeSide({ title, assets, availableAssets, marketTotal, onAdd, onRemov
         <div className="trade-side-search-wrap">
           <label className="sr-only" htmlFor={searchId}>Search assets to add to {title.toLowerCase()}</label>
           <div className="search-field trade-side-search">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
             <input
               id={searchId}
               type="search"
@@ -2725,7 +2725,8 @@ function TradeSide({ title, assets, availableAssets, marketTotal, onAdd, onRemov
                   setQuery("");
                 }
               }}
-              placeholder={`Add to ${title.toLowerCase()}`}
+              name="trade-asset-search"
+              placeholder={`Add to ${title.toLowerCase()}…`}
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="none"
@@ -3685,7 +3686,7 @@ function TickerStrip({ data, news, onPlayer, onNews }: {
                 tabIndex={isCopy ? -1 : undefined}
               >{content(item)}</button>
             ) : item.href ? (
-              <a href={item.href} target="_blank" rel="noreferrer" className={`ticker-item${isCopy ? " ticker-copy" : ""}`} key={`${item.key}:${index}`} aria-label={isCopy ? undefined : `${item.source}: ${item.label}`} aria-hidden={isCopy || undefined} tabIndex={isCopy ? -1 : undefined}>{content(item)}</a>
+              <a href={item.href} target="_blank" rel="noreferrer" className={`ticker-item${isCopy ? " ticker-copy" : ""}`} key={`${item.key}:${index}`} aria-label={isCopy ? undefined : `${item.source}: ${item.label} (opens in a new tab)`} aria-hidden={isCopy || undefined} tabIndex={isCopy ? -1 : undefined}>{content(item)}</a>
             ) : (
               <button
                 type="button"
@@ -4054,7 +4055,7 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
 
   const draftFilters = (
     <div className="draft-controls">
-      <label><span className="sr-only">Search draft players</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search players" aria-label="Search draft players" /></label>
+      <label><span className="sr-only">Search draft players</span><input type="search" name="draft-search" autoComplete="off" spellCheck={false} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search players…" aria-label="Search draft players" /></label>
       <div className="position-pills" role="group" aria-label="Draft position filter">
         {draftPositionOptions.map((item) => <button type="button" className={effectiveDraftPosition === item ? "active" : ""} aria-pressed={effectiveDraftPosition === item} onClick={() => setPosition(item)} key={item}>{item === "DEF" ? "DST" : item}</button>)}
       </div>
@@ -4296,6 +4297,7 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
   ];
   return (
     <div className="app-shell progressive-shell">
+      <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       <div className="league-sticky progressive-sticky">
         <div className="week-line"><div><span className="live-dot" /> Loading latest saved week</div><button className="refresh-button" disabled aria-label="Fantasy data is loading"><RefreshIcon spinning /></button></div>
@@ -4306,7 +4308,7 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
           {pageTabs.map(([page, label, nextTab]) => <button key={page} className={primaryPage === page ? "active" : ""} onClick={() => onTab(nextTab)} aria-current={primaryPage === page ? "page" : undefined}><NavigationIcon page={page} /><span>{label}</span></button>)}
         </nav>
       </header>
-      <main><h1 className="sr-only">Fantasy {pageTabs.find(([page]) => page === primaryPage)?.[1] ?? "dashboard"}</h1><SectionLoading label={`Loading ${primaryPage}…`} /></main>
+      <main id="main-content" tabIndex={-1}><h1 className="sr-only">Fantasy {pageTabs.find(([page]) => page === primaryPage)?.[1] ?? "dashboard"}</h1><SectionLoading label={`Loading ${primaryPage}…`} /></main>
     </div>
   );
 }
@@ -4314,6 +4316,20 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
 export function App() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("team");
+  useEffect(() => {
+    const titles: Record<Tab, string> = {
+      team: "Matchup",
+      rankings: "Rankings",
+      waivers: "Waiver Wire",
+      power: "League",
+      draft: "Draft",
+      trade: "Trades",
+      charts: "Charts",
+      comparison: "Comparison",
+      strengthOfSchedule: "Tables",
+    };
+    document.title = `${titles[tab]} · Fantasy Rankings`;
+  }, [tab]);
   const playerHistory = usePlayerCardHistory();
   const [tickerNews, setTickerNews] = useState<PlayerNewsItem | null>(null);
   const [selectedMatchup, setSelectedMatchup] = useState<MatchupSelection | null>(null);
@@ -4609,7 +4625,7 @@ export function App() {
   if (!dashboard || !league) {
     const noLeagues = Boolean(dashboard);
     return (
-      <main className="empty-state">
+      <main id="main-content" tabIndex={-1} className="empty-state">
         <SafeAreaTopScrim backgroundColor="var(--bg)" />
         <div className="empty-mark">4TH</div>
         <h1>{noLeagues ? "No leagues for this season." : "Data didn’t make it through."}</h1>
@@ -4623,6 +4639,7 @@ export function App() {
 
   return (
     <div className={`app-shell${primaryPage === "team" ? " matchup-page" : ""}`}>
+      <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       <div className="league-sticky">
           <TickerStrip data={draftQuery.data} news={newsQuery.data} onPlayer={openTickerPlayer} onNews={setTickerNews} />
@@ -4678,7 +4695,7 @@ export function App() {
         ) : null}
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <h1 className="sr-only">{({
           team: "Fantasy matchup",
           rankings: "Player rankings",

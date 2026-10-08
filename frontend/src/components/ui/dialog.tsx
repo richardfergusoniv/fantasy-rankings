@@ -40,7 +40,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-[1000] grid w-[min(calc(100%-2rem),32rem)] max-h-[min(88dvh,820px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl border bg-popover p-5 text-popover-foreground shadow-lg",
+          "fixed top-1/2 left-1/2 z-[1000] grid w-[min(calc(100%-2rem),32rem)] max-h-[min(88dvh,820px)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl border bg-popover p-5 text-popover-foreground shadow-lg",
           className,
         )}
         {...props}
@@ -72,12 +72,12 @@ function DialogCloseButton({ className, label = "Close", ...props }: React.Compo
     <DialogPrimitive.Close
       aria-label={label}
       className={cn(
-        "absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "absolute top-2 right-2 inline-flex size-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
       {...props}
     >
-      <X className="size-4" />
+      <X className="size-4" aria-hidden="true" />
     </DialogPrimitive.Close>
   );
 }
