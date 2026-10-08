@@ -9,8 +9,8 @@
 
 | Route | File | Replaces | Notes |
 |-------|------|----------|-------|
-| `GET /api/dashboard` | `api/dashboard.ts` | `getDashboard` + `getCachedDashboard` | Signed-in Sleeper users get their own dashboard. `force=true` with no resolved Sleeper user returns 401. Other unsigned reads return the global snapshot. |
-| `GET /api/dashboard/section` | `api/dashboard.ts` | `getDashboardSection` | `vercel.json` rewrites this path to `?__section=1`. Sections: meta, team, players, league, analytics. |
+| `GET /api/dashboard` | `api/dashboard.ts` | `getDashboard` + `getCachedDashboard` | Signed-in Sleeper users get their own dashboard. Every signed-out read, including `force=true`, returns 401 `Sign in required.` The stored owner snapshot is a fallback only for the signed-in scheduled owner. |
+| `GET /api/dashboard/section` | `api/dashboard.ts` | `getDashboardSection` | Same sign-in rule. `vercel.json` rewrites this path to `?__section=1`. Sections: meta, team, players, league, analytics. A cold cache is `data: null`, not the owner snapshot. |
 | `GET /api/pfn-tables` | `api/pfn-tables.ts` | `getpfntables` | Includes team-situational snapshot |
 | `GET /api/player-news` | `api/player-news.ts` | `getPlayerNews` | GET reads stored news. GET or POST with `CRON_SECRET` runs the refresh. |
 | `GET /api/trades/history` | `api/trades/history.ts` | `getHistoricalTrades` | Full Sleeper chain logic; `maxDuration: 60` |
@@ -32,7 +32,8 @@
 
 | Route | File | Replaces | Notes |
 |-------|------|----------|-------|
-| `GET /api/cron/jobs?job=rebuild-dashboard` | `api/cron/jobs.ts` | `getDashboard(force:true)` for the owner snapshot | `CRON_SECRET` auth. GitHub Actions call this; there is no `cron/refresh-dashboard.ts`. |
+| `GET /api/cron/jobs?job=rebuild-dashboard` | `api/cron/jobs.ts` | `getDashboard(force:true)` for the owner snapshot | `CRON_SECRET` auth. GitHub Actions call this; there is no `cron/refresh-dashboard.ts`. The write stays server-side. |
+| `GET /api/cron/jobs?job=read-dashboard-snapshot` | `api/cron/jobs.ts` | props `verify_dashboard.py` | Same secret. Returns `{ ok, dashboard }` from the stored snapshot, or 404 when none is stored. Not a public read. |
 | `GET /api/cron/jobs?job=refresh-fantasycalc` | `api/cron/jobs.ts` | FantasyCalc daily refresh | Same file. Unknown `job` values return 400. |
 | GET or POST `/api/player-news` | `api/player-news.ts` | `refreshPlayerNews` (simplified) | `CRON_SECRET` auth; Sleeper injury-status diff → `player_news_runs`/`player_news_items`; deep-research half stubbed `{ queued: true }` |
 

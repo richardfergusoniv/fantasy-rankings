@@ -30,6 +30,13 @@ function signOutForPersonalData(error: unknown): void {
   localStorage.removeItem(BROWSER_DASHBOARD_CACHE_KEY);
   void supabase.auth.signOut();
 }
+
+function withSignIn<T>(operation: Promise<T>): Promise<T> {
+  return operation.catch((error: unknown) => {
+    signOutForPersonalData(error);
+    throw error;
+  });
+}
 import { MatchupTag, ModalPortal, SegmentedControl, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
@@ -4165,7 +4172,21 @@ function dashboardTimestamp(dashboard: Dashboard | undefined): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function dropUnsignedBrowserDashboard(): void {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(BROWSER_DASHBOARD_CACHE_KEY) ?? "null");
+    if (!parsed || typeof parsed !== "object" || !("userId" in parsed) || parsed.userId != null) return;
+    localStorage.removeItem(BROWSER_DASHBOARD_CACHE_KEY);
+  } catch {
+    // A corrupt cache is ignored. A later signed-in save replaces it.
+  }
+}
+
 function readBrowserDashboard(userId: string | null): Dashboard | undefined {
+  if (!userId) {
+    dropUnsignedBrowserDashboard();
+    return undefined;
+  }
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(BROWSER_DASHBOARD_CACHE_KEY) ?? "null");
     if (!parsed || typeof parsed !== "object" || !("dashboard" in parsed) || !("userId" in parsed)) return undefined;
@@ -4189,6 +4210,7 @@ function readBrowserDashboard(userId: string | null): Dashboard | undefined {
 }
 
 function saveBrowserDashboard(userId: string | null, dashboard: Dashboard): void {
+  if (!userId) return;
   try {
     localStorage.setItem(BROWSER_DASHBOARD_CACHE_KEY, JSON.stringify({ userId, dashboard }));
   } catch {
@@ -4325,14 +4347,14 @@ export function App() {
   }, []);
   const metaQuery = useQuery({
     queryKey: ["dashboard-section", "meta"],
-    queryFn: () => withClientDeadline(api.getDashboardSection({ section: "meta" }), 8_000),
+    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "meta" }), 8_000)),
     staleTime: 90_000,
     retry: false,
     refetchInterval: pollWhileSectionBuilding,
   });
   const teamQuery = useQuery({
     queryKey: ["dashboard-section", "team"],
-    queryFn: () => withClientDeadline(api.getDashboardSection({ section: "team" }), 8_000),
+    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "team" }), 8_000)),
     staleTime: 90_000,
     retry: false,
     refetchInterval: pollWhileSectionBuilding,
@@ -4340,7 +4362,7 @@ export function App() {
   const playerSectionActive = tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "charts" || tab === "comparison" || tab === "strengthOfSchedule";
   const playersQuery = useQuery({
     queryKey: ["dashboard-section", "players"],
-    queryFn: () => withClientDeadline(api.getDashboardSection({ section: "players" }), 8_000),
+    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "players" }), 8_000)),
     staleTime: 90_000,
     retry: false,
     enabled: playerSectionActive,
@@ -4348,7 +4370,7 @@ export function App() {
   });
   const leagueQuery = useQuery({
     queryKey: ["dashboard-section", "league"],
-    queryFn: () => withClientDeadline(api.getDashboardSection({ section: "league" }), 8_000),
+    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "league" }), 8_000)),
     staleTime: 90_000,
     retry: false,
     enabled: tab === "power",
@@ -4356,7 +4378,7 @@ export function App() {
   });
   const analyticsQuery = useQuery({
     queryKey: ["dashboard-section", "analytics"],
-    queryFn: () => withClientDeadline(api.getDashboardSection({ section: "analytics" }), 8_000),
+    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "analytics" }), 8_000)),
     staleTime: 90_000,
     retry: false,
     enabled: tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison",
@@ -4364,7 +4386,7 @@ export function App() {
   });
   const dashboardQuery = useQuery({
     queryKey: ["fantasy-dashboard"],
-    queryFn: () => withClientDeadline(api.getDashboard({ force: false }), DASHBOARD_DEADLINE_MS),
+    queryFn: () => withSignIn(withClientDeadline(api.getDashboard({ force: false }), DASHBOARD_DEADLINE_MS)),
     staleTime: 90_000,
     initialData: browserDashboard,
     initialDataUpdatedAt: 0,
@@ -4453,7 +4475,7 @@ export function App() {
   }, [dashboard, league]);
 
   useEffect(() => {
-    if (!dashboard || browserViewerId === undefined) return;
+    if (!dashboard || !browserViewerId) return;
     saveBrowserDashboard(browserViewerId, dashboard);
     if (document.documentElement.dataset.fantasyFirstContentMs) return;
     requestAnimationFrame(() => requestAnimationFrame(() => {

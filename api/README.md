@@ -6,7 +6,7 @@ Live handlers export named `GET`, `POST`, and `DELETE` functions. Several Hatch 
 
 | File | Methods | Path |
 |------|---------|------|
-| `dashboard.ts` | GET | `/api/dashboard`. `/api/dashboard/section` is rewritten here with `?__section=1` (`vercel.json`). |
+| `dashboard.ts` | GET | `/api/dashboard`. Requires a signed-in Sleeper user; signed-out reads return 401. `/api/dashboard/section` is rewritten here with `?__section=1` (`vercel.json`). |
 | `draft-center.ts` | GET | `/api/draft-center` |
 | `boom-bust/[type].ts` | GET | `/api/boom-bust/ranges`, `/api/boom-bust/history` |
 | `value-history.ts` | GET | `/api/value-history` |
@@ -16,7 +16,7 @@ Live handlers export named `GET`, `POST`, and `DELETE` functions. Several Hatch 
 | `box-score.ts` | GET | `/api/box-score` |
 | `player-news.ts` | GET, POST | `/api/player-news`. A `CRON_SECRET` bearer on GET runs the refresh; other GETs read stored news. |
 | `ingest/[target].ts` | POST | `/api/ingest/projections`, `/api/ingest/matchup-grades`, `/api/ingest/pfn-tables` |
-| `cron/jobs.ts` | GET | `/api/cron/jobs?job=rebuild-dashboard` or `?job=refresh-fantasycalc` |
+| `cron/jobs.ts` | GET | `/api/cron/jobs?job=rebuild-dashboard`, `?job=refresh-fantasycalc`, or `?job=read-dashboard-snapshot` |
 | `user.ts` | GET, POST | `/api/user` |
 
 ## Conventions

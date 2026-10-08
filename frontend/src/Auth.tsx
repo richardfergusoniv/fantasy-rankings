@@ -107,7 +107,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
         email={session.user.email ?? ""}
         loading={connLoading}
         onConnected={refreshConnection}
-        onSignOut={() => void supabase.auth.signOut()}
+        onSignOut={() => {
+          localStorage.removeItem("fantasy-rankings-dashboard-v7");
+          void supabase.auth.signOut();
+        }}
       />
     );
   }
@@ -116,7 +119,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     <>
       <SignedInBar
         username={connection.sleeperUsername}
-        onSignOut={() => void supabase.auth.signOut()}
+        onSignOut={() => {
+          localStorage.removeItem("fantasy-rankings-dashboard-v7");
+          void supabase.auth.signOut();
+        }}
       />
       {children}
     </>

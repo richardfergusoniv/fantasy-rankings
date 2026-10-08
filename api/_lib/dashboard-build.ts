@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, like } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "./db.js";
 import {
@@ -21,6 +21,7 @@ import {
   type Dashboard,
 } from "./dashboard-schemas.js";
 import { CACHE_KEY } from "./dashboard-schemas.js";
+import { readOwnerSleeperUserId } from "./auth.js";
 import { readNflState, readUserLeagues } from "./user-leagues.js";
 import {
   DRAFT_MARKET_CACHE_KEY,
@@ -2185,8 +2186,9 @@ export function userDashboardCacheKey(sleeperUserId: string): string {
 /**
  * Serve the per-user cached dashboard when fresh (USER_DASHBOARD_CACHE_MS),
  * otherwise build, cache, and return it. `force` bypasses the freshness
- * check. A failed/slow build falls back to the stale cache when one exists;
- * with no cache at all the build error propagates (→ 500 at the route).
+ * check. A failed/slow build falls back to the stale per-user cache when
+ * one exists. The scheduled owner, and only that owner, can then fall
+ * back to the stored snapshot. Any other miss propagates (→ 500 at the route).
  */
 export async function loadOrBuildUserDashboard(sleeperUserId: string, force = false): Promise<Dashboard> {
   const cacheKey = userDashboardCacheKey(sleeperUserId);
@@ -2206,6 +2208,10 @@ export async function loadOrBuildUserDashboard(sleeperUserId: string, force = fa
     return dashboard;
   } catch (error) {
     if (cachedDashboard) return cachedDashboard; // stale beats an error
+    if (readOwnerSleeperUserId() === sleeperUserId) {
+      const snapshot = await readGlobalDashboardSnapshot();
+      if (snapshot) return snapshot;
+    }
     throw error;
   }
 }
@@ -2221,12 +2227,39 @@ async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): 
 }
 
 /**
- * Write a freshly built dashboard as the global snapshot (the cache key the
- * unauthenticated /api/dashboard serves). Used by the dashboard-rebuild cron
- * for the owner's Sleeper account.
+ * Write the scheduled owner's dashboard into the shared snapshot key.
+ * Client routes do not serve this to signed-out visitors. The signed-in
+ * owner can fall back to it, and the cron snapshot read can return it.
  */
 export async function writeGlobalDashboardSnapshot(dashboard: Dashboard): Promise<void> {
   await writeUserDashboardCache(CACHE_KEY, dashboard);
+}
+
+/** Stored owner snapshot, including the previous cache-key version when needed. */
+export async function readGlobalDashboardSnapshot(): Promise<Dashboard | null> {
+  const currentRows = await db
+    .select()
+    .from(schema.sourceCache)
+    .where(eq(schema.sourceCache.cacheKey, CACHE_KEY))
+    .limit(1);
+  const current = currentRows[0];
+  if (current) {
+    const dashboard = parseUsableDashboard(current.payload);
+    if (dashboard) return dashboard;
+  }
+
+  const legacyRows = await db
+    .select()
+    .from(schema.sourceCache)
+    .where(like(schema.sourceCache.cacheKey, "dashboard-live-projections-v%"))
+    .orderBy(desc(schema.sourceCache.fetchedAt))
+    .limit(6);
+  for (const row of legacyRows) {
+    if (row.cacheKey === CACHE_KEY) continue;
+    const dashboard = parseUsableDashboard(row.payload);
+    if (dashboard) return dashboard;
+  }
+  return null;
 }
 
 /**
