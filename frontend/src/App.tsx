@@ -10,8 +10,10 @@ import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogHead
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
-import { MatchupTag, ModalPortal, SegmentedControl, SkipLink, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { formatDecimal, formatPercent } from "./lib/format-number";
+import { MatchupTag, ModalPortal, SegmentedControl, SkipLink, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 import { supabase } from "./supabase";
+import { WindowVirtualList } from "./virtual-list";
 
 function SafeAreaTopScrim({ backgroundColor }: { backgroundColor?: string }) {
   return (
@@ -240,7 +242,7 @@ function shortLeagueName(name: string): string {
 
 function formatProjectionPoints(value: number | null, source?: PlayerSearchResult["projectionSource"]): string {
   if (value === null) return "—";
-  return source === "vegas" ? value.toString() : value.toFixed(1);
+  return source === "vegas" ? value.toString() : formatDecimal(value, 1);
 }
 
 type ProjectionComponent = { key: string; label: string; value: number; isYards: boolean };
@@ -367,7 +369,7 @@ function forecastPoints(value: number | null, players: RosterPlayer[]): string {
       ? Math.max(precision, decimalPlaces(player.projection))
       : precision
   ), 0);
-  return vegasPrecision > 0 ? value.toFixed(vegasPrecision) : formatProjectionPoints(value);
+  return vegasPrecision > 0 ? formatDecimal(value, vegasPrecision) : formatProjectionPoints(value);
 }
 
 function comparablePlayerName(value: string): string {
@@ -604,7 +606,7 @@ function PlayerTeamContext({ player }: { player: PlayerSearchResult }) {
             <div key={stat.label}>
               <span>{stat.label}</span>
               <strong>{stat.rank === null ? "—" : `#${stat.rank}`}</strong>
-              <small>{stat.value.toFixed(1)}{stat.suffix ?? " grade"}</small>
+              <small>{formatDecimal(stat.value, 1)}{stat.suffix ?? " grade"}</small>
             </div>
           ))}
         </div>
@@ -633,14 +635,14 @@ type MatchupStatConfig = {
 };
 
 const matchupStatConfigs: ReadonlyArray<MatchupStatConfig> = [
-  { label: "Grade", offKey: "grade", defKey: "grade", format: (value) => value.toFixed(1), offHigher: true, defHigher: true },
-  { label: "Scoring", offKey: "ppg", defKey: "pts_allowed_per_game", format: (value) => value.toFixed(1), offHigher: true, defHigher: false },
-  { label: "Pass", offKey: "pass", defKey: "pass", format: (value) => value.toFixed(1), offHigher: true, defHigher: true },
-  { label: "Run", offKey: "run", defKey: "run", format: (value) => value.toFixed(1), offHigher: true, defHigher: true },
-  { label: "EPA/Play", offKey: "epa_per_play", defKey: "epa_per_play", format: (value) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}`, offHigher: true, defHigher: false },
-  { label: "Yds/Play", offKey: "yds_per_play", defKey: "yds_per_play", format: (value) => value.toFixed(1), offHigher: true, defHigher: false },
-  { label: "Success%", offKey: "success_pct", defKey: "success_pct", format: (value) => `${value.toFixed(1)}%`, offHigher: true, defHigher: false },
-  { label: "Expl%", offKey: "expl_pct", defKey: "expl_pct", format: (value) => `${value.toFixed(1)}%`, offHigher: true, defHigher: false },
+  { label: "Grade", offKey: "grade", defKey: "grade", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: true },
+  { label: "Scoring", offKey: "ppg", defKey: "pts_allowed_per_game", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: false },
+  { label: "Pass", offKey: "pass", defKey: "pass", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: true },
+  { label: "Run", offKey: "run", defKey: "run", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: true },
+  { label: "EPA/Play", offKey: "epa_per_play", defKey: "epa_per_play", format: (value) => formatDecimal(value, 2, { sign: "always" }), offHigher: true, defHigher: false },
+  { label: "Yds/Play", offKey: "yds_per_play", defKey: "yds_per_play", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: false },
+  { label: "Success%", offKey: "success_pct", defKey: "success_pct", format: (value) => formatPercent(value, 1), offHigher: true, defHigher: false },
+  { label: "Expl%", offKey: "expl_pct", defKey: "expl_pct", format: (value) => formatPercent(value, 1), offHigher: true, defHigher: false },
 ];
 
 function matchupGrade(table: PfnTable | null, row: PfnRow | undefined, key = "grade", higherIsBetter = true): MatchupGrade {
@@ -769,13 +771,13 @@ function MatchupDataModal({ matchup, season, week, onClose }: { matchup: Matchup
                   <div className="matchup-stat-columns" aria-label={`Left column ${matchup.team}; right column ${matchup.opponent}`}>
                     <div className="matchup-stat-team">
                       <strong>{matchup.team}</strong>
-                      <span className={`matchup-reference-tag${sosBadgeClass(teamOffSosRank)}`}>OFF SOS: {teamOffSos === null ? "—" : teamOffSos.toFixed(1)}</span>
-                      <span className={`matchup-reference-tag${sosBadgeClass(teamDefSosRank)}`}>DEF SOS: {teamDefSos === null ? "—" : teamDefSos.toFixed(1)}</span>
+                      <span className={`matchup-reference-tag${sosBadgeClass(teamOffSosRank)}`}>OFF SOS: {teamOffSos === null ? "—" : formatDecimal(teamOffSos, 1)}</span>
+                      <span className={`matchup-reference-tag${sosBadgeClass(teamDefSosRank)}`}>DEF SOS: {teamDefSos === null ? "—" : formatDecimal(teamDefSos, 1)}</span>
                     </div>
                     <div className="matchup-stat-team">
                       <strong>{matchup.opponent}</strong>
-                      <span className={`matchup-reference-tag${sosBadgeClass(oppOffSosRank)}`}>OFF SOS: {oppOffSos === null ? "—" : oppOffSos.toFixed(1)}</span>
-                      <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : oppDefSos.toFixed(1)}</span>
+                      <span className={`matchup-reference-tag${sosBadgeClass(oppOffSosRank)}`}>OFF SOS: {oppOffSos === null ? "—" : formatDecimal(oppOffSos, 1)}</span>
+                      <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : formatDecimal(oppDefSos, 1)}</span>
                     </div>
                   </div>
                   {matchupStatGroups.map((stat) => (
@@ -890,7 +892,7 @@ function SeasonGameLog({ player, history, isLoading }: { player: PlayerSearchRes
         <div className="section-heading"><h3 id="player-season-totals-heading">Season totals</h3><span>{games.length} game{games.length === 1 ? "" : "s"}</span></div>
         <div className="player-season-totals">
           {totalRows.map(({ key, value: totalValue }) => (
-            <div key={key}><span>{gameLogStatLabels[key] ?? key}</span><strong>{key === "fantasyPoints" ? totalValue.toFixed(1) : Number.isInteger(totalValue) ? totalValue : totalValue.toFixed(1)}</strong></div>
+            <div key={key}><span>{gameLogStatLabels[key] ?? key}</span><strong>{key === "fantasyPoints" ? formatDecimal(totalValue, 1) : Number.isInteger(totalValue) ? formatDecimal(totalValue, 0) : formatDecimal(totalValue, 1)}</strong></div>
           ))}
         </div>
       </section>
@@ -901,7 +903,7 @@ function SeasonGameLog({ player, history, isLoading }: { player: PlayerSearchRes
             <article key={`${game.season}-${game.week}`}>
               <div><strong>W{game.week}</strong><span>{game.opponent ? `vs ${game.opponent}` : "Opponent unavailable"}</span></div>
               <p>{gameLogSummary(player.position, game.stats)}</p>
-              <b>{game.points.toFixed(1)}<small>PTS</small></b>
+              <b>{formatDecimal(game.points, 1)}<small>PTS</small></b>
             </article>
           ))}
         </div>
@@ -936,7 +938,7 @@ function PlayerAdvancedPanel({ player, analytics, children }: { player: PlayerSe
         <div className="section-heading"><h3 id="player-advanced-metrics-heading">Efficiency &amp; usage</h3><span>{entity ? `${entity.seasonGames} games` : null}</span></div>
         {metrics.length > 0 ? (
           <div className="player-advanced-grid">
-            {metrics.map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{metric.value.toFixed(metric.digits ?? 1)}{metric.unit ?? ""}</strong></div>)}
+            {metrics.map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{formatDecimal(metric.value, metric.digits ?? 1)}{metric.unit ?? ""}</strong></div>)}
           </div>
         ) : <div className="player-tab-empty compact"><strong>No advanced metrics yet</strong><span>nflverse has not published a matching season row for this player.</span></div>}
         {entity && analytics.throughWeek !== null ? <p className="player-tab-source">Through Week {analytics.throughWeek} · nflverse weekly player stats</p> : null}
@@ -1003,6 +1005,7 @@ function PlayerDetailSheet({
   const resetDrag = useCallback((animate: boolean) => {
     if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
     setDragging(false);
+    setPlayerSheetDragLock(false);
     setSettling(animate);
     setDragOffset({ x: 0, y: 0 });
     if (animate) {
@@ -1011,6 +1014,7 @@ function PlayerDetailSheet({
   }, []);
 
   useEffect(() => () => {
+    setPlayerSheetDragLock(false);
     if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
     if (directionTimerRef.current) window.clearTimeout(directionTimerRef.current);
   }, []);
@@ -1071,6 +1075,7 @@ function PlayerDetailSheet({
     }
     event.preventDefault();
     setDragging(true);
+    setPlayerSheetDragLock(true);
     setDragOffset(gesture.axis === "x"
       ? { x: Math.max(0, dx * 0.82), y: 0 }
       : { x: 0, y: Math.max(0, dy * 0.72) });
@@ -1249,7 +1254,7 @@ function PlayerDetailSheet({
               {projectionComponents.map((component) => (
                 <div key={component.key}>
                   <span>{component.label}</span>
-                  <strong>{component.isYards ? Math.round(component.value) : component.value.toFixed(1)}</strong>
+                  <strong>{component.isYards ? formatDecimal(Math.round(component.value), 0) : formatDecimal(component.value, 1)}</strong>
                 </div>
               ))}
             </div>
@@ -1262,7 +1267,7 @@ function PlayerDetailSheet({
               {defenseProjectionComponents.map((component) => (
                 <div key={component.key}>
                   <span>{component.label}</span>
-                  <strong>{component.isYards ? Math.round(component.value) : component.value.toFixed(1)}</strong>
+                  <strong>{component.isYards ? formatDecimal(Math.round(component.value), 0) : formatDecimal(component.value, 1)}</strong>
                 </div>
               ))}
             </div>
@@ -1543,7 +1548,7 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
           <div className="score-line">
             <strong>{formatProjectionPoints(league.teamActual)}</strong>
             <small>{forecastPoints(mode === "optimized" ? optimizedForecast : league.teamProjection, mode === "optimized" ? optimized.starters : league.starters)}<span className="sr-only"> projected points</span></small>
-            {mode === "optimized" && optimizedGain !== null ? <em className="optimized-gain">{optimizedGain >= 0 ? "+" : ""}{optimizedGain.toFixed(1)} <span>vs current</span></em> : null}
+            {mode === "optimized" && optimizedGain !== null ? <em className="optimized-gain">{formatDecimal(optimizedGain, 1, { sign: "always" })} <span>vs current</span></em> : null}
           </div>
         </div>
         <div className="versus">VS</div>
@@ -1785,7 +1790,7 @@ function TeamDataModal({
               </div>
               <div>
                 <span>Pace of play</span>
-                <strong>{usage ? usage.playsPerGame.toFixed(1) : "—"}</strong>
+                <strong>{usage ? formatDecimal(usage.playsPerGame, 1) : "—"}</strong>
                 <small>{usageWeek ? `plays / game · ${usageWeek}` : "nflverse unavailable"}</small>
               </div>
               <div>
@@ -1805,46 +1810,46 @@ function TeamDataModal({
               <div>
                 <span>PFN O-line rank</span>
                 <strong>{loading ? "…" : lineRank === null ? "—" : `#${lineRank}`}</strong>
-                <small>{lineGrade === null ? "PFN rank" : `${lineGrade.toFixed(1)} grade`}</small>
+                <small>{lineGrade === null ? "PFN rank" : `${formatDecimal(lineGrade, 1)} grade`}</small>
               </div>
               <div>
                 <span>PFN defense rank</span>
                 <strong>{loading ? "…" : defenseRank === null ? "—" : `#${defenseRank}`}</strong>
-                <small>{defenseGrade === null ? "PFN rank" : `${defenseGrade.toFixed(1)} grade`}</small>
+                <small>{defenseGrade === null ? "PFN rank" : `${formatDecimal(defenseGrade, 1)} grade`}</small>
               </div>
               <div>
                 <span>Offensive efficiency</span>
                 <strong>{loading ? "…" : offenseRank === null ? "—" : `#${offenseRank}`}</strong>
-                <small>{offenseGrade === null ? "PFN rank" : `${offenseGrade.toFixed(1)} PFN grade`}</small>
+                <small>{offenseGrade === null ? "PFN rank" : `${formatDecimal(offenseGrade, 1)} PFN grade`}</small>
               </div>
               <div>
                 <span>Red-zone TD rate</span>
-                <strong>{situational ? `${situational.redZoneTdPct.toFixed(0)}%` : "—"}</strong>
+                <strong>{situational ? formatPercent(situational.redZoneTdPct, 0) : "—"}</strong>
                 <small>{situational ? `${situational.games} game${situational.games === 1 ? "" : "s"}` : "Source unavailable"}</small>
               </div>
               <div>
                 <span>Third-down conversion</span>
-                <strong>{situational ? `${situational.thirdDownPct.toFixed(0)}%` : "—"}</strong>
+                <strong>{situational ? formatPercent(situational.thirdDownPct, 0) : "—"}</strong>
                 <small>{situational ? `${situational.games} game${situational.games === 1 ? "" : "s"}` : "Source unavailable"}</small>
               </div>
               <div>
                 <span>EPA / play</span>
-                <strong>{epaPerPlay === null ? "—" : `${epaPerPlay > 0 ? "+" : ""}${epaPerPlay.toFixed(2)}`}</strong>
+                <strong>{epaPerPlay === null ? "—" : formatDecimal(epaPerPlay, 2, { sign: "exceptZero" })}</strong>
                 <small>PFN offense</small>
               </div>
               <div>
                 <span>Success rate</span>
-                <strong>{successPct === null ? "—" : `${successPct.toFixed(1)}%`}</strong>
+                <strong>{successPct === null ? "—" : formatPercent(successPct, 1)}</strong>
                 <small>PFN offense</small>
               </div>
               <div>
                 <span>Yards / play</span>
-                <strong>{yardsPerPlay === null ? "—" : yardsPerPlay.toFixed(1)}</strong>
+                <strong>{yardsPerPlay === null ? "—" : formatDecimal(yardsPerPlay, 1)}</strong>
                 <small>PFN offense</small>
               </div>
               <div>
                 <span>Explosive play rate</span>
-                <strong>{explosivePct === null ? "—" : `${explosivePct.toFixed(1)}%`}</strong>
+                <strong>{explosivePct === null ? "—" : formatPercent(explosivePct, 1)}</strong>
                 <small>PFN offense</small>
               </div>
             </div>
@@ -2195,7 +2200,10 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
         <>
           <div className="player-search-head" aria-hidden="true"><span>Player</span><span>Week</span><span>Value</span></div>
           <div className="player-search-list" aria-label="Matching players">
-            {searchRows.map((row) => {
+            <WindowVirtualList count={searchRows.length} estimateSize={64} getKey={(index) => searchRows[index]?.key ?? index}>
+            {(index) => {
+              const row = searchRows[index];
+              if (!row) return null;
               const isMine = myRoster.has(row.playerId);
               return (
               <button
@@ -2218,7 +2226,8 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
                 <span className="player-search-value"><strong>{row.seasonValue === null ? "—" : row.seasonValue.toLocaleString()}</strong><small>{row.seasonRank === null ? "—" : `#${row.seasonRank}`}</small></span>
               </button>
               );
-            })}
+            }}
+            </WindowVirtualList>
           </div>
           {searchRows.length === 0 ? <div className="empty-inline">No player names match “{query.trim()}”.</div> : null}
         </>
@@ -2246,7 +2255,10 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
                 : <span>{rows.length} players</span>}
           </div>
           <div className="ranking-list">
-            {visibleRows.map((row) => {
+            <WindowVirtualList count={visibleRows.length} estimateSize={72} getKey={(index) => visibleRows[index]?.key ?? index}>
+            {(index) => {
+              const row = visibleRows[index];
+              if (!row) return null;
               const isMine = !availableOnly && myRoster.has(row.key);
               const detail = allPlayerDetailsById.get(row.key) ?? null;
               const trend = availableOnly ? trendingByPlayerId.get(row.key) : undefined;
@@ -2329,7 +2341,8 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
                   {content}
                 </div>
               );
-            })}
+            }}
+            </WindowVirtualList>
             {rows.length > 0 ? (
               <div className="list-pagination-row">
                 <span aria-live="polite">showing {Math.min(visibleRowCount, rows.length)} of {rows.length}</span>
@@ -2392,9 +2405,9 @@ function BoomBustPanel({
   const plotMinimum = weeklyScores.length > 0 ? Math.min(...weeklyScores.map((score) => score.points)) : null;
   const range = plotMinimum !== null && ceiling !== null ? ceiling - plotMinimum : 0;
   const markerPosition = (value: number): number => range === 0 || plotMinimum === null ? 50 : ((value - plotMinimum) / range) * 100;
-  const scoreLabel = (value: number | null): string => value === null ? "—" : value.toFixed(1);
+  const scoreLabel = (value: number | null): string => value === null ? "—" : formatDecimal(value, 1);
   const gameLabel = (score: { season: number; week: number }): string => view === "last3" ? `${score.season} Week ${score.week}` : `Week ${score.week}`;
-  const description = weeklyScores.map((score) => `${gameLabel(score)}: ${score.points.toFixed(1)}`).join(", ");
+  const description = weeklyScores.map((score) => `${gameLabel(score)}: ${formatDecimal(score.points, 1)}`).join(", ");
   const showQuartiles = weeklyScores.length >= 8 && firstQuartile !== null && thirdQuartile !== null;
   const quartileDescription = showQuartiles ? ` Interquartile range ${scoreLabel(firstQuartile)} to ${scoreLabel(thirdQuartile)}.` : "";
   const rangeLabel = view === "last3" ? "2024 through 2026 regular-season weekly scores" : "2026 weekly scores";
@@ -2421,7 +2434,7 @@ function BoomBustPanel({
               <div
                 className="boom-bust-iqr"
                 style={{ left: `${markerPosition(firstQuartile)}%`, width: `${markerPosition(thirdQuartile) - markerPosition(firstQuartile)}%` }}
-                title={`Middle 50%: ${firstQuartile.toFixed(1)}–${thirdQuartile.toFixed(1)} points`}
+                title={`Middle 50%: ${formatDecimal(firstQuartile, 1)}–${formatDecimal(thirdQuartile, 1)} points`}
               />
             ) : null}
             {weeklyScores.map((score, index) => (
@@ -2429,12 +2442,12 @@ function BoomBustPanel({
                 className={`boom-bust-dot ${index % 2 === 0 ? "above" : "below"}`}
                 key={`${score.season}-${score.week}`}
                 style={{ left: `${markerPosition(score.points)}%` }}
-                title={`${gameLabel(score)}: ${score.points.toFixed(1)} points`}
+                title={`${gameLabel(score)}: ${formatDecimal(score.points, 1)} points`}
               />
             ))}
-            <i className="boom-bust-bust-mark" style={{ left: `${markerPosition(floor)}%` }} title={weeklyScores.length >= 5 ? `Bust (10th percentile): ${floor.toFixed(1)} points` : `Bust (minimum): ${floor.toFixed(1)} points`} />
-            <i className="boom-bust-median-mark" style={{ left: `${markerPosition(medianScore)}%` }} title={`Median: ${medianScore.toFixed(1)} points`} />
-            <i className="boom-bust-mean-mark" style={{ left: `${markerPosition(meanScore)}%` }} title={`Mean: ${meanScore.toFixed(1)} points`} />
+            <i className="boom-bust-bust-mark" style={{ left: `${markerPosition(floor)}%` }} title={weeklyScores.length >= 5 ? `Bust (10th percentile): ${formatDecimal(floor, 1)} points` : `Bust (minimum): ${formatDecimal(floor, 1)} points`} />
+            <i className="boom-bust-median-mark" style={{ left: `${markerPosition(medianScore)}%` }} title={`Median: ${formatDecimal(medianScore, 1)} points`} />
+            <i className="boom-bust-mean-mark" style={{ left: `${markerPosition(meanScore)}%` }} title={`Mean: ${formatDecimal(meanScore, 1)} points`} />
           </div>
           <div className="boom-bust-labels">
             <span><small>Bust · {weeklyScores.length >= 5 ? "10th %ile" : "min"}</small><strong>{scoreLabel(floor)}</strong></span>
@@ -2664,8 +2677,8 @@ function gradeTradeSide(
     })
     .sort((a, b) => a.cost - b.cost);
   const easiestOut = surplusRows[0];
-  const needCopy = topNeed && topNeed.gain > 0.01 ? `${topNeed.position} is the clearest need (+${topNeed.gain.toFixed(1)} with a median available add).` : "No median waiver add changes the optimal lineup.";
-  const surplusCopy = easiestOut ? `${easiestOut.player.name} has a ${Math.max(0, easiestOut.cost).toFixed(1)}-point removal cost after a waiver refill.` : "No outgoing player to test for surplus.";
+  const needCopy = topNeed && topNeed.gain > 0.01 ? `${topNeed.position} is the clearest need (+${formatDecimal(topNeed.gain, 1)} with a median available add).` : "No median waiver add changes the optimal lineup.";
+  const surplusCopy = easiestOut ? `${easiestOut.player.name} has a ${formatDecimal(Math.max(0, easiestOut.cost), 1)}-point removal cost after a waiver refill.` : "No outgoing player to test for surplus.";
   return {
     lineupDelta,
     depthDelta,
@@ -2677,8 +2690,8 @@ function gradeTradeSide(
 }
 
 function signed(value: number, digits = 1): string {
-  if (Math.abs(value) < 0.005) return (0).toFixed(digits);
-  return `${value > 0 ? "+" : ""}${value.toFixed(digits)}`;
+  if (Math.abs(value) < 0.005) return formatDecimal(0, digits);
+  return formatDecimal(value, digits, { sign: "exceptZero" });
 }
 
 function TradeSide({ title, assets, availableAssets, marketTotal, onAdd, onRemove, onClear, onOpenPlayer }: { title: string; assets: TradeAsset[]; availableAssets: TradeAsset[]; marketTotal: number; onAdd: (id: string) => void; onRemove: (id: string) => void; onClear: () => void; onOpenPlayer: (playerId: string) => void }) {
@@ -3647,7 +3660,7 @@ function TickerStrip({ data, news, onPlayer, onNews }: {
       .map(({ row, edge }) => ({
         key: `adp:${row.format}:${row.playerId ?? row.name}`,
         source: "ADP",
-        label: tickerLabel(row.name, `ADP ${row.adp.toFixed(1)} · ${edge >= 0 ? "+" : ""}${edge.toFixed(1)} vs MFL`),
+        label: tickerLabel(row.name, `ADP ${formatDecimal(row.adp, 1)} · ${formatDecimal(edge, 1, { sign: "always" })} vs MFL`),
         quote: null,
         move: edge,
         tone: Math.abs(edge) < 0.05 ? "neutral" : edge > 0 ? "up" : "down",
@@ -3665,7 +3678,7 @@ function TickerStrip({ data, news, onPlayer, onNews }: {
       <span className={`ticker-source ${item.source === "BREAKING" ? "breaking" : ""}`}>{item.source}</span>
       <span className="ticker-label">{item.label}</span>
       {item.quote ? <strong>{item.quote}</strong> : null}
-      {item.move !== null && Math.abs(item.move) >= 0.05 ? <span className={`ticker-move ${item.tone}`}>{item.move > 0 ? "▲" : "▼"}{Math.abs(item.move).toFixed(1)}</span> : null}
+      {item.move !== null && Math.abs(item.move) >= 0.05 ? <span className={`ticker-move ${item.tone}`}>{item.move > 0 ? "▲" : "▼"}{formatDecimal(Math.abs(item.move), 1)}</span> : null}
     </>
   );
 
@@ -4071,11 +4084,11 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
           <div className="draft-row" role="listitem" key={`${row.format}-${row.playerId ?? row.name}`}>
             <button type="button" className="draft-player-open" onClick={() => openDraftPlayer(row)} disabled={!row.playerId} aria-label={`View ${row.name} details and news`}>
               <span className="draft-player-name-line"><strong>{row.name}</strong></span>
-              <small className="draft-player-meta"><MatchupTag team={row.team} opponent={row.opponent} isAway={row.isAway} isBye={row.isBye} position={row.position} entry={sosEntry} onClick={row.team && row.opponent && onOpenMatchup ? (event) => { event.stopPropagation(); onOpenMatchup({ team: row.team ?? "", opponent: row.opponent ?? "", isAway: row.isAway, gamePhase: row.gamePhase ?? null }); } : undefined} />{row.mflAdp === null ? null : <span>MFL {row.mflAdp.toFixed(1)}</span>}</small>
+              <small className="draft-player-meta"><MatchupTag team={row.team} opponent={row.opponent} isAway={row.isAway} isBye={row.isBye} position={row.position} entry={sosEntry} onClick={row.team && row.opponent && onOpenMatchup ? (event) => { event.stopPropagation(); onOpenMatchup({ team: row.team ?? "", opponent: row.opponent ?? "", isAway: row.isAway, gamePhase: row.gamePhase ?? null }); } : undefined} />{row.mflAdp === null ? null : <span>MFL {formatDecimal(row.mflAdp, 1)}</span>}</small>
             </button>
             <span>{row.position === "DEF" ? "DST" : row.position}</span>
             <span><span className="sr-only">Tier </span><span aria-hidden="true">T</span>{row.tier}</span>
-            <span>{isSpecialist ? <><span className="sr-only">Average draft position not listed</span><span aria-hidden="true">—</span></> : row.adpSource === "fantasycalc" ? <><span className="sr-only">FantasyCalc rank </span><span aria-hidden="true">FC </span>{row.marketRank ?? <><span className="sr-only">not listed</span><span aria-hidden="true">—</span></>}</> : <><span className="sr-only">Average draft position </span>{row.adp.toFixed(1)}</>}</span>
+            <span>{isSpecialist ? <><span className="sr-only">Average draft position not listed</span><span aria-hidden="true">—</span></> : row.adpSource === "fantasycalc" ? <><span className="sr-only">FantasyCalc rank </span><span aria-hidden="true">FC </span>{row.marketRank ?? <><span className="sr-only">not listed</span><span aria-hidden="true">—</span></>}</> : <><span className="sr-only">Average draft position </span>{formatDecimal(row.adp, 1)}</>}</span>
             <span><strong>{isSpecialist ? <><span className="sr-only">Weekly projection </span>{formatProjectionPoints(row.weeklyProjection, row.projectionSource)}</> : row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{row.marketValue.toLocaleString()}</>}</strong></span>
             <span className="draft-row-actions"><button type="button" className="row-toggle-state" disabled={!row.playerId} onClick={() => row.playerId && addToMyTeam(row.playerId)} aria-label={`Add ${row.name} to My Team`}>+</button>{liveDraft ? null : <button type="button" className="draft-taken-link" disabled={!row.playerId} onClick={() => row.playerId && markTaken(row.playerId)} aria-label={`Mark ${row.name} drafted by another team`}>Taken</button>}</span>
           </div>

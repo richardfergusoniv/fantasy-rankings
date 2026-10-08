@@ -6,6 +6,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
 import type { MatchupSelection } from "./App";
+import {
+  SAVED_CHART_VIEWS_QUERY_KEY,
+  applySavedChartViewMutation,
+  optimisticRemoveSavedChartView,
+  optimisticUpsertSavedChartView,
+  rollbackSavedChartViewMutation,
+  settleSavedChartViewMutation,
+} from "./chart-view-cache";
+import { formatDecimal } from "./lib/format-number";
 import { MatchupTag, ModalPortal, SegmentedControl, shortLeagueName, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
@@ -391,9 +400,10 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
   const [isNaming, setIsNaming] = useState(false);
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
+  const [messageIsError, setMessageIsError] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const viewsQuery = useQuery({
-    queryKey: ["saved-chart-views"],
+    queryKey: SAVED_CHART_VIEWS_QUERY_KEY,
     queryFn: () => api.listSavedChartViews({}),
     staleTime: 60_000,
     retry: false,
@@ -407,27 +417,71 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
 
   const saveMutation = useMutation({
     mutationFn: (viewName: string) => api.saveChartView({ name: viewName, ...config }),
-    onSuccess: ({ view }) => {
-      queryClient.setQueryData<ApiResponse<typeof api, "listSavedChartViews">>(["saved-chart-views"], (current) => ({
-        views: [...(current?.views ?? []).filter((item) => item.id !== view.id), view],
-      }));
+    onMutate: async (viewName) => {
+      await queryClient.cancelQueries({ queryKey: SAVED_CHART_VIEWS_QUERY_KEY });
+      const optimisticView: SavedChartView = {
+        ...config,
+        id: `optimistic:${config.dataset}:${viewName}`,
+        name: viewName,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const previous = applySavedChartViewMutation<SavedChartView>(queryClient, (current) => optimisticUpsertSavedChartView(current, optimisticView));
+      const previousSelected = selectedSavedViewId;
+      onSelectedSavedViewIdChange(optimisticView.id);
+      setName("");
+      setIsNaming(false);
+      setMessageIsError(false);
+      setMessage("");
+      return { previous, previousSelected, optimisticId: optimisticView.id };
+    },
+    onSuccess: ({ view }, _viewName, context) => {
+      applySavedChartViewMutation<SavedChartView>(queryClient, (current) => optimisticUpsertSavedChartView(
+        { views: (current?.views ?? []).filter((item) => item.id !== context?.optimisticId) },
+        view,
+      ));
       onSelectedSavedViewIdChange(view.id);
       setName("");
       setIsNaming(false);
+      setMessageIsError(false);
       setMessage(`Saved “${view.name}”.`);
     },
-    onError: () => setMessage("Couldn’t save this view. Try again."),
+    onError: (_error, viewName, context) => {
+      rollbackSavedChartViewMutation(queryClient, context?.previous);
+      onSelectedSavedViewIdChange(context?.previousSelected ?? null);
+      setIsNaming(true);
+      setName(viewName);
+      setMessageIsError(true);
+      setMessage("Couldn’t save this view. Try again.");
+    },
+    onSettled: () => {
+      void settleSavedChartViewMutation(queryClient);
+    },
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteChartView({ id }),
-    onSuccess: (_result, id) => {
-      queryClient.setQueryData<ApiResponse<typeof api, "listSavedChartViews">>(["saved-chart-views"], (current) => ({
-        views: (current?.views ?? []).filter((item) => item.id !== id),
-      }));
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: SAVED_CHART_VIEWS_QUERY_KEY });
+      const previous = applySavedChartViewMutation<SavedChartView>(queryClient, (current) => optimisticRemoveSavedChartView(current, id));
+      const previousSelected = selectedSavedViewId;
       onSelectedSavedViewIdChange(null);
+      setMessageIsError(false);
+      setMessage("");
+      return { previous, previousSelected };
+    },
+    onSuccess: () => {
+      setMessageIsError(false);
       setMessage("Saved view deleted.");
     },
-    onError: () => setMessage("Couldn’t delete this view. Try again."),
+    onError: (_error, _id, context) => {
+      rollbackSavedChartViewMutation(queryClient, context?.previous);
+      onSelectedSavedViewIdChange(context?.previousSelected ?? null);
+      setMessageIsError(true);
+      setMessage("Couldn’t delete this view. Try again.");
+    },
+    onSettled: () => {
+      void settleSavedChartViewMutation(queryClient);
+    },
   });
 
   useEffect(() => {
@@ -440,10 +494,12 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
+      setMessageIsError(true);
       setMessage("Enter a name for this view.");
       nameRef.current?.focus();
       return;
     }
+    setMessageIsError(false);
     setMessage("");
     saveMutation.mutate(trimmed);
   }
@@ -458,6 +514,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
             value={pickerValue}
             onChange={(event) => {
               const nextValue = event.target.value;
+              setMessageIsError(false);
               setMessage("");
               if (nextValue.startsWith("saved:")) {
                 const view = views.find((item) => `saved:${item.id}` === nextValue);
@@ -481,7 +538,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
           </select>
         </label>
         <div className="saved-view-actions">
-          <button type="button" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</button>
+          <button type="button" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessageIsError(false); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</button>
           {selectedSavedView ? <button type="button" className="saved-view-delete" onClick={() => deleteMutation.mutate(selectedSavedView.id)} disabled={deleteMutation.isPending}>Delete “{selectedSavedView.name}”</button> : null}
         </div>
       </div>
@@ -500,7 +557,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
           </div>
         </form>
       ) : null}
-      {viewsQuery.isError ? <p className="saved-view-status" role="status">Saved views couldn’t be loaded.</p> : message ? <p className="saved-view-status" role="status">{message}</p> : null}
+      {viewsQuery.isError ? <p className="saved-view-status" role="alert">Saved views couldn’t be loaded.</p> : message ? <p className="saved-view-status" role={messageIsError ? "alert" : "status"}>{message}</p> : null}
     </div>
   );
 }
@@ -532,7 +589,7 @@ function PercentileCutoffSelect({ axis, value, onChange }: { axis: "X" | "Y"; va
 
 function metricDisplay(value: number, metric: Metric): string {
   const decimals = Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2;
-  return `${value.toFixed(decimals)}${metric.unit ?? ""}`;
+  return `${formatDecimal(value, decimals)}${metric.unit ?? ""}`;
 }
 
 function ordinalSuffix(value: number): string {
@@ -1256,9 +1313,9 @@ function TierCliffPlot({ data }: { data: ChartDatum[] }) {
         const gap = gaps[index] ?? 0;
         return <li key={row.id}>
           <span className="tier-cliff-rank">{Math.round(row.x)}</span>
-          <span className="tier-cliff-player"><strong>{row.name}</strong><small>{row.team} · {row.y.toFixed(1)} projected</small></span>
+          <span className="tier-cliff-player"><strong>{row.name}</strong><small>{row.team} · {formatDecimal(row.y, 1)} projected</small></span>
           <span className="tier-cliff-bar" aria-hidden="true"><i style={{ width: `${Math.max(3, (gap / maxGap) * 100)}%` }} /></span>
-          <strong className="tier-cliff-drop">−{gap.toFixed(1)}</strong>
+          <strong className="tier-cliff-drop">−{formatDecimal(gap, 1)}</strong>
         </li>;
       })}
     </ol>
@@ -1285,7 +1342,7 @@ function BoomBustRangePlot({ data, entities }: { data: ChartDatum[]; entities: W
             <i className="boom-bust-band" style={{ left: `${left}%`, width: `${width}%` }} />
             <i className="boom-bust-projection" style={{ left: `${projection}%` }} />
           </span>
-          <span className="boom-bust-values"><strong>{row.x.toFixed(1)}<span className="sr-only"> projected points</span></strong><small><span className="sr-only">2026 scoring range </span>{floor.toFixed(1)}–{ceiling.toFixed(1)}</small></span>
+          <span className="boom-bust-values"><strong>{formatDecimal(row.x, 1)}<span className="sr-only"> projected points</span></strong><small><span className="sr-only">2026 scoring range </span>{formatDecimal(floor, 1)}–{formatDecimal(ceiling, 1)}</small></span>
         </li>;
       })}
     </ol>

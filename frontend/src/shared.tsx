@@ -1,5 +1,6 @@
 import { useEffect, useRef, type CSSProperties, type MouseEvent, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { formatPoints } from "./lib/format-number";
 
 export function ModalPortal({ children }: { children: ReactNode }) {
   return createPortal(children, document.body);
@@ -116,7 +117,19 @@ export function shortLeagueName(name: string): string {
 }
 
 export function points(value: number | null): string {
-  return value === null ? "—" : value.toFixed(1);
+  return formatPoints(value, 1);
+}
+
+/** While a player sheet drag is active, the page behind it is inert and text selection is off. */
+export function setPlayerSheetDragLock(active: boolean): void {
+  const root = document.getElementById("root");
+  if (active) {
+    root?.setAttribute("inert", "");
+    document.documentElement.classList.add("is-sheet-dragging");
+    return;
+  }
+  root?.removeAttribute("inert");
+  document.documentElement.classList.remove("is-sheet-dragging");
 }
 
 export type SosPosition = "QB" | "RB" | "WR" | "TE";
