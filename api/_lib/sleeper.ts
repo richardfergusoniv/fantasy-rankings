@@ -402,6 +402,8 @@ export function hasSleeperGameParticipation(row: SleeperWeeklyStatRow): boolean 
   return participationFields.some((key) => typeof row[key] === "number" && Number(row[key]) > 0);
 }
 
+// The value is only read by `z.infer`. It is the series shape `buildBoomBustSeries` returns.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- type-only schema
 const boomBustSeriesSchema = z.object({
   status: z.enum(["ok", "unavailable"]),
   weeklyScores: z.array(z.object({ season: z.number().int(), week: z.number().int(), points: z.number() })),

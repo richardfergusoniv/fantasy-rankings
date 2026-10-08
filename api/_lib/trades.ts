@@ -154,6 +154,8 @@ export const historicalTradesResponse = z.object({
   sourceErrors: z.array(z.string()),
 });
 
+export type HistoricalTrades = z.infer<typeof historicalTradesResponse>;
+
 // ---------------------------------------------------------------------------
 // Fetch utilities
 // ---------------------------------------------------------------------------

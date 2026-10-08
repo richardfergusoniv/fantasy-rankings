@@ -3,7 +3,6 @@ import {
   badRequest,
   internalError,
   json,
-  methodNotAllowed,
   queryBool,
   queryInt,
   unauthorized,

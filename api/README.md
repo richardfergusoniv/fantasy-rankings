@@ -22,7 +22,7 @@ Live handlers export named `GET`, `POST`, and `DELETE` functions. Several Hatch 
 ## Conventions
 
 - Validate input with zod `safeParse`; return 400 on failure.
-- Route handlers import the database from `api/_lib/db.js`. `drizzle.config.ts` points drizzle-kit at `lib/schema.ts` (same contents as `api/_lib/schema.ts`).
+- Route handlers import the database from `api/_lib/db.js`. `drizzle.config.ts` points drizzle-kit at `api/_lib/schema.ts`.
 - Auth-required routes verify the Supabase JWT (`getRequestUser` / `resolveSleeperUserId` in `api/_lib`).
 - Webhook and cron routes check `Authorization: Bearer ${CRON_SECRET}`.
 - Long routes set `maxDuration: 60` in `vercel.json` (Vercel Hobby cap).

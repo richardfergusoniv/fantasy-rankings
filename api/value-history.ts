@@ -5,7 +5,6 @@ import {
   badRequest,
   internalError,
   json,
-  methodNotAllowed,
 } from "./_lib/api-utils.js";
 import {
   FANTASY_CALC_HISTORY_URL,
@@ -41,6 +40,8 @@ const valueHistoryResponse = z.object({
     points: z.array(z.object({ date: z.string(), value: z.number().int() })),
   })),
 });
+
+export type ValueHistory = z.infer<typeof valueHistoryResponse>;
 
 const FANTASY_CALC_PRESETS: Array<{ format: SeasonLongFormat; url: string }> = [
   { format: { key: "redraft-1qb-12t-0.5ppr", isDynasty: false, numQbs: 1, numTeams: 12, ppr: 0.5, label: "Redraft · 12-team · 1QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=1&numTeams=12&ppr=0.5` },

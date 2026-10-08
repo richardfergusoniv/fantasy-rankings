@@ -4,7 +4,8 @@ name: Props daily pull
 # Rankings Vercel app. Mirrors the local props-twice-daily-pull cron.
 #
 # GitHub cron is UTC-only and does not follow daylight saving, so the job
-# is scheduled at both 10:00 and 11:00 UTC and a guard step lets it run
+# is scheduled at both 10:17 and 11:17 UTC (off the on-the-hour pileup,
+# after a week of 4.5-9h delivery delays at minute :00) and a guard step lets it run
 # only when it is 03:xx in America/Los_Angeles (3 AM Pacific year-round).
 # Manual dispatches always run.
 #
@@ -19,8 +20,8 @@ name: Props daily pull
 
 on:
   schedule:
-    - cron: "0 10 * * *"
-    - cron: "0 11 * * *"
+    - cron: "17 10 * * *"
+    - cron: "17 11 * * *"
   workflow_dispatch:
     inputs:
       force_fallback:

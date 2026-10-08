@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import { dashboardForViewer, sectionDashboardForViewer } from "./dashboard-access.js";
 
 type Dash = { owner: string; leagues: string[] };

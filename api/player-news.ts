@@ -54,6 +54,30 @@ type InjuryPlayer = {
   injuryStatus: string | null;
 };
 
+export type PlayerNews = {
+  lastCheckedAt: string | null;
+  runs: Array<{
+    id: string;
+    checkedAt: string;
+    items: Array<{
+      id: string;
+      playerId: string;
+      player: string;
+      team: string;
+      change: string;
+      leagueIds: string[];
+      newsType: "roster" | "waiver" | "headline";
+      leagues: string[];
+      availability: Array<z.infer<typeof playerNewsAvailabilitySchema>>;
+      roleContext: string;
+      sourceLabel: string;
+      sourceUrl: string;
+      sourcePublishedAt: string | null;
+    }>;
+  }>;
+  emptyReason: string | null;
+};
+
 function playerLabel(player: SleeperPlayer): string {
   return player.full_name ?? [player.first_name, player.last_name].filter(Boolean).join(" ");
 }
