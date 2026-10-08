@@ -237,6 +237,7 @@ async function handleMatchupGrades(req: Request): Promise<Response> {
 // ---------------------------------------------------------------------------
 
 const pfnTableKeys = ["offensive-line", "offense", "defense", "team-overall"] as const;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- type-only schema
 const pfnTableKeySchema = z.enum(pfnTableKeys);
 
 const pfnMetricValueSchema = z.union([z.number(), z.string(), z.null()]);

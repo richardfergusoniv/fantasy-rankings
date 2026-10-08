@@ -4,7 +4,6 @@ import { db, schema } from "./_lib/db.js";
 import {
   internalError,
   json,
-  methodNotAllowed,
   queryBool,
 } from "./_lib/api-utils.js";
 import {
@@ -143,6 +142,8 @@ const draftCenterResponse = z.object({
   }),
   sourceErrors: z.array(z.string()),
 });
+
+export type DraftCenter = z.infer<typeof draftCenterResponse>;
 
 type CachedDraftMarket = {
   adpAsOf: string | null;

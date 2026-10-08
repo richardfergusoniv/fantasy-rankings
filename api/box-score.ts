@@ -5,7 +5,6 @@ import {
   internalError,
   isAdminUserId,
   json,
-  methodNotAllowed,
 } from "./_lib/api-utils.js";
 import { canonicalTeam, fetchJson } from "./_lib/sleeper.js";
 
@@ -43,6 +42,8 @@ const matchupBoxScoreResponse = z.object({
     fetchedAt: z.string(),
   }).nullable(),
 });
+
+export type MatchupBoxScore = z.infer<typeof matchupBoxScoreResponse>;
 
 type EspnScoreboard = {
   season?: { year?: number };
