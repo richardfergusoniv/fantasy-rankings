@@ -2,7 +2,11 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
-  return <table data-slot="table" className={cn("w-full caption-bottom text-sm tabular-nums", className)} {...props} />;
+  return (
+    <div data-slot="table-container" className="data-table-frame">
+      <table data-slot="table" className={cn("w-full caption-bottom text-sm tabular-nums", className)} {...props} />
+    </div>
+  );
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {

@@ -1605,6 +1605,7 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
 
       <section className="lineup-section matchup-section">
         <div className="section-heading"><h2>Starters</h2></div>
+        <div className="data-table-frame">
         <div className="matchup-column-key"><span>{userTeamName}</span><span>SLOT</span><span>{opponent?.name ?? "OPP"}</span></div>
         <div className="matchup-list">
           {rows.map(({ mine: myPlayer, theirs }, index) => (
@@ -1628,11 +1629,13 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
             </div>
           ))}
         </div>
+        </div>
         {!opponent ? <div className="empty-inline compact">Sleeper hasn’t posted an opponent for this week.</div> : null}
       </section>
 
       <section className="lineup-section matchup-section bench-matchup-section" aria-label="Bench matchup">
         <div className="section-heading"><h2>Bench</h2></div>
+        <div className="data-table-frame">
         <div className="matchup-column-key"><span>{userTeamName}</span><span>BENCH</span><span>{opponent?.name ?? "OPP"}</span></div>
         <div className="matchup-list">
           {benchRows.map(({ mine: myPlayer, theirs }, index) => (
@@ -1649,6 +1652,7 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
               <MatchupPlayer player={theirs} side="theirs" sosEntry={sosEntry} onOpen={openPlayer} onOpenMatchup={onOpenMatchup} />
             </div>
           ))}
+        </div>
         </div>
         {benchRows.length === 0 ? <div className="empty-inline compact">No bench players are listed.</div> : null}
         {!opponent ? <div className="empty-inline compact">Sleeper hasn’t posted an opponent for this week.</div> : null}
