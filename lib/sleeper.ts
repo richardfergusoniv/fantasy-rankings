@@ -14,7 +14,6 @@ import { db, schema } from "./db";
 // Constants
 // ---------------------------------------------------------------------------
 
-export const SLEEPER_USER_ID = "739931264659927040";
 export const SLEEPER_BASE = "https://api.sleeper.app/v1";
 export const SLEEPER_PROJECTIONS_BASE = "https://api.sleeper.com";
 export const SOURCE_TIMEOUT_MS = 15_000;

@@ -17,7 +17,7 @@ import { db, schema } from "./db";
 // ---------------------------------------------------------------------------
 
 const SLEEPER_BASE = "https://api.sleeper.app/v1";
-const SLEEPER_USER_ID = "739931264659927040";
+const SLEEPER_USER_ID = process.env.OWNER_SLEEPER_USER_ID?.trim() ?? "";
 const HISTORICAL_TRADES_CACHE_MS = 24 * 60 * 60 * 1000;
 const HISTORICAL_PLAYERS_CACHE_KEY = "sleeper-players-nfl";
 const HISTORICAL_PLAYERS_CACHE_MS = 7 * 24 * 60 * 60 * 1000;

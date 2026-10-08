@@ -17,7 +17,6 @@ import { db, schema } from "./db.js";
 // ---------------------------------------------------------------------------
 
 const SLEEPER_BASE = "https://api.sleeper.app/v1";
-const SLEEPER_USER_ID = "739931264659927040";
 const HISTORICAL_TRADES_CACHE_MS = 24 * 60 * 60 * 1000;
 const HISTORICAL_PLAYERS_CACHE_KEY = "sleeper-players-nfl";
 const HISTORICAL_PLAYERS_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -530,6 +529,7 @@ async function fetchHistoricalSeason(
   league: SleeperLeague,
   players: Record<string, SleeperPlayer>,
   draftResolution: HistoricalDraftResolution,
+  sleeperUserId: string,
 ): Promise<z.infer<typeof historicalTradeSchema>[]> {
   const [rosters, users] = await Promise.all([
     fetchJson<SleeperRoster[]>(`${SLEEPER_BASE}/league/${league.league_id}/rosters`),
@@ -649,7 +649,7 @@ async function fetchHistoricalSeason(
           rosterId,
           ownerId,
           teamName: roster ? sleeperTeamName(roster, usersById) : `Team ${rosterId}`,
-          isUserTeam: ownerId === SLEEPER_USER_ID,
+          isUserTeam: ownerId === sleeperUserId,
           assets: { players: receivedPlayers, picks: receivedPicks, faabReceived },
         };
       });
@@ -673,9 +673,23 @@ async function fetchHistoricalSeason(
 // Main loader
 // ---------------------------------------------------------------------------
 
+function withViewerTeam<T extends { teams: Array<{ ownerId: string | null; isUserTeam: boolean }> }>(
+  trades: T[],
+  sleeperUserId: string,
+): T[] {
+  return trades.map((trade) => ({
+    ...trade,
+    teams: trade.teams.map((team) => ({
+      ...team,
+      isUserTeam: team.ownerId === sleeperUserId,
+    })),
+  }));
+}
+
 export async function loadHistoricalTrades(
   leagueId: string,
   forceRefresh: boolean,
+  sleeperUserId: string,
   requestedSeason?: number,
 ): Promise<z.infer<typeof historicalTradesResponse>> {
   const sourceErrors: string[] = [];
@@ -741,7 +755,7 @@ export async function loadHistoricalTrades(
     }
     try {
       playerMap ??= await loadHistoricalPlayerMap(forceRefresh);
-      const fresh = await fetchHistoricalSeason(league, playerMap, draftResolution);
+      const fresh = await fetchHistoricalSeason(league, playerMap, draftResolution, sleeperUserId);
       const fetchedAt = new Date();
       await db.insert(schema.historicalTrades).values({
         id: cacheId,
@@ -773,7 +787,7 @@ export async function loadHistoricalTrades(
   }
 
   return historicalTradesResponse.parse({
-    trades: collected.sort(
+    trades: withViewerTeam(collected, sleeperUserId).sort(
       (a, b) => b.season - a.season || b.week - a.week || b.createdAt.localeCompare(a.createdAt),
     ),
     seasons,
