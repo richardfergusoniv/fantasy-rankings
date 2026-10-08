@@ -310,6 +310,8 @@ export const dashboardSectionResponse = z.discriminatedUnion("section", [
   z.object({ section: z.literal("analytics"), data: z.object({ analytics: analyticsSchema }).nullable() }),
 ]);
 
+export type DashboardSection = z.infer<typeof dashboardSectionResponse>;
+
 export const CACHE_KEY = "dashboard-live-projections-v25";
 
 /**

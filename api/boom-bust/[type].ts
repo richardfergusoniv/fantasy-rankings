@@ -62,6 +62,8 @@ const boomBustHistoryResponse = boomBustSeriesSchema.extend({
   coverageNote: z.string().nullable(),
 });
 
+export type BoomBustHistory = z.infer<typeof boomBustHistoryResponse>;
+
 const querySchema = z.object({
   leagueId: z.string().min(1).max(80),
   playerId: z.string().min(1).max(80),
@@ -218,6 +220,8 @@ const boomBustRangesResponse = z.object({
   })),
   unavailablePlayerIds: z.array(z.string()),
 });
+
+export type BoomBustRanges = z.infer<typeof boomBustRangesResponse>;
 
 async function loadRangesScoringSettings(leagueId: string): Promise<Record<string, number> | null> {
   const cacheKey = `sleeper-league-settings-v1:${leagueId}`;

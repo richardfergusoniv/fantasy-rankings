@@ -40,6 +40,8 @@ const savedChartViewSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 
+export type SavedChartView = z.infer<typeof savedChartViewSchema>;
+
 const savedChartViewInputSchema = savedChartViewSchema.pick({
   dataset: true,
   position: true,
@@ -51,6 +53,8 @@ const savedChartViewInputSchema = savedChartViewSchema.pick({
   yPercentile: true,
   plotLimit: true,
 }).extend({ name: z.string().trim().min(1).max(80) });
+
+export type SavedChartViewInput = z.infer<typeof savedChartViewInputSchema>;
 
 function serializeSavedChartView(row: typeof schema.savedChartViews.$inferSelect): z.infer<typeof savedChartViewSchema> {
   return {

@@ -54,6 +54,11 @@ const teamSituationalSnapshotSchema = z.object({
   rows: z.array(teamSituationalStatSchema),
 });
 
+export type PfnTables = {
+  tables: Record<(typeof pfnTableKeys)[number], z.infer<typeof storedPfnTableSchema> | null>;
+  teamSituational: z.infer<typeof teamSituationalSnapshotSchema> | null;
+};
+
 const TEAM_SITUATIONAL_CACHE_KEY = "team-situational-stats-2026";
 
 async function loadTeamSituationalSnapshot(): Promise<z.infer<typeof teamSituationalSnapshotSchema> | null> {
