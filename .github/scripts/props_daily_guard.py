@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """Skip a scheduled props-daily run when today's pull already succeeded.
 
-The signal is a previous run of this same workflow whose
-"Pull providers and build projections" step completed with conclusion
-success, and whose start time falls on today's America/Los_Angeles date.
-GitHub's default token lists those runs (actions: read). A green run that
-only passed an earlier guard has that step skipped, so it does not count.
+Two signals, either one is enough:
 
-workflow_dispatch does not consult the check. The script does not read the
-projections snapshot, so a pull that reached the app outside this workflow
-is not visible here.
+1. The stored dashboard's rankingsAsOf, read from the cron-secret route
+   job=read-dashboard-snapshot. Dashboard builds copy that field from the
+   ingested vegas projection snapshot's built_at (any producer: the local
+   cron, this workflow, or a direct push). Its Pacific date is the date
+   the projections were ingested.
+2. A previous run of this workflow whose "Pull providers and build
+   projections" step completed with conclusion success and whose start
+   time falls on today's America/Los_Angeles date. Green runs that only
+   passed an earlier guard have that step skipped, so they do not count.
+
+If the snapshot read fails, the guard falls back to the Actions check and
+writes that to the job summary. A scheduled run at or after
+SCHEDULED_PULL_CUTOFF does not pull when today's data is still missing.
+workflow_dispatch does not consult either check.
 """
 
 from __future__ import annotations
@@ -21,13 +28,16 @@ import sys
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import TextIO
 from urllib.parse import quote, urlencode
 from zoneinfo import ZoneInfo
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
+# Scheduled runs at or after this Pacific clock do not pull.
+SCHEDULED_PULL_CUTOFF = time(9, 0)
 PULL_STEP_NAME = "Pull providers and build projections"
+SNAPSHOT_FIELD = "rankingsAsOf"
 WORKFLOW_FILE = "props-daily.yml"
 PER_PAGE = 50
 MAX_PAGES = 3
@@ -36,10 +46,15 @@ REPO_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 TIME_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 
 Fetch = Callable[[str, str], dict]
+ReadSnapshot = Callable[[str, str], dict]
 
 
 class GuardError(Exception):
     """The Actions API could not answer whether today's pull succeeded."""
+
+
+class SnapshotError(Exception):
+    """The stored dashboard snapshot could not be read."""
 
 
 def parse_time(value: str) -> datetime | None:
@@ -55,6 +70,84 @@ def pacific_date(instant: datetime) -> str:
 def pacific_midnight(instant: datetime) -> datetime:
     local = instant.astimezone(PACIFIC)
     return local.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def at_or_after_cutoff(instant: datetime) -> bool:
+    local = instant.astimezone(PACIFIC)
+    clock = local.timetz().replace(tzinfo=None)
+    return clock >= SCHEDULED_PULL_CUTOFF
+
+
+def cutoff_label() -> str:
+    clock = SCHEDULED_PULL_CUTOFF
+    hour = clock.hour % 12 or 12
+    suffix = "AM" if clock.hour < 12 else "PM"
+    return f"{hour}:{clock.minute:02d} {suffix} Pacific"
+
+
+def parse_flexible_time(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed
+
+
+def format_utc(instant: datetime) -> str:
+    return instant.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def snapshot_endpoint(base_url: str) -> str:
+    return base_url.rstrip("/") + "/api/cron/jobs?job=read-dashboard-snapshot"
+
+
+def rankings_timestamp(payload: dict) -> datetime | None:
+    """Return rankingsAsOf, or None when the dashboard has no props timestamp.
+
+    rankingsAsOf is the ingested projection snapshot's built_at. asOf is
+    only when the dashboard document was assembled, so a later rebuild
+    would look fresh even when the projections were not.
+    """
+    if payload.get("ok") is False:
+        raise SnapshotError("snapshot route reported not ok")
+    dashboard = payload.get("dashboard")
+    if not isinstance(dashboard, dict):
+        raise SnapshotError("snapshot response has no dashboard")
+    raw = dashboard.get(SNAPSHOT_FIELD)
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    parsed = parse_flexible_time(raw)
+    if parsed is None:
+        raise SnapshotError(f"snapshot {SNAPSHOT_FIELD} was not a timestamp")
+    return parsed
+
+
+def snapshot_skip_message(stamp: datetime, today: str) -> str:
+    return (
+        "Props daily pull skipped: stored dashboard rankingsAsOf "
+        f"{format_utc(stamp)} is Pacific date {today}, so projections were already ingested today."
+    )
+
+
+def missing_data_message() -> str:
+    return (
+        "Props daily pull skipped: today's data is missing and this scheduled run "
+        f"is at or after {cutoff_label()}. A manual workflow_dispatch can force the pull."
+    )
+
+
+def scrub(text: str, secret: str) -> str:
+    cleaned = text.replace("\r", " ").replace("\n", " ")
+    if secret:
+        cleaned = cleaned.replace(secret, "[redacted]")
+    return cleaned[:300]
 
 
 def pull_step_succeeded(jobs: list) -> bool:
@@ -179,6 +272,27 @@ def fail(env: Mapping[str, str], out: TextIO, message: str) -> int:
     return 1
 
 
+def read_snapshot_json(url: str, secret: str, opener: Callable = urllib.request.urlopen) -> dict:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {secret}",
+            "User-Agent": "props-daily-guard",
+        },
+    )
+    try:
+        with opener(request, timeout=30) as response:
+            payload = json.load(response)
+    except urllib.error.HTTPError as exc:
+        raise SnapshotError(f"snapshot HTTP {exc.code}") from exc
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise SnapshotError("snapshot request failed") from exc
+    if not isinstance(payload, dict):
+        raise SnapshotError("snapshot response was not an object")
+    return payload
+
+
 def github_get(url: str, token: str, opener: Callable = urllib.request.urlopen) -> dict:
     request = urllib.request.Request(
         url,
@@ -202,11 +316,31 @@ def github_get(url: str, token: str, opener: Callable = urllib.request.urlopen) 
     return payload
 
 
+def emit(out: TextIO, kind: str, message: str) -> None:
+    print(message, file=out)
+    print(workflow_command(kind, message), file=out)
+
+
+def write_summary(env: Mapping[str, str], heading: str, lines: list[str]) -> None:
+    body = "\n".join(lines)
+    append_file(env.get("GITHUB_STEP_SUMMARY"), f"### {heading}\n\n{body}\n")
+
+
+def skip(env: Mapping[str, str], out: TextIO, kind: str, lines: list[str]) -> int:
+    for line in lines[:-1]:
+        emit(out, "warning", line)
+    emit(out, kind, lines[-1])
+    write_summary(env, "Props daily pull skipped", lines)
+    append_file(env.get("GITHUB_OUTPUT"), "go=false\n")
+    return 0
+
+
 def run(
     env: Mapping[str, str],
     fetch: Fetch,
     now: datetime | None = None,
     stdout: TextIO | None = None,
+    read_snapshot: ReadSnapshot | None = None,
 ) -> int:
     out = stdout or sys.stdout
     event = env.get("GITHUB_EVENT_NAME") or ""
@@ -216,33 +350,63 @@ def run(
         append_file(env.get("GITHUB_OUTPUT"), "go=true\n")
         return 0
 
-    token = env.get("GITHUB_TOKEN") or ""
-    repo = env.get("GITHUB_REPOSITORY") or ""
-    if not token or not REPO_RE.fullmatch(repo):
-        return fail(env, out, "Props daily guard needs GITHUB_TOKEN and GITHUB_REPOSITORY.")
-
-    api = (env.get("GITHUB_API_URL") or "https://api.github.com").rstrip("/")
-    current = str(env.get("GITHUB_RUN_ID") or "")
+    secret = env.get("CRON_SECRET") or ""
+    reader = read_snapshot or read_snapshot_json
     moment = now or datetime.now(timezone.utc)
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)
     today = pacific_date(moment)
+    notes: list[str] = []
+
+    base_url = env.get("APP_BASE_URL") or ""
+    try:
+        if not secret or not base_url.startswith("https://"):
+            raise SnapshotError("snapshot route is not configured")
+        payload = reader(snapshot_endpoint(base_url), secret)
+        stamp = rankings_timestamp(payload)
+    except SnapshotError as exc:
+        notes.append(
+            f"Snapshot read failed ({scrub(str(exc), secret)}). "
+            "Fell back to this workflow's Actions run history."
+        )
+    else:
+        if stamp is not None and pacific_date(stamp) == today:
+            return skip(env, out, "notice", [snapshot_skip_message(stamp, today)])
+
+    token = env.get("GITHUB_TOKEN") or ""
+    repo = env.get("GITHUB_REPOSITORY") or ""
+    if not token or not REPO_RE.fullmatch(repo):
+        notes.append("Props daily guard needs GITHUB_TOKEN and GITHUB_REPOSITORY.")
+        if at_or_after_cutoff(moment):
+            return skip(env, out, "warning", notes + [missing_data_message()])
+        return fail(env, out, " ".join(notes))
+
+    api = (env.get("GITHUB_API_URL") or "https://api.github.com").rstrip("/")
+    current = str(env.get("GITHUB_RUN_ID") or "")
     since = pacific_midnight(moment) - CREATED_LOOKBACK
     try:
         prior = find_prior_pull(fetch, api, repo, token, today, current, since)
     except Exception as exc:
-        return fail(env, out, f"Props daily guard could not check today's runs: {exc}")
+        notes.append(f"Actions run check failed: {scrub(str(exc), secret)}")
+        if at_or_after_cutoff(moment):
+            return skip(env, out, "warning", notes + [missing_data_message()])
+        return fail(env, out, " ".join(notes))
 
-    if prior is None:
+    if prior is not None:
+        return skip(env, out, "notice", notes + [skip_message(prior, today)])
+
+    if at_or_after_cutoff(moment):
+        return skip(env, out, "warning", notes + [missing_data_message()])
+
+    if notes:
+        proceeding = f"Proceeding: no completed props pull for Pacific date {today}."
+        for line in notes:
+            emit(out, "warning", line)
+        print(proceeding, file=out)
+        write_summary(env, "Props daily pull", notes + [proceeding])
+    else:
         print(f"Proceeding: no completed props pull for Pacific date {today}.", file=out)
-        append_file(env.get("GITHUB_OUTPUT"), "go=true\n")
-        return 0
-
-    message = skip_message(prior, today)
-    print(message, file=out)
-    print(workflow_command("notice", message), file=out)
-    append_file(env.get("GITHUB_STEP_SUMMARY"), "### Props daily pull skipped\n\n" + message + "\n")
-    append_file(env.get("GITHUB_OUTPUT"), "go=false\n")
+    append_file(env.get("GITHUB_OUTPUT"), "go=true\n")
     return 0
 
 

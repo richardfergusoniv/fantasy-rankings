@@ -5,10 +5,13 @@ name: Props daily pull
 #
 # GitHub cron is UTC-only and scheduled runs often start hours after the
 # cron minute. The job is registered at both 10:17 and 11:17 UTC. On
-# schedule, the guard asks the Actions API whether this workflow already
-# completed the "Pull providers and build projections" step on today's
-# America/Los_Angeles date. A late run still pulls when that step has not
-# succeeded today. The second cron skips when the first one did. Manual
+# schedule, today's pull counts when the stored dashboard rankingsAsOf
+# (the ingested projections' built_at, from any producer) falls on today's
+# America/Los_Angeles date, or when this workflow already completed the
+# "Pull providers and build projections" step today. If the snapshot read
+# fails, the guard falls back to the Actions check and says so in the job
+# summary. A scheduled run at or after SCHEDULED_PULL_CUTOFF (9:00 AM
+# Pacific) does not pull when today's data is still missing. Manual
 # dispatches always run. The concurrency group keeps the two crons from
 # overlapping so the later run can see the earlier run's result.
 #
@@ -57,6 +60,7 @@ jobs:
         id: guard
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: python3 .github/scripts/props_daily_guard.py
 
       - uses: actions/setup-python@v5
