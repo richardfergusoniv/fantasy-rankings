@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { Card } from "@/components/ui/card";
 import type { api, ApiResponse } from "./api";
 import { MatchupTag, ModalPortal, SegmentedControl, points, shortLeagueName, useDialogFocusTrap } from "./shared";
 
@@ -208,14 +209,14 @@ export function PowerRankings({
   return (
     <section className="power-view">
       {scopeToggle}
-      <header className="power-hero">
+      <Card className="power-hero gap-0 py-0 shadow-sm">
         <div>
-          <span>YOUR POWER RANK</span>
+          <span>Your power rank</span>
           <strong>#{mine.rank}</strong>
         </div>
         <p>of {powerRankings.length} teams</p>
         <small>{scope === "week" ? `${points(mine.totalValue)} projected optimized-lineup points` : `${mine.totalValue.toLocaleString()} total roster value`}</small>
-      </header>
+      </Card>
 
       <section className="power-chart-section" aria-labelledby="position-strength-heading">
         <div className="section-heading power-section-heading">
@@ -239,7 +240,7 @@ export function PowerRankings({
             })}
           </svg>
         </div>
-        <p className="power-position-table-label">LEAGUE AVERAGE</p>
+        <p className="power-position-table-label">League average</p>
         <div className="power-position-values" role="list" aria-label="League average value by position">
           {radarData.map((row) => (
             <div key={row.position} role="listitem"><span>{positionLabel(row.position)}</span><strong>{scope === "week" ? points(row.average) : Math.round(row.average).toLocaleString()}</strong></div>
