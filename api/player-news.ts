@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "./_lib/db.js";
 import {
   forbidden,
@@ -54,9 +54,17 @@ function parseNewsAvailability(payload: string | null): z.infer<typeof playerNew
 }
 
 async function readPlayerNews(): Promise<Response> {
-  const [runs, items, checkedRows] = await Promise.all([
-    db.select().from(schema.playerNewsRuns).orderBy(desc(schema.playerNewsRuns.checkedAt)).limit(60),
-    db.select().from(schema.playerNewsItems),
+  const runs = await db
+    .select()
+    .from(schema.playerNewsRuns)
+    .orderBy(desc(schema.playerNewsRuns.checkedAt))
+    .limit(60);
+  const runIds = runs.map((run) => run.id);
+
+  const [items, checkedRows] = await Promise.all([
+    runIds.length > 0
+      ? db.select().from(schema.playerNewsItems).where(inArray(schema.playerNewsItems.runId, runIds))
+      : Promise.resolve([] as (typeof schema.playerNewsItems.$inferSelect)[]),
     db
       .select()
       .from(schema.sourceCache)

@@ -2,7 +2,9 @@
 -- Generated from lib/schema.ts (converted from SQLite schema).
 -- This is a FRESH baseline; the 17 SQLite migrations were not converted 1:1.
 -- Apply with: psql $DATABASE_URL -f drizzle-pg/0001_baseline.sql
--- Or via Supabase SQL editor / drizzle-kit migrate.
+-- Or via Supabase SQL editor / drizzle-kit migrate on a fresh database.
+-- Do not re-apply this file to production. It creates saved_chart_views_owner_idx
+-- on owner_source/owner_key, which 0002 dropped. See MIGRATION-STATUS.md.
 
 CREATE TABLE IF NOT EXISTS "source_cache" (
   "cache_key" text PRIMARY KEY NOT NULL,
