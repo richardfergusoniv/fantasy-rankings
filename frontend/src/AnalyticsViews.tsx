@@ -543,7 +543,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
           </select>
         </label>
         <div className="saved-view-actions">
-          <button type="button" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessageIsError(false); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</button>
+          <Button type="button" variant="outline" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessageIsError(false); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</Button>
           {selectedSavedView ? <button type="button" className="saved-view-delete" onClick={() => setPendingDelete(selectedSavedView)} disabled={deleteMutation.isPending}>Delete “{selectedSavedView.name}”</button> : null}
         </div>
       </div>

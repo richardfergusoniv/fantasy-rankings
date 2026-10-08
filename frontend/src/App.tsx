@@ -429,6 +429,25 @@ function sleeperInjuryTag(status: string): string {
   return labels[normalized] ?? (status.length <= 4 ? status.toUpperCase() : status.slice(0, 1).toUpperCase());
 }
 
+function DesignationBadge({
+  code,
+  label,
+  title,
+  tone = "neutral",
+}: {
+  code: string;
+  label: string;
+  title: string;
+  tone?: "neutral" | "accent";
+}) {
+  const toneClass = tone === "accent" ? "injury injury-accent" : "injury";
+  return (
+    <Badge variant={tone === "accent" ? "accent" : "secondary"} size="compact" className={toneClass} aria-label={label} title={title}>
+      {code}
+    </Badge>
+  );
+}
+
 function newsTimeLabel(value: string): string {
   return new Intl.DateTimeFormat(undefined, {
     weekday: "short",
@@ -1360,9 +1379,7 @@ function MatchupPlayer({ player, side, sosEntry, isSwappedIn = false, isDemoted 
             </span>
           ) : null}
           {player.injuryStatus ? (
-            <span className="injury" aria-label={`Injury status: ${player.injuryStatus}`} title={player.injuryStatus}>
-              {sleeperInjuryTag(player.injuryStatus)}
-            </span>
+            <DesignationBadge code={sleeperInjuryTag(player.injuryStatus)} label={`Injury status: ${player.injuryStatus}`} title={player.injuryStatus} />
           ) : null}
         </span>
       </button>
@@ -2299,7 +2316,7 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
                 <span className="player-search-main">
                   <span className="player-search-name">
                     <strong>{row.name}</strong>
-                    {row.injuryStatus ? <span className="injury" aria-label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus}>{sleeperInjuryTag(row.injuryStatus)}</span> : null}
+                    {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
                   </span>
                   <span className="player-search-meta"><span>{row.position}</span><MatchupTag team={row.team} opponent={row.opponent} isAway={row.isAway} isBye={row.isBye} position={row.position} entry={sosEntry} onClick={row.team && row.opponent && onOpenMatchup ? (event) => { event.stopPropagation(); onOpenMatchup({ team: row.team ?? "", opponent: row.opponent ?? "", isAway: row.isAway, gamePhase: row.gamePhase ?? null }); } : undefined} /></span>
                 </span>
@@ -2357,20 +2374,18 @@ function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsE
                   <span className="ranking-player">
                     <span className="ranking-name-line">
                       <strong>{row.name}</strong>
-                      {!isSeasonLong && row.injuryStatus ? <span className="injury" aria-label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus}>{sleeperInjuryTag(row.injuryStatus)}</span> : null}
+                      {row.meta === "Rookie" ? <DesignationBadge code="R" label="Rookie" title="Rookie" tone="accent" /> : null}
+                      {!isSeasonLong && row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
                     </span>
                     <span className="ranking-meta-line">
                       {isSeasonLong ? (
-                        <>
-                          <SeasonTeamPill
-                            team={row.teamContext?.team ?? null}
-                            lineRank={row.teamContext?.team ? offensiveLineRankByTeam.get(canonicalNflTeam(row.teamContext.team) ?? row.teamContext.team) ?? null : null}
-                            onOpen={row.teamContext?.team ? () => setSelectedTeam({
-                              team: row.teamContext?.team ?? "",
-                            }) : undefined}
-                          />
-                          {row.meta ? <span className="ranking-player-context">{row.meta}</span> : null}
-                        </>
+                        <SeasonTeamPill
+                          team={row.teamContext?.team ?? null}
+                          lineRank={row.teamContext?.team ? offensiveLineRankByTeam.get(canonicalNflTeam(row.teamContext.team) ?? row.teamContext.team) ?? null : null}
+                          onOpen={row.teamContext?.team ? () => setSelectedTeam({
+                            team: row.teamContext?.team ?? "",
+                          }) : undefined}
+                        />
                       ) : (
                         <span className="ranking-football-meta matchup-meta-group">
                           <MatchupTag team={detail?.team ?? null} opponent={detail?.opponent ?? null} isAway={detail?.isAway} isBye={detail?.isBye} position={row.position} entry={sosEntry} onClick={detail?.team && detail.opponent && onOpenMatchup ? (event) => { event.stopPropagation(); onOpenMatchup({ team: detail.team ?? "", opponent: detail.opponent ?? "", isAway: detail.isAway, gamePhase: detail.gamePhase ?? null }); } : undefined} />
