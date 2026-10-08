@@ -51,8 +51,10 @@ function qs(params: Record<string, string | number | boolean | undefined>): stri
 // ---------------------------------------------------------------------------
 
 export const api = {
-  getDashboard: (args: { force?: boolean } = {}): Promise<JsonValue> =>
-    request(`/api/dashboard${qs({ force: args.force })}`),
+  getDashboard: async (args: { force?: boolean } = {}): Promise<JsonValue> => {
+    const body = await request<{ dashboard: JsonValue }>(`/api/dashboard${qs({ force: args.force })}`);
+    return body.dashboard;
+  },
 
   getDashboardSection: (args: {
     section: "meta" | "team" | "players" | "league" | "analytics";

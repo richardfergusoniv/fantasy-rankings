@@ -5,6 +5,7 @@ import {
   internalError,
   json,
   queryBool,
+  unauthorized,
 } from "./_lib/api-utils.js";
 import {
   CACHE_KEY,
@@ -30,8 +31,10 @@ import { z } from "zod";
  * GET /api/dashboard
  *   Signed-in users with a connected Sleeper account get their own
  *   dashboard (per-user cache in `source_cache`, built on miss;
- *   `force=true` rebuilds). Unauthenticated requests keep the Phase 1
- *   behaviour: the last saved global snapshot, or a `partial` shell.
+ *   `force=true` rebuilds). A refresh with no resolved Sleeper user
+ *   returns 401 and does not include the global snapshot. Other
+ *   unauthenticated reads keep the last saved global snapshot, or a
+ *   `partial` shell.
  *
  * GET /api/dashboard/section?section=meta|team|players|league|analytics
  *   Returns a small projection of the same dashboard the caller would get
@@ -106,11 +109,9 @@ async function handleDashboard(req: Request): Promise<Response> {
   }
 
   if (force) {
-    // Unauthenticated requests keep the Phase 1 behaviour: the live rebuild
-    // is only available to signed-in users (their own build) for now.
-    return badRequest(
-      "force=true is not supported yet. The live dashboard rebuild moves to the cron endpoint in Phase 3.",
-    );
+    // No resolved Sleeper user: do not rebuild and do not return the global
+    // snapshot. The client turns this 401 into the existing sign-in screen.
+    return unauthorized("Sign in required.");
   }
 
   const dashboard = await getCached();
