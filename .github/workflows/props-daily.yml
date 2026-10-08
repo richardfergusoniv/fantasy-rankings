@@ -76,6 +76,7 @@ jobs:
       - name: Pull providers and build projections
         if: steps.guard.outputs.go == 'true'
         env:
+          OWNER_SLEEPER_USER_ID: ${{ vars.OWNER_SLEEPER_USER_ID }}
           PROPLINE_API_KEY: ${{ secrets.PROPLINE_API_KEY }}
           SHARPAPI_API_KEY: ${{ secrets.SHARPAPI_API_KEY }}
           PARLAYAPI_API_KEY: ${{ secrets.PARLAYAPI_API_KEY }}
@@ -205,8 +206,10 @@ jobs:
           print(f"rebuild verified: week {result.get('week')}, asOf {result.get('asOf')}")
           EOF
 
-      - name: Verify public dashboard against staged files
+      - name: Verify stored dashboard snapshot against staged files
         if: steps.guard.outputs.go == 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           python3 pipeline/scripts/verify_dashboard.py \
             pipeline/data/staged_for_push.json \

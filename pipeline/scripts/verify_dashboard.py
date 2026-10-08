@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the public Fantasy Rankings dashboard against the staged push files.
+"""Verify the stored Fantasy Rankings dashboard against the staged push files.
 
 This is the programmatic diff from the props-twice-daily-pull cron, encoded:
   - every staged player/league pair is present in the dashboard rankings
@@ -33,9 +33,10 @@ This is the programmatic diff from the props-twice-daily-pull cron, encoded:
     permutations, throughWeek equal to the staged matchup file
 
 Usage: verify_dashboard.py <staged_for_push.json> <staged_matchup_grades.json>
-Fetches the dashboard from $DASHBOARD_URL, or from $APP_BASE_URL/api/dashboard,
-or from the production domain.
-Exit 0 on pass, 1 on fail.
+Requires CRON_SECRET. Fetches the stored snapshot from $DASHBOARD_URL, or from
+$APP_BASE_URL/api/cron/jobs?job=read-dashboard-snapshot. That route is the
+same cron secret the rebuild already uses; it is not a public dashboard read.
+Exit 0 on pass, 1 on fail, 2 on usage or missing secret.
 """
 from __future__ import annotations
 
@@ -46,7 +47,10 @@ import urllib.request
 from pathlib import Path
 
 _APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://fantasy-rankings-ten.vercel.app").rstrip("/")
-DASHBOARD_URL = os.environ.get("DASHBOARD_URL", f"{_APP_BASE_URL}/api/dashboard")
+DASHBOARD_URL = os.environ.get(
+    "DASHBOARD_URL",
+    f"{_APP_BASE_URL}/api/cron/jobs?job=read-dashboard-snapshot",
+)
 POINT_TOLERANCE = 0.011
 STAT_MAP = {
     "pass_yards": "pass_yd",
@@ -59,14 +63,28 @@ STAT_MAP = {
 SKILL_POSITIONS = ("QB", "RB", "WR", "TE")
 
 
+def stored_snapshot_request(url: str, secret: str) -> dict:
+    """Read `{ ok, dashboard }` from the cron snapshot route."""
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {secret}"})
+    with urllib.request.urlopen(request, timeout=120) as resp:
+        body = json.loads(resp.read().decode())
+    dashboard = body.get("dashboard") if isinstance(body, dict) else None
+    if not isinstance(dashboard, dict):
+        raise RuntimeError("stored snapshot response has no dashboard")
+    return dashboard
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("usage: verify_dashboard.py <staged_for_push.json> <staged_matchup_grades.json>", file=sys.stderr)
         return 2
+    secret = os.environ.get("CRON_SECRET", "")
+    if not secret:
+        print("CRON_SECRET is required to read the stored dashboard snapshot", file=sys.stderr)
+        return 2
     staged = json.loads(Path(sys.argv[1]).read_text())
     staged_sos = json.loads(Path(sys.argv[2]).read_text())
-    with urllib.request.urlopen(DASHBOARD_URL, timeout=120) as resp:
-        dash = json.loads(resp.read().decode())["dashboard"]
+    dash = stored_snapshot_request(DASHBOARD_URL, secret)
 
     errors: list[str] = []
     rankings = dash["rankings"]

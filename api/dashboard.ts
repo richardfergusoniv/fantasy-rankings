@@ -1,5 +1,3 @@
-import { desc, eq, like } from "drizzle-orm";
-import { db, schema } from "./_lib/db.js";
 import {
   badRequest,
   internalError,
@@ -7,15 +5,12 @@ import {
   queryBool,
   unauthorized,
 } from "./_lib/api-utils.js";
-import {
-  CACHE_KEY,
-  parseUsableDashboard,
-  type Dashboard,
-} from "./_lib/dashboard-schemas.js";
-import { resolveSleeperUserId } from "./_lib/auth.js";
+import { readOwnerSleeperUserId, resolveSleeperUserId } from "./_lib/auth.js";
+import { dashboardForViewer, sectionDashboardForViewer, SIGN_IN_REQUIRED } from "./_lib/dashboard-access.js";
 import {
   kickUserDashboardBuild,
   loadOrBuildUserDashboard,
+  readGlobalDashboardSnapshot,
   readUserDashboardCache,
 } from "./_lib/dashboard-build.js";
 import { waitUntil } from "@vercel/functions";
@@ -29,122 +24,61 @@ import { z } from "zod";
  * via a vercel.json rewrite (?__section=1).
  *
  * GET /api/dashboard
- *   Signed-in users with a connected Sleeper account get their own
- *   dashboard (per-user cache in `source_cache`, built on miss;
- *   `force=true` rebuilds). A refresh with no resolved Sleeper user
- *   returns 401 and does not include the global snapshot. Other
- *   unauthenticated reads keep the last saved global snapshot, or a
- *   `partial` shell.
+ *   Requires a signed-in user with a connected Sleeper account. They get
+ *   their own dashboard (per-user cache, built on miss; `force=true`
+ *   rebuilds). The scheduled owner's stored snapshot is a fallback only
+ *   for that owner. Every signed-out read, including force=false, is 401.
  *
  * GET /api/dashboard/section?section=meta|team|players|league|analytics
- *   Returns a small projection of the same dashboard the caller would get
- *   from /api/dashboard (per-user when signed in, global snapshot
- *   otherwise). Never blocks on a build: a cold per-user cache returns
- *   `data: null` and rebuilds in the background; the client polls.
+ *   Same sign-in rule. A cold per-user cache returns `data: null` and
+ *   rebuilds in the background; the client polls. It does not fill that
+ *   gap with the owner snapshot unless the caller is the scheduled owner.
  */
 
-async function getCached(): Promise<Dashboard | null> {
-  const currentRows = await db
-    .select()
-    .from(schema.sourceCache)
-    .where(eq(schema.sourceCache.cacheKey, CACHE_KEY))
-    .limit(1);
-  const current = currentRows[0];
-  if (current) {
-    const dashboard = parseUsableDashboard(current.payload);
-    if (dashboard) return dashboard;
-  }
-
-  // Legacy cache-key compatibility (only when canonical snapshot is absent).
-  const legacyRows = await db
-    .select()
-    .from(schema.sourceCache)
-    .where(like(schema.sourceCache.cacheKey, "dashboard-live-projections-v%"))
-    .orderBy(desc(schema.sourceCache.fetchedAt))
-    .limit(6);
-  for (const row of legacyRows) {
-    if (row.cacheKey === CACHE_KEY) continue;
-    const dashboard = parseUsableDashboard(row.payload);
-    if (dashboard) return dashboard;
-  }
-  return null;
-}
-
-function partialShell(): Dashboard {
-  return {
-    status: "partial",
-    season: new Date().getUTCFullYear(),
-    week: 0,
-    asOf: new Date().toISOString(),
-    rankingsAsOf: null,
-    fantasyCalcAsOf: null,
-    leagues: [],
-    rankings: [],
-    weeklyChartRankings: [],
-    seasonLongRankings: [],
-    defenses: [],
-    analytics: {
-      asOf: null,
-      throughWeek: null,
-      sourceUrl: "",
-      entities: [],
-      teamUsage: [],
-      teamRecords: [],
-    },
-    strengthOfSchedule: [],
-    sourceErrors: ["No saved dashboard snapshot is available yet."],
-  };
-}
-
-async function handleDashboard(req: Request): Promise<Response> {
+async function handleDashboard(req: Request, sleeperUserId: string): Promise<Response> {
   const url = new URL(req.url, "https://localhost");
   const force = queryBool(url, "force", false);
-
-  // Phase 2: a signed-in user with a connected Sleeper account gets their
-  // own dashboard (per-user cache, built on miss; `force=true` rebuilds).
-  const sleeperUserId = await resolveSleeperUserId(req);
-  if (sleeperUserId) {
-    const dashboard = await loadOrBuildUserDashboard(sleeperUserId, force);
-    return json({ dashboard });
-  }
-
-  if (force) {
-    // No resolved Sleeper user: do not rebuild and do not return the global
-    // snapshot. The client turns this 401 into the existing sign-in screen.
-    return unauthorized("Sign in required.");
-  }
-
-  const dashboard = await getCached();
-  return json({ dashboard: dashboard ?? partialShell() });
+  const result = await dashboardForViewer({
+    sleeperUserId,
+    ownerSleeperUserId: readOwnerSleeperUserId(),
+    force,
+    loadFreshOwn: async (id) => {
+      const cached = await readUserDashboardCache(id);
+      return cached?.fresh ? cached.dashboard : null;
+    },
+    loadOwnerSnapshot: () => readGlobalDashboardSnapshot(),
+    buildOwn: (id) => loadOrBuildUserDashboard(id, force),
+  });
+  if (!result.ok) return unauthorized(result.error);
+  return json({ dashboard: result.dashboard });
 }
 
 /**
- * Dashboard source for section reads. Section reads never block on a build:
- * signed-in users get whatever is in their per-user cache right away, and a
- * cold or stale cache kicks off a background build (kept alive with
- * `waitUntil`) while the read returns immediately — `null` on a first-ever
- * load, which the client polls through with its loading shell. Everyone
- * else gets the Phase 1 global snapshot.
+ * Section reads never block on a build. A cold or stale per-user cache
+ * starts a background build and returns whatever is already stored.
  */
-async function getSectionDashboard(req: Request): Promise<Dashboard | null> {
-  const sleeperUserId = await resolveSleeperUserId(req);
-  if (sleeperUserId) {
-    try {
-      const cached = await readUserDashboardCache(sleeperUserId);
-      if (!cached || !cached.fresh) {
-        waitUntil(kickUserDashboardBuild(sleeperUserId));
+async function sectionDashboard(sleeperUserId: string) {
+  return sectionDashboardForViewer({
+    sleeperUserId,
+    ownerSleeperUserId: readOwnerSleeperUserId(),
+    loadOwn: async (id) => {
+      try {
+        const cached = await readUserDashboardCache(id);
+        if (!cached || !cached.fresh) {
+          waitUntil(kickUserDashboardBuild(id));
+        }
+        return cached?.dashboard ?? null;
+      } catch {
+        return null;
       }
-      return cached?.dashboard ?? null;
-    } catch {
-      return null;
-    }
-  }
-  return getCached();
+    },
+    loadOwnerSnapshot: () => readGlobalDashboardSnapshot(),
+  });
 }
 
 const sectionParam = z.enum(["meta", "team", "players", "league", "analytics"]);
 
-async function handleSection(req: Request): Promise<Response> {
+async function handleSection(req: Request, sleeperUserId: string): Promise<Response> {
   const url = new URL(req.url, "https://localhost");
   const parsed = sectionParam.safeParse(url.searchParams.get("section"));
   if (!parsed.success) {
@@ -152,7 +86,9 @@ async function handleSection(req: Request): Promise<Response> {
   }
   const section = parsed.data;
 
-  const cached = await getSectionDashboard(req);
+  const resolved = await sectionDashboard(sleeperUserId);
+  if (!resolved.ok) return unauthorized(resolved.error);
+  const cached = resolved.dashboard;
 
   if (section === "meta") {
     return json({
@@ -274,13 +210,15 @@ async function handleSection(req: Request): Promise<Response> {
 
 export async function GET(req: Request): Promise<Response> {
   try {
+    const sleeperUserId = await resolveSleeperUserId(req);
+    if (!sleeperUserId) return unauthorized(SIGN_IN_REQUIRED);
     const url = new URL(req.url, "https://localhost");
     // /api/dashboard/section is rewritten to /api/dashboard?__section=1
     // (see vercel.json) so both paths share this one function.
     if (url.searchParams.has("__section")) {
-      return await handleSection(req);
+      return await handleSection(req, sleeperUserId);
     }
-    return await handleDashboard(req);
+    return await handleDashboard(req, sleeperUserId);
   } catch (err) {
     return internalError(err);
   }

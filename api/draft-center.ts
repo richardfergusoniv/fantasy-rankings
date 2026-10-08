@@ -5,17 +5,19 @@ import {
   internalError,
   json,
   queryBool,
+  unauthorized,
 } from "./_lib/api-utils.js";
+import { resolveSleeperUserId } from "./_lib/auth.js";
+import { readUserLeagues } from "./_lib/user-leagues.js";
 import {
   DRAFT_MARKET_CACHE_KEY,
   DRAFT_MARKET_CACHE_MS,
   FFC_BASE_URL,
-  MFL_ADP_URL,
-  MFL_PLAYERS_URL,
   REFRESH_TIMEOUT_MS,
   SLEEPER_BASE,
-  SLEEPER_USER_ID,
   fetchJson,
+  mflAdpUrl,
+  mflPlayersUrl,
   normalizePosition,
   normalizedPlayerName,
   parseNumber,
@@ -163,6 +165,7 @@ type CachedDraftMarket = {
 async function fetchDraftMarketSnapshot(
   leagues: SleeperLeague[],
   players: Record<string, SleeperPlayer>,
+  season: number,
 ): Promise<CachedDraftMarket> {
   const sourceErrors: string[] = [];
   const sourceStatus = {
@@ -196,10 +199,10 @@ async function fetchDraftMarketSnapshot(
   const [ffcSettled, mflAdpResult, mflPlayersResult, trendResult, trendDropResult] = await Promise.all([
     Promise.allSettled(uniqueRequests.map(async (request) => ({
       request,
-      response: await fetchJson<FfcResponse>(`${FFC_BASE_URL}/${request.ffcFormat}?teams=${request.teams}&year=2026`),
+      response: await fetchJson<FfcResponse>(`${FFC_BASE_URL}/${request.ffcFormat}?teams=${request.teams}&year=${season}`),
     }))),
-    fetchJson<MflAdpResponse>(MFL_ADP_URL).then((value) => ({ ok: true as const, value })).catch(() => ({ ok: false as const, value: null })),
-    fetchJson<MflPlayersResponse>(MFL_PLAYERS_URL).then((value) => ({ ok: true as const, value })).catch(() => ({ ok: false as const, value: null })),
+    fetchJson<MflAdpResponse>(mflAdpUrl(season)).then((value) => ({ ok: true as const, value })).catch(() => ({ ok: false as const, value: null })),
+    fetchJson<MflPlayersResponse>(mflPlayersUrl(season)).then((value) => ({ ok: true as const, value })).catch(() => ({ ok: false as const, value: null })),
     fetchJson<SleeperTrend[]>(`${SLEEPER_BASE}/players/nfl/trending/add?lookback_hours=24&limit=50`).then((value) => ({ ok: true as const, value })).catch(() => ({ ok: false as const, value: [] })),
     fetchJson<SleeperTrend[]>(`${SLEEPER_BASE}/players/nfl/trending/drop?lookback_hours=24&limit=50`).then((value) => ({ ok: true as const, value })).catch(() => ({ ok: false as const, value: [] })),
   ]);
@@ -286,6 +289,7 @@ async function loadDraftMarketSnapshot(
   force: boolean,
   leagues: SleeperLeague[],
   players: Record<string, SleeperPlayer>,
+  season: number,
 ): Promise<CachedDraftMarket> {
   const rows = await db.select().from(schema.sourceCache).where(eq(schema.sourceCache.cacheKey, DRAFT_MARKET_CACHE_KEY)).limit(1);
   const cached = rows[0];
@@ -295,7 +299,7 @@ async function loadDraftMarketSnapshot(
     } catch { /* Refresh malformed or old cache below. */ }
   }
   try {
-    const fresh = await withDeadline(fetchDraftMarketSnapshot(leagues, players), REFRESH_TIMEOUT_MS);
+    const fresh = await withDeadline(fetchDraftMarketSnapshot(leagues, players, season), REFRESH_TIMEOUT_MS);
     await db.insert(schema.sourceCache).values({ cacheKey: DRAFT_MARKET_CACHE_KEY, payload: JSON.stringify(fresh), fetchedAt: new Date() })
       .onConflictDoUpdate({ target: schema.sourceCache.cacheKey, set: { payload: JSON.stringify(fresh), fetchedAt: new Date() } });
     return fresh;
@@ -330,8 +334,12 @@ function draftBoardModesForLeagues(leagues: SleeperLeague[]): z.infer<typeof dra
   });
 }
 
-async function fetchLiveDrafts(players: Record<string, SleeperPlayer>): Promise<z.infer<typeof liveDraftSchema>[]> {
-  const drafts = await fetchJson<SleeperDraft[]>(`${SLEEPER_BASE}/user/${SLEEPER_USER_ID}/drafts/nfl/2026`);
+async function fetchLiveDrafts(
+  players: Record<string, SleeperPlayer>,
+  sleeperUserId: string,
+  season: number,
+): Promise<z.infer<typeof liveDraftSchema>[]> {
+  const drafts = await fetchJson<SleeperDraft[]>(`${SLEEPER_BASE}/user/${sleeperUserId}/drafts/nfl/${season}`);
   const relevant = drafts.filter((draft) => draft.draft_id);
   const details = await Promise.allSettled(relevant.map(async (summary) => {
     const draftId = summary.draft_id ?? "";
@@ -340,11 +348,11 @@ async function fetchLiveDrafts(players: Record<string, SleeperPlayer>): Promise<
       fetchJson<SleeperDraftPick[]>(`${SLEEPER_BASE}/draft/${draftId}/picks`),
     ]);
     const userSlots = (draft as SleeperDraft & { metadata?: SleeperDraft["metadata"] & { user_id_to_draft_slot?: string } }).metadata?.user_id_to_draft_slot;
-    let ownDraftSlot: number | null = parseNumber(draft.draft_order?.[SLEEPER_USER_ID]);
+    let ownDraftSlot: number | null = parseNumber(draft.draft_order?.[sleeperUserId]);
     if (ownDraftSlot === null && userSlots) {
       try {
         const parsed = JSON.parse(userSlots) as Record<string, number>;
-        ownDraftSlot = parseNumber(parsed[SLEEPER_USER_ID]);
+        ownDraftSlot = parseNumber(parsed[sleeperUserId]);
       } catch { /* Some drafts omit this mapping until the room opens. */ }
     }
     const ownRosterId = ownDraftSlot === null ? null : parseNumber(draft.slot_to_roster_id?.[String(ownDraftSlot)]);
@@ -389,22 +397,29 @@ async function fetchLiveDrafts(players: Record<string, SleeperPlayer>): Promise<
 
 export async function GET(req: Request): Promise<Response> {
   try {
+    const sleeperUserId = await resolveSleeperUserId(req);
+    if (!sleeperUserId) return unauthorized("Sign in required.");
+
     const url = new URL(req.url, "https://localhost");
     const force = queryBool(url, "force", false);
 
     const errors: string[] = [];
     const [leaguesResult, playersResult] = await Promise.allSettled([
-      fetchJson<SleeperLeague[]>(`${SLEEPER_BASE}/user/${SLEEPER_USER_ID}/leagues/nfl/2026`),
+      readUserLeagues(sleeperUserId, force),
       fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`),
     ]);
-    const leagues = leaguesResult.status === "fulfilled" ? leaguesResult.value : [];
+    const season = leaguesResult.status === "fulfilled"
+      ? leaguesResult.value.season
+      : new Date().getUTCFullYear();
+    const leagues = leaguesResult.status === "fulfilled" ? leaguesResult.value.leagues : [];
     const players = playersResult.status === "fulfilled" ? playersResult.value : {};
     if (leaguesResult.status === "rejected") errors.push("Sleeper league formats are temporarily unavailable.");
+    if (leaguesResult.status === "fulfilled" && leagues.length === 0) errors.push("No Sleeper leagues for this season.");
     if (playersResult.status === "rejected") errors.push("Sleeper player data is temporarily unavailable.");
-    const market = await loadDraftMarketSnapshot(force, leagues, players);
+    const market = await loadDraftMarketSnapshot(force, leagues, players, season);
     let drafts: z.infer<typeof liveDraftSchema>[] = [];
     try {
-      drafts = await withDeadline(fetchLiveDrafts(players), 20_000);
+      drafts = await withDeadline(fetchLiveDrafts(players, sleeperUserId, season), 20_000);
     } catch {
       errors.push("Sleeper draft rooms are temporarily unavailable.");
     }

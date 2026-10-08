@@ -1493,9 +1493,9 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 
 .empty-state { min-height: 100vh; display: grid; place-content: center; gap: 10px; padding: 26px; text-align: center; }
 .empty-mark { display: grid; width: 52px; height: 52px; margin: 0 auto; place-items: center; border-radius: var(--radius); background: var(--surface-2); color: var(--text); font-size: var(--type-body); font-weight: 700; }
-.empty-state h1 { margin: 4px 0 0; font-size: var(--type-display); letter-spacing: -.02em; }
-.empty-state p { margin: 0; color: var(--dim); font-size: var(--type-body); }
-.empty-state button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 7px; margin-top: 4px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: var(--type-body); font-weight: 700; cursor: pointer; }
+.empty-state h1 { max-width: 28rem; margin: 4px auto 0; font-size: var(--type-display); letter-spacing: -.02em; }
+.empty-state p { max-width: 28rem; margin: 0 auto; color: var(--dim); font-size: var(--type-body); }
+.empty-state button { display: inline-flex; width: fit-content; min-height: 44px; align-items: center; justify-content: center; justify-self: center; gap: 7px; margin-top: 4px; border: 0; border-radius: var(--radius); background: var(--primary); color: var(--on-accent); font-size: var(--type-body); font-weight: 600; cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
   .spin, .loading-shimmer::after, .player-detail-backdrop, .player-detail-sheet, .player-detail-content, .news-card-backdrop, .news-card-modal, .matchup-card-backdrop, .matchup-data-card, .trade-result-backdrop, .trade-result-card, .chart-result-backdrop, .chart-result-card, .power-team-card-backdrop, .power-team-card, .ticker-track { animation: none; }

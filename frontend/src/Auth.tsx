@@ -112,6 +112,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         loading={connLoading}
         onConnected={refreshConnection}
         onSignOut={() => {
+          localStorage.removeItem("fantasy-rankings-dashboard-v7");
           if (!supabase) return;
           void supabase.auth.signOut();
         }}
@@ -124,6 +125,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       <SignedInBar
         username={connection.sleeperUsername}
         onSignOut={() => {
+          localStorage.removeItem("fantasy-rankings-dashboard-v7");
           if (!supabase) return;
           void supabase.auth.signOut();
         }}
@@ -309,7 +311,7 @@ function ConnectSleeper({
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. rdfergus15"
+                placeholder="e.g. sleepername"
               />
             </div>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
