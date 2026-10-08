@@ -5,8 +5,10 @@ import { createClient, type Session } from "@supabase/supabase-js";
  *
  * Uses the public anon key — safe to expose; Row Level Security in the
  * database is what actually protects per-user data. The URL and anon key
- * come from Vite env vars (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY),
- * set in the Vercel project settings.
+ * come from Vite env vars (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).
+ * Those should match SUPABASE_URL / SUPABASE_ANON_KEY. The Vite config
+ * copies the server or NEXT_PUBLIC_ names into the VITE_ names when the
+ * VITE_ pair is unset.
  */
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;

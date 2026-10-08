@@ -4,6 +4,7 @@
  * POST: Connect Sleeper account by username { username: string }
  */
 import { createClient } from "@supabase/supabase-js";
+import { readSupabasePublicEnv } from "./_lib/api-utils.js";
 import { getDb } from "./_lib/db.js";
 import { sql } from "drizzle-orm";
 
@@ -12,11 +13,10 @@ async function getAuthUser(req: Request) {
   if (!authHeader?.startsWith("Bearer ")) return null;
   const token = authHeader.slice(7);
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey) return null;
+  const supabaseEnv = readSupabasePublicEnv();
+  if (!supabaseEnv) return null;
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createClient(supabaseEnv.url, supabaseEnv.anonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
 

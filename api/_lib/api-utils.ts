@@ -81,13 +81,33 @@ export function isAdminUserId(userId: string | null | undefined): boolean {
 }
 
 /**
+ * Supabase project URL and anon key.
+ *
+ * Canonical names are SUPABASE_URL and SUPABASE_ANON_KEY. VITE_ (the names
+ * the browser build reads) and NEXT_PUBLIC_ are fallbacks so an existing
+ * deploy keeps working.
+ */
+export function readSupabasePublicEnv(): { url: string; anonKey: string } | null {
+  const url =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey =
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) return null;
+  return { url, anonKey };
+}
+
+/**
  * Get the Supabase user from the request's Authorization header (Bearer JWT).
  * Returns null when no valid session is present. Used by auth-required routes.
  */
 export async function getRequestUser(req: Request): Promise<{ id: string } | null> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey) return null;
+  const supabaseEnv = readSupabasePublicEnv();
+  if (!supabaseEnv) return null;
+  const { url: supabaseUrl, anonKey: supabaseAnonKey } = supabaseEnv;
 
   const authHeader = req.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) return null;
