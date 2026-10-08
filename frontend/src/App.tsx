@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+import { Plus, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -3846,42 +3847,13 @@ function readDraftPlayerIds(storageKey: string): string[] {
   catch { return []; }
 }
 
-function unfilledDraftStarterSlots(players: Array<{ position: string }>, configuredSlots: string[]): string[] {
-  const slots = configuredSlots.filter((slot) => !["BN", "IR", "TAXI"].includes(slot));
-  const assignedPlayerBySlot: Array<number | undefined> = Array.from({ length: slots.length });
-
-  const assignPlayer = (playerIndex: number, visitedSlots: Set<number>): boolean => {
-    const player = players[playerIndex];
-    if (!player) return false;
-    const eligibleSlotIndexes = slots
-      .map((slot, slotIndex) => ({ slot, slotIndex }))
-      .filter(({ slot, slotIndex }) => !visitedSlots.has(slotIndex) && eligibleForSlot(player.position, slot))
-      .sort((a, b) => Number(b.slot === player.position) - Number(a.slot === player.position));
-
-    for (const { slotIndex } of eligibleSlotIndexes) {
-      visitedSlots.add(slotIndex);
-      const assignedPlayer = assignedPlayerBySlot[slotIndex];
-      if (assignedPlayer === undefined || assignPlayer(assignedPlayer, visitedSlots)) {
-        assignedPlayerBySlot[slotIndex] = playerIndex;
-        return true;
-      }
-    }
-    return false;
-  };
-
-  players.forEach((_, playerIndex) => assignPlayer(playerIndex, new Set<number>()));
-  return slots.filter((_, slotIndex) => assignedPlayerBySlot[slotIndex] === undefined);
-}
-
-function summarizeDraftNeeds(slots: string[]): string[] {
-  const labels = slots.map((slot) => slot === "DEF" ? "DST" : slot.replaceAll("_", " "));
-  const counts = new Map<string, number>();
-  labels.forEach((label) => counts.set(label, (counts.get(label) ?? 0) + 1));
-  return [...counts].map(([label, count]) => count > 1 ? `${label} ×${count}` : label);
+function draftSecondaryLine(position: string, team: string | null | undefined, extra?: string): string | null {
+  const positionLabel = position === "DEF" ? "DST" : position.trim();
+  const parts = [positionLabel, team?.trim() ?? "", extra?.trim() ?? ""].filter((part) => part.length > 0);
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, onRetryNews, loading, onRefresh, refreshing, onOpenMatchup, draftPosition, draftQuery, draftRoom, onDraftFiltersChange, linkedPlayerId, onOpenLinkedPlayer, onCloseLinkedPlayer, onLinkedPlayerMiss, onLinkedPlayerFound }: { dashboard: Dashboard; league: League; data: DraftCenterData | undefined; news: PlayerNews | undefined; newsLoading: boolean; newsError: boolean; onRetryNews: () => void; loading: boolean; onRefresh: () => void; refreshing: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void; draftPosition: DraftPosition | null; draftQuery: string | null; draftRoom: DraftRoom | null; onDraftFiltersChange: (filters: { draftPosition: DraftPosition | null; draftQuery: string | null; draftRoom: DraftRoom | null }) => void } & PlayerLink) {
-  const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const leagueDrafts = useMemo(() => data?.drafts.filter((draft) => draft.leagueId === league.id) ?? [], [data?.drafts, league.id]);
   const liveDraft = leagueDrafts.find((draft) => draft.status === "drafting") ?? null;
   const completedDraft = leagueDrafts.find((draft) => draft.status === "complete") ?? null;
@@ -4149,9 +4121,6 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
     ...localMyTeamRows.map((row) => ({ playerId: row.playerId ?? row.name, name: row.name, position: row.position, team: row.team, livePick: false })),
   ];
   const myTeamPlayerIds = new Set(myTeamPlayers.map((player) => player.playerId));
-  const buildPositions = ["QB", "RB", "WR", "TE", ...(league.rankingPositions.includes("K") ? ["K"] : []), ...(league.rankingPositions.includes("DEF") ? ["DEF"] : [])];
-  const buildCounts = buildPositions.map((pos) => ({ pos, count: myTeamPlayers.filter((player) => player.position === pos).length }));
-  const buildNeeds = summarizeDraftNeeds(unfilledDraftStarterSlots(myTeamPlayers, league.tradeStarterSlots));
   const manualDraftedRows = rows.filter((row) => row.playerId && manualDraftedIds.includes(row.playerId) && !sleeperDraftedIds.has(row.playerId) && !myTeamPlayerIds.has(row.playerId));
 
   function addToMyTeam(playerId: string) {
@@ -4179,20 +4148,31 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
     else setMyTeamIds((current) => current.filter((id) => id !== playerId));
   }
 
-  const rosterBuild = (
-    <section className="roster-build" aria-label="Team build and needs">
-      <div className="section-heading"><h2>Team build</h2><span>{buildNeeds.length > 0 ? `Needs ${buildNeeds.join(" · ")}` : "Core spots covered"}</span></div>
-      <div className="draft-plain-row"><span>{buildCounts.map((item) => `${item.pos} ${item.count}`).join(" · ")}</span></div>
-    </section>
-  );
-
   const myTeamSection = (
     <section className="draft-my-team">
       <div className="section-heading"><h2>My Team</h2><span>{myTeamPlayers.length} players</span></div>
-      {myTeamPlayers.length > 0 ? <div className="draft-my-team-list">{myTeamPlayers.map((player) => (
-        <div key={player.playerId}><button type="button" className="draft-my-team-player-open" onClick={() => openDraftPlayer(player)} aria-label={`View ${player.name} details and news`}><strong>{player.name}</strong><small>{player.position}{player.team ? ` · ${player.team}` : ""}{player.livePick ? " · Sleeper pick" : ""}</small></button><button type="button" onClick={() => removeFromMyTeam(player.playerId, player.livePick)} aria-label={`Remove ${player.name} from My Team`}>Remove</button></div>
-      ))}</div> : <div className="empty-inline compact">{syncedDraft ? "Your Sleeper picks will appear here automatically." : "Use + in the Mock column to add a player."}</div>}
-      {rosterBuild}
+      {myTeamPlayers.length > 0 ? (
+        <div className="draft-board data-table-frame" role="list" aria-label="My team players">
+          <div className="draft-row draft-table-head draft-my-team-row">
+            <span aria-hidden="true">Player</span>
+            <span className="sr-only">Actions</span>
+          </div>
+          {myTeamPlayers.map((player) => {
+            const secondary = draftSecondaryLine(player.position, player.team, player.livePick ? "Sleeper pick" : undefined);
+            return (
+              <div className="draft-row draft-my-team-row" role="listitem" key={player.playerId}>
+                <button type="button" className={`draft-player-open${secondary ? "" : " is-single-line"}`} onClick={() => openDraftPlayer(player)} aria-label={`View ${player.name} details and news`}>
+                  <span className="draft-player-name-line"><strong>{player.name}</strong></span>
+                  {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
+                </button>
+                <span className="draft-row-actions">
+                  <button type="button" className="draft-remove-link" onClick={() => removeFromMyTeam(player.playerId, player.livePick)} aria-label={`Remove ${player.name} from My Team`}>Remove</button>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : <div className="empty-inline compact">{syncedDraft ? "Your Sleeper picks will appear here automatically." : "Add players from the Draft Board."}</div>}
       {manualDraftedRows.length > 0 ? <details className="drafted-elsewhere"><summary>Drafted elsewhere · {manualDraftedRows.length}</summary><div>{manualDraftedRows.map((player) => <button type="button" key={player.playerId ?? player.name} onClick={() => player.playerId && setManualDraftedIds((current) => current.filter((id) => id !== player.playerId))}><span><strong>{player.name}</strong><small>{player.position}{player.team ? ` · ${player.team}` : ""}</small></span><b>Restore</b></button>)}</div></details> : null}
     </section>
   );
@@ -4212,20 +4192,27 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
 
   const draftBoard = loading ? <div className="empty-inline">Loading draft values…</div> : filteredRows.length > 0 ? (
     <div className="draft-board data-table-frame" role="list" aria-label="Draft player board">
-      <div className="draft-row draft-table-head" aria-hidden="true"><span>Player</span><span>Pos</span><span>Tier</span><span>{isRookieBoard ? "ADP / rank" : "ADP"}</span><span>Val</span><span>{liveDraft ? "Add" : "Mock"}</span></div>
+      <div className="draft-row draft-table-head">
+        <span aria-hidden="true">Player</span>
+        <span aria-hidden="true">Pos</span>
+        <span aria-hidden="true">Val</span>
+        <span className="sr-only">Actions</span>
+      </div>
       {filteredRows.slice(0, visibleDraftCount).map((row) => {
         const isSpecialist = row.position === "K" || row.position === "DEF";
+        const secondary = row.team?.trim() || null;
         return (
           <div className="draft-row" role="listitem" key={`${row.format}-${row.playerId ?? row.name}`}>
-            <button type="button" className="draft-player-open" onClick={() => openDraftPlayer(row)} disabled={!row.playerId} aria-label={`View ${row.name} details and news`}>
+            <button type="button" className={`draft-player-open${secondary ? "" : " is-single-line"}`} onClick={() => openDraftPlayer(row)} disabled={!row.playerId} aria-label={`View ${row.name} details and news`}>
               <span className="draft-player-name-line"><strong>{row.name}</strong></span>
-              <small className="draft-player-meta"><MatchupTag team={row.team} opponent={row.opponent} isAway={row.isAway} isBye={row.isBye} position={row.position} entry={sosEntry} onClick={row.team && row.opponent && onOpenMatchup ? (event) => { event.stopPropagation(); onOpenMatchup({ team: row.team ?? "", opponent: row.opponent ?? "", isAway: row.isAway, gamePhase: row.gamePhase ?? null }); } : undefined} />{row.mflAdp === null ? null : <span>MFL {formatDecimal(row.mflAdp, 1)}</span>}</small>
+              {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
             </button>
             <span>{row.position === "DEF" ? "DST" : row.position}</span>
-            <span><span className="sr-only">Tier </span><span aria-hidden="true">T</span>{row.tier}</span>
-            <span>{isSpecialist ? <><span className="sr-only">Average draft position not listed</span><span aria-hidden="true">—</span></> : row.adpSource === "fantasycalc" ? <><span className="sr-only">FantasyCalc rank </span><span aria-hidden="true">FC </span>{row.marketRank ?? <><span className="sr-only">not listed</span><span aria-hidden="true">—</span></>}</> : <><span className="sr-only">Average draft position </span>{formatDecimal(row.adp, 1)}</>}</span>
             <span><strong>{isSpecialist ? <><span className="sr-only">Weekly projection </span>{formatProjectionPoints(row.weeklyProjection, row.projectionSource)}</> : row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{row.marketValue.toLocaleString()}</>}</strong></span>
-            <span className="draft-row-actions"><button type="button" className="row-toggle-state" disabled={!row.playerId} onClick={() => row.playerId && addToMyTeam(row.playerId)} aria-label={`Add ${row.name} to My Team`}>+</button>{liveDraft ? null : <button type="button" className="draft-taken-link" disabled={!row.playerId} onClick={() => row.playerId && markTaken(row.playerId)} aria-label={`Mark ${row.name} drafted by another team`}>Taken</button>}</span>
+            <span className="draft-row-actions">
+              <button type="button" className="draft-icon-button" disabled={!row.playerId} onClick={() => row.playerId && addToMyTeam(row.playerId)} aria-label={`Add ${row.name} to my team`} title="Add to my team"><Plus aria-hidden="true" /></button>
+              {liveDraft ? null : <button type="button" className="draft-icon-button draft-taken-button" disabled={!row.playerId} onClick={() => row.playerId && markTaken(row.playerId)} aria-label={`Drafted by another team, ${row.name}`} title="Drafted by another team"><UserX aria-hidden="true" /></button>}
+            </span>
           </div>
         );
       })}
@@ -4292,7 +4279,6 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
       />
       {mode === "board" ? (
         <div className="draft-board-view">
-          {rosterBuild}
           {draftFilters}
           {draftBoard}
         </div>
