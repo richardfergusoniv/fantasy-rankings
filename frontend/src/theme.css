@@ -1724,20 +1724,42 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .pfn-table-view > .section-heading { position: static; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .pfn-table-wrap { width: 100%; overflow: visible; border: 0; background: transparent; }
 .pfn-table-wrap > [data-slot="table-container"] { max-height: 70vh; overflow: auto; overscroll-behavior-inline: contain; }
-.pfn-table { width: 100%; min-width: max-content; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums lining-nums; }
-.pfn-table thead th { position: sticky; top: 0; z-index: 3; height: 44px; padding: 0; border-bottom: 1px solid var(--hairline); background: var(--surface); box-shadow: 0 1px 0 var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .04em; text-align: center; text-transform: uppercase; white-space: nowrap; }
+.pfn-table {
+  --pfn-frozen-rank: 78px;
+  --pfn-frozen-team: 86px;
+  --pfn-frozen-grade: 78px;
+  width: 100%;
+  min-width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.pfn-table thead th { position: sticky; top: 0; z-index: 3; height: 44px; padding: 0; border-bottom: 1px solid var(--hairline); background-color: var(--surface); box-shadow: 0 1px 0 var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .04em; text-align: center; text-transform: uppercase; white-space: nowrap; }
 .pfn-table thead th:not(.pfn-rank-col):not(.pfn-team-col):not(.pfn-grade-col) { min-width: 96px; }
-.pfn-sort-button { display: flex; width: 100%; min-width: max-content; min-height: 44px; align-items: center; justify-content: center; gap: 4px; padding: 7px 10px; border: 0; background: transparent; color: inherit; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: inherit; text-transform: inherit; cursor: pointer; }
+.pfn-sort-button { display: flex; width: 100%; min-width: max-content; min-height: 44px; align-items: center; justify-content: center; gap: 4px; padding: 7px 10px; border: 0; background-color: transparent; color: inherit; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: inherit; text-transform: inherit; cursor: pointer; }
 .pfn-table thead th[aria-sort]:not([aria-sort="none"]) .pfn-sort-button { color: var(--text); }
 .pfn-sort-indicator { display: inline-block; width: 9px; visibility: hidden; }
 .pfn-sort-indicator.active { visibility: visible; }
 .pfn-table th, .pfn-table td { height: 38px; padding: 7px 10px; border-bottom: 1px solid var(--hairline); font-size: var(--type-body); line-height: 1.25; text-align: center; white-space: nowrap; }
 .pfn-table tbody tr:last-child th, .pfn-table tbody tr:last-child td { border-bottom: 0; }
-.pfn-rank-col { position: sticky; left: 0; z-index: 2; width: 78px; min-width: 78px; background: var(--surface); }
-.pfn-team-col { position: sticky; left: 78px; z-index: 2; width: 86px; min-width: 86px; background: var(--surface); font-weight: 700; text-align: left !important; }
-.pfn-grade-col { position: sticky; left: 164px; z-index: 2; width: 78px; min-width: 78px; background: var(--surface); font-weight: 700; box-shadow: 1px 0 0 var(--hairline); }
+/* Frozen rank/team/grade. left tracks the widths so a scrolled column cannot
+   sit in a gap, and each cell paints an opaque surface over that seam. */
+.pfn-rank-col,
+.pfn-team-col,
+.pfn-grade-col { position: sticky; z-index: 2; background-color: var(--surface); background-clip: border-box; }
+.pfn-rank-col { left: 0; width: var(--pfn-frozen-rank); min-width: var(--pfn-frozen-rank); max-width: var(--pfn-frozen-rank); box-shadow: 1px 0 0 var(--surface); }
+.pfn-team-col { left: var(--pfn-frozen-rank); width: var(--pfn-frozen-team); min-width: var(--pfn-frozen-team); max-width: var(--pfn-frozen-team); box-shadow: 1px 0 0 var(--surface); font-weight: 700; text-align: left !important; }
+.pfn-grade-col { left: calc(var(--pfn-frozen-rank) + var(--pfn-frozen-team)); width: var(--pfn-frozen-grade); min-width: var(--pfn-frozen-grade); max-width: var(--pfn-frozen-grade); font-weight: 700; box-shadow: -1px 0 0 var(--surface), 1px 0 0 var(--border); }
+.pfn-rank-col .pfn-sort-button,
+.pfn-team-col .pfn-sort-button,
+.pfn-grade-col .pfn-sort-button { background-color: var(--surface); }
 .pfn-team-col .pfn-sort-button { justify-content: flex-start; }
-.pfn-table thead .pfn-rank-col, .pfn-table thead .pfn-team-col, .pfn-table thead .pfn-grade-col { position: sticky; z-index: 4; }
+.pfn-table thead .pfn-rank-col,
+.pfn-table thead .pfn-team-col,
+.pfn-table thead .pfn-grade-col { position: sticky; z-index: 5; background-color: var(--surface); }
+.pfn-table thead .pfn-rank-col,
+.pfn-table thead .pfn-team-col { box-shadow: 1px 0 0 var(--surface), 0 1px 0 var(--hairline); }
+.pfn-table thead .pfn-grade-col { box-shadow: -1px 0 0 var(--surface), 1px 0 0 var(--border), 0 1px 0 var(--hairline); }
 .pfn-table thead .pfn-rank-col .pfn-sort-button { min-width: 0; padding-inline: 6px; }
 .pfn-table-loading, .pfn-table-empty { padding: 22px 12px; color: var(--dim); font-size: var(--type-body); line-height: 1.5; text-align: center; }
 
