@@ -66,10 +66,11 @@ export const api = {
     position: string;
     playerIds: string[];
   }): Promise<JsonValue> =>
-    request("/api/boom-bust/ranges", {
-      method: "POST",
-      body: JSON.stringify(args),
-    }),
+    request(`/api/boom-bust/ranges${qs({
+      leagueId: args.leagueId,
+      position: args.position,
+      playerIds: args.playerIds.join(","),
+    })}`),
 
   getBoomBustHistory: (args: {
     leagueId: string;
@@ -108,7 +109,7 @@ export const api = {
     opponent: string;
     season: number;
     week: number;
-  }): Promise<JsonValue> => request(`/api/matchup/box-score${qs(args)}`),
+  }): Promise<JsonValue> => request(`/api/box-score${qs(args)}`),
 
   getPlayerNews: (): Promise<JsonValue> => request("/api/player-news"),
 };
