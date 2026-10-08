@@ -1619,7 +1619,6 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .draft-center { display: grid; gap: 16px; }
 .draft-heading { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 16px; padding: 1px 2px 11px; border-bottom: 1px solid var(--hairline); }
 .draft-heading h2 { margin: 0; font-size: var(--type-display); line-height: 1.08; font-weight: 700; letter-spacing: -.025em; }
-.draft-heading p { margin: 4px 0 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .draft-heading .refresh-button { background: var(--surface-2); }
 .draft-source-caption { margin: 0; color: var(--dim); font-size: var(--type-caption); }
 .draft-source-warning { display: grid; gap: 5px; color: var(--text); font-size: var(--type-caption); }
@@ -1632,7 +1631,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .draft-my-team .section-heading { margin-top: 0; }
 .draft-remove-link,
 .drafted-elsewhere button b { min-height: 44px; flex: none; border: 0; background: transparent; color: var(--link); font-size: var(--type-caption); font-weight: 700; }
-.draft-row .draft-remove-link { min-width: 44px; padding: 0 4px; color: var(--link); white-space: nowrap; cursor: pointer; }
+.draft-row .draft-remove-link { display: inline-flex; align-items: center; justify-content: flex-end; min-width: 44px; padding: 0 4px; color: var(--link); white-space: nowrap; cursor: pointer; }
 .draft-remove-link:hover { color: var(--link-hover); }
 .draft-remove-link:active { color: var(--link-active); }
 .drafted-elsewhere { border-top: 1px solid var(--hairline); }
@@ -1646,14 +1645,14 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .draft-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px 62px 88px; align-items: center; gap: 4px; min-height: 72px; padding: 0 10px; border-bottom: 1px solid var(--hairline); background: var(--surface); font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
 .draft-row.draft-my-team-row { grid-template-columns: minmax(0, 1fr) 72px; }
 .draft-board > .draft-row:last-child { border-bottom: 0; }
-.draft-row > span:nth-child(n+2) { text-align: right; font-size: var(--type-body); font-weight: 600; }
-.draft-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; line-height: 1.08; }
+.draft-row > span:nth-child(n+2) { display: flex; align-items: center; justify-content: flex-end; text-align: right; font-size: var(--type-body); font-weight: 600; }
+.draft-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; line-height: var(--player-name-leading); }
 .draft-row > span strong { font-size: var(--type-body); font-weight: 700; line-height: 1.25; }
 .draft-row small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.draft-row button.draft-player-open { display: grid; min-width: 0; width: auto; height: auto; justify-items: start; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text); text-align: left; }
-.draft-row .draft-player-name-line { display: flex; min-width: 0; max-width: 100%; min-height: 36px; align-items: center; gap: 5px; padding-bottom: 0; }
-.draft-row .draft-player-name-line strong { min-width: 0; color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.08; }
-.draft-row .draft-player-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 32px; align-items: flex-start; padding-top: 1px; line-height: 1.25; }
+.draft-row button.draft-player-open { display: grid; min-width: 0; width: auto; height: auto; align-content: center; align-items: center; justify-items: start; gap: 2px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text); text-align: left; }
+.draft-row .draft-player-name-line { display: flex; min-width: 0; max-width: 100%; min-height: 0; align-items: center; gap: 5px; margin: 0; padding: 0; }
+.draft-row .draft-player-name-line strong { min-width: 0; margin: 0; color: var(--text); font-size: 14px; font-weight: 600; line-height: var(--player-name-leading); }
+.draft-row .draft-player-meta { min-width: 0; min-height: 0; margin: 0; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; align-items: center; line-height: 1.25; }
 .draft-row-actions { display: flex; align-items: center; justify-content: flex-end; }
 .draft-row-actions .draft-icon-button { position: relative; display: grid; width: 44px; height: 44px; flex: none; place-items: center; padding: 0; border: 0; background: transparent; color: var(--link); cursor: pointer; }
 .draft-icon-button::before { content: ""; width: 32px; height: 32px; border-radius: var(--radius); background: var(--surface-2); }
@@ -2040,7 +2039,6 @@ h3 { font-size: var(--type-section); font-weight: 600; }
 .bench-section summary > span:nth-child(2),
 .weekly-page-intro span,
 .tool-section-heading span,
-.draft-heading p,
 .news-intro p,
 .power-position-table-label,
 .power-hero > div > span {
@@ -2245,7 +2243,6 @@ a:active { color: var(--link-active); }
 .player-search-name strong,
 .trade-asset-name strong,
 .trade-asset-open strong,
-.draft-player-name-line strong,
 .comparison-picker-results strong {
   line-height: var(--player-name-leading);
 }
@@ -2266,7 +2263,6 @@ a:active { color: var(--link-active); }
 .ranking-name-line,
 .player-search-name,
 .trade-asset-name,
-.draft-player-name-line,
 .comparison-picker-results > button > span > strong {
   min-height: var(--player-box-half);
   align-items: flex-end;
@@ -2281,7 +2277,6 @@ a:active { color: var(--link-active); }
 .ranking-meta-line,
 .player-search-meta,
 .trade-asset-main > span,
-.draft-player-meta,
 .comparison-picker-results > button > span > small {
   min-height: var(--player-box-half);
   align-items: flex-start;
@@ -2321,10 +2316,11 @@ a:active { color: var(--link-active); }
 }
 
 .draft-row button.draft-player-open {
-  min-height: 68px;
-  grid-template-rows: 36px 32px;
+  min-height: 44px;
+  grid-template-rows: auto auto;
   align-content: center;
-  gap: 0;
+  align-items: center;
+  gap: 2px;
 }
 .draft-row button.draft-player-open.is-single-line {
   min-height: 44px;
