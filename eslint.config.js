@@ -8,6 +8,12 @@ export default tseslint.config(
       "app/**",
       "drizzle-pg/**",
       "pipeline/**",
+      // Unused copy of api/_lib. lib/schema.ts stays, because drizzle-kit reads it.
+      "lib/api-utils.ts",
+      "lib/dashboard-schemas.ts",
+      "lib/db.ts",
+      "lib/sleeper.ts",
+      "lib/trades.ts",
     ],
   },
   ...tseslint.configs.recommended,
