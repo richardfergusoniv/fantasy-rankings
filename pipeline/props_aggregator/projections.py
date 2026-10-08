@@ -1,7 +1,7 @@
 """Vegas-based fantasy projections.
 
 Converts consensus prop lines into expected fantasy points for each of
-Richard's six Sleeper leagues, using each league's actual scoring_settings.
+the configured owner's Sleeper leagues, using each league's actual scoring_settings.
 
 Design (per Richard's direction 2026-09-22):
 - The market line IS the expectation: a pass_yards line of 240.5 means the
@@ -139,15 +139,29 @@ def lookup_position(name: str, positions: dict[str, dict]) -> dict:
     return positions.get(key.replace(" ", ""), {})
 
 
+def sleeper_user_leagues_url(user_id: str, season: int) -> str:
+    return f"{SLEEPER_BASE}/user/{user_id}/leagues/nfl/{season}"
+
+
+def current_nfl_season() -> int:
+    """Season from Sleeper's NFL state. Scheduled jobs must not hardcode a year."""
+    resp = requests.get(f"{SLEEPER_BASE}/state/nfl", timeout=30)
+    resp.raise_for_status()
+    try:
+        return int(resp.json()["season"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise RuntimeError("Sleeper NFL state did not include a season") from exc
+
+
 def load_leagues(data_dir: Path = DATA_DIR, refresh: bool = False) -> list[dict]:
-    cache = data_dir / "leagues_2026.json"
-    if cache.exists() and not refresh:
-        return json.loads(cache.read_text())
     owner_id = os.environ.get("OWNER_SLEEPER_USER_ID", "").strip()
     if not owner_id:
         raise RuntimeError("OWNER_SLEEPER_USER_ID is not set")
-    resp = requests.get(f"{SLEEPER_BASE}/user/{owner_id}/leagues/nfl/2026",
-                        timeout=30)
+    season = current_nfl_season()
+    cache = data_dir / f"leagues_{season}.json"
+    if cache.exists() and not refresh:
+        return json.loads(cache.read_text())
+    resp = requests.get(sleeper_user_leagues_url(owner_id, season), timeout=30)
     resp.raise_for_status()
     leagues = [
         {

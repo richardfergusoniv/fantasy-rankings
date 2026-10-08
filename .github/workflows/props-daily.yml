@@ -206,8 +206,10 @@ jobs:
           print(f"rebuild verified: week {result.get('week')}, asOf {result.get('asOf')}")
           EOF
 
-      - name: Verify public dashboard against staged files
+      - name: Verify stored dashboard snapshot against staged files
         if: steps.guard.outputs.go == 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           python3 pipeline/scripts/verify_dashboard.py \
             pipeline/data/staged_for_push.json \

@@ -1,9 +1,11 @@
 name: Dashboard rebuild
 
-# Timer for the global dashboard rebuild. The work lives in the app's
+# Timer for the owner dashboard rebuild. The work lives in the app's
 # /api/cron/jobs endpoint; this workflow only calls it on schedule with
 # the CRON_SECRET bearer header (the same call Vercel Cron used to
-# make). Moved off Vercel Cron 2026-10-02 so every scheduled job lives
+# make). The written snapshot stays server-side. Signed-out
+# /api/dashboard reads do not receive it. Moved off Vercel Cron
+# 2026-10-02 so every scheduled job lives
 # in GitHub Actions and survives a change of app host: to retarget, set
 # the APP_BASE_URL repository variable.
 #
