@@ -13,8 +13,19 @@ This is the programmatic diff from the props-twice-daily-pull cron, encoded:
     points while the app re-scores raw stats per league, and the two
     rounding paths diverge by one cent on ~3% of pairs (verified
     2026-10-02; raw stats matching exactly is the data check)
-  - a staged player the app marks Out is expected to be suppressed by the
+  - a staged player the app marks with an unavailable status (Out,
+    Inactive, IR, Injured Reserve, PUP, NFI — the app's
+    isUnavailableForCurrentWeek set) is expected to be suppressed by the
     app (leagueProjection 0, source fallback); that is intended behavior
+  - a staged player absent from ALL league rankings is a warning, not a
+    failure (pool exception: not rostered anywhere and no Sleeper
+    projection of his own, e.g. Xavier Smith). The same applies when he
+    is present only as an unprojected pool row (source fallback, no
+    projection, no components) in every league — the staged projection
+    has nowhere to attach. Partial absence (missing from some leagues
+    only) is still a failure. A player absent under a known Sleeper
+    rename (KNOWN_ALIASES, e.g. Mitchell Tinsley listed as Mitch
+    Tinsley) is likewise a warning
   - K players must never be tagged `vegas` or `first_down` (the app
     sources K projections from Sleeper). Most K entries are tagged
     `sleeper`; a K tagged `fallback` with no projection at all is a
@@ -27,7 +38,9 @@ This is the programmatic diff from the props-twice-daily-pull cron, encoded:
   - Joshua Palmer present, Josh Palmer absent
   - no dashboard players tagged with the staged file's source tag
     outside the staged file
-  - all 192 defenses carry a pregame projection
+  - defenses: every league carries the same set of playing teams
+    (32 minus that week's bye teams, so 26-32 per league; a fixed 192
+    total false-fails every bye week), each with a pregame projection
   - the analytics section is present
   - strengthOfSchedule: 6 entries, 32 teams x 4 positions, clean 1-32
     permutations, throughWeek equal to the staged matchup file
@@ -52,6 +65,8 @@ DASHBOARD_URL = os.environ.get(
     f"{_APP_BASE_URL}/api/cron/jobs?job=read-dashboard-snapshot",
 )
 POINT_TOLERANCE = 0.011
+UNAVAILABLE_STATUSES = {"Out", "Inactive", "IR", "Injured Reserve", "PUP", "NFI"}
+KNOWN_ALIASES = {"Mitchell Tinsley": "Mitch Tinsley"}
 STAT_MAP = {
     "pass_yards": "pass_yd",
     "pass_tds": "pass_td",
@@ -87,6 +102,8 @@ def main() -> int:
     dash = stored_snapshot_request(DASHBOARD_URL, secret)
 
     errors: list[str] = []
+    warnings: list[str] = []
+    missed: dict[str, list[str]] = {}
     rankings = dash["rankings"]
     by_key = {(r["leagueId"], r["name"]): r for r in rankings}
     league_ids = [l["league_id"] for l in staged["leagues"]]
@@ -98,15 +115,33 @@ def main() -> int:
         staged_names.add(p["player"])
         if p["position"] == "K":
             continue
+        # Pool exception: present at most as an unprojected pool row in
+        # every league (and not suppressed for an unavailable status) —
+        # the staged projection has nowhere to attach. Warning only.
+        rows = {lid: by_key.get((lid, p["player"])) for lid in p["leagues"]}
+        if not any(r is not None and r.get("injuryStatus") in UNAVAILABLE_STATUSES for r in rows.values()):
+            def _is_pool(r):
+                return r is None or (
+                    r.get("projectionSource") == "fallback"
+                    and r.get("leagueProjection") is None
+                    and not r.get("projectionComponents")
+                )
+            if all(_is_pool(r) for r in rows.values()):
+                alias = KNOWN_ALIASES.get(p["player"])
+                if alias and alias in {r["name"] for r in rankings}:
+                    warnings.append(f"{p['player']} absent; Sleeper lists him as {alias} (projection unattached)")
+                else:
+                    warnings.append(f"{p['player']} absent from all league rankings (pool exception)")
+                continue
         for lid, val in p["leagues"].items():
             r = by_key.get((lid, p["player"]))
             if r is None:
-                errors.append(f"MISS {p['player']} in {lid}")
+                missed.setdefault(p["player"], []).append(lid)
                 continue
-            if r.get("injuryStatus") == "Out":
-                # App suppresses Out players by design (projection 0).
+            if r.get("injuryStatus") in UNAVAILABLE_STATUSES:
+                # App suppresses unavailable players by design (projection 0).
                 if r["leagueProjection"] not in (0, None):
-                    errors.append(f"OUT {p['player']} {lid}: leagueProjection {r['leagueProjection']} (expected 0)")
+                    errors.append(f"SUPPRESSED {p['player']} {lid}: leagueProjection {r['leagueProjection']} (expected 0)")
                 continue
             if r["projectionSource"] != expected_tag:
                 errors.append(f"TAG {p['player']} {lid}: {r['projectionSource']} (expected {expected_tag})")
@@ -116,7 +151,7 @@ def main() -> int:
         # Vegas only: the First Down fallback is points-only by contract.
         if expected_tag == "vegas":
             r0 = by_key.get((league_ids[0], p["player"]))
-            if r0 is not None and r0.get("injuryStatus") != "Out":
+            if r0 is not None and r0.get("injuryStatus") not in UNAVAILABLE_STATUSES:
                 comp = r0.get("projectionComponents")
                 if not comp:
                     errors.append(f"NO COMP {p['player']}")
@@ -149,6 +184,20 @@ def main() -> int:
         if sleeper_count < 28:
             errors.append(f"K SLEEPER COUNT {lid}: {sleeper_count} (expected >= 28)")
 
+    # Resolve staged misses: partial absence is a failure; total absence
+    # is a warning (pool exception or a known Sleeper rename).
+    all_names = {r["name"] for r in rankings}
+    for player, lids in missed.items():
+        if len(lids) < len(league_ids):
+            for lid in lids:
+                errors.append(f"MISS {player} in {lid}")
+        else:
+            alias = KNOWN_ALIASES.get(player)
+            if alias and alias in all_names:
+                warnings.append(f"{player} absent; Sleeper lists him as {alias} (projection unattached)")
+            else:
+                warnings.append(f"{player} absent from all league rankings (pool exception)")
+
     names = {r["name"] for r in rankings}
     if "Josh Palmer" in names:
         errors.append("Josh Palmer present (bad)")
@@ -161,8 +210,14 @@ def main() -> int:
         errors.append(f"{expected_tag.upper()} EXTRA: {sorted(set(extra))[:10]}")
 
     defs = dash["defenses"]
-    if len(defs) != 192:
-        errors.append(f"defenses count {len(defs)} (expected 192)")
+    defs_by_league: dict[str, set] = {}
+    for d in defs:
+        defs_by_league.setdefault(d["leagueId"], set()).add(d["team"])
+    def_counts = {lid: len(t) for lid, t in defs_by_league.items()}
+    if set(def_counts) != set(league_ids) or len(set(def_counts.values())) != 1:
+        errors.append(f"defenses per-league team counts inconsistent: {def_counts}")
+    elif not 26 <= next(iter(def_counts.values())) <= 32:
+        errors.append(f"defenses teams per league {next(iter(def_counts.values()))} (expected 26-32 playing teams)")
     noproj = [d["team"] for d in defs if d.get("pregameProjection") is None]
     if noproj:
         errors.append(f"defenses without pregame projection: {noproj[:5]}")
@@ -184,6 +239,8 @@ def main() -> int:
             if ranks != list(range(1, 33)):
                 errors.append(f"SoS ranks bad {s['leagueId']} {pos}")
 
+    for w in warnings:
+        print("  WARN:", w)
     if errors:
         print(f"FAIL: {len(errors)} problem(s)")
         for e in errors[:25]:
