@@ -478,14 +478,6 @@ function RefreshIcon({ spinning = false }: { spinning?: boolean }) {
   );
 }
 
-function Chevron() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 function NavigationIcon({ page }: { page: PrimaryPage }) {
   const paths: Record<PrimaryPage, ReactNode> = {
     team: <><path d="M4 19V8l8-4 8 4v11" /><path d="M8 19v-5h8v5M8 9h.01M12 9h.01M16 9h.01" /></>,
@@ -1355,7 +1347,15 @@ function PlayerDetailSheet({
 }
 
 function MatchupPlayer({ player, side, sosEntry, isSwappedIn = false, isDemoted = false, onOpen, onOpenMatchup }: { player: RosterPlayer | undefined; side: "mine" | "theirs"; sosEntry?: StrengthOfScheduleEntryLike; isSwappedIn?: boolean; isDemoted?: boolean; onOpen?: (player: RosterPlayer) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
-  if (!player) return <div className={`matchup-player ${side} empty-player`}>—</div>;
+  if (!player) {
+    return (
+      <div className={`matchup-player ${side} empty-player`} aria-hidden="true">
+        <span className="matchup-player-open" />
+        <span className="matchup-meta" />
+        <span className="matchup-number matchup-player-score"><b>—</b></span>
+      </div>
+    );
+  }
   const score = playerScore(player);
   const openPlayer = () => onOpen?.(player);
   const position = player.position === "DEF" ? "DST" : player.position;
@@ -2973,9 +2973,9 @@ function LeagueTradeSide({
   }, [team.rosterId]);
 
   return (
-    <section className="trade-side league-trade-side" aria-label={title}>
+    <section className="trade-side league-trade-side" aria-label={`${title}, ${team.teamName}`}>
       <div className="trade-side-heading">
-        <div><h2>{title}</h2><span>{team.teamName}</span></div>
+        <div><h2>{title}</h2></div>
         {assets.length ? <button onClick={onClear}>Clear</button> : null}
       </div>
       <div className="trade-side-list">
@@ -3604,6 +3604,7 @@ function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashb
 
   return (
     <section className="trade-view">
+      <div className="tool-section-heading"><h2>Trade values</h2></div>
       <SegmentedControl
         value={tradeView}
         options={[{ value: "analyze", label: "Analyze" }, { value: "history", label: "History" }]}
@@ -3618,7 +3619,7 @@ function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashb
 
       {valuationMode === "league" ? (
         <div className="trade-team-controls">
-          <label className="select-control"><span>Trade partner</span><span className="select-control-field"><select aria-label="Select opposing team" value={theirs?.rosterId ?? ""} onChange={(event) => { setTheirRosterId(Number(event.target.value)); setGetIds([]); }}>{league.tradeTeams.filter((team) => team.rosterId !== mine?.rosterId).map((team) => <option key={team.rosterId} value={team.rosterId}>{team.teamName}</option>)}</select><Chevron /></span></label>
+          <label className="select-control"><span>Trade partner</span><span className="select-control-field"><select aria-label="Select opposing team" value={theirs?.rosterId ?? ""} onChange={(event) => { setTheirRosterId(Number(event.target.value)); setGetIds([]); }}>{league.tradeTeams.filter((team) => team.rosterId !== mine?.rosterId).map((team) => <option key={team.rosterId} value={team.rosterId}>{team.teamName}</option>)}</select></span></label>
         </div>
       ) : null}
 
@@ -4468,7 +4469,7 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       <div className="league-sticky progressive-sticky">
         <div className="week-line"><div><span className="live-dot" /> Loading latest saved week</div><button className="refresh-button" disabled aria-label="Fantasy data is loading"><RefreshIcon spinning /></button></div>
-        <label className="league-picker"><span className="sr-only">League list is loading</span><select disabled><option>Loading leagues…</option></select><Chevron /></label>
+        <label className="league-picker"><span className="sr-only">League list is loading</span><select disabled><option>Loading leagues…</option></select></label>
       </div>
       <header className="control-deck">
         <nav className="primary-tabs" aria-label="Fantasy sections">
@@ -4885,7 +4886,6 @@ export function App() {
             <select value={league.id} onChange={(event) => chooseLeague(event.target.value)}>
               {dashboard.leagues.map((item) => <option key={item.id} value={item.id}>{shortLeagueName(item.name)}</option>)}
             </select>
-            <Chevron />
           </label>
       </div>
       <header className="control-deck">

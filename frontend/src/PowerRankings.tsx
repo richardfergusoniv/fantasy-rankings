@@ -232,7 +232,6 @@ export function PowerRankings({
       <section className="power-chart-section" aria-labelledby="position-strength-heading">
         <div className="section-heading power-section-heading">
           <h2 id="position-strength-heading">Position strength</h2>
-          <span>relative to each position’s league leader</span>
         </div>
         <div className="power-radar" role="img" aria-label={`Spider chart of your ${scope === "week" ? "optimized lineup" : "roster"} strength by position in ${shortLeagueName(league.name)}`}>
           <svg viewBox="0 0 300 260" aria-hidden="true">
@@ -261,7 +260,7 @@ export function PowerRankings({
       </section>
 
       <section className="power-table-section" aria-labelledby="league-power-heading">
-        <div className="section-heading power-section-heading"><h2 id="league-power-heading">League power rankings</h2><span>{scope === "week" ? "optimized lineup projection" : "full roster value"}</span></div>
+        <div className="section-heading power-section-heading"><h2 id="league-power-heading">League power rankings</h2>{scope === "restOfSeason" ? <span>full roster value</span> : null}</div>
         <div className="power-table" role="list">
           {displayedTeams.map((team) => {
             return (
