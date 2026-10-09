@@ -2598,7 +2598,21 @@ function PlayerValueTrend({ name, history, isLoading }: { name: string; history:
   );
 }
 
-function AggregateTradeHistory({ give, get, historyByPlayerId, isLoading }: { give: TradeAsset[]; get: TradeAsset[]; historyByPlayerId: Map<string, ValueHistorySeries>; isLoading: boolean }) {
+function AggregateTradeHistory({
+  give,
+  get,
+  historyByPlayerId,
+  isLoading,
+  giveColor = "var(--chart-4)",
+  getColor = "var(--chart-3)",
+}: {
+  give: TradeAsset[];
+  get: TradeAsset[];
+  historyByPlayerId: Map<string, ValueHistorySeries>;
+  isLoading: boolean;
+  giveColor?: string;
+  getColor?: string;
+}) {
   const playerSide = (assets: TradeAsset[]) => assets.filter((asset) => asset.position !== "PICK");
   const givePlayers = playerSide(give);
   const getPlayers = playerSide(get);
@@ -2623,18 +2637,18 @@ function AggregateTradeHistory({ give, get, historyByPlayerId, isLoading }: { gi
       {data.length > 0 && (hasGive || hasGet) ? (
         <>
           <div className="trade-aggregate-chart" role="img" aria-label="Thirty-day FantasyCalc total value for each side of the trade">
-            <ChartContainer config={{ give: { label: "You give", color: "var(--chart-4)" }, get: { label: "You get", color: "var(--chart-3)" } }} className="aspect-auto h-full">
+            <ChartContainer config={{ give: { label: "You give", color: giveColor }, get: { label: "You get", color: getColor } }} className="aspect-auto h-full">
               <LineChart data={data} margin={{ top: 14, right: 12, bottom: 18, left: 2 }}>
                 <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
                 <XAxis dataKey="date" tickFormatter={formatDateTick} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={24} />
                 <YAxis width={48} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={false} />
                 <Tooltip labelFormatter={(label) => formatDateTick(String(label))} formatter={(value, name) => [Number(value).toLocaleString(), name === "give" ? "You give" : "You get"]} contentStyle={chartTooltipStyle} />
-                {hasGive ? <Line type="monotone" dataKey="give" name="give" stroke="var(--chart-4)" strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
-                {hasGet ? <Line type="monotone" dataKey="get" name="get" stroke="var(--chart-3)" strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
+                {hasGive ? <Line type="monotone" dataKey="give" name="give" stroke={giveColor} strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
+                {hasGet ? <Line type="monotone" dataKey="get" name="get" stroke={getColor} strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
               </LineChart>
             </ChartContainer>
           </div>
-          <div className="trade-aggregate-key"><span><i className="give" />You give</span><span><i className="get" />You get</span></div>
+          <div className="trade-aggregate-key"><span><i className="give" style={{ background: giveColor }} />You give</span><span><i className="get" style={{ background: getColor }} />You get</span></div>
         </>
       ) : <div className="trade-stock-empty">{isLoading ? "Loading FantasyCalc history…" : "Add a player to either side to chart its sourced daily value."}</div>}
       {(give.some((asset) => asset.position === "PICK") || get.some((asset) => asset.position === "PICK")) ? <p>Draft picks remain in the totals above but are excluded from this player-history chart.</p> : null}
@@ -3050,6 +3064,8 @@ function LeagueTradeValueDialog({
             get={get}
             historyByPlayerId={historyByPlayerId}
             isLoading={historyPlayerIds.length > 0 && historyQuery.isPending}
+            giveColor="var(--stat-strength-readable)"
+            getColor="var(--chart-2)"
           />
         </div>
       </DialogContent>
