@@ -4,6 +4,7 @@ export type Dashboard = ApiResponse<typeof api, "getDashboard">;
 export type League = Dashboard["leagues"][number];
 export type RosterPlayer = League["starters"][number];
 export type Tab =
+  | "monitor"
   | "team"
   | "rankings"
   | "waivers"
@@ -20,7 +21,7 @@ export type PlayerLink = {
   onLinkedPlayerMiss: () => void;
   onLinkedPlayerFound: () => void;
 };
-export type PrimaryPage = "team" | "players" | "league" | "draft" | "tools";
+export type PrimaryPage = "monitor" | "team" | "players" | "league" | "draft" | "tools";
 export type PlayerNews = ApiResponse<typeof api, "getPlayerNews">;
 export type DraftCenterData = ApiResponse<typeof api, "getDraftCenter">;
 export type DashboardSection = ApiResponse<typeof api, "getDashboardSection">;

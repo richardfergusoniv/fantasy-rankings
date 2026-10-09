@@ -1,4 +1,5 @@
 export const DASHBOARD_TABS = [
+  "monitor",
   "team",
   "rankings",
   "waivers",
@@ -40,7 +41,7 @@ export type DashboardUrlState = {
   playerId: string | null;
 };
 
-export const DEFAULT_DASHBOARD_TAB: DashboardTab = "team";
+export const DEFAULT_DASHBOARD_TAB: DashboardTab = "monitor";
 
 export function emptyDashboardUrlState(): DashboardUrlState {
   return {

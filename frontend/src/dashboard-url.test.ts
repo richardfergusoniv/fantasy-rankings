@@ -28,9 +28,19 @@ describe("dashboard URL state", () => {
     expect(parseDashboardSearch(serializeDashboardSearch(original))).toEqual(original);
   });
 
-  it("omits defaults so the matchup view stays a clean URL", () => {
+  it("omits defaults so the monitor view stays a clean URL", () => {
     expect(serializeDashboardSearch(emptyDashboardUrlState())).toBe("");
     expect(parseDashboardSearch("")).toEqual(emptyDashboardUrlState());
+    expect(emptyDashboardUrlState().tab).toBe("monitor");
+  });
+
+  it("round-trips older tab values including matchup", () => {
+    for (const tab of ["team", "rankings", "waivers", "power", "draft", "trade", "charts", "comparison", "strengthOfSchedule"] as const) {
+      const original = state({ tab });
+      expect(parseDashboardSearch(serializeDashboardSearch(original))).toEqual(original);
+    }
+    expect(parseDashboardSearch("?tab=team").tab).toBe("team");
+    expect(serializeDashboardSearch(state({ tab: "team" }))).toBe("?tab=team");
   });
 
   it("falls back when a param is not a known value", () => {
@@ -44,5 +54,6 @@ describe("dashboard URL state", () => {
     expect(dashboardUrlHistoryMode(state({ tab: "rankings", playerId: "p1" }), rankings)).toBe("push");
     expect(dashboardUrlHistoryMode(rankings, state({ tab: "rankings", position: "QB", query: "A" }))).toBe("replace");
     expect(dashboardUrlHistoryMode(rankings, rankings)).toBe("none");
+    expect(dashboardUrlHistoryMode(emptyDashboardUrlState(), state({ tab: "team" }))).toBe("push");
   });
 });

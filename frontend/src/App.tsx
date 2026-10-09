@@ -40,6 +40,7 @@ import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
 import { useDashboardUrl } from "./use-dashboard-url";
 import { Lineup } from "./views/lineup";
+import { Monitor } from "./views/monitor";
 
 const LazyPowerRankings = lazy(() => import("./PowerRankings").then((module) => ({ default: module.PowerRankings })));
 const LazyChartsTool = lazy(() => import("./AnalyticsViews").then((module) => ({ default: module.ChartsTool })));
@@ -73,6 +74,7 @@ function withSignIn<T>(operation: Promise<T>): Promise<T> {
 
 function NavigationIcon({ page }: { page: PrimaryPage }) {
   const paths: Record<PrimaryPage, ReactNode> = {
+    monitor: <><path d="M4 4h7v7H4zM13 4h7v4H13zM13 10h7v10H13zM4 13h7v7H4z" /></>,
     team: <><path d="M4 19V8l8-4 8 4v11" /><path d="M8 19v-5h8v5M8 9h.01M12 9h.01M16 9h.01" /></>,
     players: <><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.5-4 2.3-6 5.5-6s5 2 5.5 6M16 6.5a2.5 2.5 0 0 1 0 5M16 14c2.7.2 4.2 1.9 4.5 5" /></>,
     league: <><path d="M7 4h10v3c0 3-2 5-5 5S7 10 7 7V4Z" /><path d="M7 6H4v1c0 2 1.4 3.5 3.5 3.8M17 6h3v1c0 2-1.4 3.5-3.5 3.8M12 12v4M8 20h8M9 16h6" /></>,
@@ -87,10 +89,14 @@ function NavigationIcon({ page }: { page: PrimaryPage }) {
 }
 
 function primaryPageForTab(tab: Tab): PrimaryPage {
+  if (tab === "monitor") return "monitor";
+  if (tab === "team") return "team";
   if (tab === "rankings" || tab === "waivers") return "players";
   if (tab === "power") return "league";
+  if (tab === "draft") return "draft";
   if (tab === "trade" || tab === "charts" || tab === "comparison" || tab === "strengthOfSchedule") return "tools";
-  return tab;
+  const unreachable: never = tab;
+  return unreachable;
 }
 
 type TickerItem = {
@@ -415,6 +421,7 @@ function SectionLoading({ label }: { label: string }) {
 function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void }) {
   const primaryPage = primaryPageForTab(tab);
   const pageTabs: Array<[PrimaryPage, string, Tab]> = [
+    ["monitor", "Monitor", "monitor"],
     ["team", "Matchup", "team"],
     ["players", "Players", "rankings"],
     ["league", "League", "power"],
@@ -450,6 +457,7 @@ export function App() {
   const appliedAppPlayerId = useRef<string | null>(null);
   useEffect(() => {
     const titles: Record<Tab, string> = {
+      monitor: "Monitor",
       team: "Matchup",
       rankings: "Rankings",
       waivers: "Waiver Wire",
@@ -507,7 +515,7 @@ export function App() {
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "league" }), 8_000)),
     staleTime: 90_000,
     retry: false,
-    enabled: tab === "power",
+    enabled: tab === "power" || tab === "monitor",
     refetchInterval: pollWhileSectionBuilding,
   });
   const analyticsQuery = useQuery({
@@ -665,6 +673,7 @@ export function App() {
   const primaryPage = primaryPageForTab(tab);
   function choosePrimaryPage(page: PrimaryPage) {
     const defaultTabs: Record<PrimaryPage, Tab> = {
+      monitor: "monitor",
       team: "team",
       players: "rankings",
       league: "power",
@@ -764,6 +773,7 @@ export function App() {
   const retryNews = () => { void newsQuery.refetch(); };
   const currentSectionLoading = !hasCompleteDashboard && (
     (tab === "team" && teamQuery.isPending)
+    || (tab === "monitor" && (teamQuery.isPending || leagueQuery.isPending))
     || ((tab === "rankings" || tab === "waivers" || tab === "draft") && playersQuery.isPending)
     || (tab === "trade" && (playersQuery.isPending || teamQuery.isPending))
     || (tab === "power" && (leagueQuery.isPending || teamQuery.isPending || playersQuery.isPending))
@@ -849,6 +859,7 @@ export function App() {
       <header className="control-deck">
         <nav className="primary-tabs" aria-label="Fantasy sections">
           {([
+            ["monitor", "Monitor"],
             ["team", "Matchup"],
             ["players", "Players"],
             ["league", "League"],
@@ -888,6 +899,7 @@ export function App() {
 
       <main id="main-content" tabIndex={-1}>
         <h1 className="sr-only">{({
+          monitor: "Monitor",
           team: "Fantasy matchup",
           rankings: "Player rankings",
           waivers: "Waiver wire",
@@ -901,6 +913,7 @@ export function App() {
         {currentSectionLoading ? <SectionLoading label={`Loading ${primaryPage}…`} />
           : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
           : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
+          : tab === "monitor" ? <Monitor league={league} dashboard={activeDashboard} draftData={draftQuery.data} news={newsQuery.data} onOpenTab={setTab} onOpenPlayer={openTickerPlayer} onOpenMatchup={setSelectedMatchup} />
           : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} news={newsQuery.data} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} onOpenMatchup={setSelectedMatchup} linkedPlayerId={dashboardUrl.state.playerId} onOpenLinkedPlayer={openLinkedPlayer} onCloseLinkedPlayer={closeLinkedPlayer} onLinkedPlayerMiss={reportLinkedPlayerMiss} onLinkedPlayerFound={reportLinkedPlayerFound} />
           : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} dashboard={activeDashboard} onPlayerIntent={prefetchDashboardPlayer} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} playerCardOpen={playerHistory.isOpen} /></Suspense>
           : tab === "draft" ? <Suspense fallback={<SectionLoading label="Loading draft…" />}><LazyDraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} news={newsQuery.data} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} loading={draftQuery.isPending} onRefresh={() => draftRefresh.mutate()} refreshing={draftRefresh.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={dashboardUrl.state.playerId} onOpenLinkedPlayer={openLinkedPlayer} onCloseLinkedPlayer={closeLinkedPlayer} onLinkedPlayerMiss={reportLinkedPlayerMiss} onLinkedPlayerFound={reportLinkedPlayerFound} /></Suspense>
