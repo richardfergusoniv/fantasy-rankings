@@ -222,6 +222,7 @@
   --tab-font-size: var(--type-caption);
   --tab-font-weight: 600;
   --table-scroll-max-height: 70vh;
+  --league-roster-row-height: 56px;
 }
 
 * { box-sizing: border-box; }
@@ -854,16 +855,17 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .select-control-field:focus-within select { border-color: var(--link); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent); }
 .trade-columns { display: grid; gap: 16px; margin-top: 16px; }
 .trade-columns.league-adjusted { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-top: 8px; }
-.league-roster-card { display: flex; flex-direction: column; height: var(--table-scroll-max-height); min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+/* Content-box keeps the 1px frame outside the header and eight rows, so the last visible row meets the card edge. */
+.league-roster-card { box-sizing: content-box; display: flex; flex-direction: column; height: calc(var(--compact-control-height) + var(--league-roster-row-height) * 8); min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .league-roster-heading { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 4px; height: var(--compact-control-height); min-height: var(--compact-control-height); padding: 0 8px; border-bottom: 1px solid var(--border); background: var(--surface); }
-.league-roster-scroll { min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.league-roster-scroll { flex: none; height: calc(var(--league-roster-row-height) * 8); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .league-roster-heading h3 { min-width: 0; margin: 0; overflow: hidden; color: var(--text); font-size: var(--type-caption); font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 button.league-partner-change { flex: none; height: 24px; min-height: 24px; margin-right: -4px; padding: 0 4px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--link); font: inherit; font-size: var(--type-caption); font-weight: 700; line-height: 1; }
 button.league-partner-change:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }
 button.league-partner-change:active { color: var(--link-active); }
 .league-roster-list { margin: 0; padding: 0; list-style: none; }
 .league-roster-list > li.is-selected { background: var(--roster-highlight-bg); }
-.league-roster-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 6px; row-gap: 1px; align-items: center; min-height: 40px; padding: 4px 6px; border-bottom: 1px solid var(--hairline); cursor: pointer; }
+.league-roster-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 6px; row-gap: 1px; align-items: center; height: var(--league-roster-row-height); min-height: var(--league-roster-row-height); max-height: var(--league-roster-row-height); padding: 6px; border-bottom: 1px solid var(--hairline); cursor: pointer; }
 .league-roster-list > li:last-child .league-roster-row { border-bottom: 0; }
 .league-roster-row input { grid-row: 1 / span 2; width: 16px; height: 16px; margin: 0; accent-color: var(--action); }
 .league-roster-row input:disabled { cursor: default; }
