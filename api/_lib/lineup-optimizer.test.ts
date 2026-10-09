@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { lineupCountingPoints, optimizeLineup, type OptimizablePlayer } from "./lineup-optimizer.js";
+import {
+  activeBenchIds,
+  displayedMatchupPoints,
+  lineupCountingPoints,
+  mapSubmittedStarters,
+  optimizeLineup,
+  optimizeTradeRoster,
+  powerRankingPoints,
+  type OptimizablePlayer,
+} from "./lineup-optimizer.js";
 
 const now = Date.parse("2026-10-11T18:00:00.000Z");
 
@@ -171,5 +180,99 @@ describe("optimizeLineup", () => {
     const optimized = optimizeLineup([pregame], [better], now);
     expect(optimized.starters.map((starter) => starter.playerId)).toEqual(["better"]);
     expect(optimized.bench.map((reserve) => reserve.playerId)).toEqual(["pregame"]);
+  });
+
+  it("keeps an empty starter slot so a healthy player can fill it", () => {
+    const qb = player({ playerId: "qb", position: "QB", lineupSlot: "QB", isStarter: true, projection: 18 });
+    const vacantFlex = player({ playerId: "0", position: "FLEX", lineupSlot: "FLEX", isStarter: true, projection: null });
+    const benchWr = player({ playerId: "wr", position: "WR", projection: 11 });
+    const optimized = optimizeLineup([qb, vacantFlex], [benchWr], now);
+
+    expect(mapSubmittedStarters(["qb", "0", "rb"], (id) => id, () => "vacant")).toEqual(["qb", "vacant", "rb"]);
+    expect(optimized.starters.map((starter) => [starter.playerId, starter.lineupSlot])).toEqual([
+      ["qb", "QB"],
+      ["wr", "FLEX"],
+    ]);
+    expect(optimized.bench.map((reserve) => reserve.playerId)).toEqual([]);
+  });
+
+  it("does not let an unavailable player replace a bye or fill an empty slot", () => {
+    const byeWr = player({
+      playerId: "bye-wr",
+      position: "WR",
+      lineupSlot: "WR",
+      isStarter: true,
+      projection: null,
+      isBye: true,
+    });
+    const outBench = player({ playerId: "out-wr", position: "WR", projection: 0, injuryStatus: "Out" });
+    const irBench = player({ playerId: "ir-wr", position: "WR", projection: 0, injuryStatus: "IR" });
+    const kept = optimizeLineup([byeWr], [outBench, irBench], now);
+    expect(kept.starters.map((starter) => starter.playerId)).toEqual(["bye-wr"]);
+    expect(kept.bench.map((reserve) => reserve.playerId)).toEqual(["out-wr", "ir-wr"]);
+
+    const healthy = player({ playerId: "healthy-wr", position: "WR", projection: 9 });
+    const replaced = optimizeLineup([byeWr], [outBench, healthy], now);
+    expect(replaced.starters.map((starter) => starter.playerId)).toEqual(["healthy-wr"]);
+    expect(replaced.bench.map((reserve) => reserve.playerId)).toEqual(["bye-wr", "out-wr"]);
+
+    const vacant = player({ playerId: "0", position: "WR", lineupSlot: "WR", isStarter: true });
+    const hole = optimizeLineup([vacant], [outBench], now);
+    expect(hole.starters.map((starter) => starter.playerId)).toEqual(["0"]);
+    expect(hole.bench.map((reserve) => reserve.playerId)).toEqual(["out-wr"]);
+  });
+});
+
+describe("matchup points and bench pool", () => {
+  it("shows live points once an actual is posted and keeps a projection when it is not", () => {
+    expect(displayedMatchupPoints({ gamePhase: "live", actual: 7.4, projection: 16 })).toEqual({ value: 7.4, label: "PTS" });
+    expect(displayedMatchupPoints({ gamePhase: "live", actual: 0, projection: 16 })).toEqual({ value: 0, label: "PTS" });
+    expect(displayedMatchupPoints({ gamePhase: "live", actual: null, projection: 16 })).toEqual({ value: 16, label: "PROJ" });
+    expect(displayedMatchupPoints({ gamePhase: "pregame", actual: 0, projection: 12 })).toEqual({ value: 12, label: "PROJ" });
+    expect(displayedMatchupPoints({ gamePhase: "final", actual: 9, projection: 14 })).toEqual({ value: 9, label: "PTS" });
+  });
+
+  it("counts live actuals in power rankings and drops reserve and taxi from the bench", () => {
+    const live = player({
+      playerId: "live",
+      position: "WR",
+      projection: 18,
+      actual: 4,
+      gamePhase: "live",
+      gameTime: "2026-10-11T17:00:00.000Z",
+    });
+    expect(powerRankingPoints(live, now)).toBe(4);
+    expect(lineupCountingPoints(live, now)).toBe(4);
+    expect(powerRankingPoints(player({ playerId: "0", position: "FLEX", lineupSlot: "FLEX", isStarter: true }), now)).toBeNull();
+    expect(activeBenchIds(["qb", "wr", "ir", "taxi", "0"], ["qb", "0"], ["ir"], ["taxi"])).toEqual(["wr"]);
+  });
+});
+
+describe("optimizeTradeRoster", () => {
+  it("keeps a locked starter in place and does not start a locked bench boom", () => {
+    const locked = player({
+      playerId: "locked-wr",
+      position: "WR",
+      lineupSlot: "WR",
+      isStarter: true,
+      projection: 18,
+      actual: 2,
+      gamePhase: "final",
+      gameTime: "2026-10-11T17:00:00.000Z",
+    });
+    const fresh = player({ playerId: "fresh-wr", position: "WR", projection: 14 });
+    const lockedBench = player({
+      playerId: "bench-boom",
+      position: "WR",
+      projection: 4,
+      actual: 25,
+      gamePhase: "final",
+      gameTime: "2026-10-11T17:00:00.000Z",
+    });
+    const graded = optimizeTradeRoster([locked, fresh, lockedBench], ["WR"], now);
+
+    expect(graded.starters.map((starter) => starter.playerId)).toEqual(["locked-wr"]);
+    expect(graded.bench.map((reserve) => reserve.playerId)).toEqual(["fresh-wr", "bench-boom"]);
+    expect(graded.score).toBe(2);
   });
 });

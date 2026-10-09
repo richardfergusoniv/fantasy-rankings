@@ -60,6 +60,8 @@ export type SleeperRoster = {
   owner_id?: string;
   players?: string[];
   starters?: string[];
+  reserve?: string[];
+  taxi?: string[];
   settings?: { wins?: number; losses?: number; ties?: number };
   metadata?: { team_name?: string };
 };

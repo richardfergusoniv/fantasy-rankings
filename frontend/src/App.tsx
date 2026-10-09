@@ -11,7 +11,7 @@ import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { eligibleForSlot, lineupCountingPoints, optimizeLineup } from "../../api/_lib/lineup-optimizer";
+import { displayedMatchupPoints, eligibleForSlot, lineupCountingPoints, optimizeLineup, optimizeTradeRoster as optimizeLockedTradeRoster } from "../../api/_lib/lineup-optimizer";
 import { api, type ApiResponse } from "./api";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition } from "./dashboard-url";
 import { useLinkedPlayerSync } from "./linked-player";
@@ -403,9 +403,12 @@ function comparablePlayerName(value: string): string {
 }
 
 function playerScore(player: RosterPlayer): { value: number | null; label: "PROJ" | "PTS" } {
-  return player.gamePhase === "final"
-    ? { value: player.actual, label: "PTS" }
-    : { value: player.projection, label: "PROJ" };
+  return displayedMatchupPoints(player);
+}
+
+function matchupCell(player: RosterPlayer | undefined): RosterPlayer | undefined {
+  if (!player || player.playerId === "0") return undefined;
+  return player;
 }
 
 function sleeperInjuryTag(status: string): string {
@@ -1517,16 +1520,16 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
           {rows.map(({ mine: myPlayer, theirs }, index) => (
             <div className="matchup-row" key={`${myPlayer?.playerId ?? "empty"}-${theirs?.playerId ?? "empty"}-${index}`}>
               <MatchupPlayer
-                player={myPlayer}
+                player={matchupCell(myPlayer)}
                 side="mine"
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
-                isSwappedIn={mode === "optimized" && Boolean(myPlayer) && !league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
+                isSwappedIn={mode === "optimized" && Boolean(matchupCell(myPlayer)) && !league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
               />
               <span className="matchup-slot">{(myPlayer?.lineupSlot ?? theirs?.lineupSlot ?? "—").replace("_", " ")}</span>
               <MatchupPlayer
-                player={theirs}
+                player={matchupCell(theirs)}
                 side="theirs"
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
@@ -2574,43 +2577,7 @@ function projectionPoints(player: RosterPlayer): number {
 }
 
 function optimizeTradeRoster(players: RosterPlayer[], slots: string[]): OptimizedRoster {
-  const currentStarterIds = new Set(players.filter((player) => player.isStarter).map((player) => player.playerId));
-  type State = { score: number; currentCount: number; assignments: Array<RosterPlayer | undefined> };
-  let states = new Map<number, State>([[0, { score: 0, currentCount: 0, assignments: Array.from({ length: slots.length }) }]]);
-  for (const player of players) {
-    if (!["QB", "RB", "WR", "TE", "K", "DEF"].includes(player.position)) continue;
-    const next = new Map(states);
-    for (const [mask, state] of states) {
-      slots.forEach((slot, slotIndex) => {
-        const bit = 2 ** slotIndex;
-        if ((mask & bit) !== 0 || !eligibleForSlot(player.position, slot)) return;
-        const nextMask = mask | bit;
-        const candidate: State = {
-          score: state.score + projectionPoints(player),
-          currentCount: state.currentCount + (currentStarterIds.has(player.playerId) ? 1 : 0),
-          assignments: state.assignments.map((assigned, index) => index === slotIndex ? player : assigned),
-        };
-        const existing = next.get(nextMask);
-        if (!existing || candidate.score > existing.score || (candidate.score === existing.score && candidate.currentCount > existing.currentCount)) next.set(nextMask, candidate);
-      });
-    }
-    states = next;
-  }
-  const countBits = (value: number): number => value.toString(2).replaceAll("0", "").length;
-  let bestMask = 0;
-  let bestState = states.get(0) ?? { score: 0, currentCount: 0, assignments: [] };
-  for (const [mask, state] of states) {
-    const filled = countBits(mask);
-    const bestFilled = countBits(bestMask);
-    if (filled > bestFilled || (filled === bestFilled && (state.score > bestState.score || (state.score === bestState.score && state.currentCount > bestState.currentCount)))) {
-      bestMask = mask;
-      bestState = state;
-    }
-  }
-  const starters = bestState.assignments.flatMap((player, index) => player ? [{ ...player, isStarter: true, lineupSlot: slots[index] ?? player.position }] : []);
-  const starterIds = new Set(starters.map((player) => player.playerId));
-  const bench = players.filter((player) => !starterIds.has(player.playerId)).map((player) => ({ ...player, isStarter: false, lineupSlot: null }));
-  return { starters, bench, score: Number(bestState.score.toFixed(2)) };
+  return optimizeLockedTradeRoster(players, slots);
 }
 
 function tradeDepthScore(optimized: OptimizedRoster, slots: string[]): number {

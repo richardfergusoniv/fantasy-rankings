@@ -49,7 +49,7 @@ import {
   type SleeperPlayer,
   type SleeperRoster,
 } from "./sleeper.js";
-import { eligibleForSlot, isLineupLocked, optimizeLineup } from "./lineup-optimizer.js";
+import { activeBenchIds, eligibleForSlot, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, optimizeLineup } from "./lineup-optimizer.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -1767,14 +1767,44 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       };
     };
 
+    const vacantRosterPlayer = (slot: string): RosterPlayer => ({
+      playerId: "0",
+      name: "",
+      team: null,
+      position: slot,
+      lineupSlot: slot,
+      isStarter: true,
+      rank: null,
+      projection: null,
+      projectionSource: null,
+      actual: null,
+      gamePhase: null,
+      gameTime: null,
+      opponent: null,
+      isAway: null,
+      isBye: false,
+      injuryStatus: null,
+      defenseComponents: null,
+      projectionComponents: null,
+    });
+    const submittedStarters = (
+      starterIds: string[],
+      activeMatchup: SleeperMatchup | undefined,
+    ): RosterPlayer[] => mapSubmittedStarters(
+      starterIds,
+      (id, index) => makePlayer(id, true, activeMatchup, index),
+      (index) => vacantRosterPlayer(starterSlots[index] ?? "BN"),
+    );
+    const activeBench = (roster: SleeperRoster, activeMatchup: SleeperMatchup | undefined): RosterPlayer[] => (
+      activeBenchIds(roster.players ?? [], roster.starters ?? [], roster.reserve ?? [], roster.taxi ?? [])
+        .map((id) => makePlayer(id, false, activeMatchup))
+    );
     const starterIds = ownRoster.starters ?? [];
-    const starters = starterIds.map((id, index) => ({ id, index })).filter(({ id }) => id && id !== "0").map(({ id, index }) => makePlayer(id, true, matchup, index));
-    const starterSet = new Set(starterIds);
-    const bench = (ownRoster.players ?? []).filter((id) => !starterSet.has(id)).map((id) => makePlayer(id, false, matchup));
+    const starters = submittedStarters(starterIds, matchup);
+    const bench = activeBench(ownRoster, matchup);
     const opponentStarterIds = opponentRoster?.starters ?? [];
-    const opponentStarters = opponentStarterIds.map((id, index) => ({ id, index })).filter(({ id }) => id && id !== "0").map(({ id, index }) => makePlayer(id, true, opponentMatchup, index));
-    const opponentStarterSet = new Set(opponentStarterIds);
-    const opponentBench = (opponentRoster?.players ?? []).filter((id) => !opponentStarterSet.has(id)).map((id) => makePlayer(id, false, opponentMatchup));
+    const opponentStarters = submittedStarters(opponentStarterIds, opponentMatchup);
+    const opponentBench = opponentRoster ? activeBench(opponentRoster, opponentMatchup) : [];
     const opponentOwner = usersResult.status === "fulfilled"
       ? usersResult.value.find((user) => user.user_id === opponentRoster?.owner_id)
       : undefined;
@@ -1929,22 +1959,16 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       .map((roster) => {
         const positionValues = { QB: 0, RB: 0, WR: 0, TE: 0, FLEX: 0, K: 0, DEF: 0 };
         const rosterMatchup = matchupByRosterId.get(roster.roster_id);
-        const rosterStarterIds = roster.starters ?? [];
-        const powerStarters = rosterStarterIds
-          .map((id, index) => ({ id, index }))
-          .filter(({ id }) => id && id !== "0")
-          .map(({ id, index }) => makePlayer(id, true, rosterMatchup, index));
-        const powerStarterSet = new Set(rosterStarterIds);
-        const powerBench = (roster.players ?? [])
-          .filter((id) => !powerStarterSet.has(id))
-          .map((id) => makePlayer(id, false, rosterMatchup));
+        const powerStarters = submittedStarters(roster.starters ?? [], rosterMatchup);
+        const powerBench = activeBench(roster, rosterMatchup);
         const optimizedLineup = optimizeWeeklyPowerLineup(powerStarters, powerBench);
         for (const player of optimizedLineup) {
+          if (isVacantLineupSlot(player)) continue;
           const position = ["FLEX", "SUPER_FLEX", "REC_FLEX", "WRRB_FLEX"].includes(player.lineupSlot ?? "")
             ? "FLEX"
             : player.position;
           if (!(position in positionValues)) continue;
-          const value = player.gamePhase === "final" ? player.actual : player.projection;
+          const value = lineupCountingPoints(player);
           if (value !== null) positionValues[position as keyof typeof positionValues] += value;
         }
         for (const position of Object.keys(positionValues) as Array<keyof typeof positionValues>) {
