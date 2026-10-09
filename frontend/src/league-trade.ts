@@ -96,6 +96,17 @@ export function buildLeagueRosterRows(
   return [...playerRows, ...pickRows].sort((left, right) => (right.value ?? -1) - (left.value ?? -1) || left.name.localeCompare(right.name));
 }
 
+export type TeamRecord = {
+  wins: number;
+  losses: number;
+  ties: number;
+};
+
+export function formatTeamRecord(record: TeamRecord): string {
+  const base = `${record.wins}-${record.losses}`;
+  return record.ties > 0 ? `${base}-${record.ties}` : base;
+}
+
 export function tradeValueVerdict(giveTotal: number, getTotal: number, partnerName: string): string {
   const margin = Math.abs(getTotal - giveTotal);
   if (margin === 0) return "This trade is even.";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLeagueRosterRows, compactPlayerName, formatLineupImpact, tradeValueVerdict } from "./league-trade";
+import { buildLeagueRosterRows, compactPlayerName, formatLineupImpact, formatTeamRecord, tradeValueVerdict } from "./league-trade";
 
 describe("compactPlayerName", () => {
   it("abbreviates a first name and keeps suffixes", () => {
@@ -28,6 +28,13 @@ describe("buildLeagueRosterRows", () => {
     expect(rows[0]?.shortName).toBe("J. Jefferson");
     expect(rows[2]).toMatchObject({ position: "PICK", shortName: "2027 1st" });
     expect(rows[3]).toMatchObject({ value: null, selectable: false, injuryStatus: "Questionable" });
+  });
+});
+
+describe("formatTeamRecord", () => {
+  it("appends ties only when the roster has any", () => {
+    expect(formatTeamRecord({ wins: 4, losses: 1, ties: 0 })).toBe("4-1");
+    expect(formatTeamRecord({ wins: 4, losses: 1, ties: 1 })).toBe("4-1-1");
   });
 });
 

@@ -14,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition } from "./dashboard-url";
 import { useLinkedPlayerSync } from "./linked-player";
-import { buildLeagueRosterRows, compactAssetName, formatLineupImpact, rosterPositionLabel, tradeValueVerdict, type LeagueRosterRow } from "./league-trade";
+import { buildLeagueRosterRows, compactAssetName, formatLineupImpact, formatTeamRecord, rosterPositionLabel, tradeValueVerdict, type LeagueRosterRow, type TeamRecord } from "./league-trade";
 import { formatDecimal, formatPercent } from "./lib/format-number";
 import { MatchupTag, ModalPortal, SegmentedControl, SkipLink, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 import { supabase } from "./supabase";
@@ -3042,6 +3042,7 @@ function LeagueAdjustedTrade({
   getIds,
   starterSlots,
   waiverPool,
+  recordByRosterId,
   onPartnerChange,
   onToggle,
 }: {
@@ -3053,6 +3054,7 @@ function LeagueAdjustedTrade({
   getIds: string[];
   starterSlots: string[];
   waiverPool: RosterPlayer[];
+  recordByRosterId: ReadonlyMap<number, TeamRecord>;
   onPartnerChange: (rosterId: number | null) => void;
   onToggle: (side: "give" | "get", id: string) => void;
 }) {
@@ -3090,11 +3092,26 @@ function LeagueAdjustedTrade({
             <header className="league-roster-heading"><h3>Trade partner</h3></header>
             {partners.length === 0 ? <p className="league-roster-empty">No other teams in this league.</p> : (
               <ul className="league-roster-list" aria-label="League teams">
-                {partners.map((team) => (
-                  <li key={team.rosterId}>
-                    <button type="button" className="league-team-row" onClick={() => onPartnerChange(team.rosterId)}><span>{team.teamName}</span></button>
-                  </li>
-                ))}
+                {partners.map((team) => {
+                  const record = team.record ?? recordByRosterId.get(team.rosterId);
+                  const recordLabel = record ? formatTeamRecord(record) : "—";
+                  return (
+                    <li key={team.rosterId}>
+                      <label className="league-roster-row league-team-row">
+                        <input
+                          type="checkbox"
+                          checked={false}
+                          onChange={() => onPartnerChange(team.rosterId)}
+                          aria-label={record ? `Trade with ${team.teamName}, ${recordLabel}` : `Trade with ${team.teamName}`}
+                        />
+                        <span className="league-roster-main">
+                          <span className="league-roster-name"><strong>{team.teamName}</strong></span>
+                        </span>
+                        <span className="league-roster-meta"><span>{recordLabel}</span></span>
+                      </label>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
@@ -3686,6 +3703,18 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
   const historyQuery = useQuery({ queryKey: ["fantasycalc-value-history", league.seasonLongFormat.key, selectedPlayerIds], queryFn: () => api.getValueHistory({ formatKey: league.seasonLongFormat.key, playerIds: selectedPlayerIds }), enabled: valuationMode === "market" && selectedPlayerIds.length > 0 });
   const historyByPlayerId = useMemo(() => new Map((historyQuery.data?.series ?? []).map((series) => [series.playerId, series])), [historyQuery.data]);
   const mine = userTeam;
+  const recordByRosterId = useMemo(() => {
+    const records = new Map<number, TeamRecord>();
+    for (const ranking of [league.powerRankingsWeek, league.powerRankingsSeasonLong, league.powerRankingsDynasty]) {
+      for (const team of ranking) {
+        if (!records.has(team.rosterId)) records.set(team.rosterId, team.record);
+      }
+    }
+    for (const team of league.tradeTeams) {
+      if (team.record) records.set(team.rosterId, team.record);
+    }
+    return records;
+  }, [league.powerRankingsDynasty, league.powerRankingsSeasonLong, league.powerRankingsWeek, league.tradeTeams]);
   const partner = league.tradeTeams.find((team) => team.rosterId === theirRosterId && team.rosterId !== mine?.rosterId) ?? null;
   const marketCounterpart = league.tradeTeams.find((team) => team.rosterId !== mine?.rosterId);
   const unrestrictedAssets = assets.filter((asset) => !selectedIds.has(asset.playerId));
@@ -3763,6 +3792,7 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
             getIds={getIds}
             starterSlots={league.tradeStarterSlots}
             waiverPool={league.tradeWaiverPool}
+            recordByRosterId={recordByRosterId}
             onPartnerChange={(rosterId) => { setTheirRosterId(rosterId); setGetIds([]); }}
             onToggle={toggleLeagueAsset}
           />

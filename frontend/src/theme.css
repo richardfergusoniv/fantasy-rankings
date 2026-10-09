@@ -875,12 +875,8 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-roster-empty { margin: 0; padding: 10px 8px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .league-roster-row:focus-within { outline: 2px solid var(--link); outline-offset: -2px; }
 .league-roster-row input:focus-visible { outline: none; }
-/* Two caption lines size a roster row to 48px; the hairline makes every other row 49px. */
-.league-roster-list > li:last-child .league-team-row { min-height: 48px; border-bottom: 0; }
-button.league-team-row { display: flex; align-items: center; width: 100%; min-height: 49px; padding: 4px 6px; overflow: hidden; border: 0; border-bottom: 1px solid var(--hairline); border-radius: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-caption); font-weight: 700; line-height: 1.5; text-align: left; }
-button.league-team-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-button.league-team-row:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }
-button.league-team-row:active { background: var(--surface-2); }
+/* The position badge sets the first line of a player row. Match that so team rows stay the same height. */
+.league-team-row .league-roster-main { min-height: 21px; }
 .league-trade-dialog { width: min(calc(100% - 1.5rem), 26rem); gap: 12px; padding: 14px 12px 16px; border-color: var(--border); border-radius: var(--radius-xl); background: var(--surface); color: var(--text); box-shadow: var(--shadow-modal); }
 .league-trade-dialog-heading { padding-right: 40px; }
 .league-trade-lineup { margin: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
