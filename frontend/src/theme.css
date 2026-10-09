@@ -719,6 +719,7 @@ button.monitor-alert:hover { background: var(--surface-2); }
 .number-cell span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 
 .rankings-toolbar { position: sticky; top: var(--sticky-offset); z-index: 9; padding: 7px 0 8px; border-bottom: 1px solid var(--hairline); background: var(--bg); }
+.rankings-density-toggle { margin-top: 7px; }
 .search-field { display: flex; min-height: 44px; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--dim); }
 .search-field input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); font-size: 16px; }
 .search-field input[type="search"] { appearance: none; }
@@ -2778,6 +2779,35 @@ a:active { color: var(--link-active); }
 .trade-result-row,
 .comparison-picker-results > button {
   min-height: var(--player-box-height);
+}
+
+/*
+ * Explorer density (rankings / waivers only).
+ * Compact overrides inherit via data-density on .rankings-view so Matchup,
+ * trade, power, and draft row heights stay on the root tokens.
+ */
+.rankings-view[data-density="compact"] {
+  --player-box-height: 56px;
+  --player-box-half: 28px;
+  --player-row-height: 56px;
+}
+
+.rankings-view[data-density="compact"] .ranking-row,
+.rankings-view[data-density="compact"] .player-search-result {
+  min-height: 56px;
+}
+
+.rankings-view[data-density="compact"] .ranking-row .ranking-player {
+  grid-template-rows: 28px 28px;
+}
+
+.rankings-view[data-density="compact"] .ranking-row .ranking-name-line,
+.rankings-view[data-density="compact"] .ranking-row .ranking-meta-line {
+  min-height: 28px;
+}
+
+.rankings-view[data-density="compact"] .ranking-row .matchup-reference-button.matchup-reference-tag {
+  min-height: 28px;
 }
 
 .matchup-player {
