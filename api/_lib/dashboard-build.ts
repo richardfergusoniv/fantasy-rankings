@@ -52,6 +52,8 @@ import {
 import { activeBenchIds, eligibleForSlot, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, optimizeLineup } from "./lineup-optimizer.js";
 import { rankingsForLeagueFormats } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
+import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
+import { selectProjectionFeed } from "./projection-fallback.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -1030,13 +1032,15 @@ function mergeVegasPlayerProjections(
   defenseRankByTeam: Map<string, number>,
 ): Ranking[] {
   const feedByPlayer = new Map<string, VegasProjectionPayload["projections"][number]>();
-  const feedByNamePosition = new Map<string, VegasProjectionPayload["projections"][number]>();
+  const feedByNamePosition = new Map<string, Array<VegasProjectionPayload["projections"][number]>>();
   for (const projection of snapshot?.projections ?? []) {
     const position = normalizePosition(projection.position);
     const exactKey = `${normalizedPlayerName(projection.player)}:${canonicalTeam(projection.team)}:${position}`;
     feedByPlayer.set(exactKey, projection);
     const namePositionKey = `${normalizedPlayerName(projection.player)}:${position}`;
-    if (!feedByNamePosition.has(namePositionKey)) feedByNamePosition.set(namePositionKey, projection);
+    const nameMatches = feedByNamePosition.get(namePositionKey) ?? [];
+    nameMatches.push(projection);
+    feedByNamePosition.set(namePositionKey, nameMatches);
   }
 
   const merged = baseRows.flatMap((base): Ranking[] => {
@@ -1091,7 +1095,12 @@ function mergeVegasPlayerProjections(
     }
 
     const exactKey = `${normalizedPlayerName(base.name)}:${canonicalTeam(base.team)}:${base.position}`;
-    const feed = feedByPlayer.get(exactKey) ?? feedByNamePosition.get(`${normalizedPlayerName(base.name)}:${base.position}`);
+    const feed = selectProjectionFeed(
+      feedByPlayer.get(exactKey),
+      feedByNamePosition.get(`${normalizedPlayerName(base.name)}:${base.position}`) ?? [],
+      canonicalTeam(base.team ?? ""),
+      (row) => row.team ? canonicalTeam(row.team) : "",
+    );
     const feedTeam = feed?.team ? canonicalTeam(feed.team) : null;
     const baseTeam = canonicalTeam(base.team ?? "");
     const teamCompatible = feedTeam !== null && feedTeam === baseTeam;
@@ -1858,7 +1867,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     const matchupByRosterId = new Map(matchups.map((row) => [row.roster_id, row]));
 
     const pickTemplates = seasonLongRankings.filter((row) => row.formatKey === seasonLongFormat.key && row.position === "PICK");
-    type PickTier = "early" | "mid" | "late";
     const pickTemplatesByTier = new Map<string, SeasonLongRanking>();
     const pickCoordinates = new Map<string, { season: string; round: number }>();
     for (const template of pickTemplates) {
@@ -1874,10 +1882,9 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     }
     const tradedPicks = tradedPicksResult.status === "fulfilled" ? tradedPicksResult.value : [];
     const ordinal = (value: number): string => value === 1 ? "1st" : value === 2 ? "2nd" : value === 3 ? "3rd" : `${value}th`;
-    // Season-long power rankings (roster-only values) drive pick-tier estimation:
-    // a cellar team's future 1st is worth an "early" 1st, a contender's a "late" 1st.
-    // Built here so both ownedPicks (trade calculator) and futurePickValue (power
-    // rankings display) share the same rank source.
+    // Pick tiers blend current record with redraft roster value. A cellar team's
+    // future 1st is an "early" 1st and a contender's is a "late" 1st. Built here
+    // so owned picks and the power-rankings pick total share one order.
     const makePowerRankings = (formatKey: string): z.infer<typeof powerRankingSchema>[] => {
       const values = seasonLongRankings.filter((row) => row.formatKey === formatKey && row.position !== "PICK");
       if (values.length === 0) return [];
@@ -1907,16 +1914,20 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     };
     const seasonLongPowerFormatKey = `redraft-${seasonLongFormat.numQbs}qb-${seasonLongFormat.numTeams}t-${seasonLongFormat.ppr}ppr`;
     const powerRankingsSeasonLong = makePowerRankings(seasonLongPowerFormatKey);
-    const rankByRosterId = new Map(powerRankingsSeasonLong.map((row) => [row.rosterId, row.rank]));
+    const rankByRosterId = blendedContenderRanks(powerRankingsSeasonLong.map((row) => ({
+      rosterId: row.rosterId,
+      wins: row.record.wins,
+      losses: row.record.losses,
+      ties: row.record.ties,
+      valueRank: row.rank,
+    })));
     const teamCount = rosters.length;
     const ownedPicksByRosterId = new Map<number, SeasonLongRanking[]>();
     if (seasonLongFormat.isDynasty) {
       for (const [coordinateKey, { season: pickSeason, round: pickRound }] of pickCoordinates) {
         for (const originalRoster of rosters) {
           const originalRank = rankByRosterId.get(originalRoster.roster_id);
-          const tier: PickTier = originalRank === undefined ? "mid"
-            : originalRank <= teamCount / 3 ? "late"
-            : originalRank <= (2 * teamCount) / 3 ? "mid" : "early";
+          const tier: PickTier = pickTierForRank(originalRank, teamCount);
           const template = pickTemplatesByTier.get(`${coordinateKey}:${tier}`)
             ?? pickTemplatesByTier.get(`${coordinateKey}:mid`);
           if (!template) continue;
@@ -2019,9 +2030,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         for (const originalRoster of rosters) {
           const originalRank = rankByRosterId.get(originalRoster.roster_id);
           if (originalRank === undefined) continue;
-          const tier: PickTier = originalRank <= teamCount / 3
-            ? "late"
-            : originalRank <= (2 * teamCount) / 3 ? "mid" : "early";
+          const tier: PickTier = pickTierForRank(originalRank, teamCount);
           const template = pickTemplatesByTier.get(`${coordinateKey}:${tier}`)
             ?? pickTemplatesByTier.get(`${coordinateKey}:mid`);
           if (!template) continue;
