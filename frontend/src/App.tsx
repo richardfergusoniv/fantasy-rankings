@@ -4432,6 +4432,7 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
           ariaLabel: item === "ROOKIES" ? "Rookies" : undefined,
         }))}
       />
+      <button className="draft-refresh-button" type="button" onClick={onRefresh} disabled={refreshing} aria-label="Refresh draft data"><RefreshIcon spinning={refreshing} /></button>
     </div>
   );
 
@@ -4512,10 +4513,7 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
 
   return (
     <section className="draft-center">
-      <div className="draft-heading">
-        <h2 className="sr-only">Draft Room</h2>
-        <button className="refresh-button" type="button" onClick={onRefresh} disabled={refreshing} aria-label="Refresh draft data"><RefreshIcon spinning={refreshing} /></button>
-      </div>
+      <h2 className="sr-only">Draft Room</h2>
       <SegmentedControl
         value={mode}
         onChange={(value) => publishDraftFilters({ room: value })}
