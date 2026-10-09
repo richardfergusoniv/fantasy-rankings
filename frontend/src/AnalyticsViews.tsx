@@ -7,7 +7,7 @@ import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogFoot
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
-import type { MatchupSelection } from "./App";
+import type { MatchupSelection } from "./dashboard-types";
 import {
   SAVED_CHART_VIEWS_QUERY_KEY,
   applySavedChartViewMutation,
