@@ -585,7 +585,7 @@ button.monitor-alert:hover { background: var(--surface-2); }
   font-variant-numeric: tabular-nums;
 }
 .monitor-mover.is-up strong { color: var(--give); }
-.monitor-mover.is-down strong { color: var(--danger-text, #f07178); }
+.monitor-mover.is-down strong { color: var(--danger-text); }
 .monitor-alert {
   flex-direction: column;
   align-items: flex-start;
