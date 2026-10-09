@@ -1783,7 +1783,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 
 /* Draft center, market signals, and embedded player news */
 .draft-center { display: grid; gap: 16px; }
-.draft-heading { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 16px; padding: 1px 2px 11px; border-bottom: 1px solid var(--hairline); }
+.draft-heading { display: flex; align-items: center; justify-content: flex-end; min-height: 0; margin: 0; padding: 0; border: 0; }
 .draft-heading h2 { margin: 0; font-size: var(--type-display); line-height: 1.08; font-weight: 700; letter-spacing: -.025em; }
 .draft-heading .refresh-button { background: var(--surface-2); }
 .draft-source-caption { margin: 0; color: var(--dim); font-size: var(--type-caption); }
