@@ -3087,6 +3087,7 @@ function LeagueAdjustedTrade({
           </section>
         ) : (
           <section className="league-roster-card" aria-label="Trade partners">
+            <header className="league-roster-heading"><h3>Trade partner</h3></header>
             {partners.length === 0 ? <p className="league-roster-empty">No other teams in this league.</p> : (
               <ul className="league-roster-list" aria-label="League teams">
                 {partners.map((team) => (
