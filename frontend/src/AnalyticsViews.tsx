@@ -2227,6 +2227,30 @@ function pfnValue(value: number | string | null | undefined): string {
   return value === null || value === undefined ? "—" : String(value);
 }
 
+const PFN_HIDDEN_COLUMNS_KEY = "fantasy-pfn-hidden-columns";
+
+type PfnHiddenColumnsByTable = Partial<Record<PfnTableKey, string[]>>;
+
+function readPfnHiddenColumns(): PfnHiddenColumnsByTable {
+  try {
+    const raw = localStorage.getItem(PFN_HIDDEN_COLUMNS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as PfnHiddenColumnsByTable;
+  } catch {
+    return {};
+  }
+}
+
+function writePfnHiddenColumns(next: PfnHiddenColumnsByTable): void {
+  try {
+    localStorage.setItem(PFN_HIDDEN_COLUMNS_KEY, JSON.stringify(next));
+  } catch {
+    // Ignore quota / private-mode failures; visibility still works for this session.
+  }
+}
+
 function PfnTableView({ tableKey }: { tableKey: PfnTableKey }) {
   const query = useQuery({
     queryKey: ["pfn-tables"],
@@ -2242,13 +2266,36 @@ function PfnTableView({ tableKey }: { tableKey: PfnTableKey }) {
     // after Team.
     return ["grade", ...table.columns.filter((column) => !["rank", "team", "grade"].includes(column))];
   }, [table]);
+  const [hiddenColumns, setHiddenColumns] = useState<string[]>(() => readPfnHiddenColumns()[tableKey] ?? []);
+  const [columnsOpen, setColumnsOpen] = useState(false);
   const [sortKey, setSortKey] = useState("rank");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
     setSortKey("rank");
     setSortDirection("asc");
+    setHiddenColumns(readPfnHiddenColumns()[tableKey] ?? []);
+    setColumnsOpen(false);
   }, [tableKey]);
+
+  const visibleColumns = useMemo(
+    () => orderedColumns.filter((column) => !hiddenColumns.includes(column)),
+    [hiddenColumns, orderedColumns],
+  );
+
+  function toggleColumn(column: string) {
+    setHiddenColumns((current) => {
+      const nextHidden = current.includes(column)
+        ? current.filter((item) => item !== column)
+        : [...current, column];
+      // Rank and Team stay fixed; only toggleable columns are stored.
+      const allowed = new Set(orderedColumns);
+      const cleaned = nextHidden.filter((item) => allowed.has(item));
+      const stored = readPfnHiddenColumns();
+      writePfnHiddenColumns({ ...stored, [tableKey]: cleaned });
+      return cleaned;
+    });
+  }
 
   const rows = useMemo(() => {
     if (!table) return [];
@@ -2318,6 +2365,36 @@ function PfnTableView({ tableKey }: { tableKey: PfnTableKey }) {
         <h2>{table.label}</h2>
         <span>Updated {pfnUpdatedDate(table.fetched_at)}</span>
       </div>
+      <div className="pfn-column-controls">
+        <button
+          type="button"
+          className="pfn-columns-toggle"
+          aria-expanded={columnsOpen}
+          aria-controls={`pfn-columns-${tableKey}`}
+          onClick={() => setColumnsOpen((open) => !open)}
+        >
+          Columns
+        </button>
+        {columnsOpen ? (
+          <fieldset id={`pfn-columns-${tableKey}`} className="pfn-columns-menu" aria-label="Show or hide PFN columns">
+            <legend className="sr-only">PFN columns</legend>
+            {orderedColumns.map((column) => {
+              const label = column === "grade" ? "Grade" : (table.column_labels[column] ?? column);
+              const checked = !hiddenColumns.includes(column);
+              return (
+                <label key={column} className="pfn-column-option">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleColumn(column)}
+                  />
+                  <span>{label}</span>
+                </label>
+              );
+            })}
+          </fieldset>
+        ) : null}
+      </div>
       <div className="pfn-table-wrap" role="region" aria-label={`${table.label} team rankings`} tabIndex={0}>
         <Table className="pfn-table">
           <TableHeader>
@@ -2332,7 +2409,7 @@ function PfnTableView({ tableKey }: { tableKey: PfnTableKey }) {
                   Team {sortIndicator("team")}
                 </button>
               </TableHead>
-              {orderedColumns.map((column) => (
+              {visibleColumns.map((column) => (
                 <TableHead scope="col" className={column === "grade" ? "pfn-grade-col" : undefined} key={column} aria-sort={ariaSort(column)}>
                   <button type="button" className="pfn-sort-button" onClick={() => changeSort(column)}>
                     {column === "grade" ? "Grade" : (table.column_labels[column] ?? column)} {sortIndicator(column)}
@@ -2346,7 +2423,7 @@ function PfnTableView({ tableKey }: { tableKey: PfnTableKey }) {
               <TableRow key={row.team}>
                 <TableCell className="pfn-rank-col"><strong>{row.rank}</strong></TableCell>
                 <TableHead scope="row" className="pfn-team-col">{row.team}</TableHead>
-                {orderedColumns.map((column) => (
+                {visibleColumns.map((column) => (
                   <TableCell className={column === "grade" ? "pfn-grade-col" : undefined} key={column}>
                     {column === "grade" ? <strong>{pfnValue(row[column])}</strong> : pfnValue(row[column])}
                   </TableCell>

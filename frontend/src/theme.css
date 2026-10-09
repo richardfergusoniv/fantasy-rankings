@@ -373,6 +373,7 @@ p { text-wrap: pretty; }
 
 .subview-tabs { margin: 12px 16px 0; }
 .tools-subview-tabs { max-width: 100%; }
+.explorer-subview-tabs { max-width: 100%; overflow-x: auto; }
 .segmented-control {
   --segment-count: 2;
   --segment-index: 0;
@@ -2107,6 +2108,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .primary-tabs button.active { border-bottom-color: var(--action); color: var(--foreground); }
   .subview-tabs { width: 360px; margin-left: 32px; }
   .tools-subview-tabs { width: 520px; }
+  .explorer-subview-tabs { width: min(720px, 100%); }
   main { padding: 10px 32px 30px; }
   .matchup-score, .lineup-section, .bench-section { max-width: 860px; }
   .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
@@ -2263,6 +2265,38 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .tables-dataset-tabs { width: 100%; }
 .pfn-table-view { width: 100%; min-width: 0; }
 .pfn-table-view > .section-heading { position: static; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.pfn-column-controls { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 0 0 12px; }
+.pfn-columns-toggle {
+  min-height: var(--compact-control-height, 32px);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: var(--type-caption);
+  font-weight: 600;
+}
+.pfn-columns-toggle[aria-expanded="true"] { border-color: var(--link); color: var(--link); }
+.pfn-columns-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.pfn-column-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  color: var(--foreground);
+  font-size: var(--type-body);
+  cursor: pointer;
+}
+.pfn-column-option input { width: 16px; height: 16px; accent-color: var(--action); }
 .pfn-table-wrap { width: 100%; overflow: visible; border: 0; background: transparent; }
 .pfn-table-wrap > [data-slot="table-container"] { max-height: var(--table-scroll-max-height); overflow: auto; overscroll-behavior-inline: contain; }
 .pfn-table {

@@ -24,15 +24,24 @@ export type CommandItem = CommandPageItem | CommandLeagueItem | CommandPlayerIte
 
 export const COMMAND_RESULT_LIMIT = 8;
 
-/** Six primary nav pages and the tab each opens by default. */
+/** Primary nav pages and the tab each opens by default. Draft remains searchable as an Explorer mode. */
 export const PRIMARY_COMMAND_PAGES: CommandPageItem[] = [
   { kind: "page", id: "monitor", label: "Monitor", tab: "monitor" },
   { kind: "page", id: "team", label: "Matchup", tab: "team" },
   { kind: "page", id: "players", label: "Explorer", tab: "rankings" },
   { kind: "page", id: "league", label: "League", tab: "power" },
-  { kind: "page", id: "draft", label: "Draft", tab: "draft" },
   { kind: "page", id: "tools", label: "Tools", tab: "trade" },
 ];
+
+/** Extra destinations reachable from the palette (not primary nav). */
+export const EXTRA_COMMAND_PAGES: CommandPageItem[] = [
+  { kind: "page", id: "draft", label: "Draft", tab: "draft" },
+  { kind: "page", id: "charts", label: "Charts", tab: "charts" },
+  { kind: "page", id: "comparison", label: "Comparison", tab: "comparison" },
+  { kind: "page", id: "strengthOfSchedule", label: "Tables", tab: "strengthOfSchedule" },
+];
+
+export const COMMAND_PAGES: CommandPageItem[] = [...PRIMARY_COMMAND_PAGES, ...EXTRA_COMMAND_PAGES];
 
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -49,7 +58,7 @@ function labelMatches(needle: string, label: string): boolean {
 
 /**
  * Filter palette sources by query. Pages, then leagues, then players.
- * Caps at {@link COMMAND_RESULT_LIMIT}. Empty query returns the primary pages.
+ * Caps at {@link COMMAND_RESULT_LIMIT}. Empty query returns the primary pages only.
  */
 export function filterCommandItems(
   query: string,
@@ -61,8 +70,9 @@ export function filterCommandItems(
 ): CommandItem[] {
   const needle = query.trim().toLowerCase();
   const results: CommandItem[] = [];
+  const pages = needle ? sources.pages : sources.pages.filter((page) => PRIMARY_COMMAND_PAGES.some((primary) => primary.id === page.id));
 
-  for (const page of sources.pages) {
+  for (const page of pages) {
     if (!labelMatches(needle, page.label)) continue;
     results.push(page);
     if (results.length >= COMMAND_RESULT_LIMIT) return results;

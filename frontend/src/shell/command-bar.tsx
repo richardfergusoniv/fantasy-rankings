@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import type { Tab } from "../dashboard-types";
 import {
-  PRIMARY_COMMAND_PAGES,
+  COMMAND_PAGES,
   filterCommandItems,
   type CommandItem,
   type CommandLeagueItem,
@@ -37,7 +37,7 @@ export function CommandBar({
   const [activeIndex, setActiveIndex] = useState(0);
 
   const results = useMemo(
-    () => filterCommandItems(query, { pages: PRIMARY_COMMAND_PAGES, leagues, players }),
+    () => filterCommandItems(query, { pages: COMMAND_PAGES, leagues, players }),
     [leagues, players, query],
   );
 

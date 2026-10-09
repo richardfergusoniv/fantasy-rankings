@@ -277,13 +277,13 @@ export function PowerRankings({
                 <button
                   type="button"
                   className={`power-row power-row-toggle${team.isUser ? " is-user" : ""}${isOpponent ? " is-opponent" : ""}`}
-                  aria-label={`Open ${team.teamName}${scope === "restOfSeason" ? `, ${formatRecord(team.record)} record` : ""}, rank ${team.rank}${isOpponent ? ", this week's opponent" : ""}`}
+                  aria-label={`Open ${team.teamName}, ${formatRecord(team.record)} record, rank ${team.rank}${isOpponent ? ", this week's opponent" : ""}`}
                   aria-haspopup="dialog"
                   onClick={() => setSelectedTeamId(team.rosterId)}
                 >
                   <strong className="power-rank">{team.rank}</strong>
                   <span className="power-team">
-                    <strong>{team.teamName}{scope === "restOfSeason" ? <span className="power-team-record"> · {formatRecord(team.record)}</span> : null}</strong>
+                    <strong>{team.teamName}<span className="power-team-record"> · {formatRecord(team.record)}</span></strong>
                     {isOpponent ? <span className="sr-only">This week's opponent</span> : null}
                   </span>
                   <span className="power-total"><strong>{scope === "week" ? points(team.totalValue) : team.totalValue.toLocaleString()}</strong></span>

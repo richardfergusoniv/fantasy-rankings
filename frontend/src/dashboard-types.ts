@@ -19,7 +19,8 @@ export type PlayerLink = {
   linkedPlayerId: string | null;
   onOpenLinkedPlayer: (playerId: string) => void;
 };
-export type PrimaryPage = "monitor" | "team" | "players" | "league" | "draft" | "tools";
+/** Primary nav destinations. Draft is an Explorer season mode (?tab=draft), not its own primary item. */
+export type PrimaryPage = "monitor" | "team" | "players" | "league" | "tools";
 export type PlayerNews = ApiResponse<typeof api, "getPlayerNews">;
 export type DraftCenterData = ApiResponse<typeof api, "getDraftCenter">;
 export type DashboardSection = ApiResponse<typeof api, "getDashboardSection">;
