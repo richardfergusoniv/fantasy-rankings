@@ -881,8 +881,9 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-roster-row input:focus-visible { outline: none; }
 /* The position badge sets the first line of a player row. Match that so team rows stay the same height. */
 .league-team-row .league-roster-main { min-height: 21px; }
-.league-trade-dialog { width: min(calc(100% - 1.5rem), 26rem); gap: 12px; padding: 14px 12px 16px; border-color: var(--border); border-radius: var(--radius-xl); background: var(--surface); color: var(--text); box-shadow: var(--shadow-modal); }
-.league-trade-dialog-heading { padding-right: 40px; }
+[data-slot="dialog-content"].league-trade-dialog { display: flex; flex-direction: column; width: min(calc(100% - 16px), 560px); max-width: min(calc(100% - 16px), 560px); max-height: 90dvh; gap: 12px; overflow: hidden; padding: 14px 12px 16px; border-color: var(--border); border-radius: var(--radius-xl); background: var(--surface); color: var(--text); box-shadow: var(--shadow-modal); }
+.league-trade-dialog-heading { flex: none; min-height: 44px; justify-content: center; padding-right: 44px; }
+.league-trade-dialog-body { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; gap: 12px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .league-trade-lineup { margin: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
 .league-trade-chart { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
 .league-trade-column { display: flex; min-width: 0; gap: 4px; }
@@ -890,7 +891,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-trade-names, .league-trade-bar { display: flex; min-width: 0; flex-direction: column; gap: 2px; height: 100%; }
 .league-trade-names { flex: 1; }
 .league-trade-bar { width: 58px; flex: none; }
-.league-trade-name, .league-trade-segment { display: flex; min-height: 28px; flex-direction: column; justify-content: center; overflow: hidden; }
+.league-trade-name, .league-trade-segment { display: flex; min-height: 48px; flex-direction: column; justify-content: center; overflow: hidden; }
 .league-trade-column.mine .league-trade-name { align-items: flex-end; text-align: right; }
 .league-trade-name strong { max-width: 100%; overflow: hidden; font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .league-trade-name small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }

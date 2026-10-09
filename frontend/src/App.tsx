@@ -2980,6 +2980,7 @@ function LeagueTradeValueDialog({
   theirs,
   starterSlots,
   waiverPool,
+  formatKey,
   onClose,
 }: {
   give: TradeAsset[];
@@ -2988,6 +2989,7 @@ function LeagueTradeValueDialog({
   theirs: TradeTeam;
   starterSlots: string[];
   waiverPool: RosterPlayer[];
+  formatKey: string;
   onClose: () => void;
 }) {
   const giveTotal = tradeTotal(give);
@@ -2999,9 +3001,23 @@ function LeagueTradeValueDialog({
   const lineup = grade ? formatLineupImpact(grade.lineupBefore, grade.lineupAfter, grade.lineupDelta) : null;
   const maxTotal = Math.max(giveTotal, getTotal, 1);
   const columnHeight = (total: number, count: number): number => {
-    if (count === 0) return 36;
-    return Math.max(36, count * 32, Math.round((total / maxTotal) * 220));
+    if (count === 0) return 48;
+    const floor = count * 48 + (count - 1) * 2;
+    return Math.max(floor, Math.round((total / maxTotal) * 360));
   };
+  const historyPlayerIds = useMemo(
+    () => [...give, ...get].filter((asset) => asset.position !== "PICK").map((asset) => asset.playerId).sort(),
+    [get, give],
+  );
+  const historyQuery = useQuery({
+    queryKey: ["fantasycalc-value-history", formatKey, historyPlayerIds],
+    queryFn: () => api.getValueHistory({ formatKey, playerIds: historyPlayerIds }),
+    enabled: historyPlayerIds.length > 0,
+  });
+  const historyByPlayerId = useMemo(
+    () => new Map((historyQuery.data?.series ?? []).map((series) => [series.playerId, series])),
+    [historyQuery.data],
+  );
   const chartLabel = [
     `${mine.teamName} sends ${give.length ? give.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${giveTotal.toLocaleString()}`,
     `${theirs.teamName} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getTotal.toLocaleString()}`,
@@ -3016,18 +3032,26 @@ function LeagueTradeValueDialog({
         <DialogHeader className="league-trade-dialog-heading">
           <DialogTitle>Trade value</DialogTitle>
         </DialogHeader>
-        {lineup ? <p className="league-trade-lineup">{lineup}</p> : null}
-        <div className="league-trade-chart" role="img" aria-label={chartLabel}>
-          <div className="league-trade-side">
-            <LeagueTradeValueColumn side="mine" assets={give} height={columnHeight(giveTotal, give.length)} />
-            <div className="league-trade-total"><span>Total trade value</span><strong>{giveTotal.toLocaleString()}</strong></div>
+        <div className="league-trade-dialog-body">
+          {lineup ? <p className="league-trade-lineup">{lineup}</p> : null}
+          <div className="league-trade-chart" role="img" aria-label={chartLabel}>
+            <div className="league-trade-side">
+              <LeagueTradeValueColumn side="mine" assets={give} height={columnHeight(giveTotal, give.length)} />
+              <div className="league-trade-total"><span>Total trade value</span><strong>{giveTotal.toLocaleString()}</strong></div>
+            </div>
+            <div className="league-trade-side">
+              <LeagueTradeValueColumn side="theirs" assets={get} height={columnHeight(getTotal, get.length)} />
+              <div className="league-trade-total"><span>Total trade value</span><strong>{getTotal.toLocaleString()}</strong></div>
+            </div>
           </div>
-          <div className="league-trade-side">
-            <LeagueTradeValueColumn side="theirs" assets={get} height={columnHeight(getTotal, get.length)} />
-            <div className="league-trade-total"><span>Total trade value</span><strong>{getTotal.toLocaleString()}</strong></div>
-          </div>
+          <DialogDescription className="league-trade-verdict">{verdict}</DialogDescription>
+          <AggregateTradeHistory
+            give={give}
+            get={get}
+            historyByPlayerId={historyByPlayerId}
+            isLoading={historyPlayerIds.length > 0 && historyQuery.isPending}
+          />
         </div>
-        <DialogDescription className="league-trade-verdict">{verdict}</DialogDescription>
       </DialogContent>
     </Dialog>
   );
@@ -3065,6 +3089,7 @@ function LeagueAdjustedTrade({
   starterSlots,
   waiverPool,
   recordByRosterId,
+  formatKey,
   onPartnerChange,
   onToggle,
 }: {
@@ -3077,6 +3102,7 @@ function LeagueAdjustedTrade({
   starterSlots: string[];
   waiverPool: RosterPlayer[];
   recordByRosterId: ReadonlyMap<number, TeamRecord>;
+  formatKey: string;
   onPartnerChange: (rosterId: number | null) => void;
   onToggle: (side: "give" | "get", id: string) => void;
 }) {
@@ -3149,6 +3175,7 @@ function LeagueAdjustedTrade({
           theirs={theirs}
           starterSlots={starterSlots}
           waiverPool={waiverPool}
+          formatKey={formatKey}
           onClose={() => setIsResultOpen(false)}
         />
       ) : null}
@@ -3813,6 +3840,7 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
             starterSlots={league.tradeStarterSlots}
             waiverPool={league.tradeWaiverPool}
             recordByRosterId={recordByRosterId}
+            formatKey={league.seasonLongFormat.key}
             onPartnerChange={(rosterId) => { setTheirRosterId(rosterId); setGetIds([]); }}
             onToggle={toggleLeagueAsset}
           />
