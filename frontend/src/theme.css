@@ -1557,10 +1557,12 @@ button.league-partner-change:active { color: var(--link-active); }
 .power-list-item { display: block; }
 .power-row { display: grid; width: 100%; grid-template-columns: 26px minmax(0, 1fr) 82px; gap: 8px; min-height: 58px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); text-align: left; }
 .power-row.is-user { background: var(--roster-highlight-bg); }
+.power-row.is-opponent { background: var(--muted); }
 .power-row-toggle { cursor: pointer; touch-action: pan-y; }
 .power-row-toggle:active { background: var(--surface-2); }
 .power-rank { color: var(--dim); font-size: var(--type-body); font-weight: 700; }
 .power-row.is-user .power-rank, .power-row.is-user .power-team > strong, .power-row.is-user .power-total strong { color: var(--roster-highlight); }
+.power-row.is-opponent .power-rank, .power-row.is-opponent .power-team > strong, .power-row.is-opponent .power-total strong { color: var(--foreground); }
 .power-team { min-width: 0; }
 .power-team > strong { display: block; overflow: hidden; font-size: var(--type-body); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .power-team-record { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }

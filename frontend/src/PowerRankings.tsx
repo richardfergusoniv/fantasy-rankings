@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Card } from "@/components/ui/card";
 import type { api, ApiResponse } from "./api";
+import { weeklyOpponentRosterId } from "./power-opponent";
 import { MatchupTag, ModalPortal, SegmentedControl, points, shortLeagueName, useDialogFocusTrap } from "./shared";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
@@ -93,6 +94,9 @@ export function PowerRankings({
     () => [...powerRankings].sort((a, b) => a.rank - b.rank),
     [powerRankings],
   );
+  const opponentRosterId = scope === "week"
+    ? weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams)
+    : null;
   const isDynastyView = scope === "restOfSeason" && activeMode === "dynasty";
   const avgFuturePickValue = isDynastyView && powerRankings.length > 0
     ? powerRankings.reduce((total, team) => total + team.futurePickValue, 0) / powerRankings.length
@@ -263,18 +267,20 @@ export function PowerRankings({
         <div className="section-heading power-section-heading"><h2 id="league-power-heading">League power rankings</h2>{scope === "restOfSeason" ? <span>full roster value</span> : null}</div>
         <div className="power-table" role="list">
           {displayedTeams.map((team) => {
+            const isOpponent = opponentRosterId !== null && team.rosterId === opponentRosterId;
             return (
               <div className="power-list-item" role="listitem" key={team.rosterId}>
                 <button
                   type="button"
-                  className={`power-row power-row-toggle${team.isUser ? " is-user" : ""}`}
-                  aria-label={`Open ${team.teamName}${scope === "restOfSeason" ? `, ${formatRecord(team.record)} record` : ""}, rank ${team.rank}`}
+                  className={`power-row power-row-toggle${team.isUser ? " is-user" : ""}${isOpponent ? " is-opponent" : ""}`}
+                  aria-label={`Open ${team.teamName}${scope === "restOfSeason" ? `, ${formatRecord(team.record)} record` : ""}, rank ${team.rank}${isOpponent ? ", this week's opponent" : ""}`}
                   aria-haspopup="dialog"
                   onClick={() => setSelectedTeamId(team.rosterId)}
                 >
                   <strong className="power-rank">{team.rank}</strong>
                   <span className="power-team">
                     <strong>{team.teamName}{scope === "restOfSeason" ? <span className="power-team-record"> · {formatRecord(team.record)}</span> : null}</strong>
+                    {isOpponent ? <span className="sr-only">This week's opponent</span> : null}
                   </span>
                   <span className="power-total"><strong>{scope === "week" ? points(team.totalValue) : team.totalValue.toLocaleString()}</strong></span>
                 </button>
