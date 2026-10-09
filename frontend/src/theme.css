@@ -886,8 +886,8 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-trade-dialog-body { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; gap: 12px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .league-trade-dialog-body > * { flex-shrink: 0; }
 .league-trade-lineup { margin: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
-.league-trade-chart { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
-.league-trade-side { display: flex; min-width: 0; flex-direction: column; align-items: stretch; justify-content: flex-start; }
+.league-trade-chart { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: end; }
+.league-trade-side { display: flex; min-width: 0; flex-direction: column; align-items: stretch; justify-content: flex-end; }
 .league-trade-column { display: flex; flex: none; min-width: 0; align-items: flex-start; gap: 4px; }
 .league-trade-column.mine { justify-content: flex-end; }
 .league-trade-names, .league-trade-bar { display: flex; min-width: 0; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 2px; height: 100%; }

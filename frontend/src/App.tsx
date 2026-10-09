@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
@@ -2955,7 +2955,7 @@ function LeagueTradeValueColumn({
   assets: TradeAsset[];
   height: number;
 }) {
-  const ordered = [...assets].sort((left, right) => right.value - left.value || left.name.localeCompare(right.name));
+  const ordered = [...assets].sort((left, right) => left.value - right.value || left.name.localeCompare(right.name));
   return (
     <div className={`league-trade-column ${side}`} style={{ height, minHeight: height }}>
       {side === "mine" ? (
@@ -3033,6 +3033,12 @@ function LeagueTradeValueDialog({
     () => new Map((historyQuery.data?.series ?? []).map((series) => [series.playerId, series])),
     [historyQuery.data],
   );
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const node = bodyRef.current;
+    if (!node) return;
+    node.scrollTop = 0;
+  }, []);
   const chartLabel = [
     `${mine.teamName} sends ${give.length ? give.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${giveTotal.toLocaleString()}`,
     `${theirs.teamName} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getTotal.toLocaleString()}`,
@@ -3046,7 +3052,7 @@ function LeagueTradeValueDialog({
         <DialogHeader className="league-trade-dialog-heading">
           <DialogTitle>Trade value</DialogTitle>
         </DialogHeader>
-        <div className="league-trade-dialog-body">
+        <div className="league-trade-dialog-body" ref={bodyRef}>
           {lineup ? <p className="league-trade-lineup">{lineup}</p> : null}
           <div className="league-trade-chart" role="img" aria-label={chartLabel}>
             <div className="league-trade-side">
