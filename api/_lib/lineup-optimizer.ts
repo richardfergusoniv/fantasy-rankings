@@ -7,7 +7,26 @@ export type OptimizablePlayer = {
   actual: number | null;
   gamePhase?: "pregame" | "live" | "final" | null;
   gameTime?: string | null;
+  injuryStatus?: string | null;
+  isBye?: boolean;
 };
+
+const skillPositions = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
+
+const unavailableStatuses = new Set([
+  "out",
+  "inactive",
+  "ir",
+  "injured reserve",
+  "pup",
+  "physically unable to perform",
+  "nfi",
+  "non football injury",
+  "non football illness",
+  "suspended",
+  "suspension",
+  "reserve suspended",
+]);
 
 const flexLineupSlots = new Set(["FLEX", "SUPER_FLEX", "REC_FLEX", "WRRB_FLEX"]);
 
@@ -36,6 +55,58 @@ export function isLineupLocked(player: Pick<OptimizablePlayer, "gamePhase" | "ga
 export function lineupCountingPoints(player: Pick<OptimizablePlayer, "gamePhase" | "gameTime" | "actual" | "projection">, now = Date.now()): number | null {
   if (isLineupLocked(player, now)) return player.actual;
   return player.projection;
+}
+
+export function isVacantLineupSlot(player: Pick<OptimizablePlayer, "playerId">): boolean {
+  return player.playerId === "0";
+}
+
+function normalizedStatus(status: string): string {
+  return status.trim().toLowerCase().replaceAll("_", " ").replaceAll("-", " ").replace(/\s+/g, " ");
+}
+
+/** Same week-availability set as Sleeper injury status. Kept local so the matchup UI can import this module. */
+export function isUnavailableStatus(status: string | null | undefined): boolean {
+  if (!status) return false;
+  return unavailableStatuses.has(normalizedStatus(status));
+}
+
+/** Live and final rows show points already scored. A live row with no actual yet stays on its projection. */
+export function displayedMatchupPoints(player: Pick<OptimizablePlayer, "gamePhase" | "actual" | "projection">): { value: number | null; label: "PROJ" | "PTS" } {
+  if (player.gamePhase === "final" || (player.gamePhase === "live" && typeof player.actual === "number")) {
+    return { value: player.actual, label: "PTS" };
+  }
+  return { value: player.projection, label: "PROJ" };
+}
+
+/** Weekly power totals count live actuals. Empty starter slots add nothing. */
+export function powerRankingPoints(player: Pick<OptimizablePlayer, "playerId" | "gamePhase" | "gameTime" | "actual" | "projection">, now = Date.now()): number | null {
+  if (isVacantLineupSlot(player)) return null;
+  return lineupCountingPoints(player, now);
+}
+
+export function mapSubmittedStarters<T>(
+  starterIds: readonly string[],
+  buildPlayer: (id: string, index: number) => T,
+  buildVacant: (index: number) => T,
+): T[] {
+  return starterIds.map((id, index) => (id && id !== "0" ? buildPlayer(id, index) : buildVacant(index)));
+}
+
+/** Starters, reserve, and taxi stay out of the matchup bench pool. */
+export function activeBenchIds(
+  playerIds: readonly string[],
+  starterIds: readonly string[],
+  reserveIds: readonly string[] = [],
+  taxiIds: readonly string[] = [],
+): string[] {
+  const excluded = new Set([...starterIds, ...reserveIds, ...taxiIds, "0"]);
+  return playerIds.filter((id) => id !== "" && !excluded.has(id));
+}
+
+function canFillOpenSlot(player: OptimizablePlayer, now: number): boolean {
+  if (isVacantLineupSlot(player) || player.isBye || isUnavailableStatus(player.injuryStatus)) return false;
+  return !isLineupLocked(player, now);
 }
 
 function relabelOpenSlots<T extends OptimizablePlayer>(players: T[], slots: string[]): T[] {
@@ -137,12 +208,31 @@ function optimizeOpenSlots<T extends OptimizablePlayer>(players: T[], slots: str
   return placed;
 }
 
+function vacantSlot<T extends OptimizablePlayer>(template: T, slot: string): T {
+  return {
+    ...template,
+    playerId: "0",
+    isStarter: true,
+    lineupSlot: slot,
+    projection: null,
+    actual: null,
+    isBye: false,
+    injuryStatus: null,
+  };
+}
+
 export function optimizeLineup<T extends OptimizablePlayer>(startersInput: T[], benchInput: T[], now = Date.now()): { starters: T[]; bench: T[] } {
   const slots = startersInput.map((player) => player.lineupSlot ?? player.position);
-  const lockedSlotIndexes = startersInput.flatMap((player, index) => isLineupLocked(player, now) ? [index] : []);
-  const openSlotIndexes = startersInput.flatMap((player, index) => isLineupLocked(player, now) ? [] : [index]);
-  const unlocked = [...startersInput, ...benchInput].filter((player) => !isLineupLocked(player, now));
-  const currentStarterIds = new Set(startersInput.filter((player) => !isLineupLocked(player, now)).map((player) => player.playerId));
+  const lockedSlotIndexes = startersInput.flatMap((player, index) => (
+    !isVacantLineupSlot(player) && isLineupLocked(player, now) ? [index] : []
+  ));
+  const openSlotIndexes = startersInput.flatMap((player, index) => (
+    isVacantLineupSlot(player) || !isLineupLocked(player, now) ? [index] : []
+  ));
+  const unlocked = [...startersInput, ...benchInput].filter((player) => canFillOpenSlot(player, now));
+  const currentStarterIds = new Set(startersInput.flatMap((player) => (
+    canFillOpenSlot(player, now) ? [player.playerId] : []
+  )));
   const openPlacements = optimizeOpenSlots(unlocked, openSlotIndexes.map((index) => slots[index] ?? ""), currentStarterIds);
 
   const startersByIndex: Array<T | undefined> = Array.from({ length: slots.length });
@@ -152,15 +242,80 @@ export function optimizeLineup<T extends OptimizablePlayer>(startersInput: T[], 
     startersByIndex[index] = { ...player, isStarter: true, lineupSlot: slots[index] ?? player.position };
   }
   openSlotIndexes.forEach((slotIndex, openIndex) => {
-    const player = openPlacements[openIndex];
-    if (!player) return;
-    startersByIndex[slotIndex] = player;
+    const placed = openPlacements[openIndex];
+    const original = startersInput[slotIndex];
+    const slot = slots[slotIndex] ?? original?.position ?? "";
+    if (placed) {
+      startersByIndex[slotIndex] = placed;
+      return;
+    }
+    if (!original) return;
+    const alreadyPlaced = startersByIndex.some((player) => (
+      player !== undefined && !isVacantLineupSlot(player) && !isVacantLineupSlot(original) && player.playerId === original.playerId
+    ));
+    startersByIndex[slotIndex] = alreadyPlaced
+      ? vacantSlot(original, slot)
+      : { ...original, isStarter: true, lineupSlot: slot };
   });
 
   const starters = startersByIndex.filter((player): player is T => Boolean(player));
-  const starterIds = new Set(starters.map((player) => player.playerId));
+  const starterIds = new Set(starters.flatMap((player) => isVacantLineupSlot(player) ? [] : [player.playerId]));
   const bench = [...startersInput, ...benchInput]
-    .filter((player) => !starterIds.has(player.playerId))
+    .filter((player) => !isVacantLineupSlot(player) && !starterIds.has(player.playerId))
     .map((player) => ({ ...player, isStarter: false, lineupSlot: null }));
   return { starters, bench };
+}
+
+export type OptimizedTradeRoster<T extends OptimizablePlayer> = {
+  starters: T[];
+  bench: T[];
+  score: number;
+};
+
+function tradePoints(player: OptimizablePlayer, now: number): number {
+  if (isLineupLocked(player, now)) return lineupCountingPoints(player, now) ?? 0;
+  return player.projection ?? 0;
+}
+
+/** Best weekly lineup for a trade grade. Locked starters stay in their slot and count actual points. */
+export function optimizeTradeRoster<T extends OptimizablePlayer>(players: T[], slots: string[], now = Date.now()): OptimizedTradeRoster<T> {
+  const eligiblePlayers = players.filter((player) => skillPositions.has(player.position) && !isVacantLineupSlot(player));
+  const lockedStarters = eligiblePlayers.filter((player) => player.isStarter && isLineupLocked(player, now));
+  const movable = eligiblePlayers.filter((player) => !isLineupLocked(player, now));
+  const assignments: Array<T | undefined> = Array.from({ length: slots.length });
+  const used = new Set<string>();
+
+  const pin = (player: T, index: number) => {
+    assignments[index] = { ...player, isStarter: true, lineupSlot: slots[index] ?? player.position };
+    used.add(player.playerId);
+  };
+  for (const player of lockedStarters) {
+    if (!player.lineupSlot) continue;
+    const index = slots.findIndex((slot, slotIndex) => (
+      !assignments[slotIndex] && slot === player.lineupSlot && eligibleForSlot(player.position, slot)
+    ));
+    if (index >= 0) pin(player, index);
+  }
+  for (const player of lockedStarters) {
+    if (used.has(player.playerId)) continue;
+    const index = slots.findIndex((slot, slotIndex) => !assignments[slotIndex] && eligibleForSlot(player.position, slot));
+    if (index >= 0) pin(player, index);
+  }
+
+  const openIndexes = slots.flatMap((_, index) => assignments[index] ? [] : [index]);
+  const currentStarterIds = new Set(movable.flatMap((player) => player.isStarter ? [player.playerId] : []));
+  const openPlacements = optimizeOpenSlots(movable, openIndexes.map((index) => slots[index] ?? ""), currentStarterIds);
+  openIndexes.forEach((slotIndex, openIndex) => {
+    const player = openPlacements[openIndex];
+    if (!player || used.has(player.playerId)) return;
+    assignments[slotIndex] = { ...player, isStarter: true, lineupSlot: slots[slotIndex] ?? player.position };
+    used.add(player.playerId);
+  });
+
+  const starters = assignments.filter((player): player is T => Boolean(player));
+  const score = starters.reduce((total, player) => total + tradePoints(player, now), 0);
+  const bench = players
+    .filter((player) => !isVacantLineupSlot(player) && !used.has(player.playerId))
+    .map((player) => ({ ...player, isStarter: false, lineupSlot: null }));
+  return { starters, bench, score: Number(score.toFixed(2)) };
 }
