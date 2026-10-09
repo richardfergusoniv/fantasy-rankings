@@ -247,7 +247,7 @@ function AuthScreen() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-              {emailError ? <p id="auth-email-error" className="text-sm text-destructive" aria-live="polite">{emailError}</p> : null}
+              {emailError ? <p id="auth-email-error" className="text-sm text-[var(--danger-text)]" aria-live="polite">{emailError}</p> : null}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="auth-password">Password</Label>
@@ -264,9 +264,9 @@ function AuthScreen() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              {passwordError ? <p id="auth-password-error" className="text-sm text-destructive" aria-live="polite">{passwordError}</p> : null}
+              {passwordError ? <p id="auth-password-error" className="text-sm text-[var(--danger-text)]" aria-live="polite">{passwordError}</p> : null}
             </div>
-            {error ? <p ref={errorRef} tabIndex={-1} className="text-sm text-destructive" aria-live="polite">{error}</p> : null}
+            {error ? <p ref={errorRef} tabIndex={-1} className="text-sm text-[var(--danger-text)]" aria-live="polite">{error}</p> : null}
             {notice ? <p className="text-sm text-[var(--stat-strength-readable)]" aria-live="polite">{notice}</p> : null}
             <Button type="submit" disabled={busy} aria-busy={busy}>
               {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
@@ -385,9 +385,9 @@ function ConnectSleeper({
                 aria-invalid={usernameError ? true : undefined}
                 aria-describedby={usernameError ? "sleeper-username-error" : undefined}
               />
-              {usernameError ? <p id="sleeper-username-error" className="text-sm text-destructive" aria-live="polite">{usernameError}</p> : null}
+              {usernameError ? <p id="sleeper-username-error" className="text-sm text-[var(--danger-text)]" aria-live="polite">{usernameError}</p> : null}
             </div>
-            {error ? <p ref={errorRef} tabIndex={-1} className="text-sm text-destructive" aria-live="polite">{error}</p> : null}
+            {error ? <p ref={errorRef} tabIndex={-1} className="text-sm text-[var(--danger-text)]" aria-live="polite">{error}</p> : null}
             <Button type="submit" disabled={busy || loading} aria-busy={busy}>
               {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
               Connect
