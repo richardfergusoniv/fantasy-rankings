@@ -50,6 +50,8 @@ import {
   type SleeperRoster,
 } from "./sleeper.js";
 import { activeBenchIds, eligibleForSlot, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, optimizeLineup } from "./lineup-optimizer.js";
+import { rankingsForLeagueFormats } from "./season-long-format.js";
+import { usesRegularSeasonWeek } from "./season-week.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -1456,24 +1458,33 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const sourceErrors: string[] = [];
   let season: number;
   let week: number;
+  let seasonType = "";
   try {
     const state = await readNflState(fresh);
     season = state.season;
     week = state.week;
+    seasonType = state.seasonType;
   } catch (err) {
     console.error("[dashboard] NFL state lookup failed", err instanceof Error ? err.stack : err);
     throw new Error("Sleeper leagues are unavailable");
   }
-  const vegasProjectionSnapshot = await loadVegasProjectionSnapshot(season, week);
+  const attachWeekContext = usesRegularSeasonWeek(seasonType);
+  const vegasProjectionSnapshot = attachWeekContext ? await loadVegasProjectionSnapshot(season, week) : null;
 
   const [leagueResult, playersResult, sleeperProjectionResult, scheduleResult, currentStatsResult, previousStatsResult, kickoffResult] = await Promise.allSettled([
     readUserLeagues(sleeperUserId, fresh),
     fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`),
-    fetchJson<SleeperProjection[]>(`${SLEEPER_PROJECTIONS_BASE}/projections/nfl/${season}/${week}?season_type=regular&order_by=pts_ppr`),
-    fetchJson<SleeperGame[]>(`${SLEEPER_BASE.replace("/v1", "")}/schedule/nfl/regular/${season}`),
+    attachWeekContext
+      ? fetchJson<SleeperProjection[]>(`${SLEEPER_PROJECTIONS_BASE}/projections/nfl/${season}/${week}?season_type=regular&order_by=pts_ppr`)
+      : Promise.resolve([] as SleeperProjection[]),
+    attachWeekContext
+      ? fetchJson<SleeperGame[]>(`${SLEEPER_BASE.replace("/v1", "")}/schedule/nfl/regular/${season}`)
+      : Promise.resolve([] as SleeperGame[]),
     fetchText(NFLVERSE_PLAYER_STATS_2026_URL),
     fetchText(NFLVERSE_PLAYER_STATS_2025_URL),
-    fetchJson<EspnScoreboard>(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&dates=${season}`),
+    attachWeekContext
+      ? fetchJson<EspnScoreboard>(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&dates=${season}`)
+      : Promise.resolve({ events: [] } as EspnScoreboard),
   ]);
 
   if (leagueResult.status === "rejected") {
@@ -1488,7 +1499,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
 
   const sleeperProjectionsByPlayerId = new Map<string, SleeperProjection>();
   const sleeperDefenseProjections = new Map<string, SleeperProjection>();
-  if (sleeperProjectionResult.status === "fulfilled") {
+  if (attachWeekContext && sleeperProjectionResult.status === "fulfilled") {
     for (const row of sleeperProjectionResult.value) {
       if (row.player_id) sleeperProjectionsByPlayerId.set(row.player_id, row);
       const defenseTeam = row.team ?? row.player_id;
@@ -1496,7 +1507,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         sleeperDefenseProjections.set(canonicalTeam(defenseTeam), row);
       }
     }
-  } else sourceErrors.push("Sleeper projections are unavailable; kicker and DST rankings cannot update, and in-progress players may show their pregame projection.");
+  } else if (attachWeekContext) sourceErrors.push("Sleeper projections are unavailable; kicker and DST rankings cannot update, and in-progress players may show their pregame projection.");
 
   // FantasyCalc and the per-league Sleeper requests are independent once the
   // shared player dictionary is available. Start this now so a slow source
@@ -1518,7 +1529,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       }
     }
   }
-  if (gameTimeByTeam.size === 0) sourceErrors.push("NFL kickoff times are temporarily unavailable.");
+  if (attachWeekContext && gameTimeByTeam.size === 0) sourceErrors.push("NFL kickoff times are temporarily unavailable.");
   if (scheduleResult.status === "fulfilled") {
     for (const game of schedule) {
       if (game.week !== week) continue;
@@ -1532,7 +1543,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         if (game.away && !gameTimeByTeam.has(canonicalTeam(game.away))) gameTimeByTeam.set(canonicalTeam(game.away), game.date);
       }
     }
-  } else sourceErrors.push("NFL game status is unavailable; player rows are showing projections.");
+  } else if (attachWeekContext) sourceErrors.push("NFL game status is unavailable; player rows are showing projections.");
 
   const vegasProjectionCount = vegasProjectionSnapshot?.projections.length ?? 0;
   const isFirstDownSnapshot = vegasProjectionSnapshot?.source === "first_down";
@@ -1638,7 +1649,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const rankings = [...rankingsByLeagueId.values()].flat();
   const weeklyChartRankings = [...weeklyChartRankingsByLeagueId.values()].flat();
   defenses = [...defensesByLeagueId.values()].flat();
-  if (!useVegasPrimary) {
+  if (attachWeekContext && !useVegasPrimary) {
     sourceErrors.push(`${isFirstDownSnapshot ? "First Down" : "Vegas"} player coverage is ${vegasProjectionCount}/${minProjectionCoverage} required; weekly skill-position projections are unavailable in this snapshot.`);
   }
   const missingDefenseProjections = defenses.filter((row) => row.pregameProjection === null).length;
@@ -1647,7 +1658,18 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   }
   const players = playersResult.value;
   const fantasyCalcResult = await fantasyCalcPromise;
-  const seasonLongRankings = fantasyCalcResult.rows;
+  const seasonLongFormats = sleeperLeagues.flatMap((league) => {
+    const leagueFormat = seasonLongFormatForLeague(league);
+    return [
+      leagueFormat,
+      {
+        ...leagueFormat,
+        isDynasty: false,
+        key: `redraft-${leagueFormat.numQbs}qb-${leagueFormat.numTeams}t-${leagueFormat.ppr}ppr`,
+      },
+    ];
+  });
+  const seasonLongRankings = rankingsForLeagueFormats(fantasyCalcResult.rows, seasonLongFormats);
   if (fantasyCalcResult.failedPresets > 0) sourceErrors.push("FantasyCalc season-long rankings are unavailable for one or more league formats.");
   const fantasyCalcAsOf = seasonLongRankings.length > 0 ? new Date().toISOString() : null;
   const defenseActuals = new Map<string, number>();
