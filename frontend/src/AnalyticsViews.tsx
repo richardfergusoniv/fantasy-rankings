@@ -1723,7 +1723,7 @@ function ToolDatasetToggle({ value, onChange, label }: { value: ToolDataset; onC
 export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
   return (
     <section className="charts-tool">
-      <div className="tool-section-heading"><h2>Charts</h2></div>
+      <h2 className="sr-only">Charts</h2>
       <ToolDatasetToggle value={dataset} onChange={(value) => onDatasetChange?.(value)} label="Chart dataset" />
       {dataset === "advanced"
         ? <AnalyticsChart dashboard={dashboard} league={league} />

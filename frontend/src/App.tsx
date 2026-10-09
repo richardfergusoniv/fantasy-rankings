@@ -3827,7 +3827,7 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
   };
   return (
     <section className="trade-view">
-      <div className="tool-section-heading"><h2>Trade values</h2></div>
+      <h2 className="sr-only">Trade values</h2>
       <SegmentedControl
         value={tradeView}
         options={[{ value: "analyze", label: "Analyze" }, { value: "history", label: "History" }]}
@@ -4513,7 +4513,7 @@ function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, on
   return (
     <section className="draft-center">
       <div className="draft-heading">
-        <h2>Draft Room</h2>
+        <h2 className="sr-only">Draft Room</h2>
         <button className="refresh-button" type="button" onClick={onRefresh} disabled={refreshing} aria-label="Refresh draft data"><RefreshIcon spinning={refreshing} /></button>
       </div>
       <SegmentedControl
