@@ -719,7 +719,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
                 : <span>{rows.length} players</span>}
           </div>
           <div className="ranking-list">
-            <WindowVirtualList count={visibleRows.length} estimateSize={listRowEstimate} getKey={(index) => visibleRows[index]?.key ?? index}>
+            <WindowVirtualList key={density} count={visibleRows.length} estimateSize={listRowEstimate} getKey={(index) => visibleRows[index]?.key ?? index}>
             {(index) => {
               const row = visibleRows[index];
               if (!row) return null;
