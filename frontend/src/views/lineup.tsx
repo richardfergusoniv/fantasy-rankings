@@ -6,8 +6,6 @@ import type {
   League,
   MatchupSelection,
   PlayerLink,
-  PlayerNews,
-  PlayerSearchResult,
   RosterPlayer,
 } from "../dashboard-types";
 import {
@@ -15,17 +13,32 @@ import {
   accessibleMatchupLabel,
   forecastPoints,
   formatProjectionPoints,
-  groupNewsItemsByPlayer,
   matchupCell,
   playerScore,
   sleeperInjuryTag,
 } from "../dashboard-shared";
-import { useLinkedPlayerSync } from "../linked-player";
 import { formatDecimal } from "../lib/format-number";
-import { PlayerDetailSheet, usePlayerCardHistory } from "../player-detail";
 import { MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 
-export function MatchupPlayer({ player, side, sosEntry, isSwappedIn = false, isDemoted = false, onOpen, onOpenMatchup }: { player: RosterPlayer | undefined; side: "mine" | "theirs"; sosEntry?: StrengthOfScheduleEntryLike; isSwappedIn?: boolean; isDemoted?: boolean; onOpen?: (player: RosterPlayer) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
+export function MatchupPlayer({
+  player,
+  side,
+  sosEntry,
+  isSwappedIn = false,
+  isDemoted = false,
+  selected = false,
+  onOpen,
+  onOpenMatchup,
+}: {
+  player: RosterPlayer | undefined;
+  side: "mine" | "theirs";
+  sosEntry?: StrengthOfScheduleEntryLike;
+  isSwappedIn?: boolean;
+  isDemoted?: boolean;
+  selected?: boolean;
+  onOpen?: (player: RosterPlayer) => void;
+  onOpenMatchup?: (matchup: MatchupSelection) => void;
+}) {
   if (!player) {
     return (
       <div className={`matchup-player ${side} empty-player`} aria-hidden="true">
@@ -46,11 +59,13 @@ export function MatchupPlayer({ player, side, sosEntry, isSwappedIn = false, isD
     : isDemoted
       ? ", moved to bench in optimized lineup"
       : "";
+  const selectedDescription = selected ? ", selected" : "";
   return (
-    <div className={`matchup-player ${side}${isSwappedIn ? " swapped-in" : ""}${isDemoted ? " demoted" : ""}`}>
-      <button type="button" className="matchup-player-open" onClick={openPlayer} aria-label={`View ${player.name} details and news, ${position}, ${matchup}, ${scoreDescription}${injuryDescription}${substitutionDescription}`}>
+    <div className={`matchup-player ${side}${isSwappedIn ? " swapped-in" : ""}${isDemoted ? " demoted" : ""}${selected ? " is-player-selected" : ""}`}>
+      <button type="button" className="matchup-player-open" onClick={openPlayer} aria-label={`View ${player.name} details and news, ${position}, ${matchup}, ${scoreDescription}${injuryDescription}${substitutionDescription}${selectedDescription}`}>
         <span className="matchup-name-line">
           <strong>{player.name}</strong>
+          {selected ? <span className="player-selected-chip">Selected</span> : null}
           {isSwappedIn || isDemoted ? (
             <span className={`matchup-substitution-tag ${isSwappedIn ? "in" : "out"}`} aria-hidden="true">
               {isSwappedIn ? "IN" : "OUT"}
@@ -87,56 +102,21 @@ export function forecastTotal(players: RosterPlayer[]): number | null {
   return values.length ? values.reduce((total, value) => total + value, 0) : null;
 }
 
-export function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, onOpenMatchup, linkedPlayerId, onOpenLinkedPlayer, onCloseLinkedPlayer, onLinkedPlayerMiss, onLinkedPlayerFound }: { league: League; dashboard: Dashboard; news: PlayerNews | undefined; newsLoading: boolean; newsError: boolean; onRetryNews: () => void; onOpenMatchup: (matchup: MatchupSelection) => void } & PlayerLink) {
+export function Lineup({
+  league,
+  dashboard,
+  onOpenMatchup,
+  linkedPlayerId,
+  onOpenLinkedPlayer,
+}: {
+  league: League;
+  dashboard: Dashboard;
+  onOpenMatchup: (matchup: MatchupSelection) => void;
+} & PlayerLink) {
   const [mode, setMode] = useState<"current" | "optimized">("current");
-  const playerHistory = usePlayerCardHistory();
-  const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(news), [news]);
-  const selectedPlayerNews = playerHistory.current ? newsItemsByPlayer.get(playerHistory.current.playerId) ?? [] : [];
-  const toLineupPlayer = (player: RosterPlayer): PlayerSearchResult => {
-    const season = dashboard.seasonLongRankings.find((row) => row.playerId === player.playerId && row.formatKey === league.seasonLongFormat.key);
-    return {
-      key: `lineup:${player.playerId}`,
-      playerId: player.playerId,
-      name: player.name,
-      team: player.team,
-      position: player.position,
-      opponent: player.opponent,
-      isAway: player.isAway,
-      isBye: player.isBye,
-      injuryStatus: player.injuryStatus,
-      weeklyRank: player.rank,
-      weeklyProjection: player.gamePhase === "final" ? player.actual : player.projection,
-      projectionSource: player.projectionSource,
-      seasonRank: season?.positionRank ?? null,
-      seasonValue: season?.value ?? null,
-      movement30Day: season?.trend30Day ?? null,
-      isRostered: true,
-      gamePhase: player.gamePhase,
-      defenseComponents: player.defenseComponents,
-      projectionComponents: player.projectionComponents,
-    };
-  };
   const openPlayer = (player: RosterPlayer) => {
-    playerHistory.open(toLineupPlayer(player));
     onOpenLinkedPlayer(player.playerId);
   };
-  const rosterPlayers = useMemo(
-    () => [...league.starters, ...league.bench, ...(league.opponentTeam?.starters ?? []), ...(league.opponentTeam?.bench ?? [])],
-    [league.bench, league.opponentTeam, league.starters],
-  );
-  useLinkedPlayerSync({
-    linkedPlayerId,
-    isOpen: playerHistory.isOpen,
-    currentPlayerId: playerHistory.current?.playerId ?? null,
-    resolve: (playerId) => {
-      const player = rosterPlayers.find((item) => item.playerId === playerId);
-      return player ? toLineupPlayer(player) : null;
-    },
-    open: playerHistory.open,
-    close: playerHistory.close,
-    onMiss: onLinkedPlayerMiss,
-    onFound: onLinkedPlayerFound,
-  });
   const opponent = league.opponentTeam;
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const optimized = useMemo(() => optimizeLineup(league.starters, league.bench), [league.starters, league.bench]);
@@ -199,6 +179,7 @@ export function Lineup({ league, dashboard, news, newsLoading, newsError, onRetr
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
+                selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
                 isSwappedIn={mode === "optimized" && Boolean(matchupCell(myPlayer)) && !league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
               />
               <span className="matchup-slot">{(myPlayer?.lineupSlot ?? theirs?.lineupSlot ?? "—").replace("_", " ")}</span>
@@ -208,6 +189,7 @@ export function Lineup({ league, dashboard, news, newsLoading, newsError, onRetr
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
+                selected={Boolean(linkedPlayerId && theirs?.playerId === linkedPlayerId)}
               />
             </div>
           ))}
@@ -228,10 +210,18 @@ export function Lineup({ league, dashboard, news, newsLoading, newsError, onRetr
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
+                selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
                 isDemoted={mode === "optimized" && Boolean(myPlayer) && league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
               />
               <span className="matchup-slot">BN</span>
-              <MatchupPlayer player={theirs} side="theirs" sosEntry={sosEntry} onOpen={openPlayer} onOpenMatchup={onOpenMatchup} />
+              <MatchupPlayer
+                player={theirs}
+                side="theirs"
+                sosEntry={sosEntry}
+                onOpen={openPlayer}
+                onOpenMatchup={onOpenMatchup}
+                selected={Boolean(linkedPlayerId && theirs?.playerId === linkedPlayerId)}
+              />
             </div>
           ))}
         </div>
@@ -239,7 +229,6 @@ export function Lineup({ league, dashboard, news, newsLoading, newsError, onRetr
         {benchRows.length === 0 ? <div className="empty-inline compact">No bench players are listed.</div> : null}
         {!opponent ? <div className="empty-inline compact">Sleeper hasn’t posted an opponent for this week.</div> : null}
       </section>
-      {playerHistory.current ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode="details" analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={selectedPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={onRetryNews} onOpenMatchup={onOpenMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={() => { playerHistory.close(); onCloseLinkedPlayer(); }} /> : null}
     </>
   );
 }

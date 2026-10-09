@@ -15,11 +15,9 @@ export type Tab =
   | "comparison"
   | "strengthOfSchedule";
 export type PlayerLink = {
+  /** URL `playerId` — drives Selected chip and shell inspector open. */
   linkedPlayerId: string | null;
   onOpenLinkedPlayer: (playerId: string) => void;
-  onCloseLinkedPlayer: () => void;
-  onLinkedPlayerMiss: () => void;
-  onLinkedPlayerFound: () => void;
 };
 export type PrimaryPage = "monitor" | "team" | "players" | "league" | "draft" | "tools";
 export type PlayerNews = ApiResponse<typeof api, "getPlayerNews">;

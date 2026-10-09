@@ -6,7 +6,6 @@ import type {
   League,
   MatchupSelection,
   PlayerLink,
-  PlayerNews,
   PlayerSearchResult,
 } from "../dashboard-types";
 import {
@@ -14,12 +13,9 @@ import {
   RefreshIcon,
   comparablePlayerName,
   formatProjectionPoints,
-  groupNewsItemsByPlayer,
   showUndoToast,
 } from "../dashboard-shared";
 import type { DraftPosition, DraftRoom } from "../dashboard-url";
-import { useLinkedPlayerSync } from "../linked-player";
-import { PlayerDetailSheet, usePlayerCardHistory } from "../player-detail";
 import { SegmentedControl } from "../shared";
 import { markDraftPlayerTaken, undoDraftPlayerTaken } from "../undo";
 
@@ -60,7 +56,32 @@ export function draftSecondaryLine(position: string, team: string | null | undef
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
-export function DraftCenter({ dashboard, league, data, news, newsLoading, newsError, onRetryNews, loading, onRefresh, refreshing, onOpenMatchup, draftPosition, draftQuery, draftRoom, onDraftFiltersChange, linkedPlayerId, onOpenLinkedPlayer, onCloseLinkedPlayer, onLinkedPlayerMiss, onLinkedPlayerFound }: { dashboard: Dashboard; league: League; data: DraftCenterData | undefined; news: PlayerNews | undefined; newsLoading: boolean; newsError: boolean; onRetryNews: () => void; loading: boolean; onRefresh: () => void; refreshing: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void; draftPosition: DraftPosition | null; draftQuery: string | null; draftRoom: DraftRoom | null; onDraftFiltersChange: (filters: { draftPosition: DraftPosition | null; draftQuery: string | null; draftRoom: DraftRoom | null }) => void } & PlayerLink) {
+export function DraftCenter({
+  dashboard,
+  league,
+  data,
+  loading,
+  onRefresh,
+  refreshing,
+  draftPosition,
+  draftQuery,
+  draftRoom,
+  onDraftFiltersChange,
+  linkedPlayerId,
+  onOpenLinkedPlayer,
+}: {
+  dashboard: Dashboard;
+  league: League;
+  data: DraftCenterData | undefined;
+  loading: boolean;
+  onRefresh: () => void;
+  refreshing: boolean;
+  onOpenMatchup?: (matchup: MatchupSelection) => void;
+  draftPosition: DraftPosition | null;
+  draftQuery: string | null;
+  draftRoom: DraftRoom | null;
+  onDraftFiltersChange: (filters: { draftPosition: DraftPosition | null; draftQuery: string | null; draftRoom: DraftRoom | null }) => void;
+} & PlayerLink) {
   const leagueDrafts = useMemo(() => data?.drafts.filter((draft) => draft.leagueId === league.id) ?? [], [data?.drafts, league.id]);
   const liveDraft = leagueDrafts.find((draft) => draft.status === "drafting") ?? null;
   const completedDraft = leagueDrafts.find((draft) => draft.status === "complete") ?? null;
@@ -72,7 +93,6 @@ export function DraftCenter({ dashboard, league, data, news, newsLoading, newsEr
   const draftBoardMode = league.seasonLongFormat.isDynasty ? (syncedBoardMode === "startup" ? "startup" : "rookie") : "redraft";
   const isRookieBoard = draftBoardMode === "rookie";
   const [mode, setMode] = useState<"board" | "myTeam">(draftRoom ?? "board");
-  const playerHistory = usePlayerCardHistory();
   const [position, setPosition] = useState<"ALL" | "QB" | "RB" | "WR" | "TE" | "K" | "DEF" | "ROOKIES">(draftPosition ?? "ALL");
   const [query, setQuery] = useState(draftQuery ?? "");
   const [visibleDraftCount, setVisibleDraftCount] = useState(160);
@@ -80,8 +100,6 @@ export function DraftCenter({ dashboard, league, data, news, newsLoading, newsEr
   const [manualDraftedIds, setManualDraftedIds] = useState<string[]>(() => readDraftPlayerIds(`fantasy-draft-taken:${league.id}`));
   const [hiddenLiveTeamIds, setHiddenLiveTeamIds] = useState<string[]>(() => readDraftPlayerIds(`fantasy-draft-hidden-live:${league.id}`));
   const addToMyTeamLocked = useRef(false);
-  const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(news), [news]);
-  const selectedPlayerNews = playerHistory.current ? newsItemsByPlayer.get(playerHistory.current.playerId) ?? [] : [];
   const draftPositionOptions: Array<typeof position> = [
     "ALL",
     "QB",
@@ -366,10 +384,14 @@ export function DraftCenter({ dashboard, league, data, news, newsLoading, newsEr
           </div>
           {myTeamPlayers.map((player) => {
             const secondary = draftSecondaryLine(player.position, player.team);
+            const isSelected = Boolean(linkedPlayerId && player.playerId === linkedPlayerId);
             return (
-              <div className="draft-row draft-my-team-row" role="listitem" key={player.playerId}>
-                <button type="button" className={`draft-player-open${secondary ? "" : " is-single-line"}`} onClick={() => openDraftPlayer(player)} aria-label={`View ${player.name} details and news`}>
-                  <span className="draft-player-name-line"><strong>{player.name}</strong></span>
+              <div className={`draft-row draft-my-team-row${isSelected ? " is-player-selected" : ""}`} role="listitem" key={player.playerId}>
+                <button type="button" className={`draft-player-open${secondary ? "" : " is-single-line"}`} onClick={() => openDraftPlayer(player)} aria-label={`View ${player.name} details and news${isSelected ? ", selected" : ""}`}>
+                  <span className="draft-player-name-line">
+                    <strong>{player.name}</strong>
+                    {isSelected ? <span className="player-selected-chip">Selected</span> : null}
+                  </span>
                   {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
                 </button>
                 <span className="draft-row-actions">
@@ -413,11 +435,13 @@ export function DraftCenter({ dashboard, league, data, news, newsLoading, newsEr
       {filteredRows.slice(0, visibleDraftCount).map((row) => {
         const isSpecialist = row.position === "K" || row.position === "DEF";
         const secondary = row.team?.trim() || null;
+        const isSelected = Boolean(linkedPlayerId && row.playerId === linkedPlayerId);
         return (
-          <div className="draft-row" role="listitem" key={`${row.format}-${row.playerId ?? row.name}`}>
-            <button type="button" className={`draft-player-open${secondary ? "" : " is-single-line"}`} onClick={() => openDraftPlayer(row)} disabled={!row.playerId} aria-label={`View ${row.name} details and news`}>
+          <div className={`draft-row${isSelected ? " is-player-selected" : ""}`} role="listitem" key={`${row.format}-${row.playerId ?? row.name}`}>
+            <button type="button" className={`draft-player-open${secondary ? "" : " is-single-line"}`} onClick={() => openDraftPlayer(row)} disabled={!row.playerId} aria-label={`View ${row.name} details and news${isSelected ? ", selected" : ""}`}>
               <span className="draft-player-name-line">
                 <strong>{row.name}</strong>
+                {isSelected ? <span className="player-selected-chip">Selected</span> : null}
                 {row.rookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" tone="positive" /> : null}
               </span>
               {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
@@ -438,44 +462,10 @@ export function DraftCenter({ dashboard, league, data, news, newsLoading, newsEr
     </div>
   ) : <div className="empty-inline">No available players match these filters.</div>;
 
-  function openDraftPlayer(player: DraftPlayerOpenSource, publish = true) {
+  function openDraftPlayer(player: DraftPlayerOpenSource) {
     if (!player.playerId) return;
-    const row = rows.find((candidate) => candidate.playerId === player.playerId) ?? player;
-    playerHistory.open({
-      key: `draft:${player.playerId}`,
-      playerId: player.playerId,
-      name: player.name,
-      team: player.team,
-      position: player.position,
-      opponent: row.opponent ?? null,
-      isAway: row.isAway ?? null,
-      isBye: row.isBye ?? false,
-      injuryStatus: row.injuryStatus ?? injuryByPlayer.get(player.playerId) ?? null,
-      weeklyRank: row.weeklyRank ?? null,
-      weeklyProjection: row.weeklyProjection ?? null,
-      projectionSource: row.projectionSource ?? null,
-      seasonRank: row.marketRank ?? null,
-      seasonValue: row.marketValue ?? null,
-      movement30Day: seasonByPlayer.get(player.playerId)?.trend30Day ?? null,
-      isRostered: league.rosteredPlayerIds.includes(player.playerId),
-      gamePhase: row.gamePhase,
-      defenseComponents: row.defenseComponents,
-      projectionComponents: row.projectionComponents,
-    });
-    if (publish) onOpenLinkedPlayer(player.playerId);
+    onOpenLinkedPlayer(player.playerId);
   }
-
-  useLinkedPlayerSync({
-    linkedPlayerId,
-    isOpen: playerHistory.isOpen,
-    currentPlayerId: playerHistory.current?.playerId ?? null,
-    resolve: (playerId) => rows.find((row) => row.playerId === playerId) ?? null,
-    open: (row) => openDraftPlayer(row, false),
-    close: playerHistory.close,
-    onMiss: onLinkedPlayerMiss,
-    onFound: onLinkedPlayerFound,
-    ready: !loading || rows.length > 0,
-  });
 
   return (
     <section className="draft-center">
@@ -495,7 +485,6 @@ export function DraftCenter({ dashboard, league, data, news, newsLoading, newsEr
           {draftBoard}
         </div>
       ) : myTeamSection}
-      {playerHistory.current ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode="details" analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={selectedPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={onRetryNews} onOpenMatchup={onOpenMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={() => { playerHistory.close(); onCloseLinkedPlayer(); }} /> : null}
     </section>
   );
 }

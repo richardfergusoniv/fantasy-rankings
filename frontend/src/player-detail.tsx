@@ -314,6 +314,7 @@ export function PlayerDetailSheet({
   onBack,
   canGoBack,
   onClose,
+  presentation = "modal",
 }: {
   player: PlayerSearchResult;
   week: number;
@@ -331,7 +332,10 @@ export function PlayerDetailSheet({
   onBack: () => void;
   canGoBack: boolean;
   onClose: () => void;
+  /** Docked column skips portal, backdrop, scroll lock, and inert. */
+  presentation?: "modal" | "docked";
 }) {
+  const isModal = presentation === "modal";
   const sheetRef = useRef<HTMLElement | null>(null);
   const settleTimerRef = useRef<number | null>(null);
   const directionTimerRef = useRef<number | null>(null);
@@ -349,7 +353,18 @@ export function PlayerDetailSheet({
   const [settling, setSettling] = useState(false);
   const [contentDirection, setContentDirection] = useState<"back" | "none">("none");
   const [activeTab, setActiveTab] = useState<PlayerDetailTab>("overview");
-  useDialogFocusTrap(sheetRef, onClose);
+  useDialogFocusTrap(sheetRef, onClose, isModal);
+  useEffect(() => {
+    if (isModal) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isModal, onClose]);
 
   const resetDrag = useCallback((animate: boolean) => {
     if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
@@ -375,6 +390,7 @@ export function PlayerDetailSheet({
   }, [player.playerId, resetDrag]);
 
   const beginTouch = (event: ReactTouchEvent<HTMLElement>) => {
+    if (!isModal) return;
     if (event.touches.length !== 1) {
       gestureRef.current = null;
       return;
@@ -396,6 +412,7 @@ export function PlayerDetailSheet({
   };
 
   const moveTouch = (event: ReactTouchEvent<HTMLElement>) => {
+    if (!isModal) return;
     const gesture = gestureRef.current;
     const touch = event.touches[0];
     if (!gesture || !touch) return;
@@ -440,6 +457,7 @@ export function PlayerDetailSheet({
   };
 
   const endTouch = (event: ReactTouchEvent<HTMLElement>) => {
+    if (!isModal) return;
     const gesture = gestureRef.current;
     const touch = event.changedTouches[0];
     if (gesture && touch) {
@@ -470,6 +488,7 @@ export function PlayerDetailSheet({
   };
 
   const cancelTouch = () => {
+    if (!isModal) return;
     gestureRef.current = null;
     resetDrag(true);
   };
@@ -509,29 +528,27 @@ export function PlayerDetailSheet({
       })
     : [];
 
-  return (
-    <ModalPortal>
-      <div className="player-detail-backdrop" onClick={onClose}>
+  const sheet = (
         <section
         ref={sheetRef}
-        className={`player-detail-sheet${dragging ? " is-dragging" : ""}${settling ? " is-settling" : ""}`}
-        style={{ transform: `translate3d(0, ${dragOffset.y}px, 0)` }}
+        className={`player-detail-sheet${isModal ? "" : " is-docked"}${dragging ? " is-dragging" : ""}${settling ? " is-settling" : ""}`}
+        style={isModal ? { transform: `translate3d(0, ${dragOffset.y}px, 0)` } : undefined}
         role="dialog"
-        aria-modal="true"
+        aria-modal={isModal ? true : undefined}
         aria-labelledby="player-detail-name"
         tabIndex={-1}
-        onClick={(event) => event.stopPropagation()}
-        onTouchStart={beginTouch}
-        onTouchMove={moveTouch}
-        onTouchEnd={endTouch}
-        onTouchCancel={cancelTouch}
+        onClick={isModal ? (event) => event.stopPropagation() : undefined}
+        onTouchStart={isModal ? beginTouch : undefined}
+        onTouchMove={isModal ? moveTouch : undefined}
+        onTouchEnd={isModal ? endTouch : undefined}
+        onTouchCancel={isModal ? cancelTouch : undefined}
       >
         <div
           key={player.playerId}
           className={`player-detail-content${contentDirection === "back" ? " history-back" : ""}${dragging ? " is-dragging" : ""}${settling ? " is-settling" : ""}`}
-          style={{ transform: `translate3d(${dragOffset.x}px, 0, 0)` }}
+          style={isModal ? { transform: `translate3d(${dragOffset.x}px, 0, 0)` } : undefined}
         >
-        <div className="player-sheet-grabber" aria-hidden="true" />
+        {isModal ? <div className="player-sheet-grabber" aria-hidden="true" /> : null}
         <header className="player-detail-header">
           <div>
             <div className="player-detail-title-line">
@@ -661,6 +678,14 @@ export function PlayerDetailSheet({
         ) : null}
         </div>
         </section>
+  );
+
+  if (!isModal) return sheet;
+
+  return (
+    <ModalPortal>
+      <div className="player-detail-backdrop" onClick={onClose}>
+        {sheet}
       </div>
     </ModalPortal>
   );
