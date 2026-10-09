@@ -11,6 +11,7 @@ import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { eligibleForSlot, lineupCountingPoints, optimizeLineup } from "../../api/_lib/lineup-optimizer";
 import { api, type ApiResponse } from "./api";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition } from "./dashboard-url";
 import { useLinkedPlayerSync } from "./linked-player";
@@ -1401,118 +1402,9 @@ function MatchupPlayer({ player, side, sosEntry, isSwappedIn = false, isDemoted 
   );
 }
 
-function eligibleForSlot(position: string, slot: string): boolean {
-  if (slot === position) return true;
-  if (slot === "FLEX") return ["RB", "WR", "TE"].includes(position);
-  if (slot === "SUPER_FLEX") return ["QB", "RB", "WR", "TE"].includes(position);
-  if (slot === "REC_FLEX") return ["WR", "TE"].includes(position);
-  if (slot === "WRRB_FLEX") return ["WR", "RB"].includes(position);
-  return false;
-}
-
-const flexLineupSlots = new Set(["FLEX", "SUPER_FLEX", "REC_FLEX", "WRRB_FLEX"]);
-
-function relabelOptimizedStarters(players: RosterPlayer[], slots: string[]): RosterPlayer[] {
-  if (players.length !== slots.length || players.length === 0) return players;
-  type LabelState = { flexTotal: number; flexValues: number[]; exactCount: number; assignments: number[] };
-  const compareFlexValues = (left: number[], right: number[]) => {
-    for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
-      const leftValue = left[index] ?? 0;
-      const rightValue = right[index] ?? 0;
-      if (leftValue !== rightValue) return leftValue - rightValue;
-    }
-    return left.length - right.length;
-  };
-  let states = new Map<number, LabelState>([[0, { flexTotal: 0, flexValues: [], exactCount: 0, assignments: [] }]]);
-
-  slots.forEach((slot) => {
-    const next = new Map<number, LabelState>();
-    for (const [mask, state] of states) {
-      players.forEach((player, playerIndex) => {
-        const bit = 2 ** playerIndex;
-        if ((mask & bit) !== 0 || !eligibleForSlot(player.position, slot)) return;
-        const flexValue = player.gamePhase === "final" ? (player.actual ?? player.projection ?? -1000) : (player.projection ?? -1000);
-        const isFlexSlot = flexLineupSlots.has(slot);
-        const candidate: LabelState = {
-          flexTotal: state.flexTotal + (isFlexSlot ? flexValue : 0),
-          flexValues: isFlexSlot ? [...state.flexValues, flexValue] : state.flexValues,
-          exactCount: state.exactCount + (slot === player.position ? 1 : 0),
-          assignments: [...state.assignments, playerIndex],
-        };
-        const nextMask = mask | bit;
-        const existing = next.get(nextMask);
-        const flexOrder = existing ? compareFlexValues(candidate.flexValues, existing.flexValues) : -1;
-        if (
-          !existing
-          || candidate.flexTotal < existing.flexTotal
-          || (candidate.flexTotal === existing.flexTotal && flexOrder < 0)
-          || (candidate.flexTotal === existing.flexTotal && flexOrder === 0 && candidate.exactCount > existing.exactCount)
-        ) {
-          next.set(nextMask, candidate);
-        }
-      });
-    }
-    states = next;
-  });
-
-  const fullMask = 2 ** players.length - 1;
-  const best = states.get(fullMask);
-  if (!best) return players;
-  const assignments = best.assignments.map((playerIndex) => players[playerIndex]).filter((player): player is RosterPlayer => Boolean(player));
-  return assignments.map((player, index) => ({ ...player, isStarter: true, lineupSlot: slots[index] ?? player.position }));
-}
-
-function optimizeLineup(startersInput: RosterPlayer[], benchInput: RosterPlayer[]): { starters: RosterPlayer[]; bench: RosterPlayer[] } {
-  const slots = startersInput.map((player) => player.lineupSlot ?? player.position);
-  const roster = [...startersInput, ...benchInput];
-  const currentStarterIds = new Set(startersInput.map((player) => player.playerId));
-  type State = { score: number; currentCount: number; assignments: Array<RosterPlayer | undefined> };
-  let states = new Map<number, State>([[0, { score: 0, currentCount: 0, assignments: Array.from({ length: slots.length }) }]]);
-
-  for (const player of roster) {
-    const next = new Map(states);
-    for (const [mask, state] of states) {
-      slots.forEach((slot, slotIndex) => {
-        const bit = 2 ** slotIndex;
-        if ((mask & bit) !== 0 || !eligibleForSlot(player.position, slot)) return;
-        const nextMask = mask | bit;
-        const candidate: State = {
-          score: state.score + (player.gamePhase === "final" ? (player.actual ?? player.projection ?? -1000) : (player.projection ?? -1000)),
-          currentCount: state.currentCount + (currentStarterIds.has(player.playerId) ? 1 : 0),
-          assignments: state.assignments.map((assigned, index) => index === slotIndex ? player : assigned),
-        };
-        const existing = next.get(nextMask);
-        if (!existing || candidate.score > existing.score || (candidate.score === existing.score && candidate.currentCount > existing.currentCount)) {
-          next.set(nextMask, candidate);
-        }
-      });
-    }
-    states = next;
-  }
-
-  const countBits = (value: number): number => value.toString(2).replaceAll("0", "").length;
-  let bestMask = 0;
-  let bestState = states.get(0) ?? { score: 0, currentCount: 0, assignments: [] };
-  for (const [mask, state] of states) {
-    const filled = countBits(mask);
-    const bestFilled = countBits(bestMask);
-    if (filled > bestFilled || (filled === bestFilled && (state.score > bestState.score || (state.score === bestState.score && state.currentCount > bestState.currentCount)))) {
-      bestMask = mask;
-      bestState = state;
-    }
-  }
-
-  const optimized = bestState.assignments.flatMap((player) => player ? [player] : []);
-  const filledSlots = bestState.assignments.flatMap((player, index) => player ? [slots[index] ?? player.position] : []);
-  const starters = relabelOptimizedStarters(optimized, filledSlots);
-  const starterIds = new Set(starters.map((player) => player.playerId));
-  const bench = roster.filter((player) => !starterIds.has(player.playerId)).map((player) => ({ ...player, isStarter: false, lineupSlot: null }));
-  return { starters, bench };
-}
-
 function forecastTotal(players: RosterPlayer[]): number | null {
   const values = players.flatMap((player) => {
-    const value = player.gamePhase === "final" ? player.actual : player.projection;
+    const value = lineupCountingPoints(player);
     return value === null ? [] : [value];
   });
   return values.length ? values.reduce((total, value) => total + value, 0) : null;
@@ -1575,9 +1467,10 @@ function Lineup({ league, dashboard, news, newsLoading, newsError, onRetryNews, 
   const myBench = mode === "optimized" ? optimized.bench : league.bench;
   const theirs = opponent?.starters;
   const theirBench = opponent?.bench;
+  const currentForecast = forecastTotal(league.starters);
   const optimizedForecast = forecastTotal(optimized.starters);
-  const optimizedGain = optimizedForecast !== null && league.teamProjection !== null
-    ? Number((optimizedForecast - league.teamProjection).toFixed(1))
+  const optimizedGain = optimizedForecast !== null && currentForecast !== null
+    ? Number((optimizedForecast - currentForecast).toFixed(1))
     : null;
   const userTeamName = league.tradeTeams.find((team) => team.isUser)?.teamName ?? "My Team";
   const starterCount = Math.max(mine.length, theirs?.length ?? 0);

@@ -49,6 +49,7 @@ import {
   type SleeperPlayer,
   type SleeperRoster,
 } from "./sleeper.js";
+import { eligibleForSlot, isLineupLocked, optimizeLineup } from "./lineup-optimizer.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -665,133 +666,24 @@ function nflTeamRecordsFromScoreboard(scoreboard: EspnScoreboard): z.infer<typeo
 // Lineup optimizer + suggestions
 // ---------------------------------------------------------------------------
 
-function isEligible(position: string, slot: string): boolean {
-  if (slot === position) return true;
-  if (slot === "FLEX") return ["RB", "WR", "TE"].includes(position);
-  if (slot === "SUPER_FLEX") return ["QB", "RB", "WR", "TE"].includes(position);
-  if (slot === "REC_FLEX") return ["WR", "TE"].includes(position);
-  if (slot === "WRRB_FLEX") return ["WR", "RB"].includes(position);
-  return false;
-}
-
-const FLEX_LINEUP_SLOTS = new Set(["FLEX", "SUPER_FLEX", "REC_FLEX", "WRRB_FLEX"]);
-
-function relabelOptimizedLineup(players: RosterPlayer[], slots: string[]): RosterPlayer[] {
-  if (players.length !== slots.length || players.length === 0) return players;
-  type LabelState = { flexTotal: number; flexValues: number[]; exactCount: number; assignments: number[] };
-  const compareFlexValues = (left: number[], right: number[]) => {
-    for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
-      const leftValue = left[index] ?? 0;
-      const rightValue = right[index] ?? 0;
-      if (leftValue !== rightValue) return leftValue - rightValue;
-    }
-    return left.length - right.length;
-  };
-  let states = new Map<number, LabelState>([[0, { flexTotal: 0, flexValues: [], exactCount: 0, assignments: [] }]]);
-
-  slots.forEach((slot) => {
-    const next = new Map<number, LabelState>();
-    for (const [mask, state] of states) {
-      players.forEach((player, playerIndex) => {
-        const bit = 2 ** playerIndex;
-        if ((mask & bit) !== 0 || !isEligible(player.position, slot)) return;
-        const flexValue = player.projection ?? -1000;
-        const isFlexSlot = FLEX_LINEUP_SLOTS.has(slot);
-        const candidate: LabelState = {
-          flexTotal: state.flexTotal + (isFlexSlot ? flexValue : 0),
-          flexValues: isFlexSlot ? [...state.flexValues, flexValue] : state.flexValues,
-          exactCount: state.exactCount + (slot === player.position ? 1 : 0),
-          assignments: [...state.assignments, playerIndex],
-        };
-        const nextMask = mask | bit;
-        const existing = next.get(nextMask);
-        const flexOrder = existing ? compareFlexValues(candidate.flexValues, existing.flexValues) : -1;
-        if (
-          !existing
-          || candidate.flexTotal < existing.flexTotal
-          || (candidate.flexTotal === existing.flexTotal && flexOrder < 0)
-          || (candidate.flexTotal === existing.flexTotal && flexOrder === 0 && candidate.exactCount > existing.exactCount)
-        ) {
-          next.set(nextMask, candidate);
-        }
-      });
-    }
-    states = next;
-  });
-
-  const fullMask = 2 ** players.length - 1;
-  const best = states.get(fullMask);
-  if (!best) return players;
-  const assignments = best.assignments.map((playerIndex) => players[playerIndex]).filter((player): player is RosterPlayer => Boolean(player));
-  return assignments.map((player, index) => ({ ...player, isStarter: true, lineupSlot: slots[index] ?? player.position }));
-}
-
-function effectiveOptimizerValue(player: RosterPlayer): number {
-  return player.gamePhase === "final"
-    ? (player.actual ?? player.projection ?? -1000)
-    : (player.projection ?? -1000);
-}
-
 function optimizeWeeklyPowerLineup(startersInput: RosterPlayer[], benchInput: RosterPlayer[]): RosterPlayer[] {
-  // Keep this in lockstep with the Matchup view's optimizer. In particular,
-  // derive slots from the submitted lineup (so an empty Sleeper slot stays
-  // empty), optimize on the same displayed values (final actuals once games
-  // are final), and prefer the submitted starter when two choices are equal.
-  const slots = startersInput.map((player) => player.lineupSlot ?? player.position);
-  const roster = [...startersInput, ...benchInput];
-  const currentStarterIds = new Set(startersInput.map((player) => player.playerId));
-  type State = { score: number; currentCount: number; assignments: Array<RosterPlayer | undefined> };
-  let states = new Map<number, State>([[0, { score: 0, currentCount: 0, assignments: Array.from({ length: slots.length }) }]]);
-
-  for (const player of roster) {
-    const next = new Map(states);
-    for (const [mask, state] of states) {
-      slots.forEach((slot, slotIndex) => {
-        const bit = 2 ** slotIndex;
-        if ((mask & bit) !== 0 || !isEligible(player.position, slot)) return;
-        const nextMask = mask | bit;
-        const contender: State = {
-          score: state.score + effectiveOptimizerValue(player),
-          currentCount: state.currentCount + (currentStarterIds.has(player.playerId) ? 1 : 0),
-          assignments: state.assignments.map((assigned, index) => index === slotIndex ? player : assigned),
-        };
-        const existing = next.get(nextMask);
-        if (!existing || contender.score > existing.score || (contender.score === existing.score && contender.currentCount > existing.currentCount)) {
-          next.set(nextMask, contender);
-        }
-      });
-    }
-    states = next;
-  }
-
-  const countBits = (value: number): number => value.toString(2).replaceAll("0", "").length;
-  let bestMask = 0;
-  let bestState = states.get(0) ?? { score: 0, currentCount: 0, assignments: [] };
-  for (const [mask, state] of states) {
-    const filled = countBits(mask);
-    const bestFilled = countBits(bestMask);
-    if (filled > bestFilled || (filled === bestFilled && (state.score > bestState.score || (state.score === bestState.score && state.currentCount > bestState.currentCount)))) {
-      bestMask = mask;
-      bestState = state;
-    }
-  }
-
-  const optimized = bestState.assignments.flatMap((player) => player ? [player] : []);
-  const filledSlots = bestState.assignments.flatMap((player, index) => player ? [slots[index] ?? player.position] : []);
-  return relabelOptimizedLineup(optimized, filledSlots);
+  // Same lock rules as the Matchup optimized lineup: started or finished
+  // games stay in their submitted slot, and only pregame players move.
+  return optimizeLineup(startersInput, benchInput).starters;
 }
 
 function makeSuggestion(starters: RosterPlayer[], bench: RosterPlayer[]): z.infer<typeof suggestionSchema> {
   let best: z.infer<typeof suggestionSchema> = null;
   for (const reserve of bench) {
-    if (reserve.projection === null && (reserve.gamePhase !== "final" || reserve.actual === null)) continue;
+    if (isLineupLocked(reserve) || reserve.projection === null) continue;
     for (const starter of starters) {
       if (
-        !starter.lineupSlot
-        || (starter.projection === null && (starter.gamePhase !== "final" || starter.actual === null))
-        || !isEligible(reserve.position, starter.lineupSlot)
+        isLineupLocked(starter)
+        || !starter.lineupSlot
+        || starter.projection === null
+        || !eligibleForSlot(reserve.position, starter.lineupSlot)
       ) continue;
-      const delta = effectiveOptimizerValue(reserve) - effectiveOptimizerValue(starter);
+      const delta = reserve.projection - starter.projection;
       if (delta >= 0.5 && (!best || delta > best.delta)) {
         best = { inPlayer: reserve.name, outPlayer: starter.name, delta, slot: starter.lineupSlot };
       }
