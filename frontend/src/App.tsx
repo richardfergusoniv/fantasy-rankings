@@ -14,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition } from "./dashboard-url";
 import { useLinkedPlayerSync } from "./linked-player";
-import { buildLeagueRosterRows, compactAssetName, formatLineupImpact, formatTeamRecord, rosterPositionLabel, tradeValueVerdict, type LeagueRosterRow, type TeamRecord } from "./league-trade";
+import { buildLeagueRosterRows, compactAssetName, formatLineupImpact, formatTeamRecord, rosterPositionLabel, type LeagueRosterRow, type TeamRecord } from "./league-trade";
 import { formatDecimal, formatPercent } from "./lib/format-number";
 import { MatchupTag, ModalPortal, SegmentedControl, SkipLink, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 import { supabase } from "./supabase";
@@ -2605,6 +2605,7 @@ function AggregateTradeHistory({
   isLoading,
   giveColor = "var(--chart-4)",
   getColor = "var(--chart-3)",
+  showPickNote = true,
 }: {
   give: TradeAsset[];
   get: TradeAsset[];
@@ -2612,6 +2613,7 @@ function AggregateTradeHistory({
   isLoading: boolean;
   giveColor?: string;
   getColor?: string;
+  showPickNote?: boolean;
 }) {
   const playerSide = (assets: TradeAsset[]) => assets.filter((asset) => asset.position !== "PICK");
   const givePlayers = playerSide(give);
@@ -2651,7 +2653,7 @@ function AggregateTradeHistory({
           <div className="trade-aggregate-key"><span><i className="give" style={{ background: giveColor }} />You give</span><span><i className="get" style={{ background: getColor }} />You get</span></div>
         </>
       ) : <div className="trade-stock-empty">{isLoading ? "Loading FantasyCalc history…" : "Add a player to either side to chart its sourced daily value."}</div>}
-      {(give.some((asset) => asset.position === "PICK") || get.some((asset) => asset.position === "PICK")) ? <p>Draft picks remain in the totals above but are excluded from this player-history chart.</p> : null}
+      {showPickNote && (give.some((asset) => asset.position === "PICK") || get.some((asset) => asset.position === "PICK")) ? <p>Draft picks remain in the totals above but are excluded from this player-history chart.</p> : null}
     </section>
   );
 }
@@ -2955,7 +2957,7 @@ function LeagueTradeValueColumn({
 }) {
   const ordered = [...assets].sort((left, right) => right.value - left.value || left.name.localeCompare(right.name));
   return (
-    <div className={`league-trade-column ${side}`} style={{ height }}>
+    <div className={`league-trade-column ${side}`} style={{ height, minHeight: height }}>
       {side === "mine" ? (
         <div className="league-trade-names">
           {ordered.map((asset) => (
@@ -3008,7 +3010,6 @@ function LeagueTradeValueDialog({
 }) {
   const giveTotal = tradeTotal(give);
   const getTotal = tradeTotal(get);
-  const verdict = tradeValueVerdict(giveTotal, getTotal, theirs.teamName);
   const grade = starterSlots.length > 0
     ? gradeTradeSide(mine, give, get, theirs, waiverPool, starterSlots)
     : null;
@@ -3035,7 +3036,6 @@ function LeagueTradeValueDialog({
   const chartLabel = [
     `${mine.teamName} sends ${give.length ? give.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${giveTotal.toLocaleString()}`,
     `${theirs.teamName} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getTotal.toLocaleString()}`,
-    verdict,
     lineup,
   ].filter((part): part is string => Boolean(part)).join(" ");
 
@@ -3058,7 +3058,6 @@ function LeagueTradeValueDialog({
               <div className="league-trade-total"><span>Total trade value</span><strong>{getTotal.toLocaleString()}</strong></div>
             </div>
           </div>
-          <DialogDescription className="league-trade-verdict">{verdict}</DialogDescription>
           <AggregateTradeHistory
             give={give}
             get={get}
@@ -3066,6 +3065,7 @@ function LeagueTradeValueDialog({
             isLoading={historyPlayerIds.length > 0 && historyQuery.isPending}
             giveColor="var(--stat-strength-readable)"
             getColor="var(--chart-2)"
+            showPickNote={false}
           />
         </div>
       </DialogContent>
