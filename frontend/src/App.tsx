@@ -2813,7 +2813,7 @@ function signed(value: number, digits = 1): string {
   return formatDecimal(value, digits, { sign: "exceptZero" });
 }
 
-function TradeSide({ title, assets, availableAssets, marketTotal, onAdd, onRemove, onClear, onOpenPlayer }: { title: string; assets: TradeAsset[]; availableAssets: TradeAsset[]; marketTotal: number; onAdd: (id: string) => void; onRemove: (id: string) => void; onClear: () => void; onOpenPlayer: (playerId: string) => void }) {
+function TradeSide({ title, assets, availableAssets, onAdd, onRemove, onClear, onOpenPlayer }: { title: string; assets: TradeAsset[]; availableAssets: TradeAsset[]; onAdd: (id: string) => void; onRemove: (id: string) => void; onClear: () => void; onOpenPlayer: (playerId: string) => void }) {
   const [query, setQuery] = useState("");
   const needle = comparablePlayerName(query.trim());
   const matches = availableAssets
@@ -2881,7 +2881,6 @@ function TradeSide({ title, assets, availableAssets, marketTotal, onAdd, onRemov
         </div>
         {assets.map((asset) => <TradeAssetRow key={asset.playerId} asset={asset} onRemove={() => onRemove(asset.playerId)} onOpenPlayer={onOpenPlayer} />)}
       </div>
-      <div className="trade-side-total"><strong>{marketTotal.toLocaleString()}</strong></div>
     </section>
   );
 }
@@ -2989,29 +2988,32 @@ function LeagueTradeValueColumn({
   );
 }
 
-function LeagueTradeValueDialog({
+function TradeValueDialog({
   give,
   get,
-  mine,
-  theirs,
-  starterSlots,
-  waiverPool,
   formatKey,
   onClose,
+  giveLabel = "You give",
+  getLabel = "You get",
+  lineupContext,
 }: {
   give: TradeAsset[];
   get: TradeAsset[];
-  mine: TradeTeam;
-  theirs: TradeTeam;
-  starterSlots: string[];
-  waiverPool: RosterPlayer[];
   formatKey: string;
   onClose: () => void;
+  giveLabel?: string;
+  getLabel?: string;
+  lineupContext?: {
+    mine: TradeTeam;
+    theirs: TradeTeam;
+    starterSlots: string[];
+    waiverPool: RosterPlayer[];
+  };
 }) {
   const giveTotal = tradeTotal(give);
   const getTotal = tradeTotal(get);
-  const grade = starterSlots.length > 0
-    ? gradeTradeSide(mine, give, get, theirs, waiverPool, starterSlots)
+  const grade = lineupContext && lineupContext.starterSlots.length > 0
+    ? gradeTradeSide(lineupContext.mine, give, get, lineupContext.theirs, lineupContext.waiverPool, lineupContext.starterSlots)
     : null;
   const lineup = grade ? formatLineupImpact(grade.lineupBefore, grade.lineupAfter, grade.lineupDelta) : null;
   const maxTotal = Math.max(giveTotal, getTotal, 1);
@@ -3040,8 +3042,8 @@ function LeagueTradeValueDialog({
     node.scrollTop = 0;
   }, []);
   const chartLabel = [
-    `${mine.teamName} sends ${give.length ? give.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${giveTotal.toLocaleString()}`,
-    `${theirs.teamName} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getTotal.toLocaleString()}`,
+    `${giveLabel} sends ${give.length ? give.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${giveTotal.toLocaleString()}`,
+    `${getLabel} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getTotal.toLocaleString()}`,
     lineup,
   ].filter((part): part is string => Boolean(part)).join(" ");
 
@@ -3190,13 +3192,12 @@ function LeagueAdjustedTrade({
         {canAnalyze ? null : <span id={hintId} className="sr-only">Choose a trade partner and at least one asset.</span>}
       </div>
       {isResultOpen && canAnalyze && theirs ? (
-        <LeagueTradeValueDialog
+        <TradeValueDialog
           give={give}
           get={get}
-          mine={mine}
-          theirs={theirs}
-          starterSlots={starterSlots}
-          waiverPool={waiverPool}
+          giveLabel={mine.teamName}
+          getLabel={theirs.teamName}
+          lineupContext={{ mine, theirs, starterSlots, waiverPool }}
           formatKey={formatKey}
           onClose={() => setIsResultOpen(false)}
         />
@@ -3762,15 +3763,7 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
   const assetById = useMemo(() => new Map([...assets, ...teamPickAssets].map((asset) => [asset.playerId, asset])), [assets, teamPickAssets]);
   const give = giveIds.flatMap((id) => assetById.get(id) ?? []);
   const get = getIds.flatMap((id) => assetById.get(id) ?? []);
-  const giveMarketTotal = tradeTotal(give);
-  const getMarketTotal = tradeTotal(get);
-  const difference = Math.abs(giveMarketTotal - getMarketTotal);
-  const largerTotal = Math.max(giveMarketTotal, getMarketTotal);
-  const balancePercent = largerTotal === 0 ? 50 : Math.max(8, Math.min(92, (giveMarketTotal / (giveMarketTotal + getMarketTotal || 1)) * 100));
   const selectedIds = new Set([...giveIds, ...getIds]);
-  const selectedPlayerIds = [...selectedIds].filter((id) => assetById.get(id)?.position !== "PICK").sort();
-  const historyQuery = useQuery({ queryKey: ["fantasycalc-value-history", league.seasonLongFormat.key, selectedPlayerIds], queryFn: () => api.getValueHistory({ formatKey: league.seasonLongFormat.key, playerIds: selectedPlayerIds }), enabled: valuationMode === "market" && selectedPlayerIds.length > 0 });
-  const historyByPlayerId = useMemo(() => new Map((historyQuery.data?.series ?? []).map((series) => [series.playerId, series])), [historyQuery.data]);
   const mine = userTeam;
   const recordByRosterId = useMemo(() => {
     const records = new Map<number, TeamRecord>();
@@ -3785,7 +3778,6 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
     return records;
   }, [league.powerRankingsDynasty, league.powerRankingsSeasonLong, league.powerRankingsWeek, league.tradeTeams]);
   const partner = league.tradeTeams.find((team) => team.rosterId === theirRosterId && team.rosterId !== mine?.rosterId) ?? null;
-  const marketCounterpart = league.tradeTeams.find((team) => team.rosterId !== mine?.rosterId);
   const unrestrictedAssets = assets.filter((asset) => !selectedIds.has(asset.playerId));
 
   useEffect(() => {
@@ -3833,8 +3825,6 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
     const setter = side === "give" ? setGiveIds : setGetIds;
     setter((ids) => ids.includes(id) ? ids.filter((row) => row !== id) : [...ids, id]);
   };
-  const balanceCopy = give.length === 0 || get.length === 0 ? "Add at least one asset to each side to compare the deal." : difference === 0 ? "The two sides have the same FantasyCalc market value." : `${giveMarketTotal < getMarketTotal ? "You give" : "You get"} is ${difference.toLocaleString()} market value lower.`;
-
   return (
     <section className="trade-view">
       <div className="tool-section-heading"><h2>Trade values</h2></div>
@@ -3870,28 +3860,18 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
       ) : (
         <>
           <div className="trade-columns">
-            <TradeSide title="You give" assets={give} availableAssets={unrestrictedAssets} marketTotal={giveMarketTotal} onAdd={(id) => addAsset(id, "give")} onRemove={(id) => removeSidePlayer("give", id)} onClear={() => clearSide("give")} onOpenPlayer={onOpenPlayer} />
-            <TradeSide title="You get" assets={get} availableAssets={unrestrictedAssets} marketTotal={getMarketTotal} onAdd={(id) => addAsset(id, "get")} onRemove={(id) => removeSidePlayer("get", id)} onClear={() => clearSide("get")} onOpenPlayer={onOpenPlayer} />
+            <TradeSide title="You give" assets={give} availableAssets={unrestrictedAssets} onAdd={(id) => addAsset(id, "give")} onRemove={(id) => removeSidePlayer("give", id)} onClear={() => clearSide("give")} onOpenPlayer={onOpenPlayer} />
+            <TradeSide title="You get" assets={get} availableAssets={unrestrictedAssets} onAdd={(id) => addAsset(id, "get")} onRemove={(id) => removeSidePlayer("get", id)} onClear={() => clearSide("get")} onOpenPlayer={onOpenPlayer} />
           </div>
           {assets.length === 0 ? <div className="empty-inline empty-stack"><strong>No trade values for this format.</strong><span>Choose another league to compare assets.</span></div> : null}
           <div className="trade-calculate-wrap">
             <button type="button" className="trade-calculate-button" disabled={give.length === 0 || get.length === 0} onClick={() => setIsResultOpen(true)}>Calculate trade</button>
-            {give.length === 0 || get.length === 0 ? <span>Choose at least one asset on each side</span> : <span>Compare market value</span>}
           </div>
           {isResultOpen && give.length > 0 && get.length > 0 ? (
-            <TradeResultCard
+            <TradeValueDialog
               give={give}
               get={get}
-              mine={mine}
-              theirs={marketCounterpart}
-              league={league}
-              valuationMode="market"
-              giveMarketTotal={giveMarketTotal}
-              getMarketTotal={getMarketTotal}
-              balancePercent={balancePercent}
-              balanceCopy={balanceCopy}
-              historyByPlayerId={historyByPlayerId}
-              historyLoading={historyQuery.isPending}
+              formatKey={league.seasonLongFormat.key}
               onClose={() => setIsResultOpen(false)}
             />
           ) : null}
