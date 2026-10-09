@@ -3866,7 +3866,6 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
           {assets.length === 0 ? <div className="empty-inline empty-stack"><strong>No trade values for this format.</strong><span>Choose another league to compare assets.</span></div> : null}
           <div className="trade-calculate-wrap">
             <button type="button" className="trade-calculate-button" disabled={give.length === 0 || get.length === 0} onClick={() => setIsResultOpen(true)}>Calculate trade</button>
-            {give.length === 0 || get.length === 0 ? <span>Choose at least one asset on each side</span> : <span>Compare market value</span>}
           </div>
           {isResultOpen && give.length > 0 && get.length > 0 ? (
             <TradeValueDialog

@@ -909,11 +909,12 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-trade-dialog .trade-aggregate .section-heading { position: static; z-index: auto; min-height: 0; padding: 0 0 6px; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .trade-side { position: relative; min-width: 0; }
 .trade-side:focus-within { z-index: 10; }
-.trade-side-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 0 0 8px; border-bottom: 1px solid var(--hairline); }
+.trade-side-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 0 8px; border-bottom: 1px solid var(--hairline); }
 .trade-side-heading h2 { margin: 0; font-size: var(--type-section); line-height: 1; font-weight: 700; }
 .trade-view .trade-side-heading h2 { font-size: var(--type-body); }
 .trade-side-heading span { display: block; margin-top: 3px; color: var(--dim); font-size: var(--type-caption); }
 .trade-side-heading button { min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: var(--link); font-size: var(--type-caption); font-weight: 700; cursor: pointer; }
+.trade-view .trade-side-heading button { display: inline-flex; align-items: center; justify-content: flex-end; height: 44px; min-height: 44px; margin-block: calc((15px - 44px) / 2); padding: 0; line-height: 1; }
 .trade-side-list { min-height: 54px; overflow: visible; background: transparent; border: 0; }
 .trade-side-search-wrap { padding: 8px 0 7px; border: 0; background: transparent; }
 .trade-side-search { min-height: 44px; }
@@ -956,9 +957,9 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-picker-picks { margin-top: 15px; border-top: 1px solid var(--border); }
 .trade-picker-picks h3 { margin: 0; padding: 11px 10px 8px; font-size: var(--type-section); font-weight: 700; }
 .trade-search-empty { padding: 16px 9px; color: var(--dim); text-align: center; font-size: var(--type-caption); }
-.trade-asset-block { border-bottom: 0; }
-.trade-asset-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; column-gap: 4px; align-items: center; box-sizing: border-box; height: var(--league-roster-row-height); min-height: var(--league-roster-row-height); max-height: var(--league-roster-row-height); padding: 0 0 0 6px; border-bottom: 1px solid var(--hairline); }
-.trade-asset-block:last-child .trade-asset-row { border-bottom: 0; }
+.trade-asset-block { border-bottom: 1px solid var(--hairline); }
+.trade-asset-block:last-child { border-bottom: 0; }
+.trade-asset-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; column-gap: 4px; align-items: center; box-sizing: border-box; height: var(--league-roster-row-height); min-height: var(--league-roster-row-height); max-height: var(--league-roster-row-height); padding: 0 0 0 6px; border-bottom: 0; }
 .boom-bust-panel, .player-value-trend { margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--hairline); }
 .boom-bust-heading, .trade-stock-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .boom-bust-heading-copy { display: grid; gap: 2px; min-width: 0; }
