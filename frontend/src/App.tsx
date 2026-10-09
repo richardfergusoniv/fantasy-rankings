@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
@@ -14,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition } from "./dashboard-url";
 import { useLinkedPlayerSync } from "./linked-player";
-import { buildLeagueRosterRows, compactAssetName, formatLineupImpact, formatTeamRecord, rosterPositionLabel, tradeValueVerdict, type LeagueRosterRow, type TeamRecord } from "./league-trade";
+import { buildLeagueRosterRows, compactAssetName, formatLineupImpact, formatTeamRecord, rosterPositionLabel, type LeagueRosterRow, type TeamRecord } from "./league-trade";
 import { formatDecimal, formatPercent } from "./lib/format-number";
 import { MatchupTag, ModalPortal, SegmentedControl, SkipLink, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 import { supabase } from "./supabase";
@@ -2598,7 +2598,23 @@ function PlayerValueTrend({ name, history, isLoading }: { name: string; history:
   );
 }
 
-function AggregateTradeHistory({ give, get, historyByPlayerId, isLoading }: { give: TradeAsset[]; get: TradeAsset[]; historyByPlayerId: Map<string, ValueHistorySeries>; isLoading: boolean }) {
+function AggregateTradeHistory({
+  give,
+  get,
+  historyByPlayerId,
+  isLoading,
+  giveColor = "var(--chart-4)",
+  getColor = "var(--chart-3)",
+  showPickNote = true,
+}: {
+  give: TradeAsset[];
+  get: TradeAsset[];
+  historyByPlayerId: Map<string, ValueHistorySeries>;
+  isLoading: boolean;
+  giveColor?: string;
+  getColor?: string;
+  showPickNote?: boolean;
+}) {
   const playerSide = (assets: TradeAsset[]) => assets.filter((asset) => asset.position !== "PICK");
   const givePlayers = playerSide(give);
   const getPlayers = playerSide(get);
@@ -2623,21 +2639,21 @@ function AggregateTradeHistory({ give, get, historyByPlayerId, isLoading }: { gi
       {data.length > 0 && (hasGive || hasGet) ? (
         <>
           <div className="trade-aggregate-chart" role="img" aria-label="Thirty-day FantasyCalc total value for each side of the trade">
-            <ChartContainer config={{ give: { label: "You give", color: "var(--chart-4)" }, get: { label: "You get", color: "var(--chart-3)" } }} className="aspect-auto h-full">
+            <ChartContainer config={{ give: { label: "You give", color: giveColor }, get: { label: "You get", color: getColor } }} className="aspect-auto h-full">
               <LineChart data={data} margin={{ top: 14, right: 12, bottom: 18, left: 2 }}>
                 <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
                 <XAxis dataKey="date" tickFormatter={formatDateTick} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={24} />
                 <YAxis width={48} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={false} />
                 <Tooltip labelFormatter={(label) => formatDateTick(String(label))} formatter={(value, name) => [Number(value).toLocaleString(), name === "give" ? "You give" : "You get"]} contentStyle={chartTooltipStyle} />
-                {hasGive ? <Line type="monotone" dataKey="give" name="give" stroke="var(--chart-4)" strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
-                {hasGet ? <Line type="monotone" dataKey="get" name="get" stroke="var(--chart-3)" strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
+                {hasGive ? <Line type="monotone" dataKey="give" name="give" stroke={giveColor} strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
+                {hasGet ? <Line type="monotone" dataKey="get" name="get" stroke={getColor} strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
               </LineChart>
             </ChartContainer>
           </div>
-          <div className="trade-aggregate-key"><span><i className="give" />You give</span><span><i className="get" />You get</span></div>
+          <div className="trade-aggregate-key"><span><i className="give" style={{ background: giveColor }} />You give</span><span><i className="get" style={{ background: getColor }} />You get</span></div>
         </>
       ) : <div className="trade-stock-empty">{isLoading ? "Loading FantasyCalc history…" : "Add a player to either side to chart its sourced daily value."}</div>}
-      {(give.some((asset) => asset.position === "PICK") || get.some((asset) => asset.position === "PICK")) ? <p>Draft picks remain in the totals above but are excluded from this player-history chart.</p> : null}
+      {showPickNote && (give.some((asset) => asset.position === "PICK") || get.some((asset) => asset.position === "PICK")) ? <p>Draft picks remain in the totals above but are excluded from this player-history chart.</p> : null}
     </section>
   );
 }
@@ -2939,9 +2955,9 @@ function LeagueTradeValueColumn({
   assets: TradeAsset[];
   height: number;
 }) {
-  const ordered = [...assets].sort((left, right) => right.value - left.value || left.name.localeCompare(right.name));
+  const ordered = [...assets].sort((left, right) => left.value - right.value || left.name.localeCompare(right.name));
   return (
-    <div className={`league-trade-column ${side}`} style={{ height }}>
+    <div className={`league-trade-column ${side}`} style={{ height, minHeight: height }}>
       {side === "mine" ? (
         <div className="league-trade-names">
           {ordered.map((asset) => (
@@ -2980,6 +2996,7 @@ function LeagueTradeValueDialog({
   theirs,
   starterSlots,
   waiverPool,
+  formatKey,
   onClose,
 }: {
   give: TradeAsset[];
@@ -2988,24 +3005,43 @@ function LeagueTradeValueDialog({
   theirs: TradeTeam;
   starterSlots: string[];
   waiverPool: RosterPlayer[];
+  formatKey: string;
   onClose: () => void;
 }) {
   const giveTotal = tradeTotal(give);
   const getTotal = tradeTotal(get);
-  const verdict = tradeValueVerdict(giveTotal, getTotal, theirs.teamName);
   const grade = starterSlots.length > 0
     ? gradeTradeSide(mine, give, get, theirs, waiverPool, starterSlots)
     : null;
   const lineup = grade ? formatLineupImpact(grade.lineupBefore, grade.lineupAfter, grade.lineupDelta) : null;
   const maxTotal = Math.max(giveTotal, getTotal, 1);
   const columnHeight = (total: number, count: number): number => {
-    if (count === 0) return 36;
-    return Math.max(36, count * 32, Math.round((total / maxTotal) * 220));
+    if (count === 0) return 48;
+    const floor = count * 48 + (count - 1) * 2;
+    return Math.max(floor, Math.round((total / maxTotal) * 360));
   };
+  const historyPlayerIds = useMemo(
+    () => [...give, ...get].filter((asset) => asset.position !== "PICK").map((asset) => asset.playerId).sort(),
+    [get, give],
+  );
+  const historyQuery = useQuery({
+    queryKey: ["fantasycalc-value-history", formatKey, historyPlayerIds],
+    queryFn: () => api.getValueHistory({ formatKey, playerIds: historyPlayerIds }),
+    enabled: historyPlayerIds.length > 0,
+  });
+  const historyByPlayerId = useMemo(
+    () => new Map((historyQuery.data?.series ?? []).map((series) => [series.playerId, series])),
+    [historyQuery.data],
+  );
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const node = bodyRef.current;
+    if (!node) return;
+    node.scrollTop = 0;
+  }, []);
   const chartLabel = [
     `${mine.teamName} sends ${give.length ? give.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${giveTotal.toLocaleString()}`,
     `${theirs.teamName} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getTotal.toLocaleString()}`,
-    verdict,
     lineup,
   ].filter((part): part is string => Boolean(part)).join(" ");
 
@@ -3016,18 +3052,28 @@ function LeagueTradeValueDialog({
         <DialogHeader className="league-trade-dialog-heading">
           <DialogTitle>Trade value</DialogTitle>
         </DialogHeader>
-        {lineup ? <p className="league-trade-lineup">{lineup}</p> : null}
-        <div className="league-trade-chart" role="img" aria-label={chartLabel}>
-          <div className="league-trade-side">
-            <LeagueTradeValueColumn side="mine" assets={give} height={columnHeight(giveTotal, give.length)} />
-            <div className="league-trade-total"><span>Total trade value</span><strong>{giveTotal.toLocaleString()}</strong></div>
+        <div className="league-trade-dialog-body" ref={bodyRef}>
+          {lineup ? <p className="league-trade-lineup">{lineup}</p> : null}
+          <div className="league-trade-chart" role="img" aria-label={chartLabel}>
+            <div className="league-trade-side">
+              <LeagueTradeValueColumn side="mine" assets={give} height={columnHeight(giveTotal, give.length)} />
+              <div className="league-trade-total"><span>Total trade value</span><strong>{giveTotal.toLocaleString()}</strong></div>
+            </div>
+            <div className="league-trade-side">
+              <LeagueTradeValueColumn side="theirs" assets={get} height={columnHeight(getTotal, get.length)} />
+              <div className="league-trade-total"><span>Total trade value</span><strong>{getTotal.toLocaleString()}</strong></div>
+            </div>
           </div>
-          <div className="league-trade-side">
-            <LeagueTradeValueColumn side="theirs" assets={get} height={columnHeight(getTotal, get.length)} />
-            <div className="league-trade-total"><span>Total trade value</span><strong>{getTotal.toLocaleString()}</strong></div>
-          </div>
+          <AggregateTradeHistory
+            give={give}
+            get={get}
+            historyByPlayerId={historyByPlayerId}
+            isLoading={historyPlayerIds.length > 0 && historyQuery.isPending}
+            giveColor="var(--stat-strength-readable)"
+            getColor="var(--chart-2)"
+            showPickNote={false}
+          />
         </div>
-        <DialogDescription className="league-trade-verdict">{verdict}</DialogDescription>
       </DialogContent>
     </Dialog>
   );
@@ -3065,6 +3111,7 @@ function LeagueAdjustedTrade({
   starterSlots,
   waiverPool,
   recordByRosterId,
+  formatKey,
   onPartnerChange,
   onToggle,
 }: {
@@ -3077,6 +3124,7 @@ function LeagueAdjustedTrade({
   starterSlots: string[];
   waiverPool: RosterPlayer[];
   recordByRosterId: ReadonlyMap<number, TeamRecord>;
+  formatKey: string;
   onPartnerChange: (rosterId: number | null) => void;
   onToggle: (side: "give" | "get", id: string) => void;
 }) {
@@ -3149,6 +3197,7 @@ function LeagueAdjustedTrade({
           theirs={theirs}
           starterSlots={starterSlots}
           waiverPool={waiverPool}
+          formatKey={formatKey}
           onClose={() => setIsResultOpen(false)}
         />
       ) : null}
@@ -3813,6 +3862,7 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
             starterSlots={league.tradeStarterSlots}
             waiverPool={league.tradeWaiverPool}
             recordByRosterId={recordByRosterId}
+            formatKey={league.seasonLongFormat.key}
             onPartnerChange={(rosterId) => { setTheirRosterId(rosterId); setGetIds([]); }}
             onToggle={toggleLeagueAsset}
           />
