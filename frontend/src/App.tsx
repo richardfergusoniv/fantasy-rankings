@@ -3033,6 +3033,28 @@ function LeagueTradeValueDialog({
   );
 }
 
+function LeagueRosterCard({
+  label,
+  title,
+  action,
+  children,
+}: {
+  label: string;
+  title: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="league-roster-card" aria-label={label}>
+      <header className="league-roster-heading">
+        <h3>{title}</h3>
+        {action}
+      </header>
+      <div className="league-roster-scroll">{children}</div>
+    </section>
+  );
+}
+
 function LeagueAdjustedTrade({
   mine,
   partners,
@@ -3075,21 +3097,19 @@ function LeagueAdjustedTrade({
   return (
     <>
       <div className="trade-columns league-adjusted">
-        <section className="league-roster-card" aria-label={`${mine.teamName} roster`}>
-          <header className="league-roster-heading"><h3>{mine.teamName}</h3></header>
+        <LeagueRosterCard label={`${mine.teamName} roster`} title={mine.teamName}>
           <LeagueRosterList rows={myRows} selectedIds={selectedGive} onToggle={(id) => onToggle("give", id)} listLabel={`${mine.teamName} assets`} />
-        </section>
+        </LeagueRosterCard>
         {theirs ? (
-          <section className="league-roster-card" aria-label={`${theirs.teamName} roster`}>
-            <header className="league-roster-heading">
-              <h3>{theirs.teamName}</h3>
-              <button type="button" className="league-partner-change" aria-label="Change trade partner" onClick={() => onPartnerChange(null)}>Change</button>
-            </header>
+          <LeagueRosterCard
+            label={`${theirs.teamName} roster`}
+            title={theirs.teamName}
+            action={<button type="button" className="league-partner-change" aria-label="Change trade partner" onClick={() => onPartnerChange(null)}>Change</button>}
+          >
             <LeagueRosterList rows={theirRows} selectedIds={selectedGet} onToggle={(id) => onToggle("get", id)} listLabel={`${theirs.teamName} assets`} />
-          </section>
+          </LeagueRosterCard>
         ) : (
-          <section className="league-roster-card" aria-label="Trade partners">
-            <header className="league-roster-heading"><h3>Trade partner</h3></header>
+          <LeagueRosterCard label="Trade partners" title="Trade partner">
             {partners.length === 0 ? <p className="league-roster-empty">No other teams in this league.</p> : (
               <ul className="league-roster-list" aria-label="League teams">
                 {partners.map((team) => {
@@ -3114,7 +3134,7 @@ function LeagueAdjustedTrade({
                 })}
               </ul>
             )}
-          </section>
+          </LeagueRosterCard>
         )}
       </div>
       <div className="trade-calculate-wrap">
