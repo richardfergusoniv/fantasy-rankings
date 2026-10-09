@@ -852,6 +852,54 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .select-control-field select { width: 100%; min-height: var(--compact-control-height); padding: 0 26px 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background-color: var(--surface); color: var(--text); font: inherit; font-size: var(--type-caption); font-weight: 600; cursor: pointer; }
 .select-control-field:focus-within select { border-color: var(--link); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent); }
 .trade-columns { display: grid; gap: 16px; margin-top: 16px; }
+.trade-columns.league-adjusted { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-top: 8px; }
+.league-roster-card { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.league-roster-heading { display: flex; align-items: center; justify-content: space-between; gap: 4px; height: var(--compact-control-height); min-height: var(--compact-control-height); padding: 0 8px; border-bottom: 1px solid var(--border); }
+.league-roster-heading h3 { min-width: 0; margin: 0; overflow: hidden; color: var(--text); font-size: var(--type-caption); font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+button.league-partner-change { flex: none; height: 24px; min-height: 24px; margin-right: -4px; padding: 0 4px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--link); font: inherit; font-size: var(--type-caption); font-weight: 700; line-height: 1; }
+button.league-partner-change:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }
+button.league-partner-change:active { color: var(--link-active); }
+.league-roster-list { margin: 0; padding: 0; list-style: none; }
+.league-roster-list > li.is-selected { background: var(--roster-highlight-bg); }
+.league-roster-row { display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 6px; row-gap: 1px; align-items: center; min-height: 40px; padding: 4px 6px; border-bottom: 1px solid var(--hairline); cursor: pointer; }
+.league-roster-list > li:last-child .league-roster-row { border-bottom: 0; }
+.league-roster-row input { grid-row: 1 / span 2; width: 16px; height: 16px; margin: 0; accent-color: var(--action); }
+.league-roster-row input:disabled { cursor: default; }
+.league-roster-list > li:has(input:disabled) { color: var(--dim); }
+.league-roster-main { display: flex; grid-column: 2; grid-row: 1; min-width: 0; align-items: center; gap: 4px; }
+.league-roster-name { display: flex; min-width: 0; align-items: center; gap: 3px; }
+.league-roster-name strong { overflow: hidden; font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.league-roster-meta { display: flex; grid-column: 2; grid-row: 2; min-width: 0; align-items: center; justify-content: space-between; gap: 4px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.league-roster-meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.league-roster-meta b { flex: none; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
+.league-roster-empty { margin: 0; padding: 10px 8px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.league-roster-row:focus-within { outline: 2px solid var(--link); outline-offset: -2px; }
+.league-roster-row input:focus-visible { outline: none; }
+/* The position badge sets the first line of a player row. Match that so team rows stay the same height. */
+.league-team-row .league-roster-main { min-height: 21px; }
+.league-trade-dialog { width: min(calc(100% - 1.5rem), 26rem); gap: 12px; padding: 14px 12px 16px; border-color: var(--border); border-radius: var(--radius-xl); background: var(--surface); color: var(--text); box-shadow: var(--shadow-modal); }
+.league-trade-dialog-heading { padding-right: 40px; }
+.league-trade-lineup { margin: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.league-trade-chart { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+.league-trade-column { display: flex; min-width: 0; gap: 4px; }
+.league-trade-column.mine { justify-content: flex-end; }
+.league-trade-names, .league-trade-bar { display: flex; min-width: 0; flex-direction: column; gap: 2px; height: 100%; }
+.league-trade-names { flex: 1; }
+.league-trade-bar { width: 58px; flex: none; }
+.league-trade-name, .league-trade-segment { display: flex; min-height: 28px; flex-direction: column; justify-content: center; overflow: hidden; }
+.league-trade-column.mine .league-trade-name { align-items: flex-end; text-align: right; }
+.league-trade-name strong { max-width: 100%; overflow: hidden; font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.league-trade-name small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.league-trade-segment { align-items: center; border-radius: 3px; color: var(--on-accent); font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
+.league-trade-segment span { max-width: 100%; overflow: hidden; padding: 0 2px; text-overflow: ellipsis; white-space: nowrap; }
+.league-trade-column.mine .league-trade-segment, .league-trade-column.mine .league-trade-bar.is-empty { background: var(--stat-strength-readable); }
+.league-trade-column.theirs .league-trade-segment, .league-trade-column.theirs .league-trade-bar.is-empty { background: var(--chart-2); }
+.league-trade-bar.is-empty { align-items: center; justify-content: center; border-radius: 3px; color: var(--on-accent); font-size: var(--type-caption); font-weight: 700; }
+.league-trade-total { margin-top: 8px; }
+.league-trade-side:last-child .league-trade-total { text-align: right; }
+.league-trade-total span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.league-trade-total strong { display: block; margin-top: 2px; font-size: var(--type-section); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums lining-nums; }
+.league-trade-dialog .league-trade-verdict { margin: 0; color: var(--text); font-size: var(--type-body); font-weight: 700; }
 .trade-side { position: relative; min-width: 0; }
 .trade-side:focus-within { z-index: 10; }
 .trade-side-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 0 0 8px; border-bottom: 1px solid var(--hairline); }

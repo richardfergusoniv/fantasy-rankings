@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition } from "./dashboard-url";
 import { useLinkedPlayerSync } from "./linked-player";
+import { buildLeagueRosterRows, compactAssetName, formatLineupImpact, formatTeamRecord, rosterPositionLabel, tradeValueVerdict, type LeagueRosterRow, type TeamRecord } from "./league-trade";
 import { formatDecimal, formatPercent } from "./lib/format-number";
 import { MatchupTag, ModalPortal, SegmentedControl, SkipLink, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 import { supabase } from "./supabase";
@@ -55,7 +56,7 @@ function withSignIn<T>(operation: Promise<T>): Promise<T> {
 }
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
-type League = Dashboard["leagues"][number];
+export type League = Dashboard["leagues"][number];
 type RosterPlayer = League["starters"][number];
 type Tab = "team" | "rankings" | "waivers" | "power" | "draft" | "trade" | "charts" | "comparison" | "strengthOfSchedule";
 type PlayerLink = {
@@ -2713,6 +2714,8 @@ function tradeDepthScore(optimized: OptimizedRoster, slots: string[]): number {
 
 type SideGrade = {
   lineupDelta: number;
+  lineupBefore: number;
+  lineupAfter: number;
   depthDelta: number;
   cuts: string[];
   adds: string[];
@@ -2779,6 +2782,8 @@ function gradeTradeSide(
   const surplusCopy = easiestOut ? `${easiestOut.player.name} has a ${formatDecimal(Math.max(0, easiestOut.cost), 1)}-point removal cost after a waiver refill.` : "No outgoing player to test for surplus.";
   return {
     lineupDelta,
+    lineupBefore: pre.score,
+    lineupAfter: post.score,
     depthDelta,
     cuts,
     adds,
@@ -2865,128 +2870,269 @@ function TradeSide({ title, assets, availableAssets, marketTotal, onAdd, onRemov
   );
 }
 
-function LeagueAssetPicker({
-  sideTitle,
-  team,
-  assetById,
-  selectedIds,
-  onAdd,
-  onClose,
-}: {
-  sideTitle: string;
-  team: TradeTeam;
-  assetById: Map<string, TradeAsset>;
-  selectedIds: Set<string>;
-  onAdd: (id: string) => void;
-  onClose: () => void;
-}) {
-  const titleId = `league-asset-picker-${sideTitle.toLowerCase().replace(/\s+/g, "-")}`;
-  const dialogRef = useRef<HTMLElement | null>(null);
-  useDialogFocusTrap(dialogRef, onClose);
-  const playerRows = team.players
-    .map((player) => ({ player, asset: assetById.get(player.playerId) }))
-    .sort((a, b) => (b.asset?.value ?? -1) - (a.asset?.value ?? -1) || a.player.name.localeCompare(b.player.name));
-  const picks = [...team.ownedPicks].sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+function leagueRosterAccessibleName(row: LeagueRosterRow): string {
+  const position = row.position === "PICK" ? "draft pick" : rosterPositionLabel(row.position);
+  const team = row.position === "PICK" ? null : row.team;
+  const details = [
+    row.name,
+    position,
+    team,
+    row.value === null ? "no league value" : `value ${row.value.toLocaleString()}`,
+    row.isRookie ? "rookie" : null,
+    row.injuryStatus ? `injury status ${row.injuryStatus}` : null,
+  ].filter((part): part is string => Boolean(part));
+  return details.join(", ");
+}
 
+function LeagueRosterList({
+  rows,
+  selectedIds,
+  onToggle,
+  listLabel,
+}: {
+  rows: LeagueRosterRow[];
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
+  listLabel: string;
+}) {
+  if (rows.length === 0) return <p className="league-roster-empty">No players on this roster.</p>;
   return (
-    <ModalPortal>
-      <div className="trade-picker-backdrop" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-        <section ref={dialogRef} className="trade-picker" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-        <header className="trade-picker-header">
-          <div><h2 id={titleId}>Add Player</h2><p>{team.teamName} · {sideTitle}</p></div>
-          <button type="button" onClick={onClose}>Done</button>
-        </header>
-        <div className="trade-picker-scroll">
-          <div className="trade-picker-table" aria-label={`${team.teamName} roster`}>
-            <div className="trade-picker-columns" aria-hidden="true"><span>Player</span><span>Value</span><span /></div>
-            {playerRows.map(({ player, asset }) => {
-              const isSelected = selectedIds.has(player.playerId);
-              const isUnavailable = !asset;
-              return (
-                <button
-                  key={player.playerId}
-                  type="button"
-                  className="trade-picker-row"
-                  disabled={isSelected || isUnavailable}
-                  onClick={() => { if (asset) onAdd(asset.playerId); }}
-                  aria-label={isSelected ? `${player.name}, already added` : isUnavailable ? `${player.name}, no FantasyCalc value` : `Add ${player.name}, value ${asset.value}`}
-                >
-                  <span className="trade-picker-player"><span className="asset-position">{player.position}</span><strong>{player.name}</strong></span>
-                  <b>{asset ? asset.value.toLocaleString() : "—"}</b>
-                  <span className={`row-toggle-state${isSelected ? " selected" : ""}`} aria-hidden="true">{isSelected ? "✓" : isUnavailable ? "—" : "+"}</span>
-                </button>
-              );
-            })}
-          </div>
-          {picks.length > 0 ? (
-            <section className="trade-picker-picks" aria-labelledby={`${titleId}-picks`}>
-              <h3 id={`${titleId}-picks`}>Draft picks</h3>
-              <div className="trade-picker-table">
-                <div className="trade-picker-columns" aria-hidden="true"><span>Pick</span><span>Value</span><span /></div>
-                {picks.map((pick) => {
-                  const isSelected = selectedIds.has(pick.playerId);
-                  return (
-                    <button key={pick.playerId} type="button" className="trade-picker-row" disabled={isSelected} onClick={() => onAdd(pick.playerId)} aria-label={isSelected ? `${pick.name}, already added` : `Add ${pick.name}, value ${pick.value}`}>
-                      <span className="trade-picker-player"><span className="asset-position pick">PICK</span><strong>{pick.name}</strong></span>
-                      <b>{pick.value.toLocaleString()}</b>
-                      <span className={`row-toggle-state${isSelected ? " selected" : ""}`} aria-hidden="true">{isSelected ? "✓" : "+"}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
-        </div>
-        </section>
-      </div>
-    </ModalPortal>
+    <ul className="league-roster-list" aria-label={listLabel}>
+      {rows.map((row) => {
+        const selected = selectedIds.has(row.id);
+        return (
+          <li key={row.id} className={selected ? "is-selected" : undefined}>
+            <label className="league-roster-row">
+              <input
+                type="checkbox"
+                checked={selected}
+                disabled={!row.selectable}
+                onChange={() => onToggle(row.id)}
+                aria-label={leagueRosterAccessibleName(row)}
+              />
+              <span className="league-roster-main">
+                <span className={`asset-position${row.position === "PICK" ? " pick" : ""}`}>{rosterPositionLabel(row.position)}</span>
+                <span className="league-roster-name">
+                  <strong>{row.shortName}</strong>
+                  {row.isRookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" tone="positive" /> : null}
+                  {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
+                </span>
+              </span>
+              <span className="league-roster-meta">
+                <span>{row.position === "PICK" ? "Pick" : row.team ?? "FA"}</span>
+                <b>{row.value === null ? "—" : row.value.toLocaleString()}</b>
+              </span>
+            </label>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
-function LeagueTradeSide({
-  title,
-  team,
+function LeagueTradeValueColumn({
+  side,
   assets,
-  assetById,
-  selectedIds,
-  marketTotal,
-  onAdd,
-  onRemove,
-  onClear,
-  onOpenPlayer,
+  height,
 }: {
-  title: string;
-  team: TradeTeam;
+  side: "mine" | "theirs";
   assets: TradeAsset[];
-  assetById: Map<string, TradeAsset>;
-  selectedIds: Set<string>;
-  marketTotal: number;
-  onAdd: (id: string) => void;
-  onRemove: (id: string) => void;
-  onClear: () => void;
-  onOpenPlayer: (playerId: string) => void;
+  height: number;
 }) {
-  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const ordered = [...assets].sort((left, right) => right.value - left.value || left.name.localeCompare(right.name));
+  return (
+    <div className={`league-trade-column ${side}`} style={{ height }}>
+      {side === "mine" ? (
+        <div className="league-trade-names">
+          {ordered.map((asset) => (
+            <div className="league-trade-name" key={asset.playerId} style={{ flexGrow: Math.max(asset.value, 1) }}>
+              <strong>{compactAssetName(asset.name, asset.position)}</strong>
+              <small>{asset.position === "PICK" ? "Pick" : `${rosterPositionLabel(asset.position)}${asset.team ? ` ${asset.team}` : ""}`}</small>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className={`league-trade-bar${ordered.length === 0 ? " is-empty" : ""}`}>
+        {ordered.length === 0 ? <span>0</span> : ordered.map((asset) => (
+          <div className="league-trade-segment" key={asset.playerId} style={{ flexGrow: Math.max(asset.value, 1) }}>
+            <span>{asset.value.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+      {side === "theirs" ? (
+        <div className="league-trade-names">
+          {ordered.map((asset) => (
+            <div className="league-trade-name" key={asset.playerId} style={{ flexGrow: Math.max(asset.value, 1) }}>
+              <strong>{compactAssetName(asset.name, asset.position)}</strong>
+              <small>{asset.position === "PICK" ? "Pick" : `${rosterPositionLabel(asset.position)}${asset.team ? ` ${asset.team}` : ""}`}</small>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
-  useEffect(() => {
-    setIsPickerOpen(false);
-  }, [team.rosterId]);
+function LeagueTradeValueDialog({
+  give,
+  get,
+  mine,
+  theirs,
+  starterSlots,
+  waiverPool,
+  onClose,
+}: {
+  give: TradeAsset[];
+  get: TradeAsset[];
+  mine: TradeTeam;
+  theirs: TradeTeam;
+  starterSlots: string[];
+  waiverPool: RosterPlayer[];
+  onClose: () => void;
+}) {
+  const giveTotal = tradeTotal(give);
+  const getTotal = tradeTotal(get);
+  const verdict = tradeValueVerdict(giveTotal, getTotal, theirs.teamName);
+  const grade = starterSlots.length > 0
+    ? gradeTradeSide(mine, give, get, theirs, waiverPool, starterSlots)
+    : null;
+  const lineup = grade ? formatLineupImpact(grade.lineupBefore, grade.lineupAfter, grade.lineupDelta) : null;
+  const maxTotal = Math.max(giveTotal, getTotal, 1);
+  const columnHeight = (total: number, count: number): number => {
+    if (count === 0) return 36;
+    return Math.max(36, count * 32, Math.round((total / maxTotal) * 220));
+  };
+  const chartLabel = [
+    `${mine.teamName} sends ${give.length ? give.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${giveTotal.toLocaleString()}`,
+    `${theirs.teamName} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getTotal.toLocaleString()}`,
+    verdict,
+    lineup,
+  ].filter((part): part is string => Boolean(part)).join(" ");
 
   return (
-    <section className="trade-side league-trade-side" aria-label={`${title}, ${team.teamName}`}>
-      <div className="trade-side-heading">
-        <div><h2>{title}</h2></div>
-        {assets.length ? <button onClick={onClear}>Clear</button> : null}
-      </div>
-      <div className="trade-side-list">
-        <div className="trade-add-wrap">
-          <button type="button" className="trade-add-player" onClick={() => setIsPickerOpen(true)}>Add Player</button>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="league-trade-dialog">
+        <DialogCloseButton label="Close trade value" />
+        <DialogHeader className="league-trade-dialog-heading">
+          <DialogTitle>Trade value</DialogTitle>
+        </DialogHeader>
+        {lineup ? <p className="league-trade-lineup">{lineup}</p> : null}
+        <div className="league-trade-chart" role="img" aria-label={chartLabel}>
+          <div className="league-trade-side">
+            <LeagueTradeValueColumn side="mine" assets={give} height={columnHeight(giveTotal, give.length)} />
+            <div className="league-trade-total"><span>Total trade value</span><strong>{giveTotal.toLocaleString()}</strong></div>
+          </div>
+          <div className="league-trade-side">
+            <LeagueTradeValueColumn side="theirs" assets={get} height={columnHeight(getTotal, get.length)} />
+            <div className="league-trade-total"><span>Total trade value</span><strong>{getTotal.toLocaleString()}</strong></div>
+          </div>
         </div>
-        {assets.map((asset) => <TradeAssetRow key={asset.playerId} asset={asset} onRemove={() => onRemove(asset.playerId)} onOpenPlayer={onOpenPlayer} />)}
+        <DialogDescription className="league-trade-verdict">{verdict}</DialogDescription>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LeagueAdjustedTrade({
+  mine,
+  partners,
+  assetById,
+  theirRosterId,
+  giveIds,
+  getIds,
+  starterSlots,
+  waiverPool,
+  recordByRosterId,
+  onPartnerChange,
+  onToggle,
+}: {
+  mine: TradeTeam;
+  partners: TradeTeam[];
+  assetById: Map<string, TradeAsset>;
+  theirRosterId: number | null;
+  giveIds: string[];
+  getIds: string[];
+  starterSlots: string[];
+  waiverPool: RosterPlayer[];
+  recordByRosterId: ReadonlyMap<number, TeamRecord>;
+  onPartnerChange: (rosterId: number | null) => void;
+  onToggle: (side: "give" | "get", id: string) => void;
+}) {
+  const hintId = useId();
+  const [isResultOpen, setIsResultOpen] = useState(false);
+  const theirs = partners.find((team) => team.rosterId === theirRosterId) ?? null;
+  const give = giveIds.flatMap((id) => assetById.get(id) ?? []);
+  const get = getIds.flatMap((id) => assetById.get(id) ?? []);
+  const canAnalyze = theirs !== null && (give.length > 0 || get.length > 0);
+  const myRows = useMemo(() => buildLeagueRosterRows(mine.players, mine.ownedPicks, assetById), [assetById, mine]);
+  const theirRows = useMemo(
+    () => theirs ? buildLeagueRosterRows(theirs.players, theirs.ownedPicks, assetById) : [],
+    [assetById, theirs],
+  );
+  const selectedGive = useMemo(() => new Set(giveIds), [giveIds]);
+  const selectedGet = useMemo(() => new Set(getIds), [getIds]);
+
+  return (
+    <>
+      <div className="trade-columns league-adjusted">
+        <section className="league-roster-card" aria-label={`${mine.teamName} roster`}>
+          <header className="league-roster-heading"><h3>{mine.teamName}</h3></header>
+          <LeagueRosterList rows={myRows} selectedIds={selectedGive} onToggle={(id) => onToggle("give", id)} listLabel={`${mine.teamName} assets`} />
+        </section>
+        {theirs ? (
+          <section className="league-roster-card" aria-label={`${theirs.teamName} roster`}>
+            <header className="league-roster-heading">
+              <h3>{theirs.teamName}</h3>
+              <button type="button" className="league-partner-change" aria-label="Change trade partner" onClick={() => onPartnerChange(null)}>Change</button>
+            </header>
+            <LeagueRosterList rows={theirRows} selectedIds={selectedGet} onToggle={(id) => onToggle("get", id)} listLabel={`${theirs.teamName} assets`} />
+          </section>
+        ) : (
+          <section className="league-roster-card" aria-label="Trade partners">
+            <header className="league-roster-heading"><h3>Trade partner</h3></header>
+            {partners.length === 0 ? <p className="league-roster-empty">No other teams in this league.</p> : (
+              <ul className="league-roster-list" aria-label="League teams">
+                {partners.map((team) => {
+                  const record = team.record ?? recordByRosterId.get(team.rosterId);
+                  const recordLabel = record ? formatTeamRecord(record) : "—";
+                  return (
+                    <li key={team.rosterId}>
+                      <label className="league-roster-row league-team-row">
+                        <input
+                          type="checkbox"
+                          checked={false}
+                          onChange={() => onPartnerChange(team.rosterId)}
+                          aria-label={record ? `Trade with ${team.teamName}, ${recordLabel}` : `Trade with ${team.teamName}`}
+                        />
+                        <span className="league-roster-main">
+                          <span className="league-roster-name"><strong>{team.teamName}</strong></span>
+                        </span>
+                        <span className="league-roster-meta"><span>{recordLabel}</span></span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        )}
       </div>
-      <div className="trade-side-total"><strong>{marketTotal.toLocaleString()}</strong></div>
-      {isPickerOpen ? <LeagueAssetPicker sideTitle={title} team={team} assetById={assetById} selectedIds={selectedIds} onAdd={onAdd} onClose={() => setIsPickerOpen(false)} /> : null}
-    </section>
+      <div className="trade-calculate-wrap">
+        <button type="button" className="trade-calculate-button" disabled={!canAnalyze} aria-describedby={canAnalyze ? undefined : hintId} onClick={() => setIsResultOpen(true)}>Analyze trade</button>
+        {canAnalyze ? null : <span id={hintId} className="sr-only">Choose a trade partner and at least one asset.</span>}
+      </div>
+      {isResultOpen && canAnalyze && theirs ? (
+        <LeagueTradeValueDialog
+          give={give}
+          get={get}
+          mine={mine}
+          theirs={theirs}
+          starterSlots={starterSlots}
+          waiverPool={waiverPool}
+          onClose={() => setIsResultOpen(false)}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -3533,7 +3679,7 @@ function TradeHistoryView({ dashboard, league, onOpenPlayer }: { dashboard: Dash
   );
 }
 
-function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashboard; league: League; onOpenPlayer: (playerId: string) => void }) {
+export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashboard; league: League; onOpenPlayer: (playerId: string) => void }) {
   const [tradeView, setTradeView] = useState<"analyze" | "history">("analyze");
   const [giveIds, setGiveIds] = useState<string[]>([]);
   const [getIds, setGetIds] = useState<string[]>([]);
@@ -3541,8 +3687,7 @@ function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashb
   const [isResultOpen, setIsResultOpen] = useState(false);
   const [valuationMode, setValuationMode] = useState<ValuationMode>("league");
   const userTeam = league.tradeTeams.find((team) => team.isUser) ?? league.tradeTeams[0];
-  const defaultOpponent = league.tradeTeams.find((team) => team.rosterId !== userTeam?.rosterId);
-  const [theirRosterId, setTheirRosterId] = useState<number | null>(defaultOpponent?.rosterId ?? null);
+  const [theirRosterId, setTheirRosterId] = useState<number | null>(null);
   const assets = useMemo(() => dashboard.seasonLongRankings.filter((row) => row.formatKey === league.seasonLongFormat.key).sort((a, b) => a.overallRank - b.overallRank), [dashboard.seasonLongRankings, league.seasonLongFormat.key]);
   const teamPickAssets = useMemo(() => league.tradeTeams.flatMap((team) => team.ownedPicks), [league.tradeTeams]);
   const assetById = useMemo(() => new Map([...assets, ...teamPickAssets].map((asset) => [asset.playerId, asset])), [assets, teamPickAssets]);
@@ -3555,16 +3700,27 @@ function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashb
   const balancePercent = largerTotal === 0 ? 50 : Math.max(8, Math.min(92, (giveMarketTotal / (giveMarketTotal + getMarketTotal || 1)) * 100));
   const selectedIds = new Set([...giveIds, ...getIds]);
   const selectedPlayerIds = [...selectedIds].filter((id) => assetById.get(id)?.position !== "PICK").sort();
-  const historyQuery = useQuery({ queryKey: ["fantasycalc-value-history", league.seasonLongFormat.key, selectedPlayerIds], queryFn: () => api.getValueHistory({ formatKey: league.seasonLongFormat.key, playerIds: selectedPlayerIds }), enabled: selectedPlayerIds.length > 0 });
+  const historyQuery = useQuery({ queryKey: ["fantasycalc-value-history", league.seasonLongFormat.key, selectedPlayerIds], queryFn: () => api.getValueHistory({ formatKey: league.seasonLongFormat.key, playerIds: selectedPlayerIds }), enabled: valuationMode === "market" && selectedPlayerIds.length > 0 });
   const historyByPlayerId = useMemo(() => new Map((historyQuery.data?.series ?? []).map((series) => [series.playerId, series])), [historyQuery.data]);
   const mine = userTeam;
-  const theirs = league.tradeTeams.find((team) => team.rosterId === theirRosterId && team.rosterId !== mine?.rosterId) ?? league.tradeTeams.find((team) => team.rosterId !== mine?.rosterId);
+  const recordByRosterId = useMemo(() => {
+    const records = new Map<number, TeamRecord>();
+    for (const ranking of [league.powerRankingsWeek, league.powerRankingsSeasonLong, league.powerRankingsDynasty]) {
+      for (const team of ranking) {
+        if (!records.has(team.rosterId)) records.set(team.rosterId, team.record);
+      }
+    }
+    for (const team of league.tradeTeams) {
+      if (team.record) records.set(team.rosterId, team.record);
+    }
+    return records;
+  }, [league.powerRankingsDynasty, league.powerRankingsSeasonLong, league.powerRankingsWeek, league.tradeTeams]);
+  const partner = league.tradeTeams.find((team) => team.rosterId === theirRosterId && team.rosterId !== mine?.rosterId) ?? null;
+  const marketCounterpart = league.tradeTeams.find((team) => team.rosterId !== mine?.rosterId);
   const unrestrictedAssets = assets.filter((asset) => !selectedIds.has(asset.playerId));
 
   useEffect(() => {
-    const nextMine = league.tradeTeams.find((team) => team.isUser) ?? league.tradeTeams[0];
-    const nextThem = league.tradeTeams.find((team) => team.rosterId !== nextMine?.rosterId);
-    setTheirRosterId(nextThem?.rosterId ?? null);
+    setTheirRosterId(null);
     setGiveIds([]);
     setGetIds([]);
     setIsResultOpen(false);
@@ -3602,6 +3758,12 @@ function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashb
       else setGetIds(restore);
     });
   };
+  const toggleLeagueAsset = (side: "give" | "get", id: string) => {
+    const otherIds = side === "give" ? getIds : giveIds;
+    if (otherIds.includes(id)) return;
+    const setter = side === "give" ? setGiveIds : setGetIds;
+    setter((ids) => ids.includes(id) ? ids.filter((row) => row !== id) : [...ids, id]);
+  };
   const balanceCopy = give.length === 0 || get.length === 0 ? "Add at least one asset to each side to compare the deal." : difference === 0 ? "The two sides have the same FantasyCalc market value." : `${giveMarketTotal < getMarketTotal ? "You give" : "You get"} is ${difference.toLocaleString()} market value lower.`;
 
   return (
@@ -3620,46 +3782,51 @@ function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashb
       </div>
 
       {valuationMode === "league" ? (
-        <div className="trade-team-controls">
-          <label className="select-control"><span>Trade partner</span><span className="select-control-field"><select aria-label="Select opposing team" value={theirs?.rosterId ?? ""} onChange={(event) => { setTheirRosterId(Number(event.target.value)); setGetIds([]); }}>{league.tradeTeams.filter((team) => team.rosterId !== mine?.rosterId).map((team) => <option key={team.rosterId} value={team.rosterId}>{team.teamName}</option>)}</select></span></label>
-        </div>
-      ) : null}
-
-      <div className={`trade-columns${valuationMode === "league" ? " league-adjusted" : ""}`}>
-        {valuationMode === "league" && mine && theirs ? (
-          <>
-            <LeagueTradeSide title="You give" team={mine} assets={give} assetById={assetById} selectedIds={selectedIds} marketTotal={giveMarketTotal} onAdd={(id) => addAsset(id, "give")} onRemove={(id) => removeSidePlayer("give", id)} onClear={() => clearSide("give")} onOpenPlayer={onOpenPlayer} />
-            <LeagueTradeSide title="You get" team={theirs} assets={get} assetById={assetById} selectedIds={selectedIds} marketTotal={getMarketTotal} onAdd={(id) => addAsset(id, "get")} onRemove={(id) => removeSidePlayer("get", id)} onClear={() => clearSide("get")} onOpenPlayer={onOpenPlayer} />
-          </>
-        ) : (
-          <>
+        mine ? (
+          <LeagueAdjustedTrade
+            mine={mine}
+            partners={league.tradeTeams.filter((team) => team.rosterId !== mine.rosterId)}
+            assetById={assetById}
+            theirRosterId={partner?.rosterId ?? null}
+            giveIds={giveIds}
+            getIds={getIds}
+            starterSlots={league.tradeStarterSlots}
+            waiverPool={league.tradeWaiverPool}
+            recordByRosterId={recordByRosterId}
+            onPartnerChange={(rosterId) => { setTheirRosterId(rosterId); setGetIds([]); }}
+            onToggle={toggleLeagueAsset}
+          />
+        ) : <div className="empty-inline empty-stack"><strong>No roster available for this league.</strong></div>
+      ) : (
+        <>
+          <div className="trade-columns">
             <TradeSide title="You give" assets={give} availableAssets={unrestrictedAssets} marketTotal={giveMarketTotal} onAdd={(id) => addAsset(id, "give")} onRemove={(id) => removeSidePlayer("give", id)} onClear={() => clearSide("give")} onOpenPlayer={onOpenPlayer} />
             <TradeSide title="You get" assets={get} availableAssets={unrestrictedAssets} marketTotal={getMarketTotal} onAdd={(id) => addAsset(id, "get")} onRemove={(id) => removeSidePlayer("get", id)} onClear={() => clearSide("get")} onOpenPlayer={onOpenPlayer} />
-          </>
-        )}
-      </div>
-      {assets.length === 0 ? <div className="empty-inline empty-stack"><strong>No trade values for this format.</strong><span>Choose another league to compare assets.</span></div> : null}
-      <div className="trade-calculate-wrap">
-        <button type="button" className="trade-calculate-button" disabled={give.length === 0 || get.length === 0} onClick={() => setIsResultOpen(true)}>Calculate trade</button>
-        {give.length === 0 || get.length === 0 ? <span>Choose at least one asset on each side</span> : <span>Compare market value{valuationMode === "league" ? " and roster impact" : ""}</span>}
-      </div>
-      {isResultOpen && give.length > 0 && get.length > 0 ? (
-        <TradeResultCard
-          give={give}
-          get={get}
-          mine={mine}
-          theirs={theirs}
-          league={league}
-          valuationMode={valuationMode}
-          giveMarketTotal={giveMarketTotal}
-          getMarketTotal={getMarketTotal}
-          balancePercent={balancePercent}
-          balanceCopy={balanceCopy}
-          historyByPlayerId={historyByPlayerId}
-          historyLoading={historyQuery.isPending}
-          onClose={() => setIsResultOpen(false)}
-        />
-      ) : null}
+          </div>
+          {assets.length === 0 ? <div className="empty-inline empty-stack"><strong>No trade values for this format.</strong><span>Choose another league to compare assets.</span></div> : null}
+          <div className="trade-calculate-wrap">
+            <button type="button" className="trade-calculate-button" disabled={give.length === 0 || get.length === 0} onClick={() => setIsResultOpen(true)}>Calculate trade</button>
+            {give.length === 0 || get.length === 0 ? <span>Choose at least one asset on each side</span> : <span>Compare market value</span>}
+          </div>
+          {isResultOpen && give.length > 0 && get.length > 0 ? (
+            <TradeResultCard
+              give={give}
+              get={get}
+              mine={mine}
+              theirs={marketCounterpart}
+              league={league}
+              valuationMode="market"
+              giveMarketTotal={giveMarketTotal}
+              getMarketTotal={getMarketTotal}
+              balancePercent={balancePercent}
+              balanceCopy={balanceCopy}
+              historyByPlayerId={historyByPlayerId}
+              historyLoading={historyQuery.isPending}
+              onClose={() => setIsResultOpen(false)}
+            />
+          ) : null}
+        </>
+      )}
       </>}
     </section>
   );

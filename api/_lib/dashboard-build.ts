@@ -2006,6 +2006,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         isUser: roster.roster_id === ownRoster.roster_id,
         players: rosterPlayers,
         ownedPicks: ownedPicksByRosterId.get(roster.roster_id) ?? [],
+        record: powerTeamRecord(roster),
       };
     });
     const rosteredSet = new Set(rosteredPlayerIds);
