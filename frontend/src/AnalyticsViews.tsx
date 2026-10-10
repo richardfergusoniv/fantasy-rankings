@@ -2163,6 +2163,8 @@ export function ComparisonTool({ dashboard, league, initialPlayer = null, initia
 
   return (
     <div className="comparison-tool">
+      {/* Keep shared controls in the same order as Charts: dataset, then position, then window. */}
+      <ToolDatasetToggle value={dataset} onChange={setDataset} label="Comparison dataset" />
       <SegmentedControl<BasePosition | "">
         className="comparison-position-toggle analytics-position-tabs"
         value={position ?? ""}
@@ -2170,7 +2172,6 @@ export function ComparisonTool({ dashboard, league, initialPlayer = null, initia
         label="Comparison position"
         options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
       />
-      <ToolDatasetToggle value={dataset} onChange={setDataset} label="Comparison dataset" />
       {dataset === "advanced" ? <SegmentedControl className="lineup-mode-toggle analytics-window-toggle" value={window} onChange={setWindow} label="Advanced stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]} /> : null}
       {position ? (
         <ComparisonView
