@@ -1048,7 +1048,11 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-values strong { display: block; margin: 5px 0 3px; font-size: var(--type-section); line-height: 1; font-weight: 700; letter-spacing: -.02em; }
 .rank-tone.sos-soft { color: var(--stat-strength-readable); }
 .rank-tone.sos-tough { color: var(--stat-weakness-readable); }
-.player-detail-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 12px 2px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.player-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px 2px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.player-detail-meta .player-roster-badge { max-width: 100%; flex: none; color: var(--text); text-decoration: none; }
+.player-detail-meta .player-roster-badge:hover,
+.player-detail-meta .player-roster-badge:active { color: var(--text); }
+.player-detail-meta .player-roster-badge .matchup-reference-button-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .player-detail-injury { padding: 2px 6px; border-radius: 4px; background: var(--stat-weakness-soft); color: var(--negative); font-weight: 700; }
 .player-detail-movement { display: inline-flex; align-items: center; gap: 5px; }
 .player-detail-waiver-trends { margin-top: 14px; }
@@ -2017,6 +2021,8 @@ button.league-partner-change:active { color: var(--link-active); }
 .power-total strong { display: block; font-size: var(--type-body); font-weight: 700; }
 .power-total span { display: block; margin-top: 2px; overflow: hidden; color: var(--dim); font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .power-team-card-backdrop { position: fixed; z-index: 990; inset: 0; display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--overlay); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: backdropIn .12s ease-out both; }
+.power-team-card-backdrop.is-above-player { z-index: 1040; }
+.power-team-card-backdrop.is-above-player.is-obscured { z-index: 990; }
 .power-team-card-backdrop.is-obscured { pointer-events: none; }
 .power-team-card { width: min(100%, 560px); max-height: min(88dvh, 760px); overflow-y: auto; overscroll-behavior-y: contain; border: 1px solid var(--hairline); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-modal); animation: newsCardIn .14s cubic-bezier(.2,.7,.2,1) both; -webkit-overflow-scrolling: touch; }
 .power-team-card-header { position: sticky; z-index: 2; top: 0; display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 9px 16px; border-bottom: 1px solid var(--hairline); background: var(--surface); }

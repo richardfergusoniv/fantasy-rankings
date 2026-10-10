@@ -158,6 +158,11 @@ export function serializeDashboardSearch(state: DashboardUrlState): string {
   return value ? `?${value}` : "";
 }
 
+/** Waivers tab URL that keeps the current league, position filter, and open player. */
+export function waiversSearchPreservingContext(state: DashboardUrlState): string {
+  return serializeDashboardSearch({ ...state, tab: "waivers" });
+}
+
 export function dashboardUrlHistoryMode(previous: DashboardUrlState, next: DashboardUrlState): "push" | "replace" | "none" {
   if (serializeDashboardSearch(previous) === serializeDashboardSearch(next)) return "none";
   if (previous.tab !== next.tab || previous.playerId !== next.playerId) return "push";

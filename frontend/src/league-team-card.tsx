@@ -35,6 +35,7 @@ export function LeagueTeamCard({
   scope,
   mode,
   playerCardOpen,
+  layer = "default",
   selectedPlayerId = null,
   onPlayerIntent,
   onOpenPlayer,
@@ -47,6 +48,8 @@ export function LeagueTeamCard({
   scope: PowerScope;
   mode: PowerMode;
   playerCardOpen: boolean;
+  /** Raise above the player card when this dialog was opened from it. */
+  layer?: "default" | "above-player";
   selectedPlayerId?: string | null;
   onPlayerIntent: (playerId: string) => void;
   onOpenPlayer: (playerId: string) => void;
@@ -168,7 +171,7 @@ export function LeagueTeamCard({
   return (
     <ModalPortal>
       <div
-        className={`power-team-card-backdrop${playerCardOpen ? " is-obscured" : ""}`}
+        className={`power-team-card-backdrop${playerCardOpen ? " is-obscured" : ""}${layer === "above-player" ? " is-above-player" : ""}`}
         aria-hidden={playerCardOpen || undefined}
         onClick={onClose}
       >

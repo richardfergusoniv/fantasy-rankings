@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
@@ -327,6 +327,51 @@ export function PlayerAdvancedPanel({ player, analytics, children }: { player: P
   );
 }
 
+function PlayerRosterBadge({
+  playerName,
+  rosterTeamName,
+  rosterLabel,
+  onOpenRosterTeam,
+  waiversHref,
+  onOpenWaivers,
+}: {
+  playerName: string;
+  rosterTeamName: string | null;
+  rosterLabel: string | null;
+  onOpenRosterTeam?: () => void;
+  waiversHref?: string;
+  onOpenWaivers?: () => void;
+}) {
+  if (rosterTeamName && onOpenRosterTeam) {
+    return (
+      <button
+        type="button"
+        className="matchup-reference-tag matchup-reference-button player-roster-badge"
+        aria-label={rosterLabel ?? `Open ${rosterTeamName} league team`}
+        aria-haspopup="dialog"
+        onClick={onOpenRosterTeam}
+      >
+        <span className="matchup-reference-button-label">{rosterTeamName}</span>
+      </button>
+    );
+  }
+  if (!waiversHref || !onOpenWaivers) return null;
+  return (
+    <a
+      href={waiversHref}
+      className="matchup-reference-tag matchup-reference-button player-roster-badge"
+      aria-label={`Open Waivers for ${playerName}`}
+      onClick={(event: ReactMouseEvent<HTMLAnchorElement>) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        onOpenWaivers();
+      }}
+    >
+      <span className="matchup-reference-button-label">Available</span>
+    </a>
+  );
+}
+
 export function PlayerDetailSheet({
   player,
   week,
@@ -345,6 +390,12 @@ export function PlayerDetailSheet({
   canGoBack,
   onClose,
   presentation = "modal",
+  rosterTeamName = null,
+  rosterLabel = null,
+  onOpenRosterTeam,
+  waiversHref,
+  onOpenWaivers,
+  suspended = false,
 }: {
   player: PlayerSearchResult;
   week: number;
@@ -364,6 +415,15 @@ export function PlayerDetailSheet({
   onClose: () => void;
   /** Docked column skips portal, backdrop, scroll lock, and inert. */
   presentation?: "modal" | "docked";
+  /** League team name when this player is rostered. The badge opens that team card. */
+  rosterTeamName?: string | null;
+  rosterLabel?: string | null;
+  onOpenRosterTeam?: () => void;
+  /** Waivers URL for an available player. Keeps the current position filter and player. */
+  waiversHref?: string;
+  onOpenWaivers?: () => void;
+  /** Pause this dialog while a team card opened from the badge is on top. */
+  suspended?: boolean;
 }) {
   const isModal = presentation === "modal";
   const sheetRef = useRef<HTMLElement | null>(null);
@@ -383,9 +443,9 @@ export function PlayerDetailSheet({
   const [settling, setSettling] = useState(false);
   const [contentDirection, setContentDirection] = useState<"back" | "none">("none");
   const [activeTab, setActiveTab] = useState<PlayerDetailTab>("overview");
-  useDialogFocusTrap(sheetRef, onClose, isModal);
+  useDialogFocusTrap(sheetRef, onClose, isModal && !suspended);
   useEffect(() => {
-    if (isModal) return;
+    if (isModal || suspended) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -394,7 +454,7 @@ export function PlayerDetailSheet({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isModal, onClose]);
+  }, [isModal, onClose, suspended]);
 
   const resetDrag = useCallback((animate: boolean) => {
     if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
@@ -632,7 +692,14 @@ export function PlayerDetailSheet({
           </div>
         )}
         <div className="player-detail-meta">
-          <span>{player.isRostered ? "Rostered in this league" : "Available in this league"}</span>
+          <PlayerRosterBadge
+            playerName={player.name}
+            rosterTeamName={rosterTeamName}
+            rosterLabel={rosterLabel}
+            onOpenRosterTeam={onOpenRosterTeam}
+            waiversHref={waiversHref}
+            onOpenWaivers={onOpenWaivers}
+          />
           {player.injuryStatus ? <span className="player-detail-injury">Injury status: {player.injuryStatus}</span> : null}
           {player.seasonValue !== null ? <span className="player-detail-movement">{movementLabel(player.movement30Day)}</span> : null}
         </div>

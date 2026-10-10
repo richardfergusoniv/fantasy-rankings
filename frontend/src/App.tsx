@@ -34,7 +34,9 @@ import {
 } from "./dashboard-shared";
 import { formatDecimal } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
-import { effectiveTradeMode } from "./dashboard-url";
+import { effectiveTradeMode, waiversSearchPreservingContext } from "./dashboard-url";
+import { formatRecord, LeagueTeamCard } from "./league-team-card";
+import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
@@ -485,6 +487,7 @@ export function App() {
   const [tickerNews, setTickerNews] = useState<PlayerNewsItem | null>(null);
   const [selectedMatchup, setSelectedMatchup] = useState<MatchupSelection | null>(null);
   const [teamCardTeam, setTeamCardTeam] = useState<string | null>(null);
+  const [rosterCardRosterId, setRosterCardRosterId] = useState<number | null>(null);
   const [commandBarOpen, setCommandBarOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
@@ -620,6 +623,9 @@ export function App() {
   const dashboard = freshestDashboard(dashboardQuery.data, streamedDashboard, browserDashboard);
 
   const league = dashboard?.leagues.find((item) => item.id === selectedLeagueId) ?? dashboard?.leagues[0];
+  useEffect(() => {
+    setRosterCardRosterId(null);
+  }, [league?.id]);
   const leagueDashboard = useMemo<Dashboard | undefined>(() => {
     if (!dashboard || !league) return dashboard;
     return {
@@ -874,6 +880,13 @@ export function App() {
 
   const activeDashboard = leagueDashboard ?? dashboard;
   const selectedPlayerId = dashboardUrl.state.playerId;
+  const rosterTeam = playerHistory.current ? leaguePowerTeamForPlayer(league, playerHistory.current.playerId) : null;
+  const rosterCardTeam = rosterCardRosterId === null
+    ? null
+    : league.powerRankingsWeek.find((team) => team.rosterId === rosterCardRosterId) ?? null;
+  const rosterCardOnTop = rosterCardTeam !== null && selectedMatchup === null && teamCardTeam === null;
+  const showAvailableBadge = playerHistory.current !== null && rosterTeam === null && !playerHistory.current.isRostered;
+  const waiversHref = waiversSearchPreservingContext(dashboardUrl.state);
   const inspectorPresentation: "modal" | "docked" =
     playerHistory.current
     && DOCKABLE_INSPECTOR_TABS.has(tab)
@@ -897,8 +910,14 @@ export function App() {
       onOpenMatchup={setSelectedMatchup}
       onBack={playerHistory.back}
       canGoBack={playerHistory.canGoBack}
-      onClose={() => { playerHistory.close(); closeLinkedPlayer(); }}
+      onClose={() => { setRosterCardRosterId(null); playerHistory.close(); closeLinkedPlayer(); }}
       presentation={inspectorPresentation}
+      rosterTeamName={rosterTeam?.teamName ?? null}
+      rosterLabel={rosterTeam ? `Open ${rosterTeam.teamName}, ${formatRecord(rosterTeam.record)} record, rank ${rosterTeam.rank}` : null}
+      onOpenRosterTeam={rosterTeam ? () => setRosterCardRosterId(rosterTeam.rosterId) : undefined}
+      waiversHref={showAvailableBadge ? waiversHref : undefined}
+      onOpenWaivers={showAvailableBadge ? () => dashboardUrl.commit({ tab: "waivers" }) : undefined}
+      suspended={rosterCardOnTop}
     />
   ) : null;
 
@@ -1014,6 +1033,22 @@ export function App() {
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
       {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} suspended={teamCardTeam !== null} /> : null}
       {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
+      {rosterCardTeam ? (
+        <LeagueTeamCard
+          team={rosterCardTeam}
+          league={league}
+          dashboard={activeDashboard}
+          scope="week"
+          mode="seasonLong"
+          playerCardOpen={!rosterCardOnTop}
+          layer="above-player"
+          selectedPlayerId={selectedPlayerId}
+          onPlayerIntent={prefetchDashboardPlayer}
+          onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
+          onOpenMatchup={setSelectedMatchup}
+          onClose={() => setRosterCardRosterId(null)}
+        />
+      ) : null}
       <CommandBar
         open={commandBarOpen}
         onOpenChange={setCommandBarOpen}
