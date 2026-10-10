@@ -3,12 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type {
   Dashboard,
-  DraftCenterData,
   League,
   MatchupSelection,
   NflTeamRecord,
   PlayerLink,
-  PlayerNews,
   PlayerSearchResult,
   PfnTable,
   PositionFilter,
@@ -25,7 +23,6 @@ import {
   canonicalNflTeam,
   comparablePlayerName,
   formatProjectionPoints,
-  groupNewsItemsByPlayer,
   isBoomBustPosition,
   matchupLabel,
   movementPercent,
@@ -35,9 +32,7 @@ import {
   sleeperInjuryTag,
 } from "../dashboard-shared";
 import type { RankingHorizon, RankingPosition } from "../dashboard-url";
-import { useLinkedPlayerSync } from "../linked-player";
 import { formatDecimal, formatPercent } from "../lib/format-number";
-import { PlayerDetailSheet, usePlayerCardHistory } from "../player-detail";
 import { MatchupTag, ModalPortal, SegmentedControl, useDialogFocusTrap } from "../shared";
 import { WindowVirtualList } from "../virtual-list";
 
@@ -283,11 +278,9 @@ export function TeamDataModal({
   );
 }
 
-export function PlayerPool({ dashboard, league, availableOnly, news, newsLoading, newsError, onRetryNews, draftData, onOpenMatchup, rankingPosition, rankingHorizon, rankingQuery, onRankingFiltersChange, linkedPlayerId, onOpenLinkedPlayer, onCloseLinkedPlayer, onLinkedPlayerMiss, onLinkedPlayerFound }: { dashboard: Dashboard; league: League; availableOnly: boolean; news: PlayerNews | undefined; newsLoading: boolean; newsError: boolean; onRetryNews: () => void; draftData: DraftCenterData | undefined; onOpenMatchup?: (matchup: MatchupSelection) => void; rankingPosition: RankingPosition | null; rankingHorizon: RankingHorizon | null; rankingQuery: string | null; onRankingFiltersChange: (filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => void } & PlayerLink) {
+export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, rankingPosition, rankingHorizon, rankingQuery, onRankingFiltersChange, linkedPlayerId, onOpenLinkedPlayer }: { dashboard: Dashboard; league: League; availableOnly: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void; rankingPosition: RankingPosition | null; rankingHorizon: RankingHorizon | null; rankingQuery: string | null; onRankingFiltersChange: (filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => void } & PlayerLink) {
   const [position, setPosition] = useState<PositionFilter>(rankingPosition ?? "QB");
   const [query, setQuery] = useState(rankingQuery ?? "");
-  const playerHistory = usePlayerCardHistory();
-  const [sheetMode, setSheetMode] = useState<"details" | "chart">("details");
   const [rankingMode, setRankingMode] = useState<"week" | "ros" | "dynasty">(rankingHorizon ?? "week");
   const horizonOptions = league.seasonLongFormat.isDynasty ? ["week", "ros", "dynasty"] as const : ["week", "ros"] as const;
   const effectiveHorizon = (horizonOptions as readonly string[]).includes(rankingMode) ? rankingMode : "week";
@@ -455,17 +448,6 @@ export function PlayerPool({ dashboard, league, availableOnly, news, newsLoading
     () => new Map(allPlayerDetails.map((player) => [player.playerId, player])),
     [allPlayerDetails],
   );
-  const trendingByPlayerId = useMemo(
-    () => new Map((draftData?.trending ?? []).map((item) => [item.playerId, item])),
-    [draftData?.trending],
-  );
-  const trendingDropsByPlayerId = useMemo(
-    () => new Map((draftData?.trendingDrops ?? []).map((item) => [item.playerId, item])),
-    [draftData?.trendingDrops],
-  );
-  const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(news), [news]);
-  const selectedPlayerNews = playerHistory.current ? newsItemsByPlayer.get(playerHistory.current.playerId) ?? [] : [];
-
   const searchMatches = useMemo<PlayerSearchResult[]>(() => {
     const needle = comparablePlayerName(query.trim());
     if (!needle) return [];
@@ -599,23 +581,8 @@ export function PlayerPool({ dashboard, league, availableOnly, news, newsLoading
     }
   };
   const selectSearchResult = (player: PlayerSearchResult) => {
-    setSheetMode("details");
-    playerHistory.open(player);
     onOpenLinkedPlayer(player.playerId);
   };
-  useLinkedPlayerSync({
-    linkedPlayerId,
-    isOpen: playerHistory.isOpen,
-    currentPlayerId: playerHistory.current?.playerId ?? null,
-    resolve: (playerId) => allPlayerDetailsById.get(playerId) ?? null,
-    open: (player) => {
-      setSheetMode("details");
-      playerHistory.open(player);
-    },
-    close: playerHistory.close,
-    onMiss: onLinkedPlayerMiss,
-    onFound: onLinkedPlayerFound,
-  });
 
   return (
     <section className="rankings-view">
@@ -670,19 +637,21 @@ export function PlayerPool({ dashboard, league, availableOnly, news, newsLoading
               const row = searchRows[index];
               if (!row) return null;
               const isMine = myRoster.has(row.playerId);
+              const isSelected = linkedPlayerId === row.playerId;
               return (
               <button
-                className={`player-search-result${isMine ? " is-my-roster" : ""}`}
+                className={`player-search-result${isMine ? " is-my-roster" : ""}${isSelected ? " is-player-selected" : ""}`}
                 key={row.key}
                 type="button"
                 onPointerDown={() => prefetchPlayerPanels(row)}
                 onFocus={() => prefetchPlayerPanels(row)}
                 onClick={() => selectSearchResult(row)}
-                aria-label={`View ${row.name}, ${row.position === "DEF" ? "DST" : row.position}, ${accessibleMatchupLabel(row.team, row.opponent, row.isAway, row.isBye)}, ${row.weeklyProjection === null ? "no projection" : `${formatProjectionPoints(row.weeklyProjection, row.projectionSource)} projected points`}, ${row.seasonValue === null ? "no season value" : `${row.seasonValue.toLocaleString()} season value`}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${isMine ? ", on your team" : ""}`}
+                aria-label={`View ${row.name}, ${row.position === "DEF" ? "DST" : row.position}, ${accessibleMatchupLabel(row.team, row.opponent, row.isAway, row.isBye)}, ${row.weeklyProjection === null ? "no projection" : `${formatProjectionPoints(row.weeklyProjection, row.projectionSource)} projected points`}, ${row.seasonValue === null ? "no season value" : `${row.seasonValue.toLocaleString()} season value`}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${isMine ? ", on your team" : ""}${isSelected ? ", selected" : ""}`}
               >
                 <span className="player-search-main">
                   <span className="player-search-name">
                     <strong>{row.name}</strong>
+                    {isSelected ? <span className="player-selected-chip">Selected</span> : null}
                     {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
                   </span>
                   <span className="player-search-meta"><span>{row.position}</span><MatchupTag team={row.team} opponent={row.opponent} isAway={row.isAway} isBye={row.isBye} position={row.position} entry={sosEntry} onClick={row.team && row.opponent && onOpenMatchup ? (event) => { event.stopPropagation(); onOpenMatchup({ team: row.team ?? "", opponent: row.opponent ?? "", isAway: row.isAway, gamePhase: row.gamePhase ?? null }); } : undefined} /></span>
@@ -721,8 +690,7 @@ export function PlayerPool({ dashboard, league, availableOnly, news, newsLoading
               if (!row) return null;
               const isMine = !availableOnly && myRoster.has(row.key);
               const detail = allPlayerDetailsById.get(row.key) ?? null;
-              const trend = availableOnly ? trendingByPlayerId.get(row.key) : undefined;
-              const trendDrop = availableOnly ? trendingDropsByPlayerId.get(row.key) : undefined;
+              const isSelected = linkedPlayerId === row.key;
               const accessibleMatchup = isSeasonLong
                 ? [
                     row.teamContext?.team ?? "Free agent",
@@ -735,12 +703,13 @@ export function PlayerPool({ dashboard, league, availableOnly, news, newsLoading
               const accessibleValue = isSeasonLong
                 ? `${Math.round(row.projection ?? 0).toLocaleString()} ${row.projectionLabel}`
                 : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
-              const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${row.rosterTeamName ? `, rostered by ${row.rosterTeamName}` : ""}`;
+              const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${row.rosterTeamName ? `, rostered by ${row.rosterTeamName}` : ""}${isSelected ? ", selected" : ""}`;
               const content = (
                 <>
                   <span className="ranking-player">
                     <span className="ranking-name-line">
                       <strong>{row.name}</strong>
+                      {isSelected ? <span className="player-selected-chip">Selected</span> : null}
                       {row.isRookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" tone="positive" /> : null}
                       {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
                     </span>
@@ -768,32 +737,23 @@ export function PlayerPool({ dashboard, league, availableOnly, news, newsLoading
                   <span className="ranking-proj"><strong>{isSeasonLong ? Math.round(row.projection ?? 0).toLocaleString() : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : <span>{row.projectionLabel}</span>}</span>
                 </>
               );
-              const detailWithWaiverTrends: PlayerSearchResult | null = detail ? {
-                ...detail,
-                waiverTrends: availableOnly ? {
-                  adds: trend ? { rank: trend.rank, count: trend.count } : null,
-                  drops: trendDrop ? { rank: trendDrop.rank, count: trendDrop.count } : null,
-                } : undefined,
-              } : null;
-              const openSheet = (mode: "details" | "chart") => {
-                if (!detailWithWaiverTrends) return;
-                setSheetMode(mode);
-                playerHistory.open(detailWithWaiverTrends);
-                onOpenLinkedPlayer(detailWithWaiverTrends.playerId);
+              const openPlayer = () => {
+                if (!detail) return;
+                onOpenLinkedPlayer(detail.playerId);
               };
               return (
                 <div
-                  className={`ranking-row ranking-row-button${isMine ? " is-my-roster" : ""}`}
+                  className={`ranking-row ranking-row-button${isMine ? " is-my-roster" : ""}${isSelected ? " is-player-selected" : ""}`}
                   key={row.key}
                   role="button"
                   tabIndex={0}
-                  onPointerDown={() => detailWithWaiverTrends && prefetchPlayerPanels(detailWithWaiverTrends)}
-                  onFocus={() => detailWithWaiverTrends && prefetchPlayerPanels(detailWithWaiverTrends)}
-                  onClick={() => openSheet("details")}
+                  onPointerDown={() => detail && prefetchPlayerPanels(detail)}
+                  onFocus={() => detail && prefetchPlayerPanels(detail)}
+                  onClick={openPlayer}
                   onKeyDown={(event) => {
                     if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
                     event.preventDefault();
-                    openSheet("details");
+                    openPlayer();
                   }}
                   aria-label={rowAccessibleLabel}
                 >
@@ -833,7 +793,6 @@ export function PlayerPool({ dashboard, league, availableOnly, news, newsLoading
         </>
       )}
 
-      {playerHistory.current ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode={sheetMode} analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={selectedPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={onRetryNews} onModeChange={availableOnly ? setSheetMode : undefined} onOpenMatchup={onOpenMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={() => { playerHistory.close(); onCloseLinkedPlayer(); }} /> : null}
       {selectedTeam ? (
         <TeamDataModal
           selection={selectedTeam}

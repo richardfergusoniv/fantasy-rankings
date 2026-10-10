@@ -881,6 +881,21 @@ button.monitor-alert:hover { background: var(--surface-2); }
 @keyframes backdropIn { from { opacity: 0; } }
 .player-detail-backdrop { position: fixed; z-index: 1000; inset: 0; display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--overlay); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: backdropIn .12s ease-out both; }
 .player-detail-sheet { width: min(100%, 560px); max-height: min(88dvh, 760px); overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; touch-action: pan-y pinch-zoom; padding: 18px; border: 1px solid var(--hairline); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-modal); animation: newsCardIn .14s cubic-bezier(.2,.7,.2,1) both; -webkit-overflow-scrolling: touch; will-change: transform; }
+.player-selected-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--action) 22%, var(--surface));
+  color: var(--link);
+  font-size: var(--type-caption);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+.app-workspace { min-width: 0; }
+.inspector-frame { display: none; }
 html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-sheet.is-dragging, .player-detail-content.is-dragging { transition: none; }
 .player-detail-sheet.is-settling, .player-detail-content.is-settling { transition: transform .18s cubic-bezier(.22,.75,.28,1); }
@@ -2049,6 +2064,37 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 @media (min-width: 760px) {
   :root { --type-display: 30px; --sticky-offset: 104px; }
   .app-shell { max-width: 1080px; margin: 0 auto; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+  .app-shell.is-inspector-docked { max-width: min(1440px, 100%); }
+  .app-workspace.is-inspector-docked {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .app-workspace.is-inspector-docked > main {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .inspector-frame {
+    display: block;
+    flex: 0 0 min(360px, 36%);
+    width: min(360px, 36%);
+    position: sticky;
+    top: var(--sticky-offset);
+    max-height: calc(100dvh - var(--sticky-offset) - 24px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    border-left: 1px solid var(--hairline);
+    background: var(--surface);
+  }
+  .player-detail-sheet.is-docked {
+    width: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    animation: none;
+    will-change: auto;
+  }
   .league-sticky { display: grid; grid-template-columns: 170px minmax(0, 680px); align-items: center; padding: 10px 32px 8px; }
   .ticker-strip { grid-column: 1 / -1; margin: -10px -32px 4px; }
   .week-line { min-height: 44px; padding-right: 18px; }

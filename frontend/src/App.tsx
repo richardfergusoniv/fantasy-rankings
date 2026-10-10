@@ -41,9 +41,12 @@ import { supabase } from "./supabase";
 import { useDashboardUrl } from "./use-dashboard-url";
 import { CommandBar } from "./shell/command-bar";
 import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "./shell/command-palette";
+import { InspectorFrame, useInspectorDockViewport } from "./shell/inspector-frame";
 import { ShortcutsDialog } from "./shell/shortcuts-dialog";
 import { Lineup } from "./views/lineup";
 import { Monitor } from "./views/monitor";
+
+const DOCKABLE_INSPECTOR_TABS = new Set<Tab>(["monitor", "team", "rankings", "waivers", "draft", "power"]);
 
 const LazyPowerRankings = lazy(() => import("./PowerRankings").then((module) => ({ default: module.PowerRankings })));
 const LazyChartsTool = lazy(() => import("./AnalyticsViews").then((module) => ({ default: module.ChartsTool })));
@@ -456,8 +459,8 @@ export function App() {
   const setTab = useCallback((next: Tab) => {
     dashboardUrl.commit({ tab: next, playerId: null });
   }, [dashboardUrl.commit]);
-  const [forceAppSheet, setForceAppSheet] = useState(false);
   const appliedAppPlayerId = useRef<string | null>(null);
+  const inspectorDockViewport = useInspectorDockViewport();
   useEffect(() => {
     const titles: Record<Tab, string> = {
       monitor: "Monitor",
@@ -648,23 +651,15 @@ export function App() {
   function chooseLeague(id: string) {
     setSelectedLeagueId(id);
     localStorage.setItem("fantasy-rankings-league", id);
-    setForceAppSheet(false);
     dashboardUrl.commit({ league: id, playerId: null });
   }
 
   const openLinkedPlayer = useCallback((playerId: string) => {
-    setForceAppSheet(false);
     dashboardUrl.commit({ playerId });
   }, [dashboardUrl.commit]);
   const closeLinkedPlayer = useCallback(() => {
     dashboardUrl.closePlayer();
   }, [dashboardUrl.closePlayer]);
-  const reportLinkedPlayerMiss = useCallback(() => {
-    setForceAppSheet(true);
-  }, []);
-  const reportLinkedPlayerFound = useCallback(() => {
-    setForceAppSheet(false);
-  }, []);
   const publishRankingFilters = useCallback((filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => {
     dashboardUrl.commit(filters);
   }, [dashboardUrl.commit]);
@@ -752,8 +747,7 @@ export function App() {
   }
 
   function openTickerPlayer(playerId: string) {
-    const localSheetTab = tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft";
-    if (localSheetTab || dashboardPlayerDetail(playerId)) {
+    if (dashboardPlayerDetail(playerId) || DOCKABLE_INSPECTOR_TABS.has(tab) || tab === "trade") {
       dashboardUrl.commit({ playerId });
       return;
     }
@@ -837,16 +831,11 @@ export function App() {
     return () => clearTimeout(timer);
   }, [waitingForFirstBuild, dashboard]);
 
-  const localSheetTab = tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft";
+  // Shell owns the only PlayerDetailSheet. Open when URL playerId resolves from dashboard
+  // (including deep links that miss a view-local list until section data lands).
   useEffect(() => {
     const playerId = dashboardUrl.state.playerId;
     if (!playerId) {
-      appliedAppPlayerId.current = null;
-      setForceAppSheet((current) => current ? false : current);
-      if (playerHistory.isOpen) playerHistory.close();
-      return;
-    }
-    if (localSheetTab && !forceAppSheet) {
       appliedAppPlayerId.current = null;
       if (playerHistory.isOpen) playerHistory.close();
       return;
@@ -856,7 +845,7 @@ export function App() {
     if (!player) return;
     appliedAppPlayerId.current = playerId;
     if (playerHistory.current?.playerId !== playerId) playerHistory.open(player);
-  }, [dashboard, dashboardUrl.state.playerId, forceAppSheet, league, localSheetTab, tab]);
+  }, [dashboard, dashboardUrl.state.playerId, league, leagueDashboard, tab]);
 
   if (!dashboard && (metaQuery.isPending || teamQuery.isPending || (waitingForFirstBuild && !firstBuildTimedOut))) {
     return <ProgressiveShell tab={tab} onTab={setTab} />;
@@ -876,9 +865,37 @@ export function App() {
   }
 
   const activeDashboard = leagueDashboard ?? dashboard;
+  const selectedPlayerId = dashboardUrl.state.playerId;
+  const inspectorPresentation: "modal" | "docked" =
+    playerHistory.current
+    && DOCKABLE_INSPECTOR_TABS.has(tab)
+    && inspectorDockViewport
+      ? "docked"
+      : "modal";
+  const inspectorDocked = inspectorPresentation === "docked" && Boolean(playerHistory.current);
+  const playerSheet = playerHistory.current ? (
+    <PlayerDetailSheet
+      player={playerHistory.current}
+      week={dashboard.week}
+      leagueId={league.id}
+      formatKey={league.seasonLongFormat.key}
+      mode="details"
+      analytics={dashboard.analytics}
+      sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)}
+      newsItems={tickerPlayerNews}
+      newsLoading={newsLoading}
+      newsError={newsError}
+      onRetryNews={retryNews}
+      onOpenMatchup={setSelectedMatchup}
+      onBack={playerHistory.back}
+      canGoBack={playerHistory.canGoBack}
+      onClose={() => { playerHistory.close(); closeLinkedPlayer(); }}
+      presentation={inspectorPresentation}
+    />
+  ) : null;
 
   return (
-    <div className={`app-shell${primaryPage === "team" ? " matchup-page" : ""}`}>
+    <div className={`app-shell${primaryPage === "team" ? " matchup-page" : ""}${inspectorDocked ? " is-inspector-docked" : ""}`}>
       <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       <div className="league-sticky">
@@ -935,33 +952,36 @@ export function App() {
         ) : null}
       </header>
 
-      <main id="main-content" tabIndex={-1}>
-        <h1 className="sr-only">{({
-          monitor: "Monitor",
-          team: "Fantasy matchup",
-          rankings: "Player rankings",
-          waivers: "Waiver wire",
-          power: "League power rankings",
-          draft: "Draft room",
-          trade: "Trade values",
-          charts: "Fantasy charts",
-          comparison: "Player comparison",
-          strengthOfSchedule: "Strength of schedule",
-        } satisfies Record<Tab, string>)[tab]}</h1>
-        {currentSectionLoading ? <SectionLoading label={`Loading ${primaryPage}…`} />
-          : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
-          : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
-          : tab === "monitor" ? <Monitor league={league} dashboard={activeDashboard} draftData={draftQuery.data} news={newsQuery.data} onOpenTab={setTab} onOpenPlayer={openTickerPlayer} onOpenMatchup={setSelectedMatchup} />
-          : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} news={newsQuery.data} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} onOpenMatchup={setSelectedMatchup} linkedPlayerId={dashboardUrl.state.playerId} onOpenLinkedPlayer={openLinkedPlayer} onCloseLinkedPlayer={closeLinkedPlayer} onLinkedPlayerMiss={reportLinkedPlayerMiss} onLinkedPlayerFound={reportLinkedPlayerFound} />
-          : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} dashboard={activeDashboard} onPlayerIntent={prefetchDashboardPlayer} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} playerCardOpen={playerHistory.isOpen} /></Suspense>
-          : tab === "draft" ? <Suspense fallback={<SectionLoading label="Loading draft…" />}><LazyDraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} news={newsQuery.data} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} loading={draftQuery.isPending} onRefresh={() => draftRefresh.mutate()} refreshing={draftRefresh.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={dashboardUrl.state.playerId} onOpenLinkedPlayer={openLinkedPlayer} onCloseLinkedPlayer={closeLinkedPlayer} onLinkedPlayerMiss={reportLinkedPlayerMiss} onLinkedPlayerFound={reportLinkedPlayerFound} /></Suspense>
-          : tab === "trade" ? <Suspense fallback={<SectionLoading label="Loading trade calculator…" />}><LazyTradeCalculator dashboard={activeDashboard} league={league} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} /></Suspense>
-          : tab === "charts" ? <Suspense fallback={<SectionLoading label="Loading charts…" />}><LazyChartsTool dashboard={activeDashboard} league={league} dataset={dashboardUrl.state.chartDataset ?? "advanced"} onDatasetChange={publishChartDataset} onOpenMatchup={setSelectedMatchup} /></Suspense>
-          : tab === "comparison" ? <Suspense fallback={<SectionLoading label="Loading comparison…" />}><LazyComparisonTool dashboard={activeDashboard} league={league} initialPlayer={null} initialKey={0} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} onOpenMatchup={setSelectedMatchup} /></Suspense>
-          : tab === "strengthOfSchedule" ? <Suspense fallback={<SectionLoading label="Loading tables…" />}><LazyTablesTool dashboard={activeDashboard} league={league} sosLoadFailed={playersQuery.isError} onRetrySos={() => { void playersQuery.refetch(); }} sosRetrying={playersQuery.isFetching} /></Suspense>
-          : <Suspense fallback={<SectionLoading label="Loading players…" />}><LazyPlayerPool dashboard={activeDashboard} league={league} availableOnly={tab === "waivers"} news={newsQuery.data} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} draftData={draftQuery.data} onOpenMatchup={setSelectedMatchup} rankingPosition={dashboardUrl.state.position} rankingHorizon={dashboardUrl.state.horizon} rankingQuery={dashboardUrl.state.query} onRankingFiltersChange={publishRankingFilters} linkedPlayerId={dashboardUrl.state.playerId} onOpenLinkedPlayer={openLinkedPlayer} onCloseLinkedPlayer={closeLinkedPlayer} onLinkedPlayerMiss={reportLinkedPlayerMiss} onLinkedPlayerFound={reportLinkedPlayerFound} /></Suspense>}
-      </main>
-      {playerHistory.current && (!localSheetTab || forceAppSheet) ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode="details" analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={tickerPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} onOpenMatchup={setSelectedMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={() => { playerHistory.close(); closeLinkedPlayer(); }} /> : null}
+      <div className={`app-workspace${inspectorDocked ? " is-inspector-docked" : ""}`}>
+        <main id="main-content" tabIndex={-1}>
+          <h1 className="sr-only">{({
+            monitor: "Monitor",
+            team: "Fantasy matchup",
+            rankings: "Player rankings",
+            waivers: "Waiver wire",
+            power: "League power rankings",
+            draft: "Draft room",
+            trade: "Trade values",
+            charts: "Fantasy charts",
+            comparison: "Player comparison",
+            strengthOfSchedule: "Strength of schedule",
+          } satisfies Record<Tab, string>)[tab]}</h1>
+          {currentSectionLoading ? <SectionLoading label={`Loading ${primaryPage}…`} />
+            : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
+            : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
+            : tab === "monitor" ? <Monitor league={league} dashboard={activeDashboard} draftData={draftQuery.data} news={newsQuery.data} onOpenTab={setTab} onOpenPlayer={openTickerPlayer} onOpenMatchup={setSelectedMatchup} />
+            : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onOpenMatchup={setSelectedMatchup} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
+            : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} dashboard={activeDashboard} onPlayerIntent={prefetchDashboardPlayer} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} playerCardOpen={playerHistory.isOpen} selectedPlayerId={selectedPlayerId} /></Suspense>
+            : tab === "draft" ? <Suspense fallback={<SectionLoading label="Loading draft…" />}><LazyDraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} loading={draftQuery.isPending} onRefresh={() => draftRefresh.mutate()} refreshing={draftRefresh.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} /></Suspense>
+            : tab === "trade" ? <Suspense fallback={<SectionLoading label="Loading trade calculator…" />}><LazyTradeCalculator dashboard={activeDashboard} league={league} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} /></Suspense>
+            : tab === "charts" ? <Suspense fallback={<SectionLoading label="Loading charts…" />}><LazyChartsTool dashboard={activeDashboard} league={league} dataset={dashboardUrl.state.chartDataset ?? "advanced"} onDatasetChange={publishChartDataset} onOpenMatchup={setSelectedMatchup} /></Suspense>
+            : tab === "comparison" ? <Suspense fallback={<SectionLoading label="Loading comparison…" />}><LazyComparisonTool dashboard={activeDashboard} league={league} initialPlayer={null} initialKey={0} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} onOpenMatchup={setSelectedMatchup} /></Suspense>
+            : tab === "strengthOfSchedule" ? <Suspense fallback={<SectionLoading label="Loading tables…" />}><LazyTablesTool dashboard={activeDashboard} league={league} sosLoadFailed={playersQuery.isError} onRetrySos={() => { void playersQuery.refetch(); }} sosRetrying={playersQuery.isFetching} /></Suspense>
+            : <Suspense fallback={<SectionLoading label="Loading players…" />}><LazyPlayerPool dashboard={activeDashboard} league={league} availableOnly={tab === "waivers"} onOpenMatchup={setSelectedMatchup} rankingPosition={dashboardUrl.state.position} rankingHorizon={dashboardUrl.state.horizon} rankingQuery={dashboardUrl.state.query} onRankingFiltersChange={publishRankingFilters} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} /></Suspense>}
+        </main>
+        {inspectorDocked ? <InspectorFrame>{playerSheet}</InspectorFrame> : null}
+      </div>
+      {!inspectorDocked ? playerSheet : null}
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
       {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} /> : null}
       <CommandBar
