@@ -45,6 +45,7 @@ import {
   type StrengthOfScheduleEntryLike,
 } from "../shared";
 import { WindowVirtualList } from "../virtual-list";
+import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 
 /** Compact rankings/waivers row height (matches former density=compact). */
 export const RANKINGS_ROW_HEIGHT = 56;
@@ -696,8 +697,8 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
               label="Positions"
               options={visiblePositions.map((item) => ({
                 value: item,
-                label: item === "DEF" ? "DST" : item === "ROOKIES" ? "Rook" : item,
-                ariaLabel: item === "ROOKIES" ? "Rookies" : undefined,
+                label: positionFilterTabLabel(item),
+                ariaLabel: positionFilterTabAriaLabel(item),
               }))}
             />
           </div>
