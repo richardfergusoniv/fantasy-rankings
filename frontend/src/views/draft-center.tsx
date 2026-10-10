@@ -443,7 +443,7 @@ export function DraftCenter({
               <span className="draft-player-name-line">
                 <strong>{row.name}</strong>
                 {isSelected ? <span className="player-selected-chip">Selected</span> : null}
-                {row.rookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" tone="positive" /> : null}
+                {row.rookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" /> : null}
               </span>
               {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
             </button>

@@ -41,7 +41,13 @@ type ChartOffset = { left?: number; top?: number; width?: number; height?: numbe
 type LabelBox = { left: number; top: number; width: number; height: number };
 type LabelPlacement = LabelBox & { datum: ChartDatum; textX: number; textY: number; anchor: "start" | "middle" | "end" };
 type AdaptiveChartLabelsProps = {
-  data: ChartDatum[]; leaderIds: ReadonlySet<string>; selectedTeamIds: ReadonlySet<string>; xAxisMap?: Record<string, ChartAxis>; yAxisMap?: Record<string, ChartAxis>; offset?: ChartOffset;
+  data: ChartDatum[];
+  leaderIds: ReadonlySet<string>;
+  selectedTeamIds: ReadonlySet<string>;
+  highlightedId?: string | null;
+  xAxisMap?: Record<string, ChartAxis>;
+  yAxisMap?: Record<string, ChartAxis>;
+  offset?: ChartOffset;
 };
 const basePositionOrder: BasePosition[] = ["QB", "RB", "WR", "TE", "K", "DEF"];
 
@@ -146,31 +152,43 @@ function metricSourceValue(values: Record<string, number>, metric: Metric): numb
   return values[metric.sourceKey ?? metric.key];
 }
 
+type QuadrantLabels = {
+  highHigh?: string;
+  highLow?: string;
+  lowHigh?: string;
+  lowLow?: string;
+};
+
 type ChartPreset = {
   label: string;
   x: string;
   y: string;
   research?: { source: string; sourceUrl: string; insight: string };
+  quadrantLabels?: QuadrantLabels;
 };
+
+const smashSpot: QuadrantLabels = { highHigh: "SMASH SPOT" };
 
 const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
   QB: [
-    { label: "Volume vs efficiency", x: "pass_attempts", y: "passing_epa" },
+    { label: "Volume vs efficiency", x: "pass_attempts", y: "passing_epa", quadrantLabels: smashSpot },
     {
       label: "Talent ceiling · EPA/play × CPOE",
       x: "epa_per_play",
       y: "cpoe",
+      quadrantLabels: smashSpot,
       research: {
         source: "TJ Hernandez · 4for4",
         sourceUrl: "https://www.4for4.com/2026/preseason/most-predictable-quarterback-stats",
         insight: "Pairs play-level efficiency with accuracy over expectation to surface quarterbacks with the strongest passing ceiling.",
       },
     },
-    { label: "Accuracy over expected", x: "completion_pct", y: "cpoe" },
+    { label: "Accuracy over expected", x: "completion_pct", y: "cpoe", quadrantLabels: smashSpot },
     {
       label: "Konami rushing ceiling",
       x: "carries",
       y: "fantasy_league",
+      quadrantLabels: smashSpot,
       research: {
         source: "Rich Hribar · Fantasy Points",
         sourceUrl: "https://fantasypoints.com/nfl/articles/season/2021/quarterback-draft-predictability",
@@ -179,37 +197,38 @@ const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
     },
   ],
   RB: [
-    { label: "Workhorse profile", x: "touches", y: "fantasy_league" },
-    { label: "Receiving leverage", x: "target_share", y: "receiving_epa" },
-    { label: "Ground production", x: "carries", y: "rushing_yards" },
+    { label: "Workhorse profile", x: "touches", y: "fantasy_league", quadrantLabels: smashSpot },
+    { label: "Receiving leverage", x: "target_share", y: "receiving_epa", quadrantLabels: smashSpot },
+    { label: "Ground production", x: "carries", y: "rushing_yards", quadrantLabels: smashSpot },
   ],
   WR: [
-    { label: "Opportunity profile", x: "target_share", y: "air_yards_share" },
+    { label: "Opportunity profile", x: "target_share", y: "air_yards_share", quadrantLabels: smashSpot },
     {
       label: "WOPR buy-low / sell-high",
       x: "wopr",
       y: "fantasy_league",
+      quadrantLabels: smashSpot,
       research: {
         source: "Josh Hermsmeyer · Action Network",
         sourceUrl: "https://www.actionnetwork.com/article/p/601206703",
         insight: "Compares role quality with league-scored production so high-opportunity underperformers stand out as regression candidates.",
       },
     },
-    { label: "Air-yards conversion", x: "receiving_air_yards", y: "receiving_yards" },
+    { label: "Air-yards conversion", x: "receiving_air_yards", y: "receiving_yards", quadrantLabels: smashSpot },
   ],
   TE: [
-    { label: "Opportunity profile", x: "target_share", y: "air_yards_share" },
-    { label: "Weighted opportunity", x: "wopr", y: "fantasy_league" },
-    { label: "Air-yards conversion", x: "receiving_air_yards", y: "receiving_yards" },
+    { label: "Opportunity profile", x: "target_share", y: "air_yards_share", quadrantLabels: smashSpot },
+    { label: "Weighted opportunity", x: "wopr", y: "fantasy_league", quadrantLabels: smashSpot },
+    { label: "Air-yards conversion", x: "receiving_air_yards", y: "receiving_yards", quadrantLabels: smashSpot },
   ],
   K: [
-    { label: "Conversion volume", x: "fg_attempts", y: "fg_made" },
-    { label: "Distance upside", x: "fg_40_plus", y: "fg_50_plus" },
+    { label: "Conversion volume", x: "fg_attempts", y: "fg_made", quadrantLabels: smashSpot },
+    { label: "Distance upside", x: "fg_40_plus", y: "fg_50_plus", quadrantLabels: smashSpot },
   ],
   DEF: [
-    { label: "Pressure to sacks", x: "qb_hits", y: "sacks" },
-    { label: "Takeaway scoring", x: "takeaways", y: "defensive_tds" },
-    { label: "Backfield disruption", x: "tackles_for_loss", y: "takeaways" },
+    { label: "Pressure to sacks", x: "qb_hits", y: "sacks", quadrantLabels: smashSpot },
+    { label: "Takeaway scoring", x: "takeaways", y: "defensive_tds", quadrantLabels: smashSpot },
+    { label: "Backfield disruption", x: "tackles_for_loss", y: "takeaways", quadrantLabels: smashSpot },
   ],
 };
 
@@ -355,11 +374,11 @@ for (const position of ["QB", "RB", "WR", "TE"] as const) {
 }
 
 const projectionPresets: ChartPreset[] = [
-  { label: "Vegas vs Sleeper", x: "vegasProjection", y: "sleeperProjection" },
-  { label: "Projection vs FantasyCalc value", x: "league", y: "fantasyCalcValue" },
+  { label: "Vegas vs Sleeper", x: "vegasProjection", y: "sleeperProjection", quadrantLabels: smashSpot },
+  { label: "Projection vs FantasyCalc value", x: "league", y: "fantasyCalcValue", quadrantLabels: smashSpot },
   { label: "Positional tier cliffs", x: "leaguePositionRank", y: "league" },
-  { label: "Projection vs boom/bust range", x: "league", y: "boomBustRange" },
-  { label: "Team environment", x: "teamTotal", y: "league" },
+  { label: "Projection vs boom/bust range", x: "league", y: "boomBustRange", quadrantLabels: smashSpot },
+  { label: "Team environment", x: "teamTotal", y: "league", quadrantLabels: smashSpot },
 ];
 
 const weeklyPresets: Record<BasePosition, ChartPreset[]> = {
@@ -368,11 +387,11 @@ const weeklyPresets: Record<BasePosition, ChartPreset[]> = {
   WR: projectionPresets,
   TE: projectionPresets,
   K: [
-    { label: "Projection vs Sleeper", x: "sleeperProjection", y: "league" },
+    { label: "Projection vs Sleeper", x: "sleeperProjection", y: "league", quadrantLabels: smashSpot },
     { label: "Projected kicker ranks", x: "leaguePositionRank", y: "league" },
-    { label: "Scoring environment", x: "teamTotal", y: "league" },
+    { label: "Scoring environment", x: "teamTotal", y: "league", quadrantLabels: smashSpot },
   ],
-  DEF: [{ label: "Matchup leverage", x: "opponentTotal", y: "projection" }],
+  DEF: [{ label: "Matchup leverage", x: "opponentTotal", y: "projection", quadrantLabels: smashSpot }],
 };
 
 const defaultWeeklyAxes: Record<BasePosition, [string, string]> = {
@@ -694,7 +713,7 @@ function pointInsideBox(x: number, y: number, box: LabelBox, padding: number): b
     && y <= box.top + box.height + padding;
 }
 
-function AdaptiveChartLabels({ data, leaderIds, selectedTeamIds, xAxisMap, yAxisMap, offset }: AdaptiveChartLabelsProps) {
+function AdaptiveChartLabels({ data, leaderIds, selectedTeamIds, highlightedId = null, xAxisMap, yAxisMap, offset }: AdaptiveChartLabelsProps) {
   const xAxis = xAxisMap?.["0"] ?? Object.values(xAxisMap ?? {})[0];
   const yAxis = yAxisMap?.["0"] ?? Object.values(yAxisMap ?? {})[0];
   if (typeof xAxis?.scale !== "function" || typeof yAxis?.scale !== "function" || !offset) return null;
@@ -706,8 +725,10 @@ function AdaptiveChartLabels({ data, leaderIds, selectedTeamIds, xAxisMap, yAxis
   const right = left + (offset.width ?? 0);
   const bottom = top + (offset.height ?? 0);
   const points = data.map((datum) => ({ datum, x: xScale(datum.x), y: yScale(datum.y) }));
-  const density = (x: number, y: number) => points.filter((point) => Math.abs(point.x - x) < 52 && Math.abs(point.y - y) < 26).length;
+  const density = (x: number, y: number) => points.filter((point) => Math.abs(point.x - x) < 40 && Math.abs(point.y - y) < 18).length;
   const ordered = points.slice().sort((a, b) => {
+    const highlightedDifference = Number(b.datum.id === highlightedId) - Number(a.datum.id === highlightedId);
+    if (highlightedDifference !== 0) return highlightedDifference;
     const selectedTeamDifference = Number(selectedTeamIds.has(b.datum.id)) - Number(selectedTeamIds.has(a.datum.id));
     if (selectedTeamDifference !== 0) return selectedTeamDifference;
     const densityDifference = density(b.x, b.y) - density(a.x, a.y);
@@ -718,17 +739,17 @@ function AdaptiveChartLabels({ data, leaderIds, selectedTeamIds, xAxisMap, yAxis
   const placed: LabelPlacement[] = [];
 
   for (const point of ordered) {
-    const width = Math.min(94, Math.max(25, point.datum.label.length * 5.4 + 6));
-    const height = 13;
+    const width = Math.min(72, Math.max(18, point.datum.label.length * 4.2 + 4));
+    const height = 11;
     const candidates: Array<LabelBox & { textX: number; textY: number; anchor: "start" | "middle" | "end" }> = [
-      { left: point.x - width / 2, top: point.y - 20, width, height, textX: point.x, textY: point.y - 10, anchor: "middle" },
-      { left: point.x - width / 2, top: point.y + 8, width, height, textX: point.x, textY: point.y + 18, anchor: "middle" },
-      { left: point.x + 9, top: point.y - height / 2, width, height, textX: point.x + 12, textY: point.y + 3, anchor: "start" },
-      { left: point.x - width - 9, top: point.y - height / 2, width, height, textX: point.x - 12, textY: point.y + 3, anchor: "end" },
-      { left: point.x + 7, top: point.y - 19, width, height, textX: point.x + 10, textY: point.y - 9, anchor: "start" },
-      { left: point.x - width - 7, top: point.y - 19, width, height, textX: point.x - 10, textY: point.y - 9, anchor: "end" },
-      { left: point.x + 7, top: point.y + 7, width, height, textX: point.x + 10, textY: point.y + 17, anchor: "start" },
-      { left: point.x - width - 7, top: point.y + 7, width, height, textX: point.x - 10, textY: point.y + 17, anchor: "end" },
+      { left: point.x + 7, top: point.y - height / 2, width, height, textX: point.x + 9, textY: point.y + 3, anchor: "start" },
+      { left: point.x - width - 7, top: point.y - height / 2, width, height, textX: point.x - 9, textY: point.y + 3, anchor: "end" },
+      { left: point.x + 6, top: point.y - 16, width, height, textX: point.x + 8, textY: point.y - 7, anchor: "start" },
+      { left: point.x - width - 6, top: point.y - 16, width, height, textX: point.x - 8, textY: point.y - 7, anchor: "end" },
+      { left: point.x + 6, top: point.y + 5, width, height, textX: point.x + 8, textY: point.y + 14, anchor: "start" },
+      { left: point.x - width - 6, top: point.y + 5, width, height, textX: point.x - 8, textY: point.y + 14, anchor: "end" },
+      { left: point.x - width / 2, top: point.y - 17, width, height, textX: point.x, textY: point.y - 8, anchor: "middle" },
+      { left: point.x - width / 2, top: point.y + 6, width, height, textX: point.x, textY: point.y + 15, anchor: "middle" },
     ];
 
     let best = candidates[0];
@@ -739,7 +760,7 @@ function AdaptiveChartLabels({ data, leaderIds, selectedTeamIds, xAxisMap, yAxis
         + Math.max(0, top + 3 - candidate.top)
         + Math.max(0, candidate.top + candidate.height - bottom + 3);
       const labelOverlap = placed.reduce((score, other) => score + boxOverlap(candidate, other), 0);
-      const coveredPoints = points.reduce((count, other) => count + (other.datum.id !== point.datum.id && pointInsideBox(other.x, other.y, candidate, 3) ? 1 : 0), 0);
+      const coveredPoints = points.reduce((count, other) => count + (other.datum.id !== point.datum.id && pointInsideBox(other.x, other.y, candidate, 2) ? 1 : 0), 0);
       const edgePreference = (point.y < top + 30 && candidate.top < point.y ? 140 : 0)
         + (point.y > bottom - 30 && candidate.top > point.y ? 140 : 0)
         + (point.x < left + 52 && candidate.left < point.x ? 110 : 0)
@@ -755,18 +776,72 @@ function AdaptiveChartLabels({ data, leaderIds, selectedTeamIds, xAxisMap, yAxis
 
   return (
     <g className="adaptive-chart-labels" aria-hidden="true">
-      {placed.map((placement) => (
-        <text
-          key={placement.datum.id}
-          className={selectedTeamIds.has(placement.datum.id) ? "adaptive-chart-label selected-team" : leaderIds.has(placement.datum.id) ? "adaptive-chart-label leader" : "adaptive-chart-label"}
-          x={placement.textX}
-          y={placement.textY}
-          textAnchor={placement.anchor}
-        >
-          {placement.datum.label}
-        </text>
-      ))}
+      {placed.map((placement) => {
+        const isHighlighted = placement.datum.id === highlightedId;
+        return (
+          <g key={placement.datum.id}>
+            {isHighlighted ? (
+              <rect
+                className="adaptive-chart-label-box"
+                x={placement.left - 2}
+                y={placement.top - 1}
+                width={placement.width + 4}
+                height={placement.height + 2}
+                rx={2}
+              />
+            ) : null}
+            <text
+              className={selectedTeamIds.has(placement.datum.id) ? "adaptive-chart-label selected-team" : leaderIds.has(placement.datum.id) ? "adaptive-chart-label leader" : "adaptive-chart-label"}
+              x={placement.textX}
+              y={placement.textY}
+              textAnchor={placement.anchor}
+            >
+              {placement.datum.label}
+            </text>
+          </g>
+        );
+      })}
     </g>
+  );
+}
+
+function ScatterTrendLine({ data, xAxisMap, yAxisMap, offset }: {
+  data: ChartDatum[];
+  xAxisMap?: Record<string, ChartAxis>;
+  yAxisMap?: Record<string, ChartAxis>;
+  offset?: ChartOffset;
+}) {
+  const xAxis = xAxisMap?.["0"] ?? Object.values(xAxisMap ?? {})[0];
+  const yAxis = yAxisMap?.["0"] ?? Object.values(yAxisMap ?? {})[0];
+  if (typeof xAxis?.scale !== "function" || typeof yAxis?.scale !== "function" || !offset || data.length < 2) return null;
+  const xScale = xAxis.scale as (value: number) => number;
+  const yScale = yAxis.scale as (value: number) => number;
+  const n = data.length;
+  const sumX = data.reduce((total, point) => total + point.x, 0);
+  const sumY = data.reduce((total, point) => total + point.y, 0);
+  const sumXY = data.reduce((total, point) => total + point.x * point.y, 0);
+  const sumXX = data.reduce((total, point) => total + point.x * point.x, 0);
+  const denominator = n * sumXX - sumX * sumX;
+  if (denominator === 0) return null;
+  const slope = (n * sumXY - sumX * sumY) / denominator;
+  const intercept = (sumY - slope * sumX) / n;
+  const xs = data.map((point) => point.x);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const y1 = intercept + slope * minX;
+  const y2 = intercept + slope * maxX;
+  return (
+    <line
+      className="scatter-trend-line"
+      x1={xScale(minX)}
+      y1={yScale(y1)}
+      x2={xScale(maxX)}
+      y2={yScale(y2)}
+      stroke="var(--dim)"
+      strokeWidth={1}
+      strokeOpacity={0.35}
+      strokeDasharray="4 4"
+    />
   );
 }
 
@@ -783,15 +858,32 @@ type ScatterPlotProps = {
   labelData: ChartDatum[];
   leaderIds: ReadonlySet<string>;
   selectedTeamIds: ReadonlySet<string>;
+  highlightedId?: string | null;
   xAxis: ScatterAxisSpec;
   yAxis: ScatterAxisSpec;
   showQuadrants: boolean;
   xCutoff: number;
   yCutoff: number;
+  quadrantLabels?: QuadrantLabels;
   ariaLabel: string;
 };
 
-function ScatterPlot({ others, leadersWithoutSelectedTeam, selectedTeamPlayers, labelData, leaderIds, selectedTeamIds, xAxis, yAxis, showQuadrants, xCutoff, yCutoff, ariaLabel }: ScatterPlotProps) {
+function ScatterPlot({
+  others,
+  leadersWithoutSelectedTeam,
+  selectedTeamPlayers,
+  labelData,
+  leaderIds,
+  selectedTeamIds,
+  highlightedId = null,
+  xAxis,
+  yAxis,
+  showQuadrants,
+  xCutoff,
+  yCutoff,
+  quadrantLabels,
+  ariaLabel,
+}: ScatterPlotProps) {
   const plottedData = Array.from(new Map(
     [...others, ...leadersWithoutSelectedTeam, ...selectedTeamPlayers].map((point) => [point.id, point]),
   ).values());
@@ -799,9 +891,12 @@ function ScatterPlot({ others, leadersWithoutSelectedTeam, selectedTeamPlayers, 
     <div className="scatter-frame" role="group" aria-label={ariaLabel}>
       <p className="sr-only">{ariaLabel}. {plottedData.map((point) => `${point.name}, ${point.team}: ${xAxis.short} ${point.x}, ${yAxis.short} ${point.y}`).join("; ")}</p>
       <div aria-hidden="true" className="h-full">
-      {showQuadrants ? <div className="quadrant-label high-high">SMASH SPOT</div> : null}
+      {showQuadrants && quadrantLabels?.highHigh ? <div className="quadrant-label high-high">{quadrantLabels.highHigh}</div> : null}
+      {showQuadrants && quadrantLabels?.highLow ? <div className="quadrant-label high-low">{quadrantLabels.highLow}</div> : null}
+      {showQuadrants && quadrantLabels?.lowHigh ? <div className="quadrant-label low-high">{quadrantLabels.lowHigh}</div> : null}
+      {showQuadrants && quadrantLabels?.lowLow ? <div className="quadrant-label low-low">{quadrantLabels.lowLow}</div> : null}
       <ChartContainer config={{ field: { label: "Field", color: "var(--chart-2)" }, team: { label: "My team", color: "var(--chart-1)" } }} className="aspect-auto h-full">
-        <ScatterChart margin={{ top: 28, right: 12, bottom: 50, left: 2 }}>
+        <ScatterChart margin={{ top: 22, right: 10, bottom: 28, left: 2 }}>
           <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" />
           <XAxis
             type="number"
@@ -809,10 +904,10 @@ function ScatterPlot({ others, leadersWithoutSelectedTeam, selectedTeamPlayers, 
             name={`${xAxis.short}${xAxis.titleSuffix}`}
             domain={["auto", "auto"]}
             reversed={xAxis.lowerIsBetter}
-            tick={{ fill: "var(--dim)", fontSize: "var(--type-caption)" }}
+            tick={{ fill: "var(--dim)", fontSize: 10 }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
-            label={{ value: `${xAxis.short}${xAxis.titleSuffix}`, position: "insideBottom", offset: -34, fill: "var(--text)", fontSize: "var(--type-caption)", fontWeight: 700 }}
+            label={{ value: `${xAxis.short}${xAxis.titleSuffix}`, position: "insideBottom", offset: -12, fill: "var(--text)", fontSize: 10, fontWeight: 700 }}
           />
           <YAxis
             type="number"
@@ -820,19 +915,20 @@ function ScatterPlot({ others, leadersWithoutSelectedTeam, selectedTeamPlayers, 
             name={`${yAxis.short}${yAxis.titleSuffix}`}
             domain={["auto", "auto"]}
             reversed={yAxis.lowerIsBetter}
-            width={42}
-            tick={{ fill: "var(--dim)", fontSize: "var(--type-caption)" }}
+            width={36}
+            tick={{ fill: "var(--dim)", fontSize: 10 }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
-            label={{ value: `${yAxis.short}${yAxis.titleSuffix}`, angle: -90, position: "insideLeft", fill: "var(--text)", fontSize: "var(--type-caption)", fontWeight: 700 }}
+            label={{ value: `${yAxis.short}${yAxis.titleSuffix}`, angle: -90, position: "insideLeft", fill: "var(--text)", fontSize: 10, fontWeight: 700 }}
           />
           <Tooltip cursor={{ stroke: "var(--foreground)", strokeDasharray: "3 3" }} contentStyle={chartTooltipStyle} />
-          {showQuadrants ? <ReferenceLine x={xCutoff} stroke="var(--text)" strokeWidth={1.2} /> : null}
-          {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--text)" strokeWidth={1.2} /> : null}
+          {showQuadrants ? <ReferenceLine x={xCutoff} stroke="var(--text)" strokeWidth={1} strokeDasharray="3 4" strokeOpacity={0.7} /> : null}
+          {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--text)" strokeWidth={1} strokeDasharray="3 4" strokeOpacity={0.7} /> : null}
           <Scatter name="Field" data={others} fill="var(--chart-2)" fillOpacity={0.72} />
           <Scatter name="Smash spots" data={leadersWithoutSelectedTeam} fill="var(--chart-2)" fillOpacity={0.72} />
-          <Scatter name="My team" data={selectedTeamPlayers} fill="var(--chart-1)" stroke="var(--chart-1)" strokeWidth={1.5} />
-          {labelData.length ? <Customized component={<AdaptiveChartLabels data={labelData} leaderIds={leaderIds} selectedTeamIds={selectedTeamIds} />} /> : null}
+          <Scatter name="My team" data={selectedTeamPlayers} fill="var(--chart-1)" stroke="var(--chart-1)" strokeWidth={1} />
+          {plottedData.length > 1 ? <Customized component={<ScatterTrendLine data={plottedData} />} /> : null}
+          {labelData.length ? <Customized component={<AdaptiveChartLabels data={labelData} leaderIds={leaderIds} selectedTeamIds={selectedTeamIds} highlightedId={highlightedId} />} /> : null}
         </ScatterChart>
       </ChartContainer>
       </div>
@@ -840,14 +936,16 @@ function ScatterPlot({ others, leadersWithoutSelectedTeam, selectedTeamPlayers, 
   );
 }
 
-function ChartKey({ leagueShortName, showQuadrants, xPercentile, yPercentile }: { leagueShortName: string; showQuadrants: boolean; xPercentile: number; yPercentile: number }) {
+function ChartKey({ teamName }: { teamName: string }) {
   return (
     <div className="chart-key">
-      <span><i className="selected-team-dot" /> {leagueShortName}</span>
-      <span><i /> All plotted players · bold labels mark cutoff leaders</span>
-      {showQuadrants ? <span>Crosshairs = {xPercentile}th X · {yPercentile}th Y</span> : null}
+      <span><i className="selected-team-dot" /> {teamName}</span>
     </div>
   );
+}
+
+function fantasyTeamName(league: League): string {
+  return league.tradeTeams.find((team) => team.isUser)?.teamName ?? "My team";
 }
 
 function OmittedChartLabels({ omittedNames }: { omittedNames: string[] }) {
@@ -860,13 +958,14 @@ function OmittedChartLabels({ omittedNames }: { omittedNames: string[] }) {
   );
 }
 
-function ChartDialog({ isOpen, onClose, title, subtitle, count, countLabel, closeLabel = "Close chart", children }: {
+function ChartDialog({ isOpen, onClose, title, subtitle, count, countLabel, showCount = true, closeLabel = "Close chart", children }: {
   isOpen: boolean;
   onClose: () => void;
   title: string;
-  subtitle: string;
-  count: number;
-  countLabel: string;
+  subtitle?: string;
+  count?: number;
+  countLabel?: string;
+  showCount?: boolean;
   closeLabel?: string;
   children: ReactNode;
 }) {
@@ -879,8 +978,11 @@ function ChartDialog({ isOpen, onClose, title, subtitle, count, countLabel, clos
       <div className="chart-result-backdrop" onClick={onClose}>
         <article ref={dialogRef} className="chart-result-card" role="dialog" aria-modal="true" aria-labelledby="chart-result-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
         <header className="chart-result-header">
-          <div><h2 id="chart-result-title">{title}</h2><span>{subtitle}</span></div>
-          <div className="chart-result-header-actions"><span><strong>{count}</strong> {countLabel}</span><button type="button" onClick={onClose} aria-label={closeLabel}>×</button></div>
+          <div><h2 id="chart-result-title">{title}</h2>{subtitle ? <span>{subtitle}</span> : null}</div>
+          <div className="chart-result-header-actions">
+            {showCount && typeof count === "number" && countLabel ? <span><strong>{count}</strong> {countLabel}</span> : null}
+            <button type="button" onClick={onClose} aria-label={closeLabel}>×</button>
+          </div>
         </header>
           <div className="chart-result-body">{children}</div>
         </article>
@@ -1236,14 +1338,16 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
           labelData={labelData}
           leaderIds={leaderIds}
           selectedTeamIds={selectedTeamIds}
+          highlightedId={selectedTeamPlayers[0]?.id ?? null}
           xAxis={{ short: selectedX.short, lowerIsBetter: selectedX.lowerIsBetter, titleSuffix: " / game" }}
           yAxis={{ short: selectedY.short, lowerIsBetter: selectedY.lowerIsBetter, titleSuffix: " / game" }}
           showQuadrants={showQuadrants}
           xCutoff={xCutoff}
           yCutoff={yCutoff}
+          quadrantLabels={presets.find((preset) => preset.x === selectedX.key && preset.y === selectedY.key)?.quadrantLabels}
           ariaLabel={`${position === "DEF" ? "DST" : position} scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
         />
-        <ChartKey leagueShortName={shortLeagueName(league.name)} showQuadrants={showQuadrants} xPercentile={xPercentile} yPercentile={yPercentile} />
+        <ChartKey teamName={fantasyTeamName(league)} />
         <OmittedChartLabels omittedNames={omittedNames} />
       </ChartDialog>
     </section>
@@ -1689,14 +1793,16 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
               labelData={labelData}
               leaderIds={leaderIds}
               selectedTeamIds={selectedTeamIds}
+              highlightedId={selectedTeamPlayers[0]?.id ?? null}
               xAxis={{ short: selectedX.short, lowerIsBetter: selectedX.lowerIsBetter, titleSuffix: "" }}
               yAxis={{ short: selectedY.short, lowerIsBetter: selectedY.lowerIsBetter, titleSuffix: "" }}
               showQuadrants={showQuadrants}
               xCutoff={xCutoff}
               yCutoff={yCutoff}
+              quadrantLabels={presets.find((preset) => preset.x === selectedX.key && preset.y === selectedY.key)?.quadrantLabels}
               ariaLabel={`${position === "DEF" ? "DST" : position} weekly projection scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
             />
-            <ChartKey leagueShortName={shortLeagueName(league.name)} showQuadrants={showQuadrants} xPercentile={xPercentile} yPercentile={yPercentile} />
+            <ChartKey teamName={fantasyTeamName(league)} />
             <OmittedChartLabels omittedNames={omittedNames} />
           </>
         )}
@@ -2112,9 +2218,7 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
             isOpen={isComparisonOpen}
             onClose={() => setIsComparisonOpen(false)}
             title="Player comparison"
-            subtitle={`${position === "DEF" ? "DST" : position} · ${league.name}`}
-            count={rows.length + boomBustRows.length}
-            countLabel={rows.length + boomBustRows.length === 1 ? "metric" : "metrics"}
+            showCount={false}
             closeLabel="Close comparison"
           >
             <div className="comparison-overview" aria-label={`${left.name} and ${right.name} comparison`}>

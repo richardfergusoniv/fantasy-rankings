@@ -266,7 +266,7 @@ export function LeagueRosterList({
                 <span className={`asset-position${row.position === "PICK" ? " pick" : ""}`}>{rosterPositionLabel(row.position)}</span>
                 <span className="league-roster-name">
                   <strong>{row.shortName}</strong>
-                  {row.isRookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" tone="positive" /> : null}
+                  {row.isRookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" /> : null}
                   {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
                 </span>
               </span>
@@ -282,18 +282,44 @@ export function LeagueRosterList({
   );
 }
 
+export function tradeSideOutcome(leftTotal: number, rightTotal: number): "left" | "right" | "tie" {
+  if (leftTotal === rightTotal) return "tie";
+  return leftTotal > rightTotal ? "left" : "right";
+}
+
+export function TradeBalanceTrack({
+  leftShare,
+  leftWins,
+  rightWins,
+}: {
+  leftShare: number;
+  leftWins: boolean;
+  rightWins: boolean;
+}) {
+  const rightShare = 100 - leftShare;
+  const tied = !leftWins && !rightWins;
+  return (
+    <div className="trade-balance-track" aria-hidden="true">
+      <i className={leftWins ? "is-winner" : tied ? "is-tie" : undefined} style={{ width: `${leftShare}%` }} />
+      <i className={rightWins ? "is-winner" : tied ? "is-tie" : undefined} style={{ width: `${rightShare}%` }} />
+    </div>
+  );
+}
+
 export function LeagueTradeValueColumn({
   side,
   assets,
   height,
+  outcome = "tie",
 }: {
   side: "mine" | "theirs";
   assets: TradeAsset[];
   height: number;
+  outcome?: "winner" | "loser" | "tie";
 }) {
   const ordered = [...assets].sort((left, right) => left.value - right.value || left.name.localeCompare(right.name));
   return (
-    <div className={`league-trade-column ${side}`} style={{ height, minHeight: height }}>
+    <div className={`league-trade-column ${side}${outcome === "winner" ? " is-winner" : outcome === "tie" ? " is-tie" : ""}`} style={{ height, minHeight: height }}>
       {side === "mine" ? (
         <div className="league-trade-names">
           {ordered.map((asset) => (
@@ -349,6 +375,7 @@ export function TradeValueDialog({
 }) {
   const giveTotal = tradeTotal(give);
   const getTotal = tradeTotal(get);
+  const outcome = tradeSideOutcome(giveTotal, getTotal);
   const grade = lineupContext && lineupContext.starterSlots.length > 0
     ? gradeTradeSide(lineupContext.mine, give, get, lineupContext.theirs, lineupContext.waiverPool, lineupContext.starterSlots)
     : null;
@@ -383,6 +410,10 @@ export function TradeValueDialog({
     `${getLabel} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getTotal.toLocaleString()}`,
     lineup,
   ].filter((part): part is string => Boolean(part)).join(" ");
+  const giveColor = outcome === "left" ? "var(--warning)" : "var(--dim)";
+  const getColor = outcome === "right" ? "var(--warning)" : "var(--dim)";
+  const giveStrokeWidth = outcome === "left" || outcome === "tie" ? 2.3 : 1;
+  const getStrokeWidth = outcome === "right" || outcome === "tie" ? 2.3 : 1;
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -395,11 +426,21 @@ export function TradeValueDialog({
           {lineup ? <p className="league-trade-lineup">{lineup}</p> : null}
           <div className="league-trade-chart" role="img" aria-label={chartLabel}>
             <div className="league-trade-side">
-              <LeagueTradeValueColumn side="mine" assets={give} height={columnHeight(giveTotal, give.length)} />
+              <LeagueTradeValueColumn
+                side="mine"
+                assets={give}
+                height={columnHeight(giveTotal, give.length)}
+                outcome={outcome === "left" ? "winner" : outcome === "tie" ? "tie" : "loser"}
+              />
               <div className="league-trade-total"><span>Total trade value</span><strong>{giveTotal.toLocaleString()}</strong></div>
             </div>
             <div className="league-trade-side">
-              <LeagueTradeValueColumn side="theirs" assets={get} height={columnHeight(getTotal, get.length)} />
+              <LeagueTradeValueColumn
+                side="theirs"
+                assets={get}
+                height={columnHeight(getTotal, get.length)}
+                outcome={outcome === "right" ? "winner" : outcome === "tie" ? "tie" : "loser"}
+              />
               <div className="league-trade-total"><span>Total trade value</span><strong>{getTotal.toLocaleString()}</strong></div>
             </div>
           </div>
@@ -408,8 +449,10 @@ export function TradeValueDialog({
             get={get}
             historyByPlayerId={historyByPlayerId}
             isLoading={historyPlayerIds.length > 0 && historyQuery.isPending}
-            giveColor="var(--stat-strength-readable)"
-            getColor="var(--chart-2)"
+            giveColor={giveColor}
+            getColor={getColor}
+            giveStrokeWidth={giveStrokeWidth}
+            getStrokeWidth={getStrokeWidth}
             showPickNote={false}
           />
         </div>
@@ -684,6 +727,13 @@ export function TradeResultCard({
 }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   useDialogFocusTrap(dialogRef, onClose);
+  const leftTotal = historicalComparisonSides ? historicalComparisonSides[0].total : giveMarketTotal;
+  const rightTotal = historicalComparisonSides ? historicalComparisonSides[1].total : getMarketTotal;
+  const outcome = tradeSideOutcome(leftTotal, rightTotal);
+  const giveColor = outcome === "left" ? "var(--warning)" : "var(--dim)";
+  const getColor = outcome === "right" ? "var(--warning)" : "var(--dim)";
+  const giveStrokeWidth = outcome === "left" || outcome === "tie" ? 2.3 : 1;
+  const getStrokeWidth = outcome === "right" || outcome === "tie" ? 2.3 : 1;
 
   return (
     <ModalPortal>
@@ -733,7 +783,11 @@ export function TradeResultCard({
                 </span>
               )) : <><span>{giveLabel} <b>{giveMarketTotal.toLocaleString()}</b></span><span>{getLabel} <b>{getMarketTotal.toLocaleString()}</b></span></>}
             </div>
-            <div className="trade-balance-track" aria-hidden="true"><span style={{ width: `${balancePercent}%` }} /></div>
+            <TradeBalanceTrack
+              leftShare={balancePercent}
+              leftWins={outcome === "left"}
+              rightWins={outcome === "right"}
+            />
             <p>{balanceCopy}</p>
           </section>
           {valuationMode === "league" && mine && theirs ? (
@@ -753,7 +807,16 @@ export function TradeResultCard({
               <p>{rosterFitUnavailableNote}</p>
             </section>
           ) : null}
-          <AggregateTradeHistory give={give} get={get} historyByPlayerId={historyByPlayerId} isLoading={historyLoading} />
+          <AggregateTradeHistory
+            give={give}
+            get={get}
+            historyByPlayerId={historyByPlayerId}
+            isLoading={historyLoading}
+            giveColor={giveColor}
+            getColor={getColor}
+            giveStrokeWidth={giveStrokeWidth}
+            getStrokeWidth={getStrokeWidth}
+          />
         </div>
         </article>
       </div>
