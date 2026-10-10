@@ -724,7 +724,7 @@ button.monitor-alert:hover { background: var(--surface-2); }
 .search-field:focus-within { border-color: var(--link); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent); }
 .search-clear { flex: none; display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface-2); color: var(--dim); font-size: var(--type-section); line-height: 1; cursor: pointer; }
 .position-filter-row { margin-top: 7px; min-width: 0; }
-/* One equal-width row (QB … Rook) — same tab type size as other segmented controls. */
+/* One equal-width row (QB … ROOK) — same tab type size as other segmented controls. */
 .position-filter-row .position-tabs {
   min-height: 44px;
   overflow-x: auto;
