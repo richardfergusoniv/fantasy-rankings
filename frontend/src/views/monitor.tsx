@@ -45,7 +45,6 @@ export function Monitor({
   const leagueRows = league.powerRankingsWeek.slice(0, LEAGUE_PREVIEW_LIMIT);
   const trendingUp = (draftData?.trending ?? []).slice(0, MOVER_LIMIT);
   const trendingDown = (draftData?.trendingDrops ?? []).slice(0, MOVER_LIMIT);
-  const suggestion = league.suggestion;
 
   const alerts = useMemo(() => {
     const items: MonitorAlert[] = [];
@@ -216,23 +215,6 @@ export function Monitor({
               );
             })}
           </ul>
-        )}
-      </article>
-
-      <article className="monitor-panel">
-        <header className="monitor-panel-header">
-          <h2>Trade</h2>
-          <button type="button" className="monitor-panel-link" onClick={() => onOpenTab("trade")}>Open Trade</button>
-        </header>
-        {suggestion ? (
-          <p className="monitor-trade-teaser">
-            Start <span className="monitor-trade-chip is-get">{suggestion.inPlayer}</span>
-            {" "}over{" "}
-            <span className="monitor-trade-chip is-give">{suggestion.outPlayer}</span>
-            <strong className="monitor-trade-delta">+{formatDecimal(suggestion.delta, 1)}</strong>
-          </p>
-        ) : (
-          <p className="monitor-empty">Open Trade</p>
         )}
       </article>
     </section>

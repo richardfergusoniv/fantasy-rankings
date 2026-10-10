@@ -639,31 +639,6 @@ button.monitor-alert:hover { background: var(--surface-2); }
   font-size: var(--type-caption);
   font-weight: 600;
 }
-.monitor-trade-teaser {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-  margin: 0;
-  font-size: var(--type-body);
-  font-weight: 600;
-}
-.monitor-trade-chip {
-  display: inline-flex;
-  min-height: 24px;
-  align-items: center;
-  padding: 0 7px;
-  border-radius: 4px;
-  font-size: var(--type-caption);
-  font-weight: 700;
-}
-.monitor-trade-chip.is-get { background: color-mix(in srgb, var(--get) 18%, var(--surface)); color: var(--get); }
-.monitor-trade-chip.is-give { background: color-mix(in srgb, var(--give) 18%, var(--surface)); color: var(--give); }
-.monitor-trade-delta {
-  margin-left: auto;
-  color: var(--give);
-  font-variant-numeric: tabular-nums;
-}
 .lineup-mode-toggle { margin: 0 0 8px; }
 
 .matchup-score { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); align-items: stretch; }
