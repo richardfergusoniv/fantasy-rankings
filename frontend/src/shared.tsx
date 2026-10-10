@@ -171,6 +171,20 @@ export function leagueRank(values: readonly number[], value: number | null, high
   return rankAmong(values, value, higherIsBetter);
 }
 
+/**
+ * Rank `value` against peer rates, including it when it is not already in the set.
+ * Ties share the best rank. Fewer than two comparable values stays unranked.
+ * Unlike `rankAmong`, a displayed rate can rank even when it is not an exact peer member.
+ */
+export function rankAgainst(values: readonly number[], value: number | null | undefined, higherIsBetter = true): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const peers = values.filter((candidate) => Number.isFinite(candidate));
+  const comparable = peers.includes(value) ? peers : [...peers, value];
+  if (comparable.length < 2) return null;
+  const better = comparable.filter((candidate) => higherIsBetter ? candidate > value : candidate < value).length;
+  return better + 1;
+}
+
 /** Positional fantasy SOS rank for an opponent defense vs a skill position. */
 export function positionalSosRank(
   entry: StrengthOfScheduleEntryLike | undefined,

@@ -4,6 +4,7 @@ import {
   points,
   positionalSosRank,
   leagueRank,
+  rankAgainst,
   rankAmong,
   shortLeagueName,
   rankToneClassName,
@@ -107,6 +108,26 @@ describe("leagueRank", () => {
     expect(leagueRank([], 6.2, false)).toBeNull();
     expect(leagueRank([Number.NaN, 6.2], 6.2, false)).toBeNull();
     expect(leagueRank([4.1, 6.2], null, false)).toBeNull();
+  });
+});
+
+describe("rankAgainst", () => {
+  it("ranks a value that is not already in the peer set", () => {
+    expect(rankAgainst([10, 30], 20)).toBe(2);
+    expect(rankAgainst([10, 30], 40)).toBe(1);
+  });
+
+  it("ranks lower-is-better and shares ties", () => {
+    expect(rankAgainst([0.4, 1.2, 0.8], 0.4, false)).toBe(1);
+    expect(rankAgainst([0.4, 1.2, 0.8], 1.2, false)).toBe(3);
+    expect(rankAgainst([1.0, 1.0, 2.0], 1.0, false)).toBe(1);
+  });
+
+  it("stays unranked without two comparable values", () => {
+    expect(rankAgainst([], 5)).toBeNull();
+    expect(rankAgainst([Number.NaN], 5)).toBeNull();
+    expect(rankAgainst([10, 20], null)).toBeNull();
+    expect(rankAgainst([10, 20], Number.NaN)).toBeNull();
   });
 });
 
