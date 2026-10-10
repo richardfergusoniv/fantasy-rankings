@@ -2438,7 +2438,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .trade-side-heading button,
 .draft-remove-link,
 .integration-actions button { min-width: 44px; min-height: 44px; }
-.draft-row button.draft-player-open { min-height: var(--player-row-height); }
+.draft-row button.draft-player-open { min-height: 0; }
 .integration-row input,
 .integration-row form button { min-height: 44px; }
 .integration-actions a,
@@ -2893,27 +2893,31 @@ a:active { color: var(--link-active); }
 }
 
 /*
- * Explorer rankings / waivers use compact rows only.
- * Scoped to .rankings-view so Matchup, trade, power, and draft keep root tokens.
+ * Explorer rankings / waivers and the draft board share one compact row height.
+ * Scoped so Matchup, trade, and power keep the root token.
  */
-.rankings-view {
-  --player-box-height: 56px;
-  --player-box-half: 28px;
+.rankings-view,
+.draft-board {
   --player-row-height: 56px;
+}
+
+.rankings-view {
+  --player-box-height: var(--player-row-height);
+  --player-box-half: calc(var(--player-row-height) / 2);
 }
 
 .rankings-view .ranking-row,
 .rankings-view .player-search-result {
-  min-height: 56px;
+  min-height: var(--player-row-height);
 }
 
 .rankings-view .ranking-row .ranking-player {
-  grid-template-rows: 28px 28px;
+  grid-template-rows: var(--player-box-half) var(--player-box-half);
 }
 
 .rankings-view .ranking-row .ranking-name-line,
 .rankings-view .ranking-row .ranking-meta-line {
-  min-height: 28px;
+  min-height: var(--player-box-half);
 }
 
 .rankings-view .ranking-row .matchup-reference-button.matchup-reference-tag {
@@ -3071,7 +3075,7 @@ a:active { color: var(--link-active); }
 
 .draft-row button.draft-player-open,
 .draft-row button.draft-player-open.is-single-line {
-  min-height: var(--player-row-height);
+  min-height: 0;
   grid-template-rows: auto;
   align-content: center;
   align-items: center;
