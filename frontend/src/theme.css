@@ -1049,7 +1049,7 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .rank-tone.sos-soft { color: var(--stat-strength-readable); }
 .rank-tone.sos-tough { color: var(--stat-weakness-readable); }
 .player-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px 2px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.player-detail-meta .player-roster-badge { max-width: 100%; flex: none; color: var(--text); text-decoration: none; }
+.player-detail-meta .player-roster-badge { min-width: 44px; max-width: 100%; flex: none; justify-content: center; color: var(--text); text-decoration: none; }
 .player-detail-meta .player-roster-badge:hover,
 .player-detail-meta .player-roster-badge:active { color: var(--text); }
 .player-detail-meta .player-roster-badge .matchup-reference-button-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
