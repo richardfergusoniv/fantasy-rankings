@@ -47,6 +47,7 @@ import {
 } from "../shared";
 import { WindowVirtualList } from "../virtual-list";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
+import { perGame, perGameRank } from "./team-per-game";
 
 /** Compact rankings/waivers row height (matches former density=compact). */
 export const RANKINGS_ROW_HEIGHT = 56;
@@ -216,6 +217,43 @@ export function TeamDataModal({
   const missingNote = (missing: boolean, text: string) => (
     missing ? <span className="sr-only">{text}</span> : null
   );
+  type PerGameStatus = "missing" | "no-games" | "ready";
+  const perGameStat = (read: (row: TeamUsage) => number, higherIsBetter = true) => {
+    if (!usage) return { text: "—", rank: null, status: "missing" as const };
+    const total = read(usage);
+    const rate = perGame(total, usage.games);
+    if (rate === null) return { text: "—", rank: null, status: "no-games" as const };
+    return {
+      text: formatDecimal(rate, 1),
+      rank: perGameRank(
+        usageLeague.map((row) => ({ total: read(row), games: row.games })),
+        total,
+        usage.games,
+        higherIsBetter,
+      ),
+      status: "ready" as const,
+    };
+  };
+  const perGameNote = (status: PerGameStatus, detail: string) => {
+    switch (status) {
+      case "missing":
+        return `nflverse unavailable. ${detail}`;
+      case "no-games":
+        return `No games played. ${detail}`;
+      case "ready":
+        return detail;
+      default: {
+        const unreachable: never = status;
+        return unreachable;
+      }
+    }
+  };
+  const pointsPerGame = perGameStat((row) => row.pointsScored);
+  const totalYardsPerGame = perGameStat((row) => row.totalYards);
+  const passingYardsPerGame = perGameStat((row) => row.passingYards);
+  const rushingYardsPerGame = perGameStat((row) => row.rushingYards);
+  const touchdownsPerGame = perGameStat((row) => row.offensiveTouchdowns);
+  const turnoversPerGame = perGameStat((row) => row.turnovers, false);
 
   return (
     <ModalPortal>
@@ -235,38 +273,38 @@ export function TeamDataModal({
             </div>
             <div className="team-card-metrics">
               <div>
-                <span>Points scored</span>
-                {coloredStat(usage ? usage.pointsScored.toLocaleString() : "—", usageRank((row) => row.pointsScored))}
-                {missingNote(!usage, "nflverse unavailable")}
+                <span>Points/G</span>
+                {coloredStat(pointsPerGame.text, pointsPerGame.rank)}
+                <span className="sr-only">{perGameNote(pointsPerGame.status, "Points scored per game")}</span>
               </div>
               <div>
-                <span>Total yards</span>
-                {coloredStat(usage ? usage.totalYards.toLocaleString() : "—", usageRank((row) => row.totalYards))}
-                {missingNote(!usage, "nflverse unavailable")}
+                <span>Total yds/G</span>
+                {coloredStat(totalYardsPerGame.text, totalYardsPerGame.rank)}
+                <span className="sr-only">{perGameNote(totalYardsPerGame.status, "Total yards per game")}</span>
               </div>
               <div>
-                <span>Passing yards</span>
-                {coloredStat(usage ? usage.passingYards.toLocaleString() : "—", usageRank((row) => row.passingYards))}
-                {missingNote(!usage, "nflverse unavailable")}
+                <span>Pass yds/G</span>
+                {coloredStat(passingYardsPerGame.text, passingYardsPerGame.rank)}
+                <span className="sr-only">{perGameNote(passingYardsPerGame.status, "Passing yards per game")}</span>
               </div>
               <div>
-                <span>Rushing yards</span>
-                {coloredStat(usage ? usage.rushingYards.toLocaleString() : "—", usageRank((row) => row.rushingYards))}
-                {missingNote(!usage, "nflverse unavailable")}
+                <span>Rush yds/G</span>
+                {coloredStat(rushingYardsPerGame.text, rushingYardsPerGame.rank)}
+                <span className="sr-only">{perGameNote(rushingYardsPerGame.status, "Rushing yards per game")}</span>
               </div>
               <div>
                 <span>Win–loss record</span>
                 {coloredStat(recordLabel, recordLabel === "—" ? null : recordRank)}
               </div>
               <div>
-                <span>Offensive touchdowns</span>
-                {coloredStat(usage ? usage.offensiveTouchdowns.toLocaleString() : "—", usageRank((row) => row.offensiveTouchdowns))}
-                <span className="sr-only">{usage ? "Pass catches and rushes" : "nflverse unavailable. Pass catches and rushes"}</span>
+                <span>TD/G</span>
+                {coloredStat(touchdownsPerGame.text, touchdownsPerGame.rank)}
+                <span className="sr-only">{perGameNote(touchdownsPerGame.status, "Offensive touchdowns per game, pass catches and rushes")}</span>
               </div>
               <div>
-                <span>Turnovers</span>
-                {coloredStat(usage ? usage.turnovers.toLocaleString() : "—", usageRank((row) => row.turnovers, false))}
-                <span className="sr-only">{usage ? "Interceptions and fumbles lost" : "nflverse unavailable. Interceptions and fumbles lost"}</span>
+                <span>TO/G</span>
+                {coloredStat(turnoversPerGame.text, turnoversPerGame.rank)}
+                <span className="sr-only">{perGameNote(turnoversPerGame.status, "Turnovers per game, interceptions and fumbles lost")}</span>
               </div>
               <div>
                 <span>Pace of play</span>
