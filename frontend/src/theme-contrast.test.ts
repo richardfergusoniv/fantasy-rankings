@@ -100,6 +100,13 @@ describe("Look D theme contrast", () => {
     expect(link.toLowerCase()).toBe("#f5c16a");
   });
 
+  it("keeps optimized-change projection amber readable on Look D canvas and panel", () => {
+    const warning = resolveVar(vars, "--warning");
+    expect(warning.toLowerCase()).toBe("#f5c16a");
+    expect(contrastRatio(warning, canvas)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(warning, panel)).toBeGreaterThanOrEqual(4.5);
+  });
+
   it("uses dark ink on amber primary, not white", () => {
     expect(primary.toLowerCase()).toBe("#f0b429");
     expect(action.toLowerCase()).toBe("#f0b429");
