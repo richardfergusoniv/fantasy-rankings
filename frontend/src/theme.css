@@ -477,25 +477,12 @@ main { padding: 12px 16px 0; }
 .monitor-panel-header {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
   margin-bottom: 10px;
 }
 .monitor-panel-header h2 {
   margin: 0;
   font-size: var(--type-section);
   font-weight: 700;
-}
-.monitor-panel-link {
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--link);
-  font-size: var(--type-caption);
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: underline;
 }
 .monitor-matchup-names {
   display: flex;
