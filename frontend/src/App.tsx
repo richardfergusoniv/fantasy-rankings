@@ -426,7 +426,7 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
     ["team", "Matchup", "team"],
     ["players", "Explorer", "rankings"],
     ["league", "League", "power"],
-    ["tools", "Trade", "trade"],
+    ["tools", "Tools", "trade"],
   ];
   return (
     <div className="app-shell progressive-shell">
@@ -473,8 +473,8 @@ export function App() {
       rankings: "Explorer",
       waivers: "Explorer",
       power: "League",
-      draft: "Trade",
-      trade: "Trade",
+      draft: "Tools",
+      trade: "Tools",
       charts: "Explorer",
       comparison: "Explorer",
     };
@@ -924,7 +924,7 @@ export function App() {
             ["team", "Matchup"],
             ["players", "Explorer"],
             ["league", "League"],
-            ["tools", "Trade"],
+            ["tools", "Tools"],
           ] as const).map(([page, label]) => (
             <button
               key={page}
@@ -949,7 +949,7 @@ export function App() {
         ) : null}
         {primaryPage === "tools" ? (
           <Tabs value={tab === "draft" ? "draft" : "trade"} onValueChange={(value) => setTab(value as Tab)} className="subview-tabs tools-subview-tabs">
-            <TabsList aria-label="Trade views">
+            <TabsList aria-label="Tools views">
               <TabsTrigger value="trade">Trade</TabsTrigger>
               <TabsTrigger value="draft">Draft</TabsTrigger>
             </TabsList>
@@ -970,7 +970,7 @@ export function App() {
             charts: "Fantasy charts",
             comparison: "Player comparison",
           } satisfies Record<Tab, string>)[tab]}</h1>
-          {currentSectionLoading ? <SectionLoading label={`Loading ${primaryPage === "tools" ? "Trade" : primaryPage}…`} />
+          {currentSectionLoading ? <SectionLoading label={`Loading ${primaryPage === "tools" ? "Tools" : primaryPage}…`} />
             : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
             : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
             : tab === "monitor" ? <Monitor league={league} dashboard={activeDashboard} draftData={draftQuery.data} news={newsQuery.data} onOpenTab={setTab} onOpenPlayer={openTickerPlayer} onOpenMatchup={setSelectedMatchup} />

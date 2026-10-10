@@ -6,7 +6,7 @@ export type CommandPageItem = {
   id: string;
   label: string;
   tab: Tab;
-  /** Optional trade analyzer mode when opening the Trade tab. */
+  /** Optional trade analyzer mode when opening Tools → Trade. */
   tradeMode?: TradeMode;
 };
 
@@ -27,13 +27,13 @@ export type CommandItem = CommandPageItem | CommandLeagueItem | CommandPlayerIte
 
 export const COMMAND_RESULT_LIMIT = 8;
 
-/** Primary nav pages and the tab each opens by default. Draft remains searchable under Trade. */
+/** Primary nav pages and the tab each opens by default. Draft remains searchable under Tools. */
 export const PRIMARY_COMMAND_PAGES: CommandPageItem[] = [
   { kind: "page", id: "monitor", label: "Monitor", tab: "monitor" },
   { kind: "page", id: "team", label: "Matchup", tab: "team" },
   { kind: "page", id: "players", label: "Explorer", tab: "rankings" },
   { kind: "page", id: "league", label: "League", tab: "power" },
-  { kind: "page", id: "tools", label: "Trade", tab: "trade" },
+  { kind: "page", id: "tools", label: "Tools", tab: "trade" },
 ];
 
 /** Extra destinations reachable from the palette (not primary nav). */
