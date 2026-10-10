@@ -40,7 +40,7 @@ import {
   MatchupTag,
   ModalPortal,
   SegmentedControl,
-  sosToneFromRank,
+  rankToneClassName,
   useDialogFocusTrap,
   type StrengthOfScheduleEntryLike,
 } from "../shared";
@@ -172,7 +172,12 @@ export function TeamDataModal({
     ? pfnRecord
     : record ? `${record.wins}-${record.losses}${record.ties ? `-${record.ties}` : ""}` : "—";
   const sosRanks = fantasySosRanksForTeam(sosEntry, teamCode ?? selection.team);
-  const hasSosRanks = SOS_POSITIONS.some((position) => sosRanks[position] !== null);
+  const rankLabel = (rank: number | null, loadingValue: boolean) => (
+    loadingValue ? <strong>…</strong> : <strong className={rankToneClassName(rank)}>{rank === null ? "—" : `#${rank}`}</strong>
+  );
+  const gradeCaption = (value: number | null, fallback: string) => (
+    <small className={value === null ? undefined : "metric-grade"}>{value === null ? fallback : `${formatDecimal(value, 1)} grade`}</small>
+  );
 
   return (
     <ModalPortal>
@@ -248,28 +253,28 @@ export function TeamDataModal({
             <div className="team-card-metrics">
               <div>
                 <span>Overall</span>
-                <strong>{loading ? "…" : overallRank === null ? "—" : `#${overallRank}`}</strong>
-                <small>{overallGrade === null ? "PFN overall" : `${formatDecimal(overallGrade, 1)} grade`}</small>
+                {rankLabel(overallRank, loading)}
+                {gradeCaption(overallGrade, "PFN overall")}
               </div>
               <div>
                 <span>Special teams</span>
-                <strong>{loading ? "…" : specialTeamsRank === null ? "—" : `#${specialTeamsRank}`}</strong>
-                <small>{specialTeams === null ? "PFN overall" : `${formatDecimal(specialTeams, 1)} grade`}</small>
+                {rankLabel(specialTeamsRank, loading)}
+                {gradeCaption(specialTeams, "PFN overall")}
               </div>
               <div>
                 <span>O-line</span>
-                <strong>{loading ? "…" : lineRank === null ? "—" : `#${lineRank}`}</strong>
-                <small>{lineGrade === null ? "PFN rank" : `${formatDecimal(lineGrade, 1)} grade`}</small>
+                {rankLabel(lineRank, loading)}
+                {gradeCaption(lineGrade, "PFN rank")}
               </div>
               <div>
                 <span>Pass block</span>
-                <strong>{loading ? "…" : passBlockRank === null ? "—" : `#${passBlockRank}`}</strong>
-                <small>{passBlock === null ? "PFN O-line" : `${formatDecimal(passBlock, 1)} grade`}</small>
+                {rankLabel(passBlockRank, loading)}
+                {gradeCaption(passBlock, "PFN O-line")}
               </div>
               <div>
                 <span>Run block</span>
-                <strong>{loading ? "…" : runBlockRank === null ? "—" : `#${runBlockRank}`}</strong>
-                <small>{runBlock === null ? "PFN O-line" : `${formatDecimal(runBlock, 1)} grade`}</small>
+                {rankLabel(runBlockRank, loading)}
+                {gradeCaption(runBlock, "PFN O-line")}
               </div>
               <div>
                 <span>Pen/G</span>
@@ -278,37 +283,26 @@ export function TeamDataModal({
               </div>
               <div>
                 <span>Defense</span>
-                <strong>{loading ? "…" : defenseRank === null ? "—" : `#${defenseRank}`}</strong>
-                <small>{defenseGrade === null ? "PFN rank" : `${formatDecimal(defenseGrade, 1)} grade`}</small>
+                {rankLabel(defenseRank, loading)}
+                {gradeCaption(defenseGrade, "PFN rank")}
               </div>
               <div>
                 <span>Offense</span>
-                <strong>{loading ? "…" : offenseRank === null ? "—" : `#${offenseRank}`}</strong>
-                <small>{offenseGrade === null ? "PFN rank" : `${formatDecimal(offenseGrade, 1)} grade`}</small>
+                {rankLabel(offenseRank, loading)}
+                {gradeCaption(offenseGrade, "PFN rank")}
               </div>
+              {SOS_POSITIONS.map((position) => {
+                const rank = sosRanks[position];
+                if (rank === null) return null;
+                return (
+                  <div key={`${position}-sos`}>
+                    <span>{position} SOS</span>
+                    <strong className={rankToneClassName(rank)}>#{rank}</strong>
+                  </div>
+                );
+              })}
             </div>
           </section>
-
-          {hasSosRanks ? (
-            <section className="team-card-stat-section" aria-labelledby="team-sos-title">
-              <div className="team-card-section-heading">
-                <h3 id="team-sos-title">SOS</h3>
-                <span>Fantasy · vs position</span>
-              </div>
-              <div className="team-card-sos-grid" role="list" aria-label={`${selection.team} fantasy strength of schedule by position`}>
-                {SOS_POSITIONS.map((position) => {
-                  const rank = sosRanks[position];
-                  const tone = sosToneFromRank(rank);
-                  return (
-                    <div key={position} role="listitem" className={`team-card-sos-cell${tone}`}>
-                      <span>{position}</span>
-                      <strong>{rank === null ? "—" : `#${rank}`}</strong>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
 
           <section className="team-card-stat-section" aria-labelledby="team-advanced-stats-title">
             <div className="team-card-section-heading">
@@ -357,6 +351,47 @@ export function TeamDataModal({
         </article>
       </div>
     </ModalPortal>
+  );
+}
+
+export function ConnectedTeamCard({
+  team,
+  dashboard,
+  leagueId,
+  onClose,
+}: {
+  team: string;
+  dashboard: Dashboard;
+  leagueId: string;
+  onClose: () => void;
+}) {
+  const pfnTablesQuery = useQuery({
+    queryKey: ["pfn-tables"],
+    queryFn: () => api.getPfnTables({}),
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+  });
+  const tables = pfnTablesQuery.data?.tables;
+  const teamSituational = pfnTablesQuery.data?.teamSituational ?? null;
+  const teamCode = canonicalNflTeam(team) ?? team;
+  const situational = teamSituational?.rows.find((row) => (canonicalNflTeam(row.team) ?? row.team) === teamCode) ?? null;
+  return (
+    <TeamDataModal
+      selection={{ team }}
+      offensiveLine={tables?.["offensive-line"] ?? null}
+      defense={tables?.defense ?? null}
+      offense={tables?.offense ?? null}
+      teamOverall={tables?.["team-overall"] ?? null}
+      usage={dashboard.analytics.teamUsage.find((row) => (canonicalNflTeam(row.team) ?? row.team) === teamCode) ?? null}
+      record={(dashboard.analytics.teamRecords ?? []).find((row) => (canonicalNflTeam(row.team) ?? row.team) === teamCode) ?? null}
+      situational={situational}
+      situationalSource={teamSituational ? { fetchedAt: teamSituational.fetchedAt, sourceUrl: teamSituational.sourceUrl } : null}
+      sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === leagueId)}
+      loading={pfnTablesQuery.isPending}
+      loadError={pfnTablesQuery.isError}
+      onRetry={() => { void pfnTablesQuery.refetch(); }}
+      onClose={onClose}
+    />
   );
 }
 

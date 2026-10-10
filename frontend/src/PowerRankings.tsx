@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Card } from "@/components/ui/card";
 import type { api, ApiResponse } from "./api";
+import type { MatchupSelection } from "./dashboard-types";
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { MatchupTag, ModalPortal, SegmentedControl, points, shortLeagueName, useDialogFocusTrap } from "./shared";
 
@@ -35,6 +36,7 @@ export function PowerRankings({
   dashboard,
   onPlayerIntent,
   onOpenPlayer,
+  onOpenMatchup,
   playerCardOpen,
   selectedPlayerId = null,
 }: {
@@ -42,6 +44,7 @@ export function PowerRankings({
   dashboard: Dashboard;
   onPlayerIntent: (playerId: string) => void;
   onOpenPlayer: (playerId: string) => void;
+  onOpenMatchup?: (matchup: MatchupSelection) => void;
   playerCardOpen: boolean;
   selectedPlayerId?: string | null;
 }) {
@@ -49,7 +52,7 @@ export function PowerRankings({
   const [mode, setMode] = useState<"seasonLong" | "dynasty">("seasonLong");
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const teamDialogRef = useRef<HTMLElement | null>(null);
-  const returnPlayerRowRef = useRef<HTMLButtonElement | null>(null);
+  const returnPlayerRowRef = useRef<HTMLElement | null>(null);
   const wasPlayerCardOpenRef = useRef(false);
   const isDynastyLeague = league.seasonLongFormat.isDynasty;
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
@@ -183,29 +186,43 @@ export function PowerRankings({
     const metricLabel = scope === "week" ? "PROJ" : "VALUE";
     const slotChip = scope === "week" && player.isStarter ? starterSlotChip(player) : null;
     const isSelected = selectedPlayerId === player.playerId;
+    const openMatchup = player.team && player.opponent && onOpenMatchup
+      ? (event: MouseEvent<HTMLButtonElement>) => {
+          event.stopPropagation();
+          onOpenMatchup({
+            team: player.team ?? "",
+            opponent: player.opponent ?? "",
+            isAway: player.isAway,
+            gamePhase: player.gamePhase,
+          });
+        }
+      : undefined;
     return (
-      <button
-        type="button"
+      <div
         className={`ranking-row ranking-row-button power-roster-player${isSelected ? " is-player-selected" : ""}`}
         key={player.playerId}
-        aria-label={`Open ${player.name}${isSelected ? ", selected" : ""}`}
-        onPointerDown={() => onPlayerIntent(player.playerId)}
-        onFocus={() => onPlayerIntent(player.playerId)}
-        onClick={(event: MouseEvent<HTMLButtonElement>) => {
-          returnPlayerRowRef.current = event.currentTarget;
-          onOpenPlayer(player.playerId);
-        }}
       >
+        <button
+          type="button"
+          className="power-roster-open"
+          aria-label={`Open ${player.name}${isSelected ? ", selected" : ""}`}
+          onPointerDown={() => onPlayerIntent(player.playerId)}
+          onFocus={() => onPlayerIntent(player.playerId)}
+          onClick={(event: MouseEvent<HTMLButtonElement>) => {
+            returnPlayerRowRef.current = event.currentTarget;
+            onOpenPlayer(player.playerId);
+          }}
+        />
         <span className="ranking-player">
           <span className="ranking-name-line">
             <strong>{player.name}</strong>
             {isSelected ? <span className="player-selected-chip">Selected</span> : null}
             {slotChip ? <span className="power-slot-chip">{slotChip}</span> : null}
           </span>
-          <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span className="ranking-meta-position">{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} /></span></span>
+          <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span className="ranking-meta-position">{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={openMatchup} /></span></span>
         </span>
         <span className="ranking-proj"><strong>{metric}</strong><span>{metricLabel}</span></span>
-      </button>
+      </div>
     );
   };
 

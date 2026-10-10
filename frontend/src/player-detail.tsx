@@ -30,7 +30,7 @@ import {
   projectionComponentsForPlayer,
 } from "./dashboard-shared";
 import { formatDecimal } from "./lib/format-number";
-import { MatchupTag, ModalPortal, SegmentedControl, SosRankChip, positionalSosRank, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { MatchupTag, ModalPortal, SegmentedControl, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
 
@@ -190,35 +190,42 @@ export function PlayerTeamContext({
   }
 
   const fetchedAt = offensiveLine?.fetched_at ?? offense?.fetched_at ?? defense?.fetched_at ?? null;
+  const contextRows = sosRank === null && stats.length === 0;
   return (
     <section className="player-team-context" aria-label={`${player.name} team and matchup context`}>
       <div className="section-heading">
         <h3>Team context</h3>
         <span>{fetchedAt ? `PFN · ${pfnDateLabel(fetchedAt)}` : "PFN"}</span>
       </div>
-      {sosRank !== null ? (
-        <div className="player-team-sos" aria-label="Fantasy strength of schedule">
-          <span>SOS</span>
-          <SosRankChip entry={sosEntry} opponent={player.opponent} position={player.position} />
-        </div>
-      ) : null}
-      {query.isPending ? (
+      {query.isPending && sosRank === null ? (
         <div className="player-team-context-state" role="status">Loading team context…</div>
-      ) : query.isError ? (
+      ) : null}
+      {query.isError ? (
         <SectionError title="Team context didn’t load." onRetry={() => { void query.refetch(); }} retrying={query.isFetching} compact />
-      ) : stats.length > 0 ? (
+      ) : null}
+      {sosRank !== null || stats.length > 0 ? (
         <div className="player-team-context-grid">
-          {stats.map((stat) => (
-            <div key={stat.label}>
-              <span>{stat.label}</span>
-              <strong>{stat.rank === null ? "—" : `#${stat.rank}`}</strong>
-              <small>{formatDecimal(stat.value, 1)}{stat.suffix ?? " grade"}</small>
+          {sosRank !== null ? (
+            <div>
+              <span>SOS</span>
+              <strong className={rankToneClassName(sosRank)}>#{sosRank}</strong>
             </div>
-          ))}
+          ) : null}
+          {stats.map((stat) => {
+            const caption = `${formatDecimal(stat.value, 1)}${stat.suffix ?? " grade"}`;
+            const isGrade = (stat.suffix ?? " grade") === " grade";
+            return (
+              <div key={stat.label}>
+                <span>{stat.label}</span>
+                <strong className={rankToneClassName(stat.rank)}>{stat.rank === null ? "—" : `#${stat.rank}`}</strong>
+                <small className={isGrade ? "metric-grade" : undefined}>{caption}</small>
+              </div>
+            );
+          })}
         </div>
-      ) : sosRank !== null ? null : (
+      ) : contextRows && !query.isPending && !query.isError ? (
         <SectionError title="No PFN team context found for this matchup." onRetry={() => { void query.refetch(); }} retrying={query.isFetching} compact />
-      )}
+      ) : null}
     </section>
   );
 }
@@ -598,8 +605,20 @@ export function PlayerDetailSheet({
           </div>
         ) : (
           <div className="player-detail-values">
-            <div><span>Week {week} {player.gamePhase === "final" ? "points" : player.gamePhase === "live" ? "live projection" : "projection"}</span><strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong><small>{player.weeklyProjection === null ? "No weekly projection" : player.weeklyRank === null ? "No weekly rank" : `${positionLabel} #${player.weeklyRank}`}</small></div>
-            <div><span>Season-long value</span><strong>{player.seasonValue === null ? "—" : player.seasonValue.toLocaleString()}</strong><small>{player.seasonRank === null ? "No season rank" : `${positionLabel} #${player.seasonRank}`}</small></div>
+            <div>
+              <span>Week {week} {player.gamePhase === "final" ? "points" : player.gamePhase === "live" ? "live projection" : "projection"}</span>
+              <div className="player-detail-value-row">
+                <strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong>
+                <small>{player.weeklyProjection === null ? "No weekly projection" : player.weeklyRank === null ? "No weekly rank" : <>{positionLabel} <span className={rankToneClassName(player.weeklyRank)}>#{player.weeklyRank}</span></>}</small>
+              </div>
+            </div>
+            <div>
+              <span>Season-long value</span>
+              <div className="player-detail-value-row">
+                <strong>{player.seasonValue === null ? "—" : player.seasonValue.toLocaleString()}</strong>
+                <small>{player.seasonRank === null ? "No season rank" : <>{positionLabel} <span className={rankToneClassName(player.seasonRank)}>#{player.seasonRank}</span></>}</small>
+              </div>
+            </div>
           </div>
         )}
         <div className="player-detail-meta">

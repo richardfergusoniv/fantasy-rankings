@@ -368,9 +368,9 @@ export function matchupGrade(table: PfnTable | null, row: PfnRow | undefined, ke
   };
 }
 
-export function MatchupDataModal({ matchup, season, week, onClose }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void }) {
+export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, suspended = false }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; suspended?: boolean }) {
   const dialogRef = useRef<HTMLElement | null>(null);
-  useDialogFocusTrap(dialogRef, onClose);
+  useDialogFocusTrap(dialogRef, onClose, !suspended);
   const tablesQuery = useQuery({
     queryKey: ["pfn-tables"],
     queryFn: () => api.getPfnTables({}),
@@ -486,12 +486,22 @@ export function MatchupDataModal({ matchup, season, week, onClose }: { matchup: 
                 <div className="matchup-stat-groups" aria-label={`${matchup.team} and ${matchup.opponent} PFN offense versus defense matchups`}>
                   <div className="matchup-stat-columns" aria-label={`Left column ${matchup.team}; right column ${matchup.opponent}`}>
                     <div className="matchup-stat-team">
-                      <strong>{matchup.team}</strong>
+                      {onOpenTeam ? (
+                        <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.team} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.team)}>
+                          <span className="matchup-reference-button-label">{matchup.team}</span>
+                          <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+                        </button>
+                      ) : <strong>{matchup.team}</strong>}
                       <span className={`matchup-reference-tag${sosBadgeClass(teamOffSosRank)}`}>OFF SOS: {teamOffSos === null ? "—" : formatDecimal(teamOffSos, 1)}</span>
                       <span className={`matchup-reference-tag${sosBadgeClass(teamDefSosRank)}`}>DEF SOS: {teamDefSos === null ? "—" : formatDecimal(teamDefSos, 1)}</span>
                     </div>
                     <div className="matchup-stat-team">
-                      <strong>{matchup.opponent}</strong>
+                      {onOpenTeam ? (
+                        <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.opponent} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.opponent)}>
+                          <span className="matchup-reference-button-label">{matchup.opponent}</span>
+                          <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+                        </button>
+                      ) : <strong>{matchup.opponent}</strong>}
                       <span className={`matchup-reference-tag${sosBadgeClass(oppOffSosRank)}`}>OFF SOS: {oppOffSos === null ? "—" : formatDecimal(oppOffSos, 1)}</span>
                       <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : formatDecimal(oppDefSos, 1)}</span>
                     </div>
