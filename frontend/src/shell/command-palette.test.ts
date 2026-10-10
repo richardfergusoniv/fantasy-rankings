@@ -35,7 +35,7 @@ describe("filterCommandItems", () => {
       "Matchup",
       "Explorer",
       "League",
-      "Trade",
+      "Tools",
     ]);
   });
 
