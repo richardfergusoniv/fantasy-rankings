@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import type { api, ApiResponse } from "./api";
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { MatchupTag, ModalPortal, SegmentedControl, points, shortLeagueName, useDialogFocusTrap } from "./shared";
+import { TeamRanksBoard } from "./views/team-ranks-board";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
 type League = Dashboard["leagues"][number];
@@ -296,6 +297,11 @@ export function PowerRankings({
           <p className="power-future-picks-average">League avg future picks: <strong>{avgFuturePickValue.toLocaleString(undefined, { maximumFractionDigits: 1 })}</strong></p>
         ) : null}
       </section>
+
+      {/* Preview: NFL team ranks board as optional League home if Tables tab goes away.
+          Fantasy power rows are league teams, not NFL clubs — PFN overall captions do not map cleanly. */}
+      <TeamRanksBoard />
+
       {selectedTeam ? (
         <ModalPortal>
           <div

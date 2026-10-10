@@ -138,13 +138,46 @@ export type StrengthOfScheduleEntryLike = {
   table: Record<string, Partial<Record<SosPosition, { rank: number }>>>;
 };
 
-function matchupTone(entry: StrengthOfScheduleEntryLike | undefined, opponent: string | null, position: string): "" | " sos-soft" | " sos-tough" {
-  if (!entry || !opponent || !(["QB", "RB", "WR", "TE"] as string[]).includes(position)) return "";
+export function positionalSosRank(
+  entry: StrengthOfScheduleEntryLike | undefined,
+  opponent: string | null,
+  position: string,
+): number | null {
+  if (!entry || !opponent || !(["QB", "RB", "WR", "TE"] as string[]).includes(position)) return null;
   const rank = entry.table[opponent]?.[position as SosPosition]?.rank;
-  if (typeof rank !== "number") return "";
+  return typeof rank === "number" ? rank : null;
+}
+
+function matchupTone(entry: StrengthOfScheduleEntryLike | undefined, opponent: string | null, position: string): "" | " sos-soft" | " sos-tough" {
+  const rank = positionalSosRank(entry, opponent, position);
+  if (rank === null) return "";
   if (rank <= 10) return " sos-soft";
   if (rank >= 23) return " sos-tough";
   return "";
+}
+
+/** Compact positional SOS rank chip (e.g. RB · #7) with soft/tough tone. Preview / Look D. */
+export function SosRankChip({
+  entry,
+  opponent,
+  position,
+}: {
+  entry: StrengthOfScheduleEntryLike | undefined;
+  opponent: string | null;
+  position: string;
+}) {
+  const rank = positionalSosRank(entry, opponent, position);
+  if (rank === null) return null;
+  const posLabel = position === "DEF" ? "DST" : position;
+  const tone = matchupTone(entry, opponent, position);
+  return (
+    <span
+      className={`matchup-reference-tag sos-rank-chip${tone}`}
+      aria-label={`${posLabel} strength of schedule rank ${rank}${tone === " sos-soft" ? ", soft matchup" : tone === " sos-tough" ? ", tough matchup" : ""}`}
+    >
+      {posLabel} · #{rank}
+    </span>
+  );
 }
 
 export function MatchupTag({

@@ -18,7 +18,7 @@ import {
   sleeperInjuryTag,
 } from "../dashboard-shared";
 import { formatDecimal } from "../lib/format-number";
-import { MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
+import { MatchupTag, SegmentedControl, SosRankChip, type StrengthOfScheduleEntryLike } from "../shared";
 
 export function MatchupPlayer({
   player,
@@ -86,6 +86,7 @@ export function MatchupPlayer({
           entry={sosEntry}
           onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase }) : undefined}
         />
+        <SosRankChip entry={sosEntry} opponent={player.opponent} position={player.position} />
       </div>
       <button type="button" className={`matchup-number matchup-player-score ${score.label === "PTS" ? "actual" : ""}`} onClick={openPlayer} tabIndex={-1} aria-hidden="true">
         <b>{formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)}</b>

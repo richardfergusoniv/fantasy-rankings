@@ -945,7 +945,6 @@ export function App() {
               <TabsTrigger value="waivers">Waivers</TabsTrigger>
               <TabsTrigger value="charts">Charts</TabsTrigger>
               <TabsTrigger value="comparison">Comparison</TabsTrigger>
-              <TabsTrigger value="strengthOfSchedule" aria-label="Strength of Schedule table">Tables</TabsTrigger>
             </TabsList>
           </Tabs>
         ) : null}

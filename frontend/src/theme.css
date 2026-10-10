@@ -1888,7 +1888,16 @@ button.league-partner-change:active { color: var(--link-active); }
 .power-hero > div > strong { color: var(--text); font-size: var(--type-display); line-height: 1; font-weight: 700; }
 .power-hero p { margin: 0; color: var(--text); font-size: var(--type-body); font-weight: 600; }
 .power-hero small { grid-column: 1 / -1; margin-top: 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.power-chart-section, .power-table-section { margin-top: 18px; }
+.power-chart-section, .power-table-section, .team-ranks-board { margin-top: 18px; }
+.team-ranks-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--hairline); }
+.team-ranks-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; min-height: 40px; padding: 8px 2px; border-bottom: 1px solid var(--hairline); }
+.team-ranks-rank { color: var(--dim); font-size: var(--type-body); font-weight: 700; font-variant-numeric: tabular-nums; }
+.team-ranks-team { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.team-ranks-team > strong { font-size: var(--type-body); font-weight: 600; }
+.team-ranks-record { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.team-ranks-grade { font-size: var(--type-body); font-weight: 700; font-variant-numeric: tabular-nums; }
+.team-ranks-note { margin: 10px 2px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.matchup-meta .sos-rank-chip { flex: 0 0 auto; }
 .power-section-heading { align-items: flex-end; }
 .power-section-heading > span { margin-left: auto; text-align: right; }
 .power-radar { height: 286px; display: grid; place-items: center; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); }

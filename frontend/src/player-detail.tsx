@@ -30,7 +30,7 @@ import {
   projectionComponentsForPlayer,
 } from "./dashboard-shared";
 import { formatDecimal } from "./lib/format-number";
-import { MatchupTag, ModalPortal, SegmentedControl, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { MatchupTag, ModalPortal, SegmentedControl, SosRankChip, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
 
@@ -140,53 +140,46 @@ export function PlayerTeamContext({ player }: { player: PlayerSearchResult }) {
   });
   const tables = query.data?.tables;
   const team = canonicalNflTeam(player.team);
-  const opponent = canonicalNflTeam(player.opponent);
   const findRow = (table: PfnTable | null | undefined, code: string | null) => table?.rows.find((row) => canonicalNflTeam(row.team) === code);
   const offensiveLine = tables?.["offensive-line"] ?? null;
   const offense = tables?.offense ?? null;
   const defense = tables?.defense ?? null;
+  const overall = tables?.["team-overall"] ?? null;
   const teamLine = findRow(offensiveLine, team);
   const teamOffense = findRow(offense, team);
   const teamDefense = findRow(defense, team);
-  const opponentOffense = findRow(offense, opponent);
-  const opponentDefense = findRow(defense, opponent);
+  const teamOverall = findRow(overall, team);
   const stats: PfnContextStat[] = [];
 
   const addStat = (label: string, table: PfnTable | null, row: PfnRow | undefined, key: string, options?: { higherIsBetter?: boolean; suffix?: string; tableRank?: boolean }) => {
     const value = pfnNumber(row, key);
-    if (value === null) return;
+    if (value === null && !(options?.tableRank && row?.rank != null)) return;
     stats.push({
       label,
-      value,
+      value: value ?? row?.rank ?? 0,
       rank: options?.tableRank ? row?.rank ?? null : pfnRankForRow(table, row, key, options?.higherIsBetter ?? true),
       suffix: options?.suffix,
     });
   };
 
-  if (player.position === "QB") {
-    addStat("Pass-block rank", offensiveLine, teamLine, "pass_block");
-    addStat("Team pass grade", offense, teamOffense, "pass");
-    addStat("Opponent pass defense", defense, opponentDefense, "pass");
-  } else if (player.position === "RB") {
-    addStat("Run-block rank", offensiveLine, teamLine, "run_block");
-    addStat("Opponent run defense", defense, opponentDefense, "run");
-  } else if (player.position === "WR" || player.position === "TE") {
-    addStat("Team pass grade", offense, teamOffense, "pass");
-    addStat("Pass-block rank", offensiveLine, teamLine, "pass_block");
-    addStat("Opponent pass defense", defense, opponentDefense, "pass");
-  } else if (player.position === "DEF") {
-    addStat("Defensive grade", defense, teamDefense, "grade", { tableRank: true });
-    addStat("Points-allowed rank", defense, teamDefense, "pts_allowed_per_game", { higherIsBetter: false, suffix: " PPG" });
-    addStat("Opponent offense", offense, opponentOffense, "grade", { tableRank: true });
-  } else if (player.position === "K") {
-    addStat("Team scoring", offense, teamOffense, "ppg", { suffix: " PPG" });
+  // Preview: compact Team section with Off / Def / O-Line / Overall (Look D).
+  addStat("Offense", offense, teamOffense, "grade", { tableRank: true });
+  addStat("Defense", defense, teamDefense, "grade", { tableRank: true });
+  addStat("O-Line", offensiveLine, teamLine, "grade", { tableRank: true });
+  if (teamOverall) {
+    stats.push({
+      label: "Overall",
+      value: pfnNumber(teamOverall, "grade") ?? teamOverall.rank,
+      rank: teamOverall.rank,
+      suffix: typeof teamOverall.record === "string" ? ` grade · ${teamOverall.record}` : " grade",
+    });
   }
 
-  const fetchedAt = offensiveLine?.fetched_at ?? offense?.fetched_at ?? defense?.fetched_at ?? null;
+  const fetchedAt = offensiveLine?.fetched_at ?? offense?.fetched_at ?? defense?.fetched_at ?? overall?.fetched_at ?? null;
   return (
-    <section className="player-team-context" aria-label={`${player.name} team and matchup context`}>
+    <section className="player-team-context" aria-label={`${player.name} team grades`}>
       <div className="section-heading">
-        <h3>Team context</h3>
+        <h3>Team</h3>
         <span>{fetchedAt ? `PFN · ${pfnDateLabel(fetchedAt)}` : "PFN"}</span>
       </div>
       {query.isPending ? (
@@ -554,7 +547,11 @@ export function PlayerDetailSheet({
             <div className="player-detail-title-line">
               <h2 id="player-detail-name">{player.name}</h2>
             </div>
-            <p><span>{positionLabel}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} /></p>
+            <p>
+              <span>{positionLabel}</span>
+              <MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} />
+              <SosRankChip entry={sosEntry} opponent={player.opponent} position={player.position} />
+            </p>
           </div>
           <div className="player-detail-actions">
             {canGoBack ? <button type="button" onClick={navigateBack} aria-label="Previous player">←</button> : null}
