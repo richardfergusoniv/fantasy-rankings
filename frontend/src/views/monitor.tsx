@@ -5,7 +5,6 @@ import type {
   League,
   MatchupSelection,
   PlayerNews,
-  Tab,
 } from "../dashboard-types";
 import { formatProjectionPoints } from "../dashboard-shared";
 import { formatDecimal } from "../lib/format-number";
@@ -28,7 +27,6 @@ export function Monitor({
   dashboard,
   draftData,
   news,
-  onOpenTab,
   onOpenPlayer,
   onOpenMatchup,
 }: {
@@ -36,7 +34,6 @@ export function Monitor({
   dashboard: Dashboard;
   draftData: DraftCenterData | undefined;
   news: PlayerNews | undefined;
-  onOpenTab: (tab: Tab) => void;
   onOpenPlayer: (playerId: string) => void;
   onOpenMatchup: (matchup: MatchupSelection) => void;
 }) {
@@ -103,7 +100,6 @@ export function Monitor({
       <article className="monitor-panel">
         <header className="monitor-panel-header">
           <h2>My matchup</h2>
-          <button type="button" className="monitor-panel-link" onClick={() => onOpenTab("team")}>Open matchup</button>
         </header>
         <p className="monitor-matchup-names">
           <strong>{league.name}</strong>
@@ -126,7 +122,6 @@ export function Monitor({
       <article className="monitor-panel">
         <header className="monitor-panel-header">
           <h2>League</h2>
-          <button type="button" className="monitor-panel-link" onClick={() => onOpenTab("power")}>Open league</button>
         </header>
         {leagueRows.length === 0 ? (
           <p className="monitor-empty">Power rankings load with the league view.</p>
