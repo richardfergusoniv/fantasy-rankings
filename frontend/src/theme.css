@@ -1991,11 +1991,6 @@ button.league-partner-change:active { color: var(--link-active); }
 .chart-count { flex: none; text-align: right; }
 .chart-count strong { display: block; font-size: var(--type-display); line-height: 1; font-weight: 700; }
 .scatter-frame { position: relative; height: 520px; margin-top: 4px; overflow: hidden; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); }
-.quadrant-label { position: absolute; z-index: 1; pointer-events: none; color: var(--dim); font-size: 10px; font-weight: 700; letter-spacing: .02em; }
-.quadrant-label.high-high { top: 8px; right: 10px; }
-.quadrant-label.high-low { bottom: 36px; right: 10px; }
-.quadrant-label.low-high { top: 8px; left: 48px; }
-.quadrant-label.low-low { bottom: 36px; left: 48px; }
 .adaptive-chart-label { fill: var(--text); stroke: var(--surface); stroke-width: 2px; paint-order: stroke fill; font-size: 10px; font-weight: 700; pointer-events: none; }
 .adaptive-chart-label.leader { fill: var(--text); font-size: 10px; font-weight: 700; }
 .adaptive-chart-label.selected-team { fill: var(--text); font-size: 10px; font-weight: 700; }
