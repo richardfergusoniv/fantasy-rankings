@@ -1127,7 +1127,6 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .section-error button:disabled { opacity: .5; }
 .section-error.compact { min-height: 96px; padding: 16px 8px; }
 
-.trade-subnav { width: min(100%, 280px); margin: 0 0 16px; }
 .trade-history-view { min-width: 0; }
 .trade-history-filter { display: grid; width: min(100%, 180px); gap: 5px; margin: 0 0 14px auto; }
 .trade-history-filter > span:first-child { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
@@ -1172,7 +1171,20 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .trade-grade-grid.single-perspective > div { border-right: 1px solid var(--hairline); border-bottom: 0; }
 .trade-grade-grid.single-perspective > div:last-child { border-right: 0; }
 .trade-valuation-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 10px; margin-bottom: 16px; }
-.trade-valuation-toggle { width: min(100%, 248px); flex: none; }
+.trade-valuation-toggle {
+  width: min(100%, 420px);
+  flex: none;
+  min-height: var(--compact-control-height);
+}
+.trade-valuation-toggle.segmented-control,
+.trade-valuation-toggle.segmented-control button {
+  min-height: var(--compact-control-height);
+}
+.trade-valuation-toggle.segmented-control button {
+  padding: 0 8px;
+  font-size: var(--tab-font-size);
+  font-weight: var(--tab-font-weight);
+}
 .trade-pick-note { color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: right; }
 .trade-adjustments { margin: 0 2px 10px; }
 .trade-adjustment-chips { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -2146,7 +2158,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .primary-tabs button svg { width: 20px; height: 20px; }
   .primary-tabs button.active { border-bottom-color: var(--action); color: var(--foreground); }
   .subview-tabs { width: 360px; margin-left: 32px; }
-  .tools-subview-tabs { width: 520px; }
+  .tools-subview-tabs { width: 280px; }
   .explorer-subview-tabs { width: min(720px, 100%); }
   main { padding: 10px 32px 30px; }
   .matchup-score, .lineup-section, .bench-section { max-width: 860px; }

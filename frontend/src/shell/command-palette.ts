@@ -1,10 +1,13 @@
 import type { Tab } from "../dashboard-types";
+import type { TradeMode } from "../dashboard-url";
 
 export type CommandPageItem = {
   kind: "page";
   id: string;
   label: string;
   tab: Tab;
+  /** Optional trade analyzer mode when opening the Trade tab. */
+  tradeMode?: TradeMode;
 };
 
 export type CommandLeagueItem = {
@@ -24,18 +27,19 @@ export type CommandItem = CommandPageItem | CommandLeagueItem | CommandPlayerIte
 
 export const COMMAND_RESULT_LIMIT = 8;
 
-/** Primary nav pages and the tab each opens by default. Draft remains searchable as an Explorer mode. */
+/** Primary nav pages and the tab each opens by default. Draft remains searchable under Trade. */
 export const PRIMARY_COMMAND_PAGES: CommandPageItem[] = [
   { kind: "page", id: "monitor", label: "Monitor", tab: "monitor" },
   { kind: "page", id: "team", label: "Matchup", tab: "team" },
   { kind: "page", id: "players", label: "Explorer", tab: "rankings" },
   { kind: "page", id: "league", label: "League", tab: "power" },
-  { kind: "page", id: "tools", label: "Tools", tab: "trade" },
+  { kind: "page", id: "tools", label: "Trade", tab: "trade" },
 ];
 
 /** Extra destinations reachable from the palette (not primary nav). */
 export const EXTRA_COMMAND_PAGES: CommandPageItem[] = [
   { kind: "page", id: "draft", label: "Draft", tab: "draft" },
+  { kind: "page", id: "trade-history", label: "Trade History", tab: "trade", tradeMode: "history" },
   { kind: "page", id: "charts", label: "Charts", tab: "charts" },
   { kind: "page", id: "comparison", label: "Comparison", tab: "comparison" },
   { kind: "page", id: "strengthOfSchedule", label: "Tables", tab: "strengthOfSchedule" },

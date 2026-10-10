@@ -222,7 +222,7 @@ export function Monitor({
       <article className="monitor-panel">
         <header className="monitor-panel-header">
           <h2>Trade</h2>
-          <button type="button" className="monitor-panel-link" onClick={() => onOpenTab("trade")}>Open analyzer</button>
+          <button type="button" className="monitor-panel-link" onClick={() => onOpenTab("trade")}>Open Trade</button>
         </header>
         {suggestion ? (
           <p className="monitor-trade-teaser">
@@ -232,7 +232,7 @@ export function Monitor({
             <strong className="monitor-trade-delta">+{formatDecimal(suggestion.delta, 1)}</strong>
           </p>
         ) : (
-          <p className="monitor-empty">Open analyzer</p>
+          <p className="monitor-empty">Open Trade</p>
         )}
       </article>
     </section>

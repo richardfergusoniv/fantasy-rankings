@@ -8,11 +8,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { Tab } from "../dashboard-types";
+import type { TradeMode } from "../dashboard-url";
 import {
   COMMAND_PAGES,
   filterCommandItems,
   type CommandItem,
   type CommandLeagueItem,
+  type CommandPageItem,
   type CommandPlayerItem,
 } from "./command-palette";
 
@@ -29,7 +31,7 @@ export function CommandBar({
   onOpenChange: (open: boolean) => void;
   leagues: CommandLeagueItem[];
   players: CommandPlayerItem[];
-  onSelectPage: (tab: Tab) => void;
+  onSelectPage: (tab: Tab, options?: { tradeMode?: TradeMode }) => void;
   onSelectPlayer: (playerId: string) => void;
   onSelectLeague: (leagueId: string) => void;
 }) {
@@ -62,7 +64,7 @@ export function CommandBar({
     onOpenChange(false);
     switch (item.kind) {
       case "page":
-        onSelectPage(item.tab);
+        onSelectPage(item.tab, item.tradeMode ? { tradeMode: item.tradeMode } : undefined);
         break;
       case "player":
         onSelectPlayer(item.id);
