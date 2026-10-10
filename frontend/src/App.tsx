@@ -429,7 +429,7 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
   const pageTabs: Array<[PrimaryPage, string, Tab]> = [
     ["monitor", "Monitor", "monitor"],
     ["team", "Matchup", "team"],
-    ["players", "Players", "rankings"],
+    ["players", "Explorer", "rankings"],
     ["league", "League", "power"],
     ["draft", "Draft", "draft"],
     ["tools", "Tools", "trade"],
@@ -465,8 +465,8 @@ export function App() {
     const titles: Record<Tab, string> = {
       monitor: "Monitor",
       team: "Matchup",
-      rankings: "Rankings",
-      waivers: "Waiver Wire",
+      rankings: "Explorer",
+      waivers: "Explorer",
       power: "League",
       draft: "Draft",
       trade: "Trades",
@@ -916,7 +916,7 @@ export function App() {
           {([
             ["monitor", "Monitor"],
             ["team", "Matchup"],
-            ["players", "Players"],
+            ["players", "Explorer"],
             ["league", "League"],
             ["draft", "Draft"],
             ["tools", "Tools"],
@@ -934,9 +934,9 @@ export function App() {
         </nav>
         {primaryPage === "players" ? (
           <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="subview-tabs">
-            <TabsList aria-label="Player views">
+            <TabsList aria-label="Explorer views">
               <TabsTrigger value="rankings">Rankings</TabsTrigger>
-              <TabsTrigger value="waivers">Waiver Wire</TabsTrigger>
+              <TabsTrigger value="waivers">Waivers</TabsTrigger>
             </TabsList>
           </Tabs>
         ) : null}

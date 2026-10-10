@@ -32,7 +32,7 @@ describe("filterCommandItems", () => {
     expect(results.map((item) => item.label)).toEqual([
       "Monitor",
       "Matchup",
-      "Players",
+      "Explorer",
       "League",
       "Draft",
       "Tools",
