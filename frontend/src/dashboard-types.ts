@@ -12,8 +12,7 @@ export type Tab =
   | "draft"
   | "trade"
   | "charts"
-  | "comparison"
-  | "strengthOfSchedule";
+  | "comparison";
 export type PlayerLink = {
   /** URL `playerId` — drives Selected chip and shell inspector open. */
   linkedPlayerId: string | null;

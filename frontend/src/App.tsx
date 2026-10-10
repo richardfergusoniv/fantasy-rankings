@@ -93,7 +93,7 @@ function NavigationIcon({ page }: { page: PrimaryPage }) {
 function primaryPageForTab(tab: Tab): PrimaryPage {
   if (tab === "monitor") return "monitor";
   if (tab === "team") return "team";
-  if (tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison" || tab === "strengthOfSchedule") return "players";
+  if (tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison") return "players";
   if (tab === "power") return "league";
   if (tab === "trade" || tab === "draft") return "tools";
   const unreachable: never = tab;
@@ -477,7 +477,6 @@ export function App() {
       trade: "Trade",
       charts: "Explorer",
       comparison: "Explorer",
-      strengthOfSchedule: "Explorer",
     };
     document.title = `${titles[tab]} · Fantasy Rankings`;
   }, [tab]);
@@ -514,7 +513,8 @@ export function App() {
     retry: false,
     refetchInterval: pollWhileSectionBuilding,
   });
-  const playerSectionActive = tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "charts" || tab === "comparison" || tab === "strengthOfSchedule";
+  // Matchup player cards need fantasy SOS for Team context ranks.
+  const playerSectionActive = tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "charts" || tab === "comparison";
   const playersQuery = useQuery({
     queryKey: ["dashboard-section", "players"],
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "players" }), 8_000)),
@@ -817,7 +817,6 @@ export function App() {
     || (tab === "trade" && (playersQuery.isPending || teamQuery.isPending))
     || (tab === "power" && (leagueQuery.isPending || teamQuery.isPending || playersQuery.isPending))
     || ((tab === "charts" || tab === "comparison") && (analyticsQuery.isPending || playersQuery.isPending))
-    || (tab === "strengthOfSchedule" && playersQuery.isPending)
   );
 
   // A signed-in user's first-ever dashboard builds in the background
@@ -945,7 +944,6 @@ export function App() {
               <TabsTrigger value="waivers">Waivers</TabsTrigger>
               <TabsTrigger value="charts">Charts</TabsTrigger>
               <TabsTrigger value="comparison">Comparison</TabsTrigger>
-              <TabsTrigger value="strengthOfSchedule" aria-label="Strength of Schedule table">Tables</TabsTrigger>
             </TabsList>
           </Tabs>
         ) : null}
@@ -971,7 +969,6 @@ export function App() {
             trade: "Trade",
             charts: "Fantasy charts",
             comparison: "Player comparison",
-            strengthOfSchedule: "Strength of schedule",
           } satisfies Record<Tab, string>)[tab]}</h1>
           {currentSectionLoading ? <SectionLoading label={`Loading ${primaryPage === "tools" ? "Trade" : primaryPage}…`} />
             : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
@@ -1004,9 +1001,6 @@ export function App() {
                 chartDataset={dashboardUrl.state.chartDataset ?? "advanced"}
                 onChartDatasetChange={publishChartDataset}
                 onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
-                sosLoadFailed={playersQuery.isError}
-                onRetrySos={() => { void playersQuery.refetch(); }}
-                sosRetrying={playersQuery.isFetching}
                 linkedPlayerId={selectedPlayerId}
                 onOpenLinkedPlayer={openLinkedPlayer}
               />

@@ -28,12 +28,22 @@ import {
   movementPercent,
   pfnDateLabel,
   pfnNumber,
+  pfnRankForRow,
   positionsForFilter,
   sleeperInjuryTag,
 } from "../dashboard-shared";
 import type { RankingHorizon, RankingPosition } from "../dashboard-url";
 import { formatDecimal, formatPercent } from "../lib/format-number";
-import { MatchupTag, ModalPortal, SegmentedControl, useDialogFocusTrap } from "../shared";
+import {
+  SOS_POSITIONS,
+  fantasySosRanksForTeam,
+  MatchupTag,
+  ModalPortal,
+  SegmentedControl,
+  sosToneFromRank,
+  useDialogFocusTrap,
+  type StrengthOfScheduleEntryLike,
+} from "../shared";
 import { WindowVirtualList } from "../virtual-list";
 
 export type RankingsDensity = "comfortable" | "compact";
@@ -124,6 +134,7 @@ export function TeamDataModal({
   record,
   situational,
   situationalSource,
+  sosEntry,
   loading,
   loadError,
   onRetry,
@@ -138,6 +149,7 @@ export function TeamDataModal({
   record: NflTeamRecord | null;
   situational: TeamSituationalRow | null;
   situationalSource: Pick<TeamSituational, "fetchedAt" | "sourceUrl"> | null;
+  sosEntry?: StrengthOfScheduleEntryLike;
   loading: boolean;
   loadError: boolean;
   onRetry: () => void;
@@ -156,6 +168,15 @@ export function TeamDataModal({
   const lineRank = lineRow?.rank ?? null;
   const defenseRank = defenseRow?.rank ?? null;
   const offenseRank = offenseRow?.rank ?? null;
+  const passBlock = pfnNumber(lineRow, "pass_block");
+  const runBlock = pfnNumber(lineRow, "run_block");
+  const penPerGame = pfnNumber(lineRow, "pen_per_game");
+  const passBlockRank = pfnRankForRow(offensiveLine, lineRow, "pass_block");
+  const runBlockRank = pfnRankForRow(offensiveLine, lineRow, "run_block");
+  const overallGrade = pfnNumber(overallRow, "grade");
+  const overallRank = overallRow?.rank ?? null;
+  const specialTeams = pfnNumber(overallRow, "special_teams");
+  const specialTeamsRank = pfnRankForRow(teamOverall, overallRow, "special_teams");
   const epaPerPlay = pfnNumber(offenseRow, "epa_per_play");
   const successPct = pfnNumber(offenseRow, "success_pct");
   const yardsPerPlay = pfnNumber(offenseRow, "yds_per_play");
@@ -166,6 +187,8 @@ export function TeamDataModal({
   const recordLabel = typeof pfnRecord === "string" && /^\d+-\d+(?:-\d+)?$/.test(pfnRecord)
     ? pfnRecord
     : record ? `${record.wins}-${record.losses}${record.ties ? `-${record.ties}` : ""}` : "—";
+  const sosRanks = fantasySosRanksForTeam(sosEntry, teamCode ?? selection.team);
+  const hasSosRanks = SOS_POSITIONS.some((position) => sosRanks[position] !== null);
 
   return (
     <ModalPortal>
@@ -174,7 +197,7 @@ export function TeamDataModal({
           <header className="matchup-data-header">
             <div>
               <h2 id="team-card-title">{selection.team} team card</h2>
-              <span>{teamName}{offensiveLine?.fetched_at || defense?.fetched_at || offense?.fetched_at ? ` · PFN ${pfnDateLabel(offensiveLine?.fetched_at ?? defense?.fetched_at ?? offense?.fetched_at ?? "")}` : ""}</span>
+              <span>{teamName}{offensiveLine?.fetched_at || defense?.fetched_at || offense?.fetched_at || teamOverall?.fetched_at ? ` · PFN ${pfnDateLabel(offensiveLine?.fetched_at ?? defense?.fetched_at ?? offense?.fetched_at ?? teamOverall?.fetched_at ?? "")}` : ""}</span>
             </div>
             <button type="button" onClick={onClose} aria-label="Close team data">×</button>
           </header>
@@ -233,27 +256,82 @@ export function TeamDataModal({
             </div>
           </section>
 
+          <section className="team-card-stat-section" aria-labelledby="team-pfn-grades-title">
+            <div className="team-card-section-heading">
+              <h3 id="team-pfn-grades-title">PFN</h3>
+              <span>Grades · ranks</span>
+            </div>
+            <div className="team-card-metrics">
+              <div>
+                <span>Overall</span>
+                <strong>{loading ? "…" : overallRank === null ? "—" : `#${overallRank}`}</strong>
+                <small>{overallGrade === null ? "PFN overall" : `${formatDecimal(overallGrade, 1)} grade`}</small>
+              </div>
+              <div>
+                <span>Special teams</span>
+                <strong>{loading ? "…" : specialTeamsRank === null ? "—" : `#${specialTeamsRank}`}</strong>
+                <small>{specialTeams === null ? "PFN overall" : `${formatDecimal(specialTeams, 1)} grade`}</small>
+              </div>
+              <div>
+                <span>O-line</span>
+                <strong>{loading ? "…" : lineRank === null ? "—" : `#${lineRank}`}</strong>
+                <small>{lineGrade === null ? "PFN rank" : `${formatDecimal(lineGrade, 1)} grade`}</small>
+              </div>
+              <div>
+                <span>Pass block</span>
+                <strong>{loading ? "…" : passBlockRank === null ? "—" : `#${passBlockRank}`}</strong>
+                <small>{passBlock === null ? "PFN O-line" : `${formatDecimal(passBlock, 1)} grade`}</small>
+              </div>
+              <div>
+                <span>Run block</span>
+                <strong>{loading ? "…" : runBlockRank === null ? "—" : `#${runBlockRank}`}</strong>
+                <small>{runBlock === null ? "PFN O-line" : `${formatDecimal(runBlock, 1)} grade`}</small>
+              </div>
+              <div>
+                <span>Pen/G</span>
+                <strong>{loading ? "…" : penPerGame === null ? "—" : formatDecimal(penPerGame, 1)}</strong>
+                <small>PFN O-line</small>
+              </div>
+              <div>
+                <span>Defense</span>
+                <strong>{loading ? "…" : defenseRank === null ? "—" : `#${defenseRank}`}</strong>
+                <small>{defenseGrade === null ? "PFN rank" : `${formatDecimal(defenseGrade, 1)} grade`}</small>
+              </div>
+              <div>
+                <span>Offense</span>
+                <strong>{loading ? "…" : offenseRank === null ? "—" : `#${offenseRank}`}</strong>
+                <small>{offenseGrade === null ? "PFN rank" : `${formatDecimal(offenseGrade, 1)} grade`}</small>
+              </div>
+            </div>
+          </section>
+
+          {hasSosRanks ? (
+            <section className="team-card-stat-section" aria-labelledby="team-sos-title">
+              <div className="team-card-section-heading">
+                <h3 id="team-sos-title">SOS</h3>
+                <span>Fantasy · vs position</span>
+              </div>
+              <div className="team-card-sos-grid" role="list" aria-label={`${selection.team} fantasy strength of schedule by position`}>
+                {SOS_POSITIONS.map((position) => {
+                  const rank = sosRanks[position];
+                  const tone = sosToneFromRank(rank);
+                  return (
+                    <div key={position} role="listitem" className={`team-card-sos-cell${tone}`}>
+                      <span>{position}</span>
+                      <strong>{rank === null ? "—" : `#${rank}`}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
           <section className="team-card-stat-section" aria-labelledby="team-advanced-stats-title">
             <div className="team-card-section-heading">
               <h3 id="team-advanced-stats-title">Advanced</h3>
               <span>Offensive efficiency</span>
             </div>
             <div className="team-card-metrics team-card-advanced-metrics">
-              <div>
-                <span>PFN O-line rank</span>
-                <strong>{loading ? "…" : lineRank === null ? "—" : `#${lineRank}`}</strong>
-                <small>{lineGrade === null ? "PFN rank" : `${formatDecimal(lineGrade, 1)} grade`}</small>
-              </div>
-              <div>
-                <span>PFN defense rank</span>
-                <strong>{loading ? "…" : defenseRank === null ? "—" : `#${defenseRank}`}</strong>
-                <small>{defenseGrade === null ? "PFN rank" : `${formatDecimal(defenseGrade, 1)} grade`}</small>
-              </div>
-              <div>
-                <span>Offensive efficiency</span>
-                <strong>{loading ? "…" : offenseRank === null ? "—" : `#${offenseRank}`}</strong>
-                <small>{offenseGrade === null ? "PFN rank" : `${formatDecimal(offenseGrade, 1)} PFN grade`}</small>
-              </div>
               <div>
                 <span>Red-zone TD rate</span>
                 <strong>{situational ? formatPercent(situational.redZoneTdPct, 0) : "—"}</strong>
@@ -839,6 +917,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
           record={teamRecordByTeam.get(canonicalNflTeam(selectedTeam.team) ?? selectedTeam.team) ?? null}
           situational={teamSituationalByTeam.get(canonicalNflTeam(selectedTeam.team) ?? selectedTeam.team) ?? null}
           situationalSource={teamSituational ? { fetchedAt: teamSituational.fetchedAt, sourceUrl: teamSituational.sourceUrl } : null}
+          sosEntry={sosEntry}
           loading={pfnTablesQuery.isPending}
           loadError={pfnTablesQuery.isError}
           onRetry={() => { void pfnTablesQuery.refetch(); }}

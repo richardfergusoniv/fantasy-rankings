@@ -8,7 +8,7 @@ import type {
 import type { ChartDataset, RankingHorizon, RankingPosition } from "../dashboard-url";
 
 /** Explorer modes that share the Explorer primary page (excludes draft — that is ?tab=draft). */
-export type ExplorerMode = "rankings" | "waivers" | "charts" | "comparison" | "strengthOfSchedule";
+export type ExplorerMode = "rankings" | "waivers" | "charts" | "comparison";
 
 export function isExplorerMode(tab: string): tab is ExplorerMode {
   return (
@@ -16,14 +16,12 @@ export function isExplorerMode(tab: string): tab is ExplorerMode {
     || tab === "waivers"
     || tab === "charts"
     || tab === "comparison"
-    || tab === "strengthOfSchedule"
   );
 }
 
 const LazyPlayerPool = lazy(() => import("./player-pool").then((module) => ({ default: module.PlayerPool })));
 const LazyChartsTool = lazy(() => import("../AnalyticsViews").then((module) => ({ default: module.ChartsTool })));
 const LazyComparisonTool = lazy(() => import("../AnalyticsViews").then((module) => ({ default: module.ComparisonTool })));
-const LazyTablesTool = lazy(() => import("../AnalyticsViews").then((module) => ({ default: module.TablesTool })));
 
 function ExplorerFallback({ label }: { label: string }) {
   return (
@@ -45,9 +43,6 @@ export function Explorer({
   chartDataset,
   onChartDatasetChange,
   onOpenPlayer,
-  sosLoadFailed,
-  onRetrySos,
-  sosRetrying,
   linkedPlayerId,
   onOpenLinkedPlayer,
 }: {
@@ -66,9 +61,6 @@ export function Explorer({
   chartDataset: ChartDataset;
   onChartDatasetChange: (dataset: ChartDataset) => void;
   onOpenPlayer: (playerId: string) => void;
-  sosLoadFailed: boolean;
-  onRetrySos: () => void;
-  sosRetrying: boolean;
 } & PlayerLink): ReactNode {
   switch (mode) {
     case "rankings":
@@ -111,18 +103,6 @@ export function Explorer({
             initialKey={0}
             onOpenPlayer={onOpenPlayer}
             onOpenMatchup={onOpenMatchup}
-          />
-        </Suspense>
-      );
-    case "strengthOfSchedule":
-      return (
-        <Suspense fallback={<ExplorerFallback label="Loading tables…" />}>
-          <LazyTablesTool
-            dashboard={dashboard}
-            league={league}
-            sosLoadFailed={sosLoadFailed}
-            onRetrySos={onRetrySos}
-            sosRetrying={sosRetrying}
           />
         </Suspense>
       );
