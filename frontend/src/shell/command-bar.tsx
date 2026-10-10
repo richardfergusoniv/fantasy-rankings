@@ -14,7 +14,6 @@ import {
   filterCommandItems,
   type CommandItem,
   type CommandLeagueItem,
-  type CommandPageItem,
   type CommandPlayerItem,
 } from "./command-palette";
 
