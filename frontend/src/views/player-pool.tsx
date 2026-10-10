@@ -175,6 +175,9 @@ export function TeamDataModal({
   const rankLabel = (rank: number | null, loadingValue: boolean) => (
     loadingValue ? <strong>…</strong> : <strong className={rankToneClassName(rank)}>{rank === null ? "—" : `#${rank}`}</strong>
   );
+  const gradeCaption = (value: number | null, fallback: string) => (
+    <small className={value === null ? undefined : "metric-grade"}>{value === null ? fallback : `${formatDecimal(value, 1)} grade`}</small>
+  );
 
   return (
     <ModalPortal>
@@ -251,27 +254,27 @@ export function TeamDataModal({
               <div>
                 <span>Overall</span>
                 {rankLabel(overallRank, loading)}
-                <small>{overallGrade === null ? "PFN overall" : `${formatDecimal(overallGrade, 1)} grade`}</small>
+                {gradeCaption(overallGrade, "PFN overall")}
               </div>
               <div>
                 <span>Special teams</span>
                 {rankLabel(specialTeamsRank, loading)}
-                <small>{specialTeams === null ? "PFN overall" : `${formatDecimal(specialTeams, 1)} grade`}</small>
+                {gradeCaption(specialTeams, "PFN overall")}
               </div>
               <div>
                 <span>O-line</span>
                 {rankLabel(lineRank, loading)}
-                <small>{lineGrade === null ? "PFN rank" : `${formatDecimal(lineGrade, 1)} grade`}</small>
+                {gradeCaption(lineGrade, "PFN rank")}
               </div>
               <div>
                 <span>Pass block</span>
                 {rankLabel(passBlockRank, loading)}
-                <small>{passBlock === null ? "PFN O-line" : `${formatDecimal(passBlock, 1)} grade`}</small>
+                {gradeCaption(passBlock, "PFN O-line")}
               </div>
               <div>
                 <span>Run block</span>
                 {rankLabel(runBlockRank, loading)}
-                <small>{runBlock === null ? "PFN O-line" : `${formatDecimal(runBlock, 1)} grade`}</small>
+                {gradeCaption(runBlock, "PFN O-line")}
               </div>
               <div>
                 <span>Pen/G</span>
@@ -281,12 +284,12 @@ export function TeamDataModal({
               <div>
                 <span>Defense</span>
                 {rankLabel(defenseRank, loading)}
-                <small>{defenseGrade === null ? "PFN rank" : `${formatDecimal(defenseGrade, 1)} grade`}</small>
+                {gradeCaption(defenseGrade, "PFN rank")}
               </div>
               <div>
                 <span>Offense</span>
                 {rankLabel(offenseRank, loading)}
-                <small>{offenseGrade === null ? "PFN rank" : `${formatDecimal(offenseGrade, 1)} grade`}</small>
+                {gradeCaption(offenseGrade, "PFN rank")}
               </div>
               {SOS_POSITIONS.map((position) => {
                 const rank = sosRanks[position];
@@ -295,7 +298,6 @@ export function TeamDataModal({
                   <div key={`${position}-sos`}>
                     <span>{position} SOS</span>
                     <strong className={rankToneClassName(rank)}>#{rank}</strong>
-                    <small>Fantasy vs {position}</small>
                   </div>
                 );
               })}

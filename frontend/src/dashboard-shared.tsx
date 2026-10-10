@@ -487,14 +487,20 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, s
                   <div className="matchup-stat-columns" aria-label={`Left column ${matchup.team}; right column ${matchup.opponent}`}>
                     <div className="matchup-stat-team">
                       {onOpenTeam ? (
-                        <button type="button" className="matchup-team-open" aria-label={`View ${matchup.team} team data`} onClick={() => onOpenTeam(matchup.team)}>{matchup.team}</button>
+                        <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.team} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.team)}>
+                          <span className="matchup-reference-button-label">{matchup.team}</span>
+                          <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+                        </button>
                       ) : <strong>{matchup.team}</strong>}
                       <span className={`matchup-reference-tag${sosBadgeClass(teamOffSosRank)}`}>OFF SOS: {teamOffSos === null ? "—" : formatDecimal(teamOffSos, 1)}</span>
                       <span className={`matchup-reference-tag${sosBadgeClass(teamDefSosRank)}`}>DEF SOS: {teamDefSos === null ? "—" : formatDecimal(teamDefSos, 1)}</span>
                     </div>
                     <div className="matchup-stat-team">
                       {onOpenTeam ? (
-                        <button type="button" className="matchup-team-open" aria-label={`View ${matchup.opponent} team data`} onClick={() => onOpenTeam(matchup.opponent)}>{matchup.opponent}</button>
+                        <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.opponent} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.opponent)}>
+                          <span className="matchup-reference-button-label">{matchup.opponent}</span>
+                          <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+                        </button>
                       ) : <strong>{matchup.opponent}</strong>}
                       <span className={`matchup-reference-tag${sosBadgeClass(oppOffSosRank)}`}>OFF SOS: {oppOffSos === null ? "—" : formatDecimal(oppOffSos, 1)}</span>
                       <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : formatDecimal(oppDefSos, 1)}</span>

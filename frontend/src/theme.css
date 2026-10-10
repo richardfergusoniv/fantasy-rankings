@@ -1021,8 +1021,12 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-tab-source { margin: 8px 2px 0; }
 .player-advanced-panel .player-team-context { margin-top: 0; }
 .player-detail-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 18px; overflow: hidden; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--hairline); }
-.player-detail-values > div { min-width: 0; padding: 12px; background: var(--surface); }
+.player-detail-values > div { min-width: 0; padding: 8px 12px; background: var(--surface); }
 .player-detail-values span, .player-detail-values small { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.player-detail-value-row { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; }
+.player-detail-values .player-detail-value-row strong { margin: 0; }
+.player-detail-values .player-detail-value-row small,
+.player-detail-values .player-detail-value-row small span { display: inline; }
 .player-detail-values strong { display: block; margin: 5px 0 3px; font-size: var(--type-section); line-height: 1; font-weight: 700; letter-spacing: -.02em; }
 .rank-tone.sos-soft { color: var(--stat-strength-readable); }
 .rank-tone.sos-tough { color: var(--stat-weakness-readable); }
@@ -1052,6 +1056,8 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-team-context-grid span { min-width: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; line-height: 1.25; }
 .player-team-context-grid strong { font-size: var(--type-section); font-variant-numeric: tabular-nums; font-weight: 700; line-height: 1; }
 .player-team-context-grid small { grid-column: 1 / -1; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.player-team-context-grid small.metric-grade,
+.team-card-metrics small.metric-grade { color: var(--warning); }
 .player-team-context-state { padding: 14px 2px; border-block: 1px solid var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .dst-breakdown { margin-top: 16px; }
 .dst-breakdown .section-heading { position: static; min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -2573,9 +2579,10 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   border: 0;
   background: transparent;
   color: var(--text);
-  font: inherit;
-  font-size: var(--type-body);
+  font-family: inherit;
+  font-size: var(--type-caption);
   font-weight: 700;
+  line-height: 1;
   cursor: pointer;
 }
 .matchup-stat-team:last-child .matchup-team-open { justify-content: flex-end; }

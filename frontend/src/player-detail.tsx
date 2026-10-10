@@ -190,7 +190,6 @@ export function PlayerTeamContext({
   }
 
   const fetchedAt = offensiveLine?.fetched_at ?? offense?.fetched_at ?? defense?.fetched_at ?? null;
-  const positionLabel = player.position === "DEF" ? "DST" : player.position;
   const contextRows = sosRank === null && stats.length === 0;
   return (
     <section className="player-team-context" aria-label={`${player.name} team and matchup context`}>
@@ -210,16 +209,19 @@ export function PlayerTeamContext({
             <div>
               <span>SOS</span>
               <strong className={rankToneClassName(sosRank)}>#{sosRank}</strong>
-              <small>Fantasy vs {positionLabel}</small>
             </div>
           ) : null}
-          {stats.map((stat) => (
-            <div key={stat.label}>
-              <span>{stat.label}</span>
-              <strong className={rankToneClassName(stat.rank)}>{stat.rank === null ? "—" : `#${stat.rank}`}</strong>
-              <small>{formatDecimal(stat.value, 1)}{stat.suffix ?? " grade"}</small>
-            </div>
-          ))}
+          {stats.map((stat) => {
+            const caption = `${formatDecimal(stat.value, 1)}${stat.suffix ?? " grade"}`;
+            const isGrade = (stat.suffix ?? " grade") === " grade";
+            return (
+              <div key={stat.label}>
+                <span>{stat.label}</span>
+                <strong className={rankToneClassName(stat.rank)}>{stat.rank === null ? "—" : `#${stat.rank}`}</strong>
+                <small className={isGrade ? "metric-grade" : undefined}>{caption}</small>
+              </div>
+            );
+          })}
         </div>
       ) : contextRows && !query.isPending && !query.isError ? (
         <SectionError title="No PFN team context found for this matchup." onRetry={() => { void query.refetch(); }} retrying={query.isFetching} compact />
@@ -603,8 +605,20 @@ export function PlayerDetailSheet({
           </div>
         ) : (
           <div className="player-detail-values">
-            <div><span>Week {week} {player.gamePhase === "final" ? "points" : player.gamePhase === "live" ? "live projection" : "projection"}</span><strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong><small>{player.weeklyProjection === null ? "No weekly projection" : player.weeklyRank === null ? "No weekly rank" : <>{positionLabel} <span className={rankToneClassName(player.weeklyRank)}>#{player.weeklyRank}</span></>}</small></div>
-            <div><span>Season-long value</span><strong>{player.seasonValue === null ? "—" : player.seasonValue.toLocaleString()}</strong><small>{player.seasonRank === null ? "No season rank" : <>{positionLabel} <span className={rankToneClassName(player.seasonRank)}>#{player.seasonRank}</span></>}</small></div>
+            <div>
+              <span>Week {week} {player.gamePhase === "final" ? "points" : player.gamePhase === "live" ? "live projection" : "projection"}</span>
+              <div className="player-detail-value-row">
+                <strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong>
+                <small>{player.weeklyProjection === null ? "No weekly projection" : player.weeklyRank === null ? "No weekly rank" : <>{positionLabel} <span className={rankToneClassName(player.weeklyRank)}>#{player.weeklyRank}</span></>}</small>
+              </div>
+            </div>
+            <div>
+              <span>Season-long value</span>
+              <div className="player-detail-value-row">
+                <strong>{player.seasonValue === null ? "—" : player.seasonValue.toLocaleString()}</strong>
+                <small>{player.seasonRank === null ? "No season rank" : <>{positionLabel} <span className={rankToneClassName(player.seasonRank)}>#{player.seasonRank}</span></>}</small>
+              </div>
+            </div>
           </div>
         )}
         <div className="player-detail-meta">
