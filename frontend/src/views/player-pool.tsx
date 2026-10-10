@@ -46,25 +46,8 @@ import {
 } from "../shared";
 import { WindowVirtualList } from "../virtual-list";
 
-export type RankingsDensity = "comfortable" | "compact";
-
-const RANKINGS_DENSITY_KEY = "fantasy-rankings-density";
-
-export function readRankingsDensity(): RankingsDensity {
-  try {
-    return localStorage.getItem(RANKINGS_DENSITY_KEY) === "compact" ? "compact" : "comfortable";
-  } catch {
-    return "comfortable";
-  }
-}
-
-export function writeRankingsDensity(density: RankingsDensity): void {
-  try {
-    localStorage.setItem(RANKINGS_DENSITY_KEY, density);
-  } catch {
-    // Ignore quota / private-mode failures; in-memory density still applies.
-  }
-}
+/** Compact rankings/waivers row height (matches former density=compact). */
+export const RANKINGS_ROW_HEIGHT = 56;
 
 export function offensiveLineTone(rank: number | null): "" | " oline-strong" | " oline-weak" {
   if (rank === null || !Number.isInteger(rank) || rank < 1 || rank > 32) return "";
@@ -384,9 +367,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
   const effectiveHorizon = (horizonOptions as readonly string[]).includes(rankingMode) ? rankingMode : "week";
   const [visibleRowCount, setVisibleRowCount] = useState(120);
   const [selectedTeam, setSelectedTeam] = useState<TeamCardSelection | null>(null);
-  const [density, setDensity] = useState<RankingsDensity>(() => readRankingsDensity());
   const queryClient = useQueryClient();
-  const listRowEstimate = density === "compact" ? 56 : 80;
   const isSeasonLong = effectiveHorizon !== "week";
   const pfnTablesQuery = useQuery({
     queryKey: ["pfn-tables"],
@@ -685,7 +666,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
   };
 
   return (
-    <section className="rankings-view" data-density={density}>
+    <section className="rankings-view">
       <div className="rankings-toolbar">
         <label className="search-field">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
@@ -726,26 +707,13 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
             ) : null}
           </div>
         ) : null}
-        <SegmentedControl
-          className="rankings-density-toggle"
-          value={density}
-          onChange={(value) => {
-            setDensity(value);
-            writeRankingsDensity(value);
-          }}
-          label="List density"
-          options={[
-            { value: "comfortable", label: "Comfortable" },
-            { value: "compact", label: "Compact" },
-          ]}
-        />
       </div>
 
       {hasSearch ? (
         <>
           <div className="player-search-head" aria-hidden="true"><span>Player</span><span>Week</span><span>Value</span></div>
           <div className="player-search-list" aria-label="Matching players">
-            <WindowVirtualList key={density} count={searchRows.length} estimateSize={listRowEstimate} getKey={(index) => searchRows[index]?.key ?? index}>
+            <WindowVirtualList count={searchRows.length} estimateSize={RANKINGS_ROW_HEIGHT} getKey={(index) => searchRows[index]?.key ?? index}>
             {(index) => {
               const row = searchRows[index];
               if (!row) return null;
@@ -797,7 +765,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
                 : <span>{rows.length} players</span>}
           </div>
           <div className="ranking-list">
-            <WindowVirtualList key={density} count={visibleRows.length} estimateSize={listRowEstimate} getKey={(index) => visibleRows[index]?.key ?? index}>
+            <WindowVirtualList count={visibleRows.length} estimateSize={RANKINGS_ROW_HEIGHT} getKey={(index) => visibleRows[index]?.key ?? index}>
             {(index) => {
               const row = visibleRows[index];
               if (!row) return null;

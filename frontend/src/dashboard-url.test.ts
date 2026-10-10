@@ -79,6 +79,11 @@ describe("dashboard URL state", () => {
     expect(parseDashboardSearch("?tab=nope&pos=ZZ&horizon=year&dpos=coach&room=lounge&chart=pie&tmode=future&player=%20%20")).toEqual(emptyDashboardUrlState());
   });
 
+  it("ignores a legacy rankings density query param", () => {
+    expect(parseDashboardSearch("?tab=rankings&density=comfortable")).toEqual(state({ tab: "rankings" }));
+    expect(parseDashboardSearch("?tab=waivers&density=compact")).toEqual(state({ tab: "waivers" }));
+  });
+
   it("pushes history for tab changes and the player sheet, and replaces filter edits", () => {
     const rankings = state({ tab: "rankings" });
     expect(dashboardUrlHistoryMode(emptyDashboardUrlState(), rankings)).toBe("push");
