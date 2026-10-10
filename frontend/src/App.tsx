@@ -514,7 +514,8 @@ export function App() {
     retry: false,
     refetchInterval: pollWhileSectionBuilding,
   });
-  const playerSectionActive = tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "charts" || tab === "comparison" || tab === "strengthOfSchedule";
+  // Preview: also load players on Matchup so positional SOS chips can render.
+  const playerSectionActive = tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "charts" || tab === "comparison" || tab === "strengthOfSchedule";
   const playersQuery = useQuery({
     queryKey: ["dashboard-section", "players"],
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "players" }), 8_000)),
