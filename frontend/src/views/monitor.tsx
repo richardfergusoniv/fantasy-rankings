@@ -46,7 +46,19 @@ export function Monitor({
 }) {
   const [openRosterId, setOpenRosterId] = useState<number | null>(null);
   const opponent = league.opponentTeam;
-  const opponentRosterId = weeklyOpponentRosterId(opponent?.name, league.tradeTeams);
+  const userTeam = league.powerRankingsWeek.find((team) => team.isUser)
+    ?? league.tradeTeams.find((team) => team.isUser)
+    ?? null;
+  const userTeamName = userTeam?.teamName ?? "My Team";
+  const userRosterId = userTeam?.rosterId ?? null;
+  const opponentRosterId = weeklyOpponentRosterId(opponent?.name, league.tradeTeams)
+    ?? weeklyOpponentRosterId(opponent?.name, league.powerRankingsWeek);
+  const opponentTeamName = opponent?.name
+    ?? (opponentRosterId === null
+      ? null
+      : league.powerRankingsWeek.find((team) => team.rosterId === opponentRosterId)?.teamName
+        ?? league.tradeTeams.find((team) => team.rosterId === opponentRosterId)?.teamName
+        ?? null);
   const leagueRows = league.powerRankingsWeek.slice(0, LEAGUE_PREVIEW_LIMIT);
   const trendingUp = (draftData?.trending ?? []).slice(0, MOVER_LIMIT);
   const trendingDown = (draftData?.trendingDrops ?? []).slice(0, MOVER_LIMIT);
@@ -118,9 +130,33 @@ export function Monitor({
           <h2>My matchup</h2>
         </header>
         <p className="monitor-matchup-names">
-          <strong>{league.name}</strong>
+          {userRosterId !== null ? (
+            <button
+              type="button"
+              className="monitor-matchup-team-open"
+              aria-label={`Open ${userTeamName} league team`}
+              aria-haspopup="dialog"
+              onClick={() => setOpenRosterId(userRosterId)}
+            >
+              {userTeamName}
+            </button>
+          ) : (
+            <strong>{userTeamName}</strong>
+          )}
           <span>vs</span>
-          <strong>{opponent?.name ?? "No opponent"}</strong>
+          {opponentRosterId !== null && opponentTeamName ? (
+            <button
+              type="button"
+              className="monitor-matchup-team-open"
+              aria-label={`Open ${opponentTeamName} league team`}
+              aria-haspopup="dialog"
+              onClick={() => setOpenRosterId(opponentRosterId)}
+            >
+              {opponentTeamName}
+            </button>
+          ) : (
+            <strong>{opponentTeamName ?? "No opponent"}</strong>
+          )}
         </p>
         <p className="monitor-week-label">Week {dashboard.week}</p>
         <div className="monitor-matchup-scores" aria-label="Head-to-head score">

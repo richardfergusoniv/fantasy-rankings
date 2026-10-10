@@ -116,12 +116,14 @@ export function Lineup({
   league,
   dashboard,
   onOpenMatchup,
+  onOpenLeagueTeam,
   linkedPlayerId,
   onOpenLinkedPlayer,
 }: {
   league: League;
   dashboard: Dashboard;
   onOpenMatchup: (matchup: MatchupSelection) => void;
+  onOpenLeagueTeam?: (rosterId: number) => void;
 } & PlayerLink) {
   const [mode, setMode] = useState<"current" | "optimized">("current");
   const openPlayer = (player: RosterPlayer) => {
@@ -139,7 +141,19 @@ export function Lineup({
     optimized.starters.map((starter) => starter.playerId),
     league.starters.map((starter) => starter.playerId),
   );
-  const userTeamName = league.tradeTeams.find((team) => team.isUser)?.teamName ?? "My Team";
+  const userTeam = league.powerRankingsWeek.find((team) => team.isUser)
+    ?? league.tradeTeams.find((team) => team.isUser)
+    ?? null;
+  const userTeamName = userTeam?.teamName ?? "My Team";
+  const userRosterId = userTeam?.rosterId ?? null;
+  const opponentRosterId = (() => {
+    if (!opponent?.name) return null;
+    const fromTrade = league.tradeTeams.filter((team) => !team.isUser && team.teamName === opponent.name);
+    if (fromTrade.length === 1) return fromTrade[0]?.rosterId ?? null;
+    const fromPower = league.powerRankingsWeek.filter((team) => !team.isUser && team.teamName === opponent.name);
+    return fromPower.length === 1 ? fromPower[0]?.rosterId ?? null : null;
+  })();
+  const opponentTeamName = opponent?.name ?? "OPPONENT";
   const starterCount = Math.max(mine.length, theirs?.length ?? 0);
   const rows = Array.from({ length: starterCount }, (_, index) => ({
     mine: mine[index],
@@ -172,7 +186,19 @@ export function Lineup({
 
       <Card className="matchup-score gap-0 py-0 shadow-sm" aria-label="Head-to-head score">
         <div className="score-team mine">
-          <span>{userTeamName}</span>
+          {userRosterId !== null && onOpenLeagueTeam ? (
+            <button
+              type="button"
+              className="matchup-score-team-open"
+              aria-label={`Open ${userTeamName} league team`}
+              aria-haspopup="dialog"
+              onClick={() => onOpenLeagueTeam(userRosterId)}
+            >
+              {userTeamName}
+            </button>
+          ) : (
+            <span>{userTeamName}</span>
+          )}
           <div className="score-line">
             <strong>{formatProjectionPoints(league.teamActual)}</strong>
             <small className={myTotalProjectionClassName}>
@@ -183,7 +209,19 @@ export function Lineup({
         </div>
         <div className="versus">VS</div>
         <div className="score-team theirs">
-          <span>{opponent?.name ?? "OPPONENT"}</span>
+          {opponentRosterId !== null && onOpenLeagueTeam ? (
+            <button
+              type="button"
+              className="matchup-score-team-open"
+              aria-label={`Open ${opponentTeamName} league team`}
+              aria-haspopup="dialog"
+              onClick={() => onOpenLeagueTeam(opponentRosterId)}
+            >
+              {opponentTeamName}
+            </button>
+          ) : (
+            <span>{opponentTeamName}</span>
+          )}
           <div className="score-line"><strong>{formatProjectionPoints(opponent?.teamActual ?? null)}</strong><small>{forecastPoints(opponent?.teamProjection ?? null, opponent?.starters ?? [])}<span className="sr-only"> projected points</span></small></div>
         </div>
       </Card>

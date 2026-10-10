@@ -1,0 +1,38 @@
+name: Team situational stats
+
+# Scrapes Sportskeeda third-down / red-zone TD rates into source_cache key
+# team-situational-stats-2026 via /api/cron/jobs?job=refresh-team-situational.
+#
+# Uses plain UTC cron slots (every 6 hours) with no Pacific-hour guard so the
+# job actually fires. Manual dispatches always run.
+
+on:
+  schedule:
+    - cron: "7 2,8,14,20 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: team-situational
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Refresh team situational stats
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-ten.vercel.app' }}
+        run: |
+          curl -s --max-time 90 -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/cron/jobs?job=refresh-team-situational" | tee /tmp/situational.json
+          python3 - <<'EOF'
+          import json
+          result = json.load(open('/tmp/situational.json'))
+          assert result.get('ok') is True, f"team-situational not ok: {result}"
+          print(f"team-situational verified: {result}")
+          EOF

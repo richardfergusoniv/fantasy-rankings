@@ -24,7 +24,14 @@ import type {
 } from "./dashboard-types";
 import { formatDecimal, formatPercent } from "./lib/format-number";
 import { ModalPortal, useDialogFocusTrap } from "./shared";
-import { UNDO_DURATION_MS } from "./undo";
+import {
+  TRADE_REMOVE_TOAST_ID,
+  UNDO_DURATION_MS,
+  popTradeRemoval,
+  pushTradeRemoval,
+  tradeRemovalsToastMessage,
+  type TradePlayerRemoval,
+} from "./undo";
 
 import { supabase } from "./supabase";
 
@@ -47,6 +54,76 @@ export function showUndoToast(message: string, onUndo: () => void) {
     duration: UNDO_DURATION_MS,
     action: { label: "Undo", onClick: onUndo },
   });
+}
+
+type TradeRemoveUndoStack = {
+  entries: TradePlayerRemoval[];
+  suppressDismissClear: boolean;
+  restore: ((entry: TradePlayerRemoval) => void) | null;
+};
+
+const tradeRemoveUndoStack: TradeRemoveUndoStack = {
+  entries: [],
+  suppressDismissClear: false,
+  restore: null,
+};
+
+function presentTradeRemoveUndoToast() {
+  const count = tradeRemoveUndoStack.entries.length;
+  const onRestore = tradeRemoveUndoStack.restore;
+  if (count <= 0 || !onRestore) {
+    toast.dismiss(TRADE_REMOVE_TOAST_ID);
+    return;
+  }
+  toast(tradeRemovalsToastMessage(count), {
+    id: TRADE_REMOVE_TOAST_ID,
+    duration: UNDO_DURATION_MS,
+    action: {
+      label: "Undo",
+      onClick: () => {
+        const { next, popped } = popTradeRemoval(tradeRemoveUndoStack.entries);
+        tradeRemoveUndoStack.entries = next;
+        if (popped) onRestore(popped);
+        if (tradeRemoveUndoStack.entries.length === 0) {
+          tradeRemoveUndoStack.restore = null;
+          toast.dismiss(TRADE_REMOVE_TOAST_ID);
+          return;
+        }
+        // Action clicks dismiss the toast; keep one card with remaining undos.
+        tradeRemoveUndoStack.suppressDismissClear = true;
+        presentTradeRemoveUndoToast();
+      },
+    },
+    onDismiss: () => {
+      if (tradeRemoveUndoStack.suppressDismissClear) {
+        tradeRemoveUndoStack.suppressDismissClear = false;
+        return;
+      }
+      tradeRemoveUndoStack.entries = [];
+      tradeRemoveUndoStack.restore = null;
+    },
+    onAutoClose: () => {
+      tradeRemoveUndoStack.entries = [];
+      tradeRemoveUndoStack.restore = null;
+    },
+  });
+}
+
+/** One merged toast for successive market-trade player removals. */
+export function showTradePlayerRemoveUndoToast(
+  entry: TradePlayerRemoval,
+  onRestore: (entry: TradePlayerRemoval) => void,
+) {
+  tradeRemoveUndoStack.restore = onRestore;
+  tradeRemoveUndoStack.entries = pushTradeRemoval(tradeRemoveUndoStack.entries, entry);
+  presentTradeRemoveUndoToast();
+}
+
+export function clearTradePlayerRemoveUndoToast() {
+  tradeRemoveUndoStack.suppressDismissClear = true;
+  tradeRemoveUndoStack.entries = [];
+  tradeRemoveUndoStack.restore = null;
+  toast.dismiss(TRADE_REMOVE_TOAST_ID);
 }
 
 export const basePositionOrder: BasePosition[] = ["QB", "RB", "WR", "TE", "K", "DEF"];

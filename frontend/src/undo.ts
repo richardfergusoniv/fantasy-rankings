@@ -1,4 +1,5 @@
 export const UNDO_DURATION_MS = 5_000;
+export const TRADE_REMOVE_TOAST_ID = "trade-player-remove-undo";
 
 export type TradeSelection = {
   giveIds: string[];
@@ -9,6 +10,32 @@ export type RemovedTradePlayer = {
   id: string;
   index: number;
 };
+
+export type TradePlayerRemoval = {
+  side: "give" | "get";
+  removed: RemovedTradePlayer;
+};
+
+export function tradeRemovalsToastMessage(count: number): string {
+  if (count <= 0) return "";
+  if (count === 1) return "1 player removed";
+  return `${count} players removed`;
+}
+
+export function pushTradeRemoval(
+  stack: readonly TradePlayerRemoval[],
+  entry: TradePlayerRemoval,
+): TradePlayerRemoval[] {
+  return [...stack, entry];
+}
+
+export function popTradeRemoval(
+  stack: readonly TradePlayerRemoval[],
+): { next: TradePlayerRemoval[]; popped: TradePlayerRemoval | null } {
+  if (stack.length === 0) return { next: [], popped: null };
+  const next = stack.slice(0, -1);
+  return { next, popped: stack[stack.length - 1] ?? null };
+}
 
 export type DraftTakenState = {
   manualDraftedIds: string[];

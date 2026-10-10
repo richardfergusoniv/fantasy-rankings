@@ -17,6 +17,8 @@ import type { TradeMode } from "../dashboard-url";
 import {
   DesignationBadge,
   comparablePlayerName,
+  clearTradePlayerRemoveUndoToast,
+  showTradePlayerRemoveUndoToast,
   showUndoToast,
   signOutForPersonalData,
   sleeperInjuryTag,
@@ -946,12 +948,17 @@ export function TradeCalculator({
     setGiveIds([]);
     setGetIds([]);
     setIsResultOpen(false);
+    clearTradePlayerRemoveUndoToast();
   }, [league.id, league.tradeTeams]);
 
   useEffect(() => {
     setGiveIds((ids) => ids.filter((id) => assetById.has(id)));
     setGetIds((ids) => ids.filter((id) => assetById.has(id)));
   }, [assetById]);
+
+  useEffect(() => () => {
+    clearTradePlayerRemoveUndoToast();
+  }, []);
 
   const addAsset = (id: string, side: "give" | "get") => {
     if (selectedIds.has(id)) return;
@@ -961,6 +968,7 @@ export function TradeCalculator({
   const clearSide = (side: "give" | "get") => {
     const { next, removedIds } = clearTradeSide({ giveIds, getIds }, side);
     if (removedIds.length === 0) return;
+    clearTradePlayerRemoveUndoToast();
     setGiveIds(next.giveIds);
     setGetIds(next.getIds);
     showUndoToast(side === "give" ? "Cleared the players you’d give" : "Cleared the players you’d get", () => {
@@ -973,10 +981,9 @@ export function TradeCalculator({
     if (!removed) return;
     if (side === "give") setGiveIds(next);
     else setGetIds(next);
-    const name = assetById.get(id)?.name ?? "Player";
-    showUndoToast(`Removed ${name}`, () => {
-      const restore = (current: string[]) => restoreTradePlayer(current, removed);
-      if (side === "give") setGiveIds(restore);
+    showTradePlayerRemoveUndoToast({ side, removed }, (entry) => {
+      const restore = (current: string[]) => restoreTradePlayer(current, entry.removed);
+      if (entry.side === "give") setGiveIds(restore);
       else setGetIds(restore);
     });
   };
