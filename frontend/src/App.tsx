@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
 import type {
@@ -411,10 +410,10 @@ function SectionLoading({ label }: { label: string }) {
   return (
     <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label={label}>
       <span>{label}</span>
-      <Skeleton className="h-24 w-full" />
-      <Skeleton className="h-4 w-4/5" />
-      <Skeleton className="h-4 w-3/5" />
-      <Skeleton className="h-4 w-2/5" />
+      <div className="loading-shimmer loading-score" aria-hidden="true" />
+      <div className="loading-shimmer loading-line wide" aria-hidden="true" />
+      <div className="loading-shimmer loading-line" aria-hidden="true" />
+      <div className="loading-shimmer loading-line" aria-hidden="true" />
     </section>
   );
 }

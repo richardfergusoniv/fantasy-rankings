@@ -122,36 +122,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return (
-    <>
-      <SignedInBar
-        username={connection.sleeperUsername}
-        onSignOut={() => {
-          localStorage.removeItem("fantasy-rankings-dashboard-v7");
-          if (!supabase) return;
-          void supabase.auth.signOut();
-        }}
-      />
-      {children}
-    </>
-  );
-}
-
-function SignedInBar({ username, onSignOut }: { username: string; onSignOut: () => void }) {
-  return (
-    <div className="flex items-center justify-between gap-3 bg-foreground px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-sm text-background">
-      <span>Sleeper: {username}</span>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background"
-        onClick={onSignOut}
-      >
-        Sign out
-      </Button>
-    </div>
-  );
+  return <>{children}</>;
 }
 
 function AuthScreen() {
