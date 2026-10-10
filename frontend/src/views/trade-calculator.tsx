@@ -15,6 +15,7 @@ import type {
   ValuationMode,
   ValueHistorySeries,
 } from "../dashboard-types";
+import type { TradeMode } from "../dashboard-url";
 import {
   DesignationBadge,
   comparablePlayerName,
@@ -1085,13 +1086,23 @@ export function TradeHistoryView({ dashboard, league, onOpenPlayer }: { dashboar
   );
 }
 
-export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard: Dashboard; league: League; onOpenPlayer: (playerId: string) => void }) {
-  const [tradeView, setTradeView] = useState<"analyze" | "history">("analyze");
+export function TradeCalculator({
+  dashboard,
+  league,
+  tradeMode,
+  onTradeModeChange,
+  onOpenPlayer,
+}: {
+  dashboard: Dashboard;
+  league: League;
+  tradeMode: TradeMode;
+  onTradeModeChange: (mode: TradeMode) => void;
+  onOpenPlayer: (playerId: string) => void;
+}) {
   const [giveIds, setGiveIds] = useState<string[]>([]);
   const [getIds, setGetIds] = useState<string[]>([]);
   useUnsavedLeaveWarning(giveIds.length + getIds.length > 0);
   const [isResultOpen, setIsResultOpen] = useState(false);
-  const [valuationMode, setValuationMode] = useState<ValuationMode>("league");
   const userTeam = league.tradeTeams.find((team) => team.isUser) ?? league.tradeTeams[0];
   const [theirRosterId, setTheirRosterId] = useState<number | null>(null);
   const assets = useMemo(() => dashboard.seasonLongRankings.filter((row) => row.formatKey === league.seasonLongFormat.key).sort((a, b) => a.overallRank - b.overallRank), [dashboard.seasonLongRankings, league.seasonLongFormat.key]);
@@ -1163,20 +1174,24 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
   };
   return (
     <section className="trade-view">
-      <h2 className="sr-only">Trade values</h2>
-      <SegmentedControl
-        value={tradeView}
-        options={[{ value: "analyze", label: "Analyze" }, { value: "history", label: "History" }]}
-        onChange={setTradeView}
-        label="Trade view"
-        className="trade-subnav"
-      />
-      {tradeView === "history" ? <TradeHistoryView dashboard={dashboard} league={league} onOpenPlayer={onOpenPlayer} /> : <>
+      <h2 className="sr-only">Trade</h2>
       <div className="trade-valuation-controls">
-        <SegmentedControl value={valuationMode} options={[{ value: "league", label: "League-adjusted" }, { value: "market", label: "Market" }]} onChange={setValuationMode} label="Trade valuation mode" className="trade-valuation-toggle" />
+        <SegmentedControl
+          value={tradeMode}
+          options={[
+            { value: "league", label: "League-adjusted" },
+            { value: "market", label: "Market" },
+            { value: "history", label: "History" },
+          ]}
+          onChange={onTradeModeChange}
+          label="Trade mode"
+          className="trade-valuation-toggle"
+        />
       </div>
 
-      {valuationMode === "league" ? (
+      {tradeMode === "history" ? (
+        <TradeHistoryView dashboard={dashboard} league={league} onOpenPlayer={onOpenPlayer} />
+      ) : tradeMode === "league" ? (
         mine ? (
           <LeagueAdjustedTrade
             mine={mine}
@@ -1213,7 +1228,6 @@ export function TradeCalculator({ dashboard, league, onOpenPlayer }: { dashboard
           ) : null}
         </>
       )}
-      </>}
     </section>
   );
 }

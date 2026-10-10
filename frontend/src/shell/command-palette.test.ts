@@ -35,13 +35,16 @@ describe("filterCommandItems", () => {
       "Matchup",
       "Explorer",
       "League",
-      "Tools",
+      "Trade",
     ]);
   });
 
-  it("finds Draft and Charts when searching explorer modes", () => {
+  it("finds Draft, Trade History, and Charts from the palette", () => {
     expect(filterCommandItems("draft", { pages: COMMAND_PAGES, leagues, players })).toEqual([
       expect.objectContaining({ kind: "page", label: "Draft", tab: "draft" }),
+    ]);
+    expect(filterCommandItems("history", { pages: COMMAND_PAGES, leagues, players })).toEqual([
+      expect.objectContaining({ kind: "page", label: "Trade History", tab: "trade", tradeMode: "history" }),
     ]);
     expect(filterCommandItems("chart", { pages: COMMAND_PAGES, leagues, players })).toEqual([
       expect.objectContaining({ kind: "page", label: "Charts", tab: "charts" }),

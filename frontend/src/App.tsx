@@ -33,7 +33,8 @@ import {
   signOutForPersonalData,
 } from "./dashboard-shared";
 import { formatDecimal } from "./lib/format-number";
-import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition } from "./dashboard-url";
+import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
+import { effectiveTradeMode } from "./dashboard-url";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
@@ -92,9 +93,9 @@ function NavigationIcon({ page }: { page: PrimaryPage }) {
 function primaryPageForTab(tab: Tab): PrimaryPage {
   if (tab === "monitor") return "monitor";
   if (tab === "team") return "team";
-  if (tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison" || tab === "strengthOfSchedule" || tab === "draft") return "players";
+  if (tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison" || tab === "strengthOfSchedule") return "players";
   if (tab === "power") return "league";
-  if (tab === "trade") return "tools";
+  if (tab === "trade" || tab === "draft") return "tools";
   const unreachable: never = tab;
   return unreachable;
 }
@@ -425,7 +426,7 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
     ["team", "Matchup", "team"],
     ["players", "Explorer", "rankings"],
     ["league", "League", "power"],
-    ["tools", "Tools", "trade"],
+    ["tools", "Trade", "trade"],
   ];
   return (
     <div className="app-shell progressive-shell">
@@ -452,6 +453,17 @@ export function App() {
   const setTab = useCallback((next: Tab) => {
     dashboardUrl.commit({ tab: next, playerId: null });
   }, [dashboardUrl.commit]);
+  const openCommandPage = useCallback((next: Tab, options?: { tradeMode?: TradeMode }) => {
+    if (next === "trade") {
+      dashboardUrl.commit({
+        tab: "trade",
+        playerId: null,
+        tradeMode: options?.tradeMode && options.tradeMode !== "league" ? options.tradeMode : null,
+      });
+      return;
+    }
+    dashboardUrl.commit({ tab: next, playerId: null });
+  }, [dashboardUrl.commit]);
   const appliedAppPlayerId = useRef<string | null>(null);
   const inspectorDockViewport = useInspectorDockViewport();
   useEffect(() => {
@@ -461,8 +473,8 @@ export function App() {
       rankings: "Explorer",
       waivers: "Explorer",
       power: "League",
-      draft: "Explorer",
-      trade: "Trades",
+      draft: "Trade",
+      trade: "Trade",
       charts: "Explorer",
       comparison: "Explorer",
       strengthOfSchedule: "Explorer",
@@ -661,6 +673,9 @@ export function App() {
   }, [dashboardUrl.commit]);
   const publishChartDataset = useCallback((dataset: ChartDataset) => {
     dashboardUrl.commit({ chartDataset: dataset === "advanced" ? null : dataset });
+  }, [dashboardUrl.commit]);
+  const publishTradeMode = useCallback((mode: TradeMode) => {
+    dashboardUrl.commit({ tradeMode: mode === "league" ? null : mode });
   }, [dashboardUrl.commit]);
 
   const primaryPage = primaryPageForTab(tab);
@@ -910,7 +925,7 @@ export function App() {
             ["team", "Matchup"],
             ["players", "Explorer"],
             ["league", "League"],
-            ["tools", "Tools"],
+            ["tools", "Trade"],
           ] as const).map(([page, label]) => (
             <button
               key={page}
@@ -931,6 +946,13 @@ export function App() {
               <TabsTrigger value="charts">Charts</TabsTrigger>
               <TabsTrigger value="comparison">Comparison</TabsTrigger>
               <TabsTrigger value="strengthOfSchedule" aria-label="Strength of Schedule table">Tables</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        ) : null}
+        {primaryPage === "tools" ? (
+          <Tabs value={tab === "draft" ? "draft" : "trade"} onValueChange={(value) => setTab(value as Tab)} className="subview-tabs tools-subview-tabs">
+            <TabsList aria-label="Trade views">
+              <TabsTrigger value="trade">Trade</TabsTrigger>
               <TabsTrigger value="draft">Draft</TabsTrigger>
             </TabsList>
           </Tabs>
@@ -945,20 +967,30 @@ export function App() {
             rankings: "Player rankings",
             waivers: "Waiver wire",
             power: "League power rankings",
-            draft: "Draft room",
-            trade: "Trade values",
+            draft: "Draft assistant",
+            trade: "Trade",
             charts: "Fantasy charts",
             comparison: "Player comparison",
             strengthOfSchedule: "Strength of schedule",
           } satisfies Record<Tab, string>)[tab]}</h1>
-          {currentSectionLoading ? <SectionLoading label={`Loading ${primaryPage}…`} />
+          {currentSectionLoading ? <SectionLoading label={`Loading ${primaryPage === "tools" ? "Trade" : primaryPage}…`} />
             : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
             : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
             : tab === "monitor" ? <Monitor league={league} dashboard={activeDashboard} draftData={draftQuery.data} news={newsQuery.data} onOpenTab={setTab} onOpenPlayer={openTickerPlayer} onOpenMatchup={setSelectedMatchup} />
             : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onOpenMatchup={setSelectedMatchup} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
             : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} dashboard={activeDashboard} onPlayerIntent={prefetchDashboardPlayer} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} playerCardOpen={playerHistory.isOpen} selectedPlayerId={selectedPlayerId} /></Suspense>
             : tab === "draft" ? <Suspense fallback={<SectionLoading label="Loading draft…" />}><LazyDraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} loading={draftQuery.isPending} onRefresh={() => draftRefresh.mutate()} refreshing={draftRefresh.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} /></Suspense>
-            : tab === "trade" ? <Suspense fallback={<SectionLoading label="Loading trade calculator…" />}><LazyTradeCalculator dashboard={activeDashboard} league={league} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} /></Suspense>
+            : tab === "trade" ? (
+              <Suspense fallback={<SectionLoading label="Loading trade…" />}>
+                <LazyTradeCalculator
+                  dashboard={activeDashboard}
+                  league={league}
+                  tradeMode={effectiveTradeMode(dashboardUrl.state)}
+                  onTradeModeChange={publishTradeMode}
+                  onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
+                />
+              </Suspense>
+            )
             : isExplorerMode(tab) ? (
               <Explorer
                 mode={tab}
@@ -990,7 +1022,7 @@ export function App() {
         onOpenChange={setCommandBarOpen}
         leagues={commandLeagues}
         players={commandPlayers}
-        onSelectPage={setTab}
+        onSelectPage={openCommandPage}
         onSelectPlayer={openTickerPlayer}
         onSelectLeague={chooseLeague}
       />
