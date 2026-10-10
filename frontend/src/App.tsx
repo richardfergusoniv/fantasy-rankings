@@ -39,6 +39,9 @@ import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
 import { useDashboardUrl } from "./use-dashboard-url";
+import { CommandBar } from "./shell/command-bar";
+import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "./shell/command-palette";
+import { ShortcutsDialog } from "./shell/shortcuts-dialog";
 import { Lineup } from "./views/lineup";
 import { Monitor } from "./views/monitor";
 
@@ -473,6 +476,8 @@ export function App() {
   const playerHistory = usePlayerCardHistory();
   const [tickerNews, setTickerNews] = useState<PlayerNewsItem | null>(null);
   const [selectedMatchup, setSelectedMatchup] = useState<MatchupSelection | null>(null);
+  const [commandBarOpen, setCommandBarOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
   const [browserViewerId, setBrowserViewerId] = useState<string | null | undefined>(undefined);
   const [browserDashboard, setBrowserDashboard] = useState<Dashboard | undefined>(undefined);
@@ -755,6 +760,39 @@ export function App() {
     dashboardUrl.commit({ tab: "rankings", playerId });
   }
 
+  useEffect(() => {
+    function onGlobalKeyDown(event: KeyboardEvent) {
+      if (isTypingTarget(event.target)) return;
+      if ((event.key === "k" || event.key === "K") && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        setShortcutsOpen(false);
+        setCommandBarOpen((open) => !open);
+        return;
+      }
+      if (event.key === "?" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        setCommandBarOpen(false);
+        setShortcutsOpen(true);
+      }
+    }
+    window.addEventListener("keydown", onGlobalKeyDown);
+    return () => window.removeEventListener("keydown", onGlobalKeyDown);
+  }, []);
+
+  const commandLeagues = useMemo<CommandLeagueItem[]>(
+    () => (dashboard?.leagues ?? []).map((item) => ({ kind: "league", id: item.id, label: shortLeagueName(item.name) })),
+    [dashboard?.leagues],
+  );
+  const commandPlayers = useMemo<CommandPlayerItem[]>(
+    () => ((leagueDashboard ?? dashboard)?.rankings ?? []).map((row) => ({
+      kind: "player" as const,
+      id: row.playerId,
+      label: row.name,
+      position: row.position,
+    })),
+    [dashboard, leagueDashboard],
+  );
+
   const isRefreshing = tab === "draft" ? draftRefresh.isPending : refresh.isPending;
   const refreshCurrentView = () => {
     if (tab === "draft") draftRefresh.mutate();
@@ -926,6 +964,16 @@ export function App() {
       {playerHistory.current && (!localSheetTab || forceAppSheet) ? <PlayerDetailSheet player={playerHistory.current} week={dashboard.week} leagueId={league.id} formatKey={league.seasonLongFormat.key} mode="details" analytics={dashboard.analytics} sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)} newsItems={tickerPlayerNews} newsLoading={newsLoading} newsError={newsError} onRetryNews={retryNews} onOpenMatchup={setSelectedMatchup} onBack={playerHistory.back} canGoBack={playerHistory.canGoBack} onClose={() => { playerHistory.close(); closeLinkedPlayer(); }} /> : null}
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
       {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} /> : null}
+      <CommandBar
+        open={commandBarOpen}
+        onOpenChange={setCommandBarOpen}
+        leagues={commandLeagues}
+        players={commandPlayers}
+        onSelectPage={setTab}
+        onSelectPlayer={openTickerPlayer}
+        onSelectLeague={chooseLeague}
+      />
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 }

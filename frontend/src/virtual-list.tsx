@@ -88,7 +88,6 @@ export function WindowVirtualList({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key !== "Tab" || event.altKey || event.metaKey || event.ctrlKey) return;
     const parent = parentRef.current;
     const active = document.activeElement;
     if (!parent || !(active instanceof HTMLElement) || !parent.contains(active)) return;
@@ -96,6 +95,18 @@ export function WindowVirtualList({
     if (!row || !parent.contains(row)) return;
     const index = Number(row.dataset.index);
     if (!Number.isInteger(index)) return;
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (event.altKey || event.metaKey || event.ctrlKey) return;
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= count) return;
+      event.preventDefault();
+      focusIndex(nextIndex, "start");
+      return;
+    }
+
+    if (event.key !== "Tab" || event.altKey || event.metaKey || event.ctrlKey) return;
     const focusable = focusablesIn(row);
     const position = focusable.indexOf(active);
     if (position < 0) return;

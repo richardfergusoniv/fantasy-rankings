@@ -811,8 +811,23 @@ export function PlayerPool({ dashboard, league, availableOnly, news, newsLoading
           </div>
           {rows.length === 0 ? (
             <div className="empty-inline empty-stack">
-              <strong>{isSeasonLong && !availableOnly ? "No rankings for this format." : availableOnly ? "No available players match this filter." : "No rankings match this filter."}</strong>
-              <span>{isSeasonLong && !availableOnly ? "Choose another league or try Current week." : "Choose another position or league."}</span>
+              {!isSeasonLong && leagueRankings.length === 0 ? (
+                <>
+                  <strong>{`Week ${dashboard.week} rankings are not in yet`}</strong>
+                  <button
+                    type="button"
+                    className="empty-action-button"
+                    onClick={() => publishRankingFilters({ horizon: "ros" })}
+                  >
+                    Show season ranks
+                  </button>
+                </>
+              ) : (
+                <>
+                  <strong>{isSeasonLong && !availableOnly ? "No rankings for this format." : availableOnly ? "No available players match this filter." : "No rankings match this filter."}</strong>
+                  <span>{isSeasonLong && !availableOnly ? "Choose another league or try Current week." : "Choose another position or league."}</span>
+                </>
+              )}
             </div>
           ) : null}
         </>
