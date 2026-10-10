@@ -74,6 +74,8 @@ export type SleeperPlayer = {
   position?: string | null;
   injury_status?: string | null;
   injury_notes?: string | null;
+  /** Sleeper news stamp — epoch seconds/ms or ISO string when present. */
+  news_updated?: string | number | null;
   status?: string | null;
   years_exp?: number | null;
 };

@@ -755,12 +755,12 @@ export function PlayerDetailSheet({
             <SectionError title="News didn’t load." onRetry={onRetryNews} compact />
           ) : newsLoading ? (
             <div className="empty-inline compact">Loading news…</div>
-          ) : newsItems.length > 0 ? newsItems.slice(0, 4).map((item) => (
+          ) : newsItems.length > 0 ? newsItems.slice(0, 8).map((item) => (
             <article className="player-news-item" key={item.id}>
               <div><span className={`news-severity ${item.newsType}`}>{item.newsType === "headline" ? "League news" : item.newsType === "waiver" ? "Waiver signal" : "Roster update"}</span><time>{item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent"}</time></div>
               <strong>{item.change}</strong>
               <p>{item.roleContext}</p>
-              <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceLabel}<span className="sr-only"> (opens in a new tab)</span></a>
+              <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel}<span className="sr-only"> (opens in a new tab)</span></a>
             </article>
           )) : <div className="empty-inline compact">No recent news for this player.</div>}
         </section>

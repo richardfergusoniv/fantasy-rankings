@@ -183,6 +183,40 @@ export const playerNewsItems = pgTable(
   (table) => [index("player_news_items_run_id_idx").on(table.runId)],
 );
 
+/**
+ * User-agnostic player news (one row per source URL / post id).
+ * Cron + X ingest write here; clients filter by roster for the ticker.
+ */
+export const sharedPlayerNews = pgTable(
+  "shared_player_news",
+  {
+    id: text("id").primaryKey(),
+    playerId: text("player_id").notNull(),
+    player: text("player").notNull(),
+    team: text("team").notNull(),
+    change: text("change").notNull(),
+    newsType: text("news_type", { enum: ["roster", "waiver", "headline"] })
+      .notNull()
+      .default("roster"),
+    roleContext: text("role_context").notNull().default(""),
+    source: text("source", { enum: ["sleeper", "x", "nflverse"] }).notNull(),
+    sourceLabel: text("source_label").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    author: text("author"),
+    externalId: text("external_id"),
+    publishedAt: timestamp("published_at", { withTimezone: true, mode: "date" }),
+    signal: text("signal"),
+    score: integer("score"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("shared_player_news_source_url_uidx").on(table.sourceUrl),
+    uniqueIndex("shared_player_news_source_external_uidx").on(table.source, table.externalId),
+    index("shared_player_news_player_id_idx").on(table.playerId),
+    index("shared_player_news_published_at_idx").on(table.publishedAt),
+  ],
+);
+
 /** Links a Supabase Auth user to their Sleeper account (one connection per user). */
 export const sleeperConnections = pgTable(
   "sleeper_connections",

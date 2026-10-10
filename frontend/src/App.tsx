@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
+import { rosterNewsForTicker } from "./roster-news";
 import type {
   Dashboard,
   DraftCenterData,
@@ -168,9 +169,11 @@ function compactTickerCount(value: number): string {
   return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value).toUpperCase();
 }
 
-function TickerStrip({ data, news, onPlayer, onNews }: {
+function TickerStrip({ data, news, rosterPlayerIds, onPlayer, onNews }: {
   data: DraftCenterData | undefined;
   news: PlayerNews | undefined;
+  /** Player ids on the signed-in user's roster in the selected league. */
+  rosterPlayerIds: Set<string>;
   onPlayer: (playerId: string) => void;
   onNews: (item: PlayerNewsItem) => void;
 }) {
@@ -194,21 +197,15 @@ function TickerStrip({ data, news, onPlayer, onNews }: {
       playerId: trend.playerId,
     }));
 
-    const seenHeadlines = new Set<string>();
-    const headlineItems: TickerItem[] = (news?.runs ?? []).flatMap((run) => run.items).flatMap((item) => {
-      // The top strip is league-wide: roster-scoped entries remain available in player detail views.
-      if (item.newsType === "roster" || seenHeadlines.has(item.change)) return [];
-      seenHeadlines.add(item.change);
-      return [{
-        key: `news:${item.id}`,
-        source: item.newsType === "headline" && item.playerId === "league" ? "BREAKING" : "NEWS",
-        label: tickerNewsLabel(item),
-        quote: null,
-        move: null,
-        tone: "neutral" as const,
-        newsItem: item,
-      }];
-    }).slice(0, 5);
+    const headlineItems: TickerItem[] = rosterNewsForTicker(news, rosterPlayerIds).slice(0, 5).map((item) => ({
+      key: `news:${item.id}`,
+      source: item.newsType === "headline" && item.playerId === "league" ? "BREAKING" : "NEWS",
+      label: tickerNewsLabel(item),
+      quote: null,
+      move: null,
+      tone: "neutral" as const,
+      newsItem: item,
+    }));
 
     if (trendItems.length > 0 || trendDropItems.length > 0) return [...trendItems, ...trendDropItems, ...headlineItems];
 
@@ -227,7 +224,7 @@ function TickerStrip({ data, news, onPlayer, onNews }: {
         ...(row.playerId ? { playerId: row.playerId } : {}),
       }));
     return [...adpFallback, ...headlineItems];
-  }, [data, news]);
+  }, [data, news, rosterPlayerIds]);
 
   const visibleItems = items.length > 0 ? items : [{ key: "waiting", source: "NFL", label: "Awaiting the next update", quote: null, move: null, tone: "neutral" as const }];
   const repeatedItems = visibleItems.length > 1 ? [...visibleItems, ...visibleItems] : visibleItems;
@@ -880,6 +877,10 @@ export function App() {
 
   const activeDashboard = leagueDashboard ?? dashboard;
   const selectedPlayerId = dashboardUrl.state.playerId;
+  const selectedLeagueRosterIds = useMemo(
+    () => new Set([...league.starters, ...league.bench].map((player) => player.playerId)),
+    [league],
+  );
   const rosterTeam = playerHistory.current ? leaguePowerTeamForPlayer(league, playerHistory.current.playerId) : null;
   const rosterCardTeam = rosterCardRosterId === null
     ? null
@@ -926,7 +927,13 @@ export function App() {
       <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       <div className="league-sticky">
-          <TickerStrip data={draftQuery.data} news={newsQuery.data} onPlayer={openTickerPlayer} onNews={setTickerNews} />
+          <TickerStrip
+            data={draftQuery.data}
+            news={newsQuery.data}
+            rosterPlayerIds={selectedLeagueRosterIds}
+            onPlayer={openTickerPlayer}
+            onNews={setTickerNews}
+          />
           <div className="week-line">
             <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
             <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label={tab === "draft" ? "Refresh draft data" : "Refresh scores and rankings"}><RefreshIcon spinning={isRefreshing} /></button>

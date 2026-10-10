@@ -85,7 +85,8 @@ Early plans named separate files (`dashboard/section.ts`, `boom-bust/ranges.ts`,
 - [x] `GET /api/box-score` — `api/box-score.ts`
 - [x] `GET /api/cron/jobs?job=rebuild-dashboard` and `?job=refresh-fantasycalc` — `api/cron/jobs.ts`
 - [x] `GET` / `POST /api/player-news` — `api/player-news.ts` (refresh when the caller sends `CRON_SECRET`)
-- [x] `POST /api/ingest/projections`, `/api/ingest/matchup-grades`, `/api/ingest/pfn-tables` — `api/ingest/[target].ts`
+- [x] `POST /api/ingest/projections`, `/api/ingest/matchup-grades`, `/api/ingest/pfn-tables`, `/api/ingest/player-news-x` — `api/ingest/[target].ts`
+- [x] `shared_player_news` table — `drizzle-pg/0005_shared_player_news.sql` (hand-apply)
 - [x] `GET` / `POST /api/user` — `api/user.ts`
 - [x] GitHub Actions in `.github/workflows/` call those routes on a schedule
 

@@ -3,31 +3,26 @@ name: Player news
 # Timer for the Fantasy Rankings player-news refresh. The work lives in
 # the app's /api/player-news endpoint; this workflow only calls it on
 # schedule with the CRON_SECRET bearer header (the same call Vercel Cron
-# used to make). The refresh records injury changes for fantasy players
-# league-wide. Each signed-in user is filtered against their own leagues
-# when they open the app, so this job does not take OWNER_SLEEPER_USER_ID.
+# used to make). The refresh records injury / notes changes for fantasy
+# players league-wide into shared_player_news (deduped). Each signed-in
+# client filters the ticker against their own selected-league roster.
 # Moved off Vercel Cron 2026-10-02 so every scheduled job lives in GitHub
 # Actions and survives a change of app host: to retarget, set the
 # APP_BASE_URL repository variable.
 #
-# Intended Pacific slots: Mon-Sat 07:22 and 16:15; Sun 09:00, 12:05,
-# 16:20. GitHub cron is UTC-only and does not follow daylight saving, so
-# every slot is scheduled at both of its UTC offsets and a guard step
-# runs the call only when the Pacific hour (and weekday) matches a slot.
-# Manual dispatches always run.
+# Hourly during Pacific daytime (UTC crons cover both PDT and PST). No
+# Pacific-hour skip guard: every scheduled run must call the API and
+# assert worked=true (silent success skips were the prior failure mode).
+# API-side dedupe makes repeated hourly runs safe. Manual dispatches always run.
 
 on:
   schedule:
-    - cron: "22 14 * * 1-6" # Mon-Sat 07:22 PDT
-    - cron: "22 15 * * 1-6" # Mon-Sat 07:22 PST
-    - cron: "15 23 * * 1-6" # Mon-Sat 16:15 PDT
-    - cron: "15 0 * * 0,2-6" # Mon-Sat 16:15 PST (next UTC day)
-    - cron: "0 16 * * 0" # Sun 09:00 PDT
-    - cron: "0 17 * * 0" # Sun 09:00 PST
-    - cron: "5 19 * * 0" # Sun 12:05 PDT
-    - cron: "5 20 * * 0" # Sun 12:05 PST
-    - cron: "20 23 * * 0" # Sun 16:20 PDT
-    - cron: "20 0 * * 1" # Sun 16:20 PST (Mon UTC)
+    # Mon–Sat Pacific ~06–17 → UTC 13–01 (PDT) and 14–02 (PST)
+    - cron: "22 13-23 * * 1-6"
+    - cron: "22 0-2 * * 0,2-6"
+    # Sun Pacific ~08–17 → UTC 15–01 (PDT) and 16–02 (PST)
+    - cron: "22 15-23 * * 0"
+    - cron: "22 0-2 * * 0-1"
   workflow_dispatch:
 
 permissions:
@@ -42,34 +37,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Pacific-time guard (scheduled runs only)
-        id: guard
-        run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            DOW=$(TZ=America/Los_Angeles date +%u)
-            HOUR=$(TZ=America/Los_Angeles date +%H)
-            GO=false
-            if [ "$DOW" -le 6 ] && { [ "$HOUR" = "07" ] || [ "$HOUR" = "16" ]; }; then GO=true; fi
-            if [ "$DOW" = "7" ] && { [ "$HOUR" = "09" ] || [ "$HOUR" = "12" ] || [ "$HOUR" = "16" ]; }; then GO=true; fi
-            if [ "$GO" != "true" ]; then
-              echo "Skipping: Pacific day $DOW hour $HOUR is not a player-news slot."
-              echo "go=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          fi
-          echo "go=true" >> "$GITHUB_OUTPUT"
-
       - name: Call player-news refresh
-        if: steps.guard.outputs.go == 'true'
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-ten.vercel.app' }}
         run: |
-          curl -s --max-time 300 -H "Authorization: Bearer $CRON_SECRET" \
-            "$APP_BASE_URL/api/player-news" | tee /tmp/news.json
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET is missing; cannot refresh player news."
+            exit 1
+          fi
+          HTTP=$(curl -sS --max-time 300 -o /tmp/news.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/player-news")
+          echo "HTTP $HTTP"
+          cat /tmp/news.json
+          echo
           python3 - <<'EOF'
-          import json
-          result = json.load(open('/tmp/news.json'))
-          assert result.get('ok') is True, f"player-news not ok: {result}"
+          import json, sys
+          result = json.load(open("/tmp/news.json"))
+          if result.get("ok") is not True:
+              raise SystemExit(f"player-news not ok: {result}")
+          if result.get("worked") is not True:
+              raise SystemExit(f"player-news did no work: {result}")
           print(f"player-news verified: {result}")
           EOF
+          test "$HTTP" = "200"

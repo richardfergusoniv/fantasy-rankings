@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { db, schema } from "../_lib/db.js";
 import {
   badRequest,
@@ -10,9 +10,18 @@ import {
   methodNotAllowed,
 } from "../_lib/api-utils.js";
 import { CACHE_KEY, strengthOfScheduleEntrySchema } from "../_lib/dashboard-schemas.js";
+import {
+  buildXNewsDraft,
+  filterDuplicateDrafts,
+  normalizePlayerNameKey,
+  retentionCutoff,
+  xNewsBatchSchema,
+} from "../_lib/player-news-shared.js";
+import { SLEEPER_BASE, fetchJson, type SleeperPlayer } from "../_lib/sleeper.js";
 
 /**
- * POST /api/ingest/:target  (target = projections | matchup-grades | pfn-tables)
+ * POST /api/ingest/:target
+ *   target = projections | matchup-grades | pfn-tables | player-news-x
  *
  * Single function replacing the three deferred ingest routes to stay within
  * Vercel's function budget. The pipeline POSTs staged JSON directly in the
@@ -28,6 +37,7 @@ import { CACHE_KEY, strengthOfScheduleEntrySchema } from "../_lib/dashboard-sche
  *                   `computedAt`, busts the dashboard cache on commit.
  * - pfn-tables:     writes `pfn:{tableKey}` rows to `source_cache` for the
  *                   4 PFN tables.
+ * - player-news-x:  inserts shared player-news rows from X (dedupe by post_id).
  */
 
 // ---------------------------------------------------------------------------
@@ -314,6 +324,134 @@ async function handlePfnTables(req: Request): Promise<Response> {
 // route
 // ---------------------------------------------------------------------------
 
+
+// ---------------------------------------------------------------------------
+// player-news-x
+// ---------------------------------------------------------------------------
+
+function playerLabel(player: SleeperPlayer): string {
+  return player.full_name ?? [player.first_name, player.last_name].filter(Boolean).join(" ");
+}
+
+async function loadPlayerNameIndex(): Promise<{
+  byId: Map<string, { player: string; team: string }>;
+  byName: Map<string, string>;
+}> {
+  const players = await fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`);
+  const byId = new Map<string, { player: string; team: string }>();
+  const byName = new Map<string, string>();
+  for (const [playerId, player] of Object.entries(players)) {
+    const name = playerLabel(player);
+    if (!name) continue;
+    byId.set(playerId, { player: name, team: player.team ?? "FA" });
+    const key = normalizePlayerNameKey(name);
+    if (!byName.has(key)) byName.set(key, playerId);
+  }
+  return { byId, byName };
+}
+
+async function handlePlayerNewsX(req: Request): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return badRequest("Request body must be valid JSON.");
+  }
+
+  const parsed = xNewsBatchSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest("Invalid player-news-x payload.", parsed.error.issues);
+  }
+
+  let index: Awaited<ReturnType<typeof loadPlayerNameIndex>>;
+  try {
+    index = await loadPlayerNameIndex();
+  } catch {
+    return json({ ok: false, error: "Sleeper player data is temporarily unavailable." }, 502);
+  }
+
+  const unresolved: string[] = [];
+  const drafts = [];
+  for (const item of parsed.data.items) {
+    let playerId = item.player_id?.trim() || null;
+    let meta = playerId ? index.byId.get(playerId) : undefined;
+    if (!meta && item.player_name) {
+      const resolvedId = index.byName.get(normalizePlayerNameKey(item.player_name));
+      if (resolvedId) {
+        playerId = resolvedId;
+        meta = index.byId.get(resolvedId);
+      }
+    }
+    if (!playerId || !meta) {
+      unresolved.push(item.player_id ?? item.player_name ?? item.post_id);
+      continue;
+    }
+    drafts.push(buildXNewsDraft(item, {
+      playerId,
+      player: meta.player,
+      team: meta.team,
+    }));
+  }
+
+  const unique = filterDuplicateDrafts(drafts);
+  let inserted = 0;
+  for (let offset = 0; offset < unique.length; offset += 100) {
+    const chunk = unique.slice(offset, offset + 100).map((draft) => ({
+      id: draft.id,
+      playerId: draft.playerId,
+      player: draft.player,
+      team: draft.team,
+      change: draft.change,
+      newsType: draft.newsType,
+      roleContext: draft.roleContext,
+      source: draft.source,
+      sourceLabel: draft.sourceLabel,
+      sourceUrl: draft.sourceUrl,
+      author: draft.author,
+      externalId: draft.externalId,
+      publishedAt: draft.publishedAt,
+      signal: draft.signal,
+      score: draft.score,
+      createdAt: new Date(),
+    }));
+    const result = await db
+      .insert(schema.sharedPlayerNews)
+      .values(chunk)
+      .onConflictDoNothing()
+      .returning({ id: schema.sharedPlayerNews.id });
+    inserted += result.length;
+  }
+
+  const cutoff = retentionCutoff();
+  const purged = await db
+    .delete(schema.sharedPlayerNews)
+    .where(
+      or(
+        and(
+          sql`${schema.sharedPlayerNews.publishedAt} is not null`,
+          lt(schema.sharedPlayerNews.publishedAt, cutoff),
+        ),
+        and(
+          isNull(schema.sharedPlayerNews.publishedAt),
+          lt(schema.sharedPlayerNews.createdAt, cutoff),
+        ),
+      ),
+    )
+    .returning({ id: schema.sharedPlayerNews.id });
+
+  return json({
+    ok: true,
+    status: "committed",
+    received: parsed.data.items.length,
+    resolved: unique.length,
+    inserted,
+    duplicates: Math.max(0, unique.length - inserted),
+    unresolved: unresolved.length,
+    unresolvedSamples: unresolved.slice(0, 10),
+    purged: purged.length,
+  });
+}
+
 export async function POST(req: Request): Promise<Response> {
   if (!hasCronSecret(req)) return forbidden("Invalid or missing webhook secret.");
   const url = new URL(req.url, "https://localhost");
@@ -321,6 +459,7 @@ export async function POST(req: Request): Promise<Response> {
     if (url.pathname.endsWith("/projections")) return await handleProjections(req);
     if (url.pathname.endsWith("/matchup-grades")) return await handleMatchupGrades(req);
     if (url.pathname.endsWith("/pfn-tables")) return await handlePfnTables(req);
+    if (url.pathname.endsWith("/player-news-x")) return await handlePlayerNewsX(req);
     return json({ ok: false, error: "Unknown ingest target." }, 404);
   } catch (err) {
     return internalError(err);

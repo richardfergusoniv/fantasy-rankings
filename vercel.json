@@ -17,6 +17,9 @@
     },
     "api/ingest/[target].ts": {
       "maxDuration": 60
+    },
+    "api/player-news.ts": {
+      "maxDuration": 60
     }
   },
   "outputDirectory": "frontend/dist",
