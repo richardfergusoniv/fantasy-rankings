@@ -3,6 +3,7 @@ import {
   fantasySosRanksForTeam,
   points,
   positionalSosRank,
+  rankAmong,
   shortLeagueName,
   rankToneClassName,
   sosToneFromRank,
@@ -66,6 +67,25 @@ describe("rankToneClassName", () => {
     expect(rankToneClassName(28)).toBe("rank-tone sos-tough");
     expect(rankToneClassName(14)).toBe("rank-tone");
     expect(rankToneClassName(null)).toBe("rank-tone");
+  });
+});
+
+describe("rankAmong", () => {
+  it("ranks higher-is-better with ties sharing the best rank", () => {
+    expect(rankAmong([10, 30, 20], 30)).toBe(1);
+    expect(rankAmong([10, 30, 20], 10)).toBe(3);
+    expect(rankAmong([10, 10, 4], 10)).toBe(1);
+  });
+
+  it("ranks lower-is-better so the smallest value is rank 1", () => {
+    expect(rankAmong([8, 1, 4], 1, false)).toBe(1);
+    expect(rankAmong([8, 1, 4], 8, false)).toBe(3);
+  });
+
+  it("returns null when the value is missing or not in the set", () => {
+    expect(rankAmong([1, 2], null)).toBeNull();
+    expect(rankAmong([], 4)).toBeNull();
+    expect(rankAmong([1, 2], 9)).toBeNull();
   });
 });
 

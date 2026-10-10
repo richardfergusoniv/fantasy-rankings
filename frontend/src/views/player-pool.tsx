@@ -40,6 +40,7 @@ import {
   MatchupTag,
   ModalPortal,
   SegmentedControl,
+  rankAmong,
   rankToneClassName,
   useDialogFocusTrap,
   type StrengthOfScheduleEntryLike,
@@ -118,6 +119,9 @@ export function TeamDataModal({
   record,
   situational,
   situationalSource,
+  usageLeague = [],
+  recordLeague = [],
+  situationalLeague = [],
   sosEntry,
   loading,
   loadError,
@@ -133,6 +137,9 @@ export function TeamDataModal({
   record: NflTeamRecord | null;
   situational: TeamSituationalRow | null;
   situationalSource: Pick<TeamSituational, "fetchedAt" | "sourceUrl"> | null;
+  usageLeague?: readonly TeamUsage[];
+  recordLeague?: readonly NflTeamRecord[];
+  situationalLeague?: readonly TeamSituationalRow[];
   sosEntry?: StrengthOfScheduleEntryLike;
   loading: boolean;
   loadError: boolean;
@@ -172,11 +179,50 @@ export function TeamDataModal({
     ? pfnRecord
     : record ? `${record.wins}-${record.losses}${record.ties ? `-${record.ties}` : ""}` : "—";
   const sosRanks = fantasySosRanksForTeam(sosEntry, teamCode ?? selection.team);
+  const leagueRank = (values: readonly number[], value: number | null, higherIsBetter = true) => (
+    values.filter((candidate) => Number.isFinite(candidate)).length < 2 ? null : rankAmong(values, value, higherIsBetter)
+  );
+  const winPct = (wins: number, losses: number, ties: number): number | null => {
+    const games = wins + losses + ties;
+    if (games <= 0) return null;
+    return (wins + ties * 0.5) / games;
+  };
+  const parsedRecordPct = (value: unknown): number | null => {
+    if (typeof value !== "string") return null;
+    const match = /^(\d+)-(\d+)(?:-(\d+))?$/.exec(value);
+    if (!match) return null;
+    return winPct(Number(match[1]), Number(match[2]), match[3] ? Number(match[3]) : 0);
+  };
+  const usageRank = (read: (row: TeamUsage) => number, higherIsBetter = true) => (
+    usage ? leagueRank(usageLeague.map(read), read(usage), higherIsBetter) : null
+  );
+  const analyticsRecordRank = record
+    ? leagueRank(
+      recordLeague.flatMap((row) => {
+        const pct = winPct(row.wins, row.losses, row.ties);
+        return pct === null ? [] : [pct];
+      }),
+      winPct(record.wins, record.losses, record.ties),
+    )
+    : null;
+  const recordRank = analyticsRecordRank ?? leagueRank(
+    (teamOverall?.rows ?? []).flatMap((row) => {
+      const pct = parsedRecordPct(row.record);
+      return pct === null ? [] : [pct];
+    }),
+    parsedRecordPct(pfnRecord),
+  );
+  const situationalRank = (key: "redZoneTdPct" | "thirdDownPct") => (
+    situational ? leagueRank(situationalLeague.map((row) => row[key]), situational[key]) : null
+  );
   const rankLabel = (rank: number | null, loadingValue: boolean) => (
     loadingValue ? <strong>…</strong> : <strong className={rankToneClassName(rank)}>{rank === null ? "—" : `#${rank}`}</strong>
   );
-  const gradeCaption = (value: number | null, fallback: string) => (
-    <small className={value === null ? undefined : "metric-grade"}>{value === null ? fallback : `${formatDecimal(value, 1)} grade`}</small>
+  const coloredStat = (text: string, rank: number | null) => (
+    <strong className={rank === null ? undefined : rankToneClassName(rank)}>{text}</strong>
+  );
+  const gradeCaption = (value: number | null, rank: number | null, fallback: string) => (
+    <small className={value === null ? undefined : rankToneClassName(rank)}>{value === null ? fallback : `${formatDecimal(value, 1)} grade`}</small>
   );
 
   return (
@@ -199,42 +245,42 @@ export function TeamDataModal({
             <div className="team-card-metrics">
               <div>
                 <span>Points scored</span>
-                <strong>{usage ? usage.pointsScored.toLocaleString() : "—"}</strong>
+                {coloredStat(usage ? usage.pointsScored.toLocaleString() : "—", usageRank((row) => row.pointsScored))}
                 <small>{usageWeek ?? "nflverse unavailable"}</small>
               </div>
               <div>
                 <span>Total yards</span>
-                <strong>{usage ? usage.totalYards.toLocaleString() : "—"}</strong>
+                {coloredStat(usage ? usage.totalYards.toLocaleString() : "—", usageRank((row) => row.totalYards))}
                 <small>{usageWeek ?? "nflverse unavailable"}</small>
               </div>
               <div>
                 <span>Passing yards</span>
-                <strong>{usage ? usage.passingYards.toLocaleString() : "—"}</strong>
+                {coloredStat(usage ? usage.passingYards.toLocaleString() : "—", usageRank((row) => row.passingYards))}
                 <small>Season total</small>
               </div>
               <div>
                 <span>Rushing yards</span>
-                <strong>{usage ? usage.rushingYards.toLocaleString() : "—"}</strong>
+                {coloredStat(usage ? usage.rushingYards.toLocaleString() : "—", usageRank((row) => row.rushingYards))}
                 <small>Season total</small>
               </div>
               <div>
                 <span>Win–loss record</span>
-                <strong>{recordLabel}</strong>
+                {coloredStat(recordLabel, recordLabel === "—" ? null : recordRank)}
                 <small>Season</small>
               </div>
               <div>
                 <span>Offensive touchdowns</span>
-                <strong>{usage ? usage.offensiveTouchdowns.toLocaleString() : "—"}</strong>
+                {coloredStat(usage ? usage.offensiveTouchdowns.toLocaleString() : "—", usageRank((row) => row.offensiveTouchdowns))}
                 <small>Pass catches + rushes</small>
               </div>
               <div>
                 <span>Turnovers</span>
-                <strong>{usage ? usage.turnovers.toLocaleString() : "—"}</strong>
+                {coloredStat(usage ? usage.turnovers.toLocaleString() : "—", usageRank((row) => row.turnovers, false))}
                 <small>Interceptions + fumbles lost</small>
               </div>
               <div>
                 <span>Pace of play</span>
-                <strong>{usage ? formatDecimal(usage.playsPerGame, 1) : "—"}</strong>
+                {coloredStat(usage ? formatDecimal(usage.playsPerGame, 1) : "—", usageRank((row) => row.playsPerGame))}
                 <small>{usageWeek ? `plays / game · ${usageWeek}` : "nflverse unavailable"}</small>
               </div>
               <div>
@@ -254,27 +300,27 @@ export function TeamDataModal({
               <div>
                 <span>Overall</span>
                 {rankLabel(overallRank, loading)}
-                {gradeCaption(overallGrade, "PFN overall")}
+                {gradeCaption(overallGrade, overallRank, "PFN overall")}
               </div>
               <div>
                 <span>Special teams</span>
                 {rankLabel(specialTeamsRank, loading)}
-                {gradeCaption(specialTeams, "PFN overall")}
+                {gradeCaption(specialTeams, specialTeamsRank, "PFN overall")}
               </div>
               <div>
                 <span>O-line</span>
                 {rankLabel(lineRank, loading)}
-                {gradeCaption(lineGrade, "PFN rank")}
+                {gradeCaption(lineGrade, lineRank, "PFN rank")}
               </div>
               <div>
                 <span>Pass block</span>
                 {rankLabel(passBlockRank, loading)}
-                {gradeCaption(passBlock, "PFN O-line")}
+                {gradeCaption(passBlock, passBlockRank, "PFN O-line")}
               </div>
               <div>
                 <span>Run block</span>
                 {rankLabel(runBlockRank, loading)}
-                {gradeCaption(runBlock, "PFN O-line")}
+                {gradeCaption(runBlock, runBlockRank, "PFN O-line")}
               </div>
               <div>
                 <span>Pen/G</span>
@@ -284,12 +330,12 @@ export function TeamDataModal({
               <div>
                 <span>Defense</span>
                 {rankLabel(defenseRank, loading)}
-                {gradeCaption(defenseGrade, "PFN rank")}
+                {gradeCaption(defenseGrade, defenseRank, "PFN rank")}
               </div>
               <div>
                 <span>Offense</span>
                 {rankLabel(offenseRank, loading)}
-                {gradeCaption(offenseGrade, "PFN rank")}
+                {gradeCaption(offenseGrade, offenseRank, "PFN rank")}
               </div>
               {SOS_POSITIONS.map((position) => {
                 const rank = sosRanks[position];
@@ -312,32 +358,32 @@ export function TeamDataModal({
             <div className="team-card-metrics team-card-advanced-metrics">
               <div>
                 <span>Red-zone TD rate</span>
-                <strong>{situational ? formatPercent(situational.redZoneTdPct, 0) : "—"}</strong>
+                {coloredStat(situational ? formatPercent(situational.redZoneTdPct, 0) : "—", situationalRank("redZoneTdPct"))}
                 <small>{situational ? `${situational.games} game${situational.games === 1 ? "" : "s"}` : "Source unavailable"}</small>
               </div>
               <div>
                 <span>Third-down conversion</span>
-                <strong>{situational ? formatPercent(situational.thirdDownPct, 0) : "—"}</strong>
+                {coloredStat(situational ? formatPercent(situational.thirdDownPct, 0) : "—", situationalRank("thirdDownPct"))}
                 <small>{situational ? `${situational.games} game${situational.games === 1 ? "" : "s"}` : "Source unavailable"}</small>
               </div>
               <div>
                 <span>EPA / play</span>
-                <strong>{epaPerPlay === null ? "—" : formatDecimal(epaPerPlay, 2, { sign: "exceptZero" })}</strong>
+                {coloredStat(epaPerPlay === null ? "—" : formatDecimal(epaPerPlay, 2, { sign: "exceptZero" }), pfnRankForRow(offense, offenseRow, "epa_per_play"))}
                 <small>PFN offense</small>
               </div>
               <div>
                 <span>Success rate</span>
-                <strong>{successPct === null ? "—" : formatPercent(successPct, 1)}</strong>
+                {coloredStat(successPct === null ? "—" : formatPercent(successPct, 1), pfnRankForRow(offense, offenseRow, "success_pct"))}
                 <small>PFN offense</small>
               </div>
               <div>
                 <span>Yards / play</span>
-                <strong>{yardsPerPlay === null ? "—" : formatDecimal(yardsPerPlay, 1)}</strong>
+                {coloredStat(yardsPerPlay === null ? "—" : formatDecimal(yardsPerPlay, 1), pfnRankForRow(offense, offenseRow, "yds_per_play"))}
                 <small>PFN offense</small>
               </div>
               <div>
                 <span>Explosive play rate</span>
-                <strong>{explosivePct === null ? "—" : formatPercent(explosivePct, 1)}</strong>
+                {coloredStat(explosivePct === null ? "—" : formatPercent(explosivePct, 1), pfnRankForRow(offense, offenseRow, "expl_pct"))}
                 <small>PFN offense</small>
               </div>
             </div>
@@ -386,6 +432,9 @@ export function ConnectedTeamCard({
       record={(dashboard.analytics.teamRecords ?? []).find((row) => (canonicalNflTeam(row.team) ?? row.team) === teamCode) ?? null}
       situational={situational}
       situationalSource={teamSituational ? { fetchedAt: teamSituational.fetchedAt, sourceUrl: teamSituational.sourceUrl } : null}
+      usageLeague={dashboard.analytics.teamUsage}
+      recordLeague={dashboard.analytics.teamRecords ?? []}
+      situationalLeague={teamSituational?.rows ?? []}
       sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === leagueId)}
       loading={pfnTablesQuery.isPending}
       loadError={pfnTablesQuery.isError}
@@ -916,6 +965,9 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
           record={teamRecordByTeam.get(canonicalNflTeam(selectedTeam.team) ?? selectedTeam.team) ?? null}
           situational={teamSituationalByTeam.get(canonicalNflTeam(selectedTeam.team) ?? selectedTeam.team) ?? null}
           situationalSource={teamSituational ? { fetchedAt: teamSituational.fetchedAt, sourceUrl: teamSituational.sourceUrl } : null}
+          usageLeague={dashboard.analytics.teamUsage}
+          recordLeague={dashboard.analytics.teamRecords ?? []}
+          situationalLeague={teamSituational?.rows ?? []}
           sosEntry={sosEntry}
           loading={pfnTablesQuery.isPending}
           loadError={pfnTablesQuery.isError}

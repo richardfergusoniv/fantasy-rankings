@@ -152,6 +152,19 @@ export function rankToneClassName(rank: number | null | undefined): string {
   return `rank-tone${sosToneFromRank(rank)}`;
 }
 
+/**
+ * 1-based rank of `value` among `values`. Rank 1 is best.
+ * Ties share the best rank, matching `pfnRankForRow`.
+ */
+export function rankAmong(values: readonly number[], value: number | null | undefined, higherIsBetter = true): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const ranked = values.filter((candidate) => Number.isFinite(candidate));
+  if (ranked.length === 0) return null;
+  const sorted = [...ranked].sort((a, b) => higherIsBetter ? b - a : a - b);
+  const index = sorted.findIndex((candidate) => candidate === value);
+  return index < 0 ? null : index + 1;
+}
+
 /** Positional fantasy SOS rank for an opponent defense vs a skill position. */
 export function positionalSosRank(
   entry: StrengthOfScheduleEntryLike | undefined,

@@ -218,7 +218,7 @@ export function PlayerTeamContext({
               <div key={stat.label}>
                 <span>{stat.label}</span>
                 <strong className={rankToneClassName(stat.rank)}>{stat.rank === null ? "—" : `#${stat.rank}`}</strong>
-                <small className={isGrade ? "metric-grade" : undefined}>{caption}</small>
+                <small className={isGrade ? rankToneClassName(stat.rank) : undefined}>{caption}</small>
               </div>
             );
           })}
