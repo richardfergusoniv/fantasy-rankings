@@ -506,7 +506,7 @@ export function PlayerDetailSheet({
     enabled: player.position !== "PICK" && player.seasonValue !== null,
     staleTime: 30 * 60 * 1000,
   });
-  const valueHistory = historyQuery.data?.series.find((series) => series.playerId === player.playerId);
+  const valueHistory = historyQuery.data?.series?.find((series) => series.playerId === player.playerId);
 
   const weeklyWidth = player.weeklyProjection === null ? 0 : Math.min(100, Math.max(4, player.weeklyProjection / 30 * 100));
   const valueWidth = player.seasonValue === null ? 0 : Math.min(100, Math.max(4, player.seasonValue / 10_000 * 100));
