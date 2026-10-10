@@ -1063,6 +1063,36 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .command-bar-result-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .command-bar-result-meta { flex: none; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .command-bar-empty { margin: 4px 0 0; color: var(--dim); font-size: var(--type-caption); text-align: center; }
+.tools-account-footer {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--dim);
+  font-size: var(--type-caption);
+  font-weight: 600;
+}
+.tools-account-footer button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--type-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+.tools-account-footer button:hover { background: var(--hairline); }
+.tools-account-footer button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .shortcuts-list { display: grid; gap: 10px; margin: 0; }
 .shortcuts-list > div { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 16px; }
 .shortcuts-list dt { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 0; }

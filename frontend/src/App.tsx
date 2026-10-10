@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
 import type {
@@ -39,7 +38,9 @@ import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
 import { useDashboardUrl } from "./use-dashboard-url";
+import { useAuthSession } from "./auth-session";
 import { CommandBar } from "./shell/command-bar";
+import { ToolsAccountFooter } from "./shell/tools-account";
 import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "./shell/command-palette";
 import { InspectorFrame, useInspectorDockViewport } from "./shell/inspector-frame";
 import { ShortcutsDialog } from "./shell/shortcuts-dialog";
@@ -411,10 +412,10 @@ function SectionLoading({ label }: { label: string }) {
   return (
     <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label={label}>
       <span>{label}</span>
-      <Skeleton className="h-24 w-full" />
-      <Skeleton className="h-4 w-4/5" />
-      <Skeleton className="h-4 w-3/5" />
-      <Skeleton className="h-4 w-2/5" />
+      <div className="loading-shimmer loading-score" aria-hidden="true" />
+      <div className="loading-shimmer loading-line wide" aria-hidden="true" />
+      <div className="loading-shimmer loading-line" aria-hidden="true" />
+      <div className="loading-shimmer loading-line" aria-hidden="true" />
     </section>
   );
 }
@@ -475,6 +476,8 @@ export function App() {
   const [selectedMatchup, setSelectedMatchup] = useState<MatchupSelection | null>(null);
   const [commandBarOpen, setCommandBarOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const { sleeperUsername, signOut } = useAuthSession();
+  const commandAccount = sleeperUsername && signOut ? { username: sleeperUsername } : null;
   const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
   const [browserViewerId, setBrowserViewerId] = useState<string | null | undefined>(undefined);
   const [browserDashboard, setBrowserDashboard] = useState<Dashboard | undefined>(undefined);
@@ -959,7 +962,12 @@ export function App() {
             : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onOpenMatchup={setSelectedMatchup} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
             : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} dashboard={activeDashboard} onPlayerIntent={prefetchDashboardPlayer} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} playerCardOpen={playerHistory.isOpen} selectedPlayerId={selectedPlayerId} /></Suspense>
             : tab === "draft" ? <Suspense fallback={<SectionLoading label="Loading draft…" />}><LazyDraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} loading={draftQuery.isPending} onRefresh={() => draftRefresh.mutate()} refreshing={draftRefresh.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} /></Suspense>
-            : tab === "trade" ? <Suspense fallback={<SectionLoading label="Loading trade calculator…" />}><LazyTradeCalculator dashboard={activeDashboard} league={league} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} /></Suspense>
+            : tab === "trade" ? (
+              <>
+                <Suspense fallback={<SectionLoading label="Loading trade calculator…" />}><LazyTradeCalculator dashboard={activeDashboard} league={league} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} /></Suspense>
+                <ToolsAccountFooter />
+              </>
+            )
             : isExplorerMode(tab) ? (
               <Explorer
                 mode={tab}
@@ -991,9 +999,11 @@ export function App() {
         onOpenChange={setCommandBarOpen}
         leagues={commandLeagues}
         players={commandPlayers}
+        account={commandAccount}
         onSelectPage={setTab}
         onSelectPlayer={openTickerPlayer}
         onSelectLeague={chooseLeague}
+        onSignOut={() => { signOut?.(); }}
       />
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>

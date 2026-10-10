@@ -4,8 +4,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AuthSessionProvider } from "./auth-session";
 import { SkipLink } from "./shared";
 import { getAccessToken, isSupabaseConfigured, supabase, type Session } from "./supabase";
+
+function clearSignedInCache() {
+  localStorage.removeItem("fantasy-rankings-dashboard-v7");
+}
+
+function signOutSession() {
+  clearSignedInCache();
+  if (!supabase) return;
+  void supabase.auth.signOut();
+}
 
 /**
  * Phase 2 auth gate.
@@ -81,6 +92,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [session, refreshConnection]);
 
   if (!isSupabaseConfigured || !supabase) {
+    const fixtureUsername = import.meta.env.VITE_FIXTURE_ACCOUNT_USERNAME;
+    if (typeof fixtureUsername === "string" && fixtureUsername.length > 0) {
+      return (
+        <AuthSessionProvider
+          value={{
+            sleeperUsername: fixtureUsername,
+            signOut: () => {
+              clearSignedInCache();
+            },
+          }}
+        >
+          {children}
+        </AuthSessionProvider>
+      );
+    }
     return <>{children}</>;
   }
 
@@ -113,44 +139,20 @@ export function AuthGate({ children }: { children: ReactNode }) {
         email={session.user.email ?? ""}
         loading={connLoading}
         onConnected={refreshConnection}
-        onSignOut={() => {
-          localStorage.removeItem("fantasy-rankings-dashboard-v7");
-          if (!supabase) return;
-          void supabase.auth.signOut();
-        }}
+        onSignOut={signOutSession}
       />
     );
   }
 
   return (
-    <>
-      <SignedInBar
-        username={connection.sleeperUsername}
-        onSignOut={() => {
-          localStorage.removeItem("fantasy-rankings-dashboard-v7");
-          if (!supabase) return;
-          void supabase.auth.signOut();
-        }}
-      />
+    <AuthSessionProvider
+      value={{
+        sleeperUsername: connection.sleeperUsername,
+        signOut: signOutSession,
+      }}
+    >
       {children}
-    </>
-  );
-}
-
-function SignedInBar({ username, onSignOut }: { username: string; onSignOut: () => void }) {
-  return (
-    <div className="flex items-center justify-between gap-3 bg-foreground px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-sm text-background">
-      <span>Sleeper: {username}</span>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background"
-        onClick={onSignOut}
-      >
-        Sign out
-      </Button>
-    </div>
+    </AuthSessionProvider>
   );
 }
 

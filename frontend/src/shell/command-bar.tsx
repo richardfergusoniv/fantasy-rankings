@@ -24,21 +24,25 @@ export function CommandBar({
   onSelectPage,
   onSelectPlayer,
   onSelectLeague,
+  onSignOut,
+  account,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   leagues: CommandLeagueItem[];
   players: CommandPlayerItem[];
+  account: { username: string } | null;
   onSelectPage: (tab: Tab) => void;
   onSelectPlayer: (playerId: string) => void;
   onSelectLeague: (leagueId: string) => void;
+  onSignOut: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
 
   const results = useMemo(
-    () => filterCommandItems(query, { pages: COMMAND_PAGES, leagues, players }),
-    [leagues, players, query],
+    () => filterCommandItems(query, { pages: COMMAND_PAGES, leagues, players, account }),
+    [account, leagues, players, query],
   );
 
   useEffect(() => {
@@ -69,6 +73,9 @@ export function CommandBar({
         break;
       case "league":
         onSelectLeague(item.id);
+        break;
+      case "action":
+        if (item.id === "sign-out") onSignOut();
         break;
       default: {
         const unreachable: never = item;
@@ -121,7 +128,13 @@ export function CommandBar({
         />
         <ul className="command-bar-results" role="listbox" aria-label="Command results">
           {results.map((item, index) => {
-            const secondary = item.kind === "page" ? "Page" : item.kind === "league" ? "League" : item.position;
+            const secondary = item.kind === "page"
+              ? "Page"
+              : item.kind === "league"
+                ? "League"
+                : item.kind === "action"
+                  ? "Account"
+                  : item.position;
             return (
               <li key={`${item.kind}-${item.id}`} role="option" aria-selected={index === activeIndex}>
                 <button
