@@ -33,22 +33,41 @@ import {
   sleeperInjuryTag,
 } from "../dashboard-shared";
 import type { RankingHorizon, RankingPosition } from "../dashboard-url";
-import { formatDecimal, formatPercent } from "../lib/format-number";
+import { formatDecimal, formatPercent, formatWholePercent } from "../lib/format-number";
 import {
   SOS_POSITIONS,
   fantasySosRanksForTeam,
   MatchupTag,
   ModalPortal,
   SegmentedControl,
+  leagueRank,
   rankToneClassName,
   useDialogFocusTrap,
   type StrengthOfScheduleEntryLike,
 } from "../shared";
+import { formatRecord } from "../league-team-card";
+import { leaguePowerTeamForPlayer } from "../league-roster";
 import { WindowVirtualList } from "../virtual-list";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
+import { perGame, perGameRank } from "./team-per-game";
 
 /** Compact rankings/waivers row height (matches former density=compact). */
 export const RANKINGS_ROW_HEIGHT = 56;
+
+function rosterBadgeForPlayer(
+  playerId: string,
+  rosterTeamByPlayer: ReadonlyMap<string, { teamName: string; isUser: boolean }>,
+  powerTeamByPlayerId: ReadonlyMap<string, { rosterId: number; teamName: string; rank: number; record: { wins: number; losses: number; ties: number } }>,
+): { rosterTeamName: string | null; rosterIsUser: boolean; rosterId: number | null; rosterLabel: string | null } {
+  const assignment = rosterTeamByPlayer.get(playerId);
+  const powerTeam = powerTeamByPlayerId.get(playerId);
+  return {
+    rosterTeamName: assignment?.teamName ?? null,
+    rosterIsUser: assignment?.isUser ?? false,
+    rosterId: powerTeam?.rosterId ?? null,
+    rosterLabel: powerTeam ? `Open ${powerTeam.teamName}, ${formatRecord(powerTeam.record)} record, rank ${powerTeam.rank}` : null,
+  };
+}
 
 export function offensiveLineTone(rank: number | null): "" | " oline-strong" | " oline-weak" {
   if (rank === null || !Number.isInteger(rank) || rank < 1 || rank > 32) return "";
@@ -118,6 +137,9 @@ export function TeamDataModal({
   record,
   situational,
   situationalSource,
+  usageLeague = [],
+  recordLeague = [],
+  situationalLeague = [],
   sosEntry,
   loading,
   loadError,
@@ -133,6 +155,9 @@ export function TeamDataModal({
   record: NflTeamRecord | null;
   situational: TeamSituationalRow | null;
   situationalSource: Pick<TeamSituational, "fetchedAt" | "sourceUrl"> | null;
+  usageLeague?: readonly TeamUsage[];
+  recordLeague?: readonly NflTeamRecord[];
+  situationalLeague?: readonly TeamSituationalRow[];
   sosEntry?: StrengthOfScheduleEntryLike;
   loading: boolean;
   loadError: boolean;
@@ -146,38 +171,111 @@ export function TeamDataModal({
   const defenseRow = defense?.rows.find((row) => canonicalNflTeam(row.team) === teamCode);
   const offenseRow = offense?.rows.find((row) => canonicalNflTeam(row.team) === teamCode);
   const overallRow = teamOverall?.rows.find((row) => canonicalNflTeam(row.team) === teamCode);
-  const lineGrade = pfnNumber(lineRow, "grade");
-  const defenseGrade = pfnNumber(defenseRow, "grade");
-  const offenseGrade = pfnNumber(offenseRow, "grade");
   const lineRank = lineRow?.rank ?? null;
   const defenseRank = defenseRow?.rank ?? null;
   const offenseRank = offenseRow?.rank ?? null;
-  const passBlock = pfnNumber(lineRow, "pass_block");
-  const runBlock = pfnNumber(lineRow, "run_block");
   const penPerGame = pfnNumber(lineRow, "pen_per_game");
   const passBlockRank = pfnRankForRow(offensiveLine, lineRow, "pass_block");
   const runBlockRank = pfnRankForRow(offensiveLine, lineRow, "run_block");
-  const overallGrade = pfnNumber(overallRow, "grade");
   const overallRank = overallRow?.rank ?? null;
-  const specialTeams = pfnNumber(overallRow, "special_teams");
   const specialTeamsRank = pfnRankForRow(teamOverall, overallRow, "special_teams");
   const epaPerPlay = pfnNumber(offenseRow, "epa_per_play");
   const successPct = pfnNumber(offenseRow, "success_pct");
   const yardsPerPlay = pfnNumber(offenseRow, "yds_per_play");
   const explosivePct = pfnNumber(offenseRow, "expl_pct");
   const teamName = lineRow?.team_name ?? defenseRow?.team_name ?? offenseRow?.team_name ?? overallRow?.team_name ?? selection.team;
-  const usageWeek = usage ? `Through ${usage.games} game${usage.games === 1 ? "" : "s"}` : null;
   const pfnRecord = overallRow?.record;
   const recordLabel = typeof pfnRecord === "string" && /^\d+-\d+(?:-\d+)?$/.test(pfnRecord)
     ? pfnRecord
     : record ? `${record.wins}-${record.losses}${record.ties ? `-${record.ties}` : ""}` : "—";
   const sosRanks = fantasySosRanksForTeam(sosEntry, teamCode ?? selection.team);
+  const penaltyRank = leagueRank(
+    (offensiveLine?.rows ?? []).flatMap((row) => {
+      const value = pfnNumber(row, "pen_per_game");
+      return value === null ? [] : [value];
+    }),
+    penPerGame,
+    false,
+  );
+  const winPct = (wins: number, losses: number, ties: number): number | null => {
+    const games = wins + losses + ties;
+    if (games <= 0) return null;
+    return (wins + ties * 0.5) / games;
+  };
+  const parsedRecordPct = (value: unknown): number | null => {
+    if (typeof value !== "string") return null;
+    const match = /^(\d+)-(\d+)(?:-(\d+))?$/.exec(value);
+    if (!match) return null;
+    return winPct(Number(match[1]), Number(match[2]), match[3] ? Number(match[3]) : 0);
+  };
+  const usageRank = (read: (row: TeamUsage) => number, higherIsBetter = true) => (
+    usage ? leagueRank(usageLeague.map(read), read(usage), higherIsBetter) : null
+  );
+  const analyticsRecordRank = record
+    ? leagueRank(
+      recordLeague.flatMap((row) => {
+        const pct = winPct(row.wins, row.losses, row.ties);
+        return pct === null ? [] : [pct];
+      }),
+      winPct(record.wins, record.losses, record.ties),
+    )
+    : null;
+  const recordRank = analyticsRecordRank ?? leagueRank(
+    (teamOverall?.rows ?? []).flatMap((row) => {
+      const pct = parsedRecordPct(row.record);
+      return pct === null ? [] : [pct];
+    }),
+    parsedRecordPct(pfnRecord),
+  );
+  const situationalRank = (key: "redZoneTdPct" | "thirdDownPct") => (
+    situational ? leagueRank(situationalLeague.map((row) => row[key]), situational[key]) : null
+  );
   const rankLabel = (rank: number | null, loadingValue: boolean) => (
     loadingValue ? <strong>…</strong> : <strong className={rankToneClassName(rank)}>{rank === null ? "—" : `#${rank}`}</strong>
   );
-  const gradeCaption = (value: number | null, fallback: string) => (
-    <small className={value === null ? undefined : "metric-grade"}>{value === null ? fallback : `${formatDecimal(value, 1)} grade`}</small>
+  const coloredStat = (text: string, rank: number | null) => (
+    <strong className={rank === null ? undefined : rankToneClassName(rank)}>{text}</strong>
   );
+  const missingNote = (missing: boolean, text: string) => (
+    missing ? <span className="sr-only">{text}</span> : null
+  );
+  type PerGameStatus = "missing" | "no-games" | "ready";
+  const perGameStat = (read: (row: TeamUsage) => number, higherIsBetter = true) => {
+    if (!usage) return { text: "—", rank: null, status: "missing" as const };
+    const total = read(usage);
+    const rate = perGame(total, usage.games);
+    if (rate === null) return { text: "—", rank: null, status: "no-games" as const };
+    return {
+      text: formatDecimal(rate, 1),
+      rank: perGameRank(
+        usageLeague.map((row) => ({ total: read(row), games: row.games })),
+        total,
+        usage.games,
+        higherIsBetter,
+      ),
+      status: "ready" as const,
+    };
+  };
+  const perGameNote = (status: PerGameStatus, detail: string) => {
+    switch (status) {
+      case "missing":
+        return `nflverse unavailable. ${detail}`;
+      case "no-games":
+        return `No games played. ${detail}`;
+      case "ready":
+        return detail;
+      default: {
+        const unreachable: never = status;
+        return unreachable;
+      }
+    }
+  };
+  const pointsPerGame = perGameStat((row) => row.pointsScored);
+  const totalYardsPerGame = perGameStat((row) => row.totalYards);
+  const passingYardsPerGame = perGameStat((row) => row.passingYards);
+  const rushingYardsPerGame = perGameStat((row) => row.rushingYards);
+  const touchdownsPerGame = perGameStat((row) => row.offensiveTouchdowns);
+  const turnoversPerGame = perGameStat((row) => row.turnovers, false);
 
   return (
     <ModalPortal>
@@ -191,56 +289,54 @@ export function TeamDataModal({
             <button type="button" onClick={onClose} aria-label="Close team data">×</button>
           </header>
 
-          <section className="team-card-stat-section" aria-labelledby="team-basic-stats-title">
+          <section className="team-card-stat-section" aria-labelledby="team-stats-title">
             <div className="team-card-section-heading">
-              <h3 id="team-basic-stats-title">Basic</h3>
-              <span>{usageWeek ?? "Season production"}</span>
+              <h3 id="team-stats-title">Stats</h3>
             </div>
             <div className="team-card-metrics">
               <div>
-                <span>Points scored</span>
-                <strong>{usage ? usage.pointsScored.toLocaleString() : "—"}</strong>
-                <small>{usageWeek ?? "nflverse unavailable"}</small>
+                <span>Points/G</span>
+                {coloredStat(pointsPerGame.text, pointsPerGame.rank)}
+                <span className="sr-only">{perGameNote(pointsPerGame.status, "Points scored per game")}</span>
               </div>
               <div>
-                <span>Total yards</span>
-                <strong>{usage ? usage.totalYards.toLocaleString() : "—"}</strong>
-                <small>{usageWeek ?? "nflverse unavailable"}</small>
+                <span>Total yds/G</span>
+                {coloredStat(totalYardsPerGame.text, totalYardsPerGame.rank)}
+                <span className="sr-only">{perGameNote(totalYardsPerGame.status, "Total yards per game")}</span>
               </div>
               <div>
-                <span>Passing yards</span>
-                <strong>{usage ? usage.passingYards.toLocaleString() : "—"}</strong>
-                <small>Season total</small>
+                <span>Pass yds/G</span>
+                {coloredStat(passingYardsPerGame.text, passingYardsPerGame.rank)}
+                <span className="sr-only">{perGameNote(passingYardsPerGame.status, "Passing yards per game")}</span>
               </div>
               <div>
-                <span>Rushing yards</span>
-                <strong>{usage ? usage.rushingYards.toLocaleString() : "—"}</strong>
-                <small>Season total</small>
+                <span>Rush yds/G</span>
+                {coloredStat(rushingYardsPerGame.text, rushingYardsPerGame.rank)}
+                <span className="sr-only">{perGameNote(rushingYardsPerGame.status, "Rushing yards per game")}</span>
               </div>
               <div>
                 <span>Win–loss record</span>
-                <strong>{recordLabel}</strong>
-                <small>Season</small>
+                {coloredStat(recordLabel, recordLabel === "—" ? null : recordRank)}
               </div>
               <div>
-                <span>Offensive touchdowns</span>
-                <strong>{usage ? usage.offensiveTouchdowns.toLocaleString() : "—"}</strong>
-                <small>Pass catches + rushes</small>
+                <span>TD/G</span>
+                {coloredStat(touchdownsPerGame.text, touchdownsPerGame.rank)}
+                <span className="sr-only">{perGameNote(touchdownsPerGame.status, "Offensive touchdowns per game, pass catches and rushes")}</span>
               </div>
               <div>
-                <span>Turnovers</span>
-                <strong>{usage ? usage.turnovers.toLocaleString() : "—"}</strong>
-                <small>Interceptions + fumbles lost</small>
+                <span>TO/G</span>
+                {coloredStat(turnoversPerGame.text, turnoversPerGame.rank)}
+                <span className="sr-only">{perGameNote(turnoversPerGame.status, "Turnovers per game, interceptions and fumbles lost")}</span>
               </div>
               <div>
                 <span>Pace of play</span>
-                <strong>{usage ? formatDecimal(usage.playsPerGame, 1) : "—"}</strong>
-                <small>{usageWeek ? `plays / game · ${usageWeek}` : "nflverse unavailable"}</small>
+                {coloredStat(usage ? formatDecimal(usage.playsPerGame, 1) : "—", usageRank((row) => row.playsPerGame))}
+                {missingNote(!usage, "nflverse unavailable")}
               </div>
               <div>
                 <span>Run / pass split</span>
-                <strong>{usage ? `${Math.round(usage.runPct)} / ${Math.round(usage.passPct)}` : "—"}</strong>
-                <small>{usage ? "run% / pass%" : "nflverse unavailable"}</small>
+                <strong>{usage ? `${formatWholePercent(usage.runPct)} / ${formatWholePercent(usage.passPct)}` : "—"}</strong>
+                {missingNote(!usage, "nflverse unavailable")}
               </div>
             </div>
           </section>
@@ -248,48 +344,40 @@ export function TeamDataModal({
           <section className="team-card-stat-section" aria-labelledby="team-pfn-grades-title">
             <div className="team-card-section-heading">
               <h3 id="team-pfn-grades-title">PFN</h3>
-              <span>Grades · ranks</span>
             </div>
             <div className="team-card-metrics">
               <div>
                 <span>Overall</span>
                 {rankLabel(overallRank, loading)}
-                {gradeCaption(overallGrade, "PFN overall")}
               </div>
               <div>
                 <span>Special teams</span>
                 {rankLabel(specialTeamsRank, loading)}
-                {gradeCaption(specialTeams, "PFN overall")}
               </div>
               <div>
                 <span>O-line</span>
                 {rankLabel(lineRank, loading)}
-                {gradeCaption(lineGrade, "PFN rank")}
               </div>
               <div>
                 <span>Pass block</span>
                 {rankLabel(passBlockRank, loading)}
-                {gradeCaption(passBlock, "PFN O-line")}
               </div>
               <div>
                 <span>Run block</span>
                 {rankLabel(runBlockRank, loading)}
-                {gradeCaption(runBlock, "PFN O-line")}
               </div>
               <div>
-                <span>Pen/G</span>
-                <strong>{loading ? "…" : penPerGame === null ? "—" : formatDecimal(penPerGame, 1)}</strong>
-                <small>PFN O-line</small>
+                <span>Penalties</span>
+                {rankLabel(penaltyRank, loading)}
+                {loading ? null : <span className="sr-only">{penPerGame === null ? "Penalties per game unavailable" : `${formatDecimal(penPerGame, 1)} penalties per game`}</span>}
               </div>
               <div>
                 <span>Defense</span>
                 {rankLabel(defenseRank, loading)}
-                {gradeCaption(defenseGrade, "PFN rank")}
               </div>
               <div>
                 <span>Offense</span>
                 {rankLabel(offenseRank, loading)}
-                {gradeCaption(offenseGrade, "PFN rank")}
               </div>
               {SOS_POSITIONS.map((position) => {
                 const rank = sosRanks[position];
@@ -307,38 +395,33 @@ export function TeamDataModal({
           <section className="team-card-stat-section" aria-labelledby="team-advanced-stats-title">
             <div className="team-card-section-heading">
               <h3 id="team-advanced-stats-title">Advanced</h3>
-              <span>Offensive efficiency</span>
             </div>
             <div className="team-card-metrics team-card-advanced-metrics">
               <div>
                 <span>Red-zone TD rate</span>
-                <strong>{situational ? formatPercent(situational.redZoneTdPct, 0) : "—"}</strong>
-                <small>{situational ? `${situational.games} game${situational.games === 1 ? "" : "s"}` : "Source unavailable"}</small>
+                {coloredStat(situational ? formatPercent(situational.redZoneTdPct) : "—", situationalRank("redZoneTdPct"))}
+                {missingNote(!situational, "Source unavailable")}
               </div>
               <div>
                 <span>Third-down conversion</span>
-                <strong>{situational ? formatPercent(situational.thirdDownPct, 0) : "—"}</strong>
-                <small>{situational ? `${situational.games} game${situational.games === 1 ? "" : "s"}` : "Source unavailable"}</small>
+                {coloredStat(situational ? formatPercent(situational.thirdDownPct) : "—", situationalRank("thirdDownPct"))}
+                {missingNote(!situational, "Source unavailable")}
               </div>
               <div>
                 <span>EPA / play</span>
-                <strong>{epaPerPlay === null ? "—" : formatDecimal(epaPerPlay, 2, { sign: "exceptZero" })}</strong>
-                <small>PFN offense</small>
+                {coloredStat(epaPerPlay === null ? "—" : formatDecimal(epaPerPlay, 2, { sign: "exceptZero" }), pfnRankForRow(offense, offenseRow, "epa_per_play"))}
               </div>
               <div>
                 <span>Success rate</span>
-                <strong>{successPct === null ? "—" : formatPercent(successPct, 1)}</strong>
-                <small>PFN offense</small>
+                {coloredStat(successPct === null ? "—" : formatPercent(successPct), pfnRankForRow(offense, offenseRow, "success_pct"))}
               </div>
               <div>
                 <span>Yards / play</span>
-                <strong>{yardsPerPlay === null ? "—" : formatDecimal(yardsPerPlay, 1)}</strong>
-                <small>PFN offense</small>
+                {coloredStat(yardsPerPlay === null ? "—" : formatDecimal(yardsPerPlay, 1), pfnRankForRow(offense, offenseRow, "yds_per_play"))}
               </div>
               <div>
                 <span>Explosive play rate</span>
-                <strong>{explosivePct === null ? "—" : formatPercent(explosivePct, 1)}</strong>
-                <small>PFN offense</small>
+                {coloredStat(explosivePct === null ? "—" : formatPercent(explosivePct), pfnRankForRow(offense, offenseRow, "expl_pct"))}
               </div>
             </div>
             {situationalSource ? (
@@ -386,6 +469,9 @@ export function ConnectedTeamCard({
       record={(dashboard.analytics.teamRecords ?? []).find((row) => (canonicalNflTeam(row.team) ?? row.team) === teamCode) ?? null}
       situational={situational}
       situationalSource={teamSituational ? { fetchedAt: teamSituational.fetchedAt, sourceUrl: teamSituational.sourceUrl } : null}
+      usageLeague={dashboard.analytics.teamUsage}
+      recordLeague={dashboard.analytics.teamRecords ?? []}
+      situationalLeague={teamSituational?.rows ?? []}
       sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === leagueId)}
       loading={pfnTablesQuery.isPending}
       loadError={pfnTablesQuery.isError}
@@ -395,7 +481,7 @@ export function ConnectedTeamCard({
   );
 }
 
-export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, rankingPosition, rankingHorizon, rankingQuery, onRankingFiltersChange, linkedPlayerId, onOpenLinkedPlayer }: { dashboard: Dashboard; league: League; availableOnly: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void; rankingPosition: RankingPosition | null; rankingHorizon: RankingHorizon | null; rankingQuery: string | null; onRankingFiltersChange: (filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => void } & PlayerLink) {
+export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, onOpenLeagueTeam, rankingPosition, rankingHorizon, rankingQuery, onRankingFiltersChange, linkedPlayerId, onOpenLinkedPlayer }: { dashboard: Dashboard; league: League; availableOnly: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void; onOpenLeagueTeam?: (rosterId: number) => void; rankingPosition: RankingPosition | null; rankingHorizon: RankingHorizon | null; rankingQuery: string | null; onRankingFiltersChange: (filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => void } & PlayerLink) {
   const [position, setPosition] = useState<PositionFilter>(rankingPosition ?? "QB");
   const [query, setQuery] = useState(rankingQuery ?? "");
   const [rankingMode, setRankingMode] = useState<"week" | "ros" | "dynasty">(rankingHorizon ?? "week");
@@ -445,6 +531,20 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
     () => new Map((league.rosterAssignments ?? []).map((assignment) => [assignment.playerId, assignment])),
     [league.rosterAssignments],
   );
+  const powerTeamByPlayerId = useMemo(() => {
+    const rosterAssignments = league.rosterAssignments ?? [];
+    const lookupLeague = {
+      rosterAssignments,
+      tradeTeams: league.tradeTeams,
+      powerRankingsWeek: league.powerRankingsWeek,
+    };
+    const map = new Map<string, League["powerRankingsWeek"][number]>();
+    for (const assignment of rosterAssignments) {
+      const team = leaguePowerTeamForPlayer(lookupLeague, assignment.playerId);
+      if (team) map.set(assignment.playerId, team);
+    }
+    return map;
+  }, [league]);
   const leagueRankings = useMemo(() => dashboard.rankings.filter((row) => row.leagueId === league.id), [dashboard.rankings, league.id]);
   const leagueDefenses = useMemo(() => dashboard.defenses.filter((row) => row.leagueId === league.id), [dashboard.defenses, league.id]);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
@@ -597,7 +697,6 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
         .filter((row) => effectivePosition !== "ROOKIES" || row.isRookie)
         .filter((row) => !availableOnly || !rostered.has(row.playerId))
         .map((row) => {
-          const rosterAssignment = rosterTeamByPlayer.get(row.playerId);
           const weeklyContext = weeklyContextByPlayerId.get(row.playerId);
           const team = row.team ?? weeklyContext?.team ?? null;
           return {
@@ -612,8 +711,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
               isAway: weeklyContext?.isAway ?? null,
               isBye: weeklyContext?.isBye ?? false,
             },
-            rosterTeamName: rosterAssignment?.teamName ?? null,
-            rosterIsUser: rosterAssignment?.isUser ?? false,
+            ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId),
             projection: row.value,
             projectionLabel: "VALUE",
             projectionSource: null,
@@ -633,15 +731,13 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
       return leagueDefenses
         .filter((row) => !availableOnly || !rostered.has(row.team))
         .map((row) => {
-          const rosterAssignment = rosterTeamByPlayer.get(row.team);
           return {
             key: row.team,
             rank: row.rank,
             name: `${row.team} Defense`,
             meta: matchupLabel(row.opponent, row.isAway),
             teamContext: null,
-            rosterTeamName: rosterAssignment?.teamName ?? null,
-            rosterIsUser: rosterAssignment?.isUser ?? false,
+            ...rosterBadgeForPlayer(row.team, rosterTeamByPlayer, powerTeamByPlayerId),
             projection: row.displayProjection,
             projectionLabel: row.gamePhase === "final" ? "PTS" : "PROJ",
             projectionSource: row.projectionSource,
@@ -656,15 +752,13 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
       .filter((row) => includedPositions.includes(row.position))
       .filter((row) => !availableOnly || !rostered.has(row.playerId))
       .map((row) => {
-        const rosterAssignment = rosterTeamByPlayer.get(row.playerId);
         return {
           key: row.playerId,
           rank: league.rankingField === "ppr" ? row.pprRank : row.halfPprRank,
           name: row.name,
           meta: `${row.position} · ${row.team}${row.opponent ? ` · ${matchupLabel(row.opponent, row.isAway)}` : ""}`,
           teamContext: null,
-          rosterTeamName: rosterAssignment?.teamName ?? null,
-          rosterIsUser: rosterAssignment?.isUser ?? false,
+          ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId),
           projection: league.rankingField === "ppr" ? row.ppr : row.halfPpr,
           projectionLabel: "PROJ",
           projectionSource: row.projectionSource,
@@ -677,7 +771,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
       .sort((a, b) => effectivePosition === "FLEX" || effectivePosition === "SUPER"
         ? (b.projection ?? -1) - (a.projection ?? -1) || a.rank - b.rank
         : a.rank - b.rank);
-  }, [availableOnly, dashboard.seasonLongRankings, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, leagueDefenses, leagueRankings, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
+  }, [availableOnly, dashboard.seasonLongRankings, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, leagueDefenses, leagueRankings, powerTeamByPlayerId, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
   const visibleRows = rows.slice(0, visibleRowCount);
   const hasSearch = query.trim().length > 0;
   const prefetchPlayerPanels = (player: PlayerSearchResult) => {
@@ -815,7 +909,9 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
               const accessibleValue = isSeasonLong
                 ? `${Math.round(row.projection ?? 0).toLocaleString()} ${row.projectionLabel}`
                 : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
-              const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${row.rosterTeamName ? `, rostered by ${row.rosterTeamName}` : ""}${isSelected ? ", selected" : ""}`;
+              const rosteredBy = row.rosterTeamName && row.rosterId === null ? `, rostered by ${row.rosterTeamName}` : "";
+              const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${rosteredBy}${isSelected ? ", selected" : ""}`;
+              const rosterId = row.rosterId;
               const content = (
                 <>
                   <span className="ranking-player">
@@ -840,9 +936,26 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
                         </span>
                       )}
                       {row.rosterTeamName ? (
-                        <span className={`roster-owner-tag${row.rosterIsUser ? " is-user" : ""}`} title={row.rosterIsUser ? "Your roster" : `Rostered by ${row.rosterTeamName}`}>
-                          {row.rosterTeamName}
-                        </span>
+                        rosterId !== null && row.rosterLabel && onOpenLeagueTeam ? (
+                          <button
+                            type="button"
+                            className="roster-owner-button"
+                            aria-label={row.rosterLabel}
+                            aria-haspopup="dialog"
+                            title={row.rosterIsUser ? "Your roster" : `Rostered by ${row.rosterTeamName}`}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenLeagueTeam(rosterId);
+                            }}
+                          >
+                            <span className={`roster-owner-tag${row.rosterIsUser ? " is-user" : ""}`}>{row.rosterTeamName}</span>
+                          </button>
+                        ) : (
+                          <span className={`roster-owner-tag${row.rosterIsUser ? " is-user" : ""}`} title={row.rosterIsUser ? "Your roster" : `Rostered by ${row.rosterTeamName}`}>
+                            {row.rosterTeamName}
+                          </span>
+                        )
                       ) : null}
                     </span>
                   </span>
@@ -857,18 +970,15 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
                 <div
                   className={`ranking-row ranking-row-button${isMine ? " is-my-roster" : ""}${isSelected ? " is-player-selected" : ""}`}
                   key={row.key}
-                  role="button"
-                  tabIndex={0}
-                  onPointerDown={() => detail && prefetchPlayerPanels(detail)}
-                  onFocus={() => detail && prefetchPlayerPanels(detail)}
-                  onClick={openPlayer}
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
-                    event.preventDefault();
-                    openPlayer();
-                  }}
-                  aria-label={rowAccessibleLabel}
                 >
+                  <button
+                    type="button"
+                    className="ranking-row-open"
+                    aria-label={rowAccessibleLabel}
+                    onPointerDown={() => detail && prefetchPlayerPanels(detail)}
+                    onFocus={() => detail && prefetchPlayerPanels(detail)}
+                    onClick={openPlayer}
+                  />
                   {content}
                 </div>
               );
@@ -916,6 +1026,9 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
           record={teamRecordByTeam.get(canonicalNflTeam(selectedTeam.team) ?? selectedTeam.team) ?? null}
           situational={teamSituationalByTeam.get(canonicalNflTeam(selectedTeam.team) ?? selectedTeam.team) ?? null}
           situationalSource={teamSituational ? { fetchedAt: teamSituational.fetchedAt, sourceUrl: teamSituational.sourceUrl } : null}
+          usageLeague={dashboard.analytics.teamUsage}
+          recordLeague={dashboard.analytics.teamRecords ?? []}
+          situationalLeague={teamSituational?.rows ?? []}
           sosEntry={sosEntry}
           loading={pfnTablesQuery.isPending}
           loadError={pfnTablesQuery.isError}

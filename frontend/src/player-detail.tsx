@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
@@ -29,7 +29,8 @@ import {
   pfnRankForRow,
   projectionComponentsForPlayer,
 } from "./dashboard-shared";
-import { formatDecimal } from "./lib/format-number";
+import { formatDecimal, formatPercent } from "./lib/format-number";
+import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { MatchupTag, ModalPortal, SegmentedControl, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
@@ -92,13 +93,6 @@ export const detailAdvancedMetrics: Partial<Record<BasePosition, DetailMetric[]>
     { key: "tackles_for_loss", label: "TFL / game", digits: 1 },
   ],
 };
-
-export const gameLogStatLabels: Record<string, string> = {
-  passCmp: "CMP", passAtt: "ATT", passYds: "PASS YDS", passTd: "PASS TD", interceptions: "INT",
-  rushAtt: "CAR", rushYds: "RUSH YDS", rushTd: "RUSH TD", targets: "TGT", receptions: "REC",
-  recYds: "REC YDS", recTd: "REC TD", fantasyPoints: "FPTS",
-};
-
 
 export function usePlayerCardHistory() {
   const [history, setHistory] = useState<{ entries: PlayerSearchResult[]; index: number }>({ entries: [], index: -1 });
@@ -172,17 +166,17 @@ export function PlayerTeamContext({
 
   if (player.position === "QB") {
     addStat("Pass-block rank", offensiveLine, teamLine, "pass_block");
-    addStat("Team pass grade", offense, teamOffense, "pass");
+    addStat("Team pass rank", offense, teamOffense, "pass");
     addStat("Opponent pass defense", defense, opponentDefense, "pass");
   } else if (player.position === "RB") {
     addStat("Run-block rank", offensiveLine, teamLine, "run_block");
     addStat("Opponent run defense", defense, opponentDefense, "run");
   } else if (player.position === "WR" || player.position === "TE") {
-    addStat("Team pass grade", offense, teamOffense, "pass");
+    addStat("Team pass rank", offense, teamOffense, "pass");
     addStat("Pass-block rank", offensiveLine, teamLine, "pass_block");
     addStat("Opponent pass defense", defense, opponentDefense, "pass");
   } else if (player.position === "DEF") {
-    addStat("Defensive grade", defense, teamDefense, "grade", { tableRank: true });
+    addStat("Defense rank", defense, teamDefense, "grade", { tableRank: true });
     addStat("Points-allowed rank", defense, teamDefense, "pts_allowed_per_game", { higherIsBetter: false, suffix: " PPG" });
     addStat("Opponent offense", offense, opponentOffense, "grade", { tableRank: true });
   } else if (player.position === "K") {
@@ -211,17 +205,13 @@ export function PlayerTeamContext({
               <strong className={rankToneClassName(sosRank)}>#{sosRank}</strong>
             </div>
           ) : null}
-          {stats.map((stat) => {
-            const caption = `${formatDecimal(stat.value, 1)}${stat.suffix ?? " grade"}`;
-            const isGrade = (stat.suffix ?? " grade") === " grade";
-            return (
-              <div key={stat.label}>
-                <span>{stat.label}</span>
-                <strong className={rankToneClassName(stat.rank)}>{stat.rank === null ? "—" : `#${stat.rank}`}</strong>
-                <small className={isGrade ? "metric-grade" : undefined}>{caption}</small>
-              </div>
-            );
-          })}
+          {stats.map((stat) => (
+            <div key={stat.label}>
+              <span>{stat.label}</span>
+              <strong className={rankToneClassName(stat.rank)}>{stat.rank === null ? "—" : `#${stat.rank}`}</strong>
+              {stat.suffix ? <small>{formatDecimal(stat.value, 1)}{stat.suffix}</small> : null}
+            </div>
+          ))}
         </div>
       ) : contextRows && !query.isPending && !query.isError ? (
         <SectionError title="No PFN team context found for this matchup." onRetry={() => { void query.refetch(); }} retrying={query.isFetching} compact />
@@ -240,7 +230,17 @@ export function gameLogSummary(position: string, stats: Record<string, number>):
   return pieces.join(" · ");
 }
 
-export function SeasonGameLog({ player, history, isLoading }: { player: PlayerSearchResult; history: BoomBustHistory | undefined; isLoading: boolean }) {
+export function SeasonGameLog({
+  player,
+  history,
+  analytics,
+  isLoading,
+}: {
+  player: PlayerSearchResult;
+  history: BoomBustHistory | undefined;
+  analytics: Dashboard["analytics"];
+  isLoading: boolean;
+}) {
   const games = history?.gameLog ?? [];
   const totals = history?.seasonTotals ?? {};
   const totalOrder = player.position === "QB"
@@ -248,7 +248,14 @@ export function SeasonGameLog({ player, history, isLoading }: { player: PlayerSe
     : player.position === "RB"
       ? ["fantasyPoints", "rushAtt", "rushYds", "rushTd", "targets", "receptions", "recYds", "recTd"]
       : ["fantasyPoints", "targets", "receptions", "recYds", "recTd", "rushAtt", "rushYds", "rushTd"];
-  const totalRows = totalOrder.flatMap((key) => typeof totals[key] === "number" ? [{ key, value: totals[key] ?? 0 }] : []);
+  const playerName = normalizePlayerIdentity(player.name);
+  const playerTeam = canonicalNflTeam(player.team);
+  const rateRows = seasonRateRows(totalOrder, totals, games.length, (analyticsKey) => peerSeasonRates(
+    analytics.entities,
+    player.position,
+    analyticsKey,
+    (entity) => normalizePlayerIdentity(entity.name) === playerName || (player.position === "DEF" && canonicalNflTeam(entity.team) === playerTeam),
+  ));
 
   if (isLoading && !history) return <div className="player-tab-loading"><span className="loading-shimmer" /><span className="loading-shimmer" /><span className="loading-shimmer" /></div>;
   if (!isBoomBustPosition(player.position)) return <div className="player-tab-empty"><strong>Season log unavailable</strong><span>Weekly stat logs are currently available for QB, RB, WR, and TE.</span></div>;
@@ -257,11 +264,14 @@ export function SeasonGameLog({ player, history, isLoading }: { player: PlayerSe
 
   return (
     <div className="player-season-panel">
-      <section aria-labelledby="player-season-totals-heading">
-        <div className="section-heading"><h3 id="player-season-totals-heading">Season totals</h3><span>{games.length} game{games.length === 1 ? "" : "s"}</span></div>
+      <section aria-labelledby="player-season-rates-heading">
+        <div className="section-heading"><h3 id="player-season-rates-heading">Per game</h3></div>
         <div className="player-season-totals">
-          {totalRows.map(({ key, value: totalValue }) => (
-            <div key={key}><span>{gameLogStatLabels[key] ?? key}</span><strong>{key === "fantasyPoints" ? formatDecimal(totalValue, 1) : Number.isInteger(totalValue) ? formatDecimal(totalValue, 0) : formatDecimal(totalValue, 1)}</strong></div>
+          {rateRows.map((row) => (
+            <div key={row.key}>
+              <span>{row.label}</span>
+              <strong className={row.rank === null ? undefined : rankToneClassName(row.rank)}>{row.rate === null ? "—" : formatDecimal(row.rate, 1)}</strong>
+            </div>
           ))}
         </div>
       </section>
@@ -307,13 +317,58 @@ export function PlayerAdvancedPanel({ player, analytics, children }: { player: P
         <div className="section-heading"><h3 id="player-advanced-metrics-heading">Efficiency &amp; usage</h3><span>{entity ? `${entity.seasonGames} games` : null}</span></div>
         {metrics.length > 0 ? (
           <div className="player-advanced-grid">
-            {metrics.map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{formatDecimal(metric.value, metric.digits ?? 1)}{metric.unit ?? ""}</strong></div>)}
+            {metrics.map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{metric.unit === "%" ? formatPercent(metric.value) : `${formatDecimal(metric.value, metric.digits ?? 1)}${metric.unit ?? ""}`}</strong></div>)}
           </div>
         ) : <div className="player-tab-empty compact"><strong>No advanced metrics yet</strong><span>nflverse has not published a matching season row for this player.</span></div>}
         {entity && analytics.throughWeek !== null ? <p className="player-tab-source">Through Week {analytics.throughWeek} · nflverse weekly player stats</p> : null}
       </section>
       {children}
     </div>
+  );
+}
+
+function PlayerRosterBadge({
+  playerName,
+  rosterTeamName,
+  rosterLabel,
+  onOpenRosterTeam,
+  waiversHref,
+  onOpenWaivers,
+}: {
+  playerName: string;
+  rosterTeamName: string | null;
+  rosterLabel: string | null;
+  onOpenRosterTeam?: () => void;
+  waiversHref?: string;
+  onOpenWaivers?: () => void;
+}) {
+  if (rosterTeamName && onOpenRosterTeam) {
+    return (
+      <button
+        type="button"
+        className="matchup-reference-tag matchup-reference-button player-roster-badge"
+        aria-label={rosterLabel ?? `Open ${rosterTeamName} league team`}
+        aria-haspopup="dialog"
+        onClick={onOpenRosterTeam}
+      >
+        <span className="matchup-reference-button-label">{rosterTeamName}</span>
+      </button>
+    );
+  }
+  if (!waiversHref || !onOpenWaivers) return null;
+  return (
+    <a
+      href={waiversHref}
+      className="matchup-reference-tag matchup-reference-button player-roster-badge"
+      aria-label={`Open Waivers for ${playerName}`}
+      onClick={(event: ReactMouseEvent<HTMLAnchorElement>) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        onOpenWaivers();
+      }}
+    >
+      <span className="matchup-reference-button-label">Available</span>
+    </a>
   );
 }
 
@@ -335,6 +390,12 @@ export function PlayerDetailSheet({
   canGoBack,
   onClose,
   presentation = "modal",
+  rosterTeamName = null,
+  rosterLabel = null,
+  onOpenRosterTeam,
+  waiversHref,
+  onOpenWaivers,
+  suspended = false,
 }: {
   player: PlayerSearchResult;
   week: number;
@@ -354,6 +415,15 @@ export function PlayerDetailSheet({
   onClose: () => void;
   /** Docked column skips portal, backdrop, scroll lock, and inert. */
   presentation?: "modal" | "docked";
+  /** League team name when this player is rostered. The badge opens that team card. */
+  rosterTeamName?: string | null;
+  rosterLabel?: string | null;
+  onOpenRosterTeam?: () => void;
+  /** Waivers URL for an available player. Keeps the current position filter and player. */
+  waiversHref?: string;
+  onOpenWaivers?: () => void;
+  /** Pause this dialog while a team card opened from the badge is on top. */
+  suspended?: boolean;
 }) {
   const isModal = presentation === "modal";
   const sheetRef = useRef<HTMLElement | null>(null);
@@ -373,9 +443,9 @@ export function PlayerDetailSheet({
   const [settling, setSettling] = useState(false);
   const [contentDirection, setContentDirection] = useState<"back" | "none">("none");
   const [activeTab, setActiveTab] = useState<PlayerDetailTab>("overview");
-  useDialogFocusTrap(sheetRef, onClose, isModal);
+  useDialogFocusTrap(sheetRef, onClose, isModal && !suspended);
   useEffect(() => {
-    if (isModal) return;
+    if (isModal || suspended) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -384,7 +454,7 @@ export function PlayerDetailSheet({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isModal, onClose]);
+  }, [isModal, onClose, suspended]);
 
   const resetDrag = useCallback((animate: boolean) => {
     if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
@@ -622,7 +692,14 @@ export function PlayerDetailSheet({
           </div>
         )}
         <div className="player-detail-meta">
-          <span>{player.isRostered ? "Rostered in this league" : "Available in this league"}</span>
+          <PlayerRosterBadge
+            playerName={player.name}
+            rosterTeamName={rosterTeamName}
+            rosterLabel={rosterLabel}
+            onOpenRosterTeam={onOpenRosterTeam}
+            waiversHref={waiversHref}
+            onOpenWaivers={onOpenWaivers}
+          />
           {player.injuryStatus ? <span className="player-detail-injury">Injury status: {player.injuryStatus}</span> : null}
           {player.seasonValue !== null ? <span className="player-detail-movement">{movementLabel(player.movement30Day)}</span> : null}
         </div>
@@ -698,7 +775,7 @@ export function PlayerDetailSheet({
         </div> : null}
         {activeTab === "season" ? (
           <div id="player-detail-season-panel" role="tabpanel" aria-labelledby="player-detail-season-tab">
-            <SeasonGameLog player={player} history={boomBustQuery.data} isLoading={boomBustQuery.isPending} />
+            <SeasonGameLog player={player} history={boomBustQuery.data} analytics={analytics} isLoading={boomBustQuery.isPending} />
           </div>
         ) : null}
         {activeTab === "advanced" ? (

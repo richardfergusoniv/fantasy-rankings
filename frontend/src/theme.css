@@ -590,7 +590,7 @@ main { padding: 12px 16px 0; }
 .monitor-league-row.is-opponent { background: var(--opponent-row); }
 .monitor-league-rank { color: var(--dim); font-size: var(--type-body); font-weight: 700; font-variant-numeric: tabular-nums; }
 .monitor-league-row.is-user .monitor-league-rank,
-.monitor-league-row.is-user .monitor-league-team > strong,
+.monitor-league-row.is-user .monitor-league-team-open,
 .monitor-league-row.is-user .monitor-league-value { color: var(--link); }
 .monitor-league-team {
   display: flex;
@@ -598,12 +598,30 @@ main { padding: 12px 16px 0; }
   align-items: center;
   gap: 8px;
 }
-.monitor-league-team > strong {
+.monitor-league-team-open {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 44px;
+  max-width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   font-size: var(--type-body);
   font-weight: 600;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+.monitor-league-team-open:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
 }
 .monitor-league-value {
   font-size: var(--type-body);
@@ -1030,7 +1048,11 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-values strong { display: block; margin: 5px 0 3px; font-size: var(--type-section); line-height: 1; font-weight: 700; letter-spacing: -.02em; }
 .rank-tone.sos-soft { color: var(--stat-strength-readable); }
 .rank-tone.sos-tough { color: var(--stat-weakness-readable); }
-.player-detail-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 12px 2px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.player-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px 2px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.player-detail-meta .player-roster-badge { min-width: 44px; max-width: 100%; flex: none; justify-content: center; color: var(--text); text-decoration: none; }
+.player-detail-meta .player-roster-badge:hover,
+.player-detail-meta .player-roster-badge:active { color: var(--text); }
+.player-detail-meta .player-roster-badge .matchup-reference-button-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .player-detail-injury { padding: 2px 6px; border-radius: 4px; background: var(--stat-weakness-soft); color: var(--negative); font-weight: 700; }
 .player-detail-movement { display: inline-flex; align-items: center; gap: 5px; }
 .player-detail-waiver-trends { margin-top: 14px; }
@@ -1049,15 +1071,13 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-team-context .section-heading { position: static; min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .player-team-context .section-heading h3 { margin: 0; font-size: var(--type-section); }
 .player-team-context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
-.player-team-context-grid > div { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; padding: 10px 2px; }
+.player-team-context-grid > div { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; padding: 8px 2px; }
 .player-team-context-grid > div:nth-child(odd) { padding-right: 10px; }
 .player-team-context-grid > div:nth-child(even) { padding-left: 10px; border-left: 1px solid var(--hairline); }
 .player-team-context-grid > div:nth-child(n + 3) { border-top: 1px solid var(--hairline); }
 .player-team-context-grid span { min-width: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; line-height: 1.25; }
 .player-team-context-grid strong { font-size: var(--type-section); font-variant-numeric: tabular-nums; font-weight: 700; line-height: 1; }
 .player-team-context-grid small { grid-column: 1 / -1; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.player-team-context-grid small.metric-grade,
-.team-card-metrics small.metric-grade { color: var(--warning); }
 .player-team-context-state { padding: 14px 2px; border-block: 1px solid var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .dst-breakdown { margin-top: 16px; }
 .dst-breakdown .section-heading { position: static; min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -2001,6 +2021,8 @@ button.league-partner-change:active { color: var(--link-active); }
 .power-total strong { display: block; font-size: var(--type-body); font-weight: 700; }
 .power-total span { display: block; margin-top: 2px; overflow: hidden; color: var(--dim); font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .power-team-card-backdrop { position: fixed; z-index: 990; inset: 0; display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--overlay); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: backdropIn .12s ease-out both; }
+.power-team-card-backdrop.is-above-player { z-index: 1040; }
+.power-team-card-backdrop.is-above-player.is-obscured { z-index: 990; }
 .power-team-card-backdrop.is-obscured { pointer-events: none; }
 .power-team-card { width: min(100%, 560px); max-height: min(88dvh, 760px); overflow-y: auto; overscroll-behavior-y: contain; border: 1px solid var(--hairline); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-modal); animation: newsCardIn .14s cubic-bezier(.2,.7,.2,1) both; -webkit-overflow-scrolling: touch; }
 .power-team-card-header { position: sticky; z-index: 2; top: 0; display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 9px 16px; border-bottom: 1px solid var(--hairline); background: var(--surface); }
@@ -2416,7 +2438,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .trade-side-heading button,
 .draft-remove-link,
 .integration-actions button { min-width: 44px; min-height: 44px; }
-.draft-row button.draft-player-open { min-height: var(--player-row-height); }
+.draft-row button.draft-player-open { min-height: 0; }
 .integration-row input,
 .integration-row form button { min-height: 44px; }
 .integration-actions a,
@@ -2627,13 +2649,11 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .team-card-stat-section + .team-card-stat-section { margin-top: 18px; }
 .team-card-section-heading { display: flex; min-height: 30px; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 7px; border-bottom: 1px solid var(--hairline); }
 .team-card-section-heading h3 { margin: 0; color: var(--text); font-size: var(--type-body); font-weight: 750; }
-.team-card-section-heading span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .team-card-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--hairline); }
-.team-card-metrics > div { display: flex; min-width: 0; flex-direction: column; gap: 3px; padding: 12px 8px 12px 0; border-bottom: 1px solid var(--hairline); }
+.team-card-metrics > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; padding: 8px 8px 8px 0; border-bottom: 1px solid var(--hairline); }
 .team-card-metrics > div:nth-child(even) { padding-right: 0; padding-left: 12px; border-left: 1px solid var(--hairline); }
 .team-card-metrics span { color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
 .team-card-metrics strong { color: var(--text); font-size: var(--type-section); font-weight: 750; font-variant-numeric: tabular-nums; }
-.team-card-metrics small { color: var(--dim); font-size: var(--type-caption); font-weight: 500; line-height: 1.35; }
 .team-card-advanced-metrics > div:last-child { grid-column: 1 / -1; padding-right: 0; border-bottom: 0; }
 .team-card-source { margin: 8px 0 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.4; }
 .team-card-source a { color: var(--link); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
@@ -2873,31 +2893,109 @@ a:active { color: var(--link-active); }
 }
 
 /*
- * Explorer rankings / waivers use compact rows only.
- * Scoped to .rankings-view so Matchup, trade, power, and draft keep root tokens.
+ * Explorer rankings / waivers and the draft board share one compact row height.
+ * Scoped so Matchup, trade, and power keep the root token.
  */
-.rankings-view {
-  --player-box-height: 56px;
-  --player-box-half: 28px;
+.rankings-view,
+.draft-board {
   --player-row-height: 56px;
+}
+
+.rankings-view {
+  --player-box-height: var(--player-row-height);
+  --player-box-half: calc(var(--player-row-height) / 2);
 }
 
 .rankings-view .ranking-row,
 .rankings-view .player-search-result {
-  min-height: 56px;
+  min-height: var(--player-row-height);
 }
 
 .rankings-view .ranking-row .ranking-player {
-  grid-template-rows: 28px 28px;
+  grid-template-rows: var(--player-box-half) var(--player-box-half);
 }
 
 .rankings-view .ranking-row .ranking-name-line,
 .rankings-view .ranking-row .ranking-meta-line {
-  min-height: 28px;
+  min-height: var(--player-box-half);
 }
 
 .rankings-view .ranking-row .matchup-reference-button.matchup-reference-tag {
   min-height: 28px;
+}
+
+/* Player opener sits behind the row. The roster chip is a sibling control. */
+.rankings-view .ranking-row {
+  position: relative;
+}
+.rankings-view .ranking-row-open {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.rankings-view .ranking-row-open:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
+}
+.rankings-view .ranking-row > .ranking-player,
+.rankings-view .ranking-row > .ranking-proj {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.rankings-view .ranking-row .matchup-reference-button,
+.rankings-view .ranking-row .roster-owner-button {
+  pointer-events: auto;
+}
+.rankings-view .ranking-row-button:has(.roster-owner-button:active) {
+  background: var(--surface);
+}
+.rankings-view .ranking-row-button.is-my-roster:has(.roster-owner-button:active) {
+  background: var(--roster-highlight-bg);
+}
+/* Chip stays ~16px. Padding and a negative margin make a 44px hit box inside the 56px row. */
+.rankings-view .ranking-row .roster-owner-button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 112px;
+  min-width: 44px;
+  height: auto;
+  margin: 0;
+  margin-block: -20px -8px;
+  padding-block: 20px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: visible;
+}
+.rankings-view .ranking-row .roster-owner-button::before {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: 44px;
+  transform: translate(-50%, -50%);
+  content: "";
+}
+.rankings-view .ranking-row .roster-owner-button .roster-owner-tag {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .matchup-player {
@@ -2977,7 +3075,7 @@ a:active { color: var(--link-active); }
 
 .draft-row button.draft-player-open,
 .draft-row button.draft-player-open.is-single-line {
-  min-height: var(--player-row-height);
+  min-height: 0;
   grid-template-rows: auto;
   align-content: center;
   align-items: center;

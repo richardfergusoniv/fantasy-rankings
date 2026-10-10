@@ -357,8 +357,8 @@ export const matchupStatConfigs: ReadonlyArray<MatchupStatConfig> = [
   { label: "Run", offKey: "run", defKey: "run", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: true },
   { label: "EPA/Play", offKey: "epa_per_play", defKey: "epa_per_play", format: (value) => formatDecimal(value, 2, { sign: "always" }), offHigher: true, defHigher: false },
   { label: "Yds/Play", offKey: "yds_per_play", defKey: "yds_per_play", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: false },
-  { label: "Success%", offKey: "success_pct", defKey: "success_pct", format: (value) => formatPercent(value, 1), offHigher: true, defHigher: false },
-  { label: "Expl%", offKey: "expl_pct", defKey: "expl_pct", format: (value) => formatPercent(value, 1), offHigher: true, defHigher: false },
+  { label: "Success%", offKey: "success_pct", defKey: "success_pct", format: (value) => formatPercent(value), offHigher: true, defHigher: false },
+  { label: "Expl%", offKey: "expl_pct", defKey: "expl_pct", format: (value) => formatPercent(value), offHigher: true, defHigher: false },
 ];
 
 export function matchupGrade(table: PfnTable | null, row: PfnRow | undefined, key = "grade", higherIsBetter = true): MatchupGrade {

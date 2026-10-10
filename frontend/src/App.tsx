@@ -34,7 +34,9 @@ import {
 } from "./dashboard-shared";
 import { formatDecimal } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
-import { effectiveTradeMode } from "./dashboard-url";
+import { effectiveTradeMode, waiversSearchPreservingContext } from "./dashboard-url";
+import { formatRecord, LeagueTeamCard } from "./league-team-card";
+import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
@@ -485,6 +487,7 @@ export function App() {
   const [tickerNews, setTickerNews] = useState<PlayerNewsItem | null>(null);
   const [selectedMatchup, setSelectedMatchup] = useState<MatchupSelection | null>(null);
   const [teamCardTeam, setTeamCardTeam] = useState<string | null>(null);
+  const [rosterCardRosterId, setRosterCardRosterId] = useState<number | null>(null);
   const [commandBarOpen, setCommandBarOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
@@ -620,6 +623,9 @@ export function App() {
   const dashboard = freshestDashboard(dashboardQuery.data, streamedDashboard, browserDashboard);
 
   const league = dashboard?.leagues.find((item) => item.id === selectedLeagueId) ?? dashboard?.leagues[0];
+  useEffect(() => {
+    setRosterCardRosterId(null);
+  }, [league?.id]);
   const leagueDashboard = useMemo<Dashboard | undefined>(() => {
     if (!dashboard || !league) return dashboard;
     return {
@@ -874,6 +880,13 @@ export function App() {
 
   const activeDashboard = leagueDashboard ?? dashboard;
   const selectedPlayerId = dashboardUrl.state.playerId;
+  const rosterTeam = playerHistory.current ? leaguePowerTeamForPlayer(league, playerHistory.current.playerId) : null;
+  const rosterCardTeam = rosterCardRosterId === null
+    ? null
+    : league.powerRankingsWeek.find((team) => team.rosterId === rosterCardRosterId) ?? null;
+  const rosterCardOnTop = rosterCardTeam !== null && selectedMatchup === null && teamCardTeam === null;
+  const showAvailableBadge = playerHistory.current !== null && rosterTeam === null && !playerHistory.current.isRostered;
+  const waiversHref = waiversSearchPreservingContext(dashboardUrl.state);
   const inspectorPresentation: "modal" | "docked" =
     playerHistory.current
     && DOCKABLE_INSPECTOR_TABS.has(tab)
@@ -897,8 +910,14 @@ export function App() {
       onOpenMatchup={setSelectedMatchup}
       onBack={playerHistory.back}
       canGoBack={playerHistory.canGoBack}
-      onClose={() => { playerHistory.close(); closeLinkedPlayer(); }}
+      onClose={() => { setRosterCardRosterId(null); playerHistory.close(); closeLinkedPlayer(); }}
       presentation={inspectorPresentation}
+      rosterTeamName={rosterTeam?.teamName ?? null}
+      rosterLabel={rosterTeam ? `Open ${rosterTeam.teamName}, ${formatRecord(rosterTeam.record)} record, rank ${rosterTeam.rank}` : null}
+      onOpenRosterTeam={rosterTeam ? () => setRosterCardRosterId(rosterTeam.rosterId) : undefined}
+      waiversHref={showAvailableBadge ? waiversHref : undefined}
+      onOpenWaivers={showAvailableBadge ? () => dashboardUrl.commit({ tab: "waivers" }) : undefined}
+      suspended={rosterCardOnTop}
     />
   ) : null;
 
@@ -975,7 +994,7 @@ export function App() {
           {currentSectionLoading ? <SectionLoading label={`Loading ${({ monitor: "Monitor", team: "Matchup", players: "Players", league: "League", tools: "Tools" } as const)[primaryPage]}…`} />
             : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
             : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
-            : tab === "monitor" ? <Monitor league={league} dashboard={activeDashboard} draftData={draftQuery.data} news={newsQuery.data} onOpenPlayer={openTickerPlayer} onOpenMatchup={setSelectedMatchup} />
+            : tab === "monitor" ? <Monitor league={league} dashboard={activeDashboard} draftData={draftQuery.data} news={newsQuery.data} onOpenPlayer={openTickerPlayer} onPlayerIntent={prefetchDashboardPlayer} onOpenMatchup={setSelectedMatchup} playerCardOpen={playerHistory.isOpen} selectedPlayerId={selectedPlayerId} />
             : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onOpenMatchup={setSelectedMatchup} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
             : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} dashboard={activeDashboard} onPlayerIntent={prefetchDashboardPlayer} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} onOpenMatchup={setSelectedMatchup} playerCardOpen={playerHistory.isOpen} selectedPlayerId={selectedPlayerId} /></Suspense>
             : tab === "draft" ? <Suspense fallback={<SectionLoading label="Loading draft…" />}><LazyDraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} loading={draftQuery.isPending} onRefresh={() => draftRefresh.mutate()} refreshing={draftRefresh.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} /></Suspense>
@@ -996,6 +1015,7 @@ export function App() {
                 dashboard={activeDashboard}
                 league={league}
                 onOpenMatchup={setSelectedMatchup}
+                onOpenLeagueTeam={(rosterId) => setRosterCardRosterId(rosterId)}
                 rankingPosition={dashboardUrl.state.position}
                 rankingHorizon={dashboardUrl.state.horizon}
                 rankingQuery={dashboardUrl.state.query}
@@ -1014,6 +1034,22 @@ export function App() {
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
       {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} suspended={teamCardTeam !== null} /> : null}
       {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
+      {rosterCardTeam ? (
+        <LeagueTeamCard
+          team={rosterCardTeam}
+          league={league}
+          dashboard={activeDashboard}
+          scope="week"
+          mode="seasonLong"
+          playerCardOpen={!rosterCardOnTop}
+          layer="above-player"
+          selectedPlayerId={selectedPlayerId}
+          onPlayerIntent={prefetchDashboardPlayer}
+          onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
+          onOpenMatchup={setSelectedMatchup}
+          onClose={() => setRosterCardRosterId(null)}
+        />
+      ) : null}
       <CommandBar
         open={commandBarOpen}
         onOpenChange={setCommandBarOpen}

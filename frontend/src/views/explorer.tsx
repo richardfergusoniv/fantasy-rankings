@@ -36,6 +36,7 @@ export function Explorer({
   dashboard,
   league,
   onOpenMatchup,
+  onOpenLeagueTeam,
   rankingPosition,
   rankingHorizon,
   rankingQuery,
@@ -50,6 +51,7 @@ export function Explorer({
   dashboard: Dashboard;
   league: League;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
+  onOpenLeagueTeam?: (rosterId: number) => void;
   rankingPosition: RankingPosition | null;
   rankingHorizon: RankingHorizon | null;
   rankingQuery: string | null;
@@ -72,6 +74,7 @@ export function Explorer({
             league={league}
             availableOnly={mode === "waivers"}
             onOpenMatchup={onOpenMatchup}
+            onOpenLeagueTeam={onOpenLeagueTeam}
             rankingPosition={rankingPosition}
             rankingHorizon={rankingHorizon}
             rankingQuery={rankingQuery}

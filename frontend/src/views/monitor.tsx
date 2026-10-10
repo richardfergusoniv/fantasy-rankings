@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   Dashboard,
   DraftCenterData,
@@ -7,6 +7,7 @@ import type {
   PlayerNews,
 } from "../dashboard-types";
 import { formatProjectionPoints } from "../dashboard-shared";
+import { formatRecord, LeagueTeamCard } from "../league-team-card";
 import { formatDecimal } from "../lib/format-number";
 import { weeklyOpponentRosterId } from "../power-opponent";
 
@@ -28,15 +29,22 @@ export function Monitor({
   draftData,
   news,
   onOpenPlayer,
+  onPlayerIntent,
   onOpenMatchup,
+  playerCardOpen,
+  selectedPlayerId = null,
 }: {
   league: League;
   dashboard: Dashboard;
   draftData: DraftCenterData | undefined;
   news: PlayerNews | undefined;
   onOpenPlayer: (playerId: string) => void;
+  onPlayerIntent: (playerId: string) => void;
   onOpenMatchup: (matchup: MatchupSelection) => void;
+  playerCardOpen: boolean;
+  selectedPlayerId?: string | null;
 }) {
+  const [openRosterId, setOpenRosterId] = useState<number | null>(null);
   const opponent = league.opponentTeam;
   const opponentRosterId = weeklyOpponentRosterId(opponent?.name, league.tradeTeams);
   const leagueRows = league.powerRankingsWeek.slice(0, LEAGUE_PREVIEW_LIMIT);
@@ -95,6 +103,14 @@ export function Monitor({
     return items.slice(0, ALERT_LIMIT);
   }, [league.bench, league.starters, news, opponent?.bench, opponent?.starters]);
 
+  useEffect(() => {
+    setOpenRosterId(null);
+  }, [league.id]);
+
+  const openTeam = openRosterId === null
+    ? null
+    : league.powerRankingsWeek.find((team) => team.rosterId === openRosterId) ?? null;
+
   return (
     <section className="monitor-view" aria-label="Monitor">
       <article className="monitor-panel">
@@ -136,7 +152,15 @@ export function Monitor({
                 >
                   <strong className="monitor-league-rank">{team.rank}</strong>
                   <span className="monitor-league-team">
-                    <strong>{team.teamName}</strong>
+                    <button
+                      type="button"
+                      className="monitor-league-team-open"
+                      aria-label={`Open ${team.teamName}, ${formatRecord(team.record)} record, rank ${team.rank}${isOpponent ? ", this week's opponent" : ""}`}
+                      aria-haspopup="dialog"
+                      onClick={() => setOpenRosterId(team.rosterId)}
+                    >
+                      {team.teamName}
+                    </button>
                     {team.isUser ? <span className="roster-owner-tag is-user">Your roster</span> : null}
                     {isOpponent ? <span className="sr-only">This week&apos;s opponent</span> : null}
                   </span>
@@ -212,6 +236,21 @@ export function Monitor({
           </ul>
         )}
       </article>
+      {openTeam ? (
+        <LeagueTeamCard
+          team={openTeam}
+          league={league}
+          dashboard={dashboard}
+          scope="week"
+          mode="seasonLong"
+          playerCardOpen={playerCardOpen}
+          selectedPlayerId={selectedPlayerId}
+          onPlayerIntent={onPlayerIntent}
+          onOpenPlayer={onOpenPlayer}
+          onOpenMatchup={onOpenMatchup}
+          onClose={() => setOpenRosterId(null)}
+        />
+      ) : null}
     </section>
   );
 }

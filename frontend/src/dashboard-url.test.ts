@@ -6,6 +6,7 @@ import {
   parseDashboardSearch,
   resolveDashboardTab,
   serializeDashboardSearch,
+  waiversSearchPreservingContext,
   type DashboardUrlState,
 } from "./dashboard-url";
 
@@ -82,6 +83,18 @@ describe("dashboard URL state", () => {
   it("ignores a legacy rankings density query param", () => {
     expect(parseDashboardSearch("?tab=rankings&density=comfortable")).toEqual(state({ tab: "rankings" }));
     expect(parseDashboardSearch("?tab=waivers&density=compact")).toEqual(state({ tab: "waivers" }));
+  });
+
+  it("opens Waivers without dropping the position filter or the open player", () => {
+    expect(waiversSearchPreservingContext(state({
+      tab: "rankings",
+      league: "league-1",
+      position: "WR",
+      horizon: "ros",
+      query: "Chase",
+      playerId: "player-9",
+    }))).toBe("?tab=waivers&league=league-1&pos=WR&horizon=ros&q=Chase&player=player-9");
+    expect(waiversSearchPreservingContext(emptyDashboardUrlState())).toBe("?tab=waivers");
   });
 
   it("pushes history for tab changes and the player sheet, and replaces filter edits", () => {
