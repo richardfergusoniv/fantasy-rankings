@@ -27,7 +27,7 @@ const players: CommandPlayerItem[] = [
 
 describe("filterCommandItems", () => {
   it("returns primary pages when the query is empty", () => {
-    const results = filterCommandItems("", { pages: COMMAND_PAGES, leagues, players, account: null });
+    const results = filterCommandItems("", { pages: COMMAND_PAGES, leagues, players });
     expect(results).toHaveLength(PRIMARY_COMMAND_PAGES.length);
     expect(results.every((item) => item.kind === "page")).toBe(true);
     expect(results.map((item) => item.label)).toEqual([
@@ -40,23 +40,23 @@ describe("filterCommandItems", () => {
   });
 
   it("finds Draft and Charts when searching explorer modes", () => {
-    expect(filterCommandItems("draft", { pages: COMMAND_PAGES, leagues, players, account: null })).toEqual([
+    expect(filterCommandItems("draft", { pages: COMMAND_PAGES, leagues, players })).toEqual([
       expect.objectContaining({ kind: "page", label: "Draft", tab: "draft" }),
     ]);
-    expect(filterCommandItems("chart", { pages: COMMAND_PAGES, leagues, players, account: null })).toEqual([
+    expect(filterCommandItems("chart", { pages: COMMAND_PAGES, leagues, players })).toEqual([
       expect.objectContaining({ kind: "page", label: "Charts", tab: "charts" }),
     ]);
   });
 
   it("matches pages by label", () => {
-    const results = filterCommandItems("match", { pages: PRIMARY_COMMAND_PAGES, leagues, players, account: null });
+    const results = filterCommandItems("match", { pages: PRIMARY_COMMAND_PAGES, leagues, players });
     expect(results).toEqual([
       expect.objectContaining({ kind: "page", label: "Matchup", tab: "team" }),
     ]);
   });
 
   it("matches players by name and caps at 8", () => {
-    const results = filterCommandItems("a", { pages: PRIMARY_COMMAND_PAGES, leagues, players, account: null });
+    const results = filterCommandItems("a", { pages: PRIMARY_COMMAND_PAGES, leagues, players });
     expect(results.length).toBeLessThanOrEqual(COMMAND_RESULT_LIMIT);
     expect(results.length).toBe(COMMAND_RESULT_LIMIT);
     const playerHits = results.filter((item) => item.kind === "player");
@@ -65,20 +65,10 @@ describe("filterCommandItems", () => {
   });
 
   it("matches a specific player name", () => {
-    const results = filterCommandItems("jefferson", { pages: PRIMARY_COMMAND_PAGES, leagues, players, account: null });
+    const results = filterCommandItems("jefferson", { pages: PRIMARY_COMMAND_PAGES, leagues, players });
     expect(results).toEqual([
       expect.objectContaining({ kind: "player", id: "p2", label: "Justin Jefferson" }),
     ]);
-  });
-
-  it("offers sign out when account is connected and the query matches", () => {
-    const results = filterCommandItems("sign", {
-      pages: COMMAND_PAGES,
-      leagues,
-      players,
-      account: { username: "rdfergus15" },
-    });
-    expect(results).toContainEqual({ kind: "action", id: "sign-out", label: "Sign out" });
   });
 
   it("includes Monitor among the primary page defaults", () => {

@@ -4,19 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AuthSessionProvider } from "./auth-session";
 import { SkipLink } from "./shared";
 import { getAccessToken, isSupabaseConfigured, supabase, type Session } from "./supabase";
-
-function clearSignedInCache() {
-  localStorage.removeItem("fantasy-rankings-dashboard-v7");
-}
-
-function signOutSession() {
-  clearSignedInCache();
-  if (!supabase) return;
-  void supabase.auth.signOut();
-}
 
 /**
  * Phase 2 auth gate.
@@ -92,21 +81,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [session, refreshConnection]);
 
   if (!isSupabaseConfigured || !supabase) {
-    const fixtureUsername = import.meta.env.VITE_FIXTURE_ACCOUNT_USERNAME;
-    if (typeof fixtureUsername === "string" && fixtureUsername.length > 0) {
-      return (
-        <AuthSessionProvider
-          value={{
-            sleeperUsername: fixtureUsername,
-            signOut: () => {
-              clearSignedInCache();
-            },
-          }}
-        >
-          {children}
-        </AuthSessionProvider>
-      );
-    }
     return <>{children}</>;
   }
 
@@ -139,21 +113,16 @@ export function AuthGate({ children }: { children: ReactNode }) {
         email={session.user.email ?? ""}
         loading={connLoading}
         onConnected={refreshConnection}
-        onSignOut={signOutSession}
+        onSignOut={() => {
+          localStorage.removeItem("fantasy-rankings-dashboard-v7");
+          if (!supabase) return;
+          void supabase.auth.signOut();
+        }}
       />
     );
   }
 
-  return (
-    <AuthSessionProvider
-      value={{
-        sleeperUsername: connection.sleeperUsername,
-        signOut: signOutSession,
-      }}
-    >
-      {children}
-    </AuthSessionProvider>
-  );
+  return <>{children}</>;
 }
 
 function AuthScreen() {

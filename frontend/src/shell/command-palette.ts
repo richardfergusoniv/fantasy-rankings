@@ -20,13 +20,7 @@ export type CommandPlayerItem = {
   position: string;
 };
 
-export type CommandActionItem = {
-  kind: "action";
-  id: "sign-out";
-  label: string;
-};
-
-export type CommandItem = CommandPageItem | CommandLeagueItem | CommandPlayerItem | CommandActionItem;
+export type CommandItem = CommandPageItem | CommandLeagueItem | CommandPlayerItem;
 
 export const COMMAND_RESULT_LIMIT = 8;
 
@@ -72,7 +66,6 @@ export function filterCommandItems(
     pages: CommandPageItem[];
     leagues: CommandLeagueItem[];
     players: CommandPlayerItem[];
-    account: { username: string } | null;
   },
 ): CommandItem[] {
   const needle = query.trim().toLowerCase();
@@ -83,18 +76,6 @@ export function filterCommandItems(
     if (!labelMatches(needle, page.label)) continue;
     results.push(page);
     if (results.length >= COMMAND_RESULT_LIMIT) return results;
-  }
-
-  if (sources.account && needle) {
-    const matchesAccount = labelMatches(needle, "sign out")
-      || labelMatches(needle, "sign")
-      || labelMatches(needle, "sleeper")
-      || labelMatches(needle, "account")
-      || labelMatches(needle, sources.account.username);
-    if (matchesAccount) {
-      results.push({ kind: "action", id: "sign-out", label: "Sign out" });
-      if (results.length >= COMMAND_RESULT_LIMIT) return results;
-    }
   }
 
   if (!needle) return results;
