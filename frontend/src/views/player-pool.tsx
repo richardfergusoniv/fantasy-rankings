@@ -40,7 +40,7 @@ import {
   MatchupTag,
   ModalPortal,
   SegmentedControl,
-  rankAmong,
+  leagueRank,
   rankToneClassName,
   useDialogFocusTrap,
   type StrengthOfScheduleEntryLike,
@@ -172,8 +172,13 @@ export function TeamDataModal({
     ? pfnRecord
     : record ? `${record.wins}-${record.losses}${record.ties ? `-${record.ties}` : ""}` : "—";
   const sosRanks = fantasySosRanksForTeam(sosEntry, teamCode ?? selection.team);
-  const leagueRank = (values: readonly number[], value: number | null, higherIsBetter = true) => (
-    values.filter((candidate) => Number.isFinite(candidate)).length < 2 ? null : rankAmong(values, value, higherIsBetter)
+  const penaltyRank = leagueRank(
+    (offensiveLine?.rows ?? []).flatMap((row) => {
+      const value = pfnNumber(row, "pen_per_game");
+      return value === null ? [] : [value];
+    }),
+    penPerGame,
+    false,
   );
   const winPct = (wins: number, losses: number, ties: number): number | null => {
     const games = wins + losses + ties;
@@ -345,9 +350,9 @@ export function TeamDataModal({
                 {rankLabel(runBlockRank, loading)}
               </div>
               <div>
-                <span>Pen/G</span>
-                <strong>{loading ? "…" : penPerGame === null ? "—" : formatDecimal(penPerGame, 1)}</strong>
-                <span className="sr-only">Penalties per game</span>
+                <span>Penalties</span>
+                {rankLabel(penaltyRank, loading)}
+                {loading ? null : <span className="sr-only">{penPerGame === null ? "Penalties per game unavailable" : `${formatDecimal(penPerGame, 1)} penalties per game`}</span>}
               </div>
               <div>
                 <span>Defense</span>

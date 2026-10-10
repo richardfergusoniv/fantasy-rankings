@@ -165,6 +165,12 @@ export function rankAmong(values: readonly number[], value: number | null | unde
   return index < 0 ? null : index + 1;
 }
 
+/** League rank of one value. Fewer than two finite values stays unranked. */
+export function leagueRank(values: readonly number[], value: number | null, higherIsBetter = true): number | null {
+  if (values.filter((candidate) => Number.isFinite(candidate)).length < 2) return null;
+  return rankAmong(values, value, higherIsBetter);
+}
+
 /** Positional fantasy SOS rank for an opponent defense vs a skill position. */
 export function positionalSosRank(
   entry: StrengthOfScheduleEntryLike | undefined,

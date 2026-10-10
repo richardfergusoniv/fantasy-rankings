@@ -3,6 +3,7 @@ import {
   fantasySosRanksForTeam,
   points,
   positionalSosRank,
+  leagueRank,
   rankAmong,
   shortLeagueName,
   rankToneClassName,
@@ -86,6 +87,26 @@ describe("rankAmong", () => {
     expect(rankAmong([1, 2], null)).toBeNull();
     expect(rankAmong([], 4)).toBeNull();
     expect(rankAmong([1, 2], 9)).toBeNull();
+  });
+});
+
+describe("leagueRank", () => {
+  it("ranks fewer penalties per game as better", () => {
+    const penalties = [6.2, 4.1, 8.0, 5.5];
+    expect(leagueRank(penalties, 4.1, false)).toBe(1);
+    expect(leagueRank(penalties, 5.5, false)).toBe(2);
+    expect(leagueRank(penalties, 8.0, false)).toBe(4);
+  });
+
+  it("shares the best rank when penalty rates tie", () => {
+    expect(leagueRank([4.1, 4.1, 7.0], 4.1, false)).toBe(1);
+  });
+
+  it("stays unranked when fewer than two teams have a value", () => {
+    expect(leagueRank([6.2], 6.2, false)).toBeNull();
+    expect(leagueRank([], 6.2, false)).toBeNull();
+    expect(leagueRank([Number.NaN, 6.2], 6.2, false)).toBeNull();
+    expect(leagueRank([4.1, 6.2], null, false)).toBeNull();
   });
 });
 
