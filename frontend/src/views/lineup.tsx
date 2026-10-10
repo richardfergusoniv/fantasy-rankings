@@ -17,8 +17,10 @@ import {
   playerScore,
   sleeperInjuryTag,
 } from "../dashboard-shared";
-import { formatDecimal } from "../lib/format-number";
 import { MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
+import { isOptimizedSlotChanged, matchupProjectionClassName } from "./lineup-projection";
+
+export { isOptimizedSlotChanged, matchupProjectionClassName } from "./lineup-projection";
 
 export function MatchupPlayer({
   player,
@@ -26,6 +28,7 @@ export function MatchupPlayer({
   sosEntry,
   isSwappedIn = false,
   isDemoted = false,
+  slotChanged = false,
   selected = false,
   onOpen,
   onOpenMatchup,
@@ -35,6 +38,8 @@ export function MatchupPlayer({
   sosEntry?: StrengthOfScheduleEntryLike;
   isSwappedIn?: boolean;
   isDemoted?: boolean;
+  /** Optimized view: this slot’s player differs from the current lineup. */
+  slotChanged?: boolean;
   selected?: boolean;
   onOpen?: (player: RosterPlayer) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
@@ -59,10 +64,13 @@ export function MatchupPlayer({
     : isDemoted
       ? ", moved to bench in optimized lineup"
       : "";
+  const slotChangeDescription = slotChanged && !isSwappedIn && !isDemoted
+    ? ", different player than current lineup in this slot"
+    : "";
   const selectedDescription = selected ? ", selected" : "";
   return (
     <div className={`matchup-player ${side}${isSwappedIn ? " swapped-in" : ""}${isDemoted ? " demoted" : ""}${selected ? " is-player-selected" : ""}`}>
-      <button type="button" className="matchup-player-open" onClick={openPlayer} aria-label={`View ${player.name} details and news, ${position}, ${matchup}, ${scoreDescription}${injuryDescription}${substitutionDescription}${selectedDescription}`}>
+      <button type="button" className="matchup-player-open" onClick={openPlayer} aria-label={`View ${player.name} details and news, ${position}, ${matchup}, ${scoreDescription}${injuryDescription}${substitutionDescription}${slotChangeDescription}${selectedDescription}`}>
         <span className="matchup-name-line">
           <strong>{player.name}</strong>
           {selected ? <span className="player-selected-chip">Selected</span> : null}
@@ -87,7 +95,7 @@ export function MatchupPlayer({
           onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase }) : undefined}
         />
       </div>
-      <button type="button" className={`matchup-number matchup-player-score ${score.label === "PTS" ? "actual" : ""}`} onClick={openPlayer} tabIndex={-1} aria-hidden="true">
+      <button type="button" className={matchupProjectionClassName({ scoreLabel: score.label, slotChanged })} onClick={openPlayer} tabIndex={-1} aria-hidden="true">
         <b>{formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)}</b>
       </button>
     </div>
@@ -124,21 +132,19 @@ export function Lineup({
   const myBench = mode === "optimized" ? optimized.bench : league.bench;
   const theirs = opponent?.starters;
   const theirBench = opponent?.bench;
-  const currentForecast = forecastTotal(league.starters);
   const optimizedForecast = forecastTotal(optimized.starters);
-  const optimizedGain = optimizedForecast !== null && currentForecast !== null
-    ? Number((optimizedForecast - currentForecast).toFixed(1))
-    : null;
   const userTeamName = league.tradeTeams.find((team) => team.isUser)?.teamName ?? "My Team";
   const starterCount = Math.max(mine.length, theirs?.length ?? 0);
   const rows = Array.from({ length: starterCount }, (_, index) => ({
     mine: mine[index],
     theirs: theirs?.[index],
+    slotChanged: mode === "optimized" && isOptimizedSlotChanged(mine[index]?.playerId, league.starters[index]?.playerId),
   }));
   const benchCount = Math.max(myBench.length, theirBench?.length ?? 0);
   const benchRows = Array.from({ length: benchCount }, (_, index) => ({
     mine: myBench[index],
     theirs: theirBench?.[index],
+    slotChanged: mode === "optimized" && isOptimizedSlotChanged(myBench[index]?.playerId, league.bench[index]?.playerId),
   }));
 
   return (
@@ -157,7 +163,6 @@ export function Lineup({
           <div className="score-line">
             <strong>{formatProjectionPoints(league.teamActual)}</strong>
             <small>{forecastPoints(mode === "optimized" ? optimizedForecast : league.teamProjection, mode === "optimized" ? optimized.starters : league.starters)}<span className="sr-only"> projected points</span></small>
-            {mode === "optimized" && optimizedGain !== null ? <em className="optimized-gain">{formatDecimal(optimizedGain, 1, { sign: "always" })} <span>vs current</span></em> : null}
           </div>
         </div>
         <div className="versus">VS</div>
@@ -171,7 +176,7 @@ export function Lineup({
         <div className="section-heading"><h2>Starters</h2></div>
         <div className="data-table-frame">
         <div className="matchup-list">
-          {rows.map(({ mine: myPlayer, theirs }, index) => (
+          {rows.map(({ mine: myPlayer, theirs, slotChanged }, index) => (
             <div className="matchup-row" key={`${myPlayer?.playerId ?? "empty"}-${theirs?.playerId ?? "empty"}-${index}`}>
               <MatchupPlayer
                 player={matchupCell(myPlayer)}
@@ -181,6 +186,7 @@ export function Lineup({
                 onOpenMatchup={onOpenMatchup}
                 selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
                 isSwappedIn={mode === "optimized" && Boolean(matchupCell(myPlayer)) && !league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
+                slotChanged={slotChanged}
               />
               <span className="matchup-slot">{(myPlayer?.lineupSlot ?? theirs?.lineupSlot ?? "—").replace("_", " ")}</span>
               <MatchupPlayer
@@ -202,7 +208,7 @@ export function Lineup({
         <div className="section-heading"><h2>Bench</h2></div>
         <div className="data-table-frame">
         <div className="matchup-list">
-          {benchRows.map(({ mine: myPlayer, theirs }, index) => (
+          {benchRows.map(({ mine: myPlayer, theirs, slotChanged }, index) => (
             <div className="matchup-row" key={`${myPlayer?.playerId ?? "empty"}-${theirs?.playerId ?? "empty"}-bench-${index}`}>
               <MatchupPlayer
                 player={myPlayer}
@@ -212,6 +218,7 @@ export function Lineup({
                 onOpenMatchup={onOpenMatchup}
                 selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
                 isDemoted={mode === "optimized" && Boolean(myPlayer) && league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
+                slotChanged={slotChanged}
               />
               <span className="matchup-slot">BN</span>
               <MatchupPlayer

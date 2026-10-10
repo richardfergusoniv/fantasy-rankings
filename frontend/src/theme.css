@@ -647,8 +647,6 @@ button.monitor-alert:hover { background: var(--surface-2); }
 .score-team.theirs .score-line { justify-content: flex-end; }
 .score-line strong { font-size: var(--type-display); line-height: 1; font-weight: 700; letter-spacing: -.02em; }
 .score-line small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; white-space: nowrap; }
-.optimized-gain { display: inline-flex; min-height: 20px; align-items: center; padding: 1px 6px 0; border-radius: var(--radius-sm); background: var(--stat-strength-soft); color: var(--stat-strength-readable); font-size: var(--type-caption); font-style: normal; font-weight: 700; white-space: nowrap; }
-.optimized-gain span { color: inherit; }
 .versus { display: grid; place-items: center; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 
 .lineup-section, .bench-section { margin-top: 14px; }
@@ -2420,8 +2418,9 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 }
 .matchup-page .matchup-number b { color: var(--dim); font-weight: 600; }
 .matchup-page .matchup-number.actual b { color: var(--text); font-weight: 700; }
+/* Same type size/weight as unchanged projections — amber ink only when the slot changed. */
+.matchup-page .matchup-number.is-optimized-change b { color: var(--warning); font-size: inherit; font-weight: 600; }
 .matchup-page .injury { background: var(--surface-2); color: var(--dim); font-weight: 700; }
-.matchup-page .optimized-gain { border-radius: var(--radius-sm); background: transparent; color: var(--warning); font-size: var(--type-caption); font-weight: 700; }
 
 /* Matchup badges open this one compact floating layer; its shadow is the view's only depth cue. */
 .matchup-data-card {
