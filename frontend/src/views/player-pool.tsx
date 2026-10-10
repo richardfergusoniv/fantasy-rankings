@@ -394,14 +394,14 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
   const redraftFormatKey = `redraft-${league.seasonLongFormat.numQbs}qb-${league.seasonLongFormat.numTeams}t-${league.seasonLongFormat.ppr}ppr`;
   const seasonFormatKey = effectiveHorizon === "dynasty" ? league.seasonLongFormat.key : redraftFormatKey;
   const basePositions = basePositionOrder.filter((item) => league.rankingPositions.includes(item) && (!isSeasonLong || ["QB", "RB", "WR", "TE"].includes(item)));
-  const positionFilters: PositionFilter[] = [...basePositions];
-  const modifierFilters: PositionFilter[] = [
+  /** Single-row filter: base positions then ALL/FLEX/SUPER/Rook modifiers. */
+  const visiblePositions: PositionFilter[] = [
+    ...basePositions,
     ...(isSeasonLong ? ["ALL" as const] : []),
     "FLEX",
     ...(league.showSuperFilter ? ["SUPER" as const] : []),
     ...(effectiveHorizon === "dynasty" ? ["ROOKIES" as const] : []),
   ];
-  const visiblePositions: PositionFilter[] = [...positionFilters, ...modifierFilters];
   const effectivePosition = visiblePositions.includes(position) ? position : (visiblePositions[0] ?? "QB");
   const includedPositions = positionsForFilter(effectivePosition);
   const myRoster = new Set([...league.starters, ...league.bench].map((player) => player.playerId));
@@ -688,23 +688,18 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
           {hasSearch ? <button className="search-clear" type="button" onClick={() => publishRankingFilters({ query: "" })} aria-label="Clear player search">×</button> : null}
         </label>
         {!hasSearch ? (
-          <div className="position-filter-rows" role="group" aria-label="Position filter">
+          <div className="position-filter-row" role="group" aria-label="Position filter">
             <SegmentedControl
-              className={`position-tabs${!positionFilters.includes(effectivePosition) ? " no-active" : ""}`}
+              className={`position-tabs${!visiblePositions.includes(effectivePosition) ? " no-active" : ""}`}
               value={effectivePosition}
               onChange={(value) => publishRankingFilters({ position: value })}
               label="Positions"
-              options={positionFilters.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
+              options={visiblePositions.map((item) => ({
+                value: item,
+                label: item === "DEF" ? "DST" : item === "ROOKIES" ? "Rook" : item,
+                ariaLabel: item === "ROOKIES" ? "Rookies" : undefined,
+              }))}
             />
-            {modifierFilters.length > 0 ? (
-              <SegmentedControl
-                className={`position-tabs position-modifier-tabs${!modifierFilters.includes(effectivePosition) ? " no-active" : ""}`}
-                value={effectivePosition}
-                onChange={(value) => publishRankingFilters({ position: value })}
-                label="Position modifiers"
-                options={modifierFilters.map((item) => ({ value: item, label: item }))}
-              />
-            ) : null}
           </div>
         ) : null}
       </div>
