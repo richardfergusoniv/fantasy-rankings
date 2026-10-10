@@ -8,8 +8,10 @@ export const DASHBOARD_TABS = [
   "trade",
   "charts",
   "comparison",
-  "strengthOfSchedule",
 ] as const;
+
+/** Former Explorer Tables datasets — ignored when present on legacy URLs. */
+export const LEGACY_TABLES_DATASETS = ["sos", "offense", "defense", "offensive-line", "team-overall"] as const;
 
 export type DashboardTab = (typeof DASHBOARD_TABS)[number];
 
@@ -79,6 +81,7 @@ function textParam(value: string | null): string | null {
  * Resolve dashboard tab from ?tab=, including legacy aliases:
  * - tab=analyze → trade (old Analyze segment)
  * - tab=history → trade + history mode (old History segment)
+ * - tab=strengthOfSchedule | tab=tables → rankings (Explorer Tables removed)
  */
 export function resolveDashboardTab(rawTab: string | null): {
   tab: DashboardTab;
@@ -88,6 +91,9 @@ export function resolveDashboardTab(rawTab: string | null): {
   if (direct) return { tab: direct, legacyTradeMode: null };
   if (rawTab === "analyze") return { tab: "trade", legacyTradeMode: "league" };
   if (rawTab === "history") return { tab: "trade", legacyTradeMode: "history" };
+  if (rawTab === "strengthOfSchedule" || rawTab === "tables") {
+    return { tab: "rankings", legacyTradeMode: null };
+  }
   return { tab: DEFAULT_DASHBOARD_TAB, legacyTradeMode: null };
 }
 
@@ -114,8 +120,14 @@ export function resolveTradeMode(
 export function parseDashboardSearch(search: string): DashboardUrlState {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const { tab, legacyTradeMode } = resolveDashboardTab(params.get("tab"));
+  // Legacy Tables tool used ?table=sos|offense|… (local UI state that sometimes
+  // leaked into shared links). Drop those params by routing to Rankings.
+  const legacyTable = params.get("table") ?? params.get("dataset");
+  const redirectedFromTablesDataset = Boolean(
+    legacyTable && (LEGACY_TABLES_DATASETS as readonly string[]).includes(legacyTable),
+  );
   return {
-    tab,
+    tab: redirectedFromTablesDataset && tab === DEFAULT_DASHBOARD_TAB ? "rankings" : tab,
     league: textParam(params.get("league")),
     position: oneOf(params.get("pos"), RANKING_POSITIONS),
     horizon: oneOf(params.get("horizon"), RANKING_HORIZONS),

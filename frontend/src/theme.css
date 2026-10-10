@@ -269,8 +269,6 @@ input, textarea { font-size: 16px; }
 .trade-balance-labels b,
 .trade-grade-grid strong,
 .power-score,
-.pfn-table td,
-.sos-cell,
 .draft-row > span:nth-child(n + 2),
 .tier-cliff-rank,
 .tier-cliff-drop,
@@ -2289,110 +2287,6 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   overflow: clip;
 }
 
-/* Tables tool */
-.tables-tool { display: grid; gap: 14px; }
-.tables-dataset-tabs { width: 100%; }
-.pfn-table-view { width: 100%; min-width: 0; }
-.pfn-table-view > .section-heading { position: static; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
-.pfn-column-controls { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 0 0 12px; }
-.pfn-columns-toggle {
-  min-height: var(--compact-control-height, 32px);
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--foreground);
-  font-size: var(--type-caption);
-  font-weight: 600;
-}
-.pfn-columns-toggle[aria-expanded="true"] { border-color: var(--link); color: var(--link); }
-.pfn-columns-menu {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-.pfn-column-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  color: var(--foreground);
-  font-size: var(--type-body);
-  cursor: pointer;
-}
-.pfn-column-option input { width: 16px; height: 16px; accent-color: var(--action); }
-.pfn-table-wrap { width: 100%; overflow: visible; border: 0; background: transparent; }
-.pfn-table-wrap > [data-slot="table-container"] { max-height: var(--table-scroll-max-height); overflow: auto; overscroll-behavior-inline: contain; }
-.pfn-table {
-  --pfn-frozen-rank: 78px;
-  --pfn-frozen-team: 86px;
-  --pfn-frozen-grade: 78px;
-  width: 100%;
-  min-width: max-content;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-variant-numeric: tabular-nums lining-nums;
-}
-.pfn-table thead th { position: sticky; top: 0; z-index: 3; height: 44px; padding: 0; border-bottom: 1px solid var(--hairline); background-color: var(--surface); box-shadow: 0 1px 0 var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .04em; text-align: center; text-transform: uppercase; white-space: nowrap; }
-.pfn-table thead th:not(.pfn-rank-col):not(.pfn-team-col):not(.pfn-grade-col) { min-width: 96px; }
-.pfn-sort-button { display: flex; width: 100%; min-width: max-content; min-height: 44px; align-items: center; justify-content: center; gap: 4px; padding: 7px 10px; border: 0; background-color: transparent; color: inherit; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: inherit; text-transform: inherit; cursor: pointer; }
-.pfn-table thead th[aria-sort]:not([aria-sort="none"]) .pfn-sort-button { color: var(--text); }
-.pfn-sort-indicator { display: inline-block; width: 9px; visibility: hidden; }
-.pfn-sort-indicator.active { visibility: visible; }
-.pfn-table th, .pfn-table td { height: 38px; padding: 7px 10px; border-bottom: 1px solid var(--hairline); font-size: var(--type-body); line-height: 1.25; text-align: center; white-space: nowrap; }
-.pfn-table tbody tr:last-child th, .pfn-table tbody tr:last-child td { border-bottom: 0; }
-/* Frozen rank/team/grade. left tracks the widths so a scrolled column cannot
-   sit in a gap, and each cell paints an opaque surface over that seam. */
-.pfn-rank-col,
-.pfn-team-col,
-.pfn-grade-col { position: sticky; z-index: 2; background-color: var(--surface); background-clip: border-box; }
-.pfn-rank-col { left: 0; width: var(--pfn-frozen-rank); min-width: var(--pfn-frozen-rank); max-width: var(--pfn-frozen-rank); box-shadow: 1px 0 0 var(--surface); }
-.pfn-team-col { left: var(--pfn-frozen-rank); width: var(--pfn-frozen-team); min-width: var(--pfn-frozen-team); max-width: var(--pfn-frozen-team); box-shadow: 1px 0 0 var(--surface); font-weight: 700; text-align: left !important; }
-.pfn-grade-col { left: calc(var(--pfn-frozen-rank) + var(--pfn-frozen-team)); width: var(--pfn-frozen-grade); min-width: var(--pfn-frozen-grade); max-width: var(--pfn-frozen-grade); font-weight: 700; box-shadow: -1px 0 0 var(--surface), 1px 0 0 var(--border); }
-.pfn-rank-col .pfn-sort-button,
-.pfn-team-col .pfn-sort-button,
-.pfn-grade-col .pfn-sort-button { background-color: var(--surface); }
-.pfn-team-col .pfn-sort-button { justify-content: flex-start; }
-.pfn-table thead .pfn-rank-col,
-.pfn-table thead .pfn-team-col,
-.pfn-table thead .pfn-grade-col { position: sticky; z-index: 5; background-color: var(--surface); }
-.pfn-table thead .pfn-rank-col,
-.pfn-table thead .pfn-team-col { box-shadow: 1px 0 0 var(--surface), 0 1px 0 var(--hairline); }
-.pfn-table thead .pfn-grade-col { box-shadow: -1px 0 0 var(--surface), 1px 0 0 var(--border), 0 1px 0 var(--hairline); }
-.pfn-table thead .pfn-rank-col .pfn-sort-button { min-width: 0; padding-inline: 6px; }
-.pfn-table-loading, .pfn-table-empty { padding: 22px 12px; color: var(--dim); font-size: var(--type-body); line-height: 1.5; text-align: center; }
-
-/* Strength of Schedule table */
-.sos-view { width: 100%; max-width: none; padding: 0; }
-.sos-view > .section-heading { position: static; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
-.sos-explainer { margin: 2px 2px 7px; color: var(--dim); font-size: var(--type-caption); line-height: 1.35; }
-.sos-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 16px; margin: 0 2px 10px; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.sos-legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.sos-legend-swatch { display: inline-block; width: 18px; height: 12px; border-radius: var(--radius-sm); }
-.sos-legend-swatch.sos-soft { background: var(--stat-strength-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--stat-strength) 25%, transparent); }
-.sos-legend-swatch.sos-tough { background: var(--stat-weakness-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--stat-weakness) 25%, transparent); }
-.sos-table-wrap { width: 100%; overflow: visible; border: 0; background: transparent; }
-.sos-table { display: table; width: 100%; min-width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-variant-numeric: tabular-nums lining-nums; }
-.sos-table .sos-column { width: 20%; }
-.sos-table thead th { position: sticky; top: var(--sticky-offset); z-index: 3; padding: 0; border-bottom: 1px solid var(--hairline); background: var(--surface); box-shadow: 0 1px 0 var(--hairline); font-size: var(--type-caption); font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
-.sos-table thead button { width: 100%; min-height: 44px; padding: 7px 10px; border: 0; background: transparent; color: inherit; font: inherit; font-weight: inherit; letter-spacing: inherit; text-align: center; text-transform: inherit; cursor: pointer; }
-.sos-table thead .sos-team-col button { text-align: left; }
-.sos-table thead th[aria-sort]:not([aria-sort="none"]) button { color: var(--text); }
-.sos-table th, .sos-table td { height: 38px; padding: 7px 10px; border-bottom: 1px solid var(--hairline); font-size: var(--type-body); line-height: 1.25; text-align: center; white-space: nowrap; }
-.sos-table thead th { padding: 0; }
-.sos-table tbody tr:last-child th, .sos-table tbody tr:last-child td { border-bottom: 0; }
-.sos-team-col { position: sticky; left: 0; z-index: 2; background: var(--surface); text-align: left !important; font-weight: 700; }
-.sos-table thead .sos-team-col { z-index: 4; }
-.sos-cell { color: var(--text); font-weight: 700; }
-.sos-cell.sos-soft { background: var(--stat-strength-soft); color: var(--stat-strength-readable); font-weight: 700; }
-.sos-cell.sos-tough { background: var(--stat-weakness-soft); color: var(--stat-weakness-readable); font-weight: 700; }
-.sos-empty { padding: 18px 12px; color: var(--dim); font-size: var(--type-body); text-align: center; }
-
 /* Interaction floor: compact visuals, full-size touch targets. */
 .segmented-control button,
 .boom-bust-toggle button { min-height: 44px; }
@@ -2779,8 +2673,6 @@ a:active { color: var(--link-active); }
 .trade-balance-labels b,
 .trade-grade-grid strong,
 .power-score,
-.pfn-table td,
-.sos-cell,
 .draft-row > span:nth-child(n + 2),
 .tier-cliff-rank,
 .tier-cliff-drop,
