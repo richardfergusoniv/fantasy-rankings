@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
+import { rosterNewsForTicker } from "./roster-news";
 import type {
   Dashboard,
   DraftCenterData,
@@ -27,7 +28,6 @@ import {
   RefreshIcon,
   SectionError,
   groupNewsItemsByPlayer,
-  rosterNewsForTicker,
   isBoomBustPosition,
   movementPercent,
   shortLeagueName,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rosterNewsForTicker } from "./dashboard-shared";
+import { rosterNewsForTicker } from "./roster-news";
 import type { PlayerNews } from "./dashboard-types";
 
 function news(items: Array<{ id: string; playerId: string; change: string }>): PlayerNews {
