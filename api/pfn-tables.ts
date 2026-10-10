@@ -1,7 +1,11 @@
 import { z } from "zod";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db, schema } from "./_lib/db.js";
 import { internalError, json } from "./_lib/api-utils.js";
+import {
+  readTeamSituationalSnapshot,
+  type TeamSituationalSnapshot,
+} from "./_lib/team-situational.js";
 
 /**
  * GET /api/pfn-tables
@@ -39,43 +43,10 @@ const storedPfnTableEnvelopeSchema = z.object({
   rows: z.array(z.unknown()),
 });
 
-const teamSituationalStatSchema = z.object({
-  team: z.string(),
-  games: z.number().int(),
-  thirdDownPct: z.number(),
-  redZoneTdPct: z.number(),
-});
-
-const TEAM_SITUATIONAL_STATS_URL =
-  "https://hindi3.sportskeeda.com/nfl/team-stat/third-down-percentage-leaders?season=2026&type=regular";
-
-const teamSituationalSnapshotSchema = z.object({
-  fetchedAt: z.string(),
-  sourceUrl: z.literal(TEAM_SITUATIONAL_STATS_URL),
-  rows: z.array(teamSituationalStatSchema),
-});
-
 export type PfnTables = {
   tables: Record<(typeof pfnTableKeys)[number], z.infer<typeof storedPfnTableSchema> | null>;
-  teamSituational: z.infer<typeof teamSituationalSnapshotSchema> | null;
+  teamSituational: TeamSituationalSnapshot | null;
 };
-
-const TEAM_SITUATIONAL_CACHE_KEY = "team-situational-stats-2026";
-
-async function loadTeamSituationalSnapshot(): Promise<z.infer<typeof teamSituationalSnapshotSchema> | null> {
-  const [cached] = await db
-    .select()
-    .from(schema.sourceCache)
-    .where(eq(schema.sourceCache.cacheKey, TEAM_SITUATIONAL_CACHE_KEY))
-    .limit(1);
-  if (!cached) return null;
-  try {
-    const parsed = teamSituationalSnapshotSchema.safeParse(JSON.parse(cached.payload));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
-}
 
 export async function GET(_req: Request): Promise<Response> {
   try {
@@ -119,7 +90,7 @@ export async function GET(_req: Request): Promise<Response> {
 
     return json({
       tables,
-      teamSituational: await loadTeamSituationalSnapshot(),
+      teamSituational: await readTeamSituationalSnapshot(),
     });
   } catch (err) {
     return internalError(err);

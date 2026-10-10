@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   clearTradeSide,
   markDraftPlayerTaken,
+  popTradeRemoval,
+  pushTradeRemoval,
   removeTradePlayer,
   restoreClearedTradeSide,
   restoreTradePlayer,
+  tradeRemovalsToastMessage,
   undoDraftPlayerTaken,
 } from "./undo";
 
@@ -34,6 +37,18 @@ describe("trade undo", () => {
 
   it("does nothing when the player is not on that side", () => {
     expect(removeTradePlayer(["a"], "z").removed).toBeNull();
+  });
+
+  it("stacks removals newest-last and pops most recent first", () => {
+    const first = { side: "give" as const, removed: { id: "a", index: 0 } };
+    const second = { side: "get" as const, removed: { id: "b", index: 1 } };
+    const stacked = pushTradeRemoval(pushTradeRemoval([], first), second);
+    expect(tradeRemovalsToastMessage(stacked.length)).toBe("2 players removed");
+    const popped = popTradeRemoval(stacked);
+    expect(popped.popped).toEqual(second);
+    expect(popped.next).toEqual([first]);
+    expect(tradeRemovalsToastMessage(1)).toBe("1 player removed");
+    expect(popTradeRemoval([]).popped).toBeNull();
   });
 });
 

@@ -16,6 +16,7 @@ import {
 } from "./chart-view-cache";
 import { formatDecimal } from "./lib/format-number";
 import { MatchupTag, ModalPortal, SegmentedControl, shortLeagueName, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { scatterAxisDomain } from "./scatter-zoom";
 import { shouldWarnBeforeLeave, useUnsavedLeaveWarning } from "./unsaved-input";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
@@ -869,13 +870,35 @@ function ScatterPlot({
   yCutoff,
   ariaLabel,
 }: ScatterPlotProps) {
+  const [zoomed, setZoomed] = useState(false);
   const plottedData = Array.from(new Map(
     [...others, ...leadersWithoutSelectedTeam, ...selectedTeamPlayers].map((point) => [point.id, point]),
   ).values());
+  const xDomain = scatterAxisDomain(plottedData.map((point) => point.x), zoomed);
+  const yDomain = scatterAxisDomain(plottedData.map((point) => point.y), zoomed);
+  const toggleZoom = () => setZoomed((value) => !value);
   return (
     <div className="scatter-frame" role="group" aria-label={ariaLabel}>
-      <p className="sr-only">{ariaLabel}. {plottedData.map((point) => `${point.name}, ${point.team}: ${xAxis.short} ${point.x}, ${yAxis.short} ${point.y}`).join("; ")}</p>
-      <div aria-hidden="true" className="h-full">
+      <div className="scatter-zoom-controls">
+        <button
+          type="button"
+          className="scatter-zoom-toggle"
+          aria-pressed={zoomed}
+          onClick={toggleZoom}
+        >
+          {zoomed ? "Reset zoom" : "Zoom in"}
+        </button>
+        <span className="sr-only">Double-tap the chart to {zoomed ? "reset zoom" : "zoom into the denser central region of plotted points"}.</span>
+      </div>
+      <p className="sr-only">{ariaLabel}. {plottedData.map((point) => `${point.name}, ${point.team}: ${xAxis.short} ${point.x}, ${yAxis.short} ${point.y}`).join("; ")}{zoomed ? " Chart is zoomed into the central region of plotted points." : ""}</p>
+      <div
+        aria-hidden="true"
+        className="h-full"
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          toggleZoom();
+        }}
+      >
       <ChartContainer config={{ field: { label: "Field", color: "var(--chart-2)" }, team: { label: "My team", color: "var(--chart-1)" } }} className="aspect-auto h-full">
         <ScatterChart margin={{ top: 22, right: 10, bottom: 28, left: 2 }}>
           <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" />
@@ -883,7 +906,8 @@ function ScatterPlot({
             type="number"
             dataKey="x"
             name={`${xAxis.short}${xAxis.titleSuffix}`}
-            domain={["auto", "auto"]}
+            domain={xDomain}
+            allowDataOverflow={zoomed}
             reversed={xAxis.lowerIsBetter}
             tick={{ fill: "var(--dim)", fontSize: 10 }}
             tickLine={false}
@@ -894,7 +918,8 @@ function ScatterPlot({
             type="number"
             dataKey="y"
             name={`${yAxis.short}${yAxis.titleSuffix}`}
-            domain={["auto", "auto"]}
+            domain={yDomain}
+            allowDataOverflow={zoomed}
             reversed={yAxis.lowerIsBetter}
             width={36}
             tick={{ fill: "var(--dim)", fontSize: 10 }}
