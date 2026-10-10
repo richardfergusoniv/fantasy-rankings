@@ -100,7 +100,7 @@ describe("Look D theme contrast", () => {
     expect(link.toLowerCase()).toBe("#f5c16a");
   });
 
-  it("keeps optimized-change projection amber readable on Look D canvas and panel", () => {
+  it("keeps optimized-total projection amber readable on Look D canvas and panel", () => {
     const warning = resolveVar(vars, "--warning");
     expect(warning.toLowerCase()).toBe("#f5c16a");
     expect(contrastRatio(warning, canvas)).toBeGreaterThanOrEqual(4.5);

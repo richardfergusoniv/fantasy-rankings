@@ -2416,8 +2416,8 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 }
 .matchup-page .matchup-number b { color: var(--dim); font-weight: 600; }
 .matchup-page .matchup-number.actual b { color: var(--text); font-weight: 700; }
-/* Same type size/weight as unchanged projections — amber ink only when the slot changed. */
-.matchup-page .matchup-number.is-optimized-change b { color: var(--warning); font-size: inherit; font-weight: 600; }
+/* Amber only on the Optimized matchup-card total when the lineup isn't already set. */
+.matchup-page .score-line small.is-optimized-total { color: var(--warning); }
 .matchup-page .injury { background: var(--surface-2); color: var(--dim); font-weight: 700; }
 
 /* Matchup badges open this one compact floating layer; its shadow is the view's only depth cue. */
