@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMMAND_PAGES,
   COMMAND_RESULT_LIMIT,
   PRIMARY_COMMAND_PAGES,
   filterCommandItems,
@@ -26,7 +27,7 @@ const players: CommandPlayerItem[] = [
 
 describe("filterCommandItems", () => {
   it("returns primary pages when the query is empty", () => {
-    const results = filterCommandItems("", { pages: PRIMARY_COMMAND_PAGES, leagues, players });
+    const results = filterCommandItems("", { pages: COMMAND_PAGES, leagues, players });
     expect(results).toHaveLength(PRIMARY_COMMAND_PAGES.length);
     expect(results.every((item) => item.kind === "page")).toBe(true);
     expect(results.map((item) => item.label)).toEqual([
@@ -34,8 +35,16 @@ describe("filterCommandItems", () => {
       "Matchup",
       "Explorer",
       "League",
-      "Draft",
       "Tools",
+    ]);
+  });
+
+  it("finds Draft and Charts when searching explorer modes", () => {
+    expect(filterCommandItems("draft", { pages: COMMAND_PAGES, leagues, players })).toEqual([
+      expect.objectContaining({ kind: "page", label: "Draft", tab: "draft" }),
+    ]);
+    expect(filterCommandItems("chart", { pages: COMMAND_PAGES, leagues, players })).toEqual([
+      expect.objectContaining({ kind: "page", label: "Charts", tab: "charts" }),
     ]);
   });
 
@@ -62,8 +71,15 @@ describe("filterCommandItems", () => {
     ]);
   });
 
-  it("includes Monitor among the six primary page defaults", () => {
+  it("includes Monitor among the primary page defaults", () => {
     const monitor = PRIMARY_COMMAND_PAGES.find((page) => page.id === "monitor");
     expect(monitor).toEqual({ kind: "page", id: "monitor", label: "Monitor", tab: "monitor" });
+    expect(PRIMARY_COMMAND_PAGES.map((page) => page.id)).toEqual([
+      "monitor",
+      "team",
+      "players",
+      "league",
+      "tools",
+    ]);
   });
 });
