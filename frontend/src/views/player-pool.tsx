@@ -45,12 +45,29 @@ import {
   useDialogFocusTrap,
   type StrengthOfScheduleEntryLike,
 } from "../shared";
+import { formatRecord } from "../league-team-card";
+import { leaguePowerTeamForPlayer } from "../league-roster";
 import { WindowVirtualList } from "../virtual-list";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
 
 /** Compact rankings/waivers row height (matches former density=compact). */
 export const RANKINGS_ROW_HEIGHT = 56;
+
+function rosterBadgeForPlayer(
+  playerId: string,
+  rosterTeamByPlayer: ReadonlyMap<string, { teamName: string; isUser: boolean }>,
+  powerTeamByPlayerId: ReadonlyMap<string, { rosterId: number; teamName: string; rank: number; record: { wins: number; losses: number; ties: number } }>,
+): { rosterTeamName: string | null; rosterIsUser: boolean; rosterId: number | null; rosterLabel: string | null } {
+  const assignment = rosterTeamByPlayer.get(playerId);
+  const powerTeam = powerTeamByPlayerId.get(playerId);
+  return {
+    rosterTeamName: assignment?.teamName ?? null,
+    rosterIsUser: assignment?.isUser ?? false,
+    rosterId: powerTeam?.rosterId ?? null,
+    rosterLabel: powerTeam ? `Open ${powerTeam.teamName}, ${formatRecord(powerTeam.record)} record, rank ${powerTeam.rank}` : null,
+  };
+}
 
 export function offensiveLineTone(rank: number | null): "" | " oline-strong" | " oline-weak" {
   if (rank === null || !Number.isInteger(rank) || rank < 1 || rank > 32) return "";
@@ -464,7 +481,7 @@ export function ConnectedTeamCard({
   );
 }
 
-export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, rankingPosition, rankingHorizon, rankingQuery, onRankingFiltersChange, linkedPlayerId, onOpenLinkedPlayer }: { dashboard: Dashboard; league: League; availableOnly: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void; rankingPosition: RankingPosition | null; rankingHorizon: RankingHorizon | null; rankingQuery: string | null; onRankingFiltersChange: (filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => void } & PlayerLink) {
+export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, onOpenLeagueTeam, rankingPosition, rankingHorizon, rankingQuery, onRankingFiltersChange, linkedPlayerId, onOpenLinkedPlayer }: { dashboard: Dashboard; league: League; availableOnly: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void; onOpenLeagueTeam?: (rosterId: number) => void; rankingPosition: RankingPosition | null; rankingHorizon: RankingHorizon | null; rankingQuery: string | null; onRankingFiltersChange: (filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => void } & PlayerLink) {
   const [position, setPosition] = useState<PositionFilter>(rankingPosition ?? "QB");
   const [query, setQuery] = useState(rankingQuery ?? "");
   const [rankingMode, setRankingMode] = useState<"week" | "ros" | "dynasty">(rankingHorizon ?? "week");
@@ -514,6 +531,20 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
     () => new Map((league.rosterAssignments ?? []).map((assignment) => [assignment.playerId, assignment])),
     [league.rosterAssignments],
   );
+  const powerTeamByPlayerId = useMemo(() => {
+    const rosterAssignments = league.rosterAssignments ?? [];
+    const lookupLeague = {
+      rosterAssignments,
+      tradeTeams: league.tradeTeams,
+      powerRankingsWeek: league.powerRankingsWeek,
+    };
+    const map = new Map<string, League["powerRankingsWeek"][number]>();
+    for (const assignment of rosterAssignments) {
+      const team = leaguePowerTeamForPlayer(lookupLeague, assignment.playerId);
+      if (team) map.set(assignment.playerId, team);
+    }
+    return map;
+  }, [league]);
   const leagueRankings = useMemo(() => dashboard.rankings.filter((row) => row.leagueId === league.id), [dashboard.rankings, league.id]);
   const leagueDefenses = useMemo(() => dashboard.defenses.filter((row) => row.leagueId === league.id), [dashboard.defenses, league.id]);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
@@ -666,7 +697,6 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
         .filter((row) => effectivePosition !== "ROOKIES" || row.isRookie)
         .filter((row) => !availableOnly || !rostered.has(row.playerId))
         .map((row) => {
-          const rosterAssignment = rosterTeamByPlayer.get(row.playerId);
           const weeklyContext = weeklyContextByPlayerId.get(row.playerId);
           const team = row.team ?? weeklyContext?.team ?? null;
           return {
@@ -681,8 +711,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
               isAway: weeklyContext?.isAway ?? null,
               isBye: weeklyContext?.isBye ?? false,
             },
-            rosterTeamName: rosterAssignment?.teamName ?? null,
-            rosterIsUser: rosterAssignment?.isUser ?? false,
+            ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId),
             projection: row.value,
             projectionLabel: "VALUE",
             projectionSource: null,
@@ -702,15 +731,13 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
       return leagueDefenses
         .filter((row) => !availableOnly || !rostered.has(row.team))
         .map((row) => {
-          const rosterAssignment = rosterTeamByPlayer.get(row.team);
           return {
             key: row.team,
             rank: row.rank,
             name: `${row.team} Defense`,
             meta: matchupLabel(row.opponent, row.isAway),
             teamContext: null,
-            rosterTeamName: rosterAssignment?.teamName ?? null,
-            rosterIsUser: rosterAssignment?.isUser ?? false,
+            ...rosterBadgeForPlayer(row.team, rosterTeamByPlayer, powerTeamByPlayerId),
             projection: row.displayProjection,
             projectionLabel: row.gamePhase === "final" ? "PTS" : "PROJ",
             projectionSource: row.projectionSource,
@@ -725,15 +752,13 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
       .filter((row) => includedPositions.includes(row.position))
       .filter((row) => !availableOnly || !rostered.has(row.playerId))
       .map((row) => {
-        const rosterAssignment = rosterTeamByPlayer.get(row.playerId);
         return {
           key: row.playerId,
           rank: league.rankingField === "ppr" ? row.pprRank : row.halfPprRank,
           name: row.name,
           meta: `${row.position} · ${row.team}${row.opponent ? ` · ${matchupLabel(row.opponent, row.isAway)}` : ""}`,
           teamContext: null,
-          rosterTeamName: rosterAssignment?.teamName ?? null,
-          rosterIsUser: rosterAssignment?.isUser ?? false,
+          ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId),
           projection: league.rankingField === "ppr" ? row.ppr : row.halfPpr,
           projectionLabel: "PROJ",
           projectionSource: row.projectionSource,
@@ -746,7 +771,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
       .sort((a, b) => effectivePosition === "FLEX" || effectivePosition === "SUPER"
         ? (b.projection ?? -1) - (a.projection ?? -1) || a.rank - b.rank
         : a.rank - b.rank);
-  }, [availableOnly, dashboard.seasonLongRankings, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, leagueDefenses, leagueRankings, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
+  }, [availableOnly, dashboard.seasonLongRankings, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, leagueDefenses, leagueRankings, powerTeamByPlayerId, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
   const visibleRows = rows.slice(0, visibleRowCount);
   const hasSearch = query.trim().length > 0;
   const prefetchPlayerPanels = (player: PlayerSearchResult) => {
@@ -884,7 +909,9 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
               const accessibleValue = isSeasonLong
                 ? `${Math.round(row.projection ?? 0).toLocaleString()} ${row.projectionLabel}`
                 : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
-              const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${row.rosterTeamName ? `, rostered by ${row.rosterTeamName}` : ""}${isSelected ? ", selected" : ""}`;
+              const rosteredBy = row.rosterTeamName && row.rosterId === null ? `, rostered by ${row.rosterTeamName}` : "";
+              const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${rosteredBy}${isSelected ? ", selected" : ""}`;
+              const rosterId = row.rosterId;
               const content = (
                 <>
                   <span className="ranking-player">
@@ -909,9 +936,26 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
                         </span>
                       )}
                       {row.rosterTeamName ? (
-                        <span className={`roster-owner-tag${row.rosterIsUser ? " is-user" : ""}`} title={row.rosterIsUser ? "Your roster" : `Rostered by ${row.rosterTeamName}`}>
-                          {row.rosterTeamName}
-                        </span>
+                        rosterId !== null && row.rosterLabel && onOpenLeagueTeam ? (
+                          <button
+                            type="button"
+                            className="roster-owner-button"
+                            aria-label={row.rosterLabel}
+                            aria-haspopup="dialog"
+                            title={row.rosterIsUser ? "Your roster" : `Rostered by ${row.rosterTeamName}`}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenLeagueTeam(rosterId);
+                            }}
+                          >
+                            <span className={`roster-owner-tag${row.rosterIsUser ? " is-user" : ""}`}>{row.rosterTeamName}</span>
+                          </button>
+                        ) : (
+                          <span className={`roster-owner-tag${row.rosterIsUser ? " is-user" : ""}`} title={row.rosterIsUser ? "Your roster" : `Rostered by ${row.rosterTeamName}`}>
+                            {row.rosterTeamName}
+                          </span>
+                        )
                       ) : null}
                     </span>
                   </span>
@@ -926,18 +970,15 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, ra
                 <div
                   className={`ranking-row ranking-row-button${isMine ? " is-my-roster" : ""}${isSelected ? " is-player-selected" : ""}`}
                   key={row.key}
-                  role="button"
-                  tabIndex={0}
-                  onPointerDown={() => detail && prefetchPlayerPanels(detail)}
-                  onFocus={() => detail && prefetchPlayerPanels(detail)}
-                  onClick={openPlayer}
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
-                    event.preventDefault();
-                    openPlayer();
-                  }}
-                  aria-label={rowAccessibleLabel}
                 >
+                  <button
+                    type="button"
+                    className="ranking-row-open"
+                    aria-label={rowAccessibleLabel}
+                    onPointerDown={() => detail && prefetchPlayerPanels(detail)}
+                    onFocus={() => detail && prefetchPlayerPanels(detail)}
+                    onClick={openPlayer}
+                  />
                   {content}
                 </div>
               );

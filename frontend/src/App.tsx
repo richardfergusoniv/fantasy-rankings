@@ -1015,6 +1015,7 @@ export function App() {
                 dashboard={activeDashboard}
                 league={league}
                 onOpenMatchup={setSelectedMatchup}
+                onOpenLeagueTeam={(rosterId) => setRosterCardRosterId(rosterId)}
                 rankingPosition={dashboardUrl.state.position}
                 rankingHorizon={dashboardUrl.state.horizon}
                 rankingQuery={dashboardUrl.state.query}

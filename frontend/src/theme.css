@@ -2920,6 +2920,80 @@ a:active { color: var(--link-active); }
   min-height: 28px;
 }
 
+/* Player opener sits behind the row. The roster chip is a sibling control. */
+.rankings-view .ranking-row {
+  position: relative;
+}
+.rankings-view .ranking-row-open {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.rankings-view .ranking-row-open:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
+}
+.rankings-view .ranking-row > .ranking-player,
+.rankings-view .ranking-row > .ranking-proj {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.rankings-view .ranking-row .matchup-reference-button,
+.rankings-view .ranking-row .roster-owner-button {
+  pointer-events: auto;
+}
+.rankings-view .ranking-row-button:has(.roster-owner-button:active) {
+  background: var(--surface);
+}
+.rankings-view .ranking-row-button.is-my-roster:has(.roster-owner-button:active) {
+  background: var(--roster-highlight-bg);
+}
+/* Chip stays ~16px. Padding and a negative margin make a 44px hit box inside the 56px row. */
+.rankings-view .ranking-row .roster-owner-button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 112px;
+  min-width: 44px;
+  height: auto;
+  margin: 0;
+  margin-block: -20px -8px;
+  padding-block: 20px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: visible;
+}
+.rankings-view .ranking-row .roster-owner-button::before {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: 44px;
+  transform: translate(-50%, -50%);
+  content: "";
+}
+.rankings-view .ranking-row .roster-owner-button .roster-owner-tag {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .matchup-player {
   grid-template-rows: var(--player-box-half) var(--player-box-half);
 }
