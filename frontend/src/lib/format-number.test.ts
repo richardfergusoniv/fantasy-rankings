@@ -14,7 +14,7 @@ describe("formatDecimal", () => {
   it("uses the locale's separators without changing the decimal places", () => {
     expect(formatDecimal(1234.5, 1, { locale: "de-DE" })).toBe("1.234,5");
     expect(formatDecimal(-1234.56, 2, { locale: "de-DE" })).toBe("-1.234,56");
-    expect(formatPercent(45.26, 1, { locale: "de-DE" })).toBe("45,3%");
+    expect(formatPercent(45.26, { locale: "de-DE" })).toBe("45,3%");
   });
 
   it("matches the existing plus and zero sign rules", () => {
@@ -36,8 +36,11 @@ describe("formatPoints", () => {
 });
 
 describe("formatPercent", () => {
-  it("keeps a 0–100 value and the requested decimals", () => {
-    expect(formatPercent(45.26, 1, { locale: "en-US" })).toBe("45.3%");
-    expect(formatPercent(12, 0, { locale: "en-US" })).toBe("12%");
+  it("always shows one decimal on a 0–100 value", () => {
+    expect(formatPercent(45.26, { locale: "en-US" })).toBe("45.3%");
+    expect(formatPercent(12, { locale: "en-US" })).toBe("12.0%");
+    expect(formatPercent(42, { locale: "en-US" })).toBe("42.0%");
+    expect(formatPercent(68, { locale: "en-US" })).toBe("68.0%");
+    expect(`${formatPercent(42, { locale: "en-US" })} / ${formatPercent(58, { locale: "en-US" })}`).toBe("42.0% / 58.0%");
   });
 });

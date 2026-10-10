@@ -29,7 +29,7 @@ import {
   pfnRankForRow,
   projectionComponentsForPlayer,
 } from "./dashboard-shared";
-import { formatDecimal } from "./lib/format-number";
+import { formatDecimal, formatPercent } from "./lib/format-number";
 import { MatchupTag, ModalPortal, SegmentedControl, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
@@ -306,7 +306,7 @@ export function PlayerAdvancedPanel({ player, analytics, children }: { player: P
         <div className="section-heading"><h3 id="player-advanced-metrics-heading">Efficiency &amp; usage</h3><span>{entity ? `${entity.seasonGames} games` : null}</span></div>
         {metrics.length > 0 ? (
           <div className="player-advanced-grid">
-            {metrics.map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{formatDecimal(metric.value, metric.digits ?? 1)}{metric.unit ?? ""}</strong></div>)}
+            {metrics.map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{metric.unit === "%" ? formatPercent(metric.value) : `${formatDecimal(metric.value, metric.digits ?? 1)}${metric.unit ?? ""}`}</strong></div>)}
           </div>
         ) : <div className="player-tab-empty compact"><strong>No advanced metrics yet</strong><span>nflverse has not published a matching season row for this player.</span></div>}
         {entity && analytics.throughWeek !== null ? <p className="player-tab-source">Through Week {analytics.throughWeek} · nflverse weekly player stats</p> : null}

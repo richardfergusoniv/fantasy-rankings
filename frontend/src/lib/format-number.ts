@@ -65,6 +65,7 @@ export function formatPoints(value: number | null, decimals = 1, options?: Forma
   return formatDecimal(value, decimals, options);
 }
 
-export function formatPercent(value: number, decimals: number, options?: FormatDecimalOptions): string {
-  return `${formatDecimal(value, decimals, options)}%`;
+/** A 0–100 percentage with exactly one decimal, such as 42.0% or 68.0%. */
+export function formatPercent(value: number, options?: FormatDecimalOptions): string {
+  return `${formatDecimal(value, 1, options)}%`;
 }

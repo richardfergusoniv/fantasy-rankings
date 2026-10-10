@@ -272,9 +272,9 @@ export function TeamDataModal({
             <button type="button" onClick={onClose} aria-label="Close team data">×</button>
           </header>
 
-          <section className="team-card-stat-section" aria-labelledby="team-basic-stats-title">
+          <section className="team-card-stat-section" aria-labelledby="team-stats-title">
             <div className="team-card-section-heading">
-              <h3 id="team-basic-stats-title">Basic</h3>
+              <h3 id="team-stats-title">Stats</h3>
             </div>
             <div className="team-card-metrics">
               <div>
@@ -318,7 +318,7 @@ export function TeamDataModal({
               </div>
               <div>
                 <span>Run / pass split</span>
-                <strong>{usage ? `${Math.round(usage.runPct)}% / ${Math.round(usage.passPct)}%` : "—"}</strong>
+                <strong>{usage ? `${formatPercent(usage.runPct)} / ${formatPercent(usage.passPct)}` : "—"}</strong>
                 {missingNote(!usage, "nflverse unavailable")}
               </div>
             </div>
@@ -382,12 +382,12 @@ export function TeamDataModal({
             <div className="team-card-metrics team-card-advanced-metrics">
               <div>
                 <span>Red-zone TD rate</span>
-                {coloredStat(situational ? formatPercent(situational.redZoneTdPct, 0) : "—", situationalRank("redZoneTdPct"))}
+                {coloredStat(situational ? formatPercent(situational.redZoneTdPct) : "—", situationalRank("redZoneTdPct"))}
                 {missingNote(!situational, "Source unavailable")}
               </div>
               <div>
                 <span>Third-down conversion</span>
-                {coloredStat(situational ? formatPercent(situational.thirdDownPct, 0) : "—", situationalRank("thirdDownPct"))}
+                {coloredStat(situational ? formatPercent(situational.thirdDownPct) : "—", situationalRank("thirdDownPct"))}
                 {missingNote(!situational, "Source unavailable")}
               </div>
               <div>
@@ -396,7 +396,7 @@ export function TeamDataModal({
               </div>
               <div>
                 <span>Success rate</span>
-                {coloredStat(successPct === null ? "—" : formatPercent(successPct, 1), pfnRankForRow(offense, offenseRow, "success_pct"))}
+                {coloredStat(successPct === null ? "—" : formatPercent(successPct), pfnRankForRow(offense, offenseRow, "success_pct"))}
               </div>
               <div>
                 <span>Yards / play</span>
@@ -404,7 +404,7 @@ export function TeamDataModal({
               </div>
               <div>
                 <span>Explosive play rate</span>
-                {coloredStat(explosivePct === null ? "—" : formatPercent(explosivePct, 1), pfnRankForRow(offense, offenseRow, "expl_pct"))}
+                {coloredStat(explosivePct === null ? "—" : formatPercent(explosivePct), pfnRankForRow(offense, offenseRow, "expl_pct"))}
               </div>
             </div>
             {situationalSource ? (
