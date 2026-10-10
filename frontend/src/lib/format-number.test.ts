@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDecimal, formatPercent, formatPoints } from "./format-number";
+import { formatDecimal, formatPercent, formatPoints, formatWholePercent } from "./format-number";
 
 describe("formatDecimal", () => {
   it("keeps the same rounded digits as toFixed and adds grouping", () => {
@@ -41,6 +41,13 @@ describe("formatPercent", () => {
     expect(formatPercent(12, { locale: "en-US" })).toBe("12.0%");
     expect(formatPercent(42, { locale: "en-US" })).toBe("42.0%");
     expect(formatPercent(68, { locale: "en-US" })).toBe("68.0%");
-    expect(`${formatPercent(42, { locale: "en-US" })} / ${formatPercent(58, { locale: "en-US" })}`).toBe("42.0% / 58.0%");
+  });
+});
+
+describe("formatWholePercent", () => {
+  it("rounds a run/pass share to a whole number", () => {
+    expect(formatWholePercent(42, { locale: "en-US" })).toBe("42%");
+    expect(formatWholePercent(58.4, { locale: "en-US" })).toBe("58%");
+    expect(`${formatWholePercent(42, { locale: "en-US" })} / ${formatWholePercent(58, { locale: "en-US" })}`).toBe("42% / 58%");
   });
 });

@@ -33,7 +33,7 @@ import {
   sleeperInjuryTag,
 } from "../dashboard-shared";
 import type { RankingHorizon, RankingPosition } from "../dashboard-url";
-import { formatDecimal, formatPercent } from "../lib/format-number";
+import { formatDecimal, formatPercent, formatWholePercent } from "../lib/format-number";
 import {
   SOS_POSITIONS,
   fantasySosRanksForTeam,
@@ -318,7 +318,7 @@ export function TeamDataModal({
               </div>
               <div>
                 <span>Run / pass split</span>
-                <strong>{usage ? `${formatPercent(usage.runPct)} / ${formatPercent(usage.passPct)}` : "—"}</strong>
+                <strong>{usage ? `${formatWholePercent(usage.runPct)} / ${formatWholePercent(usage.passPct)}` : "—"}</strong>
                 {missingNote(!usage, "nflverse unavailable")}
               </div>
             </div>
