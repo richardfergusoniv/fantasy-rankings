@@ -732,16 +732,27 @@ button.monitor-alert:hover { background: var(--surface-2); }
 .number-cell span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 
 .rankings-toolbar { position: sticky; top: var(--sticky-offset); z-index: 9; padding: 7px 0 8px; border-bottom: 1px solid var(--hairline); background: var(--bg); }
-.rankings-density-toggle { margin-top: 7px; }
 .search-field { display: flex; min-height: 44px; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--dim); }
 .search-field input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); font-size: 16px; }
 .search-field input[type="search"] { appearance: none; }
 .search-field input[type="search"]::-webkit-search-cancel-button { display: none; }
 .search-field:focus-within { border-color: var(--link); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent); }
 .search-clear { flex: none; display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface-2); color: var(--dim); font-size: var(--type-section); line-height: 1; cursor: pointer; }
-.position-filter-rows { display: grid; gap: 5px; margin-top: 7px; }
-.position-tabs { min-height: 44px; }
-.position-tabs button { min-height: 44px; padding-inline: 3px; font-size: var(--tab-font-size); font-weight: var(--tab-font-weight); }
+.position-filter-row { margin-top: 7px; min-width: 0; }
+/* One equal-width row (QB … Rook) — same tab type size as other segmented controls. */
+.position-filter-row .position-tabs {
+  min-height: 44px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.position-filter-row .position-tabs::-webkit-scrollbar { display: none; }
+.position-filter-row .position-tabs button {
+  min-height: 44px;
+  padding-inline: 2px;
+  font-size: var(--tab-font-size);
+  font-weight: var(--tab-font-weight);
+}
 .rankings-note { display: flex; justify-content: flex-end; gap: 10px; margin: 10px 2px 6px; color: var(--dim); font-size: var(--type-caption); }
 .ranking-row { display: grid; width: 100%; grid-template-columns: minmax(0,1fr) 62px; gap: 8px; min-height: 52px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--hairline); background: var(--surface); color: var(--text); text-align: left; }
 .ranking-row-button { cursor: pointer; touch-action: pan-y; }
@@ -2746,31 +2757,30 @@ a:active { color: var(--link-active); }
 }
 
 /*
- * Explorer density (rankings / waivers only).
- * Compact overrides inherit via data-density on .rankings-view so Matchup,
- * trade, power, and draft row heights stay on the root tokens.
+ * Explorer rankings / waivers use compact rows only.
+ * Scoped to .rankings-view so Matchup, trade, power, and draft keep root tokens.
  */
-.rankings-view[data-density="compact"] {
+.rankings-view {
   --player-box-height: 56px;
   --player-box-half: 28px;
   --player-row-height: 56px;
 }
 
-.rankings-view[data-density="compact"] .ranking-row,
-.rankings-view[data-density="compact"] .player-search-result {
+.rankings-view .ranking-row,
+.rankings-view .player-search-result {
   min-height: 56px;
 }
 
-.rankings-view[data-density="compact"] .ranking-row .ranking-player {
+.rankings-view .ranking-row .ranking-player {
   grid-template-rows: 28px 28px;
 }
 
-.rankings-view[data-density="compact"] .ranking-row .ranking-name-line,
-.rankings-view[data-density="compact"] .ranking-row .ranking-meta-line {
+.rankings-view .ranking-row .ranking-name-line,
+.rankings-view .ranking-row .ranking-meta-line {
   min-height: 28px;
 }
 
-.rankings-view[data-density="compact"] .ranking-row .matchup-reference-button.matchup-reference-tag {
+.rankings-view .ranking-row .matchup-reference-button.matchup-reference-tag {
   min-height: 28px;
 }
 
