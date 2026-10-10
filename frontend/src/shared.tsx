@@ -134,17 +134,73 @@ export function setPlayerSheetDragLock(active: boolean): void {
 }
 
 export type SosPosition = "QB" | "RB" | "WR" | "TE";
+export const SOS_POSITIONS: readonly SosPosition[] = ["QB", "RB", "WR", "TE"];
 export type StrengthOfScheduleEntryLike = {
   table: Record<string, Partial<Record<SosPosition, { rank: number }>>>;
 };
 
-function matchupTone(entry: StrengthOfScheduleEntryLike | undefined, opponent: string | null, position: string): "" | " sos-soft" | " sos-tough" {
-  if (!entry || !opponent || !(["QB", "RB", "WR", "TE"] as string[]).includes(position)) return "";
-  const rank = entry.table[opponent]?.[position as SosPosition]?.rank;
+/** Fantasy SOS soft (1–10) / tough (23–32) tone class for a rank. */
+export function sosToneFromRank(rank: number | null | undefined): "" | " sos-soft" | " sos-tough" {
   if (typeof rank !== "number") return "";
   if (rank <= 10) return " sos-soft";
   if (rank >= 23) return " sos-tough";
   return "";
+}
+
+/** Positional fantasy SOS rank for an opponent defense vs a skill position. */
+export function positionalSosRank(
+  entry: StrengthOfScheduleEntryLike | undefined,
+  opponent: string | null | undefined,
+  position: string,
+): number | null {
+  if (!entry || !opponent || !(SOS_POSITIONS as readonly string[]).includes(position)) return null;
+  const rank = entry.table[opponent]?.[position as SosPosition]?.rank;
+  return typeof rank === "number" ? rank : null;
+}
+
+/** All four positional fantasy SOS ranks for one NFL team (as the defending side). */
+export function fantasySosRanksForTeam(
+  entry: StrengthOfScheduleEntryLike | undefined,
+  team: string | null | undefined,
+): Record<SosPosition, number | null> {
+  const empty: Record<SosPosition, number | null> = { QB: null, RB: null, WR: null, TE: null };
+  if (!entry || !team) return empty;
+  const row = entry.table[team];
+  if (!row) return empty;
+  return {
+    QB: typeof row.QB?.rank === "number" ? row.QB.rank : null,
+    RB: typeof row.RB?.rank === "number" ? row.RB.rank : null,
+    WR: typeof row.WR?.rank === "number" ? row.WR.rank : null,
+    TE: typeof row.TE?.rank === "number" ? row.TE.rank : null,
+  };
+}
+
+function matchupTone(entry: StrengthOfScheduleEntryLike | undefined, opponent: string | null, position: string): "" | " sos-soft" | " sos-tough" {
+  return sosToneFromRank(positionalSosRank(entry, opponent, position));
+}
+
+/** Compact positional SOS rank chip (e.g. RB · #7) with soft/tough tone. */
+export function SosRankChip({
+  entry,
+  opponent,
+  position,
+}: {
+  entry: StrengthOfScheduleEntryLike | undefined;
+  opponent: string | null;
+  position: string;
+}) {
+  const rank = positionalSosRank(entry, opponent, position);
+  if (rank === null) return null;
+  const posLabel = position === "DEF" ? "DST" : position;
+  const tone = sosToneFromRank(rank);
+  return (
+    <span
+      className={`matchup-reference-tag sos-rank-chip${tone}`}
+      aria-label={`${posLabel} strength of schedule rank ${rank}${tone === " sos-soft" ? ", soft matchup" : tone === " sos-tough" ? ", tough matchup" : ""}`}
+    >
+      {posLabel} · #{rank}
+    </span>
+  );
 }
 
 export function MatchupTag({

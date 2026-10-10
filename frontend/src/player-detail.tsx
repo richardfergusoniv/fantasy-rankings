@@ -30,7 +30,7 @@ import {
   projectionComponentsForPlayer,
 } from "./dashboard-shared";
 import { formatDecimal } from "./lib/format-number";
-import { MatchupTag, ModalPortal, SegmentedControl, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { MatchupTag, ModalPortal, SegmentedControl, SosRankChip, positionalSosRank, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
 
@@ -131,7 +131,13 @@ export function usePlayerCardHistory() {
   };
 }
 
-export function PlayerTeamContext({ player }: { player: PlayerSearchResult }) {
+export function PlayerTeamContext({
+  player,
+  sosEntry,
+}: {
+  player: PlayerSearchResult;
+  sosEntry?: StrengthOfScheduleEntryLike;
+}) {
   const query = useQuery({
     queryKey: ["pfn-tables"],
     queryFn: () => api.getPfnTables({}),
@@ -151,6 +157,7 @@ export function PlayerTeamContext({ player }: { player: PlayerSearchResult }) {
   const opponentOffense = findRow(offense, opponent);
   const opponentDefense = findRow(defense, opponent);
   const stats: PfnContextStat[] = [];
+  const sosRank = positionalSosRank(sosEntry, player.opponent, player.position);
 
   const addStat = (label: string, table: PfnTable | null, row: PfnRow | undefined, key: string, options?: { higherIsBetter?: boolean; suffix?: string; tableRank?: boolean }) => {
     const value = pfnNumber(row, key);
@@ -189,6 +196,12 @@ export function PlayerTeamContext({ player }: { player: PlayerSearchResult }) {
         <h3>Team context</h3>
         <span>{fetchedAt ? `PFN · ${pfnDateLabel(fetchedAt)}` : "PFN"}</span>
       </div>
+      {sosRank !== null ? (
+        <div className="player-team-sos" aria-label="Fantasy strength of schedule">
+          <span>SOS</span>
+          <SosRankChip entry={sosEntry} opponent={player.opponent} position={player.position} />
+        </div>
+      ) : null}
       {query.isPending ? (
         <div className="player-team-context-state" role="status">Loading team context…</div>
       ) : query.isError ? (
@@ -203,7 +216,7 @@ export function PlayerTeamContext({ player }: { player: PlayerSearchResult }) {
             </div>
           ))}
         </div>
-      ) : (
+      ) : sosRank !== null ? null : (
         <SectionError title="No PFN team context found for this matchup." onRetry={() => { void query.refetch(); }} retrying={query.isFetching} compact />
       )}
     </section>
@@ -639,7 +652,7 @@ export function PlayerDetailSheet({
             </div>
           </section>
         ) : null}
-        <PlayerTeamContext player={player} />
+        <PlayerTeamContext player={player} sosEntry={sosEntry} />
         <section className="player-news-section" aria-label={`${player.name} news`}>
           <div className="section-heading"><h3>Latest news</h3><span>{newsItems.length > 0 ? newsItems.length : null}</span></div>
           {newsError && onRetryNews ? (
@@ -672,7 +685,7 @@ export function PlayerDetailSheet({
         {activeTab === "advanced" ? (
           <div id="player-detail-advanced-panel" role="tabpanel" aria-labelledby="player-detail-advanced-tab">
             <PlayerAdvancedPanel player={player} analytics={analytics}>
-              <PlayerTeamContext player={player} />
+              <PlayerTeamContext player={player} sosEntry={sosEntry} />
             </PlayerAdvancedPanel>
           </div>
         ) : null}

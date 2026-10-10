@@ -975,6 +975,9 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-team-context { margin-top: 16px; }
 .player-team-context .section-heading { position: static; min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .player-team-context .section-heading h3 { margin: 0; font-size: var(--type-section); }
+.player-team-sos { display: flex; min-height: 32px; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 2px 10px; border-top: 1px solid var(--hairline); }
+.player-team-sos > span { color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
+.player-team-sos .sos-rank-chip { flex: 0 0 auto; }
 .player-team-context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
 .player-team-context-grid > div { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; padding: 10px 2px; }
 .player-team-context-grid > div:nth-child(odd) { padding-right: 10px; }
@@ -2601,6 +2604,15 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .team-card-metrics span { color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
 .team-card-metrics strong { color: var(--text); font-size: var(--type-section); font-weight: 750; font-variant-numeric: tabular-nums; }
 .team-card-metrics small { color: var(--dim); font-size: var(--type-caption); font-weight: 500; line-height: 1.35; }
+.team-card-sos-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--hairline); }
+.team-card-sos-cell { display: flex; min-height: 48px; min-width: 0; flex-direction: column; justify-content: center; gap: 2px; padding: 10px 6px; border-bottom: 1px solid var(--hairline); }
+.team-card-sos-cell + .team-card-sos-cell { border-left: 1px solid var(--hairline); }
+.team-card-sos-cell span { color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
+.team-card-sos-cell strong { color: var(--text); font-size: var(--type-section); font-weight: 750; font-variant-numeric: tabular-nums; }
+.team-card-sos-cell.sos-soft strong { color: var(--stat-strength-readable); }
+.team-card-sos-cell.sos-tough strong { color: var(--stat-weakness-readable); }
+.team-card-sos-cell.sos-soft { background: color-mix(in srgb, var(--stat-strength-soft) 55%, transparent); }
+.team-card-sos-cell.sos-tough { background: color-mix(in srgb, var(--stat-weakness-soft) 55%, transparent); }
 .team-card-advanced-metrics > div:last-child { grid-column: 1 / -1; padding-right: 0; border-bottom: 0; }
 .team-card-source { margin: 8px 0 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.4; }
 .team-card-source a { color: var(--link); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
