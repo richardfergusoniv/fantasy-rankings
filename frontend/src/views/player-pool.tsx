@@ -153,27 +153,19 @@ export function TeamDataModal({
   const defenseRow = defense?.rows.find((row) => canonicalNflTeam(row.team) === teamCode);
   const offenseRow = offense?.rows.find((row) => canonicalNflTeam(row.team) === teamCode);
   const overallRow = teamOverall?.rows.find((row) => canonicalNflTeam(row.team) === teamCode);
-  const lineGrade = pfnNumber(lineRow, "grade");
-  const defenseGrade = pfnNumber(defenseRow, "grade");
-  const offenseGrade = pfnNumber(offenseRow, "grade");
   const lineRank = lineRow?.rank ?? null;
   const defenseRank = defenseRow?.rank ?? null;
   const offenseRank = offenseRow?.rank ?? null;
-  const passBlock = pfnNumber(lineRow, "pass_block");
-  const runBlock = pfnNumber(lineRow, "run_block");
   const penPerGame = pfnNumber(lineRow, "pen_per_game");
   const passBlockRank = pfnRankForRow(offensiveLine, lineRow, "pass_block");
   const runBlockRank = pfnRankForRow(offensiveLine, lineRow, "run_block");
-  const overallGrade = pfnNumber(overallRow, "grade");
   const overallRank = overallRow?.rank ?? null;
-  const specialTeams = pfnNumber(overallRow, "special_teams");
   const specialTeamsRank = pfnRankForRow(teamOverall, overallRow, "special_teams");
   const epaPerPlay = pfnNumber(offenseRow, "epa_per_play");
   const successPct = pfnNumber(offenseRow, "success_pct");
   const yardsPerPlay = pfnNumber(offenseRow, "yds_per_play");
   const explosivePct = pfnNumber(offenseRow, "expl_pct");
   const teamName = lineRow?.team_name ?? defenseRow?.team_name ?? offenseRow?.team_name ?? overallRow?.team_name ?? selection.team;
-  const usageWeek = usage ? `Through ${usage.games} game${usage.games === 1 ? "" : "s"}` : null;
   const pfnRecord = overallRow?.record;
   const recordLabel = typeof pfnRecord === "string" && /^\d+-\d+(?:-\d+)?$/.test(pfnRecord)
     ? pfnRecord
@@ -221,8 +213,8 @@ export function TeamDataModal({
   const coloredStat = (text: string, rank: number | null) => (
     <strong className={rank === null ? undefined : rankToneClassName(rank)}>{text}</strong>
   );
-  const gradeCaption = (value: number | null, rank: number | null, fallback: string) => (
-    <small className={value === null ? undefined : rankToneClassName(rank)}>{value === null ? fallback : `${formatDecimal(value, 1)} grade`}</small>
+  const missingNote = (missing: boolean, text: string) => (
+    missing ? <span className="sr-only">{text}</span> : null
   );
 
   return (
@@ -240,53 +232,51 @@ export function TeamDataModal({
           <section className="team-card-stat-section" aria-labelledby="team-basic-stats-title">
             <div className="team-card-section-heading">
               <h3 id="team-basic-stats-title">Basic</h3>
-              <span>{usageWeek ?? "Season production"}</span>
             </div>
             <div className="team-card-metrics">
               <div>
                 <span>Points scored</span>
                 {coloredStat(usage ? usage.pointsScored.toLocaleString() : "—", usageRank((row) => row.pointsScored))}
-                <small>{usageWeek ?? "nflverse unavailable"}</small>
+                {missingNote(!usage, "nflverse unavailable")}
               </div>
               <div>
                 <span>Total yards</span>
                 {coloredStat(usage ? usage.totalYards.toLocaleString() : "—", usageRank((row) => row.totalYards))}
-                <small>{usageWeek ?? "nflverse unavailable"}</small>
+                {missingNote(!usage, "nflverse unavailable")}
               </div>
               <div>
                 <span>Passing yards</span>
                 {coloredStat(usage ? usage.passingYards.toLocaleString() : "—", usageRank((row) => row.passingYards))}
-                <small>Season total</small>
+                {missingNote(!usage, "nflverse unavailable")}
               </div>
               <div>
                 <span>Rushing yards</span>
                 {coloredStat(usage ? usage.rushingYards.toLocaleString() : "—", usageRank((row) => row.rushingYards))}
-                <small>Season total</small>
+                {missingNote(!usage, "nflverse unavailable")}
               </div>
               <div>
                 <span>Win–loss record</span>
                 {coloredStat(recordLabel, recordLabel === "—" ? null : recordRank)}
-                <small>Season</small>
               </div>
               <div>
                 <span>Offensive touchdowns</span>
                 {coloredStat(usage ? usage.offensiveTouchdowns.toLocaleString() : "—", usageRank((row) => row.offensiveTouchdowns))}
-                <small>Pass catches + rushes</small>
+                <span className="sr-only">{usage ? "Pass catches and rushes" : "nflverse unavailable. Pass catches and rushes"}</span>
               </div>
               <div>
                 <span>Turnovers</span>
                 {coloredStat(usage ? usage.turnovers.toLocaleString() : "—", usageRank((row) => row.turnovers, false))}
-                <small>Interceptions + fumbles lost</small>
+                <span className="sr-only">{usage ? "Interceptions and fumbles lost" : "nflverse unavailable. Interceptions and fumbles lost"}</span>
               </div>
               <div>
                 <span>Pace of play</span>
                 {coloredStat(usage ? formatDecimal(usage.playsPerGame, 1) : "—", usageRank((row) => row.playsPerGame))}
-                <small>{usageWeek ? `plays / game · ${usageWeek}` : "nflverse unavailable"}</small>
+                {missingNote(!usage, "nflverse unavailable")}
               </div>
               <div>
                 <span>Run / pass split</span>
-                <strong>{usage ? `${Math.round(usage.runPct)} / ${Math.round(usage.passPct)}` : "—"}</strong>
-                <small>{usage ? "run% / pass%" : "nflverse unavailable"}</small>
+                <strong>{usage ? `${Math.round(usage.runPct)}% / ${Math.round(usage.passPct)}%` : "—"}</strong>
+                {missingNote(!usage, "nflverse unavailable")}
               </div>
             </div>
           </section>
@@ -294,48 +284,40 @@ export function TeamDataModal({
           <section className="team-card-stat-section" aria-labelledby="team-pfn-grades-title">
             <div className="team-card-section-heading">
               <h3 id="team-pfn-grades-title">PFN</h3>
-              <span>Grades · ranks</span>
             </div>
             <div className="team-card-metrics">
               <div>
                 <span>Overall</span>
                 {rankLabel(overallRank, loading)}
-                {gradeCaption(overallGrade, overallRank, "PFN overall")}
               </div>
               <div>
                 <span>Special teams</span>
                 {rankLabel(specialTeamsRank, loading)}
-                {gradeCaption(specialTeams, specialTeamsRank, "PFN overall")}
               </div>
               <div>
                 <span>O-line</span>
                 {rankLabel(lineRank, loading)}
-                {gradeCaption(lineGrade, lineRank, "PFN rank")}
               </div>
               <div>
                 <span>Pass block</span>
                 {rankLabel(passBlockRank, loading)}
-                {gradeCaption(passBlock, passBlockRank, "PFN O-line")}
               </div>
               <div>
                 <span>Run block</span>
                 {rankLabel(runBlockRank, loading)}
-                {gradeCaption(runBlock, runBlockRank, "PFN O-line")}
               </div>
               <div>
                 <span>Pen/G</span>
                 <strong>{loading ? "…" : penPerGame === null ? "—" : formatDecimal(penPerGame, 1)}</strong>
-                <small>PFN O-line</small>
+                <span className="sr-only">Penalties per game</span>
               </div>
               <div>
                 <span>Defense</span>
                 {rankLabel(defenseRank, loading)}
-                {gradeCaption(defenseGrade, defenseRank, "PFN rank")}
               </div>
               <div>
                 <span>Offense</span>
                 {rankLabel(offenseRank, loading)}
-                {gradeCaption(offenseGrade, offenseRank, "PFN rank")}
               </div>
               {SOS_POSITIONS.map((position) => {
                 const rank = sosRanks[position];
@@ -353,38 +335,33 @@ export function TeamDataModal({
           <section className="team-card-stat-section" aria-labelledby="team-advanced-stats-title">
             <div className="team-card-section-heading">
               <h3 id="team-advanced-stats-title">Advanced</h3>
-              <span>Offensive efficiency</span>
             </div>
             <div className="team-card-metrics team-card-advanced-metrics">
               <div>
                 <span>Red-zone TD rate</span>
                 {coloredStat(situational ? formatPercent(situational.redZoneTdPct, 0) : "—", situationalRank("redZoneTdPct"))}
-                <small>{situational ? `${situational.games} game${situational.games === 1 ? "" : "s"}` : "Source unavailable"}</small>
+                {missingNote(!situational, "Source unavailable")}
               </div>
               <div>
                 <span>Third-down conversion</span>
                 {coloredStat(situational ? formatPercent(situational.thirdDownPct, 0) : "—", situationalRank("thirdDownPct"))}
-                <small>{situational ? `${situational.games} game${situational.games === 1 ? "" : "s"}` : "Source unavailable"}</small>
+                {missingNote(!situational, "Source unavailable")}
               </div>
               <div>
                 <span>EPA / play</span>
                 {coloredStat(epaPerPlay === null ? "—" : formatDecimal(epaPerPlay, 2, { sign: "exceptZero" }), pfnRankForRow(offense, offenseRow, "epa_per_play"))}
-                <small>PFN offense</small>
               </div>
               <div>
                 <span>Success rate</span>
                 {coloredStat(successPct === null ? "—" : formatPercent(successPct, 1), pfnRankForRow(offense, offenseRow, "success_pct"))}
-                <small>PFN offense</small>
               </div>
               <div>
                 <span>Yards / play</span>
                 {coloredStat(yardsPerPlay === null ? "—" : formatDecimal(yardsPerPlay, 1), pfnRankForRow(offense, offenseRow, "yds_per_play"))}
-                <small>PFN offense</small>
               </div>
               <div>
                 <span>Explosive play rate</span>
                 {coloredStat(explosivePct === null ? "—" : formatPercent(explosivePct, 1), pfnRankForRow(offense, offenseRow, "expl_pct"))}
-                <small>PFN offense</small>
               </div>
             </div>
             {situationalSource ? (

@@ -1067,19 +1067,13 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-team-context .section-heading { position: static; min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .player-team-context .section-heading h3 { margin: 0; font-size: var(--type-section); }
 .player-team-context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
-.player-team-context-grid > div { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; padding: 10px 2px; }
+.player-team-context-grid > div { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; padding: 8px 2px; }
 .player-team-context-grid > div:nth-child(odd) { padding-right: 10px; }
 .player-team-context-grid > div:nth-child(even) { padding-left: 10px; border-left: 1px solid var(--hairline); }
 .player-team-context-grid > div:nth-child(n + 3) { border-top: 1px solid var(--hairline); }
 .player-team-context-grid span { min-width: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; line-height: 1.25; }
 .player-team-context-grid strong { font-size: var(--type-section); font-variant-numeric: tabular-nums; font-weight: 700; line-height: 1; }
 .player-team-context-grid small { grid-column: 1 / -1; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.player-team-context-grid small.rank-tone,
-.team-card-metrics small.rank-tone { color: var(--text); }
-.player-team-context-grid small.rank-tone.sos-soft,
-.team-card-metrics small.rank-tone.sos-soft { color: var(--stat-strength-readable); }
-.player-team-context-grid small.rank-tone.sos-tough,
-.team-card-metrics small.rank-tone.sos-tough { color: var(--stat-weakness-readable); }
 .player-team-context-state { padding: 14px 2px; border-block: 1px solid var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .dst-breakdown { margin-top: 16px; }
 .dst-breakdown .section-heading { position: static; min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -2649,13 +2643,11 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .team-card-stat-section + .team-card-stat-section { margin-top: 18px; }
 .team-card-section-heading { display: flex; min-height: 30px; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 7px; border-bottom: 1px solid var(--hairline); }
 .team-card-section-heading h3 { margin: 0; color: var(--text); font-size: var(--type-body); font-weight: 750; }
-.team-card-section-heading span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .team-card-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--hairline); }
-.team-card-metrics > div { display: flex; min-width: 0; flex-direction: column; gap: 3px; padding: 12px 8px 12px 0; border-bottom: 1px solid var(--hairline); }
+.team-card-metrics > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; padding: 8px 8px 8px 0; border-bottom: 1px solid var(--hairline); }
 .team-card-metrics > div:nth-child(even) { padding-right: 0; padding-left: 12px; border-left: 1px solid var(--hairline); }
 .team-card-metrics span { color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
 .team-card-metrics strong { color: var(--text); font-size: var(--type-section); font-weight: 750; font-variant-numeric: tabular-nums; }
-.team-card-metrics small { color: var(--dim); font-size: var(--type-caption); font-weight: 500; line-height: 1.35; }
 .team-card-advanced-metrics > div:last-child { grid-column: 1 / -1; padding-right: 0; border-bottom: 0; }
 .team-card-source { margin: 8px 0 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.4; }
 .team-card-source a { color: var(--link); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }

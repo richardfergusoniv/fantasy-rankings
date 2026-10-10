@@ -212,13 +212,12 @@ export function PlayerTeamContext({
             </div>
           ) : null}
           {stats.map((stat) => {
-            const caption = `${formatDecimal(stat.value, 1)}${stat.suffix ?? " grade"}`;
             const isGrade = (stat.suffix ?? " grade") === " grade";
             return (
               <div key={stat.label}>
                 <span>{stat.label}</span>
                 <strong className={rankToneClassName(stat.rank)}>{stat.rank === null ? "—" : `#${stat.rank}`}</strong>
-                <small className={isGrade ? rankToneClassName(stat.rank) : undefined}>{caption}</small>
+                {isGrade ? null : <small>{formatDecimal(stat.value, 1)}{stat.suffix}</small>}
               </div>
             );
           })}
