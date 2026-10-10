@@ -287,6 +287,29 @@ export function tradeSideOutcome(leftTotal: number, rightTotal: number): "left" 
   return leftTotal > rightTotal ? "left" : "right";
 }
 
+/** Winner → warning; loser → dim; tie keeps the original chart colors. */
+export function tradeTrendColors(outcome: "left" | "right" | "tie"): {
+  giveColor: string;
+  getColor: string;
+  giveStrokeWidth: number;
+  getStrokeWidth: number;
+} {
+  if (outcome === "tie") {
+    return {
+      giveColor: "var(--chart-4)",
+      getColor: "var(--chart-3)",
+      giveStrokeWidth: 2.3,
+      getStrokeWidth: 2.3,
+    };
+  }
+  return {
+    giveColor: outcome === "left" ? "var(--warning)" : "var(--dim)",
+    getColor: outcome === "right" ? "var(--warning)" : "var(--dim)",
+    giveStrokeWidth: outcome === "left" ? 2.3 : 1,
+    getStrokeWidth: outcome === "right" ? 2.3 : 1,
+  };
+}
+
 export function TradeBalanceTrack({
   leftShare,
   leftWins,
@@ -410,10 +433,7 @@ export function TradeValueDialog({
     `${getLabel} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getTotal.toLocaleString()}`,
     lineup,
   ].filter((part): part is string => Boolean(part)).join(" ");
-  const giveColor = outcome === "left" ? "var(--warning)" : "var(--dim)";
-  const getColor = outcome === "right" ? "var(--warning)" : "var(--dim)";
-  const giveStrokeWidth = outcome === "left" || outcome === "tie" ? 2.3 : 1;
-  const getStrokeWidth = outcome === "right" || outcome === "tie" ? 2.3 : 1;
+  const { giveColor, getColor, giveStrokeWidth, getStrokeWidth } = tradeTrendColors(outcome);
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -730,10 +750,7 @@ export function TradeResultCard({
   const leftTotal = historicalComparisonSides ? historicalComparisonSides[0].total : giveMarketTotal;
   const rightTotal = historicalComparisonSides ? historicalComparisonSides[1].total : getMarketTotal;
   const outcome = tradeSideOutcome(leftTotal, rightTotal);
-  const giveColor = outcome === "left" ? "var(--warning)" : "var(--dim)";
-  const getColor = outcome === "right" ? "var(--warning)" : "var(--dim)";
-  const giveStrokeWidth = outcome === "left" || outcome === "tie" ? 2.3 : 1;
-  const getStrokeWidth = outcome === "right" || outcome === "tie" ? 2.3 : 1;
+  const { giveColor, getColor, giveStrokeWidth, getStrokeWidth } = tradeTrendColors(outcome);
 
   return (
     <ModalPortal>
