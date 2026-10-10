@@ -984,10 +984,9 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
               );
             }}
             </WindowVirtualList>
-            {rows.length > 0 ? (
+            {rows.length > 0 && visibleRowCount < rows.length ? (
               <div className="list-pagination-row">
-                <span aria-live="polite">showing {Math.min(visibleRowCount, rows.length)} of {rows.length}</span>
-                {visibleRowCount < rows.length ? <button type="button" onClick={() => setVisibleRowCount((count) => count + 120)}>Show more</button> : null}
+                <button type="button" onClick={() => setVisibleRowCount((count) => count + 120)}>Show more</button>
               </div>
             ) : null}
           </div>

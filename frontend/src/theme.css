@@ -1341,6 +1341,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-team-row .league-roster-main { min-height: 21px; }
 [data-slot="dialog-content"].league-trade-dialog { display: flex; flex-direction: column; width: min(calc(100% - 16px), 560px); max-width: min(calc(100% - 16px), 560px); max-height: 90dvh; gap: 12px; overflow: hidden; padding: 14px 12px 16px; border-color: var(--border); border-radius: var(--radius-xl); background: var(--surface); color: var(--text); box-shadow: var(--shadow-modal); }
 .league-trade-dialog-heading { flex: none; min-height: 44px; justify-content: center; padding-right: 44px; }
+.league-trade-dialog-subtitle { display: block; margin-top: 3px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .league-trade-dialog-body { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; gap: 12px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .league-trade-dialog-body > * { flex-shrink: 0; }
 .league-trade-lineup { margin: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }

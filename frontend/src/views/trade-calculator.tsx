@@ -12,8 +12,6 @@ import type {
   RosterPlayer,
   TradeAsset,
   TradeTeam,
-  ValuationMode,
-  ValueHistorySeries,
 } from "../dashboard-types";
 import type { TradeMode } from "../dashboard-url";
 import {
@@ -27,7 +25,7 @@ import {
 import { buildLeagueRosterRows, compactAssetName, formatLineupImpact, formatTeamRecord, rosterPositionLabel, type LeagueRosterRow, type TeamRecord } from "../league-trade";
 import { formatDecimal } from "../lib/format-number";
 import { AggregateTradeHistory } from "../player-charts";
-import { ModalPortal, SegmentedControl, useDialogFocusTrap } from "../shared";
+import { SegmentedControl } from "../shared";
 import { clearTradeSide, removeTradePlayer, restoreTradePlayer } from "../undo";
 import { useUnsavedLeaveWarning } from "../unsaved-input";
 
@@ -143,11 +141,6 @@ export function gradeTradeSide(
     explanation: `${needCopy} ${surplusCopy}`,
     missingProjections: roster.filter((player) => ["QB", "RB", "WR", "TE"].includes(player.position) && player.projection === null).length,
   };
-}
-
-export function signed(value: number, digits = 1): string {
-  if (Math.abs(value) < 0.005) return formatDecimal(0, digits);
-  return formatDecimal(value, digits, { sign: "exceptZero" });
 }
 
 export function TradeSide({ title, assets, availableAssets, onAdd, onRemove, onClear, onOpenPlayer }: { title: string; assets: TradeAsset[]; availableAssets: TradeAsset[]; onAdd: (id: string) => void; onRemove: (id: string) => void; onClear: () => void; onOpenPlayer: (playerId: string) => void }) {
@@ -310,25 +303,6 @@ export function tradeTrendColors(outcome: "left" | "right" | "tie"): {
   };
 }
 
-export function TradeBalanceTrack({
-  leftShare,
-  leftWins,
-  rightWins,
-}: {
-  leftShare: number;
-  leftWins: boolean;
-  rightWins: boolean;
-}) {
-  const rightShare = 100 - leftShare;
-  const tied = !leftWins && !rightWins;
-  return (
-    <div className="trade-balance-track" aria-hidden="true">
-      <i className={leftWins ? "is-winner" : tied ? "is-tie" : undefined} style={{ width: `${leftShare}%` }} />
-      <i className={rightWins ? "is-winner" : tied ? "is-tie" : undefined} style={{ width: `${rightShare}%` }} />
-    </div>
-  );
-}
-
 export function LeagueTradeValueColumn({
   side,
   assets,
@@ -381,6 +355,8 @@ export function TradeValueDialog({
   onClose,
   giveLabel = "You give",
   getLabel = "You get",
+  title = "Trade value",
+  subtitle,
   lineupContext,
 }: {
   give: TradeAsset[];
@@ -389,6 +365,8 @@ export function TradeValueDialog({
   onClose: () => void;
   giveLabel?: string;
   getLabel?: string;
+  title?: string;
+  subtitle?: ReactNode;
   lineupContext?: {
     mine: TradeTeam;
     theirs: TradeTeam;
@@ -440,7 +418,8 @@ export function TradeValueDialog({
       <DialogContent className="league-trade-dialog">
         <DialogCloseButton label="Close trade value" />
         <DialogHeader className="league-trade-dialog-heading">
-          <DialogTitle>Trade value</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
+          {subtitle ? <span className="league-trade-dialog-subtitle">{subtitle}</span> : null}
         </DialogHeader>
         <div className="league-trade-dialog-body" ref={bodyRef}>
           {lineup ? <p className="league-trade-lineup">{lineup}</p> : null}
@@ -606,68 +585,6 @@ export function LeagueAdjustedTrade({
   );
 }
 
-export function TradeGradeCard({
-  give,
-  get,
-  mine,
-  theirs,
-  league,
-  perspectiveLabel = "You",
-  singlePerspective = false,
-}: {
-  give: TradeAsset[];
-  get: TradeAsset[];
-  mine: TradeTeam;
-  theirs: TradeTeam;
-  league: League;
-  perspectiveLabel?: string;
-  singlePerspective?: boolean;
-}) {
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const giveMarket = tradeTotal(give);
-  const getMarket = tradeTotal(get);
-  const myGrade = gradeTradeSide(mine, give, get, theirs, league.tradeWaiverPool, league.tradeStarterSlots);
-  const theirGrade = gradeTradeSide(theirs, get, give, mine, league.tradeWaiverPool, league.tradeStarterSlots);
-  const projectionAgeHours = league.tradeValuation.projectionAsOf ? (Date.now() - new Date(league.tradeValuation.projectionAsOf).getTime()) / 3_600_000 : null;
-  const missingProjectionCount = singlePerspective ? myGrade.missingProjections : myGrade.missingProjections + theirGrade.missingProjections;
-  const confidenceNotes = [
-    projectionAgeHours === null || !Number.isFinite(projectionAgeHours)
-      ? "Weekly projection timestamp was not provided."
-      : projectionAgeHours > 48
-        ? `Weekly projections are ${Math.floor(projectionAgeHours / 24)} days old.`
-        : `Weekly projections updated ${Math.max(0, Math.round(projectionAgeHours))} hours ago.`,
-    ...league.tradeValuation.unsupportedSettings,
-    ...(missingProjectionCount > 0 ? [`${missingProjectionCount} post-trade roster player${missingProjectionCount === 1 ? "" : "s"} lack a weekly projection.`] : []),
-  ];
-  const moveText = (grade: SideGrade): string => {
-    const parts = [grade.cuts.length ? `Cut ${grade.cuts.join(", ")}` : "No cut", grade.adds.length ? `Add ${grade.adds.join(", ")}` : "no waiver add"];
-    return parts.join(" · ");
-  };
-  return (
-    <section className="trade-grade" aria-label="League-adjusted trade result">
-      <div className="trade-grade-heading"><div><strong>Market price + roster impact</strong></div><small>Today's league outlook</small></div>
-      <div className={`trade-grade-grid${singlePerspective ? " single-perspective" : ""}`}>
-        <div><span>Market balance</span><strong>{signed(getMarket - giveMarket, 0)}</strong><small>{perspectiveLabel}</small></div>
-        <div><span>{singlePerspective ? "Lineup delta" : "Your lineup delta"}</span><strong className={myGrade.lineupDelta > 0 ? "positive" : myGrade.lineupDelta < 0 ? "negative" : ""}>{signed(myGrade.lineupDelta)}</strong><small>weekly points</small></div>
-        {singlePerspective ? null : <div><span>Their lineup delta</span><strong className={theirGrade.lineupDelta > 0 ? "positive" : theirGrade.lineupDelta < 0 ? "negative" : ""}>{signed(theirGrade.lineupDelta)}</strong><small>weekly points</small></div>}
-        <div><span>Depth / risk</span><strong>{signed(myGrade.depthDelta)}</strong><small>{perspectiveLabel}</small></div>
-      </div>
-      <div className={`trade-grade-disclosure${isDetailsOpen ? " open" : ""}`}>
-        <button type="button" className="trade-grade-toggle" aria-expanded={isDetailsOpen} aria-controls="trade-grade-details" onClick={() => setIsDetailsOpen((open) => !open)}>
-          <span>Details</span><span className="trade-grade-toggle-icon" aria-hidden="true">{isDetailsOpen ? "−" : "+"}</span>
-        </button>
-        {isDetailsOpen ? (
-          <div id="trade-grade-details" className="trade-grade-detail">
-            <div><strong>Roster moves</strong><p>{perspectiveLabel}: {moveText(myGrade)}</p>{singlePerspective ? null : <p>{theirs.teamName}: {moveText(theirGrade)}</p>}</div>
-            <div><strong>Roster fit</strong><p>{perspectiveLabel}: {myGrade.explanation}</p>{singlePerspective ? null : <p>{theirs.teamName}: {theirGrade.explanation}</p>}</div>
-            <div><strong>Confidence notes</strong><ul>{confidenceNotes.map((note) => <li key={note}>{note}</li>)}</ul></div>
-          </div>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
 type HistoricalTradeDisplayAsset = {
   key: string;
   name: string;
@@ -675,13 +592,6 @@ type HistoricalTradeDisplayAsset = {
   value: number;
   note: string | null;
   playerId?: string;
-};
-
-type HistoricalTradeSide = {
-  team: HistoricalTradeTeam;
-  display: HistoricalTradeDisplayAsset[];
-  valued: TradeAsset[];
-  total: number;
 };
 
 export function historicalCurrentOccupant(team: HistoricalTradeTeam, league: League): TradeTeam | undefined {
@@ -700,145 +610,6 @@ export function HistoricalTeamMatchup({ trade, league }: { trade: HistoricalTrad
   const second = trade.teams[1];
   if (!first || !second) return <>Trade</>;
   return <><HistoricalTeamName team={first} league={league} /><i className="historical-team-separator" aria-hidden="true">↔</i><HistoricalTeamName team={second} league={league} /></>;
-}
-
-export function TradeResultCard({
-  give,
-  get,
-  mine,
-  theirs,
-  league,
-  valuationMode,
-  giveMarketTotal,
-  getMarketTotal,
-  balancePercent,
-  balanceCopy,
-  historyByPlayerId,
-  historyLoading,
-  onClose,
-  contextLine,
-  giveLabel = "You give",
-  getLabel = "You get",
-  historicalSides,
-  historicalComparisonSides,
-  rosterFitUnavailableNote,
-  onOpenPlayer,
-}: {
-  give: TradeAsset[];
-  get: TradeAsset[];
-  mine: TradeTeam | undefined;
-  theirs: TradeTeam | undefined;
-  league: League;
-  valuationMode: ValuationMode;
-  giveMarketTotal: number;
-  getMarketTotal: number;
-  balancePercent: number;
-  balanceCopy: ReactNode;
-  historyByPlayerId: Map<string, ValueHistorySeries>;
-  historyLoading: boolean;
-  onClose: () => void;
-  contextLine?: ReactNode;
-  giveLabel?: string;
-  getLabel?: string;
-  historicalSides?: HistoricalTradeSide[];
-  historicalComparisonSides?: [HistoricalTradeSide, HistoricalTradeSide];
-  rosterFitUnavailableNote?: string;
-  onOpenPlayer?: (playerId: string) => void;
-}) {
-  const dialogRef = useRef<HTMLElement | null>(null);
-  useDialogFocusTrap(dialogRef, onClose);
-  const leftTotal = historicalComparisonSides ? historicalComparisonSides[0].total : giveMarketTotal;
-  const rightTotal = historicalComparisonSides ? historicalComparisonSides[1].total : getMarketTotal;
-  const outcome = tradeSideOutcome(leftTotal, rightTotal);
-  const { giveColor, getColor, giveStrokeWidth, getStrokeWidth } = tradeTrendColors(outcome);
-
-  return (
-    <ModalPortal>
-      <div className="trade-result-backdrop" onClick={onClose}>
-        <article
-        ref={dialogRef}
-        className="trade-result-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="trade-result-title"
-        tabIndex={-1}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="trade-result-header">
-          <div><h2 id="trade-result-title">{contextLine ? "Trade hindsight" : "Trade calculation"}</h2><span>{contextLine ?? league.seasonLongFormat.label}</span></div>
-          <button type="button" onClick={onClose} aria-label="Close trade calculation">×</button>
-        </header>
-        <div className="trade-result-body">
-          {historicalSides ? (
-            <div className="historical-deal-assets">
-              {historicalSides.map((side) => (
-                <section key={side.team.rosterId} aria-label={`${side.team.teamName} received assets`}>
-                  <h3><HistoricalTeamName team={side.team} league={league} /></h3>
-                  {side.display.length ? side.display.map((asset) => (
-                    <div className="historical-deal-asset" key={asset.key}>
-                      <span>
-                        {asset.playerId && onOpenPlayer ? (
-                          <button type="button" className="historical-deal-player" aria-label={`Open ${asset.name}`} onClick={() => { const playerId = asset.playerId; if (playerId) onOpenPlayer?.(playerId); }}>{asset.name}</button>
-                        ) : <strong>{asset.name}</strong>}
-                        <small>{asset.meta}</small>
-                        {asset.note ? <em>{asset.note}</em> : null}
-                      </span>
-                      <b>{asset.value.toLocaleString()}</b>
-                    </div>
-                  )) : <p>Nothing recorded</p>}
-                  <div className="historical-deal-total"><span>Received total</span><strong>{side.total.toLocaleString()}</strong></div>
-                </section>
-              ))}
-            </div>
-          ) : null}
-          <section className="trade-balance" aria-label="Trade value comparison">
-            <div className="trade-balance-labels">
-              {historicalComparisonSides ? historicalComparisonSides.map((side) => (
-                <span className="trade-balance-side-label" key={side.team.rosterId}>
-                  <span><HistoricalTeamName team={side.team} league={league} /></span>
-                  <b>{side.total.toLocaleString()}</b>
-                </span>
-              )) : <><span>{giveLabel} <b>{giveMarketTotal.toLocaleString()}</b></span><span>{getLabel} <b>{getMarketTotal.toLocaleString()}</b></span></>}
-            </div>
-            <TradeBalanceTrack
-              leftShare={balancePercent}
-              leftWins={outcome === "left"}
-              rightWins={outcome === "right"}
-            />
-            <p>{balanceCopy}</p>
-          </section>
-          {valuationMode === "league" && mine && theirs ? (
-            <TradeGradeCard
-              key={`${league.id}:${mine.rosterId}:${theirs.rosterId}:${give.map((asset) => asset.playerId).join(",")}:${get.map((asset) => asset.playerId).join(",")}`}
-              give={give}
-              get={get}
-              mine={mine}
-              theirs={theirs}
-              league={league}
-              perspectiveLabel={contextLine ? mine.teamName : "You"}
-              singlePerspective={Boolean(contextLine)}
-            />
-          ) : rosterFitUnavailableNote ? (
-            <section className="trade-grade trade-grade-unavailable" aria-label="Roster-fit grading unavailable">
-              <div className="trade-grade-heading"><div><strong>Market price + roster impact</strong></div><small>Today's league outlook</small></div>
-              <p>{rosterFitUnavailableNote}</p>
-            </section>
-          ) : null}
-          <AggregateTradeHistory
-            give={give}
-            get={get}
-            historyByPlayerId={historyByPlayerId}
-            isLoading={historyLoading}
-            giveColor={giveColor}
-            getColor={getColor}
-            giveStrokeWidth={giveStrokeWidth}
-            getStrokeWidth={getStrokeWidth}
-          />
-        </div>
-        </article>
-      </div>
-    </ModalPortal>
-  );
 }
 
 export function historicalPickValue(assets: TradeAsset[], season: number, round: number): TradeAsset | undefined {
@@ -969,7 +740,7 @@ export function compactHistoricalAssets(team: HistoricalTradeTeam): string {
   return labels.length > 3 ? `${shown} · +${labels.length - 3} more` : shown;
 }
 
-export function TradeHistoryView({ dashboard, league, onOpenPlayer }: { dashboard: Dashboard; league: League; onOpenPlayer: (playerId: string) => void }) {
+export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; league: League }) {
   const queryClient = useQueryClient();
   const refreshRequested = useRef<string | null>(null);
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
@@ -1021,40 +792,17 @@ export function TradeHistoryView({ dashboard, league, onOpenPlayer }: { dashboar
   const selectedTrade = tradesQuery.data?.trades.find((trade) => trade.id === selectedTradeId) ?? null;
   const selectedTeam = selectedTrade?.teams.find((team) => team.isUserTeam) ?? selectedTrade?.teams[0] ?? null;
   const perspective = selectedTrade && selectedTeam ? historicalPerspectiveAssets(selectedTrade, selectedTeam, formatAssets, dashboard.season) : null;
-  const selectedSides: HistoricalTradeSide[] = selectedTrade?.teams.map((team) => {
-    const received = historicalReceivedAssets(team, formatAssets, selectedTrade.id, dashboard.season);
-    return { team, ...received, total: tradeTotal(received.valued) };
-  }) ?? [];
-  const rankedSelectedSides = [...selectedSides].sort((a, b) => b.total - a.total);
-  const firstSelectedSide = rankedSelectedSides[0];
-  const secondSelectedSide = rankedSelectedSides[1];
-  const selectedComparisonSides: [HistoricalTradeSide, HistoricalTradeSide] | undefined = firstSelectedSide && secondSelectedSide
-    ? [firstSelectedSide, secondSelectedSide]
-    : undefined;
-  const selectedWinners = firstSelectedSide ? selectedSides.filter((side) => side.total === firstSelectedSide.total) : [];
-  const selectedWinner = selectedWinners.length === 1 ? selectedWinners[0] : undefined;
-  const selectedWinMargin = selectedWinner && secondSelectedSide ? Math.max(0, selectedWinner.total - secondSelectedSide.total) : 0;
-  const historicalPlayerIds = perspective
-    ? [...perspective.give.valued, ...perspective.get.valued].filter((asset) => asset.position !== "PICK").map((asset) => asset.playerId).sort()
-    : [];
-  const historyQuery = useQuery({
-    queryKey: ["fantasycalc-value-history", league.seasonLongFormat.key, historicalPlayerIds],
-    queryFn: () => api.getValueHistory({ formatKey: league.seasonLongFormat.key, playerIds: historicalPlayerIds }),
-    enabled: historicalPlayerIds.length > 0,
-  });
-  const historyByPlayerId = useMemo(() => new Map((historyQuery.data?.series ?? []).map((series) => [series.playerId, series])), [historyQuery.data]);
-  // For historical trades, map each participant to their roster in the league.
-  // If the user's team is involved, prefer ownerId matching; otherwise match by rosterId.
-  // This enables roster-fit grading for trades between any two teams, not just the user's.
+  const counterpart = selectedTrade && selectedTeam
+    ? selectedTrade.teams.find((team) => team.rosterId !== selectedTeam.rosterId) ?? null
+    : null;
+  // Map participants to current rosters for the same lineup-impact line Market/League use.
   const mine = selectedTeam
     ? (selectedTeam.isUserTeam
       ? league.tradeTeams.find((team) => selectedTeam.ownerId !== null && team.ownerId === selectedTeam.ownerId)
         ?? league.tradeTeams.find((team) => team.rosterId === selectedTeam.rosterId && team.isUser)
       : league.tradeTeams.find((team) => team.rosterId === selectedTeam.rosterId))
     : undefined;
-  // For historical trades, "theirs" is the other participant's roster (not a synthetic combination).
-  // For 2-team trades, find the other team's roster by rosterId.
-  const historicalTheirs = selectedTrade && selectedTeam && !selectedTeam.isUserTeam && selectedTrade.teams.length === 2
+  const historicalTheirs = selectedTrade && selectedTeam && selectedTrade.teams.length === 2
     ? (() => {
         const otherTeam = selectedTrade.teams.find((team) => team.rosterId !== selectedTeam.rosterId);
         return otherTeam ? league.tradeTeams.find((team) => team.rosterId === otherTeam.rosterId) : undefined;
@@ -1068,14 +816,8 @@ export function TradeHistoryView({ dashboard, league, onOpenPlayer }: { dashboar
     players: league.tradeTeams.flatMap((team) => team.players),
     ownedPicks: league.tradeTeams.flatMap((team) => team.ownedPicks),
   } satisfies TradeTeam : undefined;
-  // For historical non-user trades, use the actual participant rosters for grading
   const gradeMine = mine;
   const gradeTheirs = historicalTheirs ?? incomingTeam;
-  const giveTotal = perspective ? tradeTotal(perspective.give.valued) : 0;
-  const getTotal = perspective ? tradeTotal(perspective.get.valued) : 0;
-  const comparisonLeftTotal = firstSelectedSide?.total ?? 0;
-  const comparisonRightTotal = secondSelectedSide?.total ?? 0;
-  const balancePercent = comparisonLeftTotal + comparisonRightTotal === 0 ? 50 : Math.max(8, Math.min(92, comparisonLeftTotal / (comparisonLeftTotal + comparisonRightTotal) * 100));
   const grouped = useMemo(() => {
     const groups = new Map<number, HistoricalTrade[]>();
     for (const trade of tradesQuery.data?.trades ?? []) groups.set(trade.season, [...(groups.get(trade.season) ?? []), trade]);
@@ -1141,25 +883,17 @@ export function TradeHistoryView({ dashboard, league, onOpenPlayer }: { dashboar
         </section>
       )) : <div className="trade-history-list">{renderTradeRows(tradesQuery.data.trades)}</div>}
       {selectedTrade && selectedTeam && perspective ? (
-        <TradeResultCard
+        <TradeValueDialog
           give={perspective.give.valued}
           get={perspective.get.valued}
-          mine={gradeMine}
-          theirs={gradeTheirs}
-          league={league}
-          valuationMode="league"
-          giveMarketTotal={giveTotal}
-          getMarketTotal={getTotal}
-          balancePercent={balancePercent}
-          balanceCopy={selectedWinner && secondSelectedSide ? <><HistoricalTeamName team={selectedWinner.team} league={league} /> won this trade by {selectedWinMargin.toLocaleString()} in today's market value.</> : "This deal is even at today's market values."}
-          historyByPlayerId={historyByPlayerId}
-          historyLoading={historyQuery.isPending}
+          giveLabel={selectedTeam.teamName}
+          getLabel={counterpart && selectedTrade.teams.length === 2 ? counterpart.teamName : "You get"}
+          subtitle={<>Week {selectedTrade.week}, {selectedTrade.season} · <HistoricalTeamMatchup trade={selectedTrade} league={league} /></>}
+          lineupContext={gradeMine && gradeTheirs
+            ? { mine: gradeMine, theirs: gradeTheirs, starterSlots: league.tradeStarterSlots, waiverPool: league.tradeWaiverPool }
+            : undefined}
+          formatKey={league.seasonLongFormat.key}
           onClose={() => setSelectedTradeId(null)}
-          contextLine={<>Week {selectedTrade.week}, {selectedTrade.season} · <HistoricalTeamMatchup trade={selectedTrade} league={league} /></>}
-          historicalSides={selectedSides}
-          historicalComparisonSides={selectedComparisonSides}
-          rosterFitUnavailableNote={gradeMine && gradeTheirs ? undefined : `Roster-fit grading isn't available because the trade participants could not be matched to current rosters. Market values are still shown above.`}
-          onOpenPlayer={onOpenPlayer}
         />
       ) : null}
     </div>
@@ -1270,7 +1004,7 @@ export function TradeCalculator({
       </div>
 
       {tradeMode === "history" ? (
-        <TradeHistoryView dashboard={dashboard} league={league} onOpenPlayer={onOpenPlayer} />
+        <TradeHistoryView dashboard={dashboard} league={league} />
       ) : tradeMode === "league" ? (
         mine ? (
           <LeagueAdjustedTrade
