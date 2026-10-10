@@ -279,6 +279,23 @@ export function groupNewsItemsByPlayer(news: PlayerNews | undefined): Map<string
   return itemsByPlayer;
 }
 
+
+/** Latest shared news for players on the selected-league roster (ticker). */
+export function rosterNewsForTicker(
+  news: PlayerNews | undefined,
+  rosterPlayerIds: Set<string>,
+): PlayerNewsItem[] {
+  const seen = new Set<string>();
+  return (news?.runs ?? [])
+    .flatMap((run) => run.items)
+    .filter((item) => {
+      if (!rosterPlayerIds.has(item.playerId) || seen.has(item.change)) return false;
+      seen.add(item.change);
+      return true;
+    });
+}
+
+
 export function RefreshIcon({ spinning = false }: { spinning?: boolean }) {
   return (
     <svg className={spinning ? "spin" : ""} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -581,7 +598,7 @@ export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose
         </DialogHeader>
         <DialogTitle id="ticker-news-headline" className="news-card-headline">{item.change}</DialogTitle>
         <DialogDescription className="text-sm leading-relaxed text-muted-foreground">{item.roleContext}</DialogDescription>
-        <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceLabel}<span className="sr-only"> (opens in a new tab)</span></a>
+        <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel}<span className="sr-only"> (opens in a new tab)</span></a>
       </DialogContent>
     </Dialog>
   );
