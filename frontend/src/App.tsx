@@ -424,7 +424,7 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
   const pageTabs: Array<[PrimaryPage, string, Tab]> = [
     ["monitor", "Monitor", "monitor"],
     ["team", "Matchup", "team"],
-    ["players", "Explorer", "rankings"],
+    ["players", "Players", "rankings"],
     ["league", "League", "power"],
     ["tools", "Tools", "trade"],
   ];
@@ -470,13 +470,13 @@ export function App() {
     const titles: Record<Tab, string> = {
       monitor: "Monitor",
       team: "Matchup",
-      rankings: "Explorer",
-      waivers: "Explorer",
+      rankings: "Players",
+      waivers: "Players",
       power: "League",
       draft: "Tools",
       trade: "Tools",
-      charts: "Explorer",
-      comparison: "Explorer",
+      charts: "Players",
+      comparison: "Players",
     };
     document.title = `${titles[tab]} · Fantasy Rankings`;
   }, [tab]);
@@ -922,7 +922,7 @@ export function App() {
           {([
             ["monitor", "Monitor"],
             ["team", "Matchup"],
-            ["players", "Explorer"],
+            ["players", "Players"],
             ["league", "League"],
             ["tools", "Tools"],
           ] as const).map(([page, label]) => (
@@ -939,7 +939,7 @@ export function App() {
         </nav>
         {primaryPage === "players" ? (
           <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="subview-tabs explorer-subview-tabs">
-            <TabsList aria-label="Explorer views">
+            <TabsList aria-label="Players views">
               <TabsTrigger value="rankings">Rankings</TabsTrigger>
               <TabsTrigger value="waivers">Waivers</TabsTrigger>
               <TabsTrigger value="charts">Charts</TabsTrigger>
@@ -970,7 +970,7 @@ export function App() {
             charts: "Fantasy charts",
             comparison: "Player comparison",
           } satisfies Record<Tab, string>)[tab]}</h1>
-          {currentSectionLoading ? <SectionLoading label={`Loading ${primaryPage === "tools" ? "Tools" : primaryPage}…`} />
+          {currentSectionLoading ? <SectionLoading label={`Loading ${({ monitor: "Monitor", team: "Matchup", players: "Players", league: "League", tools: "Tools" } as const)[primaryPage]}…`} />
             : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
             : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
             : tab === "monitor" ? <Monitor league={league} dashboard={activeDashboard} draftData={draftQuery.data} news={newsQuery.data} onOpenPlayer={openTickerPlayer} onOpenMatchup={setSelectedMatchup} />

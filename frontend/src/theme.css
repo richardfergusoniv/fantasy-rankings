@@ -226,6 +226,18 @@
   --designation-size: 12px;
   --tab-font-size: var(--type-caption);
   --tab-font-weight: 600;
+  /* In-page page tabs: Matchup Current/Optimized, Players Rankings…, League scope, Tools Trade/Draft. */
+  --page-tab-height: 48px;
+  --page-tab-button-height: 44px;
+  --page-tab-font-size: var(--type-caption);
+  --page-tab-font-weight: 600;
+  /* Sub-tabs: Trade League-adjusted/Market/History is the standard (36 track / 32 button). */
+  --sub-tab-height: 36px;
+  --sub-tab-button-height: var(--compact-control-height);
+  --sub-tab-font-size: var(--type-caption);
+  --sub-tab-font-weight: 600;
+  /* Search inputs sit between page tabs (48) and sub-tabs (36). */
+  --search-input-height: 40px;
   --table-scroll-max-height: 70vh;
   --league-roster-row-height: 56px;
 }
@@ -419,10 +431,12 @@ p { text-wrap: pretty; }
   display: grid;
   grid-template-columns: repeat(var(--segment-count), minmax(0, 1fr));
   gap: 0;
-  min-height: 48px;
+  min-height: var(--sub-tab-height);
+  height: var(--sub-tab-height);
   padding: 2px;
   border-radius: var(--radius);
   background: var(--segment-track);
+  font-family: var(--font-ui);
 }
 .segmented-control .segment-thumb {
   position: absolute;
@@ -443,22 +457,49 @@ p { text-wrap: pretty; }
   position: relative;
   z-index: 1;
   min-width: 0;
-  min-height: 44px;
+  min-height: var(--sub-tab-button-height);
+  height: var(--sub-tab-button-height);
   padding: 0 7px;
   overflow: hidden;
   border: 0;
   border-radius: var(--radius);
   background: transparent;
   color: var(--dim);
-  font-size: var(--tab-font-size);
-  font-weight: var(--tab-font-weight);
+  font-family: inherit;
+  font-size: var(--sub-tab-font-size);
+  font-weight: var(--sub-tab-font-weight);
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
   transition: color .12s ease-out;
 }
 .segmented-control button.active { color: var(--link); }
-[data-slot="tabs-trigger"] { font-size: var(--tab-font-size); font-weight: var(--tab-font-weight); }
+/* Page-level in-page tabs (Matchup Current/Optimized, League Week/Season/Dynasty). */
+.segmented-control.page-tab-control {
+  min-height: var(--page-tab-height);
+  height: var(--page-tab-height);
+}
+.segmented-control.page-tab-control button {
+  min-height: var(--page-tab-button-height);
+  height: var(--page-tab-button-height);
+  font-size: var(--page-tab-font-size);
+  font-weight: var(--page-tab-font-weight);
+}
+/* Players / Tools subview rows share page-tab tokens. */
+.subview-tabs [data-slot="tabs-list"] {
+  min-height: var(--page-tab-height);
+  height: var(--page-tab-height);
+  padding: 2px;
+  font-family: var(--font-ui);
+}
+.subview-tabs [data-slot="tabs-trigger"] {
+  min-height: var(--page-tab-button-height);
+  height: var(--page-tab-button-height);
+  font-family: inherit;
+  font-size: var(--page-tab-font-size);
+  font-weight: var(--page-tab-font-weight);
+}
+[data-slot="tabs-trigger"] { font-size: var(--page-tab-font-size); font-weight: var(--page-tab-font-weight); }
 main { padding: 12px 16px 0; }
 
 .monitor-view {
@@ -717,26 +758,42 @@ button.monitor-alert:hover { background: var(--surface-2); }
 .number-cell span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 
 .rankings-toolbar { position: sticky; top: var(--sticky-offset); z-index: 9; padding: 7px 0 8px; border-bottom: 1px solid var(--hairline); background: var(--bg); }
-.search-field { display: flex; min-height: 44px; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--dim); }
-.search-field input { width: 100%; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text); font-size: 16px; }
+.search-field { display: flex; min-height: var(--search-input-height); height: var(--search-input-height); align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--dim); font-family: var(--font-ui); }
+.search-field input { width: 100%; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: var(--text); font-family: inherit; font-size: 16px; }
 .search-field input[type="search"] { appearance: none; }
 .search-field input[type="search"]::-webkit-search-cancel-button { display: none; }
 .search-field:focus-within { border-color: var(--link); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent); }
-.search-clear { flex: none; display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface-2); color: var(--dim); font-size: var(--type-section); line-height: 1; cursor: pointer; }
+.search-clear {
+  flex: none;
+  display: grid;
+  width: calc(var(--search-input-height) - 8px);
+  height: calc(var(--search-input-height) - 8px);
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--dim);
+  font-size: var(--type-section);
+  line-height: 1;
+  cursor: pointer;
+}
 .position-filter-row { margin-top: 7px; min-width: 0; }
-/* One equal-width row (QB … ROOK) — same tab type size as other segmented controls. */
+/* One equal-width row (QB … ROOK) — sub-tab height/type tokens. */
 .position-filter-row .position-tabs {
-  min-height: 44px;
+  min-height: var(--sub-tab-height);
+  height: var(--sub-tab-height);
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 .position-filter-row .position-tabs::-webkit-scrollbar { display: none; }
 .position-filter-row .position-tabs button {
-  min-height: 44px;
+  min-height: var(--sub-tab-button-height);
+  height: var(--sub-tab-button-height);
   padding-inline: 2px;
-  font-size: var(--tab-font-size);
-  font-weight: var(--tab-font-weight);
+  font-size: var(--sub-tab-font-size);
+  font-weight: var(--sub-tab-font-weight);
 }
 .rankings-note { display: flex; justify-content: flex-end; gap: 10px; margin: 10px 2px 6px; color: var(--dim); font-size: var(--type-caption); }
 .ranking-row { display: grid; width: 100%; grid-template-columns: minmax(0,1fr) 62px; gap: 8px; min-height: 52px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--hairline); background: var(--surface); color: var(--text); text-align: left; }
@@ -1146,16 +1203,9 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .trade-valuation-toggle {
   width: min(100%, 420px);
   flex: none;
-  min-height: var(--compact-control-height);
-}
-.trade-valuation-toggle.segmented-control,
-.trade-valuation-toggle.segmented-control button {
-  min-height: var(--compact-control-height);
 }
 .trade-valuation-toggle.segmented-control button {
   padding: 0 8px;
-  font-size: var(--tab-font-size);
-  font-weight: var(--tab-font-weight);
 }
 .trade-pick-note { color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: right; }
 .trade-adjustments { margin: 0 2px 10px; }
@@ -1269,7 +1319,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-view .trade-side-heading button { display: inline-flex; align-items: center; justify-content: flex-end; height: 44px; min-height: 44px; margin-block: calc((15px - 44px) / 2); padding: 0; line-height: 1; }
 .trade-side-list { min-height: 54px; overflow: visible; background: transparent; border: 0; }
 .trade-side-search-wrap { padding: 8px 0 7px; border: 0; background: transparent; }
-.trade-side-search { min-height: 44px; }
+.trade-side-search { min-height: var(--search-input-height); height: var(--search-input-height); }
 .trade-side-search-results { max-height: 286px; margin-top: 7px; overflow-y: auto; border-top: 1px solid var(--hairline); background: var(--surface); }
 .trade-side-search-results > button { display: flex; width: 100%; min-height: 50px; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 9px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .trade-side-search-results > button:last-of-type { border-bottom: 0; }
@@ -1318,7 +1368,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .boom-bust-heading-copy > span { color: var(--text); font-weight: 700; }
 .boom-bust-heading-copy strong { color: var(--dim); font-size: var(--type-caption); font-variant-numeric: tabular-nums; font-weight: 600; }
 .boom-bust-toggle { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex: none; padding: 2px; border-radius: 8px; background: var(--surface-2); }
-.boom-bust-toggle button { min-width: 56px; min-height: 44px; padding: 0 9px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--dim); font-size: var(--tab-font-size); font-weight: var(--tab-font-weight); line-height: 1; cursor: pointer; }
+.boom-bust-toggle button { min-width: 56px; min-height: var(--sub-tab-button-height); height: var(--sub-tab-button-height); padding: 0 9px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--dim); font-size: var(--sub-tab-font-size); font-weight: var(--sub-tab-font-weight); line-height: 1; cursor: pointer; }
 .boom-bust-toggle button.active { border: 1px solid var(--border); background: var(--surface); color: var(--text); box-shadow: var(--shadow-control); }
 .boom-bust-visual { margin-top: 10px; }
 .boom-bust-loading { height: 75px; margin-top: 10px; border-radius: var(--radius-md); }
@@ -1407,7 +1457,7 @@ button.league-partner-change:active { color: var(--link-active); }
 
 .advanced-player-picker { display: block; padding: 2px 0 12px; border-bottom: 1px solid var(--hairline); }
 .advanced-player-picker > label { display: block; margin: 0 0 4px 1px; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.advanced-player-search { min-height: 44px; }
+.advanced-player-search { min-height: var(--search-input-height); height: var(--search-input-height); }
 .advanced-player-results { max-height: 318px; margin-top: 7px; overflow-y: auto; border-block: 1px solid var(--hairline); background: var(--surface); }
 .advanced-player-results > button { display: flex; width: 100%; min-height: 52px; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; text-align: left; cursor: pointer; }
 .advanced-player-results > button:last-of-type { border-bottom: 0; }
@@ -1773,7 +1823,12 @@ button.league-partner-change:active { color: var(--link-active); }
 .tool-dataset-toggle { margin-bottom: 12px; }
 .analytics-window-toggle { margin-bottom: 12px; }
 .analytics-position-tabs { margin-bottom: 16px; }
-.analytics-position-tabs button { min-height: 44px; }
+.analytics-position-tabs button {
+  min-height: var(--sub-tab-button-height);
+  height: var(--sub-tab-button-height);
+  font-size: var(--sub-tab-font-size);
+  font-weight: var(--sub-tab-font-weight);
+}
 .weekly-page-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 2px 2px 12px; }
 .weekly-page-intro h2, .tool-section-heading h2 { margin: 0; font-size: var(--type-display); line-height: 1.05; font-weight: 700; letter-spacing: -.02em; }
 .weekly-page-intro span, .tool-section-heading span { color: var(--dim); text-align: right; font-size: var(--type-caption); font-weight: 600; }
@@ -1828,15 +1883,18 @@ button.league-partner-change:active { color: var(--link-active); }
   font-size: var(--type-caption);
   font-weight: 600;
 }
-.chart-advanced-dialog .segmented-control,
-.chart-advanced-dialog .segmented-control button {
-  min-height: var(--compact-control-height);
-  height: auto;
-  font-size: var(--tab-font-size);
-  font-weight: var(--tab-font-weight);
+.chart-advanced-dialog .segmented-control {
+  min-height: var(--sub-tab-height);
+  height: var(--sub-tab-height);
+  margin-bottom: 8px;
 }
-.chart-advanced-dialog .segmented-control { min-height: 36px; margin-bottom: 8px; }
-.chart-advanced-dialog .segmented-control button { padding: 0 8px; }
+.chart-advanced-dialog .segmented-control button {
+  min-height: var(--sub-tab-button-height);
+  height: var(--sub-tab-button-height);
+  padding: 0 8px;
+  font-size: var(--sub-tab-font-size);
+  font-weight: var(--sub-tab-font-weight);
+}
 .chart-advanced-dialog .analytics-selectors { gap: 6px; padding-top: 6px; }
 .chart-advanced-dialog .analytics-selectors label > span,
 .chart-advanced-dialog .saved-view-form > label { margin-bottom: 2px; font-size: var(--type-caption); font-weight: 600; }
@@ -2164,7 +2222,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .trade-grade-grid > div { border-right: 1px solid var(--hairline); }
   .trade-grade-grid > div:last-child { border-right: 0; }
   .power-position-values { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
-  .position-tabs button { font-size: var(--tab-font-size); font-weight: var(--tab-font-weight); }
+  .position-tabs button { font-size: var(--sub-tab-font-size); font-weight: var(--sub-tab-font-weight); }
 }
 
 /* Draft center, market signals, and embedded player news */
@@ -2177,7 +2235,19 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .draft-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
 .draft-controls > label { grid-column: 1 / -1; min-width: 0; }
 .draft-controls .position-tabs { min-width: 0; }
-.draft-controls input { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); padding: 11px 12px; font-size: 16px; }
+.draft-controls input {
+  width: 100%;
+  box-sizing: border-box;
+  height: var(--search-input-height);
+  min-height: var(--search-input-height);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 12px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+}
 .draft-refresh-button { display: grid; width: var(--compact-control-height); height: var(--compact-control-height); justify-self: end; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); color: var(--link); font: inherit; line-height: 1; cursor: pointer; }
 .draft-refresh-button svg { width: 16px; height: 16px; }
 .draft-refresh-button:hover:not(:disabled) { background: var(--accent-soft); color: var(--link-hover); }
@@ -2283,11 +2353,17 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   overflow: clip;
 }
 
-/* Interaction floor: compact visuals, full-size touch targets. */
-.segmented-control button,
-.boom-bust-toggle button { min-height: 44px; }
-.segmented-control,
-.boom-bust-toggle { min-height: 48px; }
+/* Boom/bust uses sub-tab tokens (same family as other in-card segmented controls). */
+.boom-bust-toggle {
+  min-height: var(--sub-tab-height);
+  height: var(--sub-tab-height);
+}
+.boom-bust-toggle button {
+  min-height: var(--sub-tab-button-height);
+  height: var(--sub-tab-button-height);
+  font-size: var(--sub-tab-font-size);
+  font-weight: var(--sub-tab-font-weight);
+}
 .bench-section summary,
 .omitted-chart-labels summary,
 .drafted-elsewhere summary { min-height: 44px; }

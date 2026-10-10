@@ -163,7 +163,7 @@ export function Lineup({
   return (
     <>
       <SegmentedControl
-        className="lineup-mode-toggle"
+        className="lineup-mode-toggle page-tab-control"
         value={mode}
         onChange={setMode}
         label="Your lineup version"
