@@ -44,6 +44,8 @@ export function AggregateTradeHistory({
   isLoading,
   giveColor = "var(--chart-4)",
   getColor = "var(--chart-3)",
+  giveStrokeWidth = 2.3,
+  getStrokeWidth = 2.3,
   showPickNote = true,
 }: {
   give: TradeAsset[];
@@ -52,6 +54,8 @@ export function AggregateTradeHistory({
   isLoading: boolean;
   giveColor?: string;
   getColor?: string;
+  giveStrokeWidth?: number;
+  getStrokeWidth?: number;
   showPickNote?: boolean;
 }) {
   const playerSide = (assets: TradeAsset[]) => assets.filter((asset) => asset.position !== "PICK");
@@ -71,6 +75,8 @@ export function AggregateTradeHistory({
     const date = new Date(`${value}T00:00:00`);
     return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
   };
+  const giveIsWinner = giveColor === "var(--warning)";
+  const getIsWinner = getColor === "var(--warning)";
 
   return (
     <section className="trade-aggregate" aria-labelledby="trade-aggregate-heading">
@@ -84,12 +90,15 @@ export function AggregateTradeHistory({
                 <XAxis dataKey="date" tickFormatter={formatDateTick} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={24} />
                 <YAxis width={48} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={false} />
                 <Tooltip labelFormatter={(label) => formatDateTick(String(label))} formatter={(value, name) => [Number(value).toLocaleString(), name === "give" ? "You give" : "You get"]} contentStyle={chartTooltipStyle} />
-                {hasGive ? <Line type="monotone" dataKey="give" name="give" stroke={giveColor} strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
-                {hasGet ? <Line type="monotone" dataKey="get" name="get" stroke={getColor} strokeWidth={2.3} dot={false} connectNulls={false} /> : null}
+                {hasGive ? <Line type="monotone" dataKey="give" name="give" stroke={giveColor} strokeWidth={giveStrokeWidth} dot={false} connectNulls={false} /> : null}
+                {hasGet ? <Line type="monotone" dataKey="get" name="get" stroke={getColor} strokeWidth={getStrokeWidth} dot={false} connectNulls={false} /> : null}
               </LineChart>
             </ChartContainer>
           </div>
-          <div className="trade-aggregate-key"><span><i className="give" style={{ background: giveColor }} />You give</span><span><i className="get" style={{ background: getColor }} />You get</span></div>
+          <div className="trade-aggregate-key">
+            <span><i className={`give${giveIsWinner ? " is-winner" : ""}`} style={{ background: giveColor }} />You give</span>
+            <span><i className={`get${getIsWinner ? " is-winner" : ""}`} style={{ background: getColor }} />You get</span>
+          </div>
         </>
       ) : <div className="trade-stock-empty">{isLoading ? "Loading FantasyCalc history…" : "Add a player to either side to chart its sourced daily value."}</div>}
       {showPickNote && (give.some((asset) => asset.position === "PICK") || get.some((asset) => asset.position === "PICK")) ? <p>Draft picks remain in the totals above but are excluded from this player-history chart.</p> : null}

@@ -882,13 +882,13 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
               ? [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
               : [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season Long" }]}
           />
-          <div className="rankings-note">
-            {!isSeasonLong && effectivePosition === "DEF"
-              ? <span>Actual shown after final</span>
-              : !isSeasonLong && effectivePosition === "K"
-                ? <span>Rank follows opposing DST, worst first</span>
-                : <span>{rows.length} players</span>}
-          </div>
+          {!isSeasonLong && (effectivePosition === "DEF" || effectivePosition === "K") ? (
+            <div className="rankings-note">
+              {effectivePosition === "DEF"
+                ? <span>Actual shown after final</span>
+                : <span>Rank follows opposing DST, worst first</span>}
+            </div>
+          ) : null}
           <div className="ranking-list">
             <WindowVirtualList count={visibleRows.length} estimateSize={RANKINGS_ROW_HEIGHT} getKey={(index) => visibleRows[index]?.key ?? index}>
             {(index) => {
@@ -918,7 +918,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                     <span className="ranking-name-line">
                       <strong>{row.name}</strong>
                       {isSelected ? <span className="player-selected-chip">Selected</span> : null}
-                      {row.isRookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" tone="positive" /> : null}
+                      {row.isRookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" /> : null}
                       {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
                     </span>
                     <span className="ranking-meta-line">
@@ -984,10 +984,9 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
               );
             }}
             </WindowVirtualList>
-            {rows.length > 0 ? (
+            {rows.length > 0 && visibleRowCount < rows.length ? (
               <div className="list-pagination-row">
-                <span aria-live="polite">showing {Math.min(visibleRowCount, rows.length)} of {rows.length}</span>
-                {visibleRowCount < rows.length ? <button type="button" onClick={() => setVisibleRowCount((count) => count + 120)}>Show more</button> : null}
+                <button type="button" onClick={() => setVisibleRowCount((count) => count + 120)}>Show more</button>
               </div>
             ) : null}
           </div>
