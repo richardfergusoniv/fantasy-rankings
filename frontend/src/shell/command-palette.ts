@@ -31,7 +31,7 @@ export const COMMAND_RESULT_LIMIT = 8;
 export const PRIMARY_COMMAND_PAGES: CommandPageItem[] = [
   { kind: "page", id: "monitor", label: "Monitor", tab: "monitor" },
   { kind: "page", id: "team", label: "Matchup", tab: "team" },
-  { kind: "page", id: "players", label: "Explorer", tab: "rankings" },
+  { kind: "page", id: "players", label: "Players", tab: "rankings" },
   { kind: "page", id: "league", label: "League", tab: "power" },
   { kind: "page", id: "tools", label: "Tools", tab: "trade" },
 ];

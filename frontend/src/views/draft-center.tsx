@@ -18,6 +18,7 @@ import {
 import type { DraftPosition, DraftRoom } from "../dashboard-url";
 import { SegmentedControl } from "../shared";
 import { markDraftPlayerTaken, undoDraftPlayerTaken } from "../undo";
+import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 
 type DraftRow = DraftCenterData["adp"][number] & {
   adpSource: "ffc" | "fantasycalc" | "projection";
@@ -416,8 +417,8 @@ export function DraftCenter({
         label="Draft position filter"
         options={draftPositionOptions.map((item) => ({
           value: item,
-          label: item === "DEF" ? "DST" : item === "ROOKIES" ? "Rook" : item,
-          ariaLabel: item === "ROOKIES" ? "Rookies" : undefined,
+          label: positionFilterTabLabel(item),
+          ariaLabel: positionFilterTabAriaLabel(item),
         }))}
       />
       <button className="draft-refresh-button" type="button" onClick={onRefresh} disabled={refreshing} aria-label="Refresh draft data"><RefreshIcon spinning={refreshing} /></button>

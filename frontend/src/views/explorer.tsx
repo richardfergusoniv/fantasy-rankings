@@ -7,7 +7,7 @@ import type {
 } from "../dashboard-types";
 import type { ChartDataset, RankingHorizon, RankingPosition } from "../dashboard-url";
 
-/** Explorer modes that share the Explorer primary page (excludes draft — that is ?tab=draft). */
+/** Modes that share the Players primary page (excludes draft — that is ?tab=draft). */
 export type ExplorerMode = "rankings" | "waivers" | "charts" | "comparison";
 
 export function isExplorerMode(tab: string): tab is ExplorerMode {

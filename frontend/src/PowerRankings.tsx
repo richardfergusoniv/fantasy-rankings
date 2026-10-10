@@ -129,7 +129,7 @@ export function PowerRankings({
   const totalAverage = radarData.reduce((total, row) => total + row.average, 0);
   const scopeToggle = (
     <SegmentedControl
-      className="lineup-mode-toggle power-scope-toggle"
+      className="lineup-mode-toggle power-scope-toggle page-tab-control"
       value={scope === "week" ? "week" : activeMode === "dynasty" ? "dynasty" : "ros"}
       onChange={(value) => {
         if (value === "week") {
