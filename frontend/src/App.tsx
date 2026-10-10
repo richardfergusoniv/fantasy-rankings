@@ -50,6 +50,7 @@ import { Monitor } from "./views/monitor";
 const DOCKABLE_INSPECTOR_TABS = new Set<Tab>(["monitor", "team", "rankings", "waivers", "draft", "power"]);
 
 const LazyPowerRankings = lazy(() => import("./PowerRankings").then((module) => ({ default: module.PowerRankings })));
+const LazyConnectedTeamCard = lazy(() => import("./views/player-pool").then((module) => ({ default: module.ConnectedTeamCard })));
 const LazyDraftCenter = lazy(() => import("./views/draft-center").then((module) => ({ default: module.DraftCenter })));
 const LazyTradeCalculator = lazy(() => import("./views/trade-calculator").then((module) => ({ default: module.TradeCalculator })));
 
@@ -483,6 +484,7 @@ export function App() {
   const playerHistory = usePlayerCardHistory();
   const [tickerNews, setTickerNews] = useState<PlayerNewsItem | null>(null);
   const [selectedMatchup, setSelectedMatchup] = useState<MatchupSelection | null>(null);
+  const [teamCardTeam, setTeamCardTeam] = useState<string | null>(null);
   const [commandBarOpen, setCommandBarOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
@@ -1010,7 +1012,8 @@ export function App() {
       </div>
       {!inspectorDocked ? playerSheet : null}
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
-      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} /> : null}
+      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} suspended={teamCardTeam !== null} /> : null}
+      {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
       <CommandBar
         open={commandBarOpen}
         onOpenChange={setCommandBarOpen}

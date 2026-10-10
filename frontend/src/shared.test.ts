@@ -4,6 +4,7 @@ import {
   points,
   positionalSosRank,
   shortLeagueName,
+  rankToneClassName,
   sosToneFromRank,
   type StrengthOfScheduleEntryLike,
 } from "./shared";
@@ -56,6 +57,15 @@ describe("sosToneFromRank", () => {
     expect(sosToneFromRank(28)).toBe(" sos-tough");
     expect(sosToneFromRank(14)).toBe("");
     expect(sosToneFromRank(null)).toBe("");
+  });
+});
+
+describe("rankToneClassName", () => {
+  it("reuses the soft and tough matchup cutoffs", () => {
+    expect(rankToneClassName(7)).toBe("rank-tone sos-soft");
+    expect(rankToneClassName(28)).toBe("rank-tone sos-tough");
+    expect(rankToneClassName(14)).toBe("rank-tone");
+    expect(rankToneClassName(null)).toBe("rank-tone");
   });
 });
 

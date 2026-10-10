@@ -147,6 +147,11 @@ export function sosToneFromRank(rank: number | null | undefined): "" | " sos-sof
   return "";
 }
 
+/** Rank text class. Lower ranks are better, using the same soft/tough cutoff as matchup tags. */
+export function rankToneClassName(rank: number | null | undefined): string {
+  return `rank-tone${sosToneFromRank(rank)}`;
+}
+
 /** Positional fantasy SOS rank for an opponent defense vs a skill position. */
 export function positionalSosRank(
   entry: StrengthOfScheduleEntryLike | undefined,
