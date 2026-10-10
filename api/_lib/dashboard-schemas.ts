@@ -146,6 +146,11 @@ export const tradeTeamSchema = z.object({
   isUser: z.boolean(),
   players: z.array(rosterPlayerSchema),
   ownedPicks: z.array(seasonLongRankingSchema),
+  record: z.object({
+    wins: z.number().int(),
+    losses: z.number().int(),
+    ties: z.number().int(),
+  }).optional(),
 });
 
 export const leagueSchema = z.object({

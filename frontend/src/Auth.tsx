@@ -122,36 +122,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return (
-    <>
-      <SignedInBar
-        username={connection.sleeperUsername}
-        onSignOut={() => {
-          localStorage.removeItem("fantasy-rankings-dashboard-v7");
-          if (!supabase) return;
-          void supabase.auth.signOut();
-        }}
-      />
-      {children}
-    </>
-  );
-}
-
-function SignedInBar({ username, onSignOut }: { username: string; onSignOut: () => void }) {
-  return (
-    <div className="flex items-center justify-between gap-3 bg-foreground px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-sm text-background">
-      <span>Sleeper: {username}</span>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="border-background/30 bg-transparent text-background hover:bg-background/10 hover:text-background"
-        onClick={onSignOut}
-      >
-        Sign out
-      </Button>
-    </div>
-  );
+  return <>{children}</>;
 }
 
 function AuthScreen() {
@@ -247,7 +218,7 @@ function AuthScreen() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-              {emailError ? <p id="auth-email-error" className="text-sm text-destructive" aria-live="polite">{emailError}</p> : null}
+              {emailError ? <p id="auth-email-error" className="text-sm text-[var(--danger-text)]" aria-live="polite">{emailError}</p> : null}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="auth-password">Password</Label>
@@ -264,9 +235,9 @@ function AuthScreen() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              {passwordError ? <p id="auth-password-error" className="text-sm text-destructive" aria-live="polite">{passwordError}</p> : null}
+              {passwordError ? <p id="auth-password-error" className="text-sm text-[var(--danger-text)]" aria-live="polite">{passwordError}</p> : null}
             </div>
-            {error ? <p ref={errorRef} tabIndex={-1} className="text-sm text-destructive" aria-live="polite">{error}</p> : null}
+            {error ? <p ref={errorRef} tabIndex={-1} className="text-sm text-[var(--danger-text)]" aria-live="polite">{error}</p> : null}
             {notice ? <p className="text-sm text-[var(--stat-strength-readable)]" aria-live="polite">{notice}</p> : null}
             <Button type="submit" disabled={busy} aria-busy={busy}>
               {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
@@ -385,9 +356,9 @@ function ConnectSleeper({
                 aria-invalid={usernameError ? true : undefined}
                 aria-describedby={usernameError ? "sleeper-username-error" : undefined}
               />
-              {usernameError ? <p id="sleeper-username-error" className="text-sm text-destructive" aria-live="polite">{usernameError}</p> : null}
+              {usernameError ? <p id="sleeper-username-error" className="text-sm text-[var(--danger-text)]" aria-live="polite">{usernameError}</p> : null}
             </div>
-            {error ? <p ref={errorRef} tabIndex={-1} className="text-sm text-destructive" aria-live="polite">{error}</p> : null}
+            {error ? <p ref={errorRef} tabIndex={-1} className="text-sm text-[var(--danger-text)]" aria-live="polite">{error}</p> : null}
             <Button type="submit" disabled={busy || loading} aria-busy={busy}>
               {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
               Connect

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Card } from "@/components/ui/card";
 import type { api, ApiResponse } from "./api";
-import type { MatchupSelection } from "./App";
+import type { MatchupSelection } from "./dashboard-types";
+import { weeklyOpponentRosterId } from "./power-opponent";
 import { MatchupTag, ModalPortal, SegmentedControl, points, shortLeagueName, useDialogFocusTrap } from "./shared";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
@@ -12,6 +13,16 @@ type PowerPosition = "QB" | "RB" | "WR" | "TE" | "FLEX" | "K" | "DEF";
 
 function positionLabel(position: string): string {
   return position === "DEF" ? "DST" : position;
+}
+
+function normalizedLineupLabel(value: string): string {
+  return value.replaceAll("_", "").toUpperCase().replaceAll("DEF", "DST");
+}
+
+function starterSlotChip(player: RosterPlayer): string | null {
+  const slot = player.lineupSlot ?? player.position;
+  if (normalizedLineupLabel(slot) === normalizedLineupLabel(player.position)) return null;
+  return slot.replaceAll("_", " ");
 }
 
 function formatRecord(record: { wins: number; losses: number; ties: number }): string {
@@ -27,6 +38,7 @@ export function PowerRankings({
   onOpenPlayer,
   onOpenMatchup,
   playerCardOpen,
+  selectedPlayerId = null,
 }: {
   league: League;
   dashboard: Dashboard;
@@ -34,6 +46,7 @@ export function PowerRankings({
   onOpenPlayer: (playerId: string) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
   playerCardOpen: boolean;
+  selectedPlayerId?: string | null;
 }) {
   const [scope, setScope] = useState<"week" | "restOfSeason">("week");
   const [mode, setMode] = useState<"seasonLong" | "dynasty">("seasonLong");
@@ -86,6 +99,9 @@ export function PowerRankings({
     () => [...powerRankings].sort((a, b) => a.rank - b.rank),
     [powerRankings],
   );
+  const opponentRosterId = scope === "week"
+    ? weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams)
+    : null;
   const isDynastyView = scope === "restOfSeason" && activeMode === "dynasty";
   const avgFuturePickValue = isDynastyView && powerRankings.length > 0
     ? powerRankings.reduce((total, team) => total + team.futurePickValue, 0) / powerRankings.length
@@ -116,7 +132,7 @@ export function PowerRankings({
   const totalAverage = radarData.reduce((total, row) => total + row.average, 0);
   const scopeToggle = (
     <SegmentedControl
-      className="lineup-mode-toggle power-scope-toggle"
+      className="lineup-mode-toggle power-scope-toggle page-tab-control"
       value={scope === "week" ? "week" : activeMode === "dynasty" ? "dynasty" : "ros"}
       onChange={(value) => {
         if (value === "week") {
@@ -168,6 +184,8 @@ export function PowerRankings({
       ? points(player.projection)
       : (season?.value ?? 0).toLocaleString();
     const metricLabel = scope === "week" ? "PROJ" : "VALUE";
+    const slotChip = scope === "week" && player.isStarter ? starterSlotChip(player) : null;
+    const isSelected = selectedPlayerId === player.playerId;
     const openMatchup = player.team && player.opponent && onOpenMatchup
       ? (event: MouseEvent<HTMLButtonElement>) => {
           event.stopPropagation();
@@ -181,31 +199,27 @@ export function PowerRankings({
       : undefined;
     return (
       <div
-        className="ranking-row ranking-row-button power-roster-player"
+        className={`ranking-row ranking-row-button power-roster-player${isSelected ? " is-player-selected" : ""}`}
         key={player.playerId}
-        role="button"
-        tabIndex={0}
-        aria-label={`Open ${player.name}`}
-        onPointerDown={() => onPlayerIntent(player.playerId)}
-        onFocus={() => onPlayerIntent(player.playerId)}
-        onClick={(event: MouseEvent<HTMLDivElement>) => {
-          if (event.target instanceof Element && event.target.closest(".matchup-reference-button")) return;
-          returnPlayerRowRef.current = event.currentTarget;
-          onOpenPlayer(player.playerId);
-        }}
-        onKeyDown={(event) => {
-          if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
-          event.preventDefault();
-          returnPlayerRowRef.current = event.currentTarget;
-          onOpenPlayer(player.playerId);
-        }}
       >
+        <button
+          type="button"
+          className="power-roster-open"
+          aria-label={`Open ${player.name}${isSelected ? ", selected" : ""}`}
+          onPointerDown={() => onPlayerIntent(player.playerId)}
+          onFocus={() => onPlayerIntent(player.playerId)}
+          onClick={(event: MouseEvent<HTMLButtonElement>) => {
+            returnPlayerRowRef.current = event.currentTarget;
+            onOpenPlayer(player.playerId);
+          }}
+        />
         <span className="ranking-player">
           <span className="ranking-name-line">
             <strong>{player.name}</strong>
-            {scope === "week" && player.isStarter ? <span className="power-slot-chip">{(player.lineupSlot ?? player.position).replaceAll("_", " ")}</span> : null}
+            {isSelected ? <span className="player-selected-chip">Selected</span> : null}
+            {slotChip ? <span className="power-slot-chip">{slotChip}</span> : null}
           </span>
-          <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span>{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={openMatchup} /></span></span>
+          <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span className="ranking-meta-position">{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={openMatchup} /></span></span>
         </span>
         <span className="ranking-proj"><strong>{metric}</strong><span>{metricLabel}</span></span>
       </div>
@@ -243,7 +257,6 @@ export function PowerRankings({
       <section className="power-chart-section" aria-labelledby="position-strength-heading">
         <div className="section-heading power-section-heading">
           <h2 id="position-strength-heading">Position strength</h2>
-          <span>relative to each position’s league leader</span>
         </div>
         <div className="power-radar" role="img" aria-label={`Spider chart of your ${scope === "week" ? "optimized lineup" : "roster"} strength by position in ${shortLeagueName(league.name)}`}>
           <svg viewBox="0 0 300 260" aria-hidden="true">
@@ -272,21 +285,23 @@ export function PowerRankings({
       </section>
 
       <section className="power-table-section" aria-labelledby="league-power-heading">
-        <div className="section-heading power-section-heading"><h2 id="league-power-heading">League power rankings</h2><span>{scope === "week" ? "optimized lineup projection" : "full roster value"}</span></div>
+        <div className="section-heading power-section-heading"><h2 id="league-power-heading">League power rankings</h2>{scope === "restOfSeason" ? <span>full roster value</span> : null}</div>
         <div className="power-table" role="list">
           {displayedTeams.map((team) => {
+            const isOpponent = opponentRosterId !== null && team.rosterId === opponentRosterId;
             return (
               <div className="power-list-item" role="listitem" key={team.rosterId}>
                 <button
                   type="button"
-                  className={`power-row power-row-toggle${team.isUser ? " is-user" : ""}`}
-                  aria-label={`Open ${team.teamName}${scope === "restOfSeason" ? `, ${formatRecord(team.record)} record` : ""}, rank ${team.rank}`}
+                  className={`power-row power-row-toggle${team.isUser ? " is-user" : ""}${isOpponent ? " is-opponent" : ""}`}
+                  aria-label={`Open ${team.teamName}, ${formatRecord(team.record)} record, rank ${team.rank}${isOpponent ? ", this week's opponent" : ""}`}
                   aria-haspopup="dialog"
                   onClick={() => setSelectedTeamId(team.rosterId)}
                 >
                   <strong className="power-rank">{team.rank}</strong>
                   <span className="power-team">
-                    <strong>{team.teamName}{scope === "restOfSeason" ? <span className="power-team-record"> · {formatRecord(team.record)}</span> : null}</strong>
+                    <strong>{team.teamName}<span className="power-team-record"> · {formatRecord(team.record)}</span></strong>
+                    {isOpponent ? <span className="sr-only">This week's opponent</span> : null}
                   </span>
                   <span className="power-total"><strong>{scope === "week" ? points(team.totalValue) : team.totalValue.toLocaleString()}</strong></span>
                 </button>

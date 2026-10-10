@@ -2,7 +2,7 @@
 
 Scrapes the four free Pro Football Network NFL HQ "Impact" ranking tables
 (offensive line, team offense, team defense, team overall) and stages them
-for the Fantasy Rankings app's Tables view.
+for the Fantasy Rankings app (matchup badges, player/team cards).
 
 Stdlib only — no `pip install` needed. Portable to a GitHub Action: set
 `PFN_DATA_DIR` to a workspace path and run `python3 scrape.py`.

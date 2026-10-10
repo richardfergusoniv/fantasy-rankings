@@ -4,10 +4,8 @@ import { CartesianGrid, Customized, ReferenceLine, Scatter, ScatterChart, Toolti
 import { Button } from "@/components/ui/button";
 import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, type ApiResponse } from "./api";
-import type { MatchupSelection } from "./App";
+import type { MatchupSelection } from "./dashboard-types";
 import {
   SAVED_CHART_VIEWS_QUERY_KEY,
   applySavedChartViewMutation,
@@ -386,19 +384,24 @@ const defaultWeeklyAxes: Record<BasePosition, [string, string]> = {
   DEF: ["opponentTotal", "projection"],
 };
 
+type ChartPickerMode = "blank" | "derived";
+
 type SavedViewControlsProps = {
   dataset: ToolDataset;
   presets: ChartPreset[];
   validPositions: readonly BasePosition[];
   config: SavedChartConfig;
+  pickerMode: ChartPickerMode;
   selectedSavedViewId: string | null;
   onSelectedSavedViewIdChange: (id: string | null) => void;
   onApplySavedView: (view: SavedChartView) => void;
   onApplyBuiltIn: (preset: ChartPreset) => void;
-  onChooseCustom: () => void;
+  advancedOpen: boolean;
+  onAdvancedOpenChange: (open: boolean) => void;
+  children: ReactNode;
 };
 
-function SavedViewControls({ dataset, presets, validPositions, config, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, onChooseCustom }: SavedViewControlsProps) {
+function SavedViewControls({ dataset, presets, validPositions, config, pickerMode, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, advancedOpen, onAdvancedOpenChange, children }: SavedViewControlsProps) {
   const queryClient = useQueryClient();
   const [isNaming, setIsNaming] = useState(false);
   const [name, setName] = useState("");
@@ -418,7 +421,13 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
     .filter((view) => validPositions.includes(view.position));
   const selectedSavedView = views.find((view) => view.id === selectedSavedViewId);
   const matchingPreset = presets.find((preset) => preset.x === config.xMetric && preset.y === config.yMetric);
-  const pickerValue = selectedSavedView ? `saved:${selectedSavedView.id}` : matchingPreset ? `builtin:${matchingPreset.x}|${matchingPreset.y}` : "custom";
+  const pickerValue = pickerMode === "blank"
+    ? ""
+    : selectedSavedView
+      ? `saved:${selectedSavedView.id}`
+      : matchingPreset
+        ? `builtin:${matchingPreset.x}|${matchingPreset.y}`
+        : "custom";
 
   const saveMutation = useMutation({
     mutationFn: (viewName: string) => api.saveChartView({ name: viewName, ...config }),
@@ -510,6 +519,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
   }
 
   return (
+    <>
     <div className="saved-view-block">
       <div className="saved-view-row">
         <label className="chart-preset-select">
@@ -521,6 +531,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
               const nextValue = event.target.value;
               setMessageIsError(false);
               setMessage("");
+              if (!nextValue) return;
               if (nextValue.startsWith("saved:")) {
                 const view = views.find((item) => `saved:${item.id}` === nextValue);
                 if (view) onApplySavedView(view);
@@ -529,40 +540,50 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
               if (nextValue.startsWith("builtin:")) {
                 const preset = presets.find((item) => `builtin:${item.x}|${item.y}` === nextValue);
                 if (preset) onApplyBuiltIn(preset);
-                return;
               }
-              onSelectedSavedViewIdChange(null);
-              onChooseCustom();
             }}
           >
+            <option value="" disabled hidden>Choose a view</option>
             <optgroup label="Built-in views">
               {presets.map((preset) => <option key={`${preset.x}-${preset.y}`} value={`builtin:${preset.x}|${preset.y}`}>{preset.label}</option>)}
             </optgroup>
             {views.length > 0 ? <optgroup label="My saved views">{views.map((view) => <option key={view.id} value={`saved:${view.id}`}>{view.name}</option>)}</optgroup> : null}
-            <option value="custom">Custom axes</option>
+            {pickerValue === "custom" ? <option value="custom" disabled hidden>Custom</option> : null}
           </select>
         </label>
-        <div className="saved-view-actions">
-          <Button type="button" variant="outline" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessageIsError(false); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</Button>
-          {selectedSavedView ? <button type="button" className="saved-view-delete" onClick={() => setPendingDelete(selectedSavedView)} disabled={deleteMutation.isPending}>Delete “{selectedSavedView.name}”</button> : null}
-        </div>
       </div>
-      {matchingPreset?.research ? (
+      {pickerMode === "derived" && matchingPreset?.research ? (
         <div className="chart-research-note">
           <p>{matchingPreset.research.insight}</p>
           <a href={matchingPreset.research.sourceUrl} target="_blank" rel="noreferrer">Research: {matchingPreset.research.source} ↗<span className="sr-only"> (opens in a new tab)</span></a>
         </div>
       ) : null}
-      {isNaming ? (
-        <form className="saved-view-form" onSubmit={submitName}>
-          <label htmlFor={`${dataset}-saved-view-name`}>View name</label>
-          <div>
-            <input ref={nameRef} id={`${dataset}-saved-view-name`} name="view-name" autoComplete="off" spellCheck={false} value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="RB receiving upside…" />
-            <button type="submit" disabled={saveMutation.isPending} aria-busy={saveMutation.isPending}>Save{saveMutation.isPending ? <span className="sr-only"> Saving…</span> : null}</button>
-          </div>
-        </form>
-      ) : null}
-      {viewsQuery.isError ? <p className="saved-view-status" role="alert">Saved views couldn’t be loaded.</p> : message ? <p className="saved-view-status" role={messageIsError ? "alert" : "status"}>{message}</p> : null}
+    </div>
+    <Button type="button" variant="outline" className="chart-advanced-trigger" aria-haspopup="dialog" onClick={() => onAdvancedOpenChange(true)}>Advanced chart controls</Button>
+    <Dialog open={advancedOpen} onOpenChange={onAdvancedOpenChange}>
+      <DialogContent className="chart-advanced-dialog">
+        <DialogHeader>
+          <DialogTitle>Advanced chart controls</DialogTitle>
+          <DialogDescription className="sr-only">Adjust axes, players shown, and display options for this chart.</DialogDescription>
+        </DialogHeader>
+        <DialogCloseButton label="Close advanced chart controls" />
+        <div className="saved-view-actions">
+          <Button type="button" variant="outline" size="sm" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessageIsError(false); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</Button>
+          {selectedSavedView ? <button type="button" className="saved-view-delete" onClick={() => setPendingDelete(selectedSavedView)} disabled={deleteMutation.isPending}>Delete “{selectedSavedView.name}”</button> : null}
+        </div>
+        {isNaming ? (
+          <form className="saved-view-form" onSubmit={submitName}>
+            <label htmlFor={`${dataset}-saved-view-name`}>View name</label>
+            <div>
+              <input ref={nameRef} id={`${dataset}-saved-view-name`} name="view-name" autoComplete="off" spellCheck={false} value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="RB receiving upside…" />
+              <button type="submit" disabled={saveMutation.isPending} aria-busy={saveMutation.isPending}>Save{saveMutation.isPending ? <span className="sr-only"> Saving…</span> : null}</button>
+            </div>
+          </form>
+        ) : null}
+        {viewsQuery.isError ? <p className="saved-view-status" role="alert">Saved views couldn’t be loaded.</p> : message ? <p className="saved-view-status" role={messageIsError ? "alert" : "status"}>{message}</p> : null}
+        {children}
+      </DialogContent>
+    </Dialog>
       <Dialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
         <DialogContent>
           <DialogHeader>
@@ -587,7 +608,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, selectedS
           <DialogCloseButton />
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
 
@@ -1048,8 +1069,11 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
   const [xPercentile, setXPercentile] = useState(50);
   const [yPercentile, setYPercentile] = useState(50);
   const [selectedSavedViewId, setSelectedSavedViewId] = useState<string | null>(null);
+  // Shareable chart links only carry the dataset (`?chart=`). Axes and saved
+  // views are not in the URL, so the picker stays blank until the user chooses.
+  const [pickerMode, setPickerMode] = useState<ChartPickerMode>("blank");
   const [isChartOpen, setIsChartOpen] = useState(false);
-  const advancedControlsRef = useRef<HTMLDetailsElement>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
   const metrics = analyticsMetricsForLeague(position, league);
   const presets = analyticsPresets[position];
@@ -1067,12 +1091,8 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
     plotLimit,
   };
 
-  function openAdvancedControls() {
-    if (advancedControlsRef.current && !advancedControlsRef.current.open) advancedControlsRef.current.open = true;
-  }
-
   function closeAdvancedControls() {
-    if (advancedControlsRef.current?.open) advancedControlsRef.current.open = false;
+    setAdvancedOpen(false);
   }
 
   function choosePosition(nextPosition: BasePosition) {
@@ -1081,6 +1101,7 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
     setXMetric(nextX);
     setYMetric(nextY);
     setSelectedSavedViewId(null);
+    setPickerMode("blank");
   }
 
   // When the league changes and the current position is no longer valid (e.g. a
@@ -1106,6 +1127,7 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
     setYPercentile(view.yPercentile);
     setPlotLimit(view.plotLimit);
     setSelectedSavedViewId(view.id);
+    setPickerMode("derived");
   }
 
   const chartData = useMemo(() => {
@@ -1173,35 +1195,32 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
         presets={presets}
         validPositions={validPositions}
         config={config}
+        pickerMode={pickerMode}
         selectedSavedViewId={selectedSavedViewId}
         onSelectedSavedViewIdChange={setSelectedSavedViewId}
         onApplySavedView={applySavedView}
-        onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); closeAdvancedControls(); }}
-        onChooseCustom={openAdvancedControls}
-      />
-
-      <details className="chart-advanced-controls" ref={advancedControlsRef}>
-        <summary>Advanced chart controls</summary>
-        <div>
+        onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); setPickerMode("derived"); closeAdvancedControls(); }}
+        advancedOpen={advancedOpen}
+        onAdvancedOpenChange={setAdvancedOpen}
+      >
           <SegmentedControl
             className="lineup-mode-toggle analytics-window-toggle"
             value={window}
-            onChange={(value) => { setWindow(value); setSelectedSavedViewId(null); }}
+            onChange={(value) => { setWindow(value); setSelectedSavedViewId(null); setPickerMode("derived"); }}
             label="Advanced stat window"
             options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]}
           />
           <div className="analytics-selectors advanced-only-selectors">
-            <label><span>X axis</span><select aria-label="Choose horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setSelectedSavedViewId(null); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
-            <label><span>Y axis</span><select aria-label="Choose vertical axis" value={selectedY.key} onChange={(event) => { setYMetric(event.target.value); setSelectedSavedViewId(null); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
-            <label className="plot-limit"><span>Players shown</span><select aria-label="Choose number of players shown" value={plotLimit} onChange={(event) => { setPlotLimit(event.target.value as PlotLimit); setSelectedSavedViewId(null); }}><option value="24">Top 24 + my team</option><option value="40">Top 40 + my team</option><option value="all">All with data</option></select></label>
-            <PercentileCutoffSelect axis="X" value={xPercentile} onChange={(value) => { setXPercentile(value); setSelectedSavedViewId(null); }} />
-            <PercentileCutoffSelect axis="Y" value={yPercentile} onChange={(value) => { setYPercentile(value); setSelectedSavedViewId(null); }} />
+            <label><span>X axis</span><select aria-label="Choose horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
+            <label><span>Y axis</span><select aria-label="Choose vertical axis" value={selectedY.key} onChange={(event) => { setYMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
+            <label className="plot-limit"><span>Players shown</span><select aria-label="Choose number of players shown" value={plotLimit} onChange={(event) => { setPlotLimit(event.target.value as PlotLimit); setSelectedSavedViewId(null); setPickerMode("derived"); }}><option value="24">Top 24 + my team</option><option value="40">Top 40 + my team</option><option value="all">All with data</option></select></label>
+            <PercentileCutoffSelect axis="X" value={xPercentile} onChange={(value) => { setXPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
+            <PercentileCutoffSelect axis="Y" value={yPercentile} onChange={(value) => { setYPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
           </div>
-          <label className="chart-checkbox"><input type="checkbox" checked={showQuadrants} onChange={(event) => { setShowQuadrants(event.target.checked); setSelectedSavedViewId(null); }} /><span>Show quadrant guides and percentile cutoffs</span></label>
-        </div>
-      </details>
+          <label className="chart-checkbox"><input type="checkbox" checked={showQuadrants} onChange={(event) => { setShowQuadrants(event.target.checked); setSelectedSavedViewId(null); setPickerMode("derived"); }} /><span>Show quadrant guides and percentile cutoffs</span></label>
+      </SavedViewControls>
 
-      <button type="button" className="chart-open-button" onClick={() => setIsChartOpen(true)}>View chart</button>
+      <button type="button" className="chart-open-button" disabled={pickerMode === "blank"} aria-disabled={pickerMode === "blank"} onClick={() => { if (pickerMode !== "blank") setIsChartOpen(true); }}>View chart</button>
       <ChartDialog
         isOpen={isChartOpen}
         onClose={() => setIsChartOpen(false)}
@@ -1390,8 +1409,11 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   const [xPercentile, setXPercentile] = useState(50);
   const [yPercentile, setYPercentile] = useState(50);
   const [selectedSavedViewId, setSelectedSavedViewId] = useState<string | null>(null);
+  // Shareable chart links only carry the dataset (`?chart=`). Axes and saved
+  // views are not in the URL, so the picker stays blank until the user chooses.
+  const [pickerMode, setPickerMode] = useState<ChartPickerMode>("blank");
   const [isChartOpen, setIsChartOpen] = useState(false);
-  const advancedControlsRef = useRef<HTMLDetailsElement>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
   const selected = selectedPlayer ? entities.find((entity) => isSamePlayer(entity, selectedPlayer)) : undefined;
   const matches = useMemo(() => {
@@ -1465,12 +1487,8 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
     plotLimit,
   };
 
-  function openAdvancedControls() {
-    if (advancedControlsRef.current && !advancedControlsRef.current.open) advancedControlsRef.current.open = true;
-  }
-
   function closeAdvancedControls() {
-    if (advancedControlsRef.current?.open) advancedControlsRef.current.open = false;
+    setAdvancedOpen(false);
   }
 
   function choosePosition(nextPosition: BasePosition) {
@@ -1479,6 +1497,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
     setXMetric(nextX);
     setYMetric(nextY);
     setSelectedSavedViewId(null);
+    setPickerMode("blank");
   }
 
   // When the league changes and the current position is no longer valid, reset
@@ -1502,6 +1521,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
     setYPercentile(view.yPercentile);
     setPlotLimit(view.plotLimit);
     setSelectedSavedViewId(view.id);
+    setPickerMode("derived");
   }
   const chartData = useMemo(() => {
     if (!selectedX || !selectedY) return [];
@@ -1626,26 +1646,24 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
         presets={presets}
         validPositions={validPositions}
         config={config}
+        pickerMode={pickerMode}
         selectedSavedViewId={selectedSavedViewId}
         onSelectedSavedViewIdChange={setSelectedSavedViewId}
         onApplySavedView={applySavedView}
-        onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); closeAdvancedControls(); }}
-        onChooseCustom={openAdvancedControls}
-      />
-      <details className="chart-advanced-controls" ref={advancedControlsRef}>
-        <summary>Advanced chart controls</summary>
-        <div>
+        onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); setPickerMode("derived"); closeAdvancedControls(); }}
+        advancedOpen={advancedOpen}
+        onAdvancedOpenChange={setAdvancedOpen}
+      >
           <div className="analytics-selectors advanced-only-selectors">
-            <label><span>X axis</span><select aria-label="Choose weekly horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setSelectedSavedViewId(null); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
-            <label><span>Y axis</span><select aria-label="Choose weekly vertical axis" value={selectedY.key} onChange={(event) => { setYMetric(event.target.value); setSelectedSavedViewId(null); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
-            <label className="plot-limit"><span>Players shown</span><select aria-label="Choose weekly players shown" value={plotLimit} onChange={(event) => { setPlotLimit(event.target.value as PlotLimit); setSelectedSavedViewId(null); }}><option value="24">Top 24 + my team</option><option value="40">Top 40 + my team</option><option value="all">All with data</option></select></label>
-            <PercentileCutoffSelect axis="X" value={xPercentile} onChange={(value) => { setXPercentile(value); setSelectedSavedViewId(null); }} />
-            <PercentileCutoffSelect axis="Y" value={yPercentile} onChange={(value) => { setYPercentile(value); setSelectedSavedViewId(null); }} />
+            <label><span>X axis</span><select aria-label="Choose weekly horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
+            <label><span>Y axis</span><select aria-label="Choose weekly vertical axis" value={selectedY.key} onChange={(event) => { setYMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
+            <label className="plot-limit"><span>Players shown</span><select aria-label="Choose weekly players shown" value={plotLimit} onChange={(event) => { setPlotLimit(event.target.value as PlotLimit); setSelectedSavedViewId(null); setPickerMode("derived"); }}><option value="24">Top 24 + my team</option><option value="40">Top 40 + my team</option><option value="all">All with data</option></select></label>
+            <PercentileCutoffSelect axis="X" value={xPercentile} onChange={(value) => { setXPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
+            <PercentileCutoffSelect axis="Y" value={yPercentile} onChange={(value) => { setYPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
           </div>
-          <label className="chart-checkbox"><input type="checkbox" checked={showQuadrants} onChange={(event) => { setShowQuadrants(event.target.checked); setSelectedSavedViewId(null); }} /><span>Show quadrant guides and percentile cutoffs</span></label>
-        </div>
-      </details>
-      <button type="button" className="chart-open-button" onClick={() => setIsChartOpen(true)}>View chart</button>
+          <label className="chart-checkbox"><input type="checkbox" checked={showQuadrants} onChange={(event) => { setShowQuadrants(event.target.checked); setSelectedSavedViewId(null); setPickerMode("derived"); }} /><span>Show quadrant guides and percentile cutoffs</span></label>
+      </SavedViewControls>
+      <button type="button" className="chart-open-button" disabled={pickerMode === "blank"} aria-disabled={pickerMode === "blank"} onClick={() => { if (pickerMode !== "blank") setIsChartOpen(true); }}>View chart</button>
       <ChartDialog
         isOpen={isChartOpen}
         onClose={() => setIsChartOpen(false)}
@@ -1702,12 +1720,13 @@ function ToolDatasetToggle({ value, onChange, label }: { value: ToolDataset; onC
 
 export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
   return (
-    <>
+    <section className="charts-tool">
+      <h2 className="sr-only">Charts</h2>
       <ToolDatasetToggle value={dataset} onChange={(value) => onDatasetChange?.(value)} label="Chart dataset" />
       {dataset === "advanced"
         ? <AnalyticsChart dashboard={dashboard} league={league} />
         : <WeeklyProjections dashboard={dashboard} league={league} view="charts" />}
-    </>
+    </section>
   );
 }
 
@@ -2144,6 +2163,8 @@ export function ComparisonTool({ dashboard, league, initialPlayer = null, initia
 
   return (
     <div className="comparison-tool">
+      {/* Keep shared controls in the same order as Charts: dataset, then position, then window. */}
+      <ToolDatasetToggle value={dataset} onChange={setDataset} label="Comparison dataset" />
       <SegmentedControl<BasePosition | "">
         className="comparison-position-toggle analytics-position-tabs"
         value={position ?? ""}
@@ -2151,7 +2172,6 @@ export function ComparisonTool({ dashboard, league, initialPlayer = null, initia
         label="Comparison position"
         options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
       />
-      <ToolDatasetToggle value={dataset} onChange={setDataset} label="Comparison dataset" />
       {dataset === "advanced" ? <SegmentedControl className="lineup-mode-toggle analytics-window-toggle" value={window} onChange={setWindow} label="Advanced stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]} /> : null}
       {position ? (
         <ComparisonView
@@ -2174,290 +2194,5 @@ export function ComparisonTool({ dashboard, league, initialPlayer = null, initia
         </div>
       )}
     </div>
-  );
-}
-
-
-type TablesDataset = "sos" | "offense" | "defense" | "offensive-line" | "team-overall";
-type PfnTableKey = Exclude<TablesDataset, "sos">;
-
-const tableDatasets: { key: TablesDataset; label: string }[] = [
-  { key: "sos", label: "SOS" },
-  { key: "offense", label: "Offense" },
-  { key: "defense", label: "Defense" },
-  { key: "offensive-line", label: "O-Line" },
-  { key: "team-overall", label: "Overall" },
-];
-
-const pfnFallbackLabels: Record<PfnTableKey, string> = {
-  offense: "Offense",
-  defense: "Defense",
-  "offensive-line": "O-Line",
-  "team-overall": "Overall",
-};
-
-function pfnUpdatedDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
-}
-
-function pfnValue(value: number | string | null | undefined): string {
-  return value === null || value === undefined ? "—" : String(value);
-}
-
-function PfnTableView({ tableKey }: { tableKey: PfnTableKey }) {
-  const query = useQuery({
-    queryKey: ["pfn-tables"],
-    queryFn: () => api.getPfnTables({}),
-    staleTime: 60 * 60 * 1000,
-    retry: false,
-  });
-  const table = query.data?.tables[tableKey] ?? null;
-  const orderedColumns = useMemo(() => {
-    if (!table) return [];
-    // Use one ordered column list for both the header and every body row. PFN's
-    // stored column order varies by table, while Grade always belongs directly
-    // after Team.
-    return ["grade", ...table.columns.filter((column) => !["rank", "team", "grade"].includes(column))];
-  }, [table]);
-  const [sortKey, setSortKey] = useState("rank");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-
-  useEffect(() => {
-    setSortKey("rank");
-    setSortDirection("asc");
-  }, [tableKey]);
-
-  const rows = useMemo(() => {
-    if (!table) return [];
-    const cleanRows = table.rows.filter((row) => row.team.trim().toLowerCase() !== "team");
-    const getValue = (row: (typeof cleanRows)[number]): string | number | null => {
-      if (sortKey === "rank") return row.rank;
-      if (sortKey === "team") return row.team;
-      return row[sortKey] ?? null;
-    };
-    return cleanRows.slice().sort((a, b) => {
-      const aValue = getValue(a);
-      const bValue = getValue(b);
-      if (aValue === null && bValue === null) return a.rank - b.rank;
-      if (aValue === null) return 1;
-      if (bValue === null) return -1;
-      const comparison = typeof aValue === "number" && typeof bValue === "number"
-        ? aValue - bValue
-        : String(aValue).localeCompare(String(bValue), undefined, { numeric: true, sensitivity: "base" });
-      return (sortDirection === "asc" ? comparison : -comparison) || a.rank - b.rank;
-    });
-  }, [sortDirection, sortKey, table]);
-
-  const changeSort = (key: string) => {
-    if (sortKey === key) {
-      setSortDirection((direction) => direction === "asc" ? "desc" : "asc");
-      return;
-    }
-    setSortKey(key);
-    setSortDirection(key === "team" || key === "rank" ? "asc" : "desc");
-  };
-
-  const ariaSort = (key: string): "ascending" | "descending" | "none" => sortKey === key
-    ? (sortDirection === "asc" ? "ascending" : "descending")
-    : "none";
-
-  const sortIndicator = (key: string) => (
-    <span className={sortKey === key ? "pfn-sort-indicator active" : "pfn-sort-indicator"} aria-hidden="true">
-      {sortKey === key && sortDirection === "desc" ? "↓" : "↑"}
-    </span>
-  );
-
-  if (query.isPending) {
-    return <div className="pfn-table-loading" role="status">Loading…</div>;
-  }
-
-  if (query.isError) {
-    return (
-      <div className="section-error compact" role="alert">
-        <strong>PFN {pfnFallbackLabels[tableKey]} rankings didn’t load.</strong>
-        <button type="button" onClick={() => { void query.refetch(); }} disabled={query.isFetching}>Retry</button>
-      </div>
-    );
-  }
-
-  if (!table) {
-    return (
-      <div className="section-error compact" role="status">
-        <strong>No PFN {pfnFallbackLabels[tableKey]} rankings have been published yet.</strong>
-        <button type="button" onClick={() => { void query.refetch(); }} disabled={query.isFetching}>Check again</button>
-      </div>
-    );
-  }
-
-  return (
-    <section className="pfn-table-view" aria-label={`PFN ${table.label} rankings`}>
-      <div className="section-heading">
-        <h2>{table.label}</h2>
-        <span>Updated {pfnUpdatedDate(table.fetched_at)}</span>
-      </div>
-      <div className="pfn-table-wrap" role="region" aria-label={`${table.label} team rankings`} tabIndex={0}>
-        <Table className="pfn-table">
-          <TableHeader>
-            <TableRow>
-              <TableHead scope="col" className="pfn-rank-col" aria-sort={ariaSort("rank")}>
-                <button type="button" className="pfn-sort-button" aria-label="Sort by rank" onClick={() => changeSort("rank")}>
-                  <span className="pfn-header-label">Rank</span> {sortIndicator("rank")}
-                </button>
-              </TableHead>
-              <TableHead scope="col" className="pfn-team-col" aria-sort={ariaSort("team")}>
-                <button type="button" className="pfn-sort-button" onClick={() => changeSort("team")}>
-                  Team {sortIndicator("team")}
-                </button>
-              </TableHead>
-              {orderedColumns.map((column) => (
-                <TableHead scope="col" className={column === "grade" ? "pfn-grade-col" : undefined} key={column} aria-sort={ariaSort(column)}>
-                  <button type="button" className="pfn-sort-button" onClick={() => changeSort(column)}>
-                    {column === "grade" ? "Grade" : (table.column_labels[column] ?? column)} {sortIndicator(column)}
-                  </button>
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => (
-              <TableRow key={row.team}>
-                <TableCell className="pfn-rank-col"><strong>{row.rank}</strong></TableCell>
-                <TableHead scope="row" className="pfn-team-col">{row.team}</TableHead>
-                {orderedColumns.map((column) => (
-                  <TableCell className={column === "grade" ? "pfn-grade-col" : undefined} key={column}>
-                    {column === "grade" ? <strong>{pfnValue(row[column])}</strong> : pfnValue(row[column])}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </section>
-  );
-}
-
-export function TablesTool({ dashboard, league, sosLoadFailed, onRetrySos, sosRetrying }: { dashboard: Dashboard; league: League; sosLoadFailed: boolean; onRetrySos: () => void; sosRetrying: boolean }) {
-  const [dataset, setDataset] = useState<TablesDataset>("sos");
-  return (
-    <section className="tables-tool" aria-label="Team data tables">
-      <Tabs value={dataset} onValueChange={(value) => setDataset(value as TablesDataset)} className="tables-dataset-tabs">
-        <TabsList aria-label="Choose table" className="grid grid-cols-5">
-          {tableDatasets.map((item) => (
-            <TabsTrigger key={item.key} value={item.key}>
-              {item.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-      {dataset === "sos"
-        ? <StrengthOfScheduleTool dashboard={dashboard} league={league} loadFailed={sosLoadFailed} onRetry={onRetrySos} retrying={sosRetrying} />
-        : <PfnTableView tableKey={dataset} />}
-    </section>
-  );
-}
-
-const sosPositions = ["QB", "RB", "WR", "TE"] as const;
-type SosPosition = typeof sosPositions[number];
-
-function sosCellTone(rank: number | null): string {
-  if (rank === null) return "";
-  if (rank <= 10) return " sos-soft";
-  if (rank >= 23) return " sos-tough";
-  return "";
-}
-
-type SosSort = { key: "team" | SosPosition; direction: "asc" | "desc" };
-
-export function StrengthOfScheduleTool({ dashboard, league, loadFailed = false, onRetry, retrying = false }: { dashboard: Dashboard; league: League; loadFailed?: boolean; onRetry?: () => void; retrying?: boolean }) {
-  const entry = dashboard.strengthOfSchedule.find((row) => row.leagueId === league.id);
-  const [sort, setSort] = useState<SosSort>({ key: "team", direction: "asc" });
-  const teams = useMemo(() => {
-    if (!entry) return [];
-    return Object.keys(entry.table).sort((a, b) => {
-      if (sort.key === "team") return a.localeCompare(b);
-      const aRank = entry.table[a]?.[sort.key]?.rank ?? Number.MAX_SAFE_INTEGER;
-      const bRank = entry.table[b]?.[sort.key]?.rank ?? Number.MAX_SAFE_INTEGER;
-      const order = sort.direction === "asc" ? aRank - bRank : bRank - aRank;
-      return order || a.localeCompare(b);
-    });
-  }, [entry, sort]);
-
-  function sortBy(key: "team" | SosPosition) {
-    setSort((current) => {
-      if (key === "team") return { key: "team", direction: "asc" };
-      if (current.key === key) return { key, direction: current.direction === "asc" ? "desc" : "asc" };
-      return { key, direction: "asc" };
-    });
-  }
-
-  function indicator(key: "team" | SosPosition): string {
-    if (sort.key !== key) return "";
-    return sort.direction === "asc" ? " ↑" : " ↓";
-  }
-
-  return (
-    <section className="sos-view" aria-label="Fantasy strength of schedule">
-      <div className="section-heading">
-        <h2>Fantasy Strength of Schedule</h2>
-        {entry ? <span>through Week {entry.throughWeek}{entry.throughWeek <= 3 ? " · early-season sample" : ""}</span> : null}
-      </div>
-      <div className="sos-legend" aria-label="Matchup highlighting legend">
-        <span><i className="sos-legend-swatch sos-soft" aria-hidden="true" />Ranks 1–10 · soft</span>
-        <span><i className="sos-legend-swatch sos-tough" aria-hidden="true" />Ranks 23–32 · tough</span>
-      </div>
-      {entry && teams.length > 0 ? (
-        <div className="sos-table-wrap" role="region" aria-label="Defense versus position ranks" tabIndex={0}>
-          <Table className="sos-table">
-            <colgroup>
-              <col className="sos-column" />
-              {sosPositions.map((position) => <col className="sos-column" key={position} />)}
-            </colgroup>
-            <TableHeader>
-              <TableRow>
-                <TableHead scope="col" className="sos-team-col" aria-sort={sort.key === "team" ? "ascending" : "none"}>
-                  <button type="button" onClick={() => sortBy("team")} aria-label="Sort teams alphabetically">Team<span aria-hidden="true">{indicator("team")}</span></button>
-                </TableHead>
-                {sosPositions.map((position: SosPosition) => (
-                  <TableHead key={position} scope="col" aria-sort={sort.key === position ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
-                    <button type="button" onClick={() => sortBy(position)} aria-label={`Sort ${position} matchups ${sort.key === position && sort.direction === "asc" ? "toughest first" : "softest first"}`}>
-                      {position}<span aria-hidden="true">{indicator(position)}</span>
-                    </button>
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {teams.map((team) => (
-                <TableRow key={team}>
-                  <TableHead scope="row" className="sos-team-col">{team}</TableHead>
-                  {sosPositions.map((position: SosPosition) => {
-                    const cell = entry.table[team]?.[position];
-                    return (
-                      <TableCell
-                        key={position}
-                        className={`sos-cell${sosCellTone(cell?.rank ?? null)}`}
-                        aria-label={cell ? `${team} ${position} matchup rank ${cell.rank}${cell.rank <= 10 ? ", soft matchup" : cell.rank >= 23 ? ", tough matchup" : ""}` : `${team} ${position} matchup unavailable`}
-                      >
-                        {cell ? cell.rank : "—"}
-                      </TableCell>
-                    );
-                  })}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      ) : loadFailed ? (
-        <div className="section-error compact" role="alert">
-          <strong>Strength of schedule didn’t load.</strong>
-          {onRetry ? <button type="button" onClick={onRetry} disabled={retrying}>Retry</button> : null}
-        </div>
-      ) : (
-        <div className="sos-empty" role="status">Strength of schedule isn’t ready yet. It will appear after the first finalized week.</div>
-      )}
-    </section>
   );
 }

@@ -49,6 +49,11 @@ import {
   type SleeperPlayer,
   type SleeperRoster,
 } from "./sleeper.js";
+import { activeBenchIds, eligibleForSlot, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, optimizeLineup } from "./lineup-optimizer.js";
+import { rankingsForLeagueFormats } from "./season-long-format.js";
+import { usesRegularSeasonWeek } from "./season-week.js";
+import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
+import { selectProjectionFeed } from "./projection-fallback.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -665,133 +670,24 @@ function nflTeamRecordsFromScoreboard(scoreboard: EspnScoreboard): z.infer<typeo
 // Lineup optimizer + suggestions
 // ---------------------------------------------------------------------------
 
-function isEligible(position: string, slot: string): boolean {
-  if (slot === position) return true;
-  if (slot === "FLEX") return ["RB", "WR", "TE"].includes(position);
-  if (slot === "SUPER_FLEX") return ["QB", "RB", "WR", "TE"].includes(position);
-  if (slot === "REC_FLEX") return ["WR", "TE"].includes(position);
-  if (slot === "WRRB_FLEX") return ["WR", "RB"].includes(position);
-  return false;
-}
-
-const FLEX_LINEUP_SLOTS = new Set(["FLEX", "SUPER_FLEX", "REC_FLEX", "WRRB_FLEX"]);
-
-function relabelOptimizedLineup(players: RosterPlayer[], slots: string[]): RosterPlayer[] {
-  if (players.length !== slots.length || players.length === 0) return players;
-  type LabelState = { flexTotal: number; flexValues: number[]; exactCount: number; assignments: number[] };
-  const compareFlexValues = (left: number[], right: number[]) => {
-    for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
-      const leftValue = left[index] ?? 0;
-      const rightValue = right[index] ?? 0;
-      if (leftValue !== rightValue) return leftValue - rightValue;
-    }
-    return left.length - right.length;
-  };
-  let states = new Map<number, LabelState>([[0, { flexTotal: 0, flexValues: [], exactCount: 0, assignments: [] }]]);
-
-  slots.forEach((slot) => {
-    const next = new Map<number, LabelState>();
-    for (const [mask, state] of states) {
-      players.forEach((player, playerIndex) => {
-        const bit = 2 ** playerIndex;
-        if ((mask & bit) !== 0 || !isEligible(player.position, slot)) return;
-        const flexValue = player.projection ?? -1000;
-        const isFlexSlot = FLEX_LINEUP_SLOTS.has(slot);
-        const candidate: LabelState = {
-          flexTotal: state.flexTotal + (isFlexSlot ? flexValue : 0),
-          flexValues: isFlexSlot ? [...state.flexValues, flexValue] : state.flexValues,
-          exactCount: state.exactCount + (slot === player.position ? 1 : 0),
-          assignments: [...state.assignments, playerIndex],
-        };
-        const nextMask = mask | bit;
-        const existing = next.get(nextMask);
-        const flexOrder = existing ? compareFlexValues(candidate.flexValues, existing.flexValues) : -1;
-        if (
-          !existing
-          || candidate.flexTotal < existing.flexTotal
-          || (candidate.flexTotal === existing.flexTotal && flexOrder < 0)
-          || (candidate.flexTotal === existing.flexTotal && flexOrder === 0 && candidate.exactCount > existing.exactCount)
-        ) {
-          next.set(nextMask, candidate);
-        }
-      });
-    }
-    states = next;
-  });
-
-  const fullMask = 2 ** players.length - 1;
-  const best = states.get(fullMask);
-  if (!best) return players;
-  const assignments = best.assignments.map((playerIndex) => players[playerIndex]).filter((player): player is RosterPlayer => Boolean(player));
-  return assignments.map((player, index) => ({ ...player, isStarter: true, lineupSlot: slots[index] ?? player.position }));
-}
-
-function effectiveOptimizerValue(player: RosterPlayer): number {
-  return player.gamePhase === "final"
-    ? (player.actual ?? player.projection ?? -1000)
-    : (player.projection ?? -1000);
-}
-
 function optimizeWeeklyPowerLineup(startersInput: RosterPlayer[], benchInput: RosterPlayer[]): RosterPlayer[] {
-  // Keep this in lockstep with the Matchup view's optimizer. In particular,
-  // derive slots from the submitted lineup (so an empty Sleeper slot stays
-  // empty), optimize on the same displayed values (final actuals once games
-  // are final), and prefer the submitted starter when two choices are equal.
-  const slots = startersInput.map((player) => player.lineupSlot ?? player.position);
-  const roster = [...startersInput, ...benchInput];
-  const currentStarterIds = new Set(startersInput.map((player) => player.playerId));
-  type State = { score: number; currentCount: number; assignments: Array<RosterPlayer | undefined> };
-  let states = new Map<number, State>([[0, { score: 0, currentCount: 0, assignments: Array.from({ length: slots.length }) }]]);
-
-  for (const player of roster) {
-    const next = new Map(states);
-    for (const [mask, state] of states) {
-      slots.forEach((slot, slotIndex) => {
-        const bit = 2 ** slotIndex;
-        if ((mask & bit) !== 0 || !isEligible(player.position, slot)) return;
-        const nextMask = mask | bit;
-        const contender: State = {
-          score: state.score + effectiveOptimizerValue(player),
-          currentCount: state.currentCount + (currentStarterIds.has(player.playerId) ? 1 : 0),
-          assignments: state.assignments.map((assigned, index) => index === slotIndex ? player : assigned),
-        };
-        const existing = next.get(nextMask);
-        if (!existing || contender.score > existing.score || (contender.score === existing.score && contender.currentCount > existing.currentCount)) {
-          next.set(nextMask, contender);
-        }
-      });
-    }
-    states = next;
-  }
-
-  const countBits = (value: number): number => value.toString(2).replaceAll("0", "").length;
-  let bestMask = 0;
-  let bestState = states.get(0) ?? { score: 0, currentCount: 0, assignments: [] };
-  for (const [mask, state] of states) {
-    const filled = countBits(mask);
-    const bestFilled = countBits(bestMask);
-    if (filled > bestFilled || (filled === bestFilled && (state.score > bestState.score || (state.score === bestState.score && state.currentCount > bestState.currentCount)))) {
-      bestMask = mask;
-      bestState = state;
-    }
-  }
-
-  const optimized = bestState.assignments.flatMap((player) => player ? [player] : []);
-  const filledSlots = bestState.assignments.flatMap((player, index) => player ? [slots[index] ?? player.position] : []);
-  return relabelOptimizedLineup(optimized, filledSlots);
+  // Same lock rules as the Matchup optimized lineup: started or finished
+  // games stay in their submitted slot, and only pregame players move.
+  return optimizeLineup(startersInput, benchInput).starters;
 }
 
 function makeSuggestion(starters: RosterPlayer[], bench: RosterPlayer[]): z.infer<typeof suggestionSchema> {
   let best: z.infer<typeof suggestionSchema> = null;
   for (const reserve of bench) {
-    if (reserve.projection === null && (reserve.gamePhase !== "final" || reserve.actual === null)) continue;
+    if (isLineupLocked(reserve) || reserve.projection === null) continue;
     for (const starter of starters) {
       if (
-        !starter.lineupSlot
-        || (starter.projection === null && (starter.gamePhase !== "final" || starter.actual === null))
-        || !isEligible(reserve.position, starter.lineupSlot)
+        isLineupLocked(starter)
+        || !starter.lineupSlot
+        || starter.projection === null
+        || !eligibleForSlot(reserve.position, starter.lineupSlot)
       ) continue;
-      const delta = effectiveOptimizerValue(reserve) - effectiveOptimizerValue(starter);
+      const delta = reserve.projection - starter.projection;
       if (delta >= 0.5 && (!best || delta > best.delta)) {
         best = { inPlayer: reserve.name, outPlayer: starter.name, delta, slot: starter.lineupSlot };
       }
@@ -1136,13 +1032,15 @@ function mergeVegasPlayerProjections(
   defenseRankByTeam: Map<string, number>,
 ): Ranking[] {
   const feedByPlayer = new Map<string, VegasProjectionPayload["projections"][number]>();
-  const feedByNamePosition = new Map<string, VegasProjectionPayload["projections"][number]>();
+  const feedByNamePosition = new Map<string, Array<VegasProjectionPayload["projections"][number]>>();
   for (const projection of snapshot?.projections ?? []) {
     const position = normalizePosition(projection.position);
     const exactKey = `${normalizedPlayerName(projection.player)}:${canonicalTeam(projection.team)}:${position}`;
     feedByPlayer.set(exactKey, projection);
     const namePositionKey = `${normalizedPlayerName(projection.player)}:${position}`;
-    if (!feedByNamePosition.has(namePositionKey)) feedByNamePosition.set(namePositionKey, projection);
+    const nameMatches = feedByNamePosition.get(namePositionKey) ?? [];
+    nameMatches.push(projection);
+    feedByNamePosition.set(namePositionKey, nameMatches);
   }
 
   const merged = baseRows.flatMap((base): Ranking[] => {
@@ -1197,7 +1095,12 @@ function mergeVegasPlayerProjections(
     }
 
     const exactKey = `${normalizedPlayerName(base.name)}:${canonicalTeam(base.team)}:${base.position}`;
-    const feed = feedByPlayer.get(exactKey) ?? feedByNamePosition.get(`${normalizedPlayerName(base.name)}:${base.position}`);
+    const feed = selectProjectionFeed(
+      feedByPlayer.get(exactKey),
+      feedByNamePosition.get(`${normalizedPlayerName(base.name)}:${base.position}`) ?? [],
+      canonicalTeam(base.team ?? ""),
+      (row) => row.team ? canonicalTeam(row.team) : "",
+    );
     const feedTeam = feed?.team ? canonicalTeam(feed.team) : null;
     const baseTeam = canonicalTeam(base.team ?? "");
     const teamCompatible = feedTeam !== null && feedTeam === baseTeam;
@@ -1564,24 +1467,33 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const sourceErrors: string[] = [];
   let season: number;
   let week: number;
+  let seasonType = "";
   try {
     const state = await readNflState(fresh);
     season = state.season;
     week = state.week;
+    seasonType = state.seasonType;
   } catch (err) {
     console.error("[dashboard] NFL state lookup failed", err instanceof Error ? err.stack : err);
     throw new Error("Sleeper leagues are unavailable");
   }
-  const vegasProjectionSnapshot = await loadVegasProjectionSnapshot(season, week);
+  const attachWeekContext = usesRegularSeasonWeek(seasonType);
+  const vegasProjectionSnapshot = attachWeekContext ? await loadVegasProjectionSnapshot(season, week) : null;
 
   const [leagueResult, playersResult, sleeperProjectionResult, scheduleResult, currentStatsResult, previousStatsResult, kickoffResult] = await Promise.allSettled([
     readUserLeagues(sleeperUserId, fresh),
     fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`),
-    fetchJson<SleeperProjection[]>(`${SLEEPER_PROJECTIONS_BASE}/projections/nfl/${season}/${week}?season_type=regular&order_by=pts_ppr`),
-    fetchJson<SleeperGame[]>(`${SLEEPER_BASE.replace("/v1", "")}/schedule/nfl/regular/${season}`),
+    attachWeekContext
+      ? fetchJson<SleeperProjection[]>(`${SLEEPER_PROJECTIONS_BASE}/projections/nfl/${season}/${week}?season_type=regular&order_by=pts_ppr`)
+      : Promise.resolve([] as SleeperProjection[]),
+    attachWeekContext
+      ? fetchJson<SleeperGame[]>(`${SLEEPER_BASE.replace("/v1", "")}/schedule/nfl/regular/${season}`)
+      : Promise.resolve([] as SleeperGame[]),
     fetchText(NFLVERSE_PLAYER_STATS_2026_URL),
     fetchText(NFLVERSE_PLAYER_STATS_2025_URL),
-    fetchJson<EspnScoreboard>(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&dates=${season}`),
+    attachWeekContext
+      ? fetchJson<EspnScoreboard>(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&dates=${season}`)
+      : Promise.resolve({ events: [] } as EspnScoreboard),
   ]);
 
   if (leagueResult.status === "rejected") {
@@ -1596,7 +1508,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
 
   const sleeperProjectionsByPlayerId = new Map<string, SleeperProjection>();
   const sleeperDefenseProjections = new Map<string, SleeperProjection>();
-  if (sleeperProjectionResult.status === "fulfilled") {
+  if (attachWeekContext && sleeperProjectionResult.status === "fulfilled") {
     for (const row of sleeperProjectionResult.value) {
       if (row.player_id) sleeperProjectionsByPlayerId.set(row.player_id, row);
       const defenseTeam = row.team ?? row.player_id;
@@ -1604,7 +1516,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         sleeperDefenseProjections.set(canonicalTeam(defenseTeam), row);
       }
     }
-  } else sourceErrors.push("Sleeper projections are unavailable; kicker and DST rankings cannot update, and in-progress players may show their pregame projection.");
+  } else if (attachWeekContext) sourceErrors.push("Sleeper projections are unavailable; kicker and DST rankings cannot update, and in-progress players may show their pregame projection.");
 
   // FantasyCalc and the per-league Sleeper requests are independent once the
   // shared player dictionary is available. Start this now so a slow source
@@ -1626,7 +1538,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       }
     }
   }
-  if (gameTimeByTeam.size === 0) sourceErrors.push("NFL kickoff times are temporarily unavailable.");
+  if (attachWeekContext && gameTimeByTeam.size === 0) sourceErrors.push("NFL kickoff times are temporarily unavailable.");
   if (scheduleResult.status === "fulfilled") {
     for (const game of schedule) {
       if (game.week !== week) continue;
@@ -1640,7 +1552,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         if (game.away && !gameTimeByTeam.has(canonicalTeam(game.away))) gameTimeByTeam.set(canonicalTeam(game.away), game.date);
       }
     }
-  } else sourceErrors.push("NFL game status is unavailable; player rows are showing projections.");
+  } else if (attachWeekContext) sourceErrors.push("NFL game status is unavailable; player rows are showing projections.");
 
   const vegasProjectionCount = vegasProjectionSnapshot?.projections.length ?? 0;
   const isFirstDownSnapshot = vegasProjectionSnapshot?.source === "first_down";
@@ -1746,7 +1658,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const rankings = [...rankingsByLeagueId.values()].flat();
   const weeklyChartRankings = [...weeklyChartRankingsByLeagueId.values()].flat();
   defenses = [...defensesByLeagueId.values()].flat();
-  if (!useVegasPrimary) {
+  if (attachWeekContext && !useVegasPrimary) {
     sourceErrors.push(`${isFirstDownSnapshot ? "First Down" : "Vegas"} player coverage is ${vegasProjectionCount}/${minProjectionCoverage} required; weekly skill-position projections are unavailable in this snapshot.`);
   }
   const missingDefenseProjections = defenses.filter((row) => row.pregameProjection === null).length;
@@ -1755,7 +1667,18 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   }
   const players = playersResult.value;
   const fantasyCalcResult = await fantasyCalcPromise;
-  const seasonLongRankings = fantasyCalcResult.rows;
+  const seasonLongFormats = sleeperLeagues.flatMap((league) => {
+    const leagueFormat = seasonLongFormatForLeague(league);
+    return [
+      leagueFormat,
+      {
+        ...leagueFormat,
+        isDynasty: false,
+        key: `redraft-${leagueFormat.numQbs}qb-${leagueFormat.numTeams}t-${leagueFormat.ppr}ppr`,
+      },
+    ];
+  });
+  const seasonLongRankings = rankingsForLeagueFormats(fantasyCalcResult.rows, seasonLongFormats);
   if (fantasyCalcResult.failedPresets > 0) sourceErrors.push("FantasyCalc season-long rankings are unavailable for one or more league formats.");
   const fantasyCalcAsOf = seasonLongRankings.length > 0 ? new Date().toISOString() : null;
   const defenseActuals = new Map<string, number>();
@@ -1875,14 +1798,44 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       };
     };
 
+    const vacantRosterPlayer = (slot: string): RosterPlayer => ({
+      playerId: "0",
+      name: "",
+      team: null,
+      position: slot,
+      lineupSlot: slot,
+      isStarter: true,
+      rank: null,
+      projection: null,
+      projectionSource: null,
+      actual: null,
+      gamePhase: null,
+      gameTime: null,
+      opponent: null,
+      isAway: null,
+      isBye: false,
+      injuryStatus: null,
+      defenseComponents: null,
+      projectionComponents: null,
+    });
+    const submittedStarters = (
+      starterIds: string[],
+      activeMatchup: SleeperMatchup | undefined,
+    ): RosterPlayer[] => mapSubmittedStarters(
+      starterIds,
+      (id, index) => makePlayer(id, true, activeMatchup, index),
+      (index) => vacantRosterPlayer(starterSlots[index] ?? "BN"),
+    );
+    const activeBench = (roster: SleeperRoster, activeMatchup: SleeperMatchup | undefined): RosterPlayer[] => (
+      activeBenchIds(roster.players ?? [], roster.starters ?? [], roster.reserve ?? [], roster.taxi ?? [])
+        .map((id) => makePlayer(id, false, activeMatchup))
+    );
     const starterIds = ownRoster.starters ?? [];
-    const starters = starterIds.map((id, index) => ({ id, index })).filter(({ id }) => id && id !== "0").map(({ id, index }) => makePlayer(id, true, matchup, index));
-    const starterSet = new Set(starterIds);
-    const bench = (ownRoster.players ?? []).filter((id) => !starterSet.has(id)).map((id) => makePlayer(id, false, matchup));
+    const starters = submittedStarters(starterIds, matchup);
+    const bench = activeBench(ownRoster, matchup);
     const opponentStarterIds = opponentRoster?.starters ?? [];
-    const opponentStarters = opponentStarterIds.map((id, index) => ({ id, index })).filter(({ id }) => id && id !== "0").map(({ id, index }) => makePlayer(id, true, opponentMatchup, index));
-    const opponentStarterSet = new Set(opponentStarterIds);
-    const opponentBench = (opponentRoster?.players ?? []).filter((id) => !opponentStarterSet.has(id)).map((id) => makePlayer(id, false, opponentMatchup));
+    const opponentStarters = submittedStarters(opponentStarterIds, opponentMatchup);
+    const opponentBench = opponentRoster ? activeBench(opponentRoster, opponentMatchup) : [];
     const opponentOwner = usersResult.status === "fulfilled"
       ? usersResult.value.find((user) => user.user_id === opponentRoster?.owner_id)
       : undefined;
@@ -1914,7 +1867,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     const matchupByRosterId = new Map(matchups.map((row) => [row.roster_id, row]));
 
     const pickTemplates = seasonLongRankings.filter((row) => row.formatKey === seasonLongFormat.key && row.position === "PICK");
-    type PickTier = "early" | "mid" | "late";
     const pickTemplatesByTier = new Map<string, SeasonLongRanking>();
     const pickCoordinates = new Map<string, { season: string; round: number }>();
     for (const template of pickTemplates) {
@@ -1930,10 +1882,9 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     }
     const tradedPicks = tradedPicksResult.status === "fulfilled" ? tradedPicksResult.value : [];
     const ordinal = (value: number): string => value === 1 ? "1st" : value === 2 ? "2nd" : value === 3 ? "3rd" : `${value}th`;
-    // Season-long power rankings (roster-only values) drive pick-tier estimation:
-    // a cellar team's future 1st is worth an "early" 1st, a contender's a "late" 1st.
-    // Built here so both ownedPicks (trade calculator) and futurePickValue (power
-    // rankings display) share the same rank source.
+    // Pick tiers blend current record with redraft roster value. A cellar team's
+    // future 1st is an "early" 1st and a contender's is a "late" 1st. Built here
+    // so owned picks and the power-rankings pick total share one order.
     const makePowerRankings = (formatKey: string): z.infer<typeof powerRankingSchema>[] => {
       const values = seasonLongRankings.filter((row) => row.formatKey === formatKey && row.position !== "PICK");
       if (values.length === 0) return [];
@@ -1963,16 +1914,20 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     };
     const seasonLongPowerFormatKey = `redraft-${seasonLongFormat.numQbs}qb-${seasonLongFormat.numTeams}t-${seasonLongFormat.ppr}ppr`;
     const powerRankingsSeasonLong = makePowerRankings(seasonLongPowerFormatKey);
-    const rankByRosterId = new Map(powerRankingsSeasonLong.map((row) => [row.rosterId, row.rank]));
+    const rankByRosterId = blendedContenderRanks(powerRankingsSeasonLong.map((row) => ({
+      rosterId: row.rosterId,
+      wins: row.record.wins,
+      losses: row.record.losses,
+      ties: row.record.ties,
+      valueRank: row.rank,
+    })));
     const teamCount = rosters.length;
     const ownedPicksByRosterId = new Map<number, SeasonLongRanking[]>();
     if (seasonLongFormat.isDynasty) {
       for (const [coordinateKey, { season: pickSeason, round: pickRound }] of pickCoordinates) {
         for (const originalRoster of rosters) {
           const originalRank = rankByRosterId.get(originalRoster.roster_id);
-          const tier: PickTier = originalRank === undefined ? "mid"
-            : originalRank <= teamCount / 3 ? "late"
-            : originalRank <= (2 * teamCount) / 3 ? "mid" : "early";
+          const tier: PickTier = pickTierForRank(originalRank, teamCount);
           const template = pickTemplatesByTier.get(`${coordinateKey}:${tier}`)
             ?? pickTemplatesByTier.get(`${coordinateKey}:mid`);
           if (!template) continue;
@@ -2006,6 +1961,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         isUser: roster.roster_id === ownRoster.roster_id,
         players: rosterPlayers,
         ownedPicks: ownedPicksByRosterId.get(roster.roster_id) ?? [],
+        record: powerTeamRecord(roster),
       };
     });
     const rosteredSet = new Set(rosteredPlayerIds);
@@ -2036,22 +1992,16 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       .map((roster) => {
         const positionValues = { QB: 0, RB: 0, WR: 0, TE: 0, FLEX: 0, K: 0, DEF: 0 };
         const rosterMatchup = matchupByRosterId.get(roster.roster_id);
-        const rosterStarterIds = roster.starters ?? [];
-        const powerStarters = rosterStarterIds
-          .map((id, index) => ({ id, index }))
-          .filter(({ id }) => id && id !== "0")
-          .map(({ id, index }) => makePlayer(id, true, rosterMatchup, index));
-        const powerStarterSet = new Set(rosterStarterIds);
-        const powerBench = (roster.players ?? [])
-          .filter((id) => !powerStarterSet.has(id))
-          .map((id) => makePlayer(id, false, rosterMatchup));
+        const powerStarters = submittedStarters(roster.starters ?? [], rosterMatchup);
+        const powerBench = activeBench(roster, rosterMatchup);
         const optimizedLineup = optimizeWeeklyPowerLineup(powerStarters, powerBench);
         for (const player of optimizedLineup) {
+          if (isVacantLineupSlot(player)) continue;
           const position = ["FLEX", "SUPER_FLEX", "REC_FLEX", "WRRB_FLEX"].includes(player.lineupSlot ?? "")
             ? "FLEX"
             : player.position;
           if (!(position in positionValues)) continue;
-          const value = player.gamePhase === "final" ? player.actual : player.projection;
+          const value = lineupCountingPoints(player);
           if (value !== null) positionValues[position as keyof typeof positionValues] += value;
         }
         for (const position of Object.keys(positionValues) as Array<keyof typeof positionValues>) {
@@ -2080,9 +2030,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         for (const originalRoster of rosters) {
           const originalRank = rankByRosterId.get(originalRoster.roster_id);
           if (originalRank === undefined) continue;
-          const tier: PickTier = originalRank <= teamCount / 3
-            ? "late"
-            : originalRank <= (2 * teamCount) / 3 ? "mid" : "early";
+          const tier: PickTier = pickTierForRank(originalRank, teamCount);
           const template = pickTemplatesByTier.get(`${coordinateKey}:${tier}`)
             ?? pickTemplatesByTier.get(`${coordinateKey}:mid`);
           if (!template) continue;
