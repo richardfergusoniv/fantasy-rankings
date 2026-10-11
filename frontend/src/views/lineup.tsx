@@ -189,7 +189,7 @@ export function Lineup({
           {userRosterId !== null && onOpenLeagueTeam ? (
             <button
               type="button"
-              className="matchup-score-team-open"
+              className="roster-owner-tag is-user matchup-score-team-open"
               aria-label={`Open ${userTeamName} league team`}
               aria-haspopup="dialog"
               onClick={() => onOpenLeagueTeam(userRosterId)}
@@ -212,7 +212,7 @@ export function Lineup({
           {opponentRosterId !== null && onOpenLeagueTeam ? (
             <button
               type="button"
-              className="matchup-score-team-open"
+              className="roster-owner-tag matchup-score-team-open"
               aria-label={`Open ${opponentTeamName} league team`}
               aria-haspopup="dialog"
               onClick={() => onOpenLeagueTeam(opponentRosterId)}
