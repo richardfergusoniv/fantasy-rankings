@@ -49,7 +49,7 @@ import {
   type SleeperPlayer,
   type SleeperRoster,
 } from "./sleeper.js";
-import { activeBenchIds, eligibleForSlot, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, normalizeGamePhase, optimizeLineup, sumLiveForecast } from "./lineup-optimizer.js";
+import { activeBenchIds, eligibleForSlot, espnStatusToPhase, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, normalizeGamePhase, optimizeLineup, sumLiveForecast } from "./lineup-optimizer.js";
 import { rankingsForLeagueFormats } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
@@ -947,18 +947,6 @@ function dashboardCacheTtlMs(dashboard: Dashboard): number {
   return dashboardHasLiveGame(dashboard) ? LIVE_DASHBOARD_CACHE_MS : USER_DASHBOARD_CACHE_MS;
 }
 
-function espnStatusToPhase(status: NonNullable<NonNullable<EspnScoreboard["events"]>[number]["competitions"]>[number]["status"]): "pregame" | "live" | "final" | null {
-  if (!status?.type) return null;
-  if (status.type.completed) return "final";
-  const fromName = normalizeGamePhase(status.type.name);
-  if (fromName) return fromName;
-  const state = status.type.state?.toLowerCase();
-  if (state === "post") return "final";
-  if (state === "in") return "live";
-  if (state === "pre") return "pregame";
-  return normalizeGamePhase(status.type.description);
-}
-
 function adaptVegasStatsForScorer(
   position: Ranking["position"],
   stats: Record<string, number>,
@@ -1585,7 +1573,11 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   if (scheduleResult.status === "fulfilled") {
     for (const game of schedule) {
       if (game.week !== week) continue;
-      const phase = normalizeGamePhase(game.status);
+      const kickoffMs = game.date && !/^\d{4}-\d{2}-\d{2}$/.test(game.date.trim())
+        ? Date.parse(game.date)
+        : Number.NaN;
+      const scheduleHasStarted = Number.isFinite(kickoffMs) && kickoffMs <= Date.now();
+      const phase = normalizeGamePhase(game.status, { hasStarted: scheduleHasStarted });
       if (phase) {
         // ESPN kickoff feed wins when present; Sleeper fills gaps.
         if (game.home && !gamePhaseByTeam.has(canonicalTeam(game.home))) gamePhaseByTeam.set(canonicalTeam(game.home), phase);

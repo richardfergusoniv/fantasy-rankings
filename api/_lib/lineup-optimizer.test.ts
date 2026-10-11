@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   activeBenchIds,
   displayedMatchupPoints,
+  espnStatusToPhase,
   gameElapsedFraction,
   isLineupLocked,
   LIVE_PACE_BLEND_END,
   LIVE_PACE_BLEND_START,
   LIVE_PACE_REMAINING_CAP,
+  LIVE_PACE_TOTAL_CAP,
   liveForecastPoints,
   livePaceBlendWeight,
   liveRemainingProjection,
@@ -332,38 +334,75 @@ describe("liveForecastPoints", () => {
     expect(optimized.starters.map((starter) => starter.playerId)).toEqual(["qb", "rb", "wr"]);
   });
 
-  it("blends pace with a named cap so an early TD does not over-project", () => {
+  it("blends pace with named remaining and total caps so an early TD does not over-project", () => {
     expect(LIVE_PACE_BLEND_START).toBeLessThan(LIVE_PACE_BLEND_END);
-    expect(LIVE_PACE_REMAINING_CAP).toBeGreaterThan(1);
+    expect(LIVE_PACE_REMAINING_CAP).toBeCloseTo(1.1);
+    expect(LIVE_PACE_TOTAL_CAP).toBeCloseTo(1.35);
     expect(livePaceBlendWeight(0)).toBe(LIVE_PACE_BLEND_START);
     expect(livePaceBlendWeight(1)).toBe(LIVE_PACE_BLEND_END);
 
-    // ~5 minutes into Q1 after a TD (~6 pts on a 20-pt projection).
-    const elapsed = gameElapsedFraction(1, 600);
-    expect(elapsed).toBeCloseTo(300 / 3600, 5);
+    // QB proj 20 with 7 pts at 12:00 left in Q1 → near 27–28 (neutral time path is 26).
+    const twelveLeft = liveForecastPoints(player({
+      playerId: "q1-td",
+      position: "QB",
+      projection: 20,
+      actual: 7,
+      gamePhase: "live",
+      gamePeriod: 1,
+      gameClockSeconds: 720,
+    }), now);
+    expect(twelveLeft).toBeGreaterThanOrEqual(27);
+    expect(twelveLeft).toBeLessThanOrEqual(28);
+
+    // QB with 20 pts one minute in must not project near 45.
+    const oneMinuteIn = liveForecastPoints(player({
+      playerId: "instant-boom",
+      position: "QB",
+      projection: 20,
+      actual: 20,
+      gamePhase: "live",
+      gamePeriod: 1,
+      gameClockSeconds: 840,
+    }), now);
+    expect(oneMinuteIn).toBeGreaterThanOrEqual(20);
+    expect(oneMinuteIn).toBeLessThanOrEqual(20 * LIVE_PACE_TOTAL_CAP + 1e-9);
+    expect(oneMinuteIn).toBeLessThan(30);
+
+    // Halftime: QB 20 with 12 pts stays about 22–23.
+    const halftime = liveForecastPoints(player({
+      playerId: "ht-qb",
+      position: "QB",
+      projection: 20,
+      actual: 12,
+      gamePhase: "live",
+      gamePeriod: 2,
+      gameClockSeconds: 0,
+    }), now);
+    expect(halftime).toBeGreaterThanOrEqual(22);
+    expect(halftime).toBeLessThanOrEqual(23);
+
+    // Late game still moves with pace (underperforming QB shrinks below neutral 20).
+    const late = liveForecastPoints(player({
+      playerId: "late-qb",
+      position: "QB",
+      projection: 20,
+      actual: 14,
+      gamePhase: "live",
+      gamePeriod: 4,
+      gameClockSeconds: 300,
+    }), now);
+    expect(late).toBeGreaterThan(14);
+    expect(late).toBeLessThan(20);
+
+    const elapsed = gameElapsedFraction(1, 720);
     const remaining = liveRemainingProjection({
       pregameProjection: 20,
-      actual: 6,
+      actual: 7,
       elapsedFraction: elapsed!,
       position: "QB",
     });
     const timeBased = 20 * (1 - elapsed!);
-    const purePaceRemaining = timeBased * (6 / (20 * elapsed!));
     expect(remaining).toBeLessThanOrEqual(timeBased * LIVE_PACE_REMAINING_CAP + 1e-9);
-    expect(remaining).toBeLessThan(purePaceRemaining);
-    const forecast = liveForecastPoints(player({
-      playerId: "early-td-qb",
-      position: "QB",
-      projection: 20,
-      actual: 6,
-      gamePhase: "live",
-      gamePeriod: 1,
-      gameClockSeconds: 600,
-    }), now);
-    // Pure pace would imply ~72; blend+cap keeps the total near the mid-20s.
-    expect(forecast).toBeGreaterThan(6);
-    expect(forecast).toBeLessThan(32);
-    expect(forecast).toBeCloseTo(6 + remaining!, 4);
   });
 
   it("counts final actuals, pregame projections, and bye as zero", () => {
@@ -417,14 +456,50 @@ describe("liveForecastPoints", () => {
     expect(liveForecastPoints(dateOnly, now)).toBe(13);
   });
 
-  it("maps canceled and postponed statuses to pregame, not live", () => {
+  it("maps delayed/suspended/postponed/canceled phases correctly", () => {
     expect(normalizeGamePhase("canceled")).toBe("pregame");
     expect(normalizeGamePhase("cancelled")).toBe("pregame");
     expect(normalizeGamePhase("postponed")).toBe("pregame");
     expect(normalizeGamePhase("STATUS_POSTPONED")).toBe("pregame");
+    expect(normalizeGamePhase("delayed")).toBe("pregame");
+    expect(normalizeGamePhase("STATUS_DELAYED", { hasStarted: false })).toBe("pregame");
+    expect(normalizeGamePhase("STATUS_DELAYED", { hasStarted: true })).toBe("live");
+    expect(normalizeGamePhase("suspended")).toBe("live");
+    expect(normalizeGamePhase("STATUS_SUSPENDED", { hasStarted: true })).toBe("live");
+    expect(normalizeGamePhase("STATUS_SUSPENDED", { hasStarted: false })).toBe("pregame");
     expect(normalizeGamePhase("STATUS_IN_PROGRESS")).toBe("live");
     expect(normalizeGamePhase("STATUS_HALFTIME")).toBe("live");
     expect(normalizeGamePhase("complete")).toBe("final");
+
+    // Delayed mid-game (clock already into Q1) stays live and keeps the clock.
+    expect(espnStatusToPhase({
+      period: 1,
+      clock: 600,
+      type: { name: "STATUS_DELAYED", state: "in", description: "Delayed" },
+    })).toBe("live");
+    // Delayed before kickoff stays pregame.
+    expect(espnStatusToPhase({
+      period: 1,
+      clock: 900,
+      type: { name: "STATUS_DELAYED", state: "pre", description: "Delayed" },
+    })).toBe("pregame");
+    expect(espnStatusToPhase({
+      period: 2,
+      clock: 120,
+      type: { name: "STATUS_SUSPENDED", state: "in", description: "Suspended" },
+    })).toBe("live");
+    expect(espnStatusToPhase({
+      type: { name: "STATUS_POSTPONED", state: "pre", description: "Postponed" },
+    })).toBe("pregame");
+    expect(espnStatusToPhase({
+      type: { name: "STATUS_CANCELED", state: "pre", description: "Canceled" },
+    })).toBe("pregame");
+    // Unrecognized in-progress name still falls back via ESPN state.
+    expect(espnStatusToPhase({
+      period: 3,
+      clock: 400,
+      type: { name: "STATUS_SOMETHING_NEW", state: "in", description: "In Progress" },
+    })).toBe("live");
   });
 
   it("counts only actuals for Out/injured players in a live game and keeps Questionable projections", () => {

@@ -40,9 +40,14 @@ export const LIVE_PACE_BLEND_START = 0.15;
 export const LIVE_PACE_BLEND_END = 0.65;
 /**
  * Cap on remaining projection vs pure time-based remaining.
- * Stops one early TD from implying an absurd full-game total.
+ * Keeps one early score from inflating the rest of the game too far.
  */
-export const LIVE_PACE_REMAINING_CAP = 1.25;
+export const LIVE_PACE_REMAINING_CAP = 1.1;
+/**
+ * Cap on projected final vs pregame projection.
+ * Actual points always stand when they already exceed this ceiling.
+ */
+export const LIVE_PACE_TOTAL_CAP = 1.35;
 
 const REGULATION_QUARTERS = 4;
 const QUARTER_SECONDS = 15 * 60;
@@ -64,25 +69,49 @@ function kickoffHasPassed(gameTime: string | null | undefined, now: number): boo
   return Number.isFinite(kickoff) && kickoff <= now;
 }
 
+export type GamePhaseOptions = {
+  /** True when the contest has already kicked off (clock/period/state). */
+  hasStarted?: boolean;
+};
+
 /** Map Sleeper/ESPN status strings to a lineup phase. Postponed/canceled stay non-live. */
-export function normalizeGamePhase(status: string | undefined): "pregame" | "live" | "final" | null {
+export function normalizeGamePhase(
+  status: string | undefined,
+  options: GamePhaseOptions = {},
+): "pregame" | "live" | "final" | null {
   if (!status) return null;
   const normalized = status.toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
   if (["complete", "final", "post_game", "status_final", "status_full_time"].includes(normalized)) return "final";
   if ([
-    "pre_game",
-    "pregame",
-    "scheduled",
-    "status_scheduled",
-    "status_pregame",
     "postponed",
     "status_postponed",
     "canceled",
     "cancelled",
     "status_canceled",
     "status_cancelled",
+  ].includes(normalized)) return "pregame";
+  if ([
     "delayed",
     "status_delayed",
+    "rain_delay",
+    "status_rain_delay",
+  ].includes(normalized)) {
+    // Weather delay after kickoff stays live; delay before kickoff stays pregame.
+    return options.hasStarted ? "live" : "pregame";
+  }
+  if ([
+    "suspended",
+    "status_suspended",
+  ].includes(normalized)) {
+    // Suspended contests have already started unless ESPN still marks pre.
+    return options.hasStarted === false ? "pregame" : "live";
+  }
+  if ([
+    "pre_game",
+    "pregame",
+    "scheduled",
+    "status_scheduled",
+    "status_pregame",
     "time_tbd",
     "status_time_tbd",
   ].includes(normalized)) return "pregame";
@@ -97,8 +126,54 @@ export function normalizeGamePhase(status: string | undefined): "pregame" | "liv
     "status_end_of_period",
     "end_period",
   ].includes(normalized)) return "live";
-  // Unknown statuses stay non-live so postponed/canceled variants never look in-progress.
-  return "pregame";
+  // Unrecognized names return null so ESPN state fallbacks can still apply.
+  return null;
+}
+
+/** Whether ESPN status/clock indicates the game has already kicked off. */
+export function espnGameHasStarted(status: {
+  clock?: number;
+  period?: number;
+  type?: { state?: string; completed?: boolean };
+} | null | undefined): boolean {
+  if (!status) return false;
+  if (status.type?.completed) return true;
+  const state = status.type?.state?.toLowerCase();
+  if (state === "in") return true;
+  if (state === "pre") return false;
+  const period = status.period;
+  const clock = status.clock;
+  if (typeof period === "number" && period >= 2) return true;
+  if (typeof period === "number" && period >= 5) return true;
+  if (typeof period === "number" && period >= 1 && typeof clock === "number" && clock < QUARTER_SECONDS) {
+    return true;
+  }
+  return false;
+}
+
+/** ESPN competition status → lineup phase, including delayed/suspended mid-game. */
+export function espnStatusToPhase(status: {
+  clock?: number;
+  period?: number;
+  type?: {
+    name?: string;
+    state?: string;
+    completed?: boolean;
+    description?: string;
+  };
+} | null | undefined): "pregame" | "live" | "final" | null {
+  if (!status?.type) return null;
+  if (status.type.completed) return "final";
+  const hasStarted = espnGameHasStarted(status);
+  const fromName = normalizeGamePhase(status.type.name, { hasStarted });
+  if (fromName) return fromName;
+  const state = status.type.state?.toLowerCase();
+  if (state === "post") return "final";
+  if (state === "in") return "live";
+  if (state === "pre") return "pregame";
+  const fromDescription = normalizeGamePhase(status.type.description, { hasStarted });
+  if (fromDescription) return fromDescription;
+  return hasStarted ? "live" : "pregame";
 }
 
 /** A player is locked once their game has started or finished. Posted actuals alone do not lock a pregame player. */
@@ -212,7 +287,13 @@ export function liveForecastPoints(player: LiveForecastPlayer, _now = Date.now()
       elapsedFraction: elapsed,
       position: player.position,
     });
-    return Number((scored + remaining).toFixed(4));
+    let projected = scored + remaining;
+    if (projectionBase > 0) {
+      const totalCeiling = projectionBase * LIVE_PACE_TOTAL_CAP;
+      if (scored >= totalCeiling) return Number(scored.toFixed(4));
+      projected = Math.min(projected, totalCeiling);
+    }
+    return Number(projected.toFixed(4));
   }
 
   // Pregame / postponed / unknown: always use projection, even if the browser
