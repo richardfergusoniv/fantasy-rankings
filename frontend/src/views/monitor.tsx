@@ -128,6 +128,7 @@ export function Monitor({
       <article className="monitor-panel">
         <header className="monitor-panel-header">
           <h2>My matchup</h2>
+          <p className="monitor-week-label">Week {dashboard.week}</p>
         </header>
         <p className="monitor-matchup-names">
           {userRosterId !== null ? (
@@ -158,7 +159,6 @@ export function Monitor({
             <strong>{opponentTeamName ?? "No opponent"}</strong>
           )}
         </p>
-        <p className="monitor-week-label">Week {dashboard.week}</p>
         <div className="monitor-matchup-scores" aria-label="Head-to-head score">
           <div>
             <strong>{formatProjectionPoints(league.teamActual)}</strong>
