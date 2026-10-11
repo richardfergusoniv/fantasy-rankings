@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { sumLiveForecast } from "../../../api/_lib/lineup-optimizer";
 import type {
   Dashboard,
   DraftCenterData,
@@ -46,6 +47,11 @@ export function Monitor({
 }) {
   const [openRosterId, setOpenRosterId] = useState<number | null>(null);
   const opponent = league.opponentTeam;
+  const teamProjection = useMemo(() => sumLiveForecast(league.starters), [league.starters]);
+  const opponentProjection = useMemo(
+    () => sumLiveForecast(opponent?.starters ?? []),
+    [opponent?.starters],
+  );
   const userTeam = league.powerRankingsWeek.find((team) => team.isUser)
     ?? league.tradeTeams.find((team) => team.isUser)
     ?? null;
@@ -162,11 +168,11 @@ export function Monitor({
         <div className="monitor-matchup-scores" aria-label="Head-to-head score">
           <div>
             <strong>{formatProjectionPoints(league.teamActual)}</strong>
-            <small>{formatProjectionPoints(league.teamProjection)} proj</small>
+            <small>{formatProjectionPoints(teamProjection)} proj</small>
           </div>
           <div>
             <strong>{formatProjectionPoints(opponent?.teamActual ?? null)}</strong>
-            <small>{formatProjectionPoints(opponent?.teamProjection ?? null)} proj</small>
+            <small>{formatProjectionPoints(opponentProjection)} proj</small>
           </div>
         </div>
       </article>

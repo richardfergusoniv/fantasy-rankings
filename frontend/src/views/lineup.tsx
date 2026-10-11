@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { lineupCountingPoints, optimizeLineup } from "../../../api/_lib/lineup-optimizer";
+import { optimizeLineup, sumLiveForecast } from "../../../api/_lib/lineup-optimizer";
 import type {
   Dashboard,
   League,
@@ -29,6 +29,8 @@ export {
   matchupProjectionClassName,
   optimizedTotalProjectionClassName,
 } from "./lineup-projection";
+
+const LOCK_TICK_MS = 30_000;
 
 export function MatchupPlayer({
   player,
@@ -104,12 +106,8 @@ export function MatchupPlayer({
   );
 }
 
-export function forecastTotal(players: RosterPlayer[]): number | null {
-  const values = players.flatMap((player) => {
-    const value = lineupCountingPoints(player);
-    return value === null ? [] : [value];
-  });
-  return values.length ? values.reduce((total, value) => total + value, 0) : null;
+export function forecastTotal(players: RosterPlayer[], now = Date.now()): number | null {
+  return sumLiveForecast(players, now);
 }
 
 export function Lineup({
@@ -126,17 +124,30 @@ export function Lineup({
   onOpenLeagueTeam?: (rosterId: number) => void;
 } & PlayerLink) {
   const [mode, setMode] = useState<"current" | "optimized">("current");
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), LOCK_TICK_MS);
+    return () => window.clearInterval(id);
+  }, []);
   const openPlayer = (player: RosterPlayer) => {
     onOpenLinkedPlayer(player.playerId);
   };
   const opponent = league.opponentTeam;
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
-  const optimized = useMemo(() => optimizeLineup(league.starters, league.bench), [league.starters, league.bench]);
+  const optimized = useMemo(
+    () => optimizeLineup(league.starters, league.bench, nowMs),
+    [league.starters, league.bench, nowMs],
+  );
   const mine = mode === "optimized" ? optimized.starters : league.starters;
   const myBench = mode === "optimized" ? optimized.bench : league.bench;
   const theirs = opponent?.starters;
   const theirBench = opponent?.bench;
-  const optimizedForecast = forecastTotal(optimized.starters);
+  const currentForecast = useMemo(() => forecastTotal(league.starters, nowMs), [league.starters, nowMs]);
+  const optimizedForecast = useMemo(() => forecastTotal(optimized.starters, nowMs), [optimized.starters, nowMs]);
+  const opponentForecast = useMemo(
+    () => forecastTotal(opponent?.starters ?? [], nowMs),
+    [opponent?.starters, nowMs],
+  );
   const lineupChanged = isOptimizedLineupChanged(
     optimized.starters.map((starter) => starter.playerId),
     league.starters.map((starter) => starter.playerId),
@@ -202,7 +213,7 @@ export function Lineup({
           <div className="score-line">
             <strong>{formatProjectionPoints(league.teamActual)}</strong>
             <small className={myTotalProjectionClassName}>
-              {forecastPoints(mode === "optimized" ? optimizedForecast : league.teamProjection, mode === "optimized" ? optimized.starters : league.starters)}
+              {forecastPoints(mode === "optimized" ? optimizedForecast : currentForecast, mode === "optimized" ? optimized.starters : league.starters)}
               <span className="sr-only"> projected points{optimizedTotalDescription}</span>
             </small>
           </div>
@@ -222,7 +233,7 @@ export function Lineup({
           ) : (
             <span>{opponentTeamName}</span>
           )}
-          <div className="score-line"><strong>{formatProjectionPoints(opponent?.teamActual ?? null)}</strong><small>{forecastPoints(opponent?.teamProjection ?? null, opponent?.starters ?? [])}<span className="sr-only"> projected points</span></small></div>
+          <div className="score-line"><strong>{formatProjectionPoints(opponent?.teamActual ?? null)}</strong><small>{forecastPoints(opponentForecast, opponent?.starters ?? [])}<span className="sr-only"> projected points</span></small></div>
         </div>
       </Card>
 
