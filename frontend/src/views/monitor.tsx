@@ -133,7 +133,7 @@ export function Monitor({
           {userRosterId !== null ? (
             <button
               type="button"
-              className="monitor-matchup-team-open"
+              className="roster-owner-tag is-user monitor-matchup-team-open"
               aria-label={`Open ${userTeamName} league team`}
               aria-haspopup="dialog"
               onClick={() => setOpenRosterId(userRosterId)}
@@ -147,7 +147,7 @@ export function Monitor({
           {opponentRosterId !== null && opponentTeamName ? (
             <button
               type="button"
-              className="monitor-matchup-team-open"
+              className="roster-owner-tag monitor-matchup-team-open"
               aria-label={`Open ${opponentTeamName} league team`}
               aria-haspopup="dialog"
               onClick={() => setOpenRosterId(opponentRosterId)}
