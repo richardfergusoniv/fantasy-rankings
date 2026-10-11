@@ -267,9 +267,39 @@ const DASHBOARD_DEADLINE_MS = 58_000;
 // While a section answers `data: null` (signed-in user's first dashboard is
 // still building in the background), poll until the build lands.
 const SECTION_BUILD_POLL_MS = 4_000;
+const LIVE_LINEUP_REFETCH_MS = 60_000;
 function pollWhileSectionBuilding(query: { state: { data?: unknown } }): number | false {
   const data = query.state.data as { data?: unknown } | undefined;
   return data !== undefined && data.data == null ? SECTION_BUILD_POLL_MS : false;
+}
+
+function teamSectionHasLiveGame(data: unknown): boolean {
+  if (!data || typeof data !== "object" || !("data" in data)) return false;
+  const payload = (data as { data?: { leagues?: Array<{
+    starters?: Array<{ gamePhase?: string | null }>;
+    bench?: Array<{ gamePhase?: string | null }>;
+    opponentTeam?: {
+      starters?: Array<{ gamePhase?: string | null }>;
+      bench?: Array<{ gamePhase?: string | null }>;
+    } | null;
+  }> } | null }).data;
+  const leagues = payload?.leagues;
+  if (!leagues) return false;
+  return leagues.some((league) => {
+    const pools = [
+      league.starters ?? [],
+      league.bench ?? [],
+      league.opponentTeam?.starters ?? [],
+      league.opponentTeam?.bench ?? [],
+    ];
+    return pools.some((players) => players.some((player) => player.gamePhase === "live"));
+  });
+}
+
+function pollTeamSection(query: { state: { data?: unknown } }): number | false {
+  const building = pollWhileSectionBuilding(query);
+  if (building) return building;
+  return teamSectionHasLiveGame(query.state.data) ? LIVE_LINEUP_REFETCH_MS : false;
 }
 
 function dashboardTimestamp(dashboard: Dashboard | undefined): number {
@@ -499,7 +529,8 @@ export function App() {
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "team" }), 8_000)),
     staleTime: 90_000,
     retry: false,
-    refetchInterval: pollWhileSectionBuilding,
+    // Matchup/lineup: poll while building, then about every 60s while any game is live.
+    refetchInterval: pollTeamSection,
   });
   // Matchup player cards need fantasy SOS for Team context ranks.
   const playerSectionActive = tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "charts" || tab === "comparison";

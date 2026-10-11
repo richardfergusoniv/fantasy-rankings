@@ -104,6 +104,10 @@ export const rosterPlayerSchema = z.object({
   actual: z.number().nullable(),
   gamePhase: z.enum(["pregame", "live", "final"]).nullable(),
   gameTime: z.string().nullable(),
+  /** ESPN quarter / OT period when the game is in progress. */
+  gamePeriod: z.number().int().nullable().optional(),
+  /** ESPN seconds remaining in the current period. */
+  gameClockSeconds: z.number().nullable().optional(),
   opponent: z.string().nullable(),
   isAway: z.boolean().nullable(),
   isBye: z.boolean(),

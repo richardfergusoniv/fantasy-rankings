@@ -2,11 +2,23 @@ import { describe, expect, it } from "vitest";
 import {
   activeBenchIds,
   displayedMatchupPoints,
+  espnStatusToPhase,
+  gameElapsedFraction,
+  isLineupLocked,
+  LIVE_PACE_BLEND_END,
+  LIVE_PACE_BLEND_START,
+  LIVE_PACE_REMAINING_CAP,
+  LIVE_PACE_TOTAL_CAP,
+  liveForecastPoints,
+  livePaceBlendWeight,
+  liveRemainingProjection,
   lineupCountingPoints,
   mapSubmittedStarters,
+  normalizeGamePhase,
   optimizeLineup,
   optimizeTradeRoster,
   powerRankingPoints,
+  sumLiveForecast,
   type OptimizablePlayer,
 } from "./lineup-optimizer.js";
 
@@ -20,6 +32,8 @@ function player(overrides: Partial<OptimizablePlayer> & Pick<OptimizablePlayer, 
     actual: null,
     gamePhase: "pregame",
     gameTime: "2026-10-11T20:00:00.000Z",
+    gamePeriod: null,
+    gameClockSeconds: null,
     ...overrides,
   };
 }
@@ -274,5 +288,303 @@ describe("optimizeTradeRoster", () => {
     expect(graded.starters.map((starter) => starter.playerId)).toEqual(["locked-wr"]);
     expect(graded.bench.map((reserve) => reserve.playerId)).toEqual(["fresh-wr", "bench-boom"]);
     expect(graded.score).toBe(2);
+  });
+});
+
+describe("liveForecastPoints", () => {
+  it("keeps Current and Optimized totals consistent for the same live lineup", () => {
+    const starters = [
+      player({
+        playerId: "qb",
+        position: "QB",
+        lineupSlot: "QB",
+        isStarter: true,
+        projection: 20,
+        actual: 6,
+        gamePhase: "live",
+        gameTime: "2026-10-11T17:00:00.000Z",
+        gamePeriod: 1,
+        gameClockSeconds: 600,
+      }),
+      player({
+        playerId: "rb",
+        position: "RB",
+        lineupSlot: "RB",
+        isStarter: true,
+        projection: 14,
+        actual: 3,
+        gamePhase: "live",
+        gameTime: "2026-10-11T17:00:00.000Z",
+        gamePeriod: 1,
+        gameClockSeconds: 600,
+      }),
+      player({
+        playerId: "wr",
+        position: "WR",
+        lineupSlot: "WR",
+        isStarter: true,
+        projection: 12,
+        gamePhase: "pregame",
+        gameTime: "2026-10-11T20:00:00.000Z",
+      }),
+    ];
+    const currentTotal = sumLiveForecast(starters, now);
+    const optimized = optimizeLineup(starters, [], now);
+    expect(sumLiveForecast(optimized.starters, now)).toBe(currentTotal);
+    expect(optimized.starters.map((starter) => starter.playerId)).toEqual(["qb", "rb", "wr"]);
+  });
+
+  it("blends pace with named remaining and total caps so an early TD does not over-project", () => {
+    expect(LIVE_PACE_BLEND_START).toBeLessThan(LIVE_PACE_BLEND_END);
+    expect(LIVE_PACE_REMAINING_CAP).toBeCloseTo(1.1);
+    expect(LIVE_PACE_TOTAL_CAP).toBeCloseTo(1.35);
+    expect(livePaceBlendWeight(0)).toBe(LIVE_PACE_BLEND_START);
+    expect(livePaceBlendWeight(1)).toBe(LIVE_PACE_BLEND_END);
+
+    // QB proj 20 with 7 pts at 12:00 left in Q1 → near 27–28 (neutral time path is 26).
+    const twelveLeft = liveForecastPoints(player({
+      playerId: "q1-td",
+      position: "QB",
+      projection: 20,
+      actual: 7,
+      gamePhase: "live",
+      gamePeriod: 1,
+      gameClockSeconds: 720,
+    }), now);
+    expect(twelveLeft).toBeGreaterThanOrEqual(27);
+    expect(twelveLeft).toBeLessThanOrEqual(28);
+
+    // QB with 20 pts one minute in must not project near 45.
+    const oneMinuteIn = liveForecastPoints(player({
+      playerId: "instant-boom",
+      position: "QB",
+      projection: 20,
+      actual: 20,
+      gamePhase: "live",
+      gamePeriod: 1,
+      gameClockSeconds: 840,
+    }), now);
+    expect(oneMinuteIn).toBeGreaterThanOrEqual(20);
+    expect(oneMinuteIn).toBeLessThanOrEqual(20 * LIVE_PACE_TOTAL_CAP + 1e-9);
+    expect(oneMinuteIn).toBeLessThan(30);
+
+    // Halftime: QB 20 with 12 pts stays about 22–23.
+    const halftime = liveForecastPoints(player({
+      playerId: "ht-qb",
+      position: "QB",
+      projection: 20,
+      actual: 12,
+      gamePhase: "live",
+      gamePeriod: 2,
+      gameClockSeconds: 0,
+    }), now);
+    expect(halftime).toBeGreaterThanOrEqual(22);
+    expect(halftime).toBeLessThanOrEqual(23);
+
+    // Late game still moves with pace (underperforming QB shrinks below neutral 20).
+    const late = liveForecastPoints(player({
+      playerId: "late-qb",
+      position: "QB",
+      projection: 20,
+      actual: 14,
+      gamePhase: "live",
+      gamePeriod: 4,
+      gameClockSeconds: 300,
+    }), now);
+    expect(late).toBeGreaterThan(14);
+    expect(late).toBeLessThan(20);
+
+    const elapsed = gameElapsedFraction(1, 720);
+    const remaining = liveRemainingProjection({
+      pregameProjection: 20,
+      actual: 7,
+      elapsedFraction: elapsed!,
+      position: "QB",
+    });
+    const timeBased = 20 * (1 - elapsed!);
+    expect(remaining).toBeLessThanOrEqual(timeBased * LIVE_PACE_REMAINING_CAP + 1e-9);
+  });
+
+  it("counts final actuals, pregame projections, and bye as zero", () => {
+    expect(liveForecastPoints(player({
+      playerId: "done",
+      position: "WR",
+      projection: 15,
+      actual: 9.4,
+      gamePhase: "final",
+    }), now)).toBe(9.4);
+    expect(liveForecastPoints(player({
+      playerId: "waiting",
+      position: "WR",
+      projection: 11,
+      actual: 0,
+      gamePhase: "pregame",
+    }), now)).toBe(11);
+    expect(liveForecastPoints(player({
+      playerId: "bye",
+      position: "RB",
+      projection: null,
+      isBye: true,
+      gamePhase: "pregame",
+    }), now)).toBe(0);
+  });
+
+  it("uses projection for a stale pregame payload after kickoff instead of actual 0", () => {
+    const stale = player({
+      playerId: "stale",
+      position: "WR",
+      projection: 16,
+      actual: 0,
+      gamePhase: "pregame",
+      gameTime: "2026-10-11T17:00:00.000Z",
+    });
+    expect(isLineupLocked(stale, now)).toBe(true);
+    expect(lineupCountingPoints(stale, now)).toBe(0);
+    expect(liveForecastPoints(stale, now)).toBe(16);
+  });
+
+  it("does not lock on date-only kickoff strings", () => {
+    const dateOnly = player({
+      playerId: "date-only",
+      position: "WR",
+      projection: 13,
+      actual: 0,
+      gamePhase: "pregame",
+      gameTime: "2026-10-11",
+    });
+    expect(isLineupLocked(dateOnly, now)).toBe(false);
+    expect(liveForecastPoints(dateOnly, now)).toBe(13);
+  });
+
+  it("maps delayed/suspended/postponed/canceled phases correctly", () => {
+    expect(normalizeGamePhase("canceled")).toBe("pregame");
+    expect(normalizeGamePhase("cancelled")).toBe("pregame");
+    expect(normalizeGamePhase("postponed")).toBe("pregame");
+    expect(normalizeGamePhase("STATUS_POSTPONED")).toBe("pregame");
+    expect(normalizeGamePhase("delayed")).toBe("pregame");
+    expect(normalizeGamePhase("STATUS_DELAYED", { hasStarted: false })).toBe("pregame");
+    expect(normalizeGamePhase("STATUS_DELAYED", { hasStarted: true })).toBe("live");
+    expect(normalizeGamePhase("suspended")).toBe("live");
+    expect(normalizeGamePhase("STATUS_SUSPENDED", { hasStarted: true })).toBe("live");
+    expect(normalizeGamePhase("STATUS_SUSPENDED", { hasStarted: false })).toBe("pregame");
+    expect(normalizeGamePhase("STATUS_IN_PROGRESS")).toBe("live");
+    expect(normalizeGamePhase("STATUS_HALFTIME")).toBe("live");
+    expect(normalizeGamePhase("complete")).toBe("final");
+
+    // Delayed mid-game (clock already into Q1) stays live and keeps the clock.
+    expect(espnStatusToPhase({
+      period: 1,
+      clock: 600,
+      type: { name: "STATUS_DELAYED", state: "in", description: "Delayed" },
+    })).toBe("live");
+    // Delayed before kickoff stays pregame.
+    expect(espnStatusToPhase({
+      period: 1,
+      clock: 900,
+      type: { name: "STATUS_DELAYED", state: "pre", description: "Delayed" },
+    })).toBe("pregame");
+    expect(espnStatusToPhase({
+      period: 2,
+      clock: 120,
+      type: { name: "STATUS_SUSPENDED", state: "in", description: "Suspended" },
+    })).toBe("live");
+    expect(espnStatusToPhase({
+      type: { name: "STATUS_POSTPONED", state: "pre", description: "Postponed" },
+    })).toBe("pregame");
+    expect(espnStatusToPhase({
+      type: { name: "STATUS_CANCELED", state: "pre", description: "Canceled" },
+    })).toBe("pregame");
+    // Unrecognized in-progress name still falls back via ESPN state.
+    expect(espnStatusToPhase({
+      period: 3,
+      clock: 400,
+      type: { name: "STATUS_SOMETHING_NEW", state: "in", description: "In Progress" },
+    })).toBe("live");
+  });
+
+  it("counts only actuals for Out/injured players in a live game and keeps Questionable projections", () => {
+    expect(liveForecastPoints(player({
+      playerId: "hurt",
+      position: "RB",
+      projection: 15,
+      actual: 4.2,
+      gamePhase: "live",
+      gamePeriod: 2,
+      gameClockSeconds: 300,
+      injuryStatus: "Out",
+    }), now)).toBe(4.2);
+    expect(liveForecastPoints(player({
+      playerId: "q",
+      position: "WR",
+      projection: 12,
+      actual: null,
+      gamePhase: "pregame",
+      injuryStatus: "Questionable",
+    }), now)).toBe(12);
+  });
+
+  it("uses time-only remaining for K and DST with no pace boost", () => {
+    const elapsed = gameElapsedFraction(2, 0);
+    expect(elapsed).toBe(0.5);
+    const kickerRemaining = liveRemainingProjection({
+      pregameProjection: 10,
+      actual: 8,
+      elapsedFraction: elapsed!,
+      position: "K",
+    });
+    const dstRemaining = liveRemainingProjection({
+      pregameProjection: 8,
+      actual: 12,
+      elapsedFraction: elapsed!,
+      position: "DEF",
+    });
+    expect(kickerRemaining).toBeCloseTo(5, 5);
+    expect(dstRemaining).toBeCloseTo(4, 5);
+    expect(liveForecastPoints(player({
+      playerId: "k",
+      position: "K",
+      projection: 10,
+      actual: 8,
+      gamePhase: "live",
+      gamePeriod: 2,
+      gameClockSeconds: 0,
+    }), now)).toBeCloseTo(13, 4);
+  });
+
+  it("falls back to max(actual, projection) when the clock is missing", () => {
+    expect(liveForecastPoints(player({
+      playerId: "no-clock",
+      position: "QB",
+      projection: 18,
+      actual: 5,
+      gamePhase: "live",
+      gamePeriod: null,
+      gameClockSeconds: null,
+    }), now)).toBe(18);
+    expect(liveForecastPoints(player({
+      playerId: "boom-no-clock",
+      position: "QB",
+      projection: 18,
+      actual: 22,
+      gamePhase: "live",
+    }), now)).toBe(22);
+  });
+
+  it("treats overtime as fully elapsed so the forecast is the actual", () => {
+    expect(gameElapsedFraction(5, 420)).toBe(1);
+    expect(liveForecastPoints(player({
+      playerId: "ot-qb",
+      position: "QB",
+      projection: 20,
+      actual: 24.5,
+      gamePhase: "live",
+      gamePeriod: 5,
+      gameClockSeconds: 420,
+    }), now)).toBe(24.5);
+  });
+
+  it("handles halftime as half the game elapsed", () => {
+    expect(gameElapsedFraction(2, 0)).toBe(0.5);
+    expect(gameElapsedFraction(3, 900)).toBe(0.5);
   });
 });

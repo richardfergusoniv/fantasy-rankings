@@ -49,7 +49,7 @@ import {
   type SleeperPlayer,
   type SleeperRoster,
 } from "./sleeper.js";
-import { activeBenchIds, eligibleForSlot, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, optimizeLineup } from "./lineup-optimizer.js";
+import { activeBenchIds, eligibleForSlot, espnStatusToPhase, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, normalizeGamePhase, optimizeLineup, sumLiveForecast } from "./lineup-optimizer.js";
 import { rankingsForLeagueFormats } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
@@ -78,6 +78,8 @@ import { selectProjectionFeed } from "./projection-fallback.js";
  */
 
 export const USER_DASHBOARD_CACHE_MS = 10 * 60 * 1000; // 10 minutes
+/** Shorter cache while any rostered game is live so lineup totals can refresh. */
+export const LIVE_DASHBOARD_CACHE_MS = 60 * 1000;
 export const BUILD_DEADLINE_MS = 55_000; // stay inside the 60s function budget
 
 const NFLVERSE_PLAYER_STATS_2026_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.csv";
@@ -140,8 +142,23 @@ type EspnScoreboard = {
         team?: { abbreviation?: string };
         records?: Array<{ type?: string; summary?: string }>;
       }>;
+      status?: {
+        clock?: number;
+        period?: number;
+        type?: {
+          name?: string;
+          state?: string;
+          completed?: boolean;
+          description?: string;
+        };
+      };
     }>;
   }>;
+};
+
+type GameClock = {
+  period: number | null;
+  clockSeconds: number | null;
 };
 
 type StatRow = {
@@ -910,21 +927,24 @@ async function fetchFantasyCalcRankings(sleeperPlayers: Record<string, SleeperPl
 // Projection scoring / merging
 // ---------------------------------------------------------------------------
 
-function normalizeGamePhase(status: string | undefined): "pregame" | "live" | "final" | null {
-  if (!status) return null;
-  const normalized = status.toLowerCase();
-  if (["complete", "final", "post_game"].includes(normalized)) return "final";
-  if (["pre_game", "pregame", "scheduled"].includes(normalized)) return "pregame";
-  return "live";
+function sumActualsAndRemainingProjections(players: RosterPlayer[]): number | null {
+  return sumLiveForecast(players);
 }
 
-function sumActualsAndRemainingProjections(players: RosterPlayer[]): number | null {
-  const values = players.flatMap((player) => {
-    const value = player.gamePhase === "final" ? player.actual : player.projection;
-    return value === null ? [] : [value];
+function dashboardHasLiveGame(dashboard: Dashboard): boolean {
+  return dashboard.leagues.some((league) => {
+    const pools = [
+      league.starters,
+      league.bench,
+      league.opponentTeam?.starters ?? [],
+      league.opponentTeam?.bench ?? [],
+    ];
+    return pools.some((players) => players.some((player) => player.gamePhase === "live"));
   });
-  if (values.length === 0) return null;
-  return values.reduce((total, value) => total + value, 0);
+}
+
+function dashboardCacheTtlMs(dashboard: Dashboard): number {
+  return dashboardHasLiveGame(dashboard) ? LIVE_DASHBOARD_CACHE_MS : USER_DASHBOARD_CACHE_MS;
 }
 
 function adaptVegasStatsForScorer(
@@ -1527,14 +1547,25 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const schedule = scheduleResult.status === "fulfilled" ? scheduleResult.value : [];
   const gamePhaseByTeam = new Map<string, "pregame" | "live" | "final">();
   const gameTimeByTeam = new Map<string, string>();
+  const gameClockByTeam = new Map<string, GameClock>();
   const teamRecords = kickoffResult.status === "fulfilled" ? nflTeamRecordsFromScoreboard(kickoffResult.value) : [];
   if (kickoffResult.status === "fulfilled") {
     for (const event of kickoffResult.value.events ?? []) {
       if (!event.date || Number.isNaN(new Date(event.date).getTime())) continue;
-      const competitors = event.competitions?.flatMap((competition) => competition.competitors ?? []) ?? [];
+      const competition = event.competitions?.[0];
+      const competitors = competition?.competitors ?? [];
+      const espnPhase = espnStatusToPhase(competition?.status);
+      const period = typeof competition?.status?.period === "number" ? competition.status.period : null;
+      const clockSeconds = typeof competition?.status?.clock === "number" ? competition.status.clock : null;
       for (const competitor of competitors) {
         const abbreviation = competitor.team?.abbreviation;
-        if (abbreviation) gameTimeByTeam.set(canonicalTeam(abbreviation), event.date);
+        if (!abbreviation) continue;
+        const team = canonicalTeam(abbreviation);
+        gameTimeByTeam.set(team, event.date);
+        if (espnPhase) gamePhaseByTeam.set(team, espnPhase);
+        if (espnPhase === "live") {
+          gameClockByTeam.set(team, { period, clockSeconds });
+        }
       }
     }
   }
@@ -1542,10 +1573,15 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   if (scheduleResult.status === "fulfilled") {
     for (const game of schedule) {
       if (game.week !== week) continue;
-      const phase = normalizeGamePhase(game.status);
+      const kickoffMs = game.date && !/^\d{4}-\d{2}-\d{2}$/.test(game.date.trim())
+        ? Date.parse(game.date)
+        : Number.NaN;
+      const scheduleHasStarted = Number.isFinite(kickoffMs) && kickoffMs <= Date.now();
+      const phase = normalizeGamePhase(game.status, { hasStarted: scheduleHasStarted });
       if (phase) {
-        if (game.home) gamePhaseByTeam.set(canonicalTeam(game.home), phase);
-        if (game.away) gamePhaseByTeam.set(canonicalTeam(game.away), phase);
+        // ESPN kickoff feed wins when present; Sleeper fills gaps.
+        if (game.home && !gamePhaseByTeam.has(canonicalTeam(game.home))) gamePhaseByTeam.set(canonicalTeam(game.home), phase);
+        if (game.away && !gamePhaseByTeam.has(canonicalTeam(game.away))) gamePhaseByTeam.set(canonicalTeam(game.away), phase);
       }
       if (game.date) {
         if (game.home && !gameTimeByTeam.has(canonicalTeam(game.home))) gameTimeByTeam.set(canonicalTeam(game.home), game.date);
@@ -1749,32 +1785,22 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       const pregameProjection = position === "DEF"
         ? (defense?.pregameProjection ?? null)
         : (rankRow?.leagueProjection ?? null);
-      const sleeperProjection = sleeperProjectionsByPlayerId.get(playerId)?.stats;
-      const customLiveProjection = ["QB", "RB", "WR", "TE", "K"].includes(position)
-        ? scoreSleeperPlayerProjection(position as Ranking["position"], sleeperProjection, league.scoring_settings)
-        : null;
-      const fallbackLiveProjection = rankingField === "ppr"
-        ? (sleeperProjection?.pts_ppr ?? sleeperProjection?.pts_half_ppr ?? sleeperProjection?.pts_std ?? null)
-        : (sleeperProjection?.pts_half_ppr ?? sleeperProjection?.pts_ppr ?? sleeperProjection?.pts_std ?? null);
-      const liveLeg = gamePhase === "live" && !isUnavailable ? (customLiveProjection ?? fallbackLiveProjection) : null;
       const resolvedIsBye = rankRow?.isBye ?? (teamKey !== "" && scheduleWeekAvailable && !opponentByTeam.has(teamKey));
-      const pregameOrNull = resolvedIsBye ? null : isUnavailable ? 0 : pregameProjection;
-      const projection = gamePhase === "live" ? (liveLeg ?? pregameOrNull) : pregameOrNull;
+      // Keep the pregame projection on the row; liveForecastPoints reprojects from
+      // actual + ESPN clock. Sleeper's projections feed does not shrink in-game.
+      const projection = resolvedIsBye ? null : isUnavailable && gamePhase !== "live" ? 0 : pregameProjection;
       const projectionSource = gamePhase === "final"
         ? null
         : position === "DEF"
           ? (defense?.projectionSource ?? null)
           : isUnavailable
             ? "fallback" as const
-            : gamePhase === "live"
-              ? (liveLeg !== null ? "sleeper" as const : (rankRow?.projectionSource ?? "fallback"))
-              : (rankRow?.projectionSource ?? "fallback");
+            : (rankRow?.projectionSource ?? "fallback");
       const projectionComponents = gamePhase === "final" || position === "DEF" || projection === null || isUnavailable
         ? null
-        : gamePhase === "live" && liveLeg !== null
-          ? (sleeperProjection ?? null)
-          : (rankRow?.projectionComponents ?? null);
+        : (rankRow?.projectionComponents ?? null);
       const actual = typeof activeMatchup?.players_points?.[playerId] === "number" ? activeMatchup.players_points[playerId] ?? null : null;
+      const clock = gamePhase === "live" ? gameClockByTeam.get(teamKey) : undefined;
       if (position === "DEF" && actual !== null) defenseActuals.set(defenseTeam, actual);
       return {
         playerId,
@@ -1789,6 +1815,8 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         actual,
         gamePhase,
         gameTime: rankRow?.gameTime ?? defense?.gameTime ?? gameTimeByTeam.get(teamKey) ?? null,
+        gamePeriod: clock?.period ?? null,
+        gameClockSeconds: clock?.clockSeconds ?? null,
         opponent: rankRow?.opponent ?? defense?.opponent ?? opponentByTeam.get(teamKey) ?? null,
         isAway: rankRow?.isAway ?? defense?.isAway ?? isAwayByTeam.get(teamKey) ?? null,
         isBye: resolvedIsBye,
@@ -1811,6 +1839,8 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       actual: null,
       gamePhase: null,
       gameTime: null,
+      gamePeriod: null,
+      gameClockSeconds: null,
       opponent: null,
       isAway: null,
       isBye: false,
@@ -1980,6 +2010,8 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         actual: null,
         gamePhase: "pregame" as const,
         gameTime: row.gameTime,
+        gamePeriod: null,
+        gameClockSeconds: null,
         opponent: row.opponent,
         isAway: row.isAway,
         isBye: row.isBye,
@@ -2229,7 +2261,7 @@ export async function readUserDashboardCache(
   if (!dashboard) return null;
   return {
     dashboard,
-    fresh: Date.now() - row.fetchedAt.getTime() < USER_DASHBOARD_CACHE_MS,
+    fresh: Date.now() - row.fetchedAt.getTime() < dashboardCacheTtlMs(dashboard),
   };
 }
 

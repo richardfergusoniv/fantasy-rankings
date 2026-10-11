@@ -7,6 +7,10 @@ export type OptimizablePlayer = {
   actual: number | null;
   gamePhase?: "pregame" | "live" | "final" | null;
   gameTime?: string | null;
+  /** ESPN quarter / overtime period (1–4 regulation, 5+ OT). */
+  gamePeriod?: number | null;
+  /** ESPN seconds remaining in the current period. */
+  gameClockSeconds?: number | null;
   injuryStatus?: string | null;
   isBye?: boolean;
 };
@@ -30,6 +34,26 @@ const unavailableStatuses = new Set([
 
 const flexLineupSlots = new Set(["FLEX", "SUPER_FLEX", "REC_FLEX", "WRRB_FLEX"]);
 
+/** Weight of live pace vs pregame time-remaining at kickoff (mostly pregame). */
+export const LIVE_PACE_BLEND_START = 0.15;
+/** Weight of live pace near the end of regulation (still blended, not pure pace). */
+export const LIVE_PACE_BLEND_END = 0.65;
+/**
+ * Cap on remaining projection vs pure time-based remaining.
+ * Keeps one early score from inflating the rest of the game too far.
+ */
+export const LIVE_PACE_REMAINING_CAP = 1.1;
+/**
+ * Cap on projected final vs pregame projection.
+ * Actual points always stand when they already exceed this ceiling.
+ */
+export const LIVE_PACE_TOTAL_CAP = 1.35;
+
+const REGULATION_QUARTERS = 4;
+const QUARTER_SECONDS = 15 * 60;
+const REGULATION_SECONDS = REGULATION_QUARTERS * QUARTER_SECONDS;
+const DATE_ONLY_KICKOFF = /^\d{4}-\d{2}-\d{2}$/;
+
 export function eligibleForSlot(position: string, slot: string): boolean {
   if (slot === position) return true;
   if (slot === "FLEX") return ["RB", "WR", "TE"].includes(position);
@@ -40,9 +64,116 @@ export function eligibleForSlot(position: string, slot: string): boolean {
 }
 
 function kickoffHasPassed(gameTime: string | null | undefined, now: number): boolean {
-  if (!gameTime) return false;
+  if (!gameTime || DATE_ONLY_KICKOFF.test(gameTime.trim())) return false;
   const kickoff = Date.parse(gameTime);
   return Number.isFinite(kickoff) && kickoff <= now;
+}
+
+export type GamePhaseOptions = {
+  /** True when the contest has already kicked off (clock/period/state). */
+  hasStarted?: boolean;
+};
+
+/** Map Sleeper/ESPN status strings to a lineup phase. Postponed/canceled stay non-live. */
+export function normalizeGamePhase(
+  status: string | undefined,
+  options: GamePhaseOptions = {},
+): "pregame" | "live" | "final" | null {
+  if (!status) return null;
+  const normalized = status.toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
+  if (["complete", "final", "post_game", "status_final", "status_full_time"].includes(normalized)) return "final";
+  if ([
+    "postponed",
+    "status_postponed",
+    "canceled",
+    "cancelled",
+    "status_canceled",
+    "status_cancelled",
+  ].includes(normalized)) return "pregame";
+  if ([
+    "delayed",
+    "status_delayed",
+    "rain_delay",
+    "status_rain_delay",
+  ].includes(normalized)) {
+    // Weather delay after kickoff stays live; delay before kickoff stays pregame.
+    return options.hasStarted ? "live" : "pregame";
+  }
+  if ([
+    "suspended",
+    "status_suspended",
+  ].includes(normalized)) {
+    // Suspended contests have already started unless ESPN still marks pre.
+    return options.hasStarted === false ? "pregame" : "live";
+  }
+  if ([
+    "pre_game",
+    "pregame",
+    "scheduled",
+    "status_scheduled",
+    "status_pregame",
+    "time_tbd",
+    "status_time_tbd",
+  ].includes(normalized)) return "pregame";
+  if ([
+    "in_game",
+    "in_progress",
+    "live",
+    "status_in_progress",
+    "status_halftime",
+    "halftime",
+    "status_end_period",
+    "status_end_of_period",
+    "end_period",
+  ].includes(normalized)) return "live";
+  // Unrecognized names return null so ESPN state fallbacks can still apply.
+  return null;
+}
+
+/** Whether ESPN status/clock indicates the game has already kicked off. */
+export function espnGameHasStarted(status: {
+  clock?: number;
+  period?: number;
+  type?: { state?: string; completed?: boolean };
+} | null | undefined): boolean {
+  if (!status) return false;
+  if (status.type?.completed) return true;
+  const state = status.type?.state?.toLowerCase();
+  if (state === "in") return true;
+  if (state === "pre") return false;
+  const period = status.period;
+  const clock = status.clock;
+  if (typeof period === "number" && period >= 2) return true;
+  if (typeof period === "number" && period >= 5) return true;
+  if (typeof period === "number" && period >= 1 && typeof clock === "number" && clock < QUARTER_SECONDS) {
+    return true;
+  }
+  return false;
+}
+
+/** ESPN competition status → lineup phase, including delayed/suspended mid-game. */
+export function espnStatusToPhase(status: {
+  clock?: number;
+  period?: number;
+  type?: {
+    name?: string;
+    state?: string;
+    completed?: boolean;
+    description?: string;
+  };
+} | null | undefined): "pregame" | "live" | "final" | null {
+  if (!status?.type) return null;
+  if (status.type.completed) return "final";
+  const hasStarted = espnGameHasStarted(status);
+  const fromName = normalizeGamePhase(status.type.name, { hasStarted });
+  if (fromName) return fromName;
+  const state = status.type.state?.toLowerCase();
+  if (state === "post") return "final";
+  if (state === "in") return "live";
+  if (state === "pre") return "pregame";
+  const fromDescription = normalizeGamePhase(status.type.description, { hasStarted });
+  if (fromDescription) return fromDescription;
+  return hasStarted ? "live" : "pregame";
 }
 
 /** A player is locked once their game has started or finished. Posted actuals alone do not lock a pregame player. */
@@ -55,6 +186,134 @@ export function isLineupLocked(player: Pick<OptimizablePlayer, "gamePhase" | "ga
 export function lineupCountingPoints(player: Pick<OptimizablePlayer, "gamePhase" | "gameTime" | "actual" | "projection">, now = Date.now()): number | null {
   if (isLineupLocked(player, now)) return player.actual;
   return player.projection;
+}
+
+/**
+ * Fraction of regulation elapsed from ESPN period + clock.
+ * Halftime (end of Q2 / start of Q3) is 0.5. Overtime is treated as fully elapsed.
+ * Returns null when clock data is missing or unusable.
+ */
+export function gameElapsedFraction(
+  period: number | null | undefined,
+  clockSeconds: number | null | undefined,
+): number | null {
+  if (period == null || !Number.isFinite(period) || period < 1) return null;
+  if (clockSeconds == null || !Number.isFinite(clockSeconds)) return null;
+  if (period >= 5) return 1;
+  const clock = Math.max(0, Math.min(QUARTER_SECONDS, clockSeconds));
+  const completedQuarters = Math.min(REGULATION_QUARTERS, Math.max(0, Math.floor(period) - 1));
+  const secondsElapsed = completedQuarters * QUARTER_SECONDS + (QUARTER_SECONDS - clock);
+  return Math.max(0, Math.min(1, secondsElapsed / REGULATION_SECONDS));
+}
+
+export function livePaceBlendWeight(elapsedFraction: number): number {
+  const elapsed = Math.max(0, Math.min(1, elapsedFraction));
+  return LIVE_PACE_BLEND_START + (LIVE_PACE_BLEND_END - LIVE_PACE_BLEND_START) * elapsed;
+}
+
+function isKickerOrDefense(position: string): boolean {
+  return position === "K" || position === "DEF" || position === "DST";
+}
+
+/**
+ * Remaining fantasy points for a live player.
+ * Skill positions blend pregame time-remaining with live pace and apply LIVE_PACE_REMAINING_CAP.
+ * K/DST use simple time-based remaining only.
+ */
+export function liveRemainingProjection(options: {
+  pregameProjection: number;
+  actual: number;
+  elapsedFraction: number;
+  position: string;
+}): number {
+  const remainingFraction = Math.max(0, 1 - options.elapsedFraction);
+  const timeBasedRemaining = options.pregameProjection * remainingFraction;
+  if (remainingFraction <= 0) return 0;
+  if (isKickerOrDefense(options.position) || options.elapsedFraction <= 0) {
+    return Math.max(0, timeBasedRemaining);
+  }
+  const expectedSoFar = options.pregameProjection * options.elapsedFraction;
+  const paceRatio = expectedSoFar > 0 ? options.actual / expectedSoFar : 1;
+  const paceBasedRemaining = timeBasedRemaining * paceRatio;
+  const weight = livePaceBlendWeight(options.elapsedFraction);
+  const blended = (1 - weight) * timeBasedRemaining + weight * paceBasedRemaining;
+  const capped = Math.min(blended, timeBasedRemaining * LIVE_PACE_REMAINING_CAP);
+  return Math.max(0, capped);
+}
+
+export type LiveForecastPlayer = Pick<
+  OptimizablePlayer,
+  | "playerId"
+  | "position"
+  | "projection"
+  | "actual"
+  | "gamePhase"
+  | "gameTime"
+  | "gamePeriod"
+  | "gameClockSeconds"
+  | "injuryStatus"
+  | "isBye"
+>;
+
+/**
+ * Shared projected final for lineup/team totals.
+ * Final → actual. Pregame (including stale lock-by-clock) → pregame projection.
+ * Live → actual + remaining (blend/cap for skill; time-only for K/DST).
+ * Missing clock → max(actual, pregame). Out/injured in a live game → actual only.
+ */
+export function liveForecastPoints(player: LiveForecastPlayer, _now = Date.now()): number | null {
+  if (isVacantLineupSlot(player)) return null;
+  if (player.isBye) return 0;
+  if (player.gamePhase === "final") return player.actual;
+
+  const pregame = player.projection;
+  const actual = player.actual;
+
+  if (player.gamePhase === "live") {
+    if (isUnavailableStatus(player.injuryStatus)) {
+      return actual ?? 0;
+    }
+    const elapsed = gameElapsedFraction(player.gamePeriod, player.gameClockSeconds);
+    if (elapsed === null) {
+      if (actual === null && pregame === null) return null;
+      return Math.max(actual ?? 0, pregame ?? 0);
+    }
+    if (pregame === null && actual === null) return null;
+    const scored = actual ?? 0;
+    const projectionBase = pregame ?? 0;
+    const remaining = liveRemainingProjection({
+      pregameProjection: projectionBase,
+      actual: scored,
+      elapsedFraction: elapsed,
+      position: player.position,
+    });
+    let projected = scored + remaining;
+    if (projectionBase > 0) {
+      const totalCeiling = projectionBase * LIVE_PACE_TOTAL_CAP;
+      if (scored >= totalCeiling) return Number(scored.toFixed(4));
+      projected = Math.min(projected, totalCeiling);
+    }
+    return Number(projected.toFixed(4));
+  }
+
+  // Pregame / postponed / unknown: always use projection, even if the browser
+  // clock has crossed kickoff on a stale payload (actual often 0/null).
+  return pregame;
+}
+
+/** Sum of liveForecastPoints for a lineup. Vacant/null rows are omitted. */
+export function sumLiveForecast(players: readonly LiveForecastPlayer[], now = Date.now()): number | null {
+  const values = players.flatMap((player) => {
+    const value = liveForecastPoints(player, now);
+    return value === null ? [] : [value];
+  });
+  if (values.length === 0) return null;
+  return Number(values.reduce((total, value) => total + value, 0).toFixed(4));
+}
+
+/** Ranking value for the optimizer: same forecast numbers as lineup totals. */
+export function lineupRankingPoints(player: LiveForecastPlayer, now = Date.now()): number {
+  return liveForecastPoints(player, now) ?? -1000;
 }
 
 export function isVacantLineupSlot(player: Pick<OptimizablePlayer, "playerId">): boolean {
@@ -109,7 +368,7 @@ function canFillOpenSlot(player: OptimizablePlayer, now: number): boolean {
   return !isLineupLocked(player, now);
 }
 
-function relabelOpenSlots<T extends OptimizablePlayer>(players: T[], slots: string[]): T[] {
+function relabelOpenSlots<T extends OptimizablePlayer>(players: T[], slots: string[], now: number): T[] {
   if (players.length !== slots.length || players.length === 0) return players;
   type LabelState = { flexTotal: number; flexValues: number[]; exactCount: number; assignments: number[] };
   const compareFlexValues = (left: number[], right: number[]) => {
@@ -128,7 +387,7 @@ function relabelOpenSlots<T extends OptimizablePlayer>(players: T[], slots: stri
       players.forEach((player, playerIndex) => {
         const bit = 2 ** playerIndex;
         if ((mask & bit) !== 0 || !eligibleForSlot(player.position, slot)) return;
-        const flexValue = player.projection ?? -1000;
+        const flexValue = lineupRankingPoints(player, now);
         const isFlexSlot = flexLineupSlots.has(slot);
         const candidate: LabelState = {
           flexTotal: state.flexTotal + (isFlexSlot ? flexValue : 0),
@@ -159,7 +418,7 @@ function relabelOpenSlots<T extends OptimizablePlayer>(players: T[], slots: stri
   return assignments.map((player, index) => ({ ...player, isStarter: true, lineupSlot: slots[index] ?? player.position }));
 }
 
-function optimizeOpenSlots<T extends OptimizablePlayer>(players: T[], slots: string[], currentStarterIds: ReadonlySet<string>): Array<T | undefined> {
+function optimizeOpenSlots<T extends OptimizablePlayer>(players: T[], slots: string[], currentStarterIds: ReadonlySet<string>, now: number): Array<T | undefined> {
   type State = { score: number; currentCount: number; assignments: Array<T | undefined> };
   let states = new Map<number, State>([[0, { score: 0, currentCount: 0, assignments: Array.from({ length: slots.length }) }]]);
 
@@ -171,7 +430,7 @@ function optimizeOpenSlots<T extends OptimizablePlayer>(players: T[], slots: str
         if ((mask & bit) !== 0 || !eligibleForSlot(player.position, slot)) return;
         const nextMask = mask | bit;
         const candidate: State = {
-          score: state.score + (player.projection ?? -1000),
+          score: state.score + lineupRankingPoints(player, now),
           currentCount: state.currentCount + (currentStarterIds.has(player.playerId) ? 1 : 0),
           assignments: state.assignments.map((assigned, index) => index === slotIndex ? player : assigned),
         };
@@ -197,7 +456,7 @@ function optimizeOpenSlots<T extends OptimizablePlayer>(players: T[], slots: str
   }
 
   const filled = bestState.assignments.flatMap((player, index) => player ? [{ player, slot: slots[index] ?? player.position }] : []);
-  const relabeled = relabelOpenSlots(filled.map((entry) => entry.player), filled.map((entry) => entry.slot));
+  const relabeled = relabelOpenSlots(filled.map((entry) => entry.player), filled.map((entry) => entry.slot), now);
   const placed: Array<T | undefined> = Array.from({ length: slots.length });
   let relabelIndex = 0;
   bestState.assignments.forEach((player, index) => {
@@ -233,7 +492,7 @@ export function optimizeLineup<T extends OptimizablePlayer>(startersInput: T[], 
   const currentStarterIds = new Set(startersInput.flatMap((player) => (
     canFillOpenSlot(player, now) ? [player.playerId] : []
   )));
-  const openPlacements = optimizeOpenSlots(unlocked, openSlotIndexes.map((index) => slots[index] ?? ""), currentStarterIds);
+  const openPlacements = optimizeOpenSlots(unlocked, openSlotIndexes.map((index) => slots[index] ?? ""), currentStarterIds, now);
 
   const startersByIndex: Array<T | undefined> = Array.from({ length: slots.length });
   for (const index of lockedSlotIndexes) {
@@ -304,7 +563,7 @@ export function optimizeTradeRoster<T extends OptimizablePlayer>(players: T[], s
 
   const openIndexes = slots.flatMap((_, index) => assignments[index] ? [] : [index]);
   const currentStarterIds = new Set(movable.flatMap((player) => player.isStarter ? [player.playerId] : []));
-  const openPlacements = optimizeOpenSlots(movable, openIndexes.map((index) => slots[index] ?? ""), currentStarterIds);
+  const openPlacements = optimizeOpenSlots(movable, openIndexes.map((index) => slots[index] ?? ""), currentStarterIds, now);
   openIndexes.forEach((slotIndex, openIndex) => {
     const player = openPlacements[openIndex];
     if (!player || used.has(player.playerId)) return;
