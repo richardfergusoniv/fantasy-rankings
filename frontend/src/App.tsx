@@ -620,6 +620,10 @@ export function App() {
   const dashboard = freshestDashboard(dashboardQuery.data, streamedDashboard, browserDashboard);
 
   const league = dashboard?.leagues.find((item) => item.id === selectedLeagueId) ?? dashboard?.leagues[0];
+  const selectedLeagueRosterIds = useMemo(
+    () => new Set([...(league?.starters ?? []), ...(league?.bench ?? [])].map((p) => p.playerId)),
+    [league],
+  );
   useEffect(() => {
     setRosterCardRosterId(null);
   }, [league?.id]);
@@ -877,10 +881,6 @@ export function App() {
 
   const activeDashboard = leagueDashboard ?? dashboard;
   const selectedPlayerId = dashboardUrl.state.playerId;
-  const selectedLeagueRosterIds = useMemo(
-    () => new Set([...league.starters, ...league.bench].map((player) => player.playerId)),
-    [league],
-  );
   const rosterTeam = playerHistory.current ? leaguePowerTeamForPlayer(league, playerHistory.current.playerId) : null;
   const rosterCardTeam = rosterCardRosterId === null
     ? null
