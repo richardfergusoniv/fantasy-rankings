@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
-import { rosterNewsForTicker } from "./roster-news";
+import { newsForTicker, PROMINENT_OVERALL_RANK_LIMIT } from "./ticker-news";
 import type {
   Dashboard,
   DraftCenterData,
@@ -165,39 +165,25 @@ function tickerNewsLabel(item: PlayerNewsItem): string {
   return tickerLabel(subject, detail.replace(/^(?:is|are|has|have)\s+/i, ""));
 }
 
-function compactTickerCount(value: number): string {
-  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value).toUpperCase();
-}
-
-function TickerStrip({ data, news, rosterPlayerIds, onPlayer, onNews }: {
+function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominentPlayerIds, onPlayer, onNews }: {
   data: DraftCenterData | undefined;
   news: PlayerNews | undefined;
   /** Player ids on the signed-in user's roster in the selected league. */
   rosterPlayerIds: Set<string>;
+  /** Player ids on this week's opponent roster in the selected league. */
+  opponentPlayerIds: Set<string>;
+  /** Season-long top ranks (and similar) used to fill remaining ticker slots. */
+  prominentPlayerIds: Set<string>;
   onPlayer: (playerId: string) => void;
   onNews: (item: PlayerNewsItem) => void;
 }) {
   const items = useMemo<TickerItem[]>(() => {
-    const trendItems: TickerItem[] = (data?.trending ?? []).slice(0, 4).map((trend) => ({
-      key: `trend:${trend.playerId}`,
-      source: "SLEEPER",
-      label: tickerLabel(trend.name, `+${compactTickerCount(trend.count)} adds${trend.position ? ` · ${trend.position}` : ""}`),
-      quote: null,
-      move: null,
-      tone: "up",
-      playerId: trend.playerId,
-    }));
-    const trendDropItems: TickerItem[] = (data?.trendingDrops ?? []).slice(0, 4).map((trend) => ({
-      key: `trend-drop:${trend.playerId}`,
-      source: "SLEEPER",
-      label: tickerLabel(trend.name, `−${compactTickerCount(trend.count)} drops${trend.position ? ` · ${trend.position}` : ""}`),
-      quote: null,
-      move: null,
-      tone: "down",
-      playerId: trend.playerId,
-    }));
-
-    const headlineItems: TickerItem[] = rosterNewsForTicker(news, rosterPlayerIds).slice(0, 5).map((item) => ({
+    const headlineItems: TickerItem[] = newsForTicker(
+      news,
+      rosterPlayerIds,
+      opponentPlayerIds,
+      prominentPlayerIds,
+    ).map((item) => ({
       key: `news:${item.id}`,
       source: item.newsType === "headline" && item.playerId === "league" ? "BREAKING" : "NEWS",
       label: tickerNewsLabel(item),
@@ -207,9 +193,10 @@ function TickerStrip({ data, news, rosterPlayerIds, onPlayer, onNews }: {
       newsItem: item,
     }));
 
-    if (trendItems.length > 0 || trendDropItems.length > 0) return [...trendItems, ...trendDropItems, ...headlineItems];
+    if (headlineItems.length > 0) return headlineItems;
 
-    const adpFallback: TickerItem[] = (data?.adp ?? [])
+    // No player news: keep the existing ADP edge fallback (never Sleeper adds/drops).
+    return (data?.adp ?? [])
       .filter((row) => row.pool === "all" && row.mflAdp !== null)
       .map((row) => ({ row, edge: (row.mflAdp ?? row.adp) - row.adp }))
       .sort((a, b) => Math.abs(b.edge) - Math.abs(a.edge))
@@ -223,8 +210,7 @@ function TickerStrip({ data, news, rosterPlayerIds, onPlayer, onNews }: {
         tone: Math.abs(edge) < 0.05 ? "neutral" : edge > 0 ? "up" : "down",
         ...(row.playerId ? { playerId: row.playerId } : {}),
       }));
-    return [...adpFallback, ...headlineItems];
-  }, [data, news, rosterPlayerIds]);
+  }, [data, news, opponentPlayerIds, prominentPlayerIds, rosterPlayerIds]);
 
   const visibleItems = items.length > 0 ? items : [{ key: "waiting", source: "NFL", label: "Awaiting the next update", quote: null, move: null, tone: "neutral" as const }];
   const repeatedItems = visibleItems.length > 1 ? [...visibleItems, ...visibleItems] : visibleItems;
@@ -624,6 +610,26 @@ export function App() {
     () => new Set([...(league?.starters ?? []), ...(league?.bench ?? [])].map((p) => p.playerId)),
     [league],
   );
+  const selectedLeagueOpponentIds = useMemo(
+    () => new Set([
+      ...(league?.opponentTeam?.starters ?? []),
+      ...(league?.opponentTeam?.bench ?? []),
+    ].map((p) => p.playerId)),
+    [league],
+  );
+  const selectedLeagueProminentIds = useMemo(() => {
+    const formatKey = league?.seasonLongFormat.key;
+    if (!formatKey || !dashboard) return new Set<string>();
+    return new Set(
+      dashboard.seasonLongRankings
+        .filter((row) => (
+          row.formatKey === formatKey
+          && row.position !== "PICK"
+          && row.overallRank <= PROMINENT_OVERALL_RANK_LIMIT
+        ))
+        .map((row) => row.playerId),
+    );
+  }, [dashboard, league]);
   useEffect(() => {
     setRosterCardRosterId(null);
   }, [league?.id]);
@@ -931,6 +937,8 @@ export function App() {
             data={draftQuery.data}
             news={newsQuery.data}
             rosterPlayerIds={selectedLeagueRosterIds}
+            opponentPlayerIds={selectedLeagueOpponentIds}
+            prominentPlayerIds={selectedLeagueProminentIds}
             onPlayer={openTickerPlayer}
             onNews={setTickerNews}
           />
