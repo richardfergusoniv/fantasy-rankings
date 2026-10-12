@@ -134,14 +134,16 @@ describe("per-section dashboard cache", () => {
   it("builds stable section cache keys", () => {
     expect(userDashboardSectionCacheKey("abc", "meta")).toBe("dashboard:user:abc:meta");
     expect(userDashboardSectionCacheKey("abc", "trade")).toBe("dashboard:user:abc:trade");
+    expect(userDashboardSectionCacheKey("abc", "trade-waiver")).toBe("dashboard:user:abc:trade-waiver");
   });
 
-  it("splits trade fields out of the stored team section", () => {
+  it("splits trade fields out of the stored team section and waiver out of trade", () => {
     const sections = splitDashboardIntoSections(sampleDashboard);
     expect(sections.team.leagues[0]).not.toHaveProperty("tradeTeams");
     expect(sections.team.leagues[0]).not.toHaveProperty("tradeWaiverPool");
     expect(sections.trade.leagues[0]?.tradeTeams).toHaveLength(1);
-    expect(sections.trade.leagues[0]?.tradeWaiverPool).toHaveLength(1);
+    expect(sections.trade.leagues[0]).not.toHaveProperty("tradeWaiverPool");
+    expect(sections["trade-waiver"].leagues[0]?.tradeWaiverPool).toHaveLength(1);
     expect(sections.meta.leagues[0]?.name).toBe("Test League");
     expect(sections.players.rankings).toHaveLength(1);
   });
@@ -157,13 +159,16 @@ describe("per-section dashboard cache", () => {
     expect(assembled!.asOf).toBe(sampleDashboard.asOf);
   });
 
-  it("fills empty trade fields on team API data unless a trade slice is provided", () => {
+  it("fills empty trade fields on team API data unless trade / waiver slices are provided", () => {
     const sections = splitDashboardIntoSections(sampleDashboard);
     const withoutTrade = teamSectionApiData(sections.team, null);
     expect(withoutTrade.leagues[0]?.tradeTeams).toEqual([]);
     expect(withoutTrade.leagues[0]?.tradeWaiverPool).toEqual([]);
-    const withTrade = teamSectionApiData(sections.team, sections.trade);
-    expect(withTrade.leagues[0]?.tradeWaiverPool).toHaveLength(1);
+    const withTradeOnly = teamSectionApiData(sections.team, sections.trade);
+    expect(withTradeOnly.leagues[0]?.tradeTeams).toHaveLength(1);
+    expect(withTradeOnly.leagues[0]?.tradeWaiverPool).toEqual([]);
+    const withBoth = teamSectionApiData(sections.team, sections.trade, sections["trade-waiver"]);
+    expect(withBoth.leagues[0]?.tradeWaiverPool).toHaveLength(1);
   });
 
   it("projects legacy full-row team slices with trade fields still present", () => {

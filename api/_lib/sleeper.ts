@@ -513,6 +513,7 @@ export function isUnavailableForCurrentWeek(status: string | null | undefined): 
     "suspended",
     "suspension",
     "reserve suspended",
+    "sus",
   ]).has(normalizedAvailabilityStatus(status));
 }
 

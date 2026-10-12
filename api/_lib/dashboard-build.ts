@@ -25,18 +25,16 @@ import {
   CACHE_KEY,
 } from "./dashboard-schemas.js";
 import {
-  assembleDashboardFromSections,
+  buildDashboardCacheWrites,
   DASHBOARD_CACHE_SECTIONS,
+  dashboardFromSectionRows,
   dashboardAnalyticsCacheSchema,
   dashboardLeagueCacheSchema,
   dashboardTeamCacheSchema,
   dashboardTradeCacheSchema,
-  parseSectionEnvelope,
-  projectDashboardSection,
-  splitDashboardIntoSections,
-  teamSectionApiData,
+  dashboardTradeWaiverCacheSchema,
+  resolveSectionHitFromRows,
   userDashboardSectionCacheKey,
-  wrapSectionEnvelope,
   type DashboardCacheSection,
   type DashboardSectionCacheData,
   type DashboardTeamApiData,
@@ -2278,7 +2276,7 @@ function sectionTtlMs(live: boolean): number {
   return live ? LIVE_DASHBOARD_CACHE_MS : USER_DASHBOARD_CACHE_MS;
 }
 
-function parseStoredSectionData<S extends DashboardCacheSection>(
+export function parseStoredSectionData<S extends DashboardCacheSection>(
   section: S,
   data: unknown,
 ): DashboardSectionCacheData[S] | null {
@@ -2317,6 +2315,10 @@ function parseStoredSectionData<S extends DashboardCacheSection>(
       const parsed = dashboardTradeCacheSchema.safeParse(data);
       return (parsed.success ? parsed.data : null) as DashboardSectionCacheData[S] | null;
     }
+    case "trade-waiver": {
+      const parsed = dashboardTradeWaiverCacheSchema.safeParse(data);
+      return (parsed.success ? parsed.data : null) as DashboardSectionCacheData[S] | null;
+    }
     default: {
       const _exhaustive: never = section;
       return _exhaustive;
@@ -2324,47 +2326,22 @@ function parseStoredSectionData<S extends DashboardCacheSection>(
   }
 }
 
+export function sectionCacheTtlMs(live: boolean): number {
+  return sectionTtlMs(live);
+}
+
 async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): Promise<void> {
   const fetchedAt = new Date();
   const live = dashboardHasLiveGame(dashboard);
-  const fullPayload = serializeDashboardForCache(dashboard);
-
-  // Per-user builds also write slim section rows so /api/dashboard/section
-  // can read only the slice it needs. The full row stays for legacy readers
-  // and force-refresh assembly during the transition.
-  if (cacheKey.startsWith("dashboard:user:")) {
-    const sleeperUserId = cacheKey.slice("dashboard:user:".length);
-    // Reject nested keys (should not happen with userDashboardCacheKey).
-    if (!sleeperUserId.includes(":")) {
-      const sections = splitDashboardIntoSections(dashboard);
-      // Persist players without duplicating weeklyChartRankings (same as full row).
-      const playersForCache = {
-        rankings: sections.players.rankings,
-        seasonLongRankings: sections.players.seasonLongRankings,
-        defenses: sections.players.defenses,
-        strengthOfSchedule: sections.players.strengthOfSchedule,
-      };
-      const sectionPayloads: Array<{ section: DashboardCacheSection; data: unknown }> = [
-        { section: "meta", data: sections.meta },
-        { section: "team", data: sections.team },
-        { section: "players", data: playersForCache },
-        { section: "league", data: sections.league },
-        { section: "analytics", data: sections.analytics },
-        { section: "trade", data: sections.trade },
-      ];
-      await Promise.all(
-        sectionPayloads.map(({ section, data }) =>
-          upsertSourceCacheRow(
-            userDashboardSectionCacheKey(sleeperUserId, section),
-            encodeSourceCachePayload(wrapSectionEnvelope(dashboard, data, live)),
-            fetchedAt,
-          ),
-        ),
-      );
-    }
-  }
-
-  await upsertSourceCacheRow(cacheKey, fullPayload, fetchedAt);
+  const writes = buildDashboardCacheWrites({
+    cacheKey,
+    dashboard,
+    fetchedAt,
+    live,
+    encode: encodeSourceCachePayload,
+    serializeFull: serializeDashboardForCache,
+  });
+  await Promise.all(writes.map((row) => upsertSourceCacheRow(row.cacheKey, row.payload, row.fetchedAt)));
 }
 
 /**
@@ -2422,7 +2399,7 @@ async function readFullUserDashboardRow(
   };
 }
 
-async function readAllUserDashboardSections(
+export async function readAllUserDashboardSections(
   sleeperUserId: string,
 ): Promise<{ dashboard: Dashboard; fresh: boolean } | null> {
   const keys = DASHBOARD_CACHE_SECTIONS.map((section) =>
@@ -2432,40 +2409,13 @@ async function readAllUserDashboardSections(
     .select()
     .from(schema.sourceCache)
     .where(inArray(schema.sourceCache.cacheKey, keys));
-  if (rows.length < DASHBOARD_CACHE_SECTIONS.length) return null;
-
-  const byKey = new Map(rows.map((row) => [row.cacheKey, row]));
-  const assembled: Partial<DashboardSectionCacheData> = {};
-  let version: string | null = null;
-  let live = false;
-  let fetchedAtMs = Number.POSITIVE_INFINITY;
-
-  for (const section of DASHBOARD_CACHE_SECTIONS) {
-    const row = byKey.get(userDashboardSectionCacheKey(sleeperUserId, section));
-    if (!row) return null;
-    let decoded: unknown;
-    try {
-      decoded = decodeSourceCachePayload(row.payload);
-    } catch {
-      return null;
-    }
-    const envelope = parseSectionEnvelope(decoded);
-    if (!envelope) return null;
-    if (version == null) version = envelope.version;
-    else if (envelope.version !== version) return null;
-    live = live || envelope.live;
-    fetchedAtMs = Math.min(fetchedAtMs, row.fetchedAt.getTime());
-    const data = parseStoredSectionData(section, envelope.data);
-    if (!data) return null;
-    assembled[section] = data as never;
-  }
-
-  const dashboard = assembleDashboardFromSections(assembled as DashboardSectionCacheData);
-  if (!dashboard) return null;
-  return {
-    dashboard,
-    fresh: Date.now() - fetchedAtMs < sectionTtlMs(live),
-  };
+  return dashboardFromSectionRows({
+    sleeperUserId,
+    rows,
+    decode: decodeSourceCachePayload,
+    parseSectionData: parseStoredSectionData,
+    ttlMs: sectionTtlMs,
+  });
 }
 
 /**
@@ -2505,39 +2455,27 @@ export async function readUserDashboardSection<S extends DashboardCacheSection>(
     .from(schema.sourceCache)
     .where(eq(schema.sourceCache.cacheKey, sectionKey))
     .limit(1);
-  const row = rows[0];
-  if (row) {
-    try {
-      const decoded = decodeSourceCachePayload(row.payload);
-      const envelope = parseSectionEnvelope(decoded);
-      if (envelope) {
-        const data = parseStoredSectionData(section, envelope.data);
-        if (data) {
-          const apiData = section === "team"
-            ? teamSectionApiData(
-              data as DashboardSectionCacheData["team"],
-              null,
-            )
-            : data;
-          return {
-            data: apiData as UserDashboardSectionHit<S>["data"],
-            fresh: Date.now() - row.fetchedAt.getTime() < sectionTtlMs(envelope.live),
-            source: "section",
-          };
-        }
-      }
-    } catch {
-      // Fall through to the legacy full row.
-    }
-  }
+  const fromSection = resolveSectionHitFromRows({
+    section,
+    sectionRow: rows[0] ?? null,
+    fullDashboard: null,
+    fullFresh: false,
+    decode: decodeSourceCachePayload,
+    parseSectionData: parseStoredSectionData,
+    ttlMs: sectionTtlMs,
+  });
+  if (fromSection) return fromSection;
 
   const full = await readFullUserDashboardRow(sleeperUserId);
-  if (!full) return null;
-  return {
-    data: projectDashboardSection(full.dashboard, section) as UserDashboardSectionHit<S>["data"],
-    fresh: full.fresh,
-    source: "full-row" as const,
-  };
+  return resolveSectionHitFromRows({
+    section,
+    sectionRow: null,
+    fullDashboard: full?.dashboard ?? null,
+    fullFresh: full?.fresh ?? false,
+    decode: decodeSourceCachePayload,
+    parseSectionData: parseStoredSectionData,
+    ttlMs: sectionTtlMs,
+  });
 }
 
 // Single-flight guard so concurrent section reads (and dashboard reads) for

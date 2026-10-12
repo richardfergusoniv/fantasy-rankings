@@ -30,6 +30,7 @@ const unavailableStatuses = new Set([
   "suspended",
   "suspension",
   "reserve suspended",
+  "sus",
 ]);
 
 const flexLineupSlots = new Set(["FLEX", "SUPER_FLEX", "REC_FLEX", "WRRB_FLEX"]);

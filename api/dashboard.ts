@@ -34,7 +34,7 @@ import { z } from "zod";
  *   rebuilds). The scheduled owner's stored snapshot is a fallback only
  *   for that owner. Every signed-out read, including force=false, is 401.
  *
- * GET /api/dashboard/section?section=meta|team|players|league|analytics|trade
+ * GET /api/dashboard/section?section=meta|team|players|league|analytics|trade|trade-waiver
  *   Same sign-in rule. A cold per-user cache returns `data: null` and
  *   rebuilds in the background; the client polls. It does not fill that
  *   gap with the owner snapshot unless the caller is the scheduled owner.
@@ -60,7 +60,7 @@ async function handleDashboard(req: Request, sleeperUserId: string): Promise<Res
   return json({ dashboard: result.dashboard });
 }
 
-const sectionParam = z.enum(["meta", "team", "players", "league", "analytics", "trade"]);
+const sectionParam = z.enum(["meta", "team", "players", "league", "analytics", "trade", "trade-waiver"]);
 
 async function handleSection(req: Request, sleeperUserId: string): Promise<Response> {
   const url = new URL(req.url, "https://localhost");
@@ -108,7 +108,10 @@ async function handleSection(req: Request, sleeperUserId: string): Promise<Respo
   if (section === "analytics") {
     return json({ section: "analytics", data });
   }
-  return json({ section: "trade", data });
+  if (section === "trade") {
+    return json({ section: "trade", data });
+  }
+  return json({ section: "trade-waiver", data });
 }
 
 export async function GET(req: Request): Promise<Response> {

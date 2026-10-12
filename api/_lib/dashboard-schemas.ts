@@ -312,15 +312,29 @@ export const dashboardPlayersSchema = dashboardResponse.pick({
   strengthOfSchedule: true,
 });
 
+/** Trade teams + starter slots (Matchup/Monitor/Power/Trade). Waiver pool is separate. */
 export const leagueTradeSchema = leagueSchema.pick({
   id: true,
   tradeTeams: true,
-  tradeWaiverPool: true,
   tradeStarterSlots: true,
+}).extend({
+  // Older section rows still embedded the waiver pool here; readers ignore it
+  // when `trade-waiver` is present.
+  tradeWaiverPool: leagueSchema.shape.tradeWaiverPool.optional(),
 });
 
 export const dashboardTradeSchema = z.object({
   leagues: z.array(leagueTradeSchema),
+});
+
+/** Waiver pool only — loaded by the Trade tab. */
+export const leagueTradeWaiverSchema = leagueSchema.pick({
+  id: true,
+  tradeWaiverPool: true,
+});
+
+export const dashboardTradeWaiverSchema = z.object({
+  leagues: z.array(leagueTradeWaiverSchema),
 });
 
 export const dashboardSectionResponse = z.discriminatedUnion("section", [
@@ -330,6 +344,7 @@ export const dashboardSectionResponse = z.discriminatedUnion("section", [
   z.object({ section: z.literal("league"), data: z.object({ leagues: z.array(leaguePowerSchema) }).nullable() }),
   z.object({ section: z.literal("analytics"), data: z.object({ analytics: analyticsSchema }).nullable() }),
   z.object({ section: z.literal("trade"), data: dashboardTradeSchema.nullable() }),
+  z.object({ section: z.literal("trade-waiver"), data: dashboardTradeWaiverSchema.nullable() }),
 ]);
 
 export type DashboardSection = z.infer<typeof dashboardSectionResponse>;

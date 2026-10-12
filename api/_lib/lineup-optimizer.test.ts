@@ -5,6 +5,7 @@ import {
   espnStatusToPhase,
   gameElapsedFraction,
   isLineupLocked,
+  isUnavailableStatus,
   LIVE_PACE_BLEND_END,
   LIVE_PACE_BLEND_START,
   LIVE_PACE_REMAINING_CAP,
@@ -500,6 +501,11 @@ describe("liveForecastPoints", () => {
       clock: 400,
       type: { name: "STATUS_SOMETHING_NEW", state: "in", description: "In Progress" },
     })).toBe("live");
+  });
+
+  it("treats Sleeper Sus status as unavailable", () => {
+    expect(isUnavailableStatus("Sus")).toBe(true);
+    expect(isUnavailableStatus("sus")).toBe(true);
   });
 
   it("counts only actuals for Out/injured players in a live game and keeps Questionable projections", () => {
