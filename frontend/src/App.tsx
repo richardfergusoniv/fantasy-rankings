@@ -267,7 +267,7 @@ const DASHBOARD_DEADLINE_MS = 58_000;
 // While a section answers `data: null` (signed-in user's first dashboard is
 // still building in the background), poll until the build lands.
 const SECTION_BUILD_POLL_MS = 4_000;
-const LIVE_LINEUP_REFETCH_MS = 60_000;
+const LIVE_LINEUP_REFETCH_MS = 150_000;
 function pollWhileSectionBuilding(query: { state: { data?: unknown } }): number | false {
   const data = query.state.data as { data?: unknown } | undefined;
   return data !== undefined && data.data == null ? SECTION_BUILD_POLL_MS : false;
@@ -521,6 +521,7 @@ export function App() {
     queryKey: ["dashboard-section", "meta"],
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "meta" }), 8_000)),
     staleTime: 90_000,
+    refetchOnWindowFocus: false,
     retry: false,
     refetchInterval: pollWhileSectionBuilding,
   });
@@ -528,8 +529,9 @@ export function App() {
     queryKey: ["dashboard-section", "team"],
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "team" }), 8_000)),
     staleTime: 90_000,
+    refetchOnWindowFocus: false,
     retry: false,
-    // Matchup/lineup: poll while building, then about every 60s while any game is live.
+    // Matchup/lineup: poll while building, then about every 150s while any game is live.
     refetchInterval: pollTeamSection,
   });
   // Matchup player cards need fantasy SOS for Team context ranks.
@@ -538,6 +540,7 @@ export function App() {
     queryKey: ["dashboard-section", "players"],
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "players" }), 8_000)),
     staleTime: 90_000,
+    refetchOnWindowFocus: false,
     retry: false,
     enabled: playerSectionActive,
     refetchInterval: pollWhileSectionBuilding,
@@ -546,6 +549,7 @@ export function App() {
     queryKey: ["dashboard-section", "league"],
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "league" }), 8_000)),
     staleTime: 90_000,
+    refetchOnWindowFocus: false,
     retry: false,
     enabled: tab === "power" || tab === "monitor",
     refetchInterval: pollWhileSectionBuilding,
@@ -554,6 +558,7 @@ export function App() {
     queryKey: ["dashboard-section", "analytics"],
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "analytics" }), 8_000)),
     staleTime: 90_000,
+    refetchOnWindowFocus: false,
     retry: false,
     enabled: tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison",
     refetchInterval: pollWhileSectionBuilding,
