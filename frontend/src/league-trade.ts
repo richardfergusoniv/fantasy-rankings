@@ -1,5 +1,3 @@
-import { formatDecimal } from "./lib/format-number";
-
 const nameSuffixes = new Set(["jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"]);
 
 export type LeagueRosterAsset = {
@@ -113,16 +111,4 @@ export function tradeValueVerdict(giveTotal: number, getTotal: number, partnerNa
   const amount = margin.toLocaleString();
   if (getTotal > giveTotal) return `You win by ${amount}.`;
   return `${partnerName} wins by ${amount}.`;
-}
-
-export function formatLineupImpact(before: number, after: number, delta: number): string {
-  const score = (value: number): string => {
-    const rounded = Number(value.toFixed(1));
-    return Number.isInteger(rounded) ? rounded.toLocaleString() : formatDecimal(rounded, 1);
-  };
-  const deltaRounded = Number(delta.toFixed(1));
-  const digits = Number.isInteger(deltaRounded) ? 0 : 1;
-  const nearZero = Math.abs(deltaRounded) < (digits === 0 ? 0.5 : 0.05);
-  const deltaLabel = nearZero ? formatDecimal(0, digits) : formatDecimal(deltaRounded, digits, { sign: "exceptZero" });
-  return `Starting lineup: ${score(before)} → ${score(after)}, ${deltaLabel} pts`;
 }

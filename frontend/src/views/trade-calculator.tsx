@@ -1,15 +1,12 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogCloseButton, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { eligibleForSlot, optimizeTradeRoster as optimizeLockedTradeRoster } from "../../../api/_lib/lineup-optimizer";
 import { api } from "../api";
 import type {
   Dashboard,
   HistoricalTrade,
   HistoricalTradeTeam,
   League,
-  OptimizedRoster,
-  RosterPlayer,
   TradeAsset,
   TradeTeam,
 } from "../dashboard-types";
@@ -24,8 +21,7 @@ import {
   sleeperInjuryTag,
   tradeTotal,
 } from "../dashboard-shared";
-import { buildLeagueRosterRows, compactAssetName, formatLineupImpact, formatTeamRecord, rosterPositionLabel, type LeagueRosterRow, type TeamRecord } from "../league-trade";
-import { formatDecimal } from "../lib/format-number";
+import { buildLeagueRosterRows, compactAssetName, formatTeamRecord, rosterPositionLabel, type LeagueRosterRow, type TeamRecord } from "../league-trade";
 import { AggregateTradeHistory } from "../player-charts";
 import { SegmentedControl } from "../shared";
 import { clearTradeSide, removeTradePlayer, restoreTradePlayer } from "../undo";
@@ -47,102 +43,6 @@ export function TradeAssetRow({ asset, onRemove, onOpenPlayer }: { asset: TradeA
       </div>
     </div>
   );
-}
-
-export function projectionPoints(player: RosterPlayer): number {
-  return player.gamePhase === "final" ? (player.actual ?? player.projection ?? 0) : (player.projection ?? 0);
-}
-
-export function optimizeTradeRoster(players: RosterPlayer[], slots: string[]): OptimizedRoster {
-  return optimizeLockedTradeRoster(players, slots);
-}
-
-export function tradeDepthScore(optimized: OptimizedRoster, slots: string[]): number {
-  if (slots.length === 0) return 0;
-  const nextUp = slots.map((slot) => optimized.bench
-    .filter((player) => eligibleForSlot(player.position, slot))
-    .reduce((best, player) => Math.max(best, projectionPoints(player)), 0));
-  return Number((nextUp.reduce((sum, value) => sum + value, 0) / slots.length).toFixed(2));
-}
-
-type SideGrade = {
-  lineupDelta: number;
-  lineupBefore: number;
-  lineupAfter: number;
-  depthDelta: number;
-  cuts: string[];
-  adds: string[];
-  explanation: string;
-  missingProjections: number;
-};
-
-export function gradeTradeSide(
-  team: TradeTeam,
-  outgoing: TradeAsset[],
-  incoming: TradeAsset[],
-  incomingTeam: TradeTeam,
-  waiverPool: RosterPlayer[],
-  slots: string[],
-): SideGrade {
-  const outgoingIds = new Set(outgoing.filter((asset) => asset.position !== "PICK").map((asset) => asset.playerId));
-  const incomingIds = new Set(incoming.filter((asset) => asset.position !== "PICK").map((asset) => asset.playerId));
-  const incomingPlayers = incomingTeam.players.filter((player) => incomingIds.has(player.playerId));
-  const pre = optimizeTradeRoster(team.players, slots);
-  let roster = [...team.players.filter((player) => !outgoingIds.has(player.playerId)), ...incomingPlayers.map((player) => ({ ...player, isStarter: false, lineupSlot: null }))];
-  const cuts: string[] = [];
-  while (roster.length > team.players.length) {
-    const currentScore = optimizeTradeRoster(roster, slots).score;
-    const cutCandidate = roster
-      .map((player) => ({ player, cost: currentScore - optimizeTradeRoster(roster.filter((row) => row.playerId !== player.playerId), slots).score }))
-      .sort((a, b) => a.cost - b.cost || projectionPoints(a.player) - projectionPoints(b.player) || a.player.name.localeCompare(b.player.name))[0];
-    if (!cutCandidate) break;
-    cuts.push(cutCandidate.player.name);
-    roster = roster.filter((player) => player.playerId !== cutCandidate.player.playerId);
-  }
-  const adds: string[] = [];
-  const unavailableIds = new Set([...team.players, ...incomingTeam.players].map((player) => player.playerId));
-  while (roster.length < team.players.length) {
-    const rosterIds = new Set(roster.map((player) => player.playerId));
-    const add = waiverPool.find((player) => !rosterIds.has(player.playerId) && !unavailableIds.has(player.playerId) && !outgoingIds.has(player.playerId));
-    if (!add) break;
-    adds.push(add.name);
-    roster.push({ ...add, isStarter: false, lineupSlot: null });
-  }
-  const post = optimizeTradeRoster(roster, slots);
-  const lineupDelta = Number((post.score - pre.score).toFixed(2));
-  const depthDelta = Number((tradeDepthScore(post, slots) - tradeDepthScore(pre, slots)).toFixed(2));
-
-  const needRows = (["QB", "RB", "WR", "TE"] as const).flatMap((position) => {
-    const pool = waiverPool.filter((player) => player.position === position && player.projection !== null).sort((a, b) => projectionPoints(a) - projectionPoints(b));
-    const reference = pool[Math.floor(pool.length / 2)];
-    if (!reference) return [];
-    const gain = optimizeTradeRoster([...team.players, { ...reference, isStarter: false, lineupSlot: null }], slots).score - pre.score;
-    return [{ position, gain }];
-  }).sort((a, b) => b.gain - a.gain);
-  const topNeed = needRows[0];
-
-  const bestWaiver = waiverPool.find((player) => !team.players.some((row) => row.playerId === player.playerId));
-  const surplusRows = outgoingIds.size === 0 ? [] : team.players
-    .filter((player) => outgoingIds.has(player.playerId))
-    .map((player) => {
-      const without = team.players.filter((row) => row.playerId !== player.playerId);
-      const refilled = bestWaiver ? [...without, { ...bestWaiver, isStarter: false, lineupSlot: null }] : without;
-      return { player, cost: pre.score - optimizeTradeRoster(refilled, slots).score };
-    })
-    .sort((a, b) => a.cost - b.cost);
-  const easiestOut = surplusRows[0];
-  const needCopy = topNeed && topNeed.gain > 0.01 ? `${topNeed.position} is the clearest need (+${formatDecimal(topNeed.gain, 1)} with a median available add).` : "No median waiver add changes the optimal lineup.";
-  const surplusCopy = easiestOut ? `${easiestOut.player.name} has a ${formatDecimal(Math.max(0, easiestOut.cost), 1)}-point removal cost after a waiver refill.` : "No outgoing player to test for surplus.";
-  return {
-    lineupDelta,
-    lineupBefore: pre.score,
-    lineupAfter: post.score,
-    depthDelta,
-    cuts,
-    adds,
-    explanation: `${needCopy} ${surplusCopy}`,
-    missingProjections: roster.filter((player) => ["QB", "RB", "WR", "TE"].includes(player.position) && player.projection === null).length,
-  };
 }
 
 export function TradeSide({ title, assets, availableAssets, onAdd, onRemove, onClear, onOpenPlayer }: { title: string; assets: TradeAsset[]; availableAssets: TradeAsset[]; onAdd: (id: string) => void; onRemove: (id: string) => void; onClear: () => void; onOpenPlayer: (playerId: string) => void }) {
@@ -359,7 +259,6 @@ export function TradeValueDialog({
   getLabel = "You get",
   title = "Trade value",
   subtitle,
-  lineupContext,
 }: {
   give: TradeAsset[];
   get: TradeAsset[];
@@ -369,20 +268,10 @@ export function TradeValueDialog({
   getLabel?: string;
   title?: string;
   subtitle?: ReactNode;
-  lineupContext?: {
-    mine: TradeTeam;
-    theirs: TradeTeam;
-    starterSlots: string[];
-    waiverPool: RosterPlayer[];
-  };
 }) {
   const giveTotal = tradeTotal(give);
   const getTotal = tradeTotal(get);
   const outcome = tradeSideOutcome(giveTotal, getTotal);
-  const grade = lineupContext && lineupContext.starterSlots.length > 0
-    ? gradeTradeSide(lineupContext.mine, give, get, lineupContext.theirs, lineupContext.waiverPool, lineupContext.starterSlots)
-    : null;
-  const lineup = grade ? formatLineupImpact(grade.lineupBefore, grade.lineupAfter, grade.lineupDelta) : null;
   const maxTotal = Math.max(giveTotal, getTotal, 1);
   const columnHeight = (total: number, count: number): number => {
     if (count === 0) return 48;
@@ -411,8 +300,7 @@ export function TradeValueDialog({
   const chartLabel = [
     `${giveLabel} sends ${give.length ? give.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${giveTotal.toLocaleString()}`,
     `${getLabel} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getTotal.toLocaleString()}`,
-    lineup,
-  ].filter((part): part is string => Boolean(part)).join(" ");
+  ].join(" ");
   const { giveColor, getColor, giveStrokeWidth, getStrokeWidth } = tradeTrendColors(outcome);
 
   return (
@@ -424,7 +312,6 @@ export function TradeValueDialog({
           {subtitle ? <span className="league-trade-dialog-subtitle">{subtitle}</span> : null}
         </DialogHeader>
         <div className="league-trade-dialog-body" ref={bodyRef}>
-          {lineup ? <p className="league-trade-lineup">{lineup}</p> : null}
           <div className="league-trade-chart" role="img" aria-label={chartLabel}>
             <div className="league-trade-side">
               <LeagueTradeValueColumn
@@ -491,8 +378,6 @@ export function LeagueAdjustedTrade({
   theirRosterId,
   giveIds,
   getIds,
-  starterSlots,
-  waiverPool,
   recordByRosterId,
   formatKey,
   onPartnerChange,
@@ -504,8 +389,6 @@ export function LeagueAdjustedTrade({
   theirRosterId: number | null;
   giveIds: string[];
   getIds: string[];
-  starterSlots: string[];
-  waiverPool: RosterPlayer[];
   recordByRosterId: ReadonlyMap<number, TeamRecord>;
   formatKey: string;
   onPartnerChange: (rosterId: number | null) => void;
@@ -578,7 +461,6 @@ export function LeagueAdjustedTrade({
           get={get}
           giveLabel={mine.teamName}
           getLabel={theirs.teamName}
-          lineupContext={{ mine, theirs, starterSlots, waiverPool }}
           formatKey={formatKey}
           onClose={() => setIsResultOpen(false)}
         />
@@ -797,29 +679,6 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
   const counterpart = selectedTrade && selectedTeam
     ? selectedTrade.teams.find((team) => team.rosterId !== selectedTeam.rosterId) ?? null
     : null;
-  // Map participants to current rosters for the same lineup-impact line Market/League use.
-  const mine = selectedTeam
-    ? (selectedTeam.isUserTeam
-      ? league.tradeTeams.find((team) => selectedTeam.ownerId !== null && team.ownerId === selectedTeam.ownerId)
-        ?? league.tradeTeams.find((team) => team.rosterId === selectedTeam.rosterId && team.isUser)
-      : league.tradeTeams.find((team) => team.rosterId === selectedTeam.rosterId))
-    : undefined;
-  const historicalTheirs = selectedTrade && selectedTeam && selectedTrade.teams.length === 2
-    ? (() => {
-        const otherTeam = selectedTrade.teams.find((team) => team.rosterId !== selectedTeam.rosterId);
-        return otherTeam ? league.tradeTeams.find((team) => team.rosterId === otherTeam.rosterId) : undefined;
-      })()
-    : undefined;
-  const incomingTeam = mine ? {
-    rosterId: -1,
-    ownerId: null,
-    teamName: "Trade counterparties",
-    isUser: false,
-    players: league.tradeTeams.flatMap((team) => team.players),
-    ownedPicks: league.tradeTeams.flatMap((team) => team.ownedPicks),
-  } satisfies TradeTeam : undefined;
-  const gradeMine = mine;
-  const gradeTheirs = historicalTheirs ?? incomingTeam;
   const grouped = useMemo(() => {
     const groups = new Map<number, HistoricalTrade[]>();
     for (const trade of tradesQuery.data?.trades ?? []) groups.set(trade.season, [...(groups.get(trade.season) ?? []), trade]);
@@ -891,9 +750,6 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
           giveLabel={selectedTeam.teamName}
           getLabel={counterpart && selectedTrade.teams.length === 2 ? counterpart.teamName : "You get"}
           subtitle={<>Week {selectedTrade.week}, {selectedTrade.season} · <HistoricalTeamMatchup trade={selectedTrade} league={league} /></>}
-          lineupContext={gradeMine && gradeTheirs
-            ? { mine: gradeMine, theirs: gradeTheirs, starterSlots: league.tradeStarterSlots, waiverPool: league.tradeWaiverPool }
-            : undefined}
           formatKey={league.seasonLongFormat.key}
           onClose={() => setSelectedTradeId(null)}
         />
@@ -1021,8 +877,6 @@ export function TradeCalculator({
             theirRosterId={partner?.rosterId ?? null}
             giveIds={giveIds}
             getIds={getIds}
-            starterSlots={league.tradeStarterSlots}
-            waiverPool={league.tradeWaiverPool}
             recordByRosterId={recordByRosterId}
             formatKey={league.seasonLongFormat.key}
             onPartnerChange={(rosterId) => { setTheirRosterId(rosterId); setGetIds([]); }}

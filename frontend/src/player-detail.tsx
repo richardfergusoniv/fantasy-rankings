@@ -845,7 +845,7 @@ export function BoomBustPanel({
       {isLoading && !history ? (
         <div className="loading-shimmer boom-bust-loading" aria-hidden="true" />
       ) : weeklyScores.length > 0 && floor !== null && medianScore !== null && meanScore !== null && ceiling !== null ? (
-        <div className="boom-bust-visual" role="img" aria-label={`${name} ${rangeLabel}. ${description}. Bust ${scoreLabel(floor)}, ${weeklyScores.length >= 5 ? "10th percentile" : "minimum with fewer than 5 qualified weeks"}; median ${scoreLabel(medianScore)}, mean ${scoreLabel(meanScore)}, ceiling ${scoreLabel(ceiling)}.${quartileDescription}`}>
+        <div className="boom-bust-visual" role="img" aria-label={`${name} ${rangeLabel}. ${description}. Bust ${scoreLabel(floor)}; median ${scoreLabel(medianScore)}, mean ${scoreLabel(meanScore)}, boom ${scoreLabel(ceiling)}.${quartileDescription}`}>
           <div className="boom-bust-track">
             <div className="boom-bust-band" />
             {showQuartiles ? (
@@ -868,10 +868,10 @@ export function BoomBustPanel({
             <i className="boom-bust-mean-mark" style={{ left: `${markerPosition(meanScore)}%` }} title={`Mean: ${formatDecimal(meanScore, 1)} points`} />
           </div>
           <div className="boom-bust-labels">
-            <span><small>Bust · {weeklyScores.length >= 5 ? "10th %ile" : "min"}</small><strong>{scoreLabel(floor)}</strong></span>
+            <span><small>Bust</small><strong>{scoreLabel(floor)}</strong></span>
             <span><small>Median</small><strong>{scoreLabel(medianScore)}</strong></span>
             <span><small>Mean</small><strong>{scoreLabel(meanScore)}</strong></span>
-            <span><small>Ceiling</small><strong>{scoreLabel(ceiling)}</strong></span>
+            <span><small>Boom</small><strong>{scoreLabel(ceiling)}</strong></span>
           </div>
         </div>
       ) : (

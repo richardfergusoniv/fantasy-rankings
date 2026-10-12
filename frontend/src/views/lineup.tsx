@@ -17,6 +17,7 @@ import {
   playerScore,
   sleeperInjuryTag,
 } from "../dashboard-shared";
+import { sortPlayersByFantasyPosition } from "../fantasy-position-order";
 import { MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 import {
   isOptimizedLineupChanged,
@@ -139,9 +140,9 @@ export function Lineup({
     [league.starters, league.bench, nowMs],
   );
   const mine = mode === "optimized" ? optimized.starters : league.starters;
-  const myBench = mode === "optimized" ? optimized.bench : league.bench;
+  const myBench = sortPlayersByFantasyPosition(mode === "optimized" ? optimized.bench : league.bench);
   const theirs = opponent?.starters;
-  const theirBench = opponent?.bench;
+  const theirBench = opponent?.bench ? sortPlayersByFantasyPosition(opponent.bench) : undefined;
   const currentForecast = useMemo(() => forecastTotal(league.starters, nowMs), [league.starters, nowMs]);
   const optimizedForecast = useMemo(() => forecastTotal(optimized.starters, nowMs), [optimized.starters, nowMs]);
   const opponentForecast = useMemo(
