@@ -9,6 +9,7 @@ import {
   type RosterSlot,
 } from "./league-relevance.js";
 import { SLEEPER_BASE, fetchJson, type SleeperLeague, type SleeperRoster } from "./sleeper.js";
+import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
 
 /**
  * Look up the current NFL season from Sleeper, then the signed-in user's
@@ -75,7 +76,7 @@ async function readCachedPayload(cacheKey: string): Promise<{ value: unknown; fr
   if (!row) return null;
   try {
     return {
-      value: JSON.parse(row.payload) as unknown,
+      value: decodeSourceCachePayload(row.payload),
       fresh: Date.now() - row.fetchedAt.getTime() <= leagueDataTtlMs(),
     };
   } catch {
@@ -85,7 +86,7 @@ async function readCachedPayload(cacheKey: string): Promise<{ value: unknown; fr
 
 async function writeCache(cacheKey: string, payload: unknown): Promise<void> {
   try {
-    const body = JSON.stringify(payload);
+    const body = encodeSourceCachePayload(payload);
     const fetchedAt = new Date();
     await db.insert(schema.sourceCache).values({ cacheKey, payload: body, fetchedAt }).onConflictDoUpdate({
       target: schema.sourceCache.cacheKey,

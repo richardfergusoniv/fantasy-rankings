@@ -7,6 +7,7 @@ import { api } from "./api";
 import { newsForTicker, PROMINENT_OVERALL_RANK_LIMIT } from "./ticker-news";
 import type {
   Dashboard,
+  DashboardSection,
   DraftCenterData,
   LeagueSection,
   MatchupSelection,
@@ -35,6 +36,7 @@ import {
 } from "./dashboard-shared";
 import { formatDecimal } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
+import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
 import { effectiveTradeMode, waiversSearchPreservingContext } from "./dashboard-url";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
 import { leaguePowerTeamForPlayer } from "./league-roster";
@@ -367,19 +369,28 @@ function freshestDashboard(...candidates: Array<Dashboard | undefined>): Dashboa
   }, undefined);
 }
 
+type TradeSection = Extract<DashboardSection, { section: "trade" }>;
+type TradeWaiverSection = Extract<DashboardSection, { section: "trade-waiver" }>;
+
 function assembleStreamedDashboard(
   meta: MetaSection["data"],
   team: TeamSection["data"],
   players: PlayersSection["data"],
   power: LeagueSection["data"],
   analytics: AnalyticsSection["data"],
+  trade: TradeSection["data"],
+  tradeWaiver: TradeWaiverSection["data"],
 ): Dashboard | undefined {
   if (!meta) return undefined;
   const teamByLeague = new Map((team?.leagues ?? []).map((league) => [league.id, league]));
   const powerByLeague = new Map((power?.leagues ?? []).map((league) => [league.id, league]));
+  const tradeByLeague = new Map((trade?.leagues ?? []).map((league) => [league.id, league]));
+  const waiverByLeague = new Map((tradeWaiver?.leagues ?? []).map((league) => [league.id, league]));
   const leagues: Dashboard["leagues"] = meta.leagues.map((identity) => {
     const teamData = teamByLeague.get(identity.id);
     const powerData = powerByLeague.get(identity.id);
+    const tradeData = tradeByLeague.get(identity.id);
+    const waiverData = waiverByLeague.get(identity.id);
     return {
       ...identity,
       record: teamData?.record ?? { wins: 0, losses: 0, ties: 0 },
@@ -389,9 +400,13 @@ function assembleStreamedDashboard(
       bench: teamData?.bench ?? [],
       opponentTeam: teamData?.opponentTeam ?? null,
       suggestion: teamData?.suggestion ?? null,
-      tradeTeams: teamData?.tradeTeams ?? [],
-      tradeWaiverPool: teamData?.tradeWaiverPool ?? [],
-      tradeStarterSlots: teamData?.tradeStarterSlots ?? [],
+      // Prefer dedicated trade / trade-waiver sections; fall back to team (legacy).
+      tradeTeams: tradeData?.tradeTeams ?? teamData?.tradeTeams ?? [],
+      tradeWaiverPool: waiverData?.tradeWaiverPool
+        ?? tradeData?.tradeWaiverPool
+        ?? teamData?.tradeWaiverPool
+        ?? [],
+      tradeStarterSlots: tradeData?.tradeStarterSlots ?? teamData?.tradeStarterSlots ?? [],
       powerRankingsWeek: powerData?.powerRankingsWeek ?? [],
       powerRankingsSeasonLong: powerData?.powerRankingsSeasonLong ?? [],
       powerRankingsDynasty: powerData?.powerRankingsDynasty ?? [],
@@ -407,6 +422,17 @@ function assembleStreamedDashboard(
     strengthOfSchedule: players?.strengthOfSchedule ?? [],
     analytics: analytics?.analytics ?? { asOf: null, throughWeek: null, sourceUrl: "", entities: [], teamUsage: [], teamRecords: [] },
   };
+}
+
+function pollTradeSectionWhileLive(
+  query: { state: { data?: unknown } },
+  teamSectionData: unknown,
+): number | false {
+  const building = pollWhileSectionBuilding(query);
+  if (building) return building;
+  // LeagueTeamCard live projections/gamePhase come from tradeTeams — keep them
+  // on the same 150s cadence as the team section while any game is live.
+  return teamSectionHasLiveGame(teamSectionData) ? LIVE_LINEUP_REFETCH_MS : false;
 }
 
 async function withClientDeadline<T>(operation: Promise<T>, milliseconds: number): Promise<T> {
@@ -563,6 +589,36 @@ export function App() {
     enabled: tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison",
     refetchInterval: pollWhileSectionBuilding,
   });
+  // tradeTeams (+ starter slots) for Matchup/Monitor/Power/Trade. Live-polled with
+  // the team section so LeagueTeamCard projections/gamePhase stay fresh.
+  const tradeSectionActive = tab === "team" || tab === "monitor" || tab === "power" || tab === "trade";
+  const tradeMode = effectiveTradeMode(dashboardUrl.state);
+  // Waiver pool is only consumed by League-adjusted trade (not Market/History).
+  const tradeWaiverActive = tab === "trade" && tradeMode === "league";
+  const tradeQuery = useQuery({
+    queryKey: ["dashboard-section", "trade"],
+    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "trade" }), 20_000)),
+    // Errors must not stick for the session: stale immediately so tab switch /
+    // remount / manual refresh retries instead of serving a failed empty cache.
+    staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    retry: 2,
+    retryDelay: (attempt) => 1_000 * (attempt + 1),
+    enabled: tradeSectionActive,
+    refetchInterval: (query) => pollTradeSectionWhileLive(query, teamQuery.data),
+  });
+  const tradeWaiverQuery = useQuery({
+    queryKey: ["dashboard-section", "trade-waiver"],
+    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "trade-waiver" }), 20_000)),
+    staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    retry: 2,
+    retryDelay: (attempt) => 1_000 * (attempt + 1),
+    enabled: tradeWaiverActive,
+    refetchInterval: pollWhileSectionBuilding,
+  });
   const dashboardQuery = useQuery({
     queryKey: ["fantasy-dashboard"],
     queryFn: () => withSignIn(withClientDeadline(api.getDashboard({ force: false }), DASHBOARD_DEADLINE_MS)),
@@ -630,13 +686,47 @@ export function App() {
   const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(newsQuery.data), [newsQuery.data]);
   const tickerPlayerNews = playerHistory.current ? newsItemsByPlayer.get(playerHistory.current.playerId) ?? [] : [];
 
-  const streamedDashboard = useMemo(() => assembleStreamedDashboard(
-    metaQuery.data?.section === "meta" ? metaQuery.data.data : null,
-    teamQuery.data?.section === "team" ? teamQuery.data.data : null,
-    playersQuery.data?.section === "players" ? playersQuery.data.data : null,
-    leagueQuery.data?.section === "league" ? leagueQuery.data.data : null,
-    analyticsQuery.data?.section === "analytics" ? analyticsQuery.data.data : null,
-  ), [analyticsQuery.data, leagueQuery.data, metaQuery.data, playersQuery.data, teamQuery.data]);
+  // Prefer browser/full dashboard until tradeTeams land so returning users do not
+  // flash empty "No roster available" / "My Team" states over localStorage data.
+  const streamedDashboard = useMemo(() => {
+    if (tradeSectionActive && !tradeQuery.isError) {
+      const tradeReady = tradeQuery.data?.section === "trade" && tradeQuery.data.data != null;
+      if (!tradeReady && (tradeQuery.isPending || tradeQuery.data === undefined || tradeQuery.isFetching)) {
+        return undefined;
+      }
+    }
+    if (tradeWaiverActive && !tradeWaiverQuery.isError) {
+      const waiverReady = tradeWaiverQuery.data?.section === "trade-waiver" && tradeWaiverQuery.data.data != null;
+      if (!waiverReady && (tradeWaiverQuery.isPending || tradeWaiverQuery.data === undefined || tradeWaiverQuery.isFetching)) {
+        return undefined;
+      }
+    }
+    return assembleStreamedDashboard(
+      metaQuery.data?.section === "meta" ? metaQuery.data.data : null,
+      teamQuery.data?.section === "team" ? teamQuery.data.data : null,
+      playersQuery.data?.section === "players" ? playersQuery.data.data : null,
+      leagueQuery.data?.section === "league" ? leagueQuery.data.data : null,
+      analyticsQuery.data?.section === "analytics" ? analyticsQuery.data.data : null,
+      tradeQuery.data?.section === "trade" ? tradeQuery.data.data : null,
+      tradeWaiverQuery.data?.section === "trade-waiver" ? tradeWaiverQuery.data.data : null,
+    );
+  }, [
+    analyticsQuery.data,
+    leagueQuery.data,
+    metaQuery.data,
+    playersQuery.data,
+    teamQuery.data,
+    tradeQuery.data,
+    tradeQuery.isError,
+    tradeQuery.isFetching,
+    tradeQuery.isPending,
+    tradeSectionActive,
+    tradeWaiverActive,
+    tradeWaiverQuery.data,
+    tradeWaiverQuery.isError,
+    tradeWaiverQuery.isFetching,
+    tradeWaiverQuery.isPending,
+  ]);
   // Every section is projected from the same saved dashboard snapshot; no
   // render-time source refresh or projection merge occurs.
   const dashboard = freshestDashboard(dashboardQuery.data, streamedDashboard, browserDashboard);
@@ -746,8 +836,11 @@ export function App() {
     if (!currentDashboard || !league) return null;
     const weekly = currentDashboard.rankings.find((row) => row.playerId === playerId);
     const season = currentDashboard.seasonLongRankings.find((row) => row.playerId === playerId && row.formatKey === league.seasonLongFormat.key);
-    const rosterPlayer = league.tradeTeams.flatMap((team) => team.players).find((row) => row.playerId === playerId)
-      ?? [...league.starters, ...league.bench, ...(league.opponentTeam?.starters ?? []), ...(league.opponentTeam?.bench ?? [])].find((row) => row.playerId === playerId);
+    // Prefer matchup starters/bench (always in team section), then tradeTeams when loaded.
+    // Rankings/season cover ticker and deep links on Charts/Comparison without trade data.
+    const rosterPlayer = [...league.starters, ...league.bench, ...(league.opponentTeam?.starters ?? []), ...(league.opponentTeam?.bench ?? [])]
+      .find((row) => row.playerId === playerId)
+      ?? league.tradeTeams.flatMap((team) => team.players).find((row) => row.playerId === playerId);
     const defense = currentDashboard.defenses.find((row) => row.team === playerId);
     const name = weekly?.name ?? season?.name ?? rosterPlayer?.name ?? (defense ? `${defense.team} Defense` : null);
     const position = weekly?.position ?? season?.position ?? rosterPlayer?.position ?? (defense ? "DEF" : null);
@@ -861,14 +954,32 @@ export function App() {
   const newsLoading = newsQuery.isPending && !newsQuery.data;
   const newsError = newsQuery.isError && !newsQuery.data;
   const retryNews = () => { void newsQuery.refetch(); };
-  const currentSectionLoading = !hasCompleteDashboard && (
-    (tab === "team" && teamQuery.isPending)
-    || (tab === "monitor" && (teamQuery.isPending || leagueQuery.isPending))
-    || ((tab === "rankings" || tab === "waivers" || tab === "draft") && playersQuery.isPending)
-    || (tab === "trade" && (playersQuery.isPending || teamQuery.isPending))
-    || (tab === "power" && (leagueQuery.isPending || teamQuery.isPending || playersQuery.isPending))
-    || ((tab === "charts" || tab === "comparison") && (analyticsQuery.isPending || playersQuery.isPending))
-  );
+  const tradeSectionWaiting = isSectionWaiting({
+    active: tradeSectionActive,
+    isError: tradeQuery.isError,
+    isPending: tradeQuery.isPending,
+    isFetching: tradeQuery.isFetching,
+    hasPayload: tradeQuery.data?.section === "trade" && tradeQuery.data.data != null,
+    dataUndefined: tradeQuery.data === undefined,
+  });
+  const tradeWaiverWaiting = isSectionWaiting({
+    active: tradeWaiverActive,
+    isError: tradeWaiverQuery.isError,
+    isPending: tradeWaiverQuery.isPending,
+    isFetching: tradeWaiverQuery.isFetching,
+    hasPayload: tradeWaiverQuery.data?.section === "trade-waiver" && tradeWaiverQuery.data.data != null,
+    dataUndefined: tradeWaiverQuery.data === undefined,
+  });
+  const currentSectionLoading = tradeSectionWaiting
+    || tradeWaiverWaiting
+    || (!hasCompleteDashboard && (
+      (tab === "team" && teamQuery.isPending)
+      || (tab === "monitor" && (teamQuery.isPending || leagueQuery.isPending))
+      || ((tab === "rankings" || tab === "waivers" || tab === "draft") && playersQuery.isPending)
+      || (tab === "trade" && (playersQuery.isPending || teamQuery.isPending))
+      || (tab === "power" && (leagueQuery.isPending || teamQuery.isPending || playersQuery.isPending))
+      || ((tab === "charts" || tab === "comparison") && (analyticsQuery.isPending || playersQuery.isPending))
+    ));
 
   // A signed-in user's first-ever dashboard builds in the background
   // (~30s) while sections answer `data: null`. Hold the loading shell and
@@ -904,7 +1015,15 @@ export function App() {
     if (playerHistory.current?.playerId !== playerId) playerHistory.open(player);
   }, [dashboard, dashboardUrl.state.playerId, league, leagueDashboard, tab]);
 
-  if (!dashboard && (metaQuery.isPending || teamQuery.isPending || (waitingForFirstBuild && !firstBuildTimedOut))) {
+  if (shouldShowProgressiveShell({
+    hasDashboard: Boolean(dashboard),
+    metaPending: metaQuery.isPending,
+    teamPending: teamQuery.isPending,
+    waitingForFirstBuild,
+    firstBuildTimedOut,
+    tradeSectionWaiting,
+    tradeWaiverWaiting,
+  })) {
     return <ProgressiveShell tab={tab} onTab={setTab} />;
   }
 

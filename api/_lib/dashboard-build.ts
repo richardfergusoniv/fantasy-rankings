@@ -4,6 +4,8 @@ import { db, schema } from "./db.js";
 import {
   analyticsEntitySchema,
   analyticsSchema,
+  dashboardMetaSchema,
+  dashboardPlayersSchema,
   dashboardResponse,
   defenseSchema,
   nflTeamRecordSchema,
@@ -20,8 +22,24 @@ import {
   tradeTeamSchema,
   tradeValuationSchema,
   type Dashboard,
+  CACHE_KEY,
 } from "./dashboard-schemas.js";
-import { CACHE_KEY } from "./dashboard-schemas.js";
+import {
+  buildDashboardCacheWrites,
+  DASHBOARD_CACHE_SECTIONS,
+  dashboardFromSectionRows,
+  dashboardAnalyticsCacheSchema,
+  dashboardLeagueCacheSchema,
+  dashboardTeamCacheSchema,
+  dashboardTradeCacheSchema,
+  dashboardTradeWaiverCacheSchema,
+  resolveSectionHitFromRows,
+  userDashboardSectionCacheKey,
+  type DashboardCacheSection,
+  type DashboardSectionCacheData,
+  type DashboardTeamApiData,
+} from "./dashboard-section-cache.js";
+import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
 import { readOwnerSleeperUserId } from "./auth.js";
 import { readNflState, readUserLeagues } from "./user-leagues.js";
 import {
@@ -831,7 +849,7 @@ async function readFantasyCalcCache(): Promise<{
   const row = rows[0];
   if (!row) return null;
   try {
-    const payload = JSON.parse(row.payload) as {
+    const payload = decodeSourceCachePayload(row.payload) as {
       presets?: Record<string, FantasyCalcRow[]>;
     };
     if (!payload.presets || typeof payload.presets !== "object") return null;
@@ -908,16 +926,17 @@ export async function refreshFantasyCalcCache(): Promise<{
   }
   const rowCount = Object.values(presets).reduce((total, rows) => total + rows.length, 0);
   const fetchedAt = new Date();
+  const payload = encodeSourceCachePayload({ presets });
   await db
     .insert(schema.sourceCache)
     .values({
       cacheKey: FANTASYCALC_CACHE_KEY,
-      payload: JSON.stringify({ presets }),
+      payload,
       fetchedAt,
     })
     .onConflictDoUpdate({
       target: schema.sourceCache.cacheKey,
-      set: { payload: JSON.stringify({ presets }), fetchedAt },
+      set: { payload, fetchedAt },
     });
   rememberFantasyCalcPresets(presets, fetchedAt, fetchedAt.getTime());
   return { presets: Object.keys(presets).length, rows: rowCount, failed, asOf: fetchedAt.toISOString() };
@@ -1426,7 +1445,7 @@ async function loadStrengthOfSchedule(
   const entries: z.infer<typeof strengthOfScheduleEntrySchema>[] = [];
   for (const row of rows) {
     try {
-      entries.push(strengthOfScheduleEntrySchema.parse(JSON.parse(row.payload)));
+      entries.push(strengthOfScheduleEntrySchema.parse(decodeSourceCachePayload(row.payload)));
     } catch { /* skip malformed rows */ }
   }
   return entries;
@@ -1446,7 +1465,7 @@ async function loadDashboardVegasLines(): Promise<z.infer<typeof vegasLineSchema
       .limit(1);
     const cached = rows[0];
     if (!cached) return [];
-    const payload = JSON.parse(cached.payload) as { vegasLines?: unknown };
+    const payload = decodeSourceCachePayload(cached.payload) as { vegasLines?: unknown };
     const parsed = z.array(vegasLineSchema).safeParse(payload.vegasLines ?? []);
     return parsed.success ? parsed.data : [];
   } catch {
@@ -2239,15 +2258,90 @@ export async function loadOrBuildUserDashboard(sleeperUserId: string, force = fa
   }
 }
 
-async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): Promise<void> {
-  const payload = serializeDashboardForCache(dashboard);
+async function upsertSourceCacheRow(
+  cacheKey: string,
+  payload: string,
+  fetchedAt: Date,
+): Promise<void> {
   await db
     .insert(schema.sourceCache)
-    .values({ cacheKey, payload, fetchedAt: new Date() })
+    .values({ cacheKey, payload, fetchedAt })
     .onConflictDoUpdate({
       target: schema.sourceCache.cacheKey,
-      set: { payload, fetchedAt: new Date() },
+      set: { payload, fetchedAt },
     });
+}
+
+function sectionTtlMs(live: boolean): number {
+  return live ? LIVE_DASHBOARD_CACHE_MS : USER_DASHBOARD_CACHE_MS;
+}
+
+export function parseStoredSectionData<S extends DashboardCacheSection>(
+  section: S,
+  data: unknown,
+): DashboardSectionCacheData[S] | null {
+  switch (section) {
+    case "meta": {
+      const parsed = dashboardMetaSchema.safeParse(data);
+      return (parsed.success ? parsed.data : null) as DashboardSectionCacheData[S] | null;
+    }
+    case "team": {
+      const parsed = dashboardTeamCacheSchema.safeParse(data);
+      return (parsed.success ? parsed.data : null) as DashboardSectionCacheData[S] | null;
+    }
+    case "players": {
+      // Accept slim cache rows that omit weeklyChartRankings.
+      const withWeekly = data && typeof data === "object" && !Array.isArray(data)
+        ? {
+            ...(data as Record<string, unknown>),
+            weeklyChartRankings:
+              (data as { weeklyChartRankings?: unknown }).weeklyChartRankings
+              ?? (data as { rankings?: unknown }).rankings
+              ?? [],
+          }
+        : data;
+      const parsed = dashboardPlayersSchema.safeParse(withWeekly);
+      return (parsed.success ? parsed.data : null) as DashboardSectionCacheData[S] | null;
+    }
+    case "league": {
+      const parsed = dashboardLeagueCacheSchema.safeParse(data);
+      return (parsed.success ? parsed.data : null) as DashboardSectionCacheData[S] | null;
+    }
+    case "analytics": {
+      const parsed = dashboardAnalyticsCacheSchema.safeParse(data);
+      return (parsed.success ? parsed.data : null) as DashboardSectionCacheData[S] | null;
+    }
+    case "trade": {
+      const parsed = dashboardTradeCacheSchema.safeParse(data);
+      return (parsed.success ? parsed.data : null) as DashboardSectionCacheData[S] | null;
+    }
+    case "trade-waiver": {
+      const parsed = dashboardTradeWaiverCacheSchema.safeParse(data);
+      return (parsed.success ? parsed.data : null) as DashboardSectionCacheData[S] | null;
+    }
+    default: {
+      const _exhaustive: never = section;
+      return _exhaustive;
+    }
+  }
+}
+
+export function sectionCacheTtlMs(live: boolean): number {
+  return sectionTtlMs(live);
+}
+
+async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): Promise<void> {
+  const fetchedAt = new Date();
+  const live = dashboardHasLiveGame(dashboard);
+  const writes = buildDashboardCacheWrites({
+    cacheKey,
+    dashboard,
+    fetchedAt,
+    live,
+    encode: encodeSourceCachePayload,
+    serializeFull: serializeDashboardForCache,
+  });
+  await Promise.all(writes.map((row) => upsertSourceCacheRow(row.cacheKey, row.payload, row.fetchedAt)));
 }
 
 /**
@@ -2286,14 +2380,9 @@ export async function readGlobalDashboardSnapshot(): Promise<Dashboard | null> {
   return null;
 }
 
-/**
- * Read the per-user cache without building. `fresh` is true when the cached
- * dashboard is inside USER_DASHBOARD_CACHE_MS. Returns null when no usable
- * cache exists (first-ever load for this user).
- */
-export async function readUserDashboardCache(
+async function readFullUserDashboardRow(
   sleeperUserId: string,
-): Promise<{ dashboard: Dashboard; fresh: boolean } | null> {
+): Promise<{ dashboard: Dashboard; fresh: boolean; fetchedAt: Date } | null> {
   const rows = await db
     .select()
     .from(schema.sourceCache)
@@ -2305,8 +2394,88 @@ export async function readUserDashboardCache(
   if (!dashboard) return null;
   return {
     dashboard,
+    fetchedAt: row.fetchedAt,
     fresh: Date.now() - row.fetchedAt.getTime() < dashboardCacheTtlMs(dashboard),
   };
+}
+
+export async function readAllUserDashboardSections(
+  sleeperUserId: string,
+): Promise<{ dashboard: Dashboard; fresh: boolean } | null> {
+  const keys = DASHBOARD_CACHE_SECTIONS.map((section) =>
+    userDashboardSectionCacheKey(sleeperUserId, section),
+  );
+  const rows = await db
+    .select()
+    .from(schema.sourceCache)
+    .where(inArray(schema.sourceCache.cacheKey, keys));
+  return dashboardFromSectionRows({
+    sleeperUserId,
+    rows,
+    decode: decodeSourceCachePayload,
+    parseSectionData: parseStoredSectionData,
+    ttlMs: sectionTtlMs,
+  });
+}
+
+/**
+ * Read the per-user cache without building. Prefers per-section rows; falls
+ * back to the legacy full `dashboard:user:<id>` row. `fresh` follows the
+ * 10 min / 150s-live TTL. Returns null when no usable cache exists.
+ */
+export async function readUserDashboardCache(
+  sleeperUserId: string,
+): Promise<{ dashboard: Dashboard; fresh: boolean } | null> {
+  const fromSections = await readAllUserDashboardSections(sleeperUserId);
+  if (fromSections) return fromSections;
+  const full = await readFullUserDashboardRow(sleeperUserId);
+  if (!full) return null;
+  return { dashboard: full.dashboard, fresh: full.fresh };
+}
+
+export type UserDashboardSectionHit<S extends DashboardCacheSection> = {
+  data: S extends "team" ? DashboardTeamApiData : DashboardSectionCacheData[S];
+  fresh: boolean;
+  source: "section" | "full-row";
+};
+
+/**
+ * Read a single dashboard section row. Falls back to projecting from the
+ * legacy full-row cache when the section key is missing. Does not merge the
+ * trade row into team (callers that need trade fields load `trade` separately
+ * or use the full-row fallback which still includes them).
+ */
+export async function readUserDashboardSection<S extends DashboardCacheSection>(
+  sleeperUserId: string,
+  section: S,
+): Promise<UserDashboardSectionHit<S> | null> {
+  const sectionKey = userDashboardSectionCacheKey(sleeperUserId, section);
+  const rows = await db
+    .select()
+    .from(schema.sourceCache)
+    .where(eq(schema.sourceCache.cacheKey, sectionKey))
+    .limit(1);
+  const fromSection = resolveSectionHitFromRows({
+    section,
+    sectionRow: rows[0] ?? null,
+    fullDashboard: null,
+    fullFresh: false,
+    decode: decodeSourceCachePayload,
+    parseSectionData: parseStoredSectionData,
+    ttlMs: sectionTtlMs,
+  });
+  if (fromSection) return fromSection;
+
+  const full = await readFullUserDashboardRow(sleeperUserId);
+  return resolveSectionHitFromRows({
+    section,
+    sectionRow: null,
+    fullDashboard: full?.dashboard ?? null,
+    fullFresh: full?.fresh ?? false,
+    decode: decodeSourceCachePayload,
+    parseSectionData: parseStoredSectionData,
+    ttlMs: sectionTtlMs,
+  });
 }
 
 // Single-flight guard so concurrent section reads (and dashboard reads) for

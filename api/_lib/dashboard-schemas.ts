@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
 
 /**
  * Dashboard zod schemas, copied verbatim from app/server/src/actions.ts.
@@ -311,12 +312,39 @@ export const dashboardPlayersSchema = dashboardResponse.pick({
   strengthOfSchedule: true,
 });
 
+/** Trade teams + starter slots (Matchup/Monitor/Power/Trade). Waiver pool is separate. */
+export const leagueTradeSchema = leagueSchema.pick({
+  id: true,
+  tradeTeams: true,
+  tradeStarterSlots: true,
+}).extend({
+  // Older section rows still embedded the waiver pool here; readers ignore it
+  // when `trade-waiver` is present.
+  tradeWaiverPool: leagueSchema.shape.tradeWaiverPool.optional(),
+});
+
+export const dashboardTradeSchema = z.object({
+  leagues: z.array(leagueTradeSchema),
+});
+
+/** Waiver pool only — loaded by the Trade tab. */
+export const leagueTradeWaiverSchema = leagueSchema.pick({
+  id: true,
+  tradeWaiverPool: true,
+});
+
+export const dashboardTradeWaiverSchema = z.object({
+  leagues: z.array(leagueTradeWaiverSchema),
+});
+
 export const dashboardSectionResponse = z.discriminatedUnion("section", [
   z.object({ section: z.literal("meta"), data: dashboardMetaSchema.nullable() }),
   z.object({ section: z.literal("team"), data: z.object({ leagues: z.array(leagueTeamSchema) }).nullable() }),
   z.object({ section: z.literal("players"), data: dashboardPlayersSchema.nullable() }),
   z.object({ section: z.literal("league"), data: z.object({ leagues: z.array(leaguePowerSchema) }).nullable() }),
   z.object({ section: z.literal("analytics"), data: z.object({ analytics: analyticsSchema }).nullable() }),
+  z.object({ section: z.literal("trade"), data: dashboardTradeSchema.nullable() }),
+  z.object({ section: z.literal("trade-waiver"), data: dashboardTradeWaiverSchema.nullable() }),
 ]);
 
 export type DashboardSection = z.infer<typeof dashboardSectionResponse>;
@@ -336,10 +364,10 @@ export const dashboardCachePayloadSchema = dashboardResponse
 
 export type DashboardCachePayload = z.infer<typeof dashboardCachePayloadSchema>;
 
-/** Drop the duplicate weekly chart array before writing `source_cache`. */
+/** Drop the duplicate weekly chart array before writing `source_cache` (gzip when large). */
 export function serializeDashboardForCache(dashboard: Dashboard): string {
   const { weeklyChartRankings: _omit, ...cacheable } = dashboard;
-  return JSON.stringify(cacheable);
+  return encodeSourceCachePayload(cacheable);
 }
 
 /**
@@ -361,14 +389,14 @@ export function hydrateDashboardFromCache(payload: unknown): Dashboard | null {
 }
 
 /**
- * Parse a cached dashboard payload. Returns null when the payload is
- * malformed OR when it contains no leagues (a refresh can produce a
- * schema-valid shell when every per-league Sleeper request fails — never
- * promote that shell over a previously usable snapshot).
+ * Parse a cached dashboard payload (plain JSON or `gz1:` compressed). Returns
+ * null when the payload is malformed OR when it contains no leagues (a refresh
+ * can produce a schema-valid shell when every per-league Sleeper request fails
+ * — never promote that shell over a previously usable snapshot).
  */
 export function parseUsableDashboard(payload: string): Dashboard | null {
   try {
-    return hydrateDashboardFromCache(JSON.parse(payload));
+    return hydrateDashboardFromCache(decodeSourceCachePayload(payload));
   } catch {
     return null;
   }

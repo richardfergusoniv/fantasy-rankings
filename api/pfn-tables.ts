@@ -6,6 +6,7 @@ import {
   readTeamSituationalSnapshot,
   type TeamSituationalSnapshot,
 } from "./_lib/team-situational.js";
+import { decodeSourceCachePayload } from "./_lib/source-cache-payload.js";
 
 /**
  * GET /api/pfn-tables
@@ -68,7 +69,7 @@ export async function GET(_req: Request): Promise<Response> {
       const parsedKey = pfnTableKeySchema.safeParse(tableKey);
       if (!parsedKey.success) continue;
       try {
-        const envelope = storedPfnTableEnvelopeSchema.safeParse(JSON.parse(row.payload));
+        const envelope = storedPfnTableEnvelopeSchema.safeParse(decodeSourceCachePayload(row.payload));
         if (!envelope.success) continue;
         const validRows = envelope.data.rows
           .flatMap((candidate) => {

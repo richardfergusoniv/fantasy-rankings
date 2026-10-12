@@ -10,6 +10,7 @@ import {
   isFantasyCalcMemoryFresh,
   LIVE_DASHBOARD_CACHE_MS,
 } from "./dashboard-build.js";
+import { decodeSourceCachePayload } from "./source-cache-payload.js";
 
 const sampleRanking = {
   leagueId: "league-1",
@@ -99,13 +100,13 @@ const sampleDashboard: Dashboard = {
 describe("dashboard cache weeklyChartRankings dedupe", () => {
   it("omits weeklyChartRankings when serializing for cache", () => {
     const raw = serializeDashboardForCache(sampleDashboard);
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsed = decodeSourceCachePayload(raw) as Record<string, unknown>;
     expect(parsed).toHaveProperty("rankings");
     expect(parsed).not.toHaveProperty("weeklyChartRankings");
   });
 
   it("reconstructs weeklyChartRankings from rankings for new cache rows", () => {
-    const hydrated = hydrateDashboardFromCache(JSON.parse(serializeDashboardForCache(sampleDashboard)));
+    const hydrated = hydrateDashboardFromCache(decodeSourceCachePayload(serializeDashboardForCache(sampleDashboard)));
     expect(hydrated).not.toBeNull();
     expect(hydrated!.weeklyChartRankings).toEqual(hydrated!.rankings);
     expect(hydrated!.weeklyChartRankings).toEqual(sampleDashboard.rankings);

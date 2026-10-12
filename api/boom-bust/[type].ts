@@ -19,6 +19,7 @@ import {
   sleeperGameLogStats,
   type SleeperLeague,
 } from "../_lib/sleeper.js";
+import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/source-cache-payload.js";
 
 /**
  * GET /api/boom-bust/history?leagueId=&playerId=&position=&view=
@@ -78,7 +79,7 @@ async function loadScoringSettings(leagueId: string): Promise<Record<string, num
   const cachedLeagueSettings = leagueSettingsRows[0];
   if (cachedLeagueSettings && Date.now() - cachedLeagueSettings.fetchedAt.getTime() < 24 * 60 * 60 * 1000) {
     try {
-      const parsed: unknown = JSON.parse(cachedLeagueSettings.payload);
+      const parsed: unknown = decodeSourceCachePayload(cachedLeagueSettings.payload);
       if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
         return parsed as Record<string, number>;
       }
@@ -89,8 +90,9 @@ async function loadScoringSettings(leagueId: string): Promise<Record<string, num
   const league = await fetchJson<SleeperLeague>(`${SLEEPER_BASE}/league/${leagueId}`);
   if (league.league_id !== leagueId) return null;
   const scoringSettings = league.scoring_settings ?? {};
-  await db.insert(schema.sourceCache).values({ cacheKey, payload: JSON.stringify(scoringSettings), fetchedAt: new Date() })
-    .onConflictDoUpdate({ target: schema.sourceCache.cacheKey, set: { payload: JSON.stringify(scoringSettings), fetchedAt: new Date() } });
+  const encoded = encodeSourceCachePayload(scoringSettings);
+  await db.insert(schema.sourceCache).values({ cacheKey, payload: encoded, fetchedAt: new Date() })
+    .onConflictDoUpdate({ target: schema.sourceCache.cacheKey, set: { payload: encoded, fetchedAt: new Date() } });
   return scoringSettings;
 }
 
@@ -230,7 +232,7 @@ async function loadRangesScoringSettings(leagueId: string): Promise<Record<strin
   const cached = cachedRows[0];
   if (cached && Date.now() - cached.fetchedAt.getTime() < 24 * 60 * 60 * 1000) {
     try {
-      const parsed: unknown = JSON.parse(cached.payload);
+      const parsed: unknown = decodeSourceCachePayload(cached.payload);
       if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
         return parsed as Record<string, number>;
       }
@@ -241,8 +243,9 @@ async function loadRangesScoringSettings(leagueId: string): Promise<Record<strin
   const league = await fetchJson<SleeperLeague>(`${SLEEPER_BASE}/league/${leagueId}`);
   if (league.league_id !== leagueId) return null;
   const scoringSettings = league.scoring_settings ?? {};
-  await db.insert(schema.sourceCache).values({ cacheKey, payload: JSON.stringify(scoringSettings), fetchedAt: new Date() })
-    .onConflictDoUpdate({ target: schema.sourceCache.cacheKey, set: { payload: JSON.stringify(scoringSettings), fetchedAt: new Date() } });
+  const encoded = encodeSourceCachePayload(scoringSettings);
+  await db.insert(schema.sourceCache).values({ cacheKey, payload: encoded, fetchedAt: new Date() })
+    .onConflictDoUpdate({ target: schema.sourceCache.cacheKey, set: { payload: encoded, fetchedAt: new Date() } });
   return scoringSettings;
 }
 

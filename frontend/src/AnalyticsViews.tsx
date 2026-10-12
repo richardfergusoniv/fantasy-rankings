@@ -951,7 +951,11 @@ function ChartKey({ teamName }: { teamName: string }) {
 }
 
 function fantasyTeamName(league: League): string {
-  return league.tradeTeams.find((team) => team.isUser)?.teamName ?? "My team";
+  // Prefer tradeTeams when loaded; otherwise use meta rosterAssignments so
+  // Charts/Comparison do not need the trade section.
+  return league.tradeTeams.find((team) => team.isUser)?.teamName
+    ?? league.rosterAssignments.find((assignment) => assignment.isUser)?.teamName
+    ?? "My team";
 }
 
 function OmittedChartLabels({ omittedNames }: { omittedNames: string[] }) {

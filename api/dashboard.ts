@@ -12,7 +12,12 @@ import {
   loadOrBuildUserDashboard,
   readGlobalDashboardSnapshot,
   readUserDashboardCache,
+  readUserDashboardSection,
 } from "./_lib/dashboard-build.js";
+import {
+  projectDashboardSection,
+  type DashboardCacheSection,
+} from "./_lib/dashboard-section-cache.js";
 import { waitUntil } from "@vercel/functions";
 import { z } from "zod";
 
@@ -29,10 +34,12 @@ import { z } from "zod";
  *   rebuilds). The scheduled owner's stored snapshot is a fallback only
  *   for that owner. Every signed-out read, including force=false, is 401.
  *
- * GET /api/dashboard/section?section=meta|team|players|league|analytics
+ * GET /api/dashboard/section?section=meta|team|players|league|analytics|trade|trade-waiver
  *   Same sign-in rule. A cold per-user cache returns `data: null` and
  *   rebuilds in the background; the client polls. It does not fill that
  *   gap with the owner snapshot unless the caller is the scheduled owner.
+ *   Section reads prefer slim per-section `source_cache` rows and fall back
+ *   to the legacy full dashboard row when those are missing.
  */
 
 async function handleDashboard(req: Request, sleeperUserId: string): Promise<Response> {
@@ -53,30 +60,7 @@ async function handleDashboard(req: Request, sleeperUserId: string): Promise<Res
   return json({ dashboard: result.dashboard });
 }
 
-/**
- * Section reads never block on a build. A cold or stale per-user cache
- * starts a background build and returns whatever is already stored.
- */
-async function sectionDashboard(sleeperUserId: string) {
-  return sectionDashboardForViewer({
-    sleeperUserId,
-    ownerSleeperUserId: readOwnerSleeperUserId(),
-    loadOwn: async (id) => {
-      try {
-        const cached = await readUserDashboardCache(id);
-        if (!cached || !cached.fresh) {
-          waitUntil(kickUserDashboardBuild(id));
-        }
-        return cached?.dashboard ?? null;
-      } catch {
-        return null;
-      }
-    },
-    loadOwnerSnapshot: () => readGlobalDashboardSnapshot(),
-  });
-}
-
-const sectionParam = z.enum(["meta", "team", "players", "league", "analytics"]);
+const sectionParam = z.enum(["meta", "team", "players", "league", "analytics", "trade", "trade-waiver"]);
 
 async function handleSection(req: Request, sleeperUserId: string): Promise<Response> {
   const url = new URL(req.url, "https://localhost");
@@ -84,128 +68,50 @@ async function handleSection(req: Request, sleeperUserId: string): Promise<Respo
   if (!parsed.success) {
     return badRequest("Invalid or missing `section` query param.", parsed.error.issues);
   }
-  const section = parsed.data;
+  const section = parsed.data as DashboardCacheSection;
 
-  const resolved = await sectionDashboard(sleeperUserId);
+  const resolved = await sectionDashboardForViewer({
+    sleeperUserId,
+    ownerSleeperUserId: readOwnerSleeperUserId(),
+    loadOwn: async (id) => {
+      try {
+        const hit = await readUserDashboardSection(id, section);
+        if (!hit || !hit.fresh) {
+          waitUntil(kickUserDashboardBuild(id));
+        }
+        return hit?.data ?? null;
+      } catch {
+        return null;
+      }
+    },
+    loadOwnerSnapshot: async () => {
+      const snapshot = await readGlobalDashboardSnapshot();
+      if (!snapshot) return null;
+      return projectDashboardSection(snapshot, section);
+    },
+  });
   if (!resolved.ok) return unauthorized(resolved.error);
-  const cached = resolved.dashboard;
+  const data = resolved.dashboard;
 
   if (section === "meta") {
-    return json({
-      section: "meta",
-      data: cached
-        ? {
-            status: cached.status,
-            season: cached.season,
-            week: cached.week,
-            asOf: cached.asOf,
-            rankingsAsOf: cached.rankingsAsOf,
-            fantasyCalcAsOf: cached.fantasyCalcAsOf,
-            sourceErrors: cached.sourceErrors,
-            leagues: cached.leagues.map(
-              ({
-                id,
-                name,
-                scoringLabel,
-                rankingField,
-                rosteredPlayerIds,
-                rosterAssignments,
-                rankingPositions,
-                showSuperFilter,
-                seasonLongFormat,
-                tradeValuation,
-              }) => ({
-                id,
-                name,
-                scoringLabel,
-                rankingField,
-                rosteredPlayerIds,
-                rosterAssignments,
-                rankingPositions,
-                showSuperFilter,
-                seasonLongFormat,
-                tradeValuation,
-              }),
-            ),
-          }
-        : null,
-    });
+    return json({ section: "meta", data });
   }
-
   if (section === "team") {
-    return json({
-      section: "team",
-      data: cached
-        ? {
-            leagues: cached.leagues.map(
-              ({
-                id,
-                record,
-                teamActual,
-                teamProjection,
-                starters,
-                bench,
-                opponentTeam,
-                suggestion,
-                tradeTeams,
-                tradeWaiverPool,
-                tradeStarterSlots,
-              }) => ({
-                id,
-                record,
-                teamActual,
-                teamProjection,
-                starters,
-                bench,
-                opponentTeam,
-                suggestion,
-                tradeTeams,
-                tradeWaiverPool,
-                tradeStarterSlots,
-              }),
-            ),
-          }
-        : null,
-    });
+    return json({ section: "team", data });
   }
-
   if (section === "players") {
-    return json({
-      section: "players",
-      data: cached
-        ? {
-            rankings: cached.rankings,
-            weeklyChartRankings: cached.weeklyChartRankings,
-            seasonLongRankings: cached.seasonLongRankings,
-            defenses: cached.defenses,
-            strengthOfSchedule: cached.strengthOfSchedule ?? [],
-          }
-        : null,
-    });
+    return json({ section: "players", data });
   }
-
   if (section === "league") {
-    return json({
-      section: "league",
-      data: cached
-        ? {
-            leagues: cached.leagues.map(
-              ({ id, powerRankingsWeek, powerRankingsSeasonLong, powerRankingsDynasty }) => ({
-                id,
-                powerRankingsWeek,
-                powerRankingsSeasonLong,
-                powerRankingsDynasty,
-              }),
-            ),
-          }
-        : null,
-    });
+    return json({ section: "league", data });
   }
-
-  return json({
-    section: "analytics",
-    data: cached ? { analytics: cached.analytics } : null,
-  });
+  if (section === "analytics") {
+    return json({ section: "analytics", data });
+  }
+  if (section === "trade") {
+    return json({ section: "trade", data });
+  }
+  return json({ section: "trade-waiver", data });
 }
 
 export async function GET(req: Request): Promise<Response> {

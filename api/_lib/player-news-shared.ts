@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { decodeSourceCachePayload } from "./source-cache-payload.js";
 
 /**
  * Pure helpers for the shared player-news pipeline and X ingest.
@@ -98,7 +99,7 @@ export function signalToNewsType(signal: string | null | undefined): PlayerNewsK
 export function parseNotesSnapshot(payload: string | undefined): NotesSnapshot {
   if (!payload) return {};
   try {
-    const value: unknown = JSON.parse(payload);
+    const value: unknown = decodeSourceCachePayload(payload);
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
     const out: NotesSnapshot = {};
     for (const [playerId, raw] of Object.entries(value)) {

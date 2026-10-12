@@ -30,6 +30,7 @@ import {
   withDeadline,
   type SleeperPlayer,
 } from "./_lib/sleeper.js";
+import { encodeSourceCachePayload } from "./_lib/source-cache-payload.js";
 import { readNflState } from "./_lib/user-leagues.js";
 
 /**
@@ -326,31 +327,35 @@ async function runRefresh(): Promise<Response> {
   const inserted = await insertSharedDrafts(drafts);
   const purged = await purgeExpiredNews(checkedAt);
 
+  const statusPayload = encodeSourceCachePayload(nextStatus);
+  const notesPayload = encodeSourceCachePayload(nextNotes);
+  const checkPayload = encodeSourceCachePayload({ checkedAt: checkedAt.toISOString() });
+
   await db.insert(schema.sourceCache).values({
     cacheKey: PLAYER_NEWS_SNAPSHOT_KEY,
-    payload: JSON.stringify(nextStatus),
+    payload: statusPayload,
     fetchedAt: checkedAt,
   }).onConflictDoUpdate({
     target: schema.sourceCache.cacheKey,
-    set: { payload: JSON.stringify(nextStatus), fetchedAt: checkedAt },
+    set: { payload: statusPayload, fetchedAt: checkedAt },
   });
 
   await db.insert(schema.sourceCache).values({
     cacheKey: PLAYER_NEWS_NOTES_SNAPSHOT_KEY,
-    payload: JSON.stringify(nextNotes),
+    payload: notesPayload,
     fetchedAt: checkedAt,
   }).onConflictDoUpdate({
     target: schema.sourceCache.cacheKey,
-    set: { payload: JSON.stringify(nextNotes), fetchedAt: checkedAt },
+    set: { payload: notesPayload, fetchedAt: checkedAt },
   });
 
   await db.insert(schema.sourceCache).values({
     cacheKey: PLAYER_NEWS_CHECK_KEY,
-    payload: JSON.stringify({ checkedAt: checkedAt.toISOString() }),
+    payload: checkPayload,
     fetchedAt: checkedAt,
   }).onConflictDoUpdate({
     target: schema.sourceCache.cacheKey,
-    set: { payload: JSON.stringify({ checkedAt: checkedAt.toISOString() }), fetchedAt: checkedAt },
+    set: { payload: checkPayload, fetchedAt: checkedAt },
   });
 
   const runKey = `player-news-${checkedAt.toISOString()}`;
