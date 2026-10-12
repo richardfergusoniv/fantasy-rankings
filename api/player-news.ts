@@ -8,11 +8,11 @@ import {
 } from "./_lib/api-utils.js";
 import { resolveSleeperUserId } from "./_lib/auth.js";
 import { db, schema } from "./_lib/db.js";
+import { isSleeperTimestampOnlyNews } from "./_lib/player-news-filters.js";
 import {
   PLAYER_NEWS_NOTES_SNAPSHOT_KEY,
   buildInjuryNotesDraft,
   buildInjuryStatusDraft,
-  buildNewsUpdatedDraft,
   filterDuplicateDrafts,
   normalizeNewsUpdated,
   parseNotesSnapshot,
@@ -40,10 +40,11 @@ import { readNflState } from "./_lib/user-leagues.js";
  *        A cron-secret GET runs the refresh instead.
  * POST — cron-secret refresh.
  *
- * Refresh diffs Sleeper injury_status, injury_notes, and news_updated for
- * fantasy players league-wide into `shared_player_news` (deduped by URL /
- * external id). Clients filter the ticker by the signed-in user's roster in
- * the selected league; player cards show all shared rows for that player.
+ * Refresh diffs Sleeper injury_status and injury_notes for fantasy players
+ * league-wide into `shared_player_news` (deduped by URL / external id).
+ * Timestamp-only news_updated pings are not created; legacy rows are filtered
+ * on read. Clients filter the ticker by the signed-in user's roster in the
+ * selected league; player cards show all shared rows for that player.
  */
 
 const PLAYER_NEWS_CHECK_KEY = "player-news-last-check-v1";
@@ -186,25 +187,27 @@ async function readStoredNews(): Promise<Response> {
 
   const lastCheckedAt = await readLastCheckedAt();
   const checkedAt = lastCheckedAt ?? new Date().toISOString();
-  const items = rows.map((item) => ({
-    id: item.id,
-    playerId: item.playerId,
-    player: item.player,
-    team: item.team,
-    change: item.change,
-    leagueIds: [] as string[],
-    newsType: item.newsType as "roster" | "waiver" | "headline",
-    leagues: [] as string[],
-    availability: [] as PlayerNews["runs"][number]["items"][number]["availability"],
-    roleContext: item.roleContext,
-    sourceLabel: item.sourceLabel,
-    sourceUrl: item.sourceUrl,
-    sourcePublishedAt: item.publishedAt?.toISOString() ?? item.createdAt.toISOString(),
-    author: item.author,
-    source: item.source as "sleeper" | "x" | "nflverse",
-    signal: item.signal,
-    score: item.score,
-  }));
+  const items = rows
+    .filter((item) => !isSleeperTimestampOnlyNews(item))
+    .map((item) => ({
+      id: item.id,
+      playerId: item.playerId,
+      player: item.player,
+      team: item.team,
+      change: item.change,
+      leagueIds: [] as string[],
+      newsType: item.newsType as "roster" | "waiver" | "headline",
+      leagues: [] as string[],
+      availability: [] as PlayerNews["runs"][number]["items"][number]["availability"],
+      roleContext: item.roleContext,
+      sourceLabel: item.sourceLabel,
+      sourceUrl: item.sourceUrl,
+      sourcePublishedAt: item.publishedAt?.toISOString() ?? item.createdAt.toISOString(),
+      author: item.author,
+      source: item.source as "sleeper" | "x" | "nflverse",
+      signal: item.signal,
+      score: item.score,
+    }));
 
   return json({
     lastCheckedAt,
@@ -307,21 +310,7 @@ async function runRefresh(): Promise<Response> {
       newsUpdated: player.newsUpdated,
       checkedAt,
     });
-    if (notesDraft) {
-      drafts.push(notesDraft);
-      continue;
-    }
-
-    const updatedDraft = buildNewsUpdatedDraft({
-      playerId: player.playerId,
-      player: player.player,
-      team: player.team,
-      previousUpdated: priorNotes.newsUpdated,
-      nextUpdated: player.newsUpdated,
-      injuryNotes: player.injuryNotes,
-      checkedAt,
-    });
-    if (updatedDraft) drafts.push(updatedDraft);
+    if (notesDraft) drafts.push(notesDraft);
   }
 
   const inserted = await insertSharedDrafts(drafts);

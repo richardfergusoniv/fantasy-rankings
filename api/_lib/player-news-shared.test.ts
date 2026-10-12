@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  isSleeperTimestampOnlyNews,
+  SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT,
+} from "./player-news-filters.js";
+import {
   buildInjuryNotesDraft,
   buildInjuryStatusDraft,
   buildNewsUpdatedDraft,
@@ -141,7 +145,7 @@ describe("Sleeper draft builders", () => {
     expect(draft?.publishedAt?.toISOString()).toBe("2024-10-10T16:00:00.000Z");
   });
 
-  it("emits news_updated only when notes are empty", () => {
+  it("never emits timestamp-only news_updated drafts", () => {
     expect(buildNewsUpdatedDraft({
       playerId: "1",
       player: "A",
@@ -151,7 +155,7 @@ describe("Sleeper draft builders", () => {
       injuryNotes: "still hurt",
       checkedAt,
     })).toBeNull();
-    const draft = buildNewsUpdatedDraft({
+    expect(buildNewsUpdatedDraft({
       playerId: "1",
       player: "A",
       team: "MIN",
@@ -159,8 +163,24 @@ describe("Sleeper draft builders", () => {
       nextUpdated: "2",
       injuryNotes: null,
       checkedAt,
-    });
-    expect(draft?.signal).toBe("news_updated");
+    })).toBeNull();
+  });
+});
+
+describe("isSleeperTimestampOnlyNews", () => {
+  it("matches the legacy roleContext marker and ignores real Sleeper rows", () => {
+    expect(isSleeperTimestampOnlyNews({
+      roleContext: SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT,
+    })).toBe(true);
+    expect(isSleeperTimestampOnlyNews({
+      roleContext: "Sleeper injury-status change detected by the scheduled check.",
+    })).toBe(false);
+    expect(isSleeperTimestampOnlyNews({
+      roleContext: "New Sleeper injury notes.",
+    })).toBe(false);
+    expect(isSleeperTimestampOnlyNews({
+      roleContext: "Posted by @AdamSchefter on X.",
+    })).toBe(false);
   });
 });
 
