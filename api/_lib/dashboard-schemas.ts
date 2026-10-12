@@ -324,6 +324,43 @@ export type DashboardSection = z.infer<typeof dashboardSectionResponse>;
 export const CACHE_KEY = "dashboard-live-projections-v25";
 
 /**
+ * Cached rows store `rankings` once. `weeklyChartRankings` is optional so
+ * older rows that still duplicated it continue to parse; readers always
+ * reconstruct it from `rankings` (they are byte-identical by construction).
+ */
+export const dashboardCachePayloadSchema = dashboardResponse
+  .omit({ weeklyChartRankings: true })
+  .extend({
+    weeklyChartRankings: z.array(rankingSchema).optional(),
+  });
+
+export type DashboardCachePayload = z.infer<typeof dashboardCachePayloadSchema>;
+
+/** Drop the duplicate weekly chart array before writing `source_cache`. */
+export function serializeDashboardForCache(dashboard: Dashboard): string {
+  const { weeklyChartRankings: _omit, ...cacheable } = dashboard;
+  return JSON.stringify(cacheable);
+}
+
+/**
+ * Rebuild the API/UI shape from a cache payload. Always sets
+ * `weeklyChartRankings` from `rankings` so new and legacy rows behave the same.
+ */
+export function hydrateDashboardFromCache(payload: unknown): Dashboard | null {
+  try {
+    const parsed = dashboardCachePayloadSchema.parse(payload);
+    if (parsed.leagues.length === 0) return null;
+    const { weeklyChartRankings: _stored, ...rest } = parsed;
+    return dashboardResponse.parse({
+      ...rest,
+      weeklyChartRankings: rest.rankings,
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Parse a cached dashboard payload. Returns null when the payload is
  * malformed OR when it contains no leagues (a refresh can produce a
  * schema-valid shell when every per-league Sleeper request fails — never
@@ -331,8 +368,7 @@ export const CACHE_KEY = "dashboard-live-projections-v25";
  */
 export function parseUsableDashboard(payload: string): Dashboard | null {
   try {
-    const dashboard = dashboardResponse.parse(JSON.parse(payload));
-    return dashboard.leagues.length > 0 ? dashboard : null;
+    return hydrateDashboardFromCache(JSON.parse(payload));
   } catch {
     return null;
   }

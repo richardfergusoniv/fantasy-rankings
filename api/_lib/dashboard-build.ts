@@ -13,6 +13,7 @@ import {
   rosterAssignmentSchema,
   rosterPlayerSchema,
   seasonLongRankingSchema,
+  serializeDashboardForCache,
   strengthOfScheduleEntrySchema,
   suggestionSchema,
   teamUsageSchema,
@@ -79,7 +80,7 @@ import { selectProjectionFeed } from "./projection-fallback.js";
 
 export const USER_DASHBOARD_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 /** Shorter cache while any rostered game is live so lineup totals can refresh. */
-export const LIVE_DASHBOARD_CACHE_MS = 60 * 1000;
+export const LIVE_DASHBOARD_CACHE_MS = 150 * 1000;
 export const BUILD_DEADLINE_MS = 55_000; // stay inside the 60s function budget
 
 const NFLVERSE_PLAYER_STATS_2026_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.csv";
@@ -775,11 +776,53 @@ const FANTASY_CALC_PRESETS: Array<{ format: SeasonLongFormat; url: string }> = [
  */
 const FANTASYCALC_CACHE_KEY = "fantasycalc:presets";
 const FANTASYCALC_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+/** Keep the parsed ~2.5 MB presets row in process memory between builds. */
+export const FANTASYCALC_MEMORY_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+type FantasyCalcPresetsHit = {
+  presets: Record<string, FantasyCalcRow[]>;
+  /** `source_cache.fetchedAt` — drives the 24h data freshness check. */
+  sourceFetchedAt: Date;
+  /** When this process last loaded/parsed the row — drives memory TTL. */
+  fetchedAt: Date;
+};
+
+let fantasyCalcPresetsMemory: FantasyCalcPresetsHit | null = null;
+
+/** True when the in-process FantasyCalc parse is still within the memory TTL. */
+export function isFantasyCalcMemoryFresh<T extends { fetchedAt: Date }>(
+  memory: T | null,
+  nowMs: number,
+  ttlMs: number = FANTASYCALC_MEMORY_TTL_MS,
+): memory is T {
+  return memory != null && nowMs - memory.fetchedAt.getTime() < ttlMs;
+}
+
+function rememberFantasyCalcPresets(
+  presets: Record<string, FantasyCalcRow[]>,
+  sourceFetchedAt: Date,
+  nowMs: number = Date.now(),
+): FantasyCalcPresetsHit {
+  fantasyCalcPresetsMemory = {
+    presets,
+    sourceFetchedAt,
+    fetchedAt: new Date(nowMs),
+  };
+  return fantasyCalcPresetsMemory;
+}
 
 async function readFantasyCalcCache(): Promise<{
   presets: Record<string, FantasyCalcRow[]>;
   fetchedAt: Date;
 } | null> {
+  const nowMs = Date.now();
+  const memoryHit = fantasyCalcPresetsMemory;
+  if (isFantasyCalcMemoryFresh(memoryHit, nowMs)) {
+    return {
+      presets: memoryHit.presets,
+      fetchedAt: memoryHit.sourceFetchedAt,
+    };
+  }
   const rows = await db
     .select()
     .from(schema.sourceCache)
@@ -792,7 +835,8 @@ async function readFantasyCalcCache(): Promise<{
       presets?: Record<string, FantasyCalcRow[]>;
     };
     if (!payload.presets || typeof payload.presets !== "object") return null;
-    return { presets: payload.presets, fetchedAt: row.fetchedAt };
+    const remembered = rememberFantasyCalcPresets(payload.presets, row.fetchedAt, nowMs);
+    return { presets: remembered.presets, fetchedAt: remembered.sourceFetchedAt };
   } catch {
     return null;
   }
@@ -875,6 +919,7 @@ export async function refreshFantasyCalcCache(): Promise<{
       target: schema.sourceCache.cacheKey,
       set: { payload: JSON.stringify({ presets }), fetchedAt },
     });
+  rememberFantasyCalcPresets(presets, fetchedAt, fetchedAt.getTime());
   return { presets: Object.keys(presets).length, rows: rowCount, failed, asOf: fetchedAt.toISOString() };
 }
 
@@ -1660,9 +1705,8 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     }];
   });
   const rankingsByLeagueId = new Map<string, Ranking[]>();
-  // Weekly charts use the same source rows as the rest of the artifact so the
-  // retired opportunity-weight projection model cannot reappear in tools.
-  const weeklyChartRankingsByLeagueId = new Map<string, Ranking[]>();
+  // Weekly charts reuse the same ranking rows (stored once in cache; see
+  // serializeDashboardForCache / hydrateDashboardFromCache).
   const defensesByLeagueId = new Map<string, z.infer<typeof defenseSchema>[]>();
   for (const league of sleeperLeagues) {
     const rankingField: "ppr" | "halfPpr" = isDynasticalPpfdLeague(league) || (league.scoring_settings?.rec ?? 0) >= 1 ? "ppr" : "halfPpr";
@@ -1687,12 +1731,11 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       league.scoring_settings,
       defenseRankByTeam,
     );
-    weeklyChartRankingsByLeagueId.set(league.league_id, mergedRankings);
     rankingsByLeagueId.set(league.league_id, mergedRankings);
     defensesByLeagueId.set(league.league_id, leagueDefenses);
   }
   const rankings = [...rankingsByLeagueId.values()].flat();
-  const weeklyChartRankings = [...weeklyChartRankingsByLeagueId.values()].flat();
+  const weeklyChartRankings = rankings;
   defenses = [...defensesByLeagueId.values()].flat();
   if (attachWeekContext && !useVegasPrimary) {
     sourceErrors.push(`${isFirstDownSnapshot ? "First Down" : "Vegas"} player coverage is ${vegasProjectionCount}/${minProjectionCoverage} required; weekly skill-position projections are unavailable in this snapshot.`);
@@ -2197,12 +2240,13 @@ export async function loadOrBuildUserDashboard(sleeperUserId: string, force = fa
 }
 
 async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): Promise<void> {
+  const payload = serializeDashboardForCache(dashboard);
   await db
     .insert(schema.sourceCache)
-    .values({ cacheKey, payload: JSON.stringify(dashboard), fetchedAt: new Date() })
+    .values({ cacheKey, payload, fetchedAt: new Date() })
     .onConflictDoUpdate({
       target: schema.sourceCache.cacheKey,
-      set: { payload: JSON.stringify(dashboard), fetchedAt: new Date() },
+      set: { payload, fetchedAt: new Date() },
     });
 }
 
