@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, type MouseEvent } from "react";
 import type { Dashboard, League, MatchupSelection } from "./dashboard-types";
+import { compareByFantasyPosition } from "./fantasy-position-order";
 import { MatchupTag, ModalPortal, points, useDialogFocusTrap } from "./shared";
 
 type RosterPlayer = League["tradeTeams"][number]["players"][number];
@@ -100,7 +101,9 @@ export function LeagueTeamCard({
         .map((player, rosterIndex) => ({ player, season: seasonRowsByPlayerId.get(player.playerId) ?? null, rosterIndex }))
         .sort((a, b) => {
           if (a.player.isStarter !== b.player.isStarter) return a.player.isStarter ? -1 : 1;
-          if (!a.player.isStarter) return a.rosterIndex - b.rosterIndex;
+          if (!a.player.isStarter) {
+            return compareByFantasyPosition(a.player.position, b.player.position) || a.rosterIndex - b.rosterIndex;
+          }
           const aSlotIndex = matchupSlotOrder.indexOf(a.player.lineupSlot ?? a.player.position);
           const bSlotIndex = matchupSlotOrder.indexOf(b.player.lineupSlot ?? b.player.position);
           const aOrder = aSlotIndex < 0 ? Number.MAX_SAFE_INTEGER : aSlotIndex;

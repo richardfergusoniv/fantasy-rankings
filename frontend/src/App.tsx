@@ -545,18 +545,22 @@ export function App() {
   }, []);
   const metaQuery = useQuery({
     queryKey: ["dashboard-section", "meta"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "meta" }), 8_000)),
-    staleTime: 90_000,
+    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "meta" }), 20_000)),
+    staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
-    retry: false,
+    refetchOnMount: true,
+    retry: 2,
+    retryDelay: (attempt) => 1_000 * (attempt + 1),
     refetchInterval: pollWhileSectionBuilding,
   });
   const teamQuery = useQuery({
     queryKey: ["dashboard-section", "team"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "team" }), 8_000)),
-    staleTime: 90_000,
+    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "team" }), 20_000)),
+    staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
-    retry: false,
+    refetchOnMount: true,
+    retry: 2,
+    retryDelay: (attempt) => 1_000 * (attempt + 1),
     // Matchup/lineup: poll while building, then about every 150s while any game is live.
     refetchInterval: pollTeamSection,
   });
