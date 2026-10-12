@@ -7,12 +7,16 @@ import {
   json,
 } from "./_lib/api-utils.js";
 import {
-  FANTASY_CALC_HISTORY_URL,
-  FANTASY_CALC_VALUES_URL,
+  FANTASY_CALC_SNAPSHOT_PRESETS,
+  fantasyCalcHistoryUrl,
+  historySnapshotRowsFromPoints,
+  startOfUtcDay,
+  upsertPlayerValueSnapshots,
+} from "./_lib/player-value-history.js";
+import {
   fetchJson,
   type FantasyCalcHistoryResponse,
   type FantasyCalcRow,
-  type SeasonLongFormat,
 } from "./_lib/sleeper.js";
 
 /**
@@ -43,26 +47,6 @@ const valueHistoryResponse = z.object({
 
 export type ValueHistory = z.infer<typeof valueHistoryResponse>;
 
-const FANTASY_CALC_PRESETS: Array<{ format: SeasonLongFormat; url: string }> = [
-  { format: { key: "redraft-1qb-12t-0.5ppr", isDynasty: false, numQbs: 1, numTeams: 12, ppr: 0.5, label: "Redraft · 12-team · 1QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=1&numTeams=12&ppr=0.5` },
-  { format: { key: "redraft-1qb-10t-0.5ppr", isDynasty: false, numQbs: 1, numTeams: 10, ppr: 0.5, label: "Redraft · 10-team · 1QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=1&numTeams=10&ppr=0.5` },
-  { format: { key: "redraft-1qb-12t-1ppr", isDynasty: false, numQbs: 1, numTeams: 12, ppr: 1, label: "Redraft · 12-team · 1QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=1&numTeams=12&ppr=1` },
-  { format: { key: "redraft-2qb-14t-1ppr", isDynasty: false, numQbs: 2, numTeams: 14, ppr: 1, label: "Redraft · 14-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=2&numTeams=14&ppr=1` },
-  { format: { key: "redraft-2qb-12t-0.5ppr", isDynasty: false, numQbs: 2, numTeams: 12, ppr: 0.5, label: "Redraft · 12-team · Superflex / 2QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=2&numTeams=12&ppr=0.5` },
-  { format: { key: "redraft-2qb-12t-1ppr", isDynasty: false, numQbs: 2, numTeams: 12, ppr: 1, label: "Redraft · 12-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=2&numTeams=12&ppr=1` },
-  { format: { key: "dynasty-1qb-10t-0.5ppr", isDynasty: true, numQbs: 1, numTeams: 10, ppr: 0.5, label: "Dynasty · 10-team · 1QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=1&numTeams=10&ppr=0.5` },
-  { format: { key: "dynasty-1qb-12t-1ppr", isDynasty: true, numQbs: 1, numTeams: 12, ppr: 1, label: "Dynasty · 12-team · 1QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=1&numTeams=12&ppr=1` },
-  { format: { key: "dynasty-2qb-14t-1ppr", isDynasty: true, numQbs: 2, numTeams: 14, ppr: 1, label: "Dynasty · 14-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=2&numTeams=14&ppr=1` },
-  { format: { key: "dynasty-2qb-12t-0.5ppr", isDynasty: true, numQbs: 2, numTeams: 12, ppr: 0.5, label: "Dynasty · 12-team · Superflex / 2QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=2&numTeams=12&ppr=0.5` },
-  { format: { key: "dynasty-2qb-12t-1ppr", isDynasty: true, numQbs: 2, numTeams: 12, ppr: 1, label: "Dynasty · 12-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=2&numTeams=12&ppr=1` },
-];
-
-function startOfUtcDay(date: Date): Date {
-  const copy = new Date(date);
-  copy.setUTCHours(0, 0, 0, 0);
-  return copy;
-}
-
 export async function GET(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url, "https://localhost");
@@ -87,47 +71,32 @@ export async function GET(req: Request): Promise<Response> {
       if (!latestSnapshotByPlayer.has(row.playerId)) latestSnapshotByPlayer.set(row.playerId, row.snapshotDate);
     }
     const hasFreshSnapshots = playerIds.every((playerId) => (latestSnapshotByPlayer.get(playerId) ?? "") >= yesterday);
-    const preset = FANTASY_CALC_PRESETS.find(({ format }) => format.key === formatKey);
+    const preset = FANTASY_CALC_SNAPSHOT_PRESETS.find(({ format }) => format.key === formatKey);
     if (preset && !hasFreshSnapshots) {
       try {
         const currentRows = await fetchJson<FantasyCalcRow[]>(preset.url);
         const selected = currentRows.filter((row) => row.player?.sleeperId && playerIds.includes(row.player.sleeperId) && typeof row.player.id === "number");
+        const cutoff = startOfUtcDay(new Date());
+        cutoff.setUTCDate(cutoff.getUTCDate() - 29);
+        const minSnapshotDate = cutoff.toISOString().slice(0, 10);
         const historyResults = await Promise.allSettled(selected.map(async (row) => {
           const playerId = row.player?.sleeperId;
           const fantasyCalcId = row.player?.id;
           if (!playerId || typeof fantasyCalcId !== "number") return [];
-          const query = new URLSearchParams({
-            isDynasty: String(preset.format.isDynasty),
-            numQbs: String(preset.format.numQbs),
-            numTeams: String(preset.format.numTeams),
-            ppr: String(preset.format.ppr),
-          });
-          const history = await fetchJson<FantasyCalcHistoryResponse>(`${FANTASY_CALC_HISTORY_URL}/${fantasyCalcId}?${query.toString()}`);
-          const cutoff = startOfUtcDay(new Date());
-          cutoff.setUTCDate(cutoff.getUTCDate() - 29);
-          return (history.historicalValues ?? []).flatMap((point) => {
-            if (typeof point.date !== "string" || typeof point.value !== "number") return [];
-            const [month = 0, day = 0, year = 0] = point.date.split("/").map(Number);
-            const date = new Date(Date.UTC(year, month - 1, day));
-            if (!year || !month || !day || Number.isNaN(date.getTime()) || date < cutoff) return [];
-            const snapshotDate = date.toISOString().slice(0, 10);
-            return [{
-              id: `${snapshotDate}:${formatKey}:${playerId}`,
-              snapshotDate,
-              formatKey,
-              playerId,
-              playerName: row.player?.name ?? playerId,
-              position: row.player?.position ?? "",
-              value: Math.round(point.value),
-              capturedAt: date,
-            }];
+          const history = await fetchJson<FantasyCalcHistoryResponse>(
+            fantasyCalcHistoryUrl(preset.format, fantasyCalcId),
+          );
+          return historySnapshotRowsFromPoints({
+            formatKey,
+            playerId,
+            playerName: row.player?.name ?? playerId,
+            position: row.player?.position ?? "",
+            points: history.historicalValues ?? [],
+            minSnapshotDate,
           });
         }));
         const backfillRows = historyResults.flatMap((result) => result.status === "fulfilled" ? result.value : []);
-        for (let index = 0; index < backfillRows.length; index += 250) {
-          const chunk = backfillRows.slice(index, index + 250);
-          if (chunk.length) await db.insert(schema.playerValueSnapshots).values(chunk).onConflictDoNothing();
-        }
+        await upsertPlayerValueSnapshots(backfillRows);
       } catch {
         // Stored daily snapshots still provide an honest partial history.
       }
