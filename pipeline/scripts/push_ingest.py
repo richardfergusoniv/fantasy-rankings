@@ -7,9 +7,10 @@ files via a privileged file handler. The Vercel endpoints take the same
 JSON directly in the POST body, authenticated with the shared CRON_SECRET.
 
 Usage:
-  push_ingest.py projections     # data/staged_for_push.json
-  push_ingest.py matchup-grades  # data/staged_matchup_grades.json
-  push_ingest.py pfn-tables      # ~/workspace/pfn-pipeline/data/staged_pfn_tables.json
+  push_ingest.py projections          # data/staged_for_push.json
+  push_ingest.py matchup-grades       # data/staged_matchup_grades.json
+  push_ingest.py pfn-tables           # ~/workspace/pfn-pipeline/data/staged_pfn_tables.json
+  push_ingest.py prop-line-snapshots  # data/staged_prop_line_snapshots.json
 
 Reads CRON_SECRET from the environment. The host is INGEST_BASE_URL if set,
 otherwise APP_BASE_URL, otherwise the production domain. The props-aggregator
@@ -45,6 +46,7 @@ TARGETS = {
     "projections": PROPS_DATA_DIR / "staged_for_push.json",
     "matchup-grades": PROPS_DATA_DIR / "staged_matchup_grades.json",
     "pfn-tables": PFN_DATA_DIR / "staged_pfn_tables.json",
+    "prop-line-snapshots": PROPS_DATA_DIR / "staged_prop_line_snapshots.json",
 }
 
 

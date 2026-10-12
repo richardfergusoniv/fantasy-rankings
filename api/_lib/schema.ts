@@ -3,6 +3,9 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
+  real,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -230,4 +233,35 @@ export const sleeperConnections = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (table) => [index("sleeper_connections_sleeper_user_id_idx").on(table.sleeperUserId)],
+);
+
+/**
+ * Dated consensus prop-line snapshots (not raw book pulls).
+ * Written by POST /api/ingest/prop-line-snapshots after each props pull.
+ */
+export const propLineSnapshots = pgTable(
+  "prop_line_snapshots",
+  {
+    pulledAt: timestamp("pulled_at", { withTimezone: true, mode: "date" }).notNull(),
+    playerId: text("player_id").notNull(),
+    stat: text("stat").notNull(),
+    line: real("line").notNull(),
+    medianOverOdds: real("median_over_odds"),
+    medianUnderOdds: real("median_under_odds"),
+    bookCount: smallint("book_count").notNull(),
+    week: smallint("week").notNull(),
+    season: smallint("season").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      name: "prop_line_snapshots_pkey",
+      columns: [table.pulledAt, table.playerId, table.stat],
+    }),
+    index("prop_line_snapshots_player_stat_pulled_idx").on(
+      table.playerId,
+      table.stat,
+      table.pulledAt.desc(),
+    ),
+    index("prop_line_snapshots_season_week_idx").on(table.season, table.week),
+  ],
 );
