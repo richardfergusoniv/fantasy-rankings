@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
 
 /**
  * Dashboard zod schemas, copied verbatim from app/server/src/actions.ts.
@@ -311,12 +312,24 @@ export const dashboardPlayersSchema = dashboardResponse.pick({
   strengthOfSchedule: true,
 });
 
+export const leagueTradeSchema = leagueSchema.pick({
+  id: true,
+  tradeTeams: true,
+  tradeWaiverPool: true,
+  tradeStarterSlots: true,
+});
+
+export const dashboardTradeSchema = z.object({
+  leagues: z.array(leagueTradeSchema),
+});
+
 export const dashboardSectionResponse = z.discriminatedUnion("section", [
   z.object({ section: z.literal("meta"), data: dashboardMetaSchema.nullable() }),
   z.object({ section: z.literal("team"), data: z.object({ leagues: z.array(leagueTeamSchema) }).nullable() }),
   z.object({ section: z.literal("players"), data: dashboardPlayersSchema.nullable() }),
   z.object({ section: z.literal("league"), data: z.object({ leagues: z.array(leaguePowerSchema) }).nullable() }),
   z.object({ section: z.literal("analytics"), data: z.object({ analytics: analyticsSchema }).nullable() }),
+  z.object({ section: z.literal("trade"), data: dashboardTradeSchema.nullable() }),
 ]);
 
 export type DashboardSection = z.infer<typeof dashboardSectionResponse>;
@@ -336,10 +349,10 @@ export const dashboardCachePayloadSchema = dashboardResponse
 
 export type DashboardCachePayload = z.infer<typeof dashboardCachePayloadSchema>;
 
-/** Drop the duplicate weekly chart array before writing `source_cache`. */
+/** Drop the duplicate weekly chart array before writing `source_cache` (gzip when large). */
 export function serializeDashboardForCache(dashboard: Dashboard): string {
   const { weeklyChartRankings: _omit, ...cacheable } = dashboard;
-  return JSON.stringify(cacheable);
+  return encodeSourceCachePayload(cacheable);
 }
 
 /**
@@ -361,14 +374,14 @@ export function hydrateDashboardFromCache(payload: unknown): Dashboard | null {
 }
 
 /**
- * Parse a cached dashboard payload. Returns null when the payload is
- * malformed OR when it contains no leagues (a refresh can produce a
- * schema-valid shell when every per-league Sleeper request fails — never
- * promote that shell over a previously usable snapshot).
+ * Parse a cached dashboard payload (plain JSON or `gz1:` compressed). Returns
+ * null when the payload is malformed OR when it contains no leagues (a refresh
+ * can produce a schema-valid shell when every per-league Sleeper request fails
+ * — never promote that shell over a previously usable snapshot).
  */
 export function parseUsableDashboard(payload: string): Dashboard | null {
   try {
-    return hydrateDashboardFromCache(JSON.parse(payload));
+    return hydrateDashboardFromCache(decodeSourceCachePayload(payload));
   } catch {
     return null;
   }

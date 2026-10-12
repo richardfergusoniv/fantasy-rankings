@@ -31,8 +31,10 @@ import {
 /**
  * Key/value cache for dashboard snapshots and external source payloads.
  * Some rows are multi‑MB JSON text (players dump, full dashboards). Keep
- * reads keyed by `cache_key`; longer-term, large blobs should move to object
- * storage or compressed/chunked payloads rather than growing this table.
+ * reads keyed by `cache_key`. Payloads over ~50 KB are stored as `gz1:` +
+ * base64(gzip(JSON)) via `encodeSourceCachePayload` / `decodeSourceCachePayload`;
+ * legacy plain JSON still reads. Per-user dashboards also use section keys
+ * `dashboard:user:<id>:meta|team|players|league|analytics|trade`.
  */
 export const sourceCache = pgTable("source_cache", {
   cacheKey: text("cache_key").primaryKey(),

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, schema } from "./db.js";
+import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
 
 /**
  * Historical trades logic, extracted from app/server/src/actions.ts.
@@ -277,7 +278,7 @@ async function loadHistoricalDraftPickMap(
   const cached = cachedRows[0];
   if (cached && !forceRefresh) {
     try {
-      const parsed = historicalDraftPickMapCacheSchema.parse(JSON.parse(cached.payload));
+      const parsed = historicalDraftPickMapCacheSchema.parse(decodeSourceCachePayload(cached.payload));
       return {
         byOriginalPick: new Map(parsed.entries),
         placeholderByLeagueId: new Map(
@@ -295,7 +296,9 @@ async function loadHistoricalDraftPickMap(
     } catch {
       try {
         return {
-          byOriginalPick: new Map(historicalDraftPickMapEntriesSchema.parse(JSON.parse(cached.payload))),
+          byOriginalPick: new Map(
+            historicalDraftPickMapEntriesSchema.parse(decodeSourceCachePayload(cached.payload)),
+          ),
           placeholderByLeagueId: new Map(),
         };
       } catch {
@@ -462,7 +465,7 @@ async function loadHistoricalDraftPickMap(
   }
 
   const fetchedAt = new Date();
-  const payload = JSON.stringify({
+  const payload = encodeSourceCachePayload({
     entries: [...draftedPlayersByOriginalPick.entries()],
     placeholders: [...placeholderByLeagueId.entries()].map(([leagueId, placeholder]) => ({
       leagueId,
@@ -480,7 +483,7 @@ async function loadHistoricalDraftPickMap(
 }
 
 function parseHistoricalPlayerMap(payload: string): Record<string, SleeperPlayer> {
-  const parsed: unknown = JSON.parse(payload);
+  const parsed: unknown = decodeSourceCachePayload(payload);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("Sleeper player cache is malformed.");
   }
@@ -505,7 +508,7 @@ async function loadHistoricalPlayerMap(forceRefresh: boolean): Promise<Record<st
   try {
     const fresh = await fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`);
     const fetchedAt = new Date();
-    const payload = JSON.stringify(fresh);
+    const payload = encodeSourceCachePayload(fresh);
     await db.insert(schema.sourceCache).values({ cacheKey: HISTORICAL_PLAYERS_CACHE_KEY, payload, fetchedAt }).onConflictDoUpdate({
       target: schema.sourceCache.cacheKey,
       set: { payload, fetchedAt },

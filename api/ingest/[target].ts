@@ -18,6 +18,7 @@ import {
   xNewsBatchSchema,
 } from "../_lib/player-news-shared.js";
 import { SLEEPER_BASE, fetchJson, type SleeperPlayer } from "../_lib/sleeper.js";
+import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/source-cache-payload.js";
 
 /**
  * POST /api/ingest/:target
@@ -203,7 +204,7 @@ async function handleMatchupGrades(req: Request): Promise<Response> {
     const existing = existingRows[0];
     if (existing) {
       try {
-        const prev = JSON.parse(existing.payload) as { computedAt?: string };
+        const prev = decodeSourceCachePayload(existing.payload) as { computedAt?: string };
         if (
           prev.computedAt &&
           new Date(prev.computedAt).getTime() >= new Date(league.computed_at).getTime()
@@ -215,12 +216,13 @@ async function handleMatchupGrades(req: Request): Promise<Response> {
       }
     }
     const fetchedAt = new Date(league.computed_at);
+    const encoded = encodeSourceCachePayload(entry);
     await db
       .insert(schema.sourceCache)
-      .values({ cacheKey, payload: JSON.stringify(entry), fetchedAt })
+      .values({ cacheKey, payload: encoded, fetchedAt })
       .onConflictDoUpdate({
         target: schema.sourceCache.cacheKey,
-        set: { payload: JSON.stringify(entry), fetchedAt },
+        set: { payload: encoded, fetchedAt },
       });
     committed += 1;
   }
@@ -302,13 +304,14 @@ async function handlePfnTables(req: Request): Promise<Response> {
       rows: table.rows,
     };
     const cacheKey = `pfn:${tableKey}`;
+    const encoded = encodeSourceCachePayload(stored);
     await db.insert(schema.sourceCache).values({
       cacheKey,
-      payload: JSON.stringify(stored),
+      payload: encoded,
       fetchedAt,
     }).onConflictDoUpdate({
       target: schema.sourceCache.cacheKey,
-      set: { payload: JSON.stringify(stored), fetchedAt },
+      set: { payload: encoded, fetchedAt },
     });
   }
 

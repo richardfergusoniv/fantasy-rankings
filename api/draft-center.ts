@@ -9,6 +9,7 @@ import {
 } from "./_lib/api-utils.js";
 import { resolveSleeperUserId } from "./_lib/auth.js";
 import { readUserLeagues } from "./_lib/user-leagues.js";
+import { decodeSourceCachePayload, encodeSourceCachePayload } from "./_lib/source-cache-payload.js";
 import {
   DRAFT_MARKET_CACHE_KEY,
   DRAFT_MARKET_CACHE_MS,
@@ -295,18 +296,19 @@ async function loadDraftMarketSnapshot(
   const cached = rows[0];
   if (!force && cached && Date.now() - cached.fetchedAt.getTime() < DRAFT_MARKET_CACHE_MS) {
     try {
-      return draftCenterResponse.pick({ adpAsOf: true, adp: true, trending: true, trendingDrops: true, markets: true, vegasLines: true, sourceStatus: true, sourceErrors: true }).parse(JSON.parse(cached.payload));
+      return draftCenterResponse.pick({ adpAsOf: true, adp: true, trending: true, trendingDrops: true, markets: true, vegasLines: true, sourceStatus: true, sourceErrors: true }).parse(decodeSourceCachePayload(cached.payload));
     } catch { /* Refresh malformed or old cache below. */ }
   }
   try {
     const fresh = await withDeadline(fetchDraftMarketSnapshot(leagues, players, season), REFRESH_TIMEOUT_MS);
-    await db.insert(schema.sourceCache).values({ cacheKey: DRAFT_MARKET_CACHE_KEY, payload: JSON.stringify(fresh), fetchedAt: new Date() })
-      .onConflictDoUpdate({ target: schema.sourceCache.cacheKey, set: { payload: JSON.stringify(fresh), fetchedAt: new Date() } });
+    const encoded = encodeSourceCachePayload(fresh);
+    await db.insert(schema.sourceCache).values({ cacheKey: DRAFT_MARKET_CACHE_KEY, payload: encoded, fetchedAt: new Date() })
+      .onConflictDoUpdate({ target: schema.sourceCache.cacheKey, set: { payload: encoded, fetchedAt: new Date() } });
     return fresh;
   } catch {
     if (cached) {
       try {
-        const parsed = draftCenterResponse.pick({ adpAsOf: true, adp: true, trending: true, trendingDrops: true, markets: true, vegasLines: true, sourceStatus: true, sourceErrors: true }).parse(JSON.parse(cached.payload));
+        const parsed = draftCenterResponse.pick({ adpAsOf: true, adp: true, trending: true, trendingDrops: true, markets: true, vegasLines: true, sourceStatus: true, sourceErrors: true }).parse(decodeSourceCachePayload(cached.payload));
         return { ...parsed, sourceErrors: [...parsed.sourceErrors, "Market refresh failed; showing the last saved snapshot."] };
       } catch { /* Empty state below. */ }
     }

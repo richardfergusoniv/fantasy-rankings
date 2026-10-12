@@ -28,6 +28,7 @@ export type TeamSection = Extract<DashboardSection, { section: "team" }>;
 export type PlayersSection = Extract<DashboardSection, { section: "players" }>;
 export type LeagueSection = Extract<DashboardSection, { section: "league" }>;
 export type AnalyticsSection = Extract<DashboardSection, { section: "analytics" }>;
+export type TradeSection = Extract<DashboardSection, { section: "trade" }>;
 export type PlayerNewsItem = PlayerNews["runs"][number]["items"][number];
 export type ValueHistorySeries = ApiResponse<typeof api, "getValueHistory">["series"][number];
 export type HistoricalTrades = ApiResponse<typeof api, "getHistoricalTrades">;

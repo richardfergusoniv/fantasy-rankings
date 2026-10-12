@@ -2,6 +2,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, schema } from "./db.js";
 import { canonicalTeam, fetchText } from "./sleeper.js";
+import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
 
 export const TEAM_SITUATIONAL_STATS_URL =
   "https://hindi3.sportskeeda.com/nfl/team-stat/third-down-percentage-leaders?season=2026&type=regular";
@@ -118,7 +119,7 @@ export async function readTeamSituationalSnapshot(): Promise<TeamSituationalSnap
     .limit(1);
   if (!cached) return null;
   try {
-    const parsed = teamSituationalSnapshotSchema.safeParse(JSON.parse(cached.payload));
+    const parsed = teamSituationalSnapshotSchema.safeParse(decodeSourceCachePayload(cached.payload));
     return parsed.success ? parsed.data : null;
   } catch {
     return null;
@@ -153,13 +154,14 @@ export async function refreshTeamSituationalSnapshot(): Promise<TeamSituationalR
       sourceUrl: TEAM_SITUATIONAL_STATS_URL,
       rows,
     };
+    const payload = encodeSourceCachePayload(snapshot);
     await db.insert(schema.sourceCache).values({
       cacheKey: TEAM_SITUATIONAL_CACHE_KEY,
-      payload: JSON.stringify(snapshot),
+      payload,
       fetchedAt: new Date(snapshot.fetchedAt),
     }).onConflictDoUpdate({
       target: schema.sourceCache.cacheKey,
-      set: { payload: JSON.stringify(snapshot), fetchedAt: new Date(snapshot.fetchedAt) },
+      set: { payload, fetchedAt: new Date(snapshot.fetchedAt) },
     });
     return {
       ok: true,

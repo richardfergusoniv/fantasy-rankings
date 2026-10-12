@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, schema } from "./db.js";
+import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
 
 /**
  * Shared Sleeper API helpers and fantasy-stat scoring functions.
@@ -311,7 +312,7 @@ export async function loadSleeperPlayerWeeklySeason(
   const cached = cachedRows[0];
   const maxAge = season === 2026 ? SLEEPER_WEEKLY_STATS_CURRENT_CACHE_MS : SLEEPER_WEEKLY_STATS_ARCHIVE_CACHE_MS;
   if (cached && Date.now() - cached.fetchedAt.getTime() < maxAge) {
-    const parsed: unknown = JSON.parse(cached.payload);
+    const parsed: unknown = decodeSourceCachePayload(cached.payload);
     return normalizeSleeperWeeklyRows(parsed);
   }
   try {
@@ -319,12 +320,13 @@ export async function loadSleeperPlayerWeeklySeason(
       `${SLEEPER_PROJECTIONS_BASE}/stats/nfl/player/${encodeURIComponent(playerId)}?season_type=regular&season=${season}&grouping=week`,
     );
     const rows = normalizeSleeperWeeklyRows(payload);
-    await db.insert(schema.sourceCache).values({ cacheKey, payload: JSON.stringify(payload), fetchedAt: new Date() })
-      .onConflictDoUpdate({ target: schema.sourceCache.cacheKey, set: { payload: JSON.stringify(payload), fetchedAt: new Date() } });
+    const encoded = encodeSourceCachePayload(payload);
+    await db.insert(schema.sourceCache).values({ cacheKey, payload: encoded, fetchedAt: new Date() })
+      .onConflictDoUpdate({ target: schema.sourceCache.cacheKey, set: { payload: encoded, fetchedAt: new Date() } });
     return rows;
   } catch (error) {
     if (cached) {
-      const parsed: unknown = JSON.parse(cached.payload);
+      const parsed: unknown = decodeSourceCachePayload(cached.payload);
       return normalizeSleeperWeeklyRows(parsed);
     }
     throw error;
@@ -530,7 +532,7 @@ export function weeklyAvailabilityStatus(player: SleeperPlayer | undefined): str
 export function parseInjurySnapshot(payload: string | undefined): Record<string, string | null> {
   if (!payload) return {};
   try {
-    const value: unknown = JSON.parse(payload);
+    const value: unknown = decodeSourceCachePayload(payload);
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
     const entries = Object.entries(value).filter(
       (entry): entry is [string, string | null] => typeof entry[1] === "string" || entry[1] === null,
