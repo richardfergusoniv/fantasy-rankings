@@ -184,6 +184,11 @@ export const leagueSchema = z.object({
   powerRankingsDynasty: z.array(powerRankingSchema),
 });
 
+export const weeklySnapPointSchema = z.object({
+  week: z.number().int(),
+  snapShare: z.number(),
+});
+
 export const analyticsEntitySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -193,6 +198,7 @@ export const analyticsEntitySchema = z.object({
   rollingGames: z.number().int(),
   season: z.record(z.string(), z.number()),
   rolling17: z.record(z.string(), z.number()),
+  weeklySnaps: z.array(weeklySnapPointSchema).default([]),
 });
 
 export const teamUsageSchema = z.object({
@@ -207,6 +213,7 @@ export const teamUsageSchema = z.object({
   playsPerGame: z.number(),
   passPct: z.number(),
   runPct: z.number(),
+  proe: z.number().optional(),
 });
 
 export const nflTeamRecordSchema = z.object({

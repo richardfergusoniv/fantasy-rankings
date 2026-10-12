@@ -73,6 +73,13 @@ import { rankingsForLeagueFormats } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
 import { selectProjectionFeed } from "./projection-fallback.js";
+import {
+  applySnapSharesToRows,
+  enrichOpportunityMetrics,
+  weeklySnapsByPlayerId,
+  type ChartStatRow,
+} from "./chart-metric-transforms.js";
+import { loadChartExtrasSnapshot, type ChartExtrasSnapshot } from "./nflverse-chart-extras.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -294,7 +301,22 @@ function parseCsv(source: string): string[][] {
   return rows;
 }
 
-const RATE_METRICS = new Set(["completion_pct", "cpoe", "epa_per_play", "target_share", "air_yards_share", "wopr", "racr", "fg_pct"]);
+const RATE_METRICS = new Set([
+  "completion_pct",
+  "cpoe",
+  "epa_per_play",
+  "target_share",
+  "air_yards_share",
+  "wopr",
+  "racr",
+  "fg_pct",
+  "opportunity_share",
+  "carry_share",
+  "rb_target_share",
+  "snap_share",
+  "rz_target_share",
+  "rz_carry_share",
+]);
 
 function numeric(row: Record<string, string>, key: string): number {
   const value = Number(row[key]);
@@ -575,7 +597,7 @@ function emptyTeamGameProduction(): TeamGameProduction {
   };
 }
 
-function buildTeamUsage(rows: StatRow[]): z.infer<typeof teamUsageSchema>[] {
+function buildTeamUsage(rows: StatRow[], teamProe?: Map<string, number>): z.infer<typeof teamUsageSchema>[] {
   const byTeam = new Map<string, Map<string, TeamGameProduction>>();
   for (const row of rows) {
     const teamGames = byTeam.get(row.team) ?? new Map<string, TeamGameProduction>();
@@ -640,12 +662,32 @@ function buildTeamUsage(rows: StatRow[]): z.infer<typeof teamUsageSchema>[] {
       playsPerGame: Number((plays / games.size).toFixed(1)),
       passPct: Number(((totals.passAttempts / plays) * 100).toFixed(1)),
       runPct: Number(((totals.rushAttempts / plays) * 100).toFixed(1)),
+      ...(teamProe?.has(team) ? { proe: teamProe.get(team) } : {}),
     }];
   }).sort((a, b) => a.team.localeCompare(b.team));
 }
 
-function buildAnalytics(previousCsv: string, currentCsv: string, season: number): { throughWeek: number | null; entities: AnalyticsEntity[]; teamUsage: z.infer<typeof teamUsageSchema>[] } {
+function applyChartExtrasToRows(rows: StatRow[], extras: ChartExtrasSnapshot | null): void {
+  enrichOpportunityMetrics(rows as ChartStatRow[]);
+  if (!extras) return;
+  applySnapSharesToRows(rows as ChartStatRow[], extras.snaps);
+  for (const row of rows) {
+    if (row.position === "K" || row.position === "DEF") continue;
+    const rz = extras.players[row.id];
+    if (!rz) continue;
+    if (typeof rz.rzTargetShare === "number") row.values.rz_target_share = rz.rzTargetShare;
+    if (typeof rz.rzCarryShare === "number") row.values.rz_carry_share = rz.rzCarryShare;
+  }
+}
+
+function buildAnalytics(
+  previousCsv: string,
+  currentCsv: string,
+  season: number,
+  extras: ChartExtrasSnapshot | null = null,
+): { throughWeek: number | null; entities: AnalyticsEntity[]; teamUsage: z.infer<typeof teamUsageSchema>[] } {
   const allRows = [...parseAnalyticsRows(previousCsv), ...parseAnalyticsRows(currentCsv)];
+  applyChartExtrasToRows(allRows, extras);
   const currentRows = allRows.filter((row) => row.season === season);
   const activeKeys = new Set(currentRows.map((row) => `${row.position}:${row.id}`));
   const byKey = new Map<string, StatRow[]>();
@@ -656,6 +698,7 @@ function buildAnalytics(previousCsv: string, currentCsv: string, season: number)
     group.push(row);
     byKey.set(key, group);
   }
+  const weeklySnaps = weeklySnapsByPlayerId(currentRows as ChartStatRow[], season);
   const entities: AnalyticsEntity[] = [];
   for (const [key, rowsForEntity] of byKey) {
     const ordered = rowsForEntity.slice().sort((a, b) => b.season - a.season || b.week - a.week);
@@ -664,6 +707,20 @@ function buildAnalytics(previousCsv: string, currentCsv: string, season: number)
     const seasonRows = ordered.filter((row) => row.season === season);
     const rollingRows = ordered.slice(0, 17);
     if (seasonRows.length === 0) continue;
+    const seasonMetrics = averageMetrics(seasonRows);
+    const rollingMetrics = averageMetrics(rollingRows);
+    // Red-zone shares are season aggregates from pbp; keep them on both windows.
+    const rz = extras?.players[latest.id];
+    if (rz) {
+      if (typeof rz.rzTargetShare === "number") {
+        seasonMetrics.rz_target_share = rz.rzTargetShare;
+        rollingMetrics.rz_target_share = rz.rzTargetShare;
+      }
+      if (typeof rz.rzCarryShare === "number") {
+        seasonMetrics.rz_carry_share = rz.rzCarryShare;
+        rollingMetrics.rz_carry_share = rz.rzCarryShare;
+      }
+    }
     entities.push({
       id: key,
       name: latest.name,
@@ -671,13 +728,20 @@ function buildAnalytics(previousCsv: string, currentCsv: string, season: number)
       position: latest.position,
       seasonGames: seasonRows.length,
       rollingGames: rollingRows.length,
-      season: averageMetrics(seasonRows),
-      rolling17: averageMetrics(rollingRows),
+      season: seasonMetrics,
+      rolling17: rollingMetrics,
+      weeklySnaps: weeklySnaps.get(latest.id) ?? [],
     });
   }
   entities.sort((a, b) => a.position.localeCompare(b.position) || a.name.localeCompare(b.name));
   const throughWeek = currentRows.reduce<number | null>((maximum, row) => maximum === null ? row.week : Math.max(maximum, row.week), null);
-  return { throughWeek, entities, teamUsage: buildTeamUsage(currentRows) };
+  const proeByTeam = new Map<string, number>();
+  if (extras) {
+    for (const [team, value] of Object.entries(extras.teams)) {
+      proeByTeam.set(team, value.proe);
+    }
+  }
+  return { throughWeek, entities, teamUsage: buildTeamUsage(currentRows, proeByTeam) };
 }
 
 function nflTeamRecordsFromScoreboard(scoreboard: EspnScoreboard): z.infer<typeof nflTeamRecordSchema>[] {
@@ -1671,7 +1735,8 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     sourceErrors.push("Advanced stats are awaiting the nflverse file for the current season.");
   } else if (currentStatsResult.status === "fulfilled" && previousStatsResult.status === "fulfilled") {
     try {
-      const built = buildAnalytics(previousStatsResult.value, currentStatsResult.value, season);
+      const chartExtras = await loadChartExtrasSnapshot();
+      const built = buildAnalytics(previousStatsResult.value, currentStatsResult.value, season, chartExtras);
       analytics = { asOf: new Date().toISOString(), throughWeek: built.throughWeek, sourceUrl: NFLVERSE_PLAYER_STATS_2026_URL, entities: built.entities, teamUsage: built.teamUsage, teamRecords };
       if (built.entities.length === 0) sourceErrors.push("nflverse advanced stats did not include any current-season games.");
     } catch {

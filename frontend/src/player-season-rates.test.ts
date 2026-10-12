@@ -12,6 +12,7 @@ function entity(name: string, position: AnalyticsEntity["position"], season: Rec
     rollingGames: 5,
     season,
     rolling17: {},
+    weeklySnaps: [],
   };
 }
 
