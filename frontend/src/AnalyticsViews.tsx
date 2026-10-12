@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CartesianGrid, Customized, ReferenceLine, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Customized, Line, LineChart, ReferenceLine, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -68,6 +68,11 @@ const analyticsMetrics: Record<BasePosition, Metric[]> = {
     { key: "rushing_yards", label: "Rushing yards", short: "Rush yds" },
     { key: "rushing_tds", label: "Rushing touchdowns", short: "Rush TD" },
     { key: "cpoe", label: "Completion % over expected", short: "CPOE", unit: "%" },
+    { key: "opportunity", label: "Opportunity", short: "Opp" },
+    { key: "opportunity_share", label: "Opportunity share", short: "Opp %", unit: "%" },
+    { key: "snap_share", label: "Snap share", short: "Snap %", unit: "%" },
+    { key: "rz_target_share", label: "Red-zone target share", short: "RZ tgt %", unit: "%" },
+    { key: "rz_carry_share", label: "Red-zone carry share", short: "RZ carry %", unit: "%" },
   ],
   RB: [
     { key: "fantasy_league", label: "League fantasy points", short: "League pts", sourceKey: "fantasy_ppr" },
@@ -83,6 +88,13 @@ const analyticsMetrics: Record<BasePosition, Metric[]> = {
     { key: "target_share", label: "Target share", short: "Target %", unit: "%" },
     { key: "rushing_epa", label: "Rushing EPA", short: "Rush EPA" },
     { key: "receiving_epa", label: "Receiving EPA", short: "Rec EPA" },
+    { key: "opportunity", label: "Opportunity", short: "Opp" },
+    { key: "opportunity_share", label: "Opportunity share", short: "Opp %", unit: "%" },
+    { key: "carry_share", label: "Carry share", short: "Carry %", unit: "%" },
+    { key: "rb_target_share", label: "RB target share", short: "RB tgt %", unit: "%" },
+    { key: "snap_share", label: "Snap share", short: "Snap %", unit: "%" },
+    { key: "rz_target_share", label: "Red-zone target share", short: "RZ tgt %", unit: "%" },
+    { key: "rz_carry_share", label: "Red-zone carry share", short: "RZ carry %", unit: "%" },
   ],
   WR: [
     { key: "fantasy_league", label: "League fantasy points", short: "League pts", sourceKey: "fantasy_ppr" },
@@ -97,6 +109,11 @@ const analyticsMetrics: Record<BasePosition, Metric[]> = {
     { key: "wopr", label: "Weighted opportunity rating", short: "WOPR" },
     { key: "racr", label: "Receiver air conversion ratio", short: "RACR" },
     { key: "receiving_epa", label: "Receiving EPA", short: "Rec EPA" },
+    { key: "opportunity", label: "Opportunity", short: "Opp" },
+    { key: "opportunity_share", label: "Opportunity share", short: "Opp %", unit: "%" },
+    { key: "snap_share", label: "Snap share", short: "Snap %", unit: "%" },
+    { key: "rz_target_share", label: "Red-zone target share", short: "RZ tgt %", unit: "%" },
+    { key: "rz_carry_share", label: "Red-zone carry share", short: "RZ carry %", unit: "%" },
   ],
   TE: [
     { key: "fantasy_league", label: "League fantasy points", short: "League pts", sourceKey: "fantasy_ppr" },
@@ -111,6 +128,11 @@ const analyticsMetrics: Record<BasePosition, Metric[]> = {
     { key: "wopr", label: "Weighted opportunity rating", short: "WOPR" },
     { key: "racr", label: "Receiver air conversion ratio", short: "RACR" },
     { key: "receiving_epa", label: "Receiving EPA", short: "Rec EPA" },
+    { key: "opportunity", label: "Opportunity", short: "Opp" },
+    { key: "opportunity_share", label: "Opportunity share", short: "Opp %", unit: "%" },
+    { key: "snap_share", label: "Snap share", short: "Snap %", unit: "%" },
+    { key: "rz_target_share", label: "Red-zone target share", short: "RZ tgt %", unit: "%" },
+    { key: "rz_carry_share", label: "Red-zone carry share", short: "RZ carry %", unit: "%" },
   ],
   K: [
     { key: "fg_attempts", label: "Field-goal attempts", short: "FG att" },
@@ -153,12 +175,23 @@ function metricSourceValue(values: Record<string, number>, metric: Metric): numb
   return values[metric.sourceKey ?? metric.key];
 }
 
+type ChartKind = "scatter" | "snap-trend" | "heatmap" | "team-scatter";
+
 type ChartPreset = {
   label: string;
   x: string;
   y: string;
+  kind?: ChartKind;
   research?: { source: string; sourceUrl: string; insight: string };
 };
+
+const sharedSkillPresets: ChartPreset[] = [
+  { label: "Usage vs Production", x: "opportunity", y: "fantasy_league" },
+  { label: "Snap share", x: "snap_week", y: "snap_share", kind: "snap-trend" },
+  { label: "Red-zone share", x: "rz_target_share", y: "rz_carry_share" },
+  { label: "FPA heatmap", x: "fpa_team", y: "fpa_position", kind: "heatmap" },
+  { label: "Pace x PROE", x: "plays_per_game", y: "proe", kind: "team-scatter" },
+];
 
 const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
   QB: [
@@ -184,11 +217,14 @@ const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
         insight: "Uses rushing volume against league-scored fantasy output to reveal the dual-threat ceiling behind the Konami Code framework.",
       },
     },
+    ...sharedSkillPresets,
   ],
   RB: [
     { label: "Workhorse profile", x: "touches", y: "fantasy_league" },
     { label: "Receiving leverage", x: "target_share", y: "receiving_epa" },
     { label: "Ground production", x: "carries", y: "rushing_yards" },
+    { label: "Backfield share", x: "carry_share", y: "rb_target_share" },
+    ...sharedSkillPresets,
   ],
   WR: [
     { label: "Opportunity profile", x: "target_share", y: "air_yards_share" },
@@ -203,20 +239,26 @@ const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
       },
     },
     { label: "Air-yards conversion", x: "receiving_air_yards", y: "receiving_yards" },
+    ...sharedSkillPresets,
   ],
   TE: [
     { label: "Opportunity profile", x: "target_share", y: "air_yards_share" },
     { label: "Weighted opportunity", x: "wopr", y: "fantasy_league" },
     { label: "Air-yards conversion", x: "receiving_air_yards", y: "receiving_yards" },
+    ...sharedSkillPresets,
   ],
   K: [
     { label: "Conversion volume", x: "fg_attempts", y: "fg_made" },
     { label: "Distance upside", x: "fg_40_plus", y: "fg_50_plus" },
+    { label: "FPA heatmap", x: "fpa_team", y: "fpa_position", kind: "heatmap" },
+    { label: "Pace x PROE", x: "plays_per_game", y: "proe", kind: "team-scatter" },
   ],
   DEF: [
     { label: "Pressure to sacks", x: "qb_hits", y: "sacks" },
     { label: "Takeaway scoring", x: "takeaways", y: "defensive_tds" },
     { label: "Backfield disruption", x: "tackles_for_loss", y: "takeaways" },
+    { label: "FPA heatmap", x: "fpa_team", y: "fpa_position", kind: "heatmap" },
+    { label: "Pace x PROE", x: "plays_per_game", y: "proe", kind: "team-scatter" },
   ],
 };
 
@@ -942,6 +984,138 @@ function ScatterPlot({
   );
 }
 
+const SNAP_TREND_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "#c4b5fd", "#f9a8d4", "#67e8f9"];
+
+function SnapShareTrendChart({
+  series,
+  ariaLabel,
+}: {
+  series: Array<{ id: string; name: string; label: string; color: string; points: Array<{ week: number; snapShare: number }> }>;
+  ariaLabel: string;
+}) {
+  const weeks = [...new Set(series.flatMap((item) => item.points.map((point) => point.week)))].sort((a, b) => a - b);
+  const data = weeks.map((week) => {
+    const row: Record<string, number | string> = { week };
+    for (const item of series) {
+      const point = item.points.find((candidate) => candidate.week === week);
+      if (point) row[item.id] = point.snapShare;
+    }
+    return row;
+  });
+
+  return (
+    <div className="scatter-frame" role="img" aria-label={ariaLabel}>
+      <ChartContainer
+        config={Object.fromEntries(series.map((item) => [item.id, { label: item.label, color: item.color }]))}
+        className="aspect-auto h-full"
+      >
+        <LineChart data={data} margin={{ top: 22, right: 10, bottom: 28, left: 2 }}>
+          <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
+          <XAxis
+            dataKey="week"
+            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tickLine={false}
+            axisLine={{ stroke: "var(--border)" }}
+            label={{ value: "Week", position: "insideBottom", offset: -12, fill: "var(--text)", fontSize: 10, fontWeight: 700 }}
+          />
+          <YAxis
+            domain={[0, 100]}
+            width={36}
+            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tickLine={false}
+            axisLine={false}
+            label={{ value: "Snap %", angle: -90, position: "insideLeft", fill: "var(--text)", fontSize: 10, fontWeight: 700 }}
+          />
+          <Tooltip contentStyle={chartTooltipStyle} />
+          {series.map((item) => (
+            <Line key={item.id} type="monotone" dataKey={item.id} name={item.label} stroke={item.color} strokeWidth={2} dot={{ r: 2 }} connectNulls={false} />
+          ))}
+        </LineChart>
+      </ChartContainer>
+    </div>
+  );
+}
+
+function fpaHeatColor(rank: number): string {
+  const t = Math.min(1, Math.max(0, (rank - 1) / 31));
+  const strength = { r: 22, g: 53, b: 39 };
+  const mid = { r: 42, g: 45, b: 53 };
+  const weakness = { r: 58, g: 26, b: 34 };
+  const mix = (from: typeof strength, to: typeof strength, amount: number) => ({
+    r: Math.round(from.r + (to.r - from.r) * amount),
+    g: Math.round(from.g + (to.g - from.g) * amount),
+    b: Math.round(from.b + (to.b - from.b) * amount),
+  });
+  const color = t < 0.5 ? mix(strength, mid, t * 2) : mix(mid, weakness, (t - 0.5) * 2);
+  return `rgb(${color.r} ${color.g} ${color.b})`;
+}
+
+function FpaHeatmap({
+  table,
+}: {
+  table: Record<string, Partial<Record<"QB" | "RB" | "WR" | "TE", { avg: number; weeks: number; rank: number }>>>;
+}) {
+  const positions = ["QB", "RB", "WR", "TE"] as const;
+  const teams = Object.keys(table).sort((a, b) => a.localeCompare(b));
+
+  return (
+    <div className="fpa-heatmap" role="img" aria-label="Fantasy points allowed by defense and position">
+      <div className="fpa-heatmap-grid" style={{ gridTemplateColumns: `minmax(2.5rem, 3rem) repeat(${positions.length}, minmax(0, 1fr))` }}>
+        <div className="fpa-heatmap-corner" aria-hidden="true" />
+        {positions.map((position) => <div className="fpa-heatmap-head" key={position}>{position}</div>)}
+        {teams.flatMap((team) => [
+          <div className="fpa-heatmap-team" key={`${team}-label`}>{team}</div>,
+          ...positions.map((position) => {
+            const cell = table[team]?.[position];
+            if (!cell) {
+              return <div className="fpa-heatmap-cell is-empty" key={`${team}-${position}`}>—</div>;
+            }
+            return (
+              <div
+                className="fpa-heatmap-cell"
+                key={`${team}-${position}`}
+                style={{ background: fpaHeatColor(cell.rank) }}
+              >
+                <strong>{formatDecimal(cell.avg, 1)}</strong>
+              </div>
+            );
+          }),
+        ])}
+      </div>
+    </div>
+  );
+}
+
+function TeamScatterPlot({
+  data,
+  xShort,
+  yShort,
+  ariaLabel,
+}: {
+  data: ChartDatum[];
+  xShort: string;
+  yShort: string;
+  ariaLabel: string;
+}) {
+  return (
+    <ScatterPlot
+      others={data.filter((row) => !row.isSelectedTeam)}
+      leadersWithoutSelectedTeam={[]}
+      selectedTeamPlayers={data.filter((row) => row.isSelectedTeam)}
+      labelData={data}
+      leaderIds={new Set()}
+      selectedTeamIds={new Set(data.filter((row) => row.isSelectedTeam).map((row) => row.id))}
+      highlightedId={null}
+      xAxis={{ short: xShort, titleSuffix: "" }}
+      yAxis={{ short: yShort, titleSuffix: "" }}
+      showQuadrants={false}
+      xCutoff={0}
+      yCutoff={0}
+      ariaLabel={ariaLabel}
+    />
+  );
+}
+
 function ChartKey({ teamName }: { teamName: string }) {
   return (
     <div className="chart-key">
@@ -1176,6 +1350,7 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
   const [window, setWindow] = useState<AnalyticsWindow>("season");
   const [xMetric, setXMetric] = useState(defaultAnalyticsAxes.RB[0]);
   const [yMetric, setYMetric] = useState(defaultAnalyticsAxes.RB[1]);
+  const [chartKind, setChartKind] = useState<ChartKind>("scatter");
   const [plotLimit, setPlotLimit] = useState<PlotLimit>("40");
   const [showQuadrants, setShowQuadrants] = useState(true);
   const [xPercentile, setXPercentile] = useState(50);
@@ -1194,8 +1369,8 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
   const config: SavedChartConfig = {
     dataset: "advanced",
     position,
-    xMetric: selectedX?.key ?? xMetric,
-    yMetric: selectedY?.key ?? yMetric,
+    xMetric: chartKind === "scatter" ? (selectedX?.key ?? xMetric) : xMetric,
+    yMetric: chartKind === "scatter" ? (selectedY?.key ?? yMetric) : yMetric,
     window,
     showQuadrants,
     xPercentile,
@@ -1212,6 +1387,7 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
     setPosition(nextPosition);
     setXMetric(nextX);
     setYMetric(nextY);
+    setChartKind("scatter");
     setSelectedSavedViewId(null);
     setPickerMode("blank");
   }
@@ -1233,6 +1409,7 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
     setPosition(view.position);
     setXMetric(validMetrics.some((metric) => metric.key === view.xMetric) ? view.xMetric : fallbackX);
     setYMetric(validMetrics.some((metric) => metric.key === view.yMetric) ? view.yMetric : fallbackY);
+    setChartKind("scatter");
     setWindow(view.window);
     setShowQuadrants(view.showQuadrants);
     setXPercentile(view.xPercentile);
@@ -1242,8 +1419,17 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
     setPickerMode("derived");
   }
 
+  function applyBuiltInPreset(preset: ChartPreset) {
+    setXMetric(preset.x);
+    setYMetric(preset.y);
+    setChartKind(preset.kind ?? "scatter");
+    setSelectedSavedViewId(null);
+    setPickerMode("derived");
+    closeAdvancedControls();
+  }
+
   const chartData = useMemo(() => {
-    if (!selectedX || !selectedY) return [];
+    if (chartKind !== "scatter" || !selectedX || !selectedY) return [];
     const mapped = dashboard.analytics.entities
       .filter((entity) => entity.position === position)
       .flatMap((entity): ChartDatum[] => {
@@ -1267,8 +1453,59 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
     const visible = mapped.slice(0, Number(plotLimit));
     const visibleIds = new Set(visible.map((row) => row.id));
     return [...visible, ...mapped.filter((row) => row.isSelectedTeam && !visibleIds.has(row.id))];
-  }, [dashboard.analytics.entities, league, plotLimit, position, selectedX, selectedY, window]);
+  }, [chartKind, dashboard.analytics.entities, league, plotLimit, position, selectedX, selectedY, window]);
 
+  const snapTrendSeries = useMemo(() => {
+    if (chartKind !== "snap-trend") return [];
+    const mapped = dashboard.analytics.entities
+      .filter((entity) => entity.position === position && (entity.weeklySnaps?.length ?? 0) > 0)
+      .map((entity) => ({
+        id: entity.id,
+        name: entity.name,
+        label: analyticsLabel(entity),
+        team: entity.team,
+        games: entity.weeklySnaps.length,
+        avgSnap: entity.weeklySnaps.reduce((sum, point) => sum + point.snapShare, 0) / entity.weeklySnaps.length,
+        points: entity.weeklySnaps,
+        isSelectedTeam: isPlayerOnSelectedTeam(entity, league),
+      }))
+      .sort((a, b) => Number(b.isSelectedTeam) - Number(a.isSelectedTeam) || b.avgSnap - a.avgSnap);
+    const limit = plotLimit === "all" ? mapped.length : Number(plotLimit);
+    const selected = mapped.filter((row) => row.isSelectedTeam);
+    const others = mapped.filter((row) => !row.isSelectedTeam).slice(0, limit);
+    const combined = [...selected, ...others.filter((row) => !selected.some((item) => item.id === row.id))].slice(0, Math.max(limit, selected.length));
+    return combined.map((row, index) => ({
+      id: row.id,
+      name: row.name,
+      label: row.label,
+      color: row.isSelectedTeam ? "var(--chart-1)" : SNAP_TREND_COLORS[index % SNAP_TREND_COLORS.length] ?? "var(--chart-2)",
+      points: row.points,
+    }));
+  }, [chartKind, dashboard.analytics.entities, league, plotLimit, position]);
+
+  const teamScatterData = useMemo(() => {
+    if (chartKind !== "team-scatter") return [];
+    const userTeams = new Set(
+      [...league.starters, ...league.bench]
+        .map((player) => player.team)
+        .filter((team): team is string => Boolean(team)),
+    );
+    return dashboard.analytics.teamUsage.flatMap((usage): ChartDatum[] => {
+      if (typeof usage.proe !== "number" || !Number.isFinite(usage.proe)) return [];
+      return [{
+        id: usage.team,
+        name: usage.team,
+        label: usage.team,
+        team: usage.team,
+        games: usage.games,
+        x: usage.playsPerGame,
+        y: usage.proe,
+        isSelectedTeam: userTeams.has(usage.team),
+      }];
+    });
+  }, [chartKind, dashboard.analytics.teamUsage, league.bench, league.starters]);
+
+  const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const xCutoff = percentileCutoff(chartData.map((row) => row.x), xPercentile, selectedX?.lowerIsBetter);
   const yCutoff = percentileCutoff(chartData.map((row) => row.y), yPercentile, selectedY?.lowerIsBetter);
   const leaders = selectedX && selectedY ? chartData.filter((row) => (selectedX.lowerIsBetter ? row.x <= xCutoff : row.x >= xCutoff) && (selectedY.lowerIsBetter ? row.y <= yCutoff : row.y >= yCutoff)) : [];
@@ -1280,6 +1517,23 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
   const labelData = plotLimit === "all" ? selectedTeamPlayers : chartData;
   const labeledIds = new Set(labelData.map((row) => row.id));
   const omittedNames = chartData.filter((row) => !labeledIds.has(row.id)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
+
+  const chartCount = (() => {
+    switch (chartKind) {
+      case "scatter":
+        return chartData.length;
+      case "snap-trend":
+        return snapTrendSeries.length;
+      case "heatmap":
+        return Object.keys(sosEntry?.table ?? {}).length;
+      case "team-scatter":
+        return teamScatterData.length;
+      default: {
+        const _exhaustive: never = chartKind;
+        return _exhaustive;
+      }
+    }
+  })();
 
   if (!dashboard.analytics.entities.length || !selectedX || !selectedY) {
     return (
@@ -1311,20 +1565,20 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
         selectedSavedViewId={selectedSavedViewId}
         onSelectedSavedViewIdChange={setSelectedSavedViewId}
         onApplySavedView={applySavedView}
-        onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); setPickerMode("derived"); closeAdvancedControls(); }}
+        onApplyBuiltIn={applyBuiltInPreset}
         advancedOpen={advancedOpen}
         onAdvancedOpenChange={setAdvancedOpen}
       >
           <SegmentedControl
             className="lineup-mode-toggle analytics-window-toggle"
             value={window}
-            onChange={(value) => { setWindow(value); setSelectedSavedViewId(null); setPickerMode("derived"); }}
+            onChange={(value) => { setWindow(value); setSelectedSavedViewId(null); setPickerMode("derived"); setChartKind("scatter"); }}
             label="Advanced stat window"
             options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]}
           />
           <div className="analytics-selectors advanced-only-selectors">
-            <label><span>X axis</span><select aria-label="Choose horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
-            <label><span>Y axis</span><select aria-label="Choose vertical axis" value={selectedY.key} onChange={(event) => { setYMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
+            <label><span>X axis</span><select aria-label="Choose horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setChartKind("scatter"); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
+            <label><span>Y axis</span><select aria-label="Choose vertical axis" value={selectedY.key} onChange={(event) => { setYMetric(event.target.value); setChartKind("scatter"); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
             <label className="plot-limit"><span>Players shown</span><select aria-label="Choose number of players shown" value={plotLimit} onChange={(event) => { setPlotLimit(event.target.value as PlotLimit); setSelectedSavedViewId(null); setPickerMode("derived"); }}><option value="24">Top 24 + my team</option><option value="40">Top 40 + my team</option><option value="all">All with data</option></select></label>
             <PercentileCutoffSelect axis="X" value={xPercentile} onChange={(value) => { setXPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
             <PercentileCutoffSelect axis="Y" value={yPercentile} onChange={(value) => { setYPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
@@ -1336,28 +1590,48 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
       <ChartDialog
         isOpen={isChartOpen}
         onClose={() => setIsChartOpen(false)}
-        title={`${position === "DEF" ? "DST" : position} field`}
-        subtitle={`${window === "season" ? `${dashboard.season} games so far` : "Each player’s latest 17 games"} · per-game averages`}
-        count={chartData.length}
-        countLabel={position === "DEF" ? "teams" : "players"}
+        title={chartKind === "heatmap" ? "FPA" : chartKind === "team-scatter" ? "Pace x PROE" : chartKind === "snap-trend" ? "Snap share" : `${position === "DEF" ? "DST" : position} field`}
+        subtitle={chartKind === "scatter" ? `${window === "season" ? `${dashboard.season} games so far` : "Each player’s latest 17 games"} · per-game averages` : undefined}
+        count={chartCount}
+        countLabel={chartKind === "heatmap" || chartKind === "team-scatter" ? "teams" : position === "DEF" ? "teams" : "players"}
+        showCount={chartKind !== "heatmap"}
       >
-        <ScatterPlot
-          others={others}
-          leadersWithoutSelectedTeam={leadersWithoutSelectedTeam}
-          selectedTeamPlayers={selectedTeamPlayers}
-          labelData={labelData}
-          leaderIds={leaderIds}
-          selectedTeamIds={selectedTeamIds}
-          highlightedId={selectedTeamPlayers[0]?.id ?? null}
-          xAxis={{ short: selectedX.short, lowerIsBetter: selectedX.lowerIsBetter, titleSuffix: " / game" }}
-          yAxis={{ short: selectedY.short, lowerIsBetter: selectedY.lowerIsBetter, titleSuffix: " / game" }}
-          showQuadrants={showQuadrants}
-          xCutoff={xCutoff}
-          yCutoff={yCutoff}
-          ariaLabel={`${position === "DEF" ? "DST" : position} scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
-        />
-        <ChartKey teamName={fantasyTeamName(league)} />
-        <OmittedChartLabels omittedNames={omittedNames} />
+        {chartKind === "snap-trend" ? (
+          snapTrendSeries.length > 0
+            ? <SnapShareTrendChart series={snapTrendSeries} ariaLabel={`${position} weekly offensive snap share`} />
+            : <div className="analytics-empty"><strong>No snap share data yet.</strong></div>
+        ) : null}
+        {chartKind === "heatmap" ? (
+          sosEntry?.table && Object.keys(sosEntry.table).length > 0
+            ? <FpaHeatmap table={sosEntry.table} />
+            : <div className="analytics-empty"><strong>No FPA data yet.</strong></div>
+        ) : null}
+        {chartKind === "team-scatter" ? (
+          teamScatterData.length > 0
+            ? <TeamScatterPlot data={teamScatterData} xShort="Plays/g" yShort="PROE" ariaLabel="Team pace versus pass rate over expected" />
+            : <div className="analytics-empty"><strong>No pace or PROE data yet.</strong></div>
+        ) : null}
+        {chartKind === "scatter" && selectedX && selectedY ? (
+          <>
+            <ScatterPlot
+              others={others}
+              leadersWithoutSelectedTeam={leadersWithoutSelectedTeam}
+              selectedTeamPlayers={selectedTeamPlayers}
+              labelData={labelData}
+              leaderIds={leaderIds}
+              selectedTeamIds={selectedTeamIds}
+              highlightedId={selectedTeamPlayers[0]?.id ?? null}
+              xAxis={{ short: selectedX.short, lowerIsBetter: selectedX.lowerIsBetter, titleSuffix: " / game" }}
+              yAxis={{ short: selectedY.short, lowerIsBetter: selectedY.lowerIsBetter, titleSuffix: " / game" }}
+              showQuadrants={showQuadrants}
+              xCutoff={xCutoff}
+              yCutoff={yCutoff}
+              ariaLabel={`${position === "DEF" ? "DST" : position} scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
+            />
+            <ChartKey teamName={fantasyTeamName(league)} />
+            <OmittedChartLabels omittedNames={omittedNames} />
+          </>
+        ) : null}
       </ChartDialog>
     </section>
   );

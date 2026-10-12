@@ -16,9 +16,10 @@ import {
 import { readOwnerSleeperUserId } from "../_lib/auth.js";
 import { withDeadline } from "../_lib/sleeper.js";
 import { refreshTeamSituationalSnapshot } from "../_lib/team-situational.js";
+import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
 
 /**
- * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational
+ * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras
  *
  * One function for the scheduled jobs (Vercel's 12-function budget).
  * Vercel Cron invokes with GET; auth is `Authorization: Bearer <CRON_SECRET>`
@@ -36,6 +37,8 @@ import { refreshTeamSituationalSnapshot } from "../_lib/team-situational.js";
  * - refresh-team-situational: scrapes Sportskeeda third-down / red-zone TD
  *   rates into `team-situational-stats-2026`. Requires ≥30 teams before
  *   replacing cache; keeps the last valid snapshot on failure.
+ * - refresh-chart-extras: rebuilds compact nflverse snap / red-zone / PROE
+ *   metrics for Charts presets into `nflverse-chart-extras-2026-v1`.
  */
 
 async function handleRebuildDashboard(): Promise<Response> {
@@ -75,6 +78,11 @@ async function handleRefreshTeamSituational(): Promise<Response> {
   return json({ ok: true, job: "refresh-team-situational", ...result });
 }
 
+async function handleRefreshChartExtras(): Promise<Response> {
+  const result = await refreshChartExtrasSnapshot();
+  return json({ ok: true, job: "refresh-chart-extras", ...result });
+}
+
 export async function GET(req: Request): Promise<Response> {
   if (!hasCronSecret(req)) return forbidden("Invalid or missing cron secret.");
   const url = new URL(req.url, "https://localhost");
@@ -84,8 +92,9 @@ export async function GET(req: Request): Promise<Response> {
     if (job === "refresh-fantasycalc") return await handleRefreshFantasyCalc();
     if (job === "read-dashboard-snapshot") return await handleReadDashboardSnapshot();
     if (job === "refresh-team-situational") return await handleRefreshTeamSituational();
+    if (job === "refresh-chart-extras") return await handleRefreshChartExtras();
     return badRequest(
-      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, or refresh-team-situational.",
+      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, or refresh-chart-extras.",
     );
   } catch (err) {
     return internalError(err);
