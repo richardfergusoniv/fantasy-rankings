@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT } from "../../api/_lib/player-news-filters";
 import { rosterNewsForTicker } from "./roster-news";
 import type { PlayerNews } from "./dashboard-types";
 
-function news(items: Array<{ id: string; playerId: string; change: string }>): PlayerNews {
+function news(items: Array<{ id: string; playerId: string; change: string; roleContext?: string }>): PlayerNews {
   return {
     lastCheckedAt: null,
     emptyReason: null,
@@ -19,7 +20,7 @@ function news(items: Array<{ id: string; playerId: string; change: string }>): P
         newsType: "roster" as const,
         leagues: [],
         availability: [],
-        roleContext: "",
+        roleContext: item.roleContext ?? "",
         sourceLabel: "Sleeper",
         sourceUrl: "https://sleeper.app",
         sourcePublishedAt: null,
@@ -41,5 +42,24 @@ describe("rosterNewsForTicker", () => {
     ]);
     const items = rosterNewsForTicker(feed, new Set(["a"]));
     expect(items.map((item) => item.id)).toEqual(["1"]);
+  });
+
+  it("drops legacy Sleeper timestamp-only news rows", () => {
+    const feed = news([
+      {
+        id: "ping",
+        playerId: "a",
+        change: "Player has a Sleeper news update.",
+        roleContext: SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT,
+      },
+      {
+        id: "status",
+        playerId: "a",
+        change: "Injury status changed from Questionable to Out.",
+        roleContext: "Sleeper injury-status change detected by the scheduled check.",
+      },
+    ]);
+    const items = rosterNewsForTicker(feed, new Set(["a"]));
+    expect(items.map((item) => item.id)).toEqual(["status"]);
   });
 });

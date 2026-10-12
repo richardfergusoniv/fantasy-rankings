@@ -2,6 +2,11 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 
+export {
+  isSleeperTimestampOnlyNews,
+  SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT,
+} from "./player-news-filters.js";
+
 /**
  * Pure helpers for the shared player-news pipeline and X ingest.
  * Kept free of DB / network so vitest can cover validation and dedupe.
@@ -209,7 +214,13 @@ export function buildInjuryNotesDraft(input: {
   };
 }
 
-export function buildNewsUpdatedDraft(input: {
+/**
+ * Formerly emitted a lightweight ping when Sleeper's news_updated timestamp
+ * changed without new injury notes. Those rows were meaningless in the ticker
+ * ("…has a Sleeper news update.") — creation is disabled. Existing rows are
+ * filtered on read via {@link isSleeperTimestampOnlyNews}.
+ */
+export function buildNewsUpdatedDraft(_input: {
   playerId: string;
   player: string;
   team: string;
@@ -218,33 +229,7 @@ export function buildNewsUpdatedDraft(input: {
   injuryNotes: string | null;
   checkedAt: Date;
 }): SharedNewsDraft | null {
-  const nextUpdated = normalizeNewsUpdated(input.nextUpdated);
-  const previousUpdated = normalizeNewsUpdated(input.previousUpdated);
-  if (!nextUpdated || nextUpdated === previousUpdated) return null;
-  // Prefer the notes item when notes also changed; news_updated alone still
-  // surfaces a lightweight status ping when notes are empty/unchanged.
-  const notes = input.injuryNotes?.trim() || null;
-  if (notes) return null;
-  const publishedAt = newsUpdatedToDate(nextUpdated) ?? input.checkedAt;
-  const externalId = `news-updated:${input.playerId}:${nextUpdated}`;
-  const sourceUrl = `https://sleeper.app/players/nfl/${encodeURIComponent(input.playerId)}?news=${encodeURIComponent(externalId)}`;
-  return {
-    id: stableNewsId(["sleeper", externalId]),
-    playerId: input.playerId,
-    player: input.player,
-    team: input.team,
-    change: `${input.player} has a Sleeper news update.`,
-    newsType: "roster",
-    roleContext: "Sleeper news_updated timestamp changed without new injury notes.",
-    source: "sleeper",
-    sourceLabel: "Sleeper",
-    sourceUrl,
-    author: null,
-    externalId,
-    publishedAt,
-    signal: "news_updated",
-    score: null,
-  };
+  return null;
 }
 
 export function normalizePlayerNameKey(name: string): string {

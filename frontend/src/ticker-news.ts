@@ -1,3 +1,4 @@
+import { isSleeperTimestampOnlyNews } from "../../api/_lib/player-news-filters";
 import type { PlayerNews, PlayerNewsItem } from "./dashboard-types";
 
 /** Max items shown in the live ticker strip. */
@@ -14,7 +15,9 @@ export const PROMINENT_OVERALL_RANK_LIMIT = 150;
 export const HIGH_NEWS_SCORE = 70;
 
 function flattenNews(news: PlayerNews | undefined): PlayerNewsItem[] {
-  return (news?.runs ?? []).flatMap((run) => run.items);
+  return (news?.runs ?? [])
+    .flatMap((run) => run.items)
+    .filter((item) => !isSleeperTimestampOnlyNews(item));
 }
 
 /** Highest score first, then newest published time. Missing score sorts last. */
