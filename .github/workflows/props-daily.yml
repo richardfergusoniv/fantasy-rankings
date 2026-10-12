@@ -155,6 +155,31 @@ jobs:
             cp "${{ steps.validate.outputs.file }}" pipeline/data/staged_for_push.json
           fi
 
+      - name: Stage prop line snapshots
+        if: steps.guard.outputs.go == 'true'
+        run: |
+          WEEK="${{ steps.validate.outputs.week }}"
+          CONSENSUS="pipeline/data/consensus_2026_w${WEEK}.json"
+          test -f "$CONSENSUS"
+          python3 - <<EOF
+          import json
+          from pathlib import Path
+          src = Path("$CONSENSUS")
+          payload = json.loads(src.read_text())
+          pulled_at = (payload.get("built_at") or payload.get("pulled_at") or "")
+          pulled_at = pulled_at.replace("+00:00", "Z")
+          staged = {
+              "season": payload["season"],
+              "week": payload["week"],
+              "pulled_at": pulled_at,
+              "consensus": payload["consensus"],
+          }
+          assert staged["pulled_at"], "consensus file missing built_at/pulled_at"
+          out = Path("pipeline/data/staged_prop_line_snapshots.json")
+          out.write_text(json.dumps(staged))
+          print(f"staged {len(staged['consensus'])} consensus rows from {src}")
+          EOF
+
       - name: Push projections to Vercel
         if: steps.guard.outputs.go == 'true'
         env:
@@ -171,6 +196,28 @@ jobs:
           assert result.get('savedProjections') == expected, \
               f"savedProjections {result.get('savedProjections')} != staged {expected}"
           print(f"push verified: committed, savedProjections={expected}")
+          EOF
+
+      - name: Push prop line snapshots to Vercel
+        if: steps.guard.outputs.go == 'true'
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          python3 pipeline/scripts/push_ingest.py prop-line-snapshots | tee /tmp/push_prop_lines.json
+          python3 - <<'EOF'
+          import json
+          result = json.load(open('/tmp/push_prop_lines.json'))
+          staged = json.load(open('pipeline/data/staged_prop_line_snapshots.json'))
+          assert result.get('ok') is True, f"push not ok: {result}"
+          assert result.get('status') == 'committed', f"unexpected push status: {result}"
+          assert result.get('received') == len(staged['consensus']), \
+              f"received {result.get('received')} != staged {len(staged['consensus'])}"
+          assert result.get('inserted', 0) >= 0, f"missing inserted: {result}"
+          print(
+              f"prop-line push verified: received={result.get('received')} "
+              f"resolved={result.get('resolved')} inserted={result.get('inserted')} "
+              f"unresolved={result.get('unresolved')}"
+          )
           EOF
 
       - name: Build strength of schedule

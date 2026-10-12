@@ -18,11 +18,16 @@ import {
   xNewsBatchSchema,
 } from "../_lib/player-news-shared.js";
 import { SLEEPER_BASE, fetchJson, type SleeperPlayer } from "../_lib/sleeper.js";
+import {
+  propLineSnapshotPayloadSchema,
+  toPropLineSnapshotRows,
+} from "../_lib/prop-line-snapshots.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/source-cache-payload.js";
 
 /**
  * POST /api/ingest/:target
  *   target = projections | matchup-grades | pfn-tables | player-news-x
+ *            | prop-line-snapshots
  *
  * Single function replacing the three deferred ingest routes to stay within
  * Vercel's function budget. The pipeline POSTs staged JSON directly in the
@@ -39,6 +44,8 @@ import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/sour
  * - pfn-tables:     writes `pfn:{tableKey}` rows to `source_cache` for the
  *                   4 PFN tables.
  * - player-news-x:  inserts shared player-news rows from X (dedupe by post_id).
+ * - prop-line-snapshots: inserts dated consensus prop-line rows into
+ *                   `prop_line_snapshots` (line-movement history).
  */
 
 // ---------------------------------------------------------------------------
@@ -455,6 +462,63 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
   });
 }
 
+// ---------------------------------------------------------------------------
+// prop-line-snapshots
+// ---------------------------------------------------------------------------
+
+async function handlePropLineSnapshots(req: Request): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return badRequest("Request body must be valid JSON.");
+  }
+
+  const parsed = propLineSnapshotPayloadSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest("Invalid prop-line-snapshots payload.", parsed.error.issues);
+  }
+
+  let index: Awaited<ReturnType<typeof loadPlayerNameIndex>>;
+  try {
+    index = await loadPlayerNameIndex();
+  } catch {
+    return json({ ok: false, error: "Sleeper player data is temporarily unavailable." }, 502);
+  }
+
+  const { rows, unresolved, skippedDuplicates } = toPropLineSnapshotRows(
+    parsed.data,
+    index.byName,
+  );
+
+  let inserted = 0;
+  for (let offset = 0; offset < rows.length; offset += 500) {
+    const chunk = rows.slice(offset, offset + 500);
+    const result = await db
+      .insert(schema.propLineSnapshots)
+      .values(chunk)
+      .onConflictDoNothing()
+      .returning({
+        playerId: schema.propLineSnapshots.playerId,
+        stat: schema.propLineSnapshots.stat,
+      });
+    inserted += result.length;
+  }
+
+  return json({
+    ok: true,
+    status: "committed",
+    season: parsed.data.season,
+    week: parsed.data.week,
+    received: parsed.data.consensus.length,
+    resolved: rows.length,
+    inserted,
+    duplicates: Math.max(0, rows.length - inserted) + skippedDuplicates,
+    unresolved: unresolved.length,
+    unresolvedSamples: unresolved.slice(0, 10),
+  });
+}
+
 export async function POST(req: Request): Promise<Response> {
   if (!hasCronSecret(req)) return forbidden("Invalid or missing webhook secret.");
   const url = new URL(req.url, "https://localhost");
@@ -463,6 +527,7 @@ export async function POST(req: Request): Promise<Response> {
     if (url.pathname.endsWith("/matchup-grades")) return await handleMatchupGrades(req);
     if (url.pathname.endsWith("/pfn-tables")) return await handlePfnTables(req);
     if (url.pathname.endsWith("/player-news-x")) return await handlePlayerNewsX(req);
+    if (url.pathname.endsWith("/prop-line-snapshots")) return await handlePropLineSnapshots(req);
     return json({ ok: false, error: "Unknown ingest target." }, 404);
   } catch (err) {
     return internalError(err);
