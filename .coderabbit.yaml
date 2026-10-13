@@ -9,6 +9,9 @@ reviews:
   auto_review:
     enabled: true
     drafts: true
+    # Allow this review-only audit PR (base is not main/default).
+    base_branches:
+      - "^coderabbit-audit-base$"
   path_filters:
     # Exclude lockfiles / package manager noise
     - "!**/package-lock.json"
