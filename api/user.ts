@@ -4,7 +4,7 @@
  * POST: Connect Sleeper account by username { username: string }
  */
 import { eq } from "drizzle-orm";
-import { getAuthUser } from "./_lib/auth.js";
+import { getAuthUser, sleeperIdLinkedToOtherUser } from "./_lib/auth.js";
 import { getDb, schema } from "./_lib/db.js";
 
 export async function GET(req: Request): Promise<Response> {
@@ -73,6 +73,19 @@ export async function POST(req: Request): Promise<Response> {
     }
 
     const db = getDb();
+    // One indexed lookup: refuse claiming a Sleeper id already linked elsewhere.
+    const [existingLink] = await db
+      .select({ userId: schema.sleeperConnections.userId })
+      .from(schema.sleeperConnections)
+      .where(eq(schema.sleeperConnections.sleeperUserId, sleeperUser.user_id))
+      .limit(1);
+    if (sleeperIdLinkedToOtherUser(existingLink?.userId, user.id)) {
+      return Response.json(
+        { error: "This Sleeper account is already linked to another user" },
+        { status: 409 },
+      );
+    }
+
     const now = new Date();
     await db
       .insert(schema.sleeperConnections)

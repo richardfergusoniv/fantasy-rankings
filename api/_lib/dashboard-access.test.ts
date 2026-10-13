@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
-import { dashboardForViewer, sectionDashboardForViewer } from "./dashboard-access.js";
+import {
+  dashboardForViewer,
+  isScheduledOwner,
+  sectionDashboardForViewer,
+} from "./dashboard-access.js";
 
 type Dash = { owner: string; leagues: string[] };
 
@@ -10,6 +14,50 @@ const friendDashboard: Dash = { owner: "friend", leagues: ["league-b"] };
 function failIfCalled(name: string): () => Promise<Dash> {
   return () => Promise.reject(new Error(`${name} should not be called`));
 }
+
+describe("isScheduledOwner", () => {
+  it("prefers OWNER_USER_ID over a matching Sleeper id", () => {
+    assert.equal(
+      isScheduledOwner({
+        sleeperUserId: "owner-sleeper",
+        viewerUserId: "attacker-supabase",
+        ownerSleeperUserId: "owner-sleeper",
+        ownerUserId: "owner-supabase",
+      }),
+      false,
+    );
+    assert.equal(
+      isScheduledOwner({
+        sleeperUserId: "other-sleeper",
+        viewerUserId: "owner-supabase",
+        ownerSleeperUserId: "owner-sleeper",
+        ownerUserId: "owner-supabase",
+      }),
+      true,
+    );
+  });
+
+  it("falls back to Sleeper id match when OWNER_USER_ID is unset", () => {
+    assert.equal(
+      isScheduledOwner({
+        sleeperUserId: "owner-sleeper",
+        viewerUserId: "anyone",
+        ownerSleeperUserId: "owner-sleeper",
+        ownerUserId: null,
+      }),
+      true,
+    );
+    assert.equal(
+      isScheduledOwner({
+        sleeperUserId: "friend-sleeper",
+        viewerUserId: "anyone",
+        ownerSleeperUserId: "owner-sleeper",
+        ownerUserId: null,
+      }),
+      false,
+    );
+  });
+});
 
 describe("dashboardForViewer", () => {
   it("returns 401 for a signed-out read and does not touch the owner snapshot", async () => {
@@ -85,6 +133,47 @@ describe("dashboardForViewer", () => {
     const result = await dashboardForViewer<Dash>({
       sleeperUserId: "owner",
       ownerSleeperUserId: "owner",
+      force: false,
+      loadFreshOwn: async () => null,
+      loadOwnerSnapshot: async () => ownerSnapshot,
+      buildOwn: failIfCalled("buildOwn"),
+    });
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.source, "owner-snapshot");
+      assert.deepEqual(result.dashboard, ownerSnapshot);
+    }
+  });
+
+  it("does not grant owner snapshot when Sleeper ids match but OWNER_USER_ID does not", async () => {
+    let snapshotReads = 0;
+    const result = await dashboardForViewer<Dash>({
+      sleeperUserId: "owner-sleeper",
+      viewerUserId: "attacker",
+      ownerSleeperUserId: "owner-sleeper",
+      ownerUserId: "real-owner",
+      force: false,
+      loadFreshOwn: async () => null,
+      loadOwnerSnapshot: async () => {
+        snapshotReads += 1;
+        return ownerSnapshot;
+      },
+      buildOwn: async (id) => ({ owner: id, leagues: ["league-stolen"] }),
+    });
+    assert.equal(snapshotReads, 0);
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.source, "built");
+      assert.deepEqual(result.dashboard.leagues, ["league-stolen"]);
+    }
+  });
+
+  it("grants owner snapshot when viewer matches OWNER_USER_ID", async () => {
+    const result = await dashboardForViewer<Dash>({
+      sleeperUserId: "owner-sleeper",
+      viewerUserId: "real-owner",
+      ownerSleeperUserId: "owner-sleeper",
+      ownerUserId: "real-owner",
       force: false,
       loadFreshOwn: async () => null,
       loadOwnerSnapshot: async () => ownerSnapshot,

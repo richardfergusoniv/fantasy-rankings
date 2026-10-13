@@ -232,7 +232,11 @@ export const sleeperConnections = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
-  (table) => [index("sleeper_connections_sleeper_user_id_idx").on(table.sleeperUserId)],
+  (table) => [
+    index("sleeper_connections_sleeper_user_id_idx").on(table.sleeperUserId),
+    // One Sleeper account may be linked to only one Supabase user.
+    uniqueIndex("sleeper_connections_sleeper_user_id_uidx").on(table.sleeperUserId),
+  ],
 );
 
 /**

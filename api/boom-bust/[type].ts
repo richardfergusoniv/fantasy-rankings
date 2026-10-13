@@ -5,7 +5,9 @@ import {
   badRequest,
   internalError,
   json,
+  unauthorized,
 } from "../_lib/api-utils.js";
+import { resolveSleeperUserId } from "../_lib/auth.js";
 import {
   BOOM_BUST_SEASONS,
   SLEEPER_BASE,
@@ -291,6 +293,8 @@ async function handleRanges(req: Request): Promise<Response> {
 
 
 export async function GET(req: Request): Promise<Response> {
+  const sleeperUserId = await resolveSleeperUserId(req);
+  if (!sleeperUserId) return unauthorized("Sign in required.");
   const url = new URL(req.url, "https://localhost");
   if (url.pathname.endsWith("/ranges")) {
     return handleRanges(req);
