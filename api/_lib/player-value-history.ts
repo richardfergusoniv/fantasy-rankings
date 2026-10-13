@@ -41,6 +41,16 @@ export const VALUE_HISTORY_UPSERT_CHUNK = 1000;
 export const VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT = 20;
 export const VALUE_HISTORY_BACKFILL_MAX_LIMIT = 40;
 /**
+ * FantasyCalc `/trades/implied/{id}` scrambles dates / 500s under concurrency.
+ * Backfill must stay sequential with a short gap between requests.
+ */
+export const VALUE_HISTORY_BACKFILL_CONCURRENCY = 1;
+export const VALUE_HISTORY_BACKFILL_REQUEST_DELAY_MS = 150;
+/** Attempts for 5xx / network / whole-response validation failures. */
+export const VALUE_HISTORY_FETCH_MAX_ATTEMPTS = 3;
+/** Backoff before attempt 2 / 3 / 4 (ms). Indexed by attempt-1. */
+export const VALUE_HISTORY_FETCH_BACKOFF_MS = [500, 1000, 2000] as const;
+/**
  * Inclusive lower bound for snapshot_date / captured_at.
  * FantasyCalc occasionally returns absurd years (e.g. 12600) that serialize as
  * `+012600-…` ISO strings; Postgres then rejects them as SQLSTATE 22009.
@@ -129,6 +139,99 @@ export function parseFantasyCalcHistoryDate(value: string, now: Date = new Date(
   }
   if (!isAcceptableValueHistoryInstant(date, now)) return null;
   return date;
+}
+
+export type FantasyCalcHistoryPoint = { date?: string; value?: unknown };
+
+/**
+ * Whole-response check for FantasyCalc history payloads.
+ * Every point must parse inside the accepted window, and dates must be
+ * strictly increasing consecutive UTC days with no gaps or repeats.
+ * A single scrambled / absurd date invalidates the entire response.
+ */
+export function isValidFantasyCalcHistorySequence(
+  points: FantasyCalcHistoryPoint[],
+  now: Date = new Date(),
+): boolean {
+  if (!Array.isArray(points)) return false;
+  let prevTime: number | null = null;
+  for (const point of points) {
+    if (typeof point.date !== "string") return false;
+    const date = parseFantasyCalcHistoryDate(point.date, now);
+    if (!date) return false;
+    const time = date.getTime();
+    if (prevTime != null && time !== prevTime + DAY_MS) return false;
+    prevTime = time;
+  }
+  return true;
+}
+
+/** True for HTTP 5xx from `fetchJson` and network / abort failures (not 4xx). */
+export function isRetryableHistoryFetchError(err: unknown): boolean {
+  if (!(err instanceof Error)) return true;
+  const match = /^Source returned (\d+)$/.exec(err.message);
+  if (match) {
+    const status = Number(match[1]);
+    return status >= 500 && status <= 599;
+  }
+  return true;
+}
+
+export class CorruptFantasyCalcHistoryError extends Error {
+  constructor(message = "FantasyCalc history response failed validation") {
+    super(message);
+    this.name = "CorruptFantasyCalcHistoryError";
+  }
+}
+
+async function defaultSleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetch FantasyCalc history and require a valid consecutive-day sequence.
+ * Retries 5xx / network / corrupt bodies up to `VALUE_HISTORY_FETCH_MAX_ATTEMPTS`
+ * with backoff (~0.5s, 1s, 2s). Inject `sleepFn` / `fetchFn` in unit tests.
+ */
+export async function fetchValidatedFantasyCalcHistory(
+  url: string,
+  options: {
+    now?: Date;
+    maxAttempts?: number;
+    backoffMs?: readonly number[];
+    sleepFn?: (ms: number) => Promise<void>;
+    fetchFn?: <T>(url: string) => Promise<T>;
+  } = {},
+): Promise<FantasyCalcHistoryResponse> {
+  const now = options.now ?? new Date();
+  const maxAttempts = Math.max(1, options.maxAttempts ?? VALUE_HISTORY_FETCH_MAX_ATTEMPTS);
+  const backoffMs = options.backoffMs ?? VALUE_HISTORY_FETCH_BACKOFF_MS;
+  const sleepFn = options.sleepFn ?? defaultSleep;
+  const fetchFn = options.fetchFn ?? fetchJson;
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (attempt > 0) {
+      const delay = backoffMs[Math.min(attempt - 1, backoffMs.length - 1)] ?? 2000;
+      await sleepFn(delay);
+    }
+    try {
+      const history = await fetchFn<FantasyCalcHistoryResponse>(url);
+      const points = history.historicalValues ?? [];
+      if (!isValidFantasyCalcHistorySequence(points, now)) {
+        throw new CorruptFantasyCalcHistoryError(
+          `FantasyCalc history response failed validation (points=${points.length})`,
+        );
+      }
+      return history;
+    } catch (err) {
+      lastError = err;
+      const retryable =
+        err instanceof CorruptFantasyCalcHistoryError || isRetryableHistoryFetchError(err);
+      if (!retryable || attempt >= maxAttempts - 1) throw err;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("FantasyCalc history fetch failed");
 }
 
 export function playerValueSnapshotId(snapshotDate: string, formatKey: string, playerId: string): string {
@@ -359,9 +462,6 @@ export async function upsertPlayerValueSnapshots(rows: PlayerValueSnapshotRow[])
   return written;
 }
 
-/** Small concurrency so FantasyCalc history endpoints are less likely to 500. */
-const VALUE_HISTORY_BACKFILL_CONCURRENCY = 3;
-
 async function mapPool<T, R>(
   items: T[],
   concurrency: number,
@@ -416,6 +516,11 @@ function clampBackfillLimit(raw: number | undefined): number {
   return Math.max(1, Math.min(VALUE_HISTORY_BACKFILL_MAX_LIMIT, Math.floor(raw)));
 }
 
+export type ValueHistoryBackfillFailedItem = {
+  formatKey: string;
+  playerId: string;
+};
+
 export type ValueHistoryBackfillResult = {
   job: "backfill-value-history";
   offset: number;
@@ -423,6 +528,7 @@ export type ValueHistoryBackfillResult = {
   nextOffset: number;
   processed: number;
   failed: number;
+  failedItems: ValueHistoryBackfillFailedItem[];
   upserted: number;
   skipped: number;
   totalWorkItems: number;
@@ -434,6 +540,11 @@ export type ValueHistoryBackfillResult = {
  * One resumable backfill batch: walk FantasyCalc-ranked players across all
  * presets (PICK rows skipped), fetch full history for `limit` work items
  * starting at `offset`, and upsert compact snapshot rows.
+ *
+ * Fetches are sequential (`VALUE_HISTORY_BACKFILL_CONCURRENCY = 1`) with a
+ * short delay between requests. Each history response must pass whole-sequence
+ * validation; corrupt or 5xx responses are retried, then counted as failed
+ * with nothing written for that player×format.
  *
  * Avoids reading `player_value_snapshots` — upserts alone are enough for
  * idempotency. `totalWorkItems` is discovered while walking presets so the
@@ -452,6 +563,7 @@ export async function backfillValueHistoryBatch(options: {
   let failed = 0;
   let upserted = 0;
   let skipped = 0;
+  const failedItems: ValueHistoryBackfillFailedItem[] = [];
   const work: Array<{
     format: SeasonLongFormat;
     player: RankedFantasyCalcPlayer;
@@ -472,29 +584,35 @@ export async function backfillValueHistoryBatch(options: {
     for (const player of slice) work.push({ format: preset.format, player });
   }
 
-  // Per work item: fetch → sanitize → upsert. One bad player/history must not
-  // 500 the whole cron invocation or poison sibling upserts. Invalid / absurd
-  // history dates are skipped so valid points in the same item still write.
-  const historyResults = await mapPool(work, VALUE_HISTORY_BACKFILL_CONCURRENCY, async ({ format, player }) => {
-    const history = await fetchJson<FantasyCalcHistoryResponse>(
-      fantasyCalcHistoryUrl(format, player.fantasyCalcId),
-    );
-    const built = historySnapshotRowsFromPoints({
-      formatKey: format.key,
-      playerId: player.playerId,
-      playerName: player.playerName,
-      position: player.position,
-      points: history.historicalValues ?? [],
-      minSnapshotDate: null,
-    });
-    if (built.skipped > 0) {
-      console.info(
-        `[player-value-history] backfill skipped=${built.skipped} format=${format.key} player=${player.playerId} (invalid or out-of-range dates)`,
+  // Per work item: validated fetch → sanitize → upsert. One bad player/history
+  // must not 500 the whole cron or write a scrambled date sequence.
+  const historyResults = await mapPool(
+    work,
+    VALUE_HISTORY_BACKFILL_CONCURRENCY,
+    async ({ format, player }, index) => {
+      if (index > 0 && VALUE_HISTORY_BACKFILL_REQUEST_DELAY_MS > 0) {
+        await defaultSleep(VALUE_HISTORY_BACKFILL_REQUEST_DELAY_MS);
+      }
+      const history = await fetchValidatedFantasyCalcHistory(
+        fantasyCalcHistoryUrl(format, player.fantasyCalcId),
       );
-    }
-    const written = await upsertPlayerValueSnapshots(built.rows);
-    return { upserted: written, skipped: built.skipped };
-  });
+      const built = historySnapshotRowsFromPoints({
+        formatKey: format.key,
+        playerId: player.playerId,
+        playerName: player.playerName,
+        position: player.position,
+        points: history.historicalValues ?? [],
+        minSnapshotDate: null,
+      });
+      if (built.skipped > 0) {
+        console.info(
+          `[player-value-history] backfill skipped=${built.skipped} format=${format.key} player=${player.playerId} (non-finite values after validation)`,
+        );
+      }
+      const written = await upsertPlayerValueSnapshots(built.rows);
+      return { upserted: written, skipped: built.skipped };
+    },
+  );
 
   for (const [index, result] of historyResults.entries()) {
     if (result.status === "fulfilled") {
@@ -505,13 +623,16 @@ export async function backfillValueHistoryBatch(options: {
     }
     failed += 1;
     const item = work[index];
+    const formatKey = item?.format.key ?? "?";
+    const playerId = item?.player.playerId ?? "?";
+    failedItems.push({ formatKey, playerId });
     const dbText = formatDbError(result.reason);
     const fetchText =
       result.reason instanceof Error && !result.reason.message.startsWith("Failed query:")
         ? result.reason.message
         : "";
     console.error(
-      `[player-value-history] backfill item failed format=${item?.format.key ?? "?"} player=${item?.player.playerId ?? "?"} ${dbText !== "unknown database error" ? dbText : fetchText || dbText}`,
+      `[player-value-history] backfill item failed format=${formatKey} player=${playerId} ${dbText !== "unknown database error" ? dbText : fetchText || dbText}`,
     );
   }
 
@@ -526,6 +647,7 @@ export async function backfillValueHistoryBatch(options: {
     nextOffset: done ? totalWorkItems : nextOffset,
     processed,
     failed,
+    failedItems,
     upserted,
     skipped,
     totalWorkItems,
