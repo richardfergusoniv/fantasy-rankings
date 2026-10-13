@@ -77,3 +77,19 @@ def test_td_probability_error_flags_mismatched_values():
     assert module.td_probability_error(player, {"rec_td": 0.4}) is None
     error = module.td_probability_error(player, {"rec_td": 0.1})
     assert error is not None and error.startswith("TD Star WR rec_td:")
+
+
+def test_td_probability_error_uses_rec_td_for_non_qb_positions():
+    module = _module()
+    rb = {"player": "Workhorse RB", "position": "RB", "td_probability": 0.35}
+    assert module.td_probability_error(rb, {"rec_td": 0.35, "rush_td": 0.1}) is None
+    error = module.td_probability_error(rb, {"rec_td": None, "rush_td": 0.35})
+    assert error is not None and "rec_td" in error
+
+
+def test_td_probability_error_uses_rush_td_for_qb():
+    module = _module()
+    qb = {"player": "Scrambling QB", "position": "QB", "td_probability": 0.2}
+    assert module.td_probability_error(qb, {"rush_td": 0.2}) is None
+    error = module.td_probability_error(qb, {"rush_td": 0.05})
+    assert error is not None and error.startswith("TD Scrambling QB rush_td:")

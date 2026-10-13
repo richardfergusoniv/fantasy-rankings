@@ -100,7 +100,8 @@ def td_probability_error(player: dict, components: dict) -> str | None:
     td_prob = player.get("td_probability")
     if td_prob is None:
         return None
-    td_key = "rec_td" if player["position"] in ("WR", "TE") else "rush_td"
+    # Match projections.py: anytime TD scores as rush_td for QBs, rec_td otherwise.
+    td_key = "rush_td" if player["position"] == "QB" else "rec_td"
     dv = components.get(td_key)
     if dv is None or abs(dv - td_prob) > 1e-9:
         return f"TD {player['player']} {td_key}: dash={dv} staged={td_prob}"
