@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chunkPlayerValueSnapshots,
+  coerceFiniteNumber,
   compactPlayerValueSnapshot,
   dailySnapshotRowsFromPreset,
   dedupePlayerValueSnapshotsById,
@@ -44,8 +45,18 @@ describe("parseFantasyCalcHistoryDate", () => {
   });
 });
 
+describe("coerceFiniteNumber", () => {
+  it("accepts finite numbers and numeric strings", () => {
+    expect(coerceFiniteNumber(10511.6)).toBe(10511.6);
+    expect(coerceFiniteNumber("9500.4")).toBe(9500.4);
+    expect(coerceFiniteNumber(Number.NaN)).toBeNull();
+    expect(coerceFiniteNumber("")).toBeNull();
+    expect(coerceFiniteNumber(null)).toBeNull();
+  });
+});
+
 describe("compactPlayerValueSnapshot", () => {
-  it("builds a compact PK row and rounds value", () => {
+  it("builds a compact PK row and rounds decimal values to integers", () => {
     const capturedAt = new Date("2026-10-12T15:00:00.000Z");
     expect(
       compactPlayerValueSnapshot({
@@ -69,7 +80,42 @@ describe("compactPlayerValueSnapshot", () => {
     });
   });
 
-  it("skips picks and incomplete players", () => {
+  it("fills nullish name/position with empty strings and skips non-finite values", () => {
+    const capturedAt = new Date("2026-10-12T00:00:00.000Z");
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2026-10-12",
+        formatKey: "redraft-1qb-12t-0.5ppr",
+        playerId: "9221",
+        playerName: null,
+        position: undefined,
+        value: "100.4",
+        capturedAt,
+      }),
+    ).toEqual({
+      id: "2026-10-12:redraft-1qb-12t-0.5ppr:9221",
+      snapshotDate: "2026-10-12",
+      formatKey: "redraft-1qb-12t-0.5ppr",
+      playerId: "9221",
+      playerName: "",
+      position: "",
+      value: 100,
+      capturedAt,
+    });
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2026-10-12",
+        formatKey: "redraft-1qb-12t-0.5ppr",
+        playerId: "9221",
+        playerName: "X",
+        position: "WR",
+        value: Number.NaN,
+        capturedAt,
+      }),
+    ).toBeNull();
+  });
+
+  it("skips picks and missing player ids", () => {
     expect(
       compactPlayerValueSnapshot({
         snapshotDate: "2026-10-12",
@@ -167,10 +213,12 @@ describe("rankedPlayersFromFantasyCalcRows", () => {
       { player: { id: 2, sleeperId: "a", name: "A again", position: "QB" } },
       { player: { id: 3, sleeperId: "b", name: "Pick", position: "PICK" } },
       { player: { id: 4, sleeperId: "c", name: "C", position: "WR" } },
+      { player: { id: 5, sleeperId: "d", name: undefined, position: "" } },
     ]);
     expect(ranked).toEqual([
       { fantasyCalcId: 1, playerId: "a", playerName: "A", position: "QB" },
       { fantasyCalcId: 4, playerId: "c", playerName: "C", position: "WR" },
+      { fantasyCalcId: 5, playerId: "d", playerName: "", position: "" },
     ]);
   });
 });
@@ -235,13 +283,17 @@ describe("chunkPlayerValueSnapshots", () => {
 });
 
 describe("formatDbError", () => {
-  it("surfaces nested Postgres cause details from a Failed query wrapper", () => {
-    const cause = Object.assign(new Error("cannot affect row a second time"), {
-      code: "21000",
-      detail: "Row with id=x appears twice",
+  it("logs only cause code/message and never the Failed query SQL wrapper", () => {
+    const cause = Object.assign(new Error("invalid input syntax for type integer: \"10511.6\""), {
+      code: "22P02",
     });
-    const wrapped = Object.assign(new Error("Failed query: insert into \"player_value_snapshots\""), { cause });
-    expect(formatDbError(wrapped)).toContain("cannot affect row a second time");
-    expect(formatDbError(wrapped)).toContain("21000");
+    const wrapped = Object.assign(
+      new Error('Failed query: insert into "player_value_snapshots" (id, snapshot_date, format_key, player_id, player_name, position, value, captured_at) values ...'),
+      { cause },
+    );
+    expect(formatDbError(wrapped)).toBe('code=22P02 | invalid input syntax for type integer: "10511.6"');
+    expect(formatDbError(wrapped)).not.toContain("Failed query");
+    expect(formatDbError(wrapped)).not.toContain("player_value_snapshots");
+    expect(formatDbError(new Error("Failed query: insert into x"))).toBe("unknown database error");
   });
 });
