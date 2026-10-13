@@ -5,7 +5,9 @@ import posthog from "posthog-js";
  *
  * - Initialized only when VITE_POSTHOG_KEY is set; otherwise every export
  *   is a no-op, so local/preview builds without the key behave as before.
- * - Users are identified by Sleeper user ID, never by email.
+ * - The PostHog project runs in identified-only person mode: the SDK
+ *   drops events from anonymous browsers, so nothing is recorded until
+ *   AuthGate identifies the signed-in user (Sleeper user ID, never email).
  * - Session recording is disabled outright. Event properties are scrubbed
  *   of anything credential-shaped before they leave the browser.
  */
@@ -33,7 +35,7 @@ export function initPostHog(): void {
   if (!key) return;
   posthog.init(key, {
     api_host: POSTHOG_HOST,
-    capture_pageview: "history_change",
+    capture_pageview: true,
     capture_exceptions: true,
     autocapture: true,
     disable_session_recording: true,
