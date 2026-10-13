@@ -1,0 +1,29 @@
+# Review-only full-codebase audit config (head branch only — do not merge to main).
+language: "en-US"
+reviews:
+  profile: "assertive"
+  high_level_summary: true
+  request_changes_workflow: false
+  review_status: true
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: true
+  path_filters:
+    # Exclude lockfiles / package manager noise
+    - "!**/package-lock.json"
+    - "!**/yarn.lock"
+    - "!**/pnpm-lock.yaml"
+    - "!**/bun.lockb"
+    - "!**/Cargo.lock"
+    # Exclude binaries / fonts / media
+    - "!**/*.{woff,woff2,ttf,otf,eot}"
+    - "!**/*.{png,jpg,jpeg,gif,webp,ico,svg,pdf}"
+    # Exclude bulky generated / snapshot / fixture data
+    - "!**/perf-ledger.json"
+    - "!**/pipeline/pfn/data/**"
+    - "!**/pipeline/fixtures/**"
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/.next/**"
