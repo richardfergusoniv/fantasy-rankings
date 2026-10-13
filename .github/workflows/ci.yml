@@ -13,9 +13,10 @@ jobs:
       - name: Test props daily guard
         run: python3 .github/scripts/props_daily_guard_test.py
       - name: Test props aggregator
+        working-directory: pipeline
         run: |
-          python3 -m pip install -q -r pipeline/requirements.txt pytest
-          python3 -m pytest pipeline/tests -q
+          python3 -m pip install -q -r requirements.txt pytest
+          python3 -m pytest tests -q
       - uses: actions/setup-node@v4
         with:
           node-version: 20
