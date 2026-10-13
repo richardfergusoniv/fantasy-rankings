@@ -148,12 +148,18 @@ class ParlayAPIProvider(BaseProvider):
         player = str(item.get("player") or item.get("description") or "").strip()
         if not player:
             return None
+        # Prefer `line`, but a present-null `line` must still fall back to `point`
+        # (dict.get("line", default) does not, because the key exists).
+        raw_line = item.get("line")
+        if raw_line is None:
+            raw_line = item.get("point")
         try:
-            line = float(item.get("line", item.get("point")))
+            line = float(raw_line)
         except (TypeError, ValueError):
-            line = 0.0
-        if line == 0.0 and stat in ("anytime_td", "first_td"):
-            line = 0.5  # binary scorer markets carry an implicit 0.5 line
+            if stat in ("anytime_td", "first_td"):
+                line = 0.5  # binary scorer markets carry an implicit 0.5 line
+            else:
+                return None  # no valid line: skip, don't invent 0.0 consensus
         injury = item.get("injury") or {}
         return PropRecord(
             provider=self.name,

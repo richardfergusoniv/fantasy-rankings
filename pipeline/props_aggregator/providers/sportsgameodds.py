@@ -119,6 +119,9 @@ class SportsGameOddsProvider(BaseProvider):
                                                 "line", "handicap"))
                         except (TypeError, ValueError):
                             continue
+                        # 1.5+ rungs are multi-TD markets (2+ TDs), not anytime TD.
+                        if stat == "anytime_td" and point != 0.5:
+                            continue
                     price = _american(_first(b, "price", "odds", "american", "us"))
                     legs.setdefault(
                         (event_id, player, stat, point, str(book_id)),

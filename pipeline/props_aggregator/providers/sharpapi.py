@@ -16,11 +16,11 @@ binary — one row per player with selection_type "other" and no line):
   line, selection_type ("over"/"under"/"other"), odds_american, is_main_line,
   event_id, home_team, away_team, event_start_time.
 
-Rows are grouped by (event_id, market_id, sportsbook, line) into one
-record with over/under odds. Binary TD-scorer rows become implicit 0.5
-lines with the Yes price as over_odds. Only main lines are kept so the
-median consensus isn't skewed by alternate lines. Unmapped market ids
-are skipped and reported on stderr — never guessed.
+Rows are grouped by (event_id, queried market, sportsbook, player, line)
+into one record with over/under odds. Binary TD-scorer rows become
+implicit 0.5 lines with the Yes price as over_odds. Only main lines are
+kept so the median consensus isn't skewed by alternate lines. Unmapped
+market ids are skipped and reported on stderr — never guessed.
 """
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ class SharpAPIProvider(BaseProvider):
 
     def fetch_props(self, week: int, season: int) -> list[PropRecord]:
         fetched = utcnow_iso()
-        # Group over/under rows: one record per (event, market, book, line).
+        # Group over/under rows: one record per (event, market, book, player, line).
         groups: dict[tuple, dict] = {}
         skipped: dict[str, int] = {}
         for market in SHARPAPI_MARKETS:
@@ -104,10 +104,13 @@ class SharpAPIProvider(BaseProvider):
                         continue
                     over = odds if st == "over" else None
                     under = odds if st == "under" else None
+                # Queried `market` (not optional market_id) + player keep rows
+                # for different players/markets from overwriting each other.
                 key = (
                     str(r.get("event_id") or ""),
-                    str(r.get("market_id") or ""),
+                    market,
                     str(r.get("sportsbook") or ""),
+                    player,
                     line,
                 )
                 g = groups.setdefault(key, {
