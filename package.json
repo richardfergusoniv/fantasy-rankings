@@ -16,6 +16,8 @@
     "drizzle-orm": "0.45.2",
     "lucide-react": "^1.52.0",
     "postgres": "^3.4.5",
+    "posthog-js": "^1.438.9",
+    "posthog-node": "^5.56.0",
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "recharts": "2.15.3",
