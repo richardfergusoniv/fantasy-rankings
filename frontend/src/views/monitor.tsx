@@ -138,8 +138,8 @@ export function Monitor({
       const response = await fetch(NFLVERSE_GAMES_CSV_URL);
       if (!response.ok) throw new Error(`games lines HTTP ${response.status}`);
       const csv = await response.text();
-      // Non-empty body that yields zero rows means a parse/format failure, not an empty week.
-      if (csv.trim().length > 0 && parseGamesCsv(csv).length === 0) {
+      // Zero parsed rows (empty body or bad headers) is a load failure, not an empty week.
+      if (parseGamesCsv(csv).length === 0) {
         throw new Error("game lines parse failed");
       }
       return gameLineCardsForWeek(csv, dashboard.season, dashboard.week);
