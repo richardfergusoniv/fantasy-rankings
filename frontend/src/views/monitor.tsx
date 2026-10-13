@@ -1,5 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { sumLiveForecast } from "../../../api/_lib/lineup-optimizer";
+import {
+  GAME_LINES_STALE_MS,
+  NFLVERSE_GAMES_CSV_URL,
+  gameLineCardsForWeek,
+} from "../../../api/_lib/nflverse-game-lines";
 import type {
   Dashboard,
   DraftCenterData,
@@ -124,6 +130,20 @@ export function Monitor({
   useEffect(() => {
     setOpenRosterId(null);
   }, [league.id]);
+
+  const gameLinesQuery = useQuery({
+    queryKey: ["nflverse-game-lines", dashboard.season, dashboard.week],
+    queryFn: async () => {
+      const response = await fetch(NFLVERSE_GAMES_CSV_URL);
+      if (!response.ok) throw new Error(`games lines HTTP ${response.status}`);
+      const csv = await response.text();
+      return gameLineCardsForWeek(csv, dashboard.season, dashboard.week);
+    },
+    staleTime: GAME_LINES_STALE_MS,
+    gcTime: GAME_LINES_STALE_MS * 2,
+    retry: 1,
+  });
+  const gameLineCards = gameLinesQuery.data ?? [];
 
   const openTeam = openRosterId === null
     ? null
@@ -277,6 +297,26 @@ export function Monitor({
             })}
           </ul>
         )}
+      </article>
+
+      <article className="monitor-panel">
+        <header className="monitor-panel-header">
+          <h2>Game lines</h2>
+        </header>
+        {gameLineCards.length > 0 ? (
+          <ul className="monitor-game-lines-grid">
+            {gameLineCards.map((game) => (
+              <li key={game.gameId} className="monitor-game-line-card">
+                <strong className="monitor-game-line-matchup">{game.matchup}</strong>
+                <span className="monitor-game-line-kickoff">{game.kickoffPt}</span>
+                <span className="monitor-game-line-spread">{game.spread}</span>
+                <span className="monitor-game-line-total">{game.total}</span>
+                <span className="monitor-game-line-ml">{game.moneylines}</span>
+                <span className="monitor-game-line-implied">{game.totalsOrScore}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </article>
       {openTeam ? (
         <LeagueTeamCard

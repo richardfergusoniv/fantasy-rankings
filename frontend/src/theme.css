@@ -723,6 +723,51 @@ button.monitor-alert:hover { background: var(--surface-2); }
   font-size: var(--type-caption);
   font-weight: 600;
 }
+.monitor-game-lines-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.monitor-game-line-card {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.monitor-game-line-matchup {
+  overflow: hidden;
+  font-size: var(--type-body);
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.monitor-game-line-kickoff,
+.monitor-game-line-spread,
+.monitor-game-line-total,
+.monitor-game-line-ml,
+.monitor-game-line-implied {
+  overflow: hidden;
+  color: var(--dim);
+  font-size: var(--type-caption);
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.monitor-game-line-spread,
+.monitor-game-line-implied {
+  color: var(--text);
+  font-weight: 700;
+}
 .lineup-mode-toggle { margin: 0 0 8px; }
 
 .matchup-score { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); align-items: stretch; }
