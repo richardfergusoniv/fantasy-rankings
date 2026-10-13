@@ -65,10 +65,15 @@ class RapidOddsProvider(BaseProvider):
                         side = (o.get("name") or "").strip().lower()
                         key = (game_id, book_name, player, stat, point)
                         slot = legs.setdefault(key, {})
-                        if side == "under":
+                        # yes/no binary markets: Yes -> over, No -> under.
+                        # Never dump unrecognized sides into over (No used to
+                        # overwrite Yes and invert TD probability).
+                        if side in ("under", "no"):
                             slot["under"] = american
-                        else:  # "over", or yes/no style (e.g. anytime TD)
+                        elif side in ("over", "yes"):
                             slot["over"] = american
+                        else:
+                            continue
         for (game_id, book_name, player, stat, point), sides in legs.items():
             records.append(PropRecord(
                 provider=self.name, book=book_name, player=player,

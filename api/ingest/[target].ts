@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { db, schema } from "../_lib/db.js";
 import { captureServerError } from "../_lib/posthog.js";
@@ -10,7 +9,14 @@ import {
   json,
   methodNotAllowed,
 } from "../_lib/api-utils.js";
-import { CACHE_KEY, strengthOfScheduleEntrySchema } from "../_lib/dashboard-schemas.js";
+import {
+  expireDashboardCaches,
+  pfnTableKeys,
+  stagedMatchupGradesSchema,
+  stagedPfnTablesSchema,
+  strengthOfScheduleEntrySchema,
+  vegasProjectionPayloadSchema,
+} from "../_lib/ingest-helpers.js";
 import {
   buildXNewsDraft,
   filterDuplicateDrafts,
@@ -52,36 +58,6 @@ import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/sour
 // ---------------------------------------------------------------------------
 // projections
 // ---------------------------------------------------------------------------
-
-const vegasProjectionLeagueSchema = z.object({
-  league_id: z.string().min(1).max(80),
-  name: z.string().min(1).max(160),
-});
-
-const vegasPlayerProjectionSchema = z.object({
-  player: z.string().min(1).max(160),
-  team: z.string().min(1).max(12),
-  position: z.string().min(1).max(12),
-  opponent: z.string().max(12).nullable(),
-  expected_stats: z.record(z.string(), z.number()),
-  td_probability: z.union([z.number(), z.record(z.string(), z.number())]).nullable(),
-  coverage: z.object({
-    stats: z.union([z.number(), z.array(z.string()), z.record(z.string(), z.number())]),
-    provider_count: z.number().int().nonnegative(),
-    book_count: z.number().int().nonnegative(),
-  }),
-  leagues: z.record(z.string(), z.number()),
-  components: z.record(z.string(), z.record(z.string(), z.number())),
-});
-
-const vegasProjectionPayloadSchema = z.object({
-  season: z.number().int().min(2020).max(2100),
-  week: z.number().int().min(1).max(25),
-  built_at: z.string().datetime(),
-  source: z.string().min(1).max(160),
-  leagues: z.array(vegasProjectionLeagueSchema).max(32),
-  projections: z.array(vegasPlayerProjectionSchema).max(2500),
-});
 
 async function handleProjections(req: Request): Promise<Response> {
   let body: unknown;
@@ -135,11 +111,8 @@ async function handleProjections(req: Request): Promise<Response> {
         storedAt,
       },
     });
-    // Bust the dashboard cache so the next read rebuilds from fresh data.
-    await db
-      .update(schema.sourceCache)
-      .set({ fetchedAt: new Date(0) })
-      .where(eq(schema.sourceCache.cacheKey, CACHE_KEY));
+    // Bust global + per-user dashboard caches so the next read rebuilds.
+    await expireDashboardCaches();
   }
 
   return json({
@@ -156,29 +129,6 @@ async function handleProjections(req: Request): Promise<Response> {
 // ---------------------------------------------------------------------------
 
 const STRENGTH_OF_SCHEDULE_CACHE_PREFIX = "strength-of-schedule-v1";
-
-const strengthOfScheduleCellSchema = z.object({
-  avg: z.number(),
-  weeks: z.number().int(),
-  rank: z.number().int(),
-});
-
-const stagedMatchupGradesSchema = z.object({
-  source: z.literal("matchup-grades"),
-  season: z.number().int(),
-  through_week: z.number().int(),
-  built_at: z.string(),
-  leagues: z.array(
-    z.object({
-      league_id: z.string(),
-      league_name: z.string(),
-      through_week: z.number().int(),
-      completed_weeks: z.array(z.number().int()),
-      computed_at: z.string(),
-      table: z.record(z.string(), z.record(z.enum(["QB", "RB", "WR", "TE"]), strengthOfScheduleCellSchema)),
-    }),
-  ),
-});
 
 async function handleMatchupGrades(req: Request): Promise<Response> {
   let body: unknown;
@@ -237,10 +187,7 @@ async function handleMatchupGrades(req: Request): Promise<Response> {
 
   const status = committed > 0 ? ("committed" as const) : ("ignored" as const);
   if (status === "committed") {
-    await db
-      .update(schema.sourceCache)
-      .set({ fetchedAt: new Date(0) })
-      .where(eq(schema.sourceCache.cacheKey, CACHE_KEY));
+    await expireDashboardCaches();
   }
 
   return json({
@@ -255,37 +202,6 @@ async function handleMatchupGrades(req: Request): Promise<Response> {
 // ---------------------------------------------------------------------------
 // pfn-tables
 // ---------------------------------------------------------------------------
-
-const pfnTableKeys = ["offensive-line", "offense", "defense", "team-overall"] as const;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- type-only schema
-const pfnTableKeySchema = z.enum(pfnTableKeys);
-
-const pfnMetricValueSchema = z.union([z.number(), z.string(), z.null()]);
-const pfnRowSchema = z
-  .object({
-    rank: z.number().int(),
-    team: z.string(),
-    team_name: z.string(),
-  })
-  .catchall(pfnMetricValueSchema);
-
-const pfnTableSchema = z.object({
-  label: z.string(),
-  columns: z.array(z.string()),
-  column_labels: z.record(z.string(), z.string()),
-  rows: z.array(pfnRowSchema),
-});
-
-const stagedPfnTablesSchema = z.object({
-  source: z.literal("pfn-nfl-hq"),
-  fetched_at: z.string(),
-  tables: z.object({
-    "offensive-line": pfnTableSchema,
-    offense: pfnTableSchema,
-    defense: pfnTableSchema,
-    "team-overall": pfnTableSchema,
-  }),
-});
 
 async function handlePfnTables(req: Request): Promise<Response> {
   let body: unknown;
@@ -327,7 +243,7 @@ async function handlePfnTables(req: Request): Promise<Response> {
     ok: true,
     status: "committed",
     fetched_at: payload.fetched_at,
-    tables: [...pfnTableKeys] as Array<z.infer<typeof pfnTableKeySchema>>,
+    tables: [...pfnTableKeys],
   });
 }
 

@@ -21,6 +21,8 @@ const SLEEPER_BASE = "https://api.sleeper.app/v1";
 const HISTORICAL_TRADES_CACHE_MS = 24 * 60 * 60 * 1000;
 const HISTORICAL_PLAYERS_CACHE_KEY = "sleeper-players-nfl";
 const HISTORICAL_PLAYERS_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
+/** Current-season draft maps can still grow as rookie drafts finish; refresh daily. */
+export const HISTORICAL_DRAFT_PICK_MAP_CACHE_MS = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Sleeper API types
@@ -260,6 +262,78 @@ const historicalDraftPickMapCacheSchema = z.object({
   ),
 });
 
+/**
+ * NFL season year for a UTC instant: Jan–Feb still belong to the prior season.
+ * Used only to decide whether a draft-pick map needs a TTL (current season).
+ */
+export function nflSeasonYearAt(nowMs: number = Date.now()): number {
+  const d = new Date(nowMs);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth(); // 0-based
+  return month <= 1 ? year - 1 : year;
+}
+
+/**
+ * Past-season draft maps are immutable and may be reused indefinitely.
+ * A chain that includes the current NFL season expires after
+ * HISTORICAL_DRAFT_PICK_MAP_CACHE_MS so late rookie-draft picks land.
+ */
+export function isDraftPickMapCacheFresh(
+  fetchedAt: Date,
+  leagueSeasons: readonly number[],
+  nowMs: number = Date.now(),
+  ttlMs: number = HISTORICAL_DRAFT_PICK_MAP_CACHE_MS,
+): boolean {
+  const currentSeason = nflSeasonYearAt(nowMs);
+  const includesCurrentSeason = leagueSeasons.some(
+    (season) => Number.isInteger(season) && season === currentSeason,
+  );
+  if (!includesCurrentSeason) return true;
+  return nowMs - fetchedAt.getTime() < ttlMs;
+}
+
+/** True when a draft list entry can map pick slots to roster IDs without /draft detail. */
+export function draftHasRosterMapping(draft: {
+  slot_to_roster_id?: Record<string, number | null>;
+  draft_order?: Record<string, number>;
+}): boolean {
+  return (
+    Object.keys(draft.slot_to_roster_id ?? {}).length > 0 ||
+    Object.keys(draft.draft_order ?? {}).length > 0
+  );
+}
+
+function parseDraftPickMapCache(payload: string): HistoricalDraftResolution | null {
+  try {
+    const parsed = historicalDraftPickMapCacheSchema.parse(decodeSourceCachePayload(payload));
+    return {
+      byOriginalPick: new Map(parsed.entries),
+      placeholderByLeagueId: new Map(
+        parsed.placeholders.map((placeholder) => [
+          placeholder.leagueId,
+          {
+            season: placeholder.season,
+            cutoffMs: placeholder.cutoffMs,
+            maxRound: placeholder.maxRound,
+            kickerChain: placeholder.kickerChain,
+          } satisfies PlaceholderDraftResolution,
+        ]),
+      ),
+    };
+  } catch {
+    try {
+      return {
+        byOriginalPick: new Map(
+          historicalDraftPickMapEntriesSchema.parse(decodeSourceCachePayload(payload)),
+        ),
+        placeholderByLeagueId: new Map(),
+      };
+    } catch {
+      return null;
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Draft pick map
 // ---------------------------------------------------------------------------
@@ -270,45 +344,24 @@ async function loadHistoricalDraftPickMap(
   forceRefresh: boolean,
 ): Promise<HistoricalDraftResolution> {
   const cacheKey = `historical-draft-pick-map:${rootLeagueId}`;
+  const leagueSeasons = leagueChain
+    .map((league) => Number(league.season ?? 0))
+    .filter((season) => Number.isInteger(season) && season > 0);
   const cachedRows = await db
     .select()
     .from(schema.sourceCache)
     .where(eq(schema.sourceCache.cacheKey, cacheKey))
     .limit(1);
   const cached = cachedRows[0];
-  if (cached && !forceRefresh) {
-    try {
-      const parsed = historicalDraftPickMapCacheSchema.parse(decodeSourceCachePayload(cached.payload));
-      return {
-        byOriginalPick: new Map(parsed.entries),
-        placeholderByLeagueId: new Map(
-          parsed.placeholders.map((placeholder) => [
-            placeholder.leagueId,
-            {
-              season: placeholder.season,
-              cutoffMs: placeholder.cutoffMs,
-              maxRound: placeholder.maxRound,
-              kickerChain: placeholder.kickerChain,
-            } satisfies PlaceholderDraftResolution,
-          ]),
-        ),
-      };
-    } catch {
-      try {
-        return {
-          byOriginalPick: new Map(
-            historicalDraftPickMapEntriesSchema.parse(decodeSourceCachePayload(cached.payload)),
-          ),
-          placeholderByLeagueId: new Map(),
-        };
-      } catch {
-        // Rebuild a malformed cache entry from Sleeper's immutable draft history.
-      }
-    }
+  if (cached && !forceRefresh && isDraftPickMapCacheFresh(cached.fetchedAt, leagueSeasons)) {
+    const fromCache = parseDraftPickMapCache(cached.payload);
+    if (fromCache) return fromCache;
+    // Rebuild a malformed cache entry from Sleeper's immutable draft history.
   }
 
   const draftedPlayersByOriginalPick = new Map<string, string>();
   const placeholderByLeagueId = new Map<string, PlaceholderDraftResolution>();
+  let hadFetchFailure = false;
   for (const league of leagueChain) {
     try {
       const [rosters, drafts] = await Promise.all([
@@ -329,12 +382,17 @@ async function loadHistoricalDraftPickMap(
             const draftDetail = await fetchJson<SleeperDraft>(`${SLEEPER_BASE}/draft/${draft.draft_id}`);
             resolvedDraft = { ...draft, ...draftDetail };
           } catch {
-            // The league draft list still provides the legacy draft_order fallback when detail is unavailable.
+            // League list may still carry slot_to_roster_id / draft_order. Without
+            // either, picks cannot be associated with original rosters — mark incomplete.
+            if (!draftHasRosterMapping(draft)) {
+              hadFetchFailure = true;
+            }
           }
           const picks = await fetchJson<SleeperDraftPick[]>(`${SLEEPER_BASE}/draft/${draft.draft_id}/picks`);
           draftsWithPicks.push({ draft: resolvedDraft, picks });
         } catch {
           // An unreadable draft should not prevent other drafts in this league from contributing.
+          hadFetchFailure = true;
         }
       }
 
@@ -461,7 +519,16 @@ async function loadHistoricalDraftPickMap(
       }
     } catch {
       // A league without readable rosters or drafts should not block the rest of the chain.
+      hadFetchFailure = true;
     }
+  }
+
+  // Never persist a map built after any Sleeper fetch failure — an empty or
+  // partial payload would otherwise stick forever (no TTL on past seasons).
+  if (hadFetchFailure) {
+    const fromCache = cached ? parseDraftPickMapCache(cached.payload) : null;
+    if (fromCache) return fromCache;
+    return { byOriginalPick: draftedPlayersByOriginalPick, placeholderByLeagueId };
   }
 
   const fetchedAt = new Date();
