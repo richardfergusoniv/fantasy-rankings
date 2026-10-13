@@ -140,7 +140,9 @@ export function etWallTimeToUtc(gameday: string, gametime: string): Date | null 
   const hour = Number(timeMatch[1]);
   const minute = Number(timeMatch[2]);
   if (![year, month, day, hour, minute].every(Number.isFinite)) return null;
-  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return null;
+  if (month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59) return null;
+  // Date.UTC rolls invalid days (e.g. Feb 31) into the next month — reject those.
+  if (day > new Date(Date.UTC(year, month, 0)).getUTCDate()) return null;
 
   // Seed near EST (UTC−5), then converge using America/New_York offsets.
   let utcMs = Date.UTC(year, month - 1, day, hour + 5, minute, 0);

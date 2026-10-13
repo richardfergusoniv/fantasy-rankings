@@ -153,6 +153,12 @@ describe("ET → PT kickoff", () => {
     expect(formatKickoffPt("2026-10-18", "")).toBe("—");
     expect(etWallTimeToUtc("2026-13-40", "99:99")).toBeNull();
   });
+
+  it("rejects impossible calendar dates instead of rolling them forward", () => {
+    expect(etWallTimeToUtc("2026-02-31", "13:00")).toBeNull();
+    expect(etWallTimeToUtc("2026-04-31", "13:00")).toBeNull();
+    expect(formatKickoffPt("2026-02-31", "13:00")).toBe("—");
+  });
 });
 
 describe("spread favorite formatting", () => {
