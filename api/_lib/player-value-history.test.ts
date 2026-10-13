@@ -1,21 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   chunkPlayerValueSnapshots,
   coerceFiniteNumber,
   compactPlayerValueSnapshot,
+  CorruptFantasyCalcHistoryError,
   dailySnapshotRowsFromPreset,
   dedupePlayerValueSnapshotsById,
   fantasyCalcHistoryUrl,
+  fetchValidatedFantasyCalcHistory,
   formatDbError,
   historySnapshotRowsFromPoints,
   isAcceptableSnapshotDateKey,
   isAcceptableValueHistoryInstant,
+  isRetryableHistoryFetchError,
+  isValidFantasyCalcHistorySequence,
   parseFantasyCalcHistoryDate,
   playerValueSnapshotId,
   rankedPlayersFromFantasyCalcRows,
   utcDateKey,
+  VALUE_HISTORY_BACKFILL_CONCURRENCY,
   VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
   VALUE_HISTORY_BACKFILL_MAX_LIMIT,
+  VALUE_HISTORY_BACKFILL_REQUEST_DELAY_MS,
+  VALUE_HISTORY_FETCH_BACKOFF_MS,
+  VALUE_HISTORY_FETCH_MAX_ATTEMPTS,
   VALUE_HISTORY_MIN_SNAPSHOT_DATE,
   VALUE_HISTORY_UPSERT_CHUNK,
   type PlayerValueSnapshotRow,
@@ -79,6 +87,10 @@ describe("parseFantasyCalcHistoryDate", () => {
     expect(parseFantasyCalcHistoryDate("", now)).toBeNull();
     expect(parseFantasyCalcHistoryDate("1/7/12600", now)).toBeNull();
     expect(parseFantasyCalcHistoryDate("01/07/26", now)).toBeNull();
+    // Scrambled FantasyCalc concurrency artifacts
+    expect(parseFantasyCalcHistoryDate("10/05/2194", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("12/02/1969", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("02/11/20262026", now)).toBeNull();
   });
 
   it("rejects dates before 2015-01-01 and more than one day ahead", () => {
@@ -86,6 +98,189 @@ describe("parseFantasyCalcHistoryDate", () => {
     expect(parseFantasyCalcHistoryDate("01/01/2015", now)?.toISOString()).toBe("2015-01-01T00:00:00.000Z");
     expect(parseFantasyCalcHistoryDate("10/15/2026", now)).toBeNull();
     expect(parseFantasyCalcHistoryDate("01/07/2361", now)).toBeNull();
+  });
+});
+
+describe("isValidFantasyCalcHistorySequence", () => {
+  const now = new Date("2026-10-13T12:00:00.000Z");
+
+  it("accepts empty arrays and consecutive daily sequences", () => {
+    expect(isValidFantasyCalcHistorySequence([], now)).toBe(true);
+    expect(
+      isValidFantasyCalcHistorySequence(
+        [
+          { date: "01/01/2026", value: 9000 },
+          { date: "01/02/2026", value: 9050 },
+          { date: "01/03/2026", value: 9100 },
+        ],
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects gaps, repeats, out-of-order, and out-of-window dates", () => {
+    expect(
+      isValidFantasyCalcHistorySequence(
+        [
+          { date: "01/01/2026", value: 1 },
+          { date: "01/03/2026", value: 2 },
+        ],
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      isValidFantasyCalcHistorySequence(
+        [
+          { date: "01/01/2026", value: 1 },
+          { date: "01/01/2026", value: 2 },
+        ],
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      isValidFantasyCalcHistorySequence(
+        [
+          { date: "01/02/2026", value: 1 },
+          { date: "01/01/2026", value: 2 },
+        ],
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      isValidFantasyCalcHistorySequence(
+        [
+          { date: "01/01/2026", value: 1 },
+          { date: "10/05/2194", value: 2 },
+        ],
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      isValidFantasyCalcHistorySequence([{ date: "bad", value: 1 }], now),
+    ).toBe(false);
+    expect(
+      isValidFantasyCalcHistorySequence([{ date: undefined, value: 1 }], now),
+    ).toBe(false);
+  });
+
+  it("rejects the whole response when any single date is corrupt", () => {
+    expect(
+      isValidFantasyCalcHistorySequence(
+        [
+          { date: "01/01/2026", value: 9000 },
+          { date: "01/02/2026", value: 9100 },
+          { date: "12/02/1969", value: 9200 },
+          { date: "01/04/2026", value: 9300 },
+        ],
+        now,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("isRetryableHistoryFetchError", () => {
+  it("retries 5xx and network errors but not 4xx", () => {
+    expect(isRetryableHistoryFetchError(new Error("Source returned 500"))).toBe(true);
+    expect(isRetryableHistoryFetchError(new Error("Source returned 503"))).toBe(true);
+    expect(isRetryableHistoryFetchError(new Error("Source returned 404"))).toBe(false);
+    expect(isRetryableHistoryFetchError(new Error("Source returned 400"))).toBe(false);
+    expect(isRetryableHistoryFetchError(new TypeError("fetch failed"))).toBe(true);
+    expect(isRetryableHistoryFetchError(new Error("aborted"))).toBe(true);
+    expect(isRetryableHistoryFetchError("boom")).toBe(true);
+  });
+});
+
+describe("fetchValidatedFantasyCalcHistory", () => {
+  const now = new Date("2026-10-13T00:00:00.000Z");
+  const good = {
+    historicalValues: [
+      { date: "01/01/2026", value: 100 },
+      { date: "01/02/2026", value: 110 },
+    ],
+  };
+  const corrupt = {
+    historicalValues: [
+      { date: "01/01/2026", value: 100 },
+      { date: "10/05/2194", value: 110 },
+    ],
+  };
+
+  it("returns a validated response on the first success", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(good);
+    const sleepFn = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      fetchValidatedFantasyCalcHistory("https://example.test/history", {
+        now,
+        fetchFn,
+        sleepFn,
+      }),
+    ).resolves.toEqual(good);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(sleepFn).not.toHaveBeenCalled();
+  });
+
+  it("retries 5xx then succeeds, using backoff delays", async () => {
+    const fetchFn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Source returned 500"))
+      .mockRejectedValueOnce(new Error("Source returned 500"))
+      .mockResolvedValueOnce(good);
+    const sleepFn = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      fetchValidatedFantasyCalcHistory("https://example.test/history", {
+        now,
+        fetchFn,
+        sleepFn,
+      }),
+    ).resolves.toEqual(good);
+    expect(fetchFn).toHaveBeenCalledTimes(3);
+    expect(sleepFn.mock.calls.map((call) => call[0])).toEqual([
+      VALUE_HISTORY_FETCH_BACKOFF_MS[0],
+      VALUE_HISTORY_FETCH_BACKOFF_MS[1],
+    ]);
+  });
+
+  it("retries corrupt whole responses then succeeds", async () => {
+    const fetchFn = vi.fn().mockResolvedValueOnce(corrupt).mockResolvedValueOnce(good);
+    const sleepFn = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      fetchValidatedFantasyCalcHistory("https://example.test/history", {
+        now,
+        fetchFn,
+        sleepFn,
+      }),
+    ).resolves.toEqual(good);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(sleepFn).toHaveBeenCalledWith(VALUE_HISTORY_FETCH_BACKOFF_MS[0]);
+  });
+
+  it("throws CorruptFantasyCalcHistoryError after exhausting corrupt retries", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(corrupt);
+    const sleepFn = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      fetchValidatedFantasyCalcHistory("https://example.test/history", {
+        now,
+        fetchFn,
+        sleepFn,
+        maxAttempts: VALUE_HISTORY_FETCH_MAX_ATTEMPTS,
+      }),
+    ).rejects.toBeInstanceOf(CorruptFantasyCalcHistoryError);
+    expect(fetchFn).toHaveBeenCalledTimes(VALUE_HISTORY_FETCH_MAX_ATTEMPTS);
+    expect(sleepFn).toHaveBeenCalledTimes(VALUE_HISTORY_FETCH_MAX_ATTEMPTS - 1);
+  });
+
+  it("does not retry HTTP 4xx", async () => {
+    const fetchFn = vi.fn().mockRejectedValue(new Error("Source returned 404"));
+    const sleepFn = vi.fn().mockResolvedValue(undefined);
+    await expect(
+      fetchValidatedFantasyCalcHistory("https://example.test/history", {
+        now,
+        fetchFn,
+        sleepFn,
+      }),
+    ).rejects.toThrow("Source returned 404");
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(sleepFn).not.toHaveBeenCalled();
   });
 });
 
@@ -368,6 +563,13 @@ describe("backfill batch sizing constants", () => {
   it("keeps default under the max Vercel-friendly cap", () => {
     expect(VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT).toBeLessThanOrEqual(VALUE_HISTORY_BACKFILL_MAX_LIMIT);
     expect(VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT).toBeGreaterThan(0);
+  });
+
+  it("runs FantasyCalc history fetches sequentially with a short delay", () => {
+    expect(VALUE_HISTORY_BACKFILL_CONCURRENCY).toBe(1);
+    expect(VALUE_HISTORY_BACKFILL_REQUEST_DELAY_MS).toBe(150);
+    expect(VALUE_HISTORY_FETCH_MAX_ATTEMPTS).toBe(3);
+    expect([...VALUE_HISTORY_FETCH_BACKOFF_MS]).toEqual([500, 1000, 2000]);
   });
 
   it("keeps upsert chunks under the Postgres bind-parameter budget", () => {
