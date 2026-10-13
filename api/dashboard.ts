@@ -6,6 +6,7 @@ import {
   unauthorized,
 } from "./_lib/api-utils.js";
 import { readOwnerSleeperUserId, resolveSleeperUserId } from "./_lib/auth.js";
+import { captureServerError } from "./_lib/posthog.js";
 import { dashboardForViewer, sectionDashboardForViewer, SIGN_IN_REQUIRED } from "./_lib/dashboard-access.js";
 import {
   kickUserDashboardBuild,
@@ -126,6 +127,7 @@ export async function GET(req: Request): Promise<Response> {
     }
     return await handleDashboard(req, sleeperUserId);
   } catch (err) {
+    await captureServerError(err, { route: "dashboard" });
     return internalError(err);
   }
 }
