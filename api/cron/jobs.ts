@@ -14,6 +14,7 @@ import {
   writeGlobalDashboardSnapshot,
 } from "../_lib/dashboard-build.js";
 import { readOwnerSleeperUserId } from "../_lib/auth.js";
+import { captureServerError } from "../_lib/posthog.js";
 import {
   backfillValueHistoryBatch,
   VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
@@ -126,6 +127,7 @@ export async function GET(req: Request): Promise<Response> {
       "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, or backfill-value-history.",
     );
   } catch (err) {
+    await captureServerError(err, { route: "cron/jobs", job: job ?? "unknown" });
     return internalError(err);
   }
 }
