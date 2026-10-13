@@ -11,12 +11,13 @@ import { resolveSleeperUserId } from "./_lib/auth.js";
 import { readUserLeagues } from "./_lib/user-leagues.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./_lib/source-cache-payload.js";
 import {
-  DRAFT_MARKET_CACHE_KEY,
   DRAFT_MARKET_CACHE_MS,
   FFC_BASE_URL,
   REFRESH_TIMEOUT_MS,
   SLEEPER_BASE,
+  draftMarketCacheKey,
   fetchJson,
+  ffcFormatForLeague,
   mflAdpUrl,
   mflPlayersUrl,
   normalizePosition,
@@ -189,7 +190,7 @@ async function fetchDraftMarketSnapshot(
   }
   const leagueFormats = leagues.flatMap((league) => {
     const format = seasonLongFormatForLeague(league);
-    const ffcFormat = format.numQbs === 2 ? "2qb" : format.isDynasty ? "dynasty" : format.ppr === 1 ? "ppr" : format.ppr === 0.5 ? "half-ppr" : "standard";
+    const ffcFormat = ffcFormatForLeague(league);
     const allPlayers = { formatKey: format.key, ffcFormat, teams: format.numTeams, pool: "all" as const };
     return format.isDynasty
       ? [allPlayers, { formatKey: format.key, ffcFormat: "rookie", teams: format.numTeams, pool: "rookie" as const }]
@@ -292,7 +293,8 @@ async function loadDraftMarketSnapshot(
   players: Record<string, SleeperPlayer>,
   season: number,
 ): Promise<CachedDraftMarket> {
-  const rows = await db.select().from(schema.sourceCache).where(eq(schema.sourceCache.cacheKey, DRAFT_MARKET_CACHE_KEY)).limit(1);
+  const cacheKey = draftMarketCacheKey(season, leagues);
+  const rows = await db.select().from(schema.sourceCache).where(eq(schema.sourceCache.cacheKey, cacheKey)).limit(1);
   const cached = rows[0];
   if (!force && cached && Date.now() - cached.fetchedAt.getTime() < DRAFT_MARKET_CACHE_MS) {
     try {
@@ -302,7 +304,7 @@ async function loadDraftMarketSnapshot(
   try {
     const fresh = await withDeadline(fetchDraftMarketSnapshot(leagues, players, season), REFRESH_TIMEOUT_MS);
     const encoded = encodeSourceCachePayload(fresh);
-    await db.insert(schema.sourceCache).values({ cacheKey: DRAFT_MARKET_CACHE_KEY, payload: encoded, fetchedAt: new Date() })
+    await db.insert(schema.sourceCache).values({ cacheKey, payload: encoded, fetchedAt: new Date() })
       .onConflictDoUpdate({ target: schema.sourceCache.cacheKey, set: { payload: encoded, fetchedAt: new Date() } });
     return fresh;
   } catch {

@@ -805,7 +805,7 @@ export function TradeCalculator({
     setGetIds([]);
     setIsResultOpen(false);
     clearTradePlayerRemoveUndoToast();
-  }, [league.id, league.tradeTeams]);
+  }, [league.id]);
 
   useEffect(() => {
     setGiveIds((ids) => ids.filter((id) => assetById.has(id)));

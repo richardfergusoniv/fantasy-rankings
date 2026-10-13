@@ -62,7 +62,11 @@ async function handleRebuildDashboard(): Promise<Response> {
   const buildPromise = buildUserDashboard(ownerId, true);
   buildPromise.catch(() => undefined);
   const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
-  await writeGlobalDashboardSnapshot(dashboard);
+  // An empty rebuild (e.g. every per-league roster fetch failed) must not
+  // overwrite a good owner snapshot — snapshot readers reject empty boards.
+  if (dashboard.leagues.length > 0) {
+    await writeGlobalDashboardSnapshot(dashboard);
+  }
   return json({
     ok: true,
     job: "rebuild-dashboard",

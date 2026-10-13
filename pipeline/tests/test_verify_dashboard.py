@@ -62,3 +62,18 @@ def test_stored_snapshot_request_rejects_a_body_without_a_dashboard():
             assert "no dashboard" in str(error)
         else:
             raise AssertionError("expected a missing dashboard to fail")
+
+
+def test_td_probability_error_skips_when_anytime_td_is_missing():
+    module = _module()
+    player = {"player": "Backup QB", "position": "QB", "td_probability": None}
+    assert module.td_probability_error(player, {"rush_td": None}) is None
+    assert module.td_probability_error(player, {"rush_td": 0.12}) is None
+
+
+def test_td_probability_error_flags_mismatched_values():
+    module = _module()
+    player = {"player": "Star WR", "position": "WR", "td_probability": 0.4}
+    assert module.td_probability_error(player, {"rec_td": 0.4}) is None
+    error = module.td_probability_error(player, {"rec_td": 0.1})
+    assert error is not None and error.startswith("TD Star WR rec_td:")

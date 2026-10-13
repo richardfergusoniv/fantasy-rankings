@@ -89,6 +89,24 @@ def stored_snapshot_request(url: str, secret: str) -> dict:
     return dashboard
 
 
+def td_probability_error(player: dict, components: dict) -> str | None:
+    """Compare staged anytime-TD probability to dashboard components.
+
+    QBs can pass the coverage gate with only pass_yards + pass_tds and no
+    anytime_td prop, so td_probability is None. Skip the check in that case —
+    comparing abs(dv - None) would raise, and a missing rush_td would be a
+    false failure.
+    """
+    td_prob = player.get("td_probability")
+    if td_prob is None:
+        return None
+    td_key = "rec_td" if player["position"] in ("WR", "TE") else "rush_td"
+    dv = components.get(td_key)
+    if dv is None or abs(dv - td_prob) > 1e-9:
+        return f"TD {player['player']} {td_key}: dash={dv} staged={td_prob}"
+    return None
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print("usage: verify_dashboard.py <staged_for_push.json> <staged_matchup_grades.json>", file=sys.stderr)
@@ -161,10 +179,9 @@ def main() -> int:
                             dv = comp.get(dk)
                             if dv is None or abs(dv - p["expected_stats"][sk]) > 1e-9:
                                 errors.append(f"STAT {p['player']} {sk}: dash={dv} staged={p['expected_stats'][sk]}")
-                    td_key = "rec_td" if p["position"] in ("WR", "TE") else "rush_td"
-                    dv = comp.get(td_key)
-                    if dv is None or abs(dv - p["td_probability"]) > 1e-9:
-                        errors.append(f"TD {p['player']} {td_key}: dash={dv} staged={p['td_probability']}")
+                    td_error = td_probability_error(p, comp)
+                    if td_error:
+                        errors.append(td_error)
 
     # K: never vegas/first_down; mostly sleeper; fallback-with-no-projection
     # allowed for pool kickers with no data from any source.

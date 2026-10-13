@@ -4,16 +4,17 @@ Pull NFL player props from many providers, normalize them into one record
 shape, and build a cross-provider consensus (median line, book count, line
 spread) for projection modeling.
 
-Only dependency: `requests` (plus `pytest` for tests). No accounts are
-created and no credentials are entered by this tool — API keys come from
-environment variables only, and are never written to source, logs, or fixtures.
+Dependencies: `requests` and `python-dotenv` (plus `pytest` for tests). No
+accounts are created and no credentials are entered by this tool — API keys
+come from environment variables only, and are never written to source, logs,
+or fixtures.
 
 ## Setup
 
 ```bash
-cd props-aggregator
+cd pipeline
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt   # requests
+.venv/bin/pip install -r requirements.txt   # requests, python-dotenv
 .venv/bin/pip install pytest                # tests only
 cp .env.example .env   # then fill in the keys you have (never commit .env)
 ```
@@ -105,8 +106,8 @@ field_goals_made`. Provider-native market names map to these in
 | propline | `apiKey` query | 1,000 req/day, no card | implemented, needs key |
 | parlayapi | `apiKey` query | 1,000 credits/mo, no card | implemented, needs key |
 | sharpapi | `X-API-Key` header | 12 req/min, 2 books | live 2026-09-22: 237 records, 14 markets |
-| sportsgameodds | `x-api-key` header | 100 req/day trial, **requires card on file** | implemented, market ids need runtime discovery |
-| moneyline | `x-api-key` header | 1,000 credits/mo | implemented, **base URL unverified** |
+| sportsgameodds | `x-api-key` header | 2,500 objects/mo, **requires card on file** | live 2026-09-22, statIDs discovered |
+| moneyline | `x-api-key` header | 1,000 credits/mo | live 2026-09-22, base URL verified |
 | rapidodds | `api_key` query | 250 credits | implemented, sport/market ids provisional |
 | oddspapi | `apiKey` query | 250 req/mo | implemented, market ids need key to discover |
 | theoddsapi | `apiKey` query | 500 req/mo (MLB/NBA only) | implemented, **NFL needs paid tier** |

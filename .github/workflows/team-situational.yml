@@ -28,7 +28,8 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-ten.vercel.app' }}
         run: |
-          curl -s --max-time 90 -H "Authorization: Bearer $CRON_SECRET" \
+          curl -sS --fail-with-body --max-time 90 \
+            -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_BASE_URL/api/cron/jobs?job=refresh-team-situational" | tee /tmp/situational.json
           python3 - <<'EOF'
           import json
