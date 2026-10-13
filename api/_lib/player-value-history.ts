@@ -40,6 +40,12 @@ export const VALUE_HISTORY_UPSERT_CHUNK = 1000;
 /** Default players×format work items per backfill invocation (fits Hobby 60s). */
 export const VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT = 20;
 export const VALUE_HISTORY_BACKFILL_MAX_LIMIT = 40;
+/** FantasyCalc history starts in Jan of the current season year; reject absurd years. */
+export const VALUE_HISTORY_MIN_YEAR = 2025;
+/** Serializing years outside ~±10000 yields `+012600-…` ISO strings Postgres reads as TZ offsets (22009). */
+export function valueHistoryMaxYear(now: Date = new Date()): number {
+  return now.getUTCFullYear() + 1;
+}
 
 export type PlayerValueSnapshotRow = {
   id: string;
@@ -69,14 +75,36 @@ export function utcDateKey(date: Date): string {
   return startOfUtcDay(date).toISOString().slice(0, 10);
 }
 
-/** FantasyCalc history dates are `M/D/YYYY` (US). */
-export function parseFantasyCalcHistoryDate(value: string): Date | null {
-  const [month = 0, day = 0, year = 0] = value.split("/").map(Number);
-  if (!year || !month || !day) return null;
+/**
+ * FantasyCalc history dates are `M/D/YYYY` (US, 4-digit year).
+ * Reject 2-digit years and out-of-range years — those become extended ISO
+ * timestamps like `+012600-01-07T00:00:00.000Z`, which Postgres treats as an
+ * invalid time-zone displacement (SQLSTATE 22009).
+ */
+export function parseFantasyCalcHistoryDate(
+  value: string,
+  now: Date = new Date(),
+): Date | null {
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+  if (!match) return null;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  if (year < VALUE_HISTORY_MIN_YEAR || year > valueHistoryMaxYear(now)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   const date = new Date(Date.UTC(year, month - 1, day));
   if (Number.isNaN(date.getTime())) return null;
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
   return date;
+}
+
+/** True when snapshot_date is YYYY-MM-DD inside the accepted history window. */
+export function isValidSnapshotDateKey(snapshotDate: string, now: Date = new Date()): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshotDate)) return false;
+  const year = Number(snapshotDate.slice(0, 4));
+  if (year < VALUE_HISTORY_MIN_YEAR || year > valueHistoryMaxYear(now)) return false;
+  const date = new Date(`${snapshotDate}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === snapshotDate;
 }
 
 export function playerValueSnapshotId(snapshotDate: string, formatKey: string, playerId: string): string {
@@ -104,20 +132,21 @@ export function compactPlayerValueSnapshot(input: {
   playerName?: string | null;
   position?: string | null;
   value: unknown;
-  capturedAt: Date;
+  capturedAt?: Date;
+  now?: Date;
 }): PlayerValueSnapshotRow | null {
   const playerId = asTrimmedString(input.playerId);
   if (!playerId) return null;
   const position = asTrimmedString(input.position);
   if (position === "PICK") return null;
+  if (!isValidSnapshotDateKey(input.snapshotDate, input.now)) return null;
   const rawValue = coerceFiniteNumber(input.value);
   if (rawValue == null) return null;
   const value = Math.round(rawValue);
   if (!Number.isFinite(value)) return null;
-  const capturedAt =
-    input.capturedAt instanceof Date && !Number.isNaN(input.capturedAt.getTime())
-      ? input.capturedAt
-      : new Date(`${input.snapshotDate}T00:00:00.000Z`);
+  // Always derive timestamptz from the validated YYYY-MM-DD key so we never
+  // send postgres.js an extended-year Date (`+012600-…`) that trips 22009.
+  const capturedAt = new Date(`${input.snapshotDate}T00:00:00.000Z`);
   if (Number.isNaN(capturedAt.getTime())) return null;
   return {
     id: playerValueSnapshotId(input.snapshotDate, input.formatKey, playerId),
@@ -287,8 +316,8 @@ export async function upsertPlayerValueSnapshots(rows: PlayerValueSnapshotRow[])
   return written;
 }
 
-/** Small concurrency so FantasyCalc history endpoints are less likely to 500. */
-const VALUE_HISTORY_BACKFILL_CONCURRENCY = 3;
+/** Sequential history fetches — FantasyCalc 500s under even light concurrency. */
+const VALUE_HISTORY_BACKFILL_CONCURRENCY = 1;
 
 async function mapPool<T, R>(
   items: T[],
@@ -313,6 +342,25 @@ async function mapPool<T, R>(
   const pool = Array.from({ length: Math.min(concurrency, Math.max(items.length, 1)) }, () => run());
   await Promise.all(pool);
   return results;
+}
+
+function isRetryableFantasyCalcError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes("Source returned 500") || message.includes("timed out") || message.includes("Source request timed out");
+}
+
+async function fetchFantasyCalcJsonWithRetry<T>(url: string, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await fetchJson<T>(url);
+    } catch (err) {
+      lastError = err;
+      if (!isRetryableFantasyCalcError(err) || attempt === attempts - 1) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
+    }
+  }
+  throw lastError;
 }
 
 /**
@@ -375,7 +423,7 @@ export async function backfillValueHistoryBatch(options: {
   }> = [];
 
   for (const preset of FANTASY_CALC_SNAPSHOT_PRESETS) {
-    const currentRows = await fetchJson<FantasyCalcRow[]>(preset.url);
+    const currentRows = await fetchFantasyCalcJsonWithRetry<FantasyCalcRow[]>(preset.url);
     const ranked = rankedPlayersFromFantasyCalcRows(currentRows);
     totalWorkItems += ranked.length;
     if (remaining <= 0) continue;
@@ -392,7 +440,7 @@ export async function backfillValueHistoryBatch(options: {
   // Per work item: fetch → sanitize → upsert. One bad player/history must not
   // 500 the whole cron invocation or poison sibling upserts.
   const historyResults = await mapPool(work, VALUE_HISTORY_BACKFILL_CONCURRENCY, async ({ format, player }) => {
-    const history = await fetchJson<FantasyCalcHistoryResponse>(
+    const history = await fetchFantasyCalcJsonWithRetry<FantasyCalcHistoryResponse>(
       fantasyCalcHistoryUrl(format, player.fantasyCalcId),
     );
     const rows = historySnapshotRowsFromPoints({

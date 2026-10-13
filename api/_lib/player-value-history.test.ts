@@ -8,12 +8,14 @@ import {
   fantasyCalcHistoryUrl,
   formatDbError,
   historySnapshotRowsFromPoints,
+  isValidSnapshotDateKey,
   parseFantasyCalcHistoryDate,
   playerValueSnapshotId,
   rankedPlayersFromFantasyCalcRows,
   utcDateKey,
   VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
   VALUE_HISTORY_BACKFILL_MAX_LIMIT,
+  VALUE_HISTORY_MIN_YEAR,
   VALUE_HISTORY_UPSERT_CHUNK,
   type PlayerValueSnapshotRow,
 } from "./player-value-history.js";
@@ -33,15 +35,37 @@ function snapshotRow(id: string, value: number): PlayerValueSnapshotRow {
 }
 
 describe("parseFantasyCalcHistoryDate", () => {
+  const now = new Date("2026-10-13T00:00:00.000Z");
+
   it("parses US M/D/YYYY as UTC midnight", () => {
-    const date = parseFantasyCalcHistoryDate("01/15/2026");
+    const date = parseFantasyCalcHistoryDate("01/15/2026", now);
     expect(date?.toISOString()).toBe("2026-01-15T00:00:00.000Z");
   });
 
-  it("rejects impossible calendar dates", () => {
-    expect(parseFantasyCalcHistoryDate("02/31/2026")).toBeNull();
-    expect(parseFantasyCalcHistoryDate("not-a-date")).toBeNull();
-    expect(parseFantasyCalcHistoryDate("")).toBeNull();
+  it("rejects impossible calendar dates and non 4-digit years", () => {
+    expect(parseFantasyCalcHistoryDate("02/31/2026", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("not-a-date", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("1/7/26", now)).toBeNull();
+  });
+
+  it("rejects absurd years that would serialize as +0NNNNN ISO timestamps", () => {
+    expect(parseFantasyCalcHistoryDate("01/07/12600", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("06/22/2361", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("1/24/202026", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("01/01/2024", now)).toBeNull();
+    expect(VALUE_HISTORY_MIN_YEAR).toBe(2025);
+  });
+});
+
+describe("isValidSnapshotDateKey", () => {
+  const now = new Date("2026-10-13T00:00:00.000Z");
+
+  it("accepts YYYY-MM-DD inside the history window", () => {
+    expect(isValidSnapshotDateKey("2026-01-07", now)).toBe(true);
+    expect(isValidSnapshotDateKey("2361-06-22", now)).toBe(false);
+    expect(isValidSnapshotDateKey("2026-13-01", now)).toBe(false);
+    expect(isValidSnapshotDateKey("01/07/2026", now)).toBe(false);
   });
 });
 
@@ -57,7 +81,6 @@ describe("coerceFiniteNumber", () => {
 
 describe("compactPlayerValueSnapshot", () => {
   it("builds a compact PK row and rounds decimal values to integers", () => {
-    const capturedAt = new Date("2026-10-12T15:00:00.000Z");
     expect(
       compactPlayerValueSnapshot({
         snapshotDate: "2026-10-12",
@@ -66,7 +89,7 @@ describe("compactPlayerValueSnapshot", () => {
         playerName: "Jahmyr Gibbs",
         position: "RB",
         value: 10511.6,
-        capturedAt,
+        capturedAt: new Date("2026-10-12T15:00:00.000Z"),
       }),
     ).toEqual({
       id: "2026-10-12:redraft-1qb-12t-0.5ppr:9221",
@@ -76,7 +99,7 @@ describe("compactPlayerValueSnapshot", () => {
       playerName: "Jahmyr Gibbs",
       position: "RB",
       value: 10512,
-      capturedAt,
+      capturedAt: new Date("2026-10-12T00:00:00.000Z"),
     });
   });
 
@@ -167,7 +190,7 @@ describe("dailySnapshotRowsFromPreset", () => {
         playerName: "Jahmyr Gibbs",
         position: "RB",
         value: 10511,
-        capturedAt: asOf,
+        capturedAt: new Date("2026-10-12T00:00:00.000Z"),
       },
     ]);
     expect(utcDateKey(asOf)).toBe("2026-10-12");
@@ -182,6 +205,8 @@ describe("historySnapshotRowsFromPoints", () => {
       { date: "10/12/2026", value: 10511 },
       { date: "bad", value: 1 },
       { date: "10/13/2026", value: undefined },
+      { date: "01/07/12600", value: 50 },
+      { date: "6/22/2361", value: 0 },
     ];
     const all = historySnapshotRowsFromPoints({
       formatKey: "dynasty-2qb-12t-1ppr",
@@ -193,6 +218,7 @@ describe("historySnapshotRowsFromPoints", () => {
     });
     expect(all.map((row) => row.snapshotDate)).toEqual(["2026-01-01", "2026-03-15", "2026-10-12"]);
     expect(all[1]?.value).toBe(9500);
+    expect(all.every((row) => row.capturedAt.toISOString().startsWith(row.snapshotDate))).toBe(true);
 
     const recent = historySnapshotRowsFromPoints({
       formatKey: "dynasty-2qb-12t-1ppr",
