@@ -15,13 +15,26 @@ else
   PY=python3
 fi
 
-read -r SEASON WEEK < <($PY -c "
+SEASON=""
+WEEK=""
+for attempt in 1 2 3; do
+  if out=$($PY -c "
 import json
 import urllib.request
 with urllib.request.urlopen('https://api.sleeper.app/v1/state/nfl', timeout=30) as resp:
     state = json.load(resp)
 print(int(state['season']), max(1, min(18, int(state['week']))))
-")
+") && read -r SEASON WEEK <<< "$out" && [[ "$SEASON" =~ ^[0-9]+$ && "$WEEK" =~ ^[0-9]+$ ]]; then
+    break
+  fi
+  SEASON=""
+  WEEK=""
+  if [ "$attempt" -eq 3 ]; then
+    echo "Unable to read a valid Sleeper NFL state after 3 attempts." >&2
+    exit 1
+  fi
+  sleep 5
+done
 
 echo "pulling all providers for ${SEASON} week ${WEEK}..."
 $PY -m props_aggregator.cli pull --all --week "${WEEK}" --season "${SEASON}"
