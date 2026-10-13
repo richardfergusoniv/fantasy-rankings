@@ -64,6 +64,9 @@ jobs:
         with:
           name: pfn-data
           path: pipeline/pfn/data
+          # Includes .last_hash.json (change-detection state). Directory is
+          # scrape outputs only — no secrets.
+          include-hidden-files: true
           if-no-files-found: error
 
   commit-state:
