@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SkipLink } from "./shared";
 import { getAccessToken, isSupabaseConfigured, supabase, type Session } from "./supabase";
+import { identifyPostHogUser, resetPostHog } from "./posthog";
 
 /**
  * Phase 2 auth gate.
@@ -79,6 +80,16 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setConnChecked(false);
     }
   }, [session, refreshConnection]);
+
+  // PostHog: identify by Sleeper user ID once the connection is known;
+  // reset on sign-out so the next user on this browser starts clean.
+  useEffect(() => {
+    if (connection?.sleeperUserId) {
+      identifyPostHogUser(connection.sleeperUserId, connection.sleeperUsername);
+    } else if (!session) {
+      resetPostHog();
+    }
+  }, [connection, session]);
 
   if (!isSupabaseConfigured || !supabase) {
     return <>{children}</>;
