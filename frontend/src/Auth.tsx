@@ -81,12 +81,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
   }, [session, refreshConnection]);
 
-  // PostHog: identify by Sleeper user ID once the connection is known;
-  // reset on sign-out so the next user on this browser starts clean.
+  // PostHog runs in identified-only mode (project setting): events from
+  // anonymous browsers are dropped client-side. Identify as soon as a
+  // session exists (Supabase user ID), then re-identify under the Sleeper
+  // user ID once connected — PostHog merges the two profiles. Reset on
+  // sign-out so the next user on this browser starts clean.
   useEffect(() => {
     if (connection?.sleeperUserId) {
       identifyPostHogUser(connection.sleeperUserId, connection.sleeperUsername);
-    } else if (!session) {
+    } else if (session) {
+      identifyPostHogUser(session.user.id);
+    } else {
       resetPostHog();
     }
   }, [connection, session]);
