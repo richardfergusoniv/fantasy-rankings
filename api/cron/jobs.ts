@@ -47,7 +47,7 @@ import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
  *   metrics for Charts presets into `nflverse-chart-extras-2026-v1`.
  * - backfill-value-history: one-time / resumable FantasyCalc history pull
  *   into `player_value_snapshots`. Query params: `offset` (default 0),
- *   `limit` (default 40, max 80). Repeat with `nextOffset` until `done`.
+ *   `limit` (default 20, max 40). Repeat with `nextOffset` until `done`.
  */
 
 async function handleRebuildDashboard(): Promise<Response> {

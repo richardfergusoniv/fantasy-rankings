@@ -45,7 +45,22 @@ export function methodNotAllowed(allowed: string[]): Response {
 
 export function internalError(err: unknown): Response {
   const message = err instanceof Error ? err.message : "Internal server error";
-  console.error("[api]", message, err instanceof Error ? err.stack : err);
+  const cause = err instanceof Error && err.cause != null ? err.cause : undefined;
+  const causeMessage =
+    cause instanceof Error
+      ? cause.message
+      : cause && typeof cause === "object" && "message" in cause && typeof (cause as { message: unknown }).message === "string"
+        ? (cause as { message: string }).message
+        : cause != null
+          ? String(cause)
+          : undefined;
+  console.error(
+    "[api]",
+    message,
+    causeMessage ? `cause=${causeMessage}` : "",
+    err instanceof Error ? err.stack : err,
+    cause && !(cause instanceof Error) ? cause : "",
+  );
   return json({ ok: false, error: "Internal server error" }, 500);
 }
 
