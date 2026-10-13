@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { db, schema } from "../_lib/db.js";
+import { captureServerError } from "../_lib/posthog.js";
 import {
   badRequest,
   forbidden,
@@ -530,6 +531,10 @@ export async function POST(req: Request): Promise<Response> {
     if (url.pathname.endsWith("/prop-line-snapshots")) return await handlePropLineSnapshots(req);
     return json({ ok: false, error: "Unknown ingest target." }, 404);
   } catch (err) {
+    await captureServerError(err, {
+      route: "ingest",
+      target: url.pathname.split("/").pop() ?? "unknown",
+    });
     return internalError(err);
   }
 }
