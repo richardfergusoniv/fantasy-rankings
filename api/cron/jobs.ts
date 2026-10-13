@@ -14,12 +14,16 @@ import {
   writeGlobalDashboardSnapshot,
 } from "../_lib/dashboard-build.js";
 import { readOwnerSleeperUserId } from "../_lib/auth.js";
+import {
+  backfillValueHistoryBatch,
+  VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
+} from "../_lib/player-value-history.js";
 import { withDeadline } from "../_lib/sleeper.js";
 import { refreshTeamSituationalSnapshot } from "../_lib/team-situational.js";
 import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
 
 /**
- * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras
+ * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | backfill-value-history
  *
  * One function for the scheduled jobs (Vercel's 12-function budget).
  * Vercel Cron invokes with GET; auth is `Authorization: Bearer <CRON_SECRET>`
@@ -30,7 +34,9 @@ import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
  *   visitors. Schedule this AFTER the daily props pull and the fantasycalc
  *   refresh so the snapshot lands on the freshest inputs.
  * - refresh-fantasycalc: refreshes the daily FantasyCalc preset cache that
- *   dashboard builds read instead of hitting the FantasyCalc API 12x each.
+ *   dashboard builds read instead of hitting the FantasyCalc API 12x each,
+ *   and appends today's values into `player_value_snapshots` for every
+ *   ranked player in each fetched preset.
  * - read-dashboard-snapshot: returns the stored snapshot for the props
  *   verifier. It is not a public read; the cron secret is required, and the
  *   body is the same dashboard the rebuild just wrote.
@@ -39,6 +45,9 @@ import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
  *   replacing cache; keeps the last valid snapshot on failure.
  * - refresh-chart-extras: rebuilds compact nflverse snap / red-zone / PROE
  *   metrics for Charts presets into `nflverse-chart-extras-2026-v1`.
+ * - backfill-value-history: one-time / resumable FantasyCalc history pull
+ *   into `player_value_snapshots`. Query params: `offset` (default 0),
+ *   `limit` (default 40, max 80). Repeat with `nextOffset` until `done`.
  */
 
 async function handleRebuildDashboard(): Promise<Response> {
@@ -75,12 +84,29 @@ async function handleReadDashboardSnapshot(): Promise<Response> {
 
 async function handleRefreshTeamSituational(): Promise<Response> {
   const result = await refreshTeamSituationalSnapshot();
-  return json({ ok: true, job: "refresh-team-situational", ...result });
+  return json({ job: "refresh-team-situational", ...result });
 }
 
 async function handleRefreshChartExtras(): Promise<Response> {
   const result = await refreshChartExtrasSnapshot();
-  return json({ ok: true, job: "refresh-chart-extras", ...result });
+  return json({ job: "refresh-chart-extras", ...result });
+}
+
+function parseNonNegativeInt(raw: string | null, fallback: number): number {
+  if (raw == null || raw === "") return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.floor(parsed);
+}
+
+async function handleBackfillValueHistory(url: URL): Promise<Response> {
+  const offset = parseNonNegativeInt(url.searchParams.get("offset"), 0);
+  const limit = parseNonNegativeInt(
+    url.searchParams.get("limit"),
+    VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
+  );
+  const result = await backfillValueHistoryBatch({ offset, limit });
+  return json({ ok: true, ...result });
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -93,8 +119,9 @@ export async function GET(req: Request): Promise<Response> {
     if (job === "read-dashboard-snapshot") return await handleReadDashboardSnapshot();
     if (job === "refresh-team-situational") return await handleRefreshTeamSituational();
     if (job === "refresh-chart-extras") return await handleRefreshChartExtras();
+    if (job === "backfill-value-history") return await handleBackfillValueHistory(url);
     return badRequest(
-      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, or refresh-chart-extras.",
+      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, or backfill-value-history.",
     );
   } catch (err) {
     return internalError(err);

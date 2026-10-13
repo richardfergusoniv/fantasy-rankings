@@ -73,6 +73,7 @@ import { rankingsForLeagueFormats } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
 import { selectProjectionFeed } from "./projection-fallback.js";
+import { appendDailyValueSnapshots } from "./player-value-history.js";
 import {
   applySnapSharesToRows,
   enrichOpportunityMetrics,
@@ -966,6 +967,7 @@ export async function refreshFantasyCalcCache(): Promise<{
   rows: number;
   failed: number;
   asOf: string;
+  valueSnapshots: number;
 }> {
   const presets: Record<string, FantasyCalcRow[]> = {};
   let failed = 0;
@@ -1003,7 +1005,16 @@ export async function refreshFantasyCalcCache(): Promise<{
       set: { payload, fetchedAt },
     });
   rememberFantasyCalcPresets(presets, fetchedAt, fetchedAt.getTime());
-  return { presets: Object.keys(presets).length, rows: rowCount, failed, asOf: fetchedAt.toISOString() };
+  // Append today's market values for every fetched preset so value history
+  // covers the full ranked universe, not only players opened in the UI.
+  const snapshots = await appendDailyValueSnapshots(presets, fetchedAt);
+  return {
+    presets: Object.keys(presets).length,
+    rows: rowCount,
+    failed,
+    asOf: fetchedAt.toISOString(),
+    valueSnapshots: snapshots.rows,
+  };
 }
 
 async function fetchFantasyCalcRankings(sleeperPlayers: Record<string, SleeperPlayer>): Promise<{ rows: SeasonLongRanking[]; failedPresets: number }> {
