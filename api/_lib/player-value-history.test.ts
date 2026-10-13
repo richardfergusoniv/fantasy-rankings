@@ -8,12 +8,15 @@ import {
   fantasyCalcHistoryUrl,
   formatDbError,
   historySnapshotRowsFromPoints,
+  isAcceptableSnapshotDateKey,
+  isAcceptableValueHistoryInstant,
   parseFantasyCalcHistoryDate,
   playerValueSnapshotId,
   rankedPlayersFromFantasyCalcRows,
   utcDateKey,
   VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
   VALUE_HISTORY_BACKFILL_MAX_LIMIT,
+  VALUE_HISTORY_MIN_SNAPSHOT_DATE,
   VALUE_HISTORY_UPSERT_CHUNK,
   type PlayerValueSnapshotRow,
 } from "./player-value-history.js";
@@ -32,16 +35,57 @@ function snapshotRow(id: string, value: number): PlayerValueSnapshotRow {
   };
 }
 
+describe("utcDateKey", () => {
+  it("formats UTC calendar dates without Date#toISOString", () => {
+    expect(utcDateKey(new Date(Date.UTC(2026, 9, 12)))).toBe("2026-10-12");
+    expect(utcDateKey(new Date(Date.UTC(2015, 0, 1)))).toBe("2015-01-01");
+  });
+});
+
+describe("isAcceptableValueHistoryInstant / isAcceptableSnapshotDateKey", () => {
+  const now = new Date("2026-10-13T12:00:00.000Z");
+
+  it("accepts dates on/after 2015-01-01 and within one day ahead", () => {
+    expect(isAcceptableValueHistoryInstant(new Date("2015-01-01T00:00:00.000Z"), now)).toBe(true);
+    expect(isAcceptableValueHistoryInstant(new Date("2026-10-13T12:00:00.000Z"), now)).toBe(true);
+    expect(isAcceptableValueHistoryInstant(new Date("2026-10-14T11:59:59.000Z"), now)).toBe(true);
+    expect(isAcceptableSnapshotDateKey("2026-10-13", now)).toBe(true);
+    expect(isAcceptableSnapshotDateKey(VALUE_HISTORY_MIN_SNAPSHOT_DATE, now)).toBe(true);
+  });
+
+  it("rejects invalid, pre-2015, and >1 day future instants", () => {
+    expect(isAcceptableValueHistoryInstant(new Date(Number.NaN), now)).toBe(false);
+    expect(isAcceptableValueHistoryInstant(new Date("2014-12-31T00:00:00.000Z"), now)).toBe(false);
+    expect(isAcceptableValueHistoryInstant(new Date("2026-10-14T12:00:01.000Z"), now)).toBe(false);
+    expect(isAcceptableValueHistoryInstant(new Date(Date.UTC(12600, 0, 7)), now)).toBe(false);
+    expect(isAcceptableSnapshotDateKey("2014-12-31", now)).toBe(false);
+    expect(isAcceptableSnapshotDateKey("2026-10-15", now)).toBe(false);
+    expect(isAcceptableSnapshotDateKey("not-a-date", now)).toBe(false);
+    expect(isAcceptableSnapshotDateKey("2026-02-31", now)).toBe(false);
+  });
+});
+
 describe("parseFantasyCalcHistoryDate", () => {
+  const now = new Date("2026-10-13T00:00:00.000Z");
+
   it("parses US M/D/YYYY as UTC midnight", () => {
-    const date = parseFantasyCalcHistoryDate("01/15/2026");
+    const date = parseFantasyCalcHistoryDate("01/15/2026", now);
     expect(date?.toISOString()).toBe("2026-01-15T00:00:00.000Z");
   });
 
-  it("rejects impossible calendar dates", () => {
-    expect(parseFantasyCalcHistoryDate("02/31/2026")).toBeNull();
-    expect(parseFantasyCalcHistoryDate("not-a-date")).toBeNull();
-    expect(parseFantasyCalcHistoryDate("")).toBeNull();
+  it("rejects impossible calendar dates and non-4-digit years", () => {
+    expect(parseFantasyCalcHistoryDate("02/31/2026", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("not-a-date", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("1/7/12600", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("01/07/26", now)).toBeNull();
+  });
+
+  it("rejects dates before 2015-01-01 and more than one day ahead", () => {
+    expect(parseFantasyCalcHistoryDate("12/31/2014", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("01/01/2015", now)?.toISOString()).toBe("2015-01-01T00:00:00.000Z");
+    expect(parseFantasyCalcHistoryDate("10/15/2026", now)).toBeNull();
+    expect(parseFantasyCalcHistoryDate("01/07/2361", now)).toBeNull();
   });
 });
 
@@ -58,6 +102,7 @@ describe("coerceFiniteNumber", () => {
 describe("compactPlayerValueSnapshot", () => {
   it("builds a compact PK row and rounds decimal values to integers", () => {
     const capturedAt = new Date("2026-10-12T15:00:00.000Z");
+    const now = new Date("2026-10-13T00:00:00.000Z");
     expect(
       compactPlayerValueSnapshot({
         snapshotDate: "2026-10-12",
@@ -67,6 +112,7 @@ describe("compactPlayerValueSnapshot", () => {
         position: "RB",
         value: 10511.6,
         capturedAt,
+        now,
       }),
     ).toEqual({
       id: "2026-10-12:redraft-1qb-12t-0.5ppr:9221",
@@ -82,6 +128,7 @@ describe("compactPlayerValueSnapshot", () => {
 
   it("fills nullish name/position with empty strings and skips non-finite values", () => {
     const capturedAt = new Date("2026-10-12T00:00:00.000Z");
+    const now = new Date("2026-10-13T00:00:00.000Z");
     expect(
       compactPlayerValueSnapshot({
         snapshotDate: "2026-10-12",
@@ -91,6 +138,7 @@ describe("compactPlayerValueSnapshot", () => {
         position: undefined,
         value: "100.4",
         capturedAt,
+        now,
       }),
     ).toEqual({
       id: "2026-10-12:redraft-1qb-12t-0.5ppr:9221",
@@ -111,11 +159,13 @@ describe("compactPlayerValueSnapshot", () => {
         position: "WR",
         value: Number.NaN,
         capturedAt,
+        now,
       }),
     ).toBeNull();
   });
 
-  it("skips picks and missing player ids", () => {
+  it("skips picks, missing player ids, and out-of-range snapshot/captured dates", () => {
+    const now = new Date("2026-10-13T00:00:00.000Z");
     expect(
       compactPlayerValueSnapshot({
         snapshotDate: "2026-10-12",
@@ -125,6 +175,7 @@ describe("compactPlayerValueSnapshot", () => {
         position: "PICK",
         value: 4000,
         capturedAt: new Date(),
+        now,
       }),
     ).toBeNull();
     expect(
@@ -136,6 +187,31 @@ describe("compactPlayerValueSnapshot", () => {
         position: "WR",
         value: 100,
         capturedAt: new Date(),
+        now,
+      }),
+    ).toBeNull();
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2014-12-31",
+        formatKey: "redraft-1qb-12t-0.5ppr",
+        playerId: "9221",
+        playerName: "X",
+        position: "RB",
+        value: 100,
+        capturedAt: new Date("2014-12-31T00:00:00.000Z"),
+        now,
+      }),
+    ).toBeNull();
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2026-10-12",
+        formatKey: "redraft-1qb-12t-0.5ppr",
+        playerId: "9221",
+        playerName: "X",
+        position: "RB",
+        value: 100,
+        capturedAt: new Date("2026-10-15T00:00:00.000Z"),
+        now,
       }),
     ).toBeNull();
   });
@@ -158,23 +234,41 @@ describe("dailySnapshotRowsFromPreset", () => {
         value: 1000,
       },
     ];
-    expect(dailySnapshotRowsFromPreset("redraft-1qb-12t-0.5ppr", rows, asOf)).toEqual([
-      {
-        id: playerValueSnapshotId("2026-10-12", "redraft-1qb-12t-0.5ppr", "9221"),
-        snapshotDate: "2026-10-12",
-        formatKey: "redraft-1qb-12t-0.5ppr",
-        playerId: "9221",
-        playerName: "Jahmyr Gibbs",
-        position: "RB",
-        value: 10511,
-        capturedAt: asOf,
-      },
-    ]);
+    expect(dailySnapshotRowsFromPreset("redraft-1qb-12t-0.5ppr", rows, asOf)).toEqual({
+      rows: [
+        {
+          id: playerValueSnapshotId("2026-10-12", "redraft-1qb-12t-0.5ppr", "9221"),
+          snapshotDate: "2026-10-12",
+          formatKey: "redraft-1qb-12t-0.5ppr",
+          playerId: "9221",
+          playerName: "Jahmyr Gibbs",
+          position: "RB",
+          value: 10511,
+          capturedAt: asOf,
+        },
+      ],
+      skipped: 0,
+    });
     expect(utcDateKey(asOf)).toBe("2026-10-12");
+  });
+
+  it("skips the whole preset when asOf is outside the accepted window", () => {
+    const asOf = new Date("2026-10-20T00:00:00.000Z");
+    const now = new Date("2026-10-13T00:00:00.000Z");
+    const rows: FantasyCalcRow[] = [
+      { player: { id: 1, sleeperId: "9221", name: "A", position: "RB" }, value: 100 },
+      { player: { id: 2, sleeperId: "4046", name: "B", position: "WR" }, value: 200 },
+    ];
+    expect(dailySnapshotRowsFromPreset("redraft-1qb-12t-0.5ppr", rows, asOf, now)).toEqual({
+      rows: [],
+      skipped: 2,
+    });
   });
 });
 
 describe("historySnapshotRowsFromPoints", () => {
+  const now = new Date("2026-10-13T00:00:00.000Z");
+
   it("keeps full history when minSnapshotDate is null and filters when set", () => {
     const points = [
       { date: "01/01/2026", value: 9000 },
@@ -190,9 +284,12 @@ describe("historySnapshotRowsFromPoints", () => {
       position: "WR",
       points,
       minSnapshotDate: null,
+      now,
     });
-    expect(all.map((row) => row.snapshotDate)).toEqual(["2026-01-01", "2026-03-15", "2026-10-12"]);
-    expect(all[1]?.value).toBe(9500);
+    expect(all.rows.map((row) => row.snapshotDate)).toEqual(["2026-01-01", "2026-03-15", "2026-10-12"]);
+    expect(all.rows[1]?.value).toBe(9500);
+    // "bad" + undefined-value point with valid date that fails compact
+    expect(all.skipped).toBe(1);
 
     const recent = historySnapshotRowsFromPoints({
       formatKey: "dynasty-2qb-12t-1ppr",
@@ -201,8 +298,34 @@ describe("historySnapshotRowsFromPoints", () => {
       position: "WR",
       points,
       minSnapshotDate: "2026-03-01",
+      now,
     });
-    expect(recent.map((row) => row.snapshotDate)).toEqual(["2026-03-15", "2026-10-12"]);
+    expect(recent.rows.map((row) => row.snapshotDate)).toEqual(["2026-03-15", "2026-10-12"]);
+  });
+
+  it("skips absurd / pre-2015 / far-future dates and still keeps valid points", () => {
+    const built = historySnapshotRowsFromPoints({
+      formatKey: "dynasty-2qb-12t-1ppr",
+      playerId: "4046",
+      playerName: "Justin Jefferson",
+      position: "WR",
+      points: [
+        { date: "01/07/12600", value: 1 },
+        { date: "01/07/2361", value: 2 },
+        { date: "12/31/2014", value: 3 },
+        { date: "10/15/2026", value: 4 },
+        { date: "01/01/2015", value: 5000 },
+        { date: "10/12/2026", value: 10511 },
+        { date: "not-a-date", value: 9 },
+      ],
+      minSnapshotDate: null,
+      now,
+    });
+    expect(built.rows.map((row) => ({ date: row.snapshotDate, value: row.value }))).toEqual([
+      { date: "2015-01-01", value: 5000 },
+      { date: "2026-10-12", value: 10511 },
+    ]);
+    expect(built.skipped).toBe(5);
   });
 });
 

@@ -40,6 +40,13 @@ export const VALUE_HISTORY_UPSERT_CHUNK = 1000;
 /** Default players×format work items per backfill invocation (fits Hobby 60s). */
 export const VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT = 20;
 export const VALUE_HISTORY_BACKFILL_MAX_LIMIT = 40;
+/**
+ * Inclusive lower bound for snapshot_date / captured_at.
+ * FantasyCalc occasionally returns absurd years (e.g. 12600) that serialize as
+ * `+012600-…` ISO strings; Postgres then rejects them as SQLSTATE 22009.
+ */
+export const VALUE_HISTORY_MIN_SNAPSHOT_DATE = "2015-01-01";
+const DAY_MS = 86_400_000;
 
 export type PlayerValueSnapshotRow = {
   id: string;
@@ -59,23 +66,68 @@ export type RankedFantasyCalcPlayer = {
   position: string;
 };
 
+export type PlayerValueSnapshotBuildResult = {
+  rows: PlayerValueSnapshotRow[];
+  /** Points/rows dropped for invalid or out-of-range dates (or failed compact). */
+  skipped: number;
+};
+
 export function startOfUtcDay(date: Date): Date {
   const copy = new Date(date);
   copy.setUTCHours(0, 0, 0, 0);
   return copy;
 }
 
+/**
+ * Format YYYY-MM-DD without Date#toISOString — extended years produce
+ * `+012600-…` which `.slice(0, 10)` corrupts and Postgres misreads as a TZ.
+ */
 export function utcDateKey(date: Date): string {
-  return startOfUtcDay(date).toISOString().slice(0, 10);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${String(year).padStart(4, "0")}-${month}-${day}`;
 }
 
-/** FantasyCalc history dates are `M/D/YYYY` (US). */
-export function parseFantasyCalcHistoryDate(value: string): Date | null {
-  const [month = 0, day = 0, year = 0] = value.split("/").map(Number);
-  if (!year || !month || !day) return null;
+/**
+ * Accept finite instants on/after 2015-01-01 UTC and at most 1 day ahead of `now`.
+ * Rejects NaN dates and absurd far-future years from FantasyCalc history.
+ */
+export function isAcceptableValueHistoryInstant(date: Date, now: Date = new Date()): boolean {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return false;
+  const year = date.getUTCFullYear();
+  // Keep years in the normal 4-digit ISO range so timestamptz never sees +YYYYYY.
+  if (year < 2015 || year > 9999) return false;
+  if (utcDateKey(date) < VALUE_HISTORY_MIN_SNAPSHOT_DATE) return false;
+  if (date.getTime() > now.getTime() + DAY_MS) return false;
+  return true;
+}
+
+/** True when snapshot_date is a real YYYY-MM-DD inside the accepted window. */
+export function isAcceptableSnapshotDateKey(snapshotDate: string, now: Date = new Date()): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshotDate)) return false;
+  const date = new Date(`${snapshotDate}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || utcDateKey(date) !== snapshotDate) return false;
+  return isAcceptableValueHistoryInstant(date, now);
+}
+
+/**
+ * FantasyCalc history dates are `M/D/YYYY` (US, 4-digit year).
+ * Rejects malformed strings and dates outside the accepted history window.
+ */
+export function parseFantasyCalcHistoryDate(value: string, now: Date = new Date()): Date | null {
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+  if (!match) return null;
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   const date = new Date(Date.UTC(year, month - 1, day));
   if (Number.isNaN(date.getTime())) return null;
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return null;
+  }
+  if (!isAcceptableValueHistoryInstant(date, now)) return null;
   return date;
 }
 
@@ -105,11 +157,14 @@ export function compactPlayerValueSnapshot(input: {
   position?: string | null;
   value: unknown;
   capturedAt: Date;
+  now?: Date;
 }): PlayerValueSnapshotRow | null {
+  const now = input.now ?? new Date();
   const playerId = asTrimmedString(input.playerId);
   if (!playerId) return null;
   const position = asTrimmedString(input.position);
   if (position === "PICK") return null;
+  if (!isAcceptableSnapshotDateKey(input.snapshotDate, now)) return null;
   const rawValue = coerceFiniteNumber(input.value);
   if (rawValue == null) return null;
   const value = Math.round(rawValue);
@@ -118,7 +173,7 @@ export function compactPlayerValueSnapshot(input: {
     input.capturedAt instanceof Date && !Number.isNaN(input.capturedAt.getTime())
       ? input.capturedAt
       : new Date(`${input.snapshotDate}T00:00:00.000Z`);
-  if (Number.isNaN(capturedAt.getTime())) return null;
+  if (!isAcceptableValueHistoryInstant(capturedAt, now)) return null;
   return {
     id: playerValueSnapshotId(input.snapshotDate, input.formatKey, playerId),
     snapshotDate: input.snapshotDate,
@@ -156,9 +211,14 @@ export function dailySnapshotRowsFromPreset(
   formatKey: string,
   rows: FantasyCalcRow[],
   asOf: Date,
-): PlayerValueSnapshotRow[] {
-  const snapshotDate = utcDateKey(asOf);
+  now: Date = asOf,
+): PlayerValueSnapshotBuildResult {
   const out: PlayerValueSnapshotRow[] = [];
+  // Date-window rejection only — PICK / missing id / non-finite value are not "skipped".
+  if (!isAcceptableValueHistoryInstant(asOf, now) || !isAcceptableSnapshotDateKey(utcDateKey(asOf), now)) {
+    return { rows: out, skipped: rows.length };
+  }
+  const snapshotDate = utcDateKey(asOf);
   for (const row of rows) {
     const compact = compactPlayerValueSnapshot({
       snapshotDate,
@@ -168,10 +228,11 @@ export function dailySnapshotRowsFromPreset(
       position: row.player?.position ?? "",
       value: row.value,
       capturedAt: asOf,
+      now,
     });
     if (compact) out.push(compact);
   }
-  return out;
+  return { rows: out, skipped: 0 };
 }
 
 export function historySnapshotRowsFromPoints(input: {
@@ -182,12 +243,22 @@ export function historySnapshotRowsFromPoints(input: {
   points: Array<{ date?: string; value?: unknown }>;
   /** Inclusive lower bound on snapshot_date (YYYY-MM-DD), or null for all history. */
   minSnapshotDate?: string | null;
-}): PlayerValueSnapshotRow[] {
+  now?: Date;
+}): PlayerValueSnapshotBuildResult {
+  const now = input.now ?? new Date();
   const out: PlayerValueSnapshotRow[] = [];
+  let skipped = 0;
   for (const point of input.points) {
-    if (typeof point.date !== "string") continue;
-    const date = parseFantasyCalcHistoryDate(point.date);
-    if (!date) continue;
+    if (typeof point.date !== "string") {
+      skipped += 1;
+      continue;
+    }
+    const date = parseFantasyCalcHistoryDate(point.date, now);
+    if (!date) {
+      // Invalid calendar / absurd year / before 2015 / >1 day ahead.
+      skipped += 1;
+      continue;
+    }
     const snapshotDate = utcDateKey(date);
     if (input.minSnapshotDate && snapshotDate < input.minSnapshotDate) continue;
     const compact = compactPlayerValueSnapshot({
@@ -198,10 +269,11 @@ export function historySnapshotRowsFromPoints(input: {
       position: input.position,
       value: point.value,
       capturedAt: date,
+      now,
     });
     if (compact) out.push(compact);
   }
-  return out;
+  return { rows: out, skipped };
 }
 
 export function fantasyCalcHistoryUrl(format: SeasonLongFormat, fantasyCalcId: number): string {
@@ -322,12 +394,21 @@ async function mapPool<T, R>(
 export async function appendDailyValueSnapshots(
   presets: Record<string, FantasyCalcRow[]>,
   asOf: Date = new Date(),
-): Promise<{ formats: number; rows: number }> {
-  const rows = Object.entries(presets).flatMap(([formatKey, presetRows]) =>
-    dailySnapshotRowsFromPreset(formatKey, presetRows, asOf),
-  );
+): Promise<{ formats: number; rows: number; skipped: number }> {
+  let skipped = 0;
+  const rows: PlayerValueSnapshotRow[] = [];
+  for (const [formatKey, presetRows] of Object.entries(presets)) {
+    const built = dailySnapshotRowsFromPreset(formatKey, presetRows, asOf, asOf);
+    rows.push(...built.rows);
+    skipped += built.skipped;
+    if (built.skipped > 0) {
+      console.info(
+        `[player-value-history] daily append skipped=${built.skipped} format=${formatKey} (invalid or out-of-range dates)`,
+      );
+    }
+  }
   const written = await upsertPlayerValueSnapshots(rows);
-  return { formats: Object.keys(presets).length, rows: written };
+  return { formats: Object.keys(presets).length, rows: written, skipped };
 }
 
 function clampBackfillLimit(raw: number | undefined): number {
@@ -343,6 +424,7 @@ export type ValueHistoryBackfillResult = {
   processed: number;
   failed: number;
   upserted: number;
+  skipped: number;
   totalWorkItems: number;
   batchCount: number;
   done: boolean;
@@ -369,6 +451,7 @@ export async function backfillValueHistoryBatch(options: {
   let processed = 0;
   let failed = 0;
   let upserted = 0;
+  let skipped = 0;
   const work: Array<{
     format: SeasonLongFormat;
     player: RankedFantasyCalcPlayer;
@@ -390,12 +473,13 @@ export async function backfillValueHistoryBatch(options: {
   }
 
   // Per work item: fetch → sanitize → upsert. One bad player/history must not
-  // 500 the whole cron invocation or poison sibling upserts.
+  // 500 the whole cron invocation or poison sibling upserts. Invalid / absurd
+  // history dates are skipped so valid points in the same item still write.
   const historyResults = await mapPool(work, VALUE_HISTORY_BACKFILL_CONCURRENCY, async ({ format, player }) => {
     const history = await fetchJson<FantasyCalcHistoryResponse>(
       fantasyCalcHistoryUrl(format, player.fantasyCalcId),
     );
-    const rows = historySnapshotRowsFromPoints({
+    const built = historySnapshotRowsFromPoints({
       formatKey: format.key,
       playerId: player.playerId,
       playerName: player.playerName,
@@ -403,13 +487,20 @@ export async function backfillValueHistoryBatch(options: {
       points: history.historicalValues ?? [],
       minSnapshotDate: null,
     });
-    return upsertPlayerValueSnapshots(rows);
+    if (built.skipped > 0) {
+      console.info(
+        `[player-value-history] backfill skipped=${built.skipped} format=${format.key} player=${player.playerId} (invalid or out-of-range dates)`,
+      );
+    }
+    const written = await upsertPlayerValueSnapshots(built.rows);
+    return { upserted: written, skipped: built.skipped };
   });
 
   for (const [index, result] of historyResults.entries()) {
     if (result.status === "fulfilled") {
       processed += 1;
-      upserted += result.value;
+      upserted += result.value.upserted;
+      skipped += result.value.skipped;
       continue;
     }
     failed += 1;
@@ -436,6 +527,7 @@ export async function backfillValueHistoryBatch(options: {
     processed,
     failed,
     upserted,
+    skipped,
     totalWorkItems,
     batchCount,
     done,
