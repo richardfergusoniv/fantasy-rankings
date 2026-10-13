@@ -968,6 +968,7 @@ export async function refreshFantasyCalcCache(): Promise<{
   failed: number;
   asOf: string;
   valueSnapshots: number;
+  skipped: number;
 }> {
   const presets: Record<string, FantasyCalcRow[]> = {};
   let failed = 0;
@@ -1014,6 +1015,7 @@ export async function refreshFantasyCalcCache(): Promise<{
     failed,
     asOf: fetchedAt.toISOString(),
     valueSnapshots: snapshots.rows,
+    skipped: snapshots.skipped,
   };
 }
 

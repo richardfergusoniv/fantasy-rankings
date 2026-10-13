@@ -93,7 +93,7 @@ export async function GET(req: Request): Promise<Response> {
             position: row.player?.position ?? "",
             points: history.historicalValues ?? [],
             minSnapshotDate,
-          });
+          }).rows;
         }));
         const backfillRows = historyResults.flatMap((result) => result.status === "fulfilled" ? result.value : []);
         await upsertPlayerValueSnapshots(backfillRows);
