@@ -83,28 +83,52 @@ export function playerValueSnapshotId(snapshotDate: string, formatKey: string, p
   return `${snapshotDate}:${formatKey}:${playerId}`;
 }
 
+function asTrimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** Coerce FantasyCalc numeric payloads (number or numeric string) to a finite number. */
+export function coerceFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 export function compactPlayerValueSnapshot(input: {
   snapshotDate: string;
   formatKey: string;
   playerId: string;
-  playerName: string;
-  position: string;
-  value: number;
+  playerName?: string | null;
+  position?: string | null;
+  value: unknown;
   capturedAt: Date;
 }): PlayerValueSnapshotRow | null {
-  const playerId = input.playerId.trim();
-  const position = input.position.trim();
-  if (!playerId || !position || position === "PICK") return null;
-  if (!Number.isFinite(input.value)) return null;
+  const playerId = asTrimmedString(input.playerId);
+  if (!playerId) return null;
+  const position = asTrimmedString(input.position);
+  if (position === "PICK") return null;
+  const rawValue = coerceFiniteNumber(input.value);
+  if (rawValue == null) return null;
+  const value = Math.round(rawValue);
+  if (!Number.isFinite(value)) return null;
+  const capturedAt =
+    input.capturedAt instanceof Date && !Number.isNaN(input.capturedAt.getTime())
+      ? input.capturedAt
+      : new Date(`${input.snapshotDate}T00:00:00.000Z`);
+  if (Number.isNaN(capturedAt.getTime())) return null;
   return {
     id: playerValueSnapshotId(input.snapshotDate, input.formatKey, playerId),
     snapshotDate: input.snapshotDate,
     formatKey: input.formatKey,
     playerId,
-    playerName: input.playerName.trim() || playerId,
+    // Prefer the current FantasyCalc name/position; never write SQL NULL.
+    playerName: asTrimmedString(input.playerName),
     position,
-    value: Math.round(input.value),
-    capturedAt: input.capturedAt,
+    value,
+    capturedAt,
   };
 }
 
@@ -112,16 +136,16 @@ export function rankedPlayersFromFantasyCalcRows(rows: FantasyCalcRow[]): Ranked
   const seen = new Set<string>();
   const ranked: RankedFantasyCalcPlayer[] = [];
   for (const row of rows) {
-    const playerId = row.player?.sleeperId;
+    const playerId = asTrimmedString(row.player?.sleeperId);
     const fantasyCalcId = row.player?.id;
-    const position = row.player?.position;
-    if (!playerId || typeof fantasyCalcId !== "number" || !position || position === "PICK") continue;
+    const position = asTrimmedString(row.player?.position);
+    if (!playerId || typeof fantasyCalcId !== "number" || position === "PICK") continue;
     if (seen.has(playerId)) continue;
     seen.add(playerId);
     ranked.push({
       fantasyCalcId,
       playerId,
-      playerName: typeof row.player?.name === "string" ? row.player.name : playerId,
+      playerName: asTrimmedString(row.player?.name),
       position,
     });
   }
@@ -136,7 +160,6 @@ export function dailySnapshotRowsFromPreset(
   const snapshotDate = utcDateKey(asOf);
   const out: PlayerValueSnapshotRow[] = [];
   for (const row of rows) {
-    if (typeof row.value !== "number") continue;
     const compact = compactPlayerValueSnapshot({
       snapshotDate,
       formatKey,
@@ -156,13 +179,13 @@ export function historySnapshotRowsFromPoints(input: {
   playerId: string;
   playerName: string;
   position: string;
-  points: Array<{ date?: string; value?: number }>;
+  points: Array<{ date?: string; value?: unknown }>;
   /** Inclusive lower bound on snapshot_date (YYYY-MM-DD), or null for all history. */
   minSnapshotDate?: string | null;
 }): PlayerValueSnapshotRow[] {
   const out: PlayerValueSnapshotRow[] = [];
   for (const point of input.points) {
-    if (typeof point.date !== "string" || typeof point.value !== "number") continue;
+    if (typeof point.date !== "string") continue;
     const date = parseFantasyCalcHistoryDate(point.date);
     if (!date) continue;
     const snapshotDate = utcDateKey(date);
@@ -211,48 +234,32 @@ export function chunkPlayerValueSnapshots(
   return chunks;
 }
 
-/** Prefer the underlying Postgres/driver message over drizzle's "Failed query" wrapper. */
+/**
+ * Log-safe DB error text: only `cause.message` / `cause.code`.
+ * Never include drizzle's "Failed query: <sql>" wrapper (it truncates logs).
+ */
 export function formatDbError(err: unknown): string {
-  if (!err || typeof err !== "object") return String(err);
-  const record = err as {
-    message?: unknown;
-    code?: unknown;
-    detail?: unknown;
-    hint?: unknown;
-    cause?: unknown;
-  };
-  const parts: string[] = [];
-  const walk = (value: unknown, depth: number) => {
-    if (!value || typeof value !== "object" || depth > 3) return;
-    const node = value as {
-      message?: unknown;
-      code?: unknown;
-      detail?: unknown;
-      hint?: unknown;
-      cause?: unknown;
-    };
-    if (typeof node.code === "string" || typeof node.code === "number") {
-      parts.push(`code=${String(node.code)}`);
-    }
-    if (typeof node.message === "string" && node.message.trim()) {
-      parts.push(node.message.trim());
-    }
-    if (typeof node.detail === "string" && node.detail.trim()) {
-      parts.push(`detail=${node.detail.trim()}`);
-    }
-    if (typeof node.hint === "string" && node.hint.trim()) {
-      parts.push(`hint=${node.hint.trim()}`);
-    }
-    if (node.cause) walk(node.cause, depth + 1);
-  };
-  walk(record, 0);
-  if (parts.length > 0) return [...new Set(parts)].join(" | ");
-  return err instanceof Error ? err.message : String(err);
+  const cause =
+    err && typeof err === "object" && "cause" in err
+      ? (err as { cause: unknown }).cause
+      : undefined;
+  if (!cause || typeof cause !== "object") return "unknown database error";
+  const node = cause as { message?: unknown; code?: unknown };
+  const code = node.code != null && String(node.code).trim() !== "" ? `code=${String(node.code)}` : "";
+  const message = typeof node.message === "string" ? node.message.trim() : "";
+  // Guard against a nested wrapper that still embeds SQL.
+  const safeMessage = message.startsWith("Failed query:") ? "" : message;
+  return [code, safeMessage].filter(Boolean).join(" | ") || "unknown database error";
 }
 
 export async function upsertPlayerValueSnapshots(rows: PlayerValueSnapshotRow[]): Promise<number> {
   if (rows.length === 0) return 0;
-  const deduped = dedupePlayerValueSnapshotsById(rows);
+  // Sanitize again at the write boundary (decimals → int, nullish names → "").
+  const sanitized = rows.flatMap((row) => {
+    const compact = compactPlayerValueSnapshot(row);
+    return compact ? [compact] : [];
+  });
+  const deduped = dedupePlayerValueSnapshotsById(sanitized);
   const chunks = chunkPlayerValueSnapshots(deduped, VALUE_HISTORY_UPSERT_CHUNK);
   let written = 0;
   for (const chunk of chunks) {
@@ -272,14 +279,40 @@ export async function upsertPlayerValueSnapshots(rows: PlayerValueSnapshotRow[])
       written += chunk.length;
     } catch (err) {
       console.error(
-        `[player-value-history] upsert failed chunkSize=${chunk.length} written=${written} remaining=${deduped.length - written}:`,
-        formatDbError(err),
-        err,
+        `[player-value-history] upsert failed chunkSize=${chunk.length} written=${written}: ${formatDbError(err)}`,
       );
       throw err;
     }
   }
   return written;
+}
+
+/** Small concurrency so FantasyCalc history endpoints are less likely to 500. */
+const VALUE_HISTORY_BACKFILL_CONCURRENCY = 3;
+
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<Array<PromiseSettledResult<R>>> {
+  const results: Array<PromiseSettledResult<R>> = new Array(items.length);
+  let next = 0;
+  async function run(): Promise<void> {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      const item = items[index];
+      if (item === undefined) continue;
+      try {
+        results[index] = { status: "fulfilled", value: await worker(item, index) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  }
+  const pool = Array.from({ length: Math.min(concurrency, Math.max(items.length, 1)) }, () => run());
+  await Promise.all(pool);
+  return results;
 }
 
 /**
@@ -356,32 +389,40 @@ export async function backfillValueHistoryBatch(options: {
     for (const player of slice) work.push({ format: preset.format, player });
   }
 
-  const historyResults = await Promise.allSettled(
-    work.map(async ({ format, player }) => {
-      const history = await fetchJson<FantasyCalcHistoryResponse>(
-        fantasyCalcHistoryUrl(format, player.fantasyCalcId),
-      );
-      return historySnapshotRowsFromPoints({
-        formatKey: format.key,
-        playerId: player.playerId,
-        playerName: player.playerName,
-        position: player.position,
-        points: history.historicalValues ?? [],
-        minSnapshotDate: null,
-      });
-    }),
-  );
+  // Per work item: fetch → sanitize → upsert. One bad player/history must not
+  // 500 the whole cron invocation or poison sibling upserts.
+  const historyResults = await mapPool(work, VALUE_HISTORY_BACKFILL_CONCURRENCY, async ({ format, player }) => {
+    const history = await fetchJson<FantasyCalcHistoryResponse>(
+      fantasyCalcHistoryUrl(format, player.fantasyCalcId),
+    );
+    const rows = historySnapshotRowsFromPoints({
+      formatKey: format.key,
+      playerId: player.playerId,
+      playerName: player.playerName,
+      position: player.position,
+      points: history.historicalValues ?? [],
+      minSnapshotDate: null,
+    });
+    return upsertPlayerValueSnapshots(rows);
+  });
 
-  const backfillRows: PlayerValueSnapshotRow[] = [];
-  for (const result of historyResults) {
+  for (const [index, result] of historyResults.entries()) {
     if (result.status === "fulfilled") {
       processed += 1;
-      backfillRows.push(...result.value);
-    } else {
-      failed += 1;
+      upserted += result.value;
+      continue;
     }
+    failed += 1;
+    const item = work[index];
+    const dbText = formatDbError(result.reason);
+    const fetchText =
+      result.reason instanceof Error && !result.reason.message.startsWith("Failed query:")
+        ? result.reason.message
+        : "";
+    console.error(
+      `[player-value-history] backfill item failed format=${item?.format.key ?? "?"} player=${item?.player.playerId ?? "?"} ${dbText !== "unknown database error" ? dbText : fetchText || dbText}`,
+    );
   }
-  upserted = await upsertPlayerValueSnapshots(backfillRows);
 
   const nextOffset = offset + work.length;
   const done = nextOffset >= totalWorkItems;
