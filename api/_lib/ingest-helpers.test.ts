@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CACHE_KEY } from "./dashboard-schemas.js";
 import {
+  DASHBOARD_USER_CACHE_PREFIX,
   isDashboardCacheKey,
   stagedMatchupGradesSchema,
   stagedPfnTablesSchema,
@@ -17,9 +18,9 @@ const emptyPfnTable = {
 describe("isDashboardCacheKey", () => {
   it("matches the global cache key and every dashboard:user: prefix", () => {
     expect(isDashboardCacheKey(CACHE_KEY)).toBe(true);
-    expect(isDashboardCacheKey("dashboard:user:abc")).toBe(true);
-    expect(isDashboardCacheKey("dashboard:user:abc:meta")).toBe(true);
-    expect(isDashboardCacheKey("dashboard:user:abc:trade-waiver")).toBe(true);
+    expect(isDashboardCacheKey(`${DASHBOARD_USER_CACHE_PREFIX}abc`)).toBe(true);
+    expect(isDashboardCacheKey(`${DASHBOARD_USER_CACHE_PREFIX}abc:meta`)).toBe(true);
+    expect(isDashboardCacheKey(`${DASHBOARD_USER_CACHE_PREFIX}abc:trade-waiver`)).toBe(true);
   });
 
   it("rejects unrelated source_cache keys", () => {

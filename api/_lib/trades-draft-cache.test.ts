@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  draftHasRosterMapping,
   HISTORICAL_DRAFT_PICK_MAP_CACHE_MS,
   isDraftPickMapCacheFresh,
   nflSeasonYearAt,
@@ -36,5 +37,17 @@ describe("isDraftPickMapCacheFresh", () => {
   it("keeps a current-season map within the TTL", () => {
     const fetchedAt = new Date(now - 60_000);
     expect(isDraftPickMapCacheFresh(fetchedAt, [2026], now, ttl)).toBe(true);
+  });
+});
+
+describe("draftHasRosterMapping", () => {
+  it("is true when slot_to_roster_id or draft_order is present", () => {
+    expect(draftHasRosterMapping({ slot_to_roster_id: { "1": 3 } })).toBe(true);
+    expect(draftHasRosterMapping({ draft_order: { ownerA: 1 } })).toBe(true);
+  });
+
+  it("is false when neither mapping source exists", () => {
+    expect(draftHasRosterMapping({})).toBe(false);
+    expect(draftHasRosterMapping({ slot_to_roster_id: {}, draft_order: {} })).toBe(false);
   });
 });

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { db, schema } from "./db.js";
 import { CACHE_KEY, strengthOfScheduleEntrySchema } from "./dashboard-schemas.js";
 
+export const DASHBOARD_USER_CACHE_PREFIX = "dashboard:user:";
+
 /**
  * Expire the global dashboard snapshot and every per-user dashboard cache row
  * (`dashboard:user:*` full + section keys) in one UPDATE.
@@ -14,14 +16,14 @@ export async function expireDashboardCaches(): Promise<void> {
     .where(
       or(
         eq(schema.sourceCache.cacheKey, CACHE_KEY),
-        like(schema.sourceCache.cacheKey, "dashboard:user:%"),
+        like(schema.sourceCache.cacheKey, `${DASHBOARD_USER_CACHE_PREFIX}%`),
       ),
     );
 }
 
 /** Predicate used by expireDashboardCaches — exported for unit tests. */
 export function isDashboardCacheKey(cacheKey: string): boolean {
-  return cacheKey === CACHE_KEY || cacheKey.startsWith("dashboard:user:");
+  return cacheKey === CACHE_KEY || cacheKey.startsWith(DASHBOARD_USER_CACHE_PREFIX);
 }
 
 export const vegasProjectionPayloadSchema = z.object({

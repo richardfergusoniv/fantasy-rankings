@@ -292,6 +292,48 @@ export function isDraftPickMapCacheFresh(
   return nowMs - fetchedAt.getTime() < ttlMs;
 }
 
+/** True when a draft list entry can map pick slots to roster IDs without /draft detail. */
+export function draftHasRosterMapping(draft: {
+  slot_to_roster_id?: Record<string, number | null>;
+  draft_order?: Record<string, number>;
+}): boolean {
+  return (
+    Object.keys(draft.slot_to_roster_id ?? {}).length > 0 ||
+    Object.keys(draft.draft_order ?? {}).length > 0
+  );
+}
+
+function parseDraftPickMapCache(payload: string): HistoricalDraftResolution | null {
+  try {
+    const parsed = historicalDraftPickMapCacheSchema.parse(decodeSourceCachePayload(payload));
+    return {
+      byOriginalPick: new Map(parsed.entries),
+      placeholderByLeagueId: new Map(
+        parsed.placeholders.map((placeholder) => [
+          placeholder.leagueId,
+          {
+            season: placeholder.season,
+            cutoffMs: placeholder.cutoffMs,
+            maxRound: placeholder.maxRound,
+            kickerChain: placeholder.kickerChain,
+          } satisfies PlaceholderDraftResolution,
+        ]),
+      ),
+    };
+  } catch {
+    try {
+      return {
+        byOriginalPick: new Map(
+          historicalDraftPickMapEntriesSchema.parse(decodeSourceCachePayload(payload)),
+        ),
+        placeholderByLeagueId: new Map(),
+      };
+    } catch {
+      return null;
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Draft pick map
 // ---------------------------------------------------------------------------
@@ -312,34 +354,9 @@ async function loadHistoricalDraftPickMap(
     .limit(1);
   const cached = cachedRows[0];
   if (cached && !forceRefresh && isDraftPickMapCacheFresh(cached.fetchedAt, leagueSeasons)) {
-    try {
-      const parsed = historicalDraftPickMapCacheSchema.parse(decodeSourceCachePayload(cached.payload));
-      return {
-        byOriginalPick: new Map(parsed.entries),
-        placeholderByLeagueId: new Map(
-          parsed.placeholders.map((placeholder) => [
-            placeholder.leagueId,
-            {
-              season: placeholder.season,
-              cutoffMs: placeholder.cutoffMs,
-              maxRound: placeholder.maxRound,
-              kickerChain: placeholder.kickerChain,
-            } satisfies PlaceholderDraftResolution,
-          ]),
-        ),
-      };
-    } catch {
-      try {
-        return {
-          byOriginalPick: new Map(
-            historicalDraftPickMapEntriesSchema.parse(decodeSourceCachePayload(cached.payload)),
-          ),
-          placeholderByLeagueId: new Map(),
-        };
-      } catch {
-        // Rebuild a malformed cache entry from Sleeper's immutable draft history.
-      }
-    }
+    const fromCache = parseDraftPickMapCache(cached.payload);
+    if (fromCache) return fromCache;
+    // Rebuild a malformed cache entry from Sleeper's immutable draft history.
   }
 
   const draftedPlayersByOriginalPick = new Map<string, string>();
@@ -365,7 +382,11 @@ async function loadHistoricalDraftPickMap(
             const draftDetail = await fetchJson<SleeperDraft>(`${SLEEPER_BASE}/draft/${draft.draft_id}`);
             resolvedDraft = { ...draft, ...draftDetail };
           } catch {
-            // The league draft list still provides the legacy draft_order fallback when detail is unavailable.
+            // League list may still carry slot_to_roster_id / draft_order. Without
+            // either, picks cannot be associated with original rosters — mark incomplete.
+            if (!draftHasRosterMapping(draft)) {
+              hadFetchFailure = true;
+            }
           }
           const picks = await fetchJson<SleeperDraftPick[]>(`${SLEEPER_BASE}/draft/${draft.draft_id}/picks`);
           draftsWithPicks.push({ draft: resolvedDraft, picks });
@@ -505,27 +526,8 @@ async function loadHistoricalDraftPickMap(
   // Never persist a map built after any Sleeper fetch failure — an empty or
   // partial payload would otherwise stick forever (no TTL on past seasons).
   if (hadFetchFailure) {
-    if (cached) {
-      try {
-        const parsed = historicalDraftPickMapCacheSchema.parse(decodeSourceCachePayload(cached.payload));
-        return {
-          byOriginalPick: new Map(parsed.entries),
-          placeholderByLeagueId: new Map(
-            parsed.placeholders.map((placeholder) => [
-              placeholder.leagueId,
-              {
-                season: placeholder.season,
-                cutoffMs: placeholder.cutoffMs,
-                maxRound: placeholder.maxRound,
-                kickerChain: placeholder.kickerChain,
-              } satisfies PlaceholderDraftResolution,
-            ]),
-          ),
-        };
-      } catch {
-        // Fall through to the in-memory partial map when cache is unusable.
-      }
-    }
+    const fromCache = cached ? parseDraftPickMapCache(cached.payload) : null;
+    if (fromCache) return fromCache;
     return { byOriginalPick: draftedPlayersByOriginalPick, placeholderByLeagueId };
   }
 
