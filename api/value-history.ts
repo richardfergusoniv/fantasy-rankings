@@ -5,7 +5,9 @@ import {
   badRequest,
   internalError,
   json,
+  unauthorized,
 } from "./_lib/api-utils.js";
+import { resolveSleeperUserId } from "./_lib/auth.js";
 import {
   FANTASY_CALC_SNAPSHOT_PRESETS,
   fantasyCalcHistoryUrl,
@@ -49,6 +51,9 @@ export type ValueHistory = z.infer<typeof valueHistoryResponse>;
 
 export async function GET(req: Request): Promise<Response> {
   try {
+    const sleeperUserId = await resolveSleeperUserId(req);
+    if (!sleeperUserId) return unauthorized("Sign in required.");
+
     const url = new URL(req.url, "https://localhost");
     const rawPlayerIds = url.searchParams.get("playerIds") ?? "";
     const parsed = querySchema.safeParse({

@@ -69,7 +69,7 @@ the code never guesses silently; unmapped markets are skipped.
 - Free: 12 req/min, **2 sportsbooks** (DraftKings, FanDuel on the account),
   Odds + Schedule only, no card. 60s data delay.
   (Tiers: Hobby $79/5 books, Pro $229/15 books, Sharp $399/all.)
-- Account: rdfergus15@gmail.com, email-verified; key in gitignored `.env`
+- Account: owner account, email-verified; key in gitignored `.env`
   as `SHARPAPI_API_KEY`. Free plan allows exactly 1 API key.
 - Endpoints: `GET /events`, `GET /odds` (filters: sport, league, market,
   sportsbook, event, player_name; offset pagination capped at 500 —
@@ -85,7 +85,7 @@ the code never guesses silently; unmapped markets are skipped.
 
 ## SportsGameOdds — live, account created 2026-09-22 (free $0/mo, card on file)
 
-- Account: rdfergus15@gmail.com, Amateur tier, active. Key in `.env`
+- Account: owner account, Amateur tier, active. Key in `.env`
   (`SPORTSGAMEODDS_API_KEY`); never reproduce it.
 - Base: `https://api.sportsgameodds.com/v2`
 - Auth: `x-api-key` header (`apiKey` query param also works).

@@ -5,7 +5,7 @@ import {
   queryBool,
   unauthorized,
 } from "./_lib/api-utils.js";
-import { readOwnerSleeperUserId, resolveSleeperUserId } from "./_lib/auth.js";
+import { readOwnerSleeperUserId, readOwnerUserId, resolveViewer } from "./_lib/auth.js";
 import { captureServerError } from "./_lib/posthog.js";
 import { dashboardForViewer, sectionDashboardForViewer, SIGN_IN_REQUIRED } from "./_lib/dashboard-access.js";
 import {
@@ -43,12 +43,17 @@ import { z } from "zod";
  *   to the legacy full dashboard row when those are missing.
  */
 
-async function handleDashboard(req: Request, sleeperUserId: string): Promise<Response> {
+async function handleDashboard(
+  req: Request,
+  viewer: { userId: string; sleeperUserId: string },
+): Promise<Response> {
   const url = new URL(req.url, "https://localhost");
   const force = queryBool(url, "force", false);
   const result = await dashboardForViewer({
-    sleeperUserId,
+    sleeperUserId: viewer.sleeperUserId,
+    viewerUserId: viewer.userId,
     ownerSleeperUserId: readOwnerSleeperUserId(),
+    ownerUserId: readOwnerUserId(),
     force,
     loadFreshOwn: async (id) => {
       const cached = await readUserDashboardCache(id);
@@ -63,7 +68,10 @@ async function handleDashboard(req: Request, sleeperUserId: string): Promise<Res
 
 const sectionParam = z.enum(["meta", "team", "players", "league", "analytics", "trade", "trade-waiver"]);
 
-async function handleSection(req: Request, sleeperUserId: string): Promise<Response> {
+async function handleSection(
+  req: Request,
+  viewer: { userId: string; sleeperUserId: string },
+): Promise<Response> {
   const url = new URL(req.url, "https://localhost");
   const parsed = sectionParam.safeParse(url.searchParams.get("section"));
   if (!parsed.success) {
@@ -72,8 +80,10 @@ async function handleSection(req: Request, sleeperUserId: string): Promise<Respo
   const section = parsed.data as DashboardCacheSection;
 
   const resolved = await sectionDashboardForViewer({
-    sleeperUserId,
+    sleeperUserId: viewer.sleeperUserId,
+    viewerUserId: viewer.userId,
     ownerSleeperUserId: readOwnerSleeperUserId(),
+    ownerUserId: readOwnerUserId(),
     loadOwn: async (id) => {
       try {
         const hit = await readUserDashboardSection(id, section);
@@ -117,15 +127,15 @@ async function handleSection(req: Request, sleeperUserId: string): Promise<Respo
 
 export async function GET(req: Request): Promise<Response> {
   try {
-    const sleeperUserId = await resolveSleeperUserId(req);
-    if (!sleeperUserId) return unauthorized(SIGN_IN_REQUIRED);
+    const viewer = await resolveViewer(req);
+    if (!viewer) return unauthorized(SIGN_IN_REQUIRED);
     const url = new URL(req.url, "https://localhost");
     // /api/dashboard/section is rewritten to /api/dashboard?__section=1
     // (see vercel.json) so both paths share this one function.
     if (url.searchParams.has("__section")) {
-      return await handleSection(req, sleeperUserId);
+      return await handleSection(req, viewer);
     }
-    return await handleDashboard(req, sleeperUserId);
+    return await handleDashboard(req, viewer);
   } catch (err) {
     await captureServerError(err, { route: "dashboard" });
     return internalError(err);

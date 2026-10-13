@@ -4,8 +4,17 @@
  * POST: Connect Sleeper account by username { username: string }
  */
 import { eq } from "drizzle-orm";
-import { getAuthUser } from "./_lib/auth.js";
+import {
+  getAuthUser,
+  isReservedOwnerSleeperClaim,
+  isUniqueViolation,
+  readOwnerSleeperUserId,
+  readOwnerUserId,
+  sleeperIdLinkedToOtherUser,
+} from "./_lib/auth.js";
 import { getDb, schema } from "./_lib/db.js";
+
+const SLEEPER_LINK_CONFLICT = "This Sleeper account is already linked to another user";
 
 export async function GET(req: Request): Promise<Response> {
   try {
@@ -72,25 +81,55 @@ export async function POST(req: Request): Promise<Response> {
       return Response.json({ error: "Invalid Sleeper user response" }, { status: 502 });
     }
 
-    const db = getDb();
-    const now = new Date();
-    await db
-      .insert(schema.sleeperConnections)
-      .values({
-        userId: user.id,
+    // Configured owner Sleeper id is reserved for OWNER_USER_ID when both are set.
+    if (
+      isReservedOwnerSleeperClaim({
         sleeperUserId: sleeperUser.user_id,
-        sleeperUsername: sleeperUser.username,
-        createdAt: now,
-        updatedAt: now,
+        requestingUserId: user.id,
+        ownerSleeperUserId: readOwnerSleeperUserId(),
+        ownerUserId: readOwnerUserId(),
       })
-      .onConflictDoUpdate({
-        target: schema.sleeperConnections.userId,
-        set: {
+    ) {
+      return Response.json({ error: SLEEPER_LINK_CONFLICT }, { status: 409 });
+    }
+
+    const db = getDb();
+    // One indexed lookup: refuse claiming a Sleeper id already linked elsewhere.
+    const [existingLink] = await db
+      .select({ userId: schema.sleeperConnections.userId })
+      .from(schema.sleeperConnections)
+      .where(eq(schema.sleeperConnections.sleeperUserId, sleeperUser.user_id))
+      .limit(1);
+    if (sleeperIdLinkedToOtherUser(existingLink?.userId, user.id)) {
+      return Response.json({ error: SLEEPER_LINK_CONFLICT }, { status: 409 });
+    }
+
+    const now = new Date();
+    try {
+      await db
+        .insert(schema.sleeperConnections)
+        .values({
+          userId: user.id,
           sleeperUserId: sleeperUser.user_id,
           sleeperUsername: sleeperUser.username,
+          createdAt: now,
           updatedAt: now,
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: schema.sleeperConnections.userId,
+          set: {
+            sleeperUserId: sleeperUser.user_id,
+            sleeperUsername: sleeperUser.username,
+            updatedAt: now,
+          },
+        });
+    } catch (err) {
+      // Race: two callers passed the pre-check; unique index on sleeper_user_id wins.
+      if (isUniqueViolation(err)) {
+        return Response.json({ error: SLEEPER_LINK_CONFLICT }, { status: 409 });
+      }
+      throw err;
+    }
 
     return Response.json({
       ok: true,

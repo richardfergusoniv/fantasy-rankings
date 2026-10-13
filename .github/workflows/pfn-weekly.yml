@@ -10,8 +10,8 @@ name: PFN weekly pull
 # every scheduled trigger can run the job. Manual dispatches always run.
 #
 # Change-detection state (.last_hash.json, latest.json, snapshots) lives
-# in pipeline/pfn/data inside the repo; after a changed run the workflow
-# commits the refreshed state back so the next run can diff against it.
+# in pipeline/pfn/data inside the repo; after a changed run the commit
+# job pushes refreshed state so the next run can diff against it.
 
 on:
   schedule:
@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: pfn-weekly
@@ -29,6 +29,8 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      changed: ${{ steps.scrape.outputs.changed }}
     env:
       PFN_DATA_DIR: ${{ github.workspace }}/pipeline/pfn/data
       PROPS_DATA_DIR: ${{ github.workspace }}/pipeline/data
@@ -56,11 +58,42 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: python3 pipeline/scripts/push_ingest.py pfn-tables
 
-      - name: Commit refreshed PFN state back to the repo
+      - name: Upload refreshed PFN data for commit job
         if: steps.scrape.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pfn-data
+          path: pipeline/pfn/data
+          # Includes .last_hash.json (change-detection state). Directory is
+          # scrape outputs only — no secrets.
+          include-hidden-files: true
+          if-no-files-found: error
+
+  commit-state:
+    needs: scrape
+    if: needs.scrape.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only this job needs to push refreshed scrape state back to the repo.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download refreshed PFN data
+        uses: actions/download-artifact@v4
+        with:
+          name: pfn-data
+          path: pipeline/pfn/data
+
+      - name: Commit refreshed PFN state back to the repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add pipeline/pfn/data
+          if git diff --cached --quiet; then
+            echo "No PFN data changes to commit."
+            exit 0
+          fi
           git commit -m "PFN tables update $(date -u +%Y-%m-%d)"
           git push

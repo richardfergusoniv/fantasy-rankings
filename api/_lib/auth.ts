@@ -51,10 +51,22 @@ export async function getSleeperConnection(userId: string): Promise<SleeperConne
  * unauthenticated or the user has not connected a Sleeper account yet.
  */
 export async function resolveSleeperUserId(req: Request): Promise<string | null> {
+  const viewer = await resolveViewer(req);
+  return viewer?.sleeperUserId ?? null;
+}
+
+export type ResolvedViewer = { userId: string; sleeperUserId: string };
+
+/**
+ * Signed-in Supabase user plus their linked Sleeper id, or null when either
+ * piece is missing.
+ */
+export async function resolveViewer(req: Request): Promise<ResolvedViewer | null> {
   const user = await getAuthUser(req);
   if (!user) return null;
   const connection = await getSleeperConnection(user.id);
-  return connection?.sleeperUserId ?? null;
+  if (!connection) return null;
+  return { userId: user.id, sleeperUserId: connection.sleeperUserId };
 }
 
 /**
@@ -65,4 +77,56 @@ export async function resolveSleeperUserId(req: Request): Promise<string | null>
 export function readOwnerSleeperUserId(): string | null {
   const id = process.env.OWNER_SLEEPER_USER_ID?.trim();
   return id ? id : null;
+}
+
+/**
+ * Supabase Auth user id of the scheduled owner. When set, dashboard owner
+ * privileges are decided by this id (not by a caller-chosen Sleeper username).
+ * Set `OWNER_USER_ID` in the Vercel project. Never hardcode it.
+ */
+export function readOwnerUserId(): string | null {
+  const id = process.env.OWNER_USER_ID?.trim();
+  return id ? id : null;
+}
+
+/**
+ * True when another Supabase user already holds this Sleeper id.
+ * Same-user re-links (username refresh) are allowed.
+ */
+export function sleeperIdLinkedToOtherUser(
+  existingOwnerUserId: string | null | undefined,
+  requestingUserId: string,
+): boolean {
+  return Boolean(existingOwnerUserId && existingOwnerUserId !== requestingUserId);
+}
+
+/**
+ * When both owner env ids are set, only the scheduled owner Supabase user may
+ * claim the configured owner Sleeper id. Blocks first-claim hijacks of that id
+ * without requiring a Sleeper OAuth flow the product does not have.
+ */
+export function isReservedOwnerSleeperClaim(args: {
+  sleeperUserId: string;
+  requestingUserId: string;
+  ownerSleeperUserId: string | null;
+  ownerUserId: string | null;
+}): boolean {
+  if (!args.ownerSleeperUserId || !args.ownerUserId) return false;
+  if (args.sleeperUserId !== args.ownerSleeperUserId) return false;
+  return args.requestingUserId !== args.ownerUserId;
+}
+
+/** Postgres unique_violation, including drizzle-wrapped `cause`. */
+export function isUniqueViolation(err: unknown): boolean {
+  const codes: unknown[] = [];
+  if (err && typeof err === "object" && "code" in err) {
+    codes.push((err as { code: unknown }).code);
+  }
+  if (err && typeof err === "object" && "cause" in err) {
+    const cause = (err as { cause: unknown }).cause;
+    if (cause && typeof cause === "object" && "code" in cause) {
+      codes.push((cause as { code: unknown }).code);
+    }
+  }
+  return codes.some((code) => code === "23505");
 }
