@@ -4,7 +4,10 @@ import { createRoot } from "react-dom/client";
 import { Toaster } from "@/components/ui/sonner";
 import { App } from "./App";
 import { AuthGate } from "./Auth";
+import { initPostHog } from "./posthog";
 import "./theme.css";
+
+initPostHog();
 
 const rootEl = document.getElementById("root");
 if (!rootEl) {
