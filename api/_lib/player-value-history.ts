@@ -32,10 +32,14 @@ export const FANTASY_CALC_SNAPSHOT_PRESETS: Array<{ format: SeasonLongFormat; ur
   { format: { key: "dynasty-2qb-12t-1ppr", isDynasty: true, numQbs: 2, numTeams: 12, ppr: 1, label: "Dynasty · 12-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=2&numTeams=12&ppr=1` },
 ];
 
-export const VALUE_HISTORY_UPSERT_CHUNK = 250;
+/**
+ * Rows per INSERT. 1000 × 8 columns = 8000 bind params, well under Postgres's
+ * 65,535 limit. Backfill batches of ~20 players × ~285 days need several chunks.
+ */
+export const VALUE_HISTORY_UPSERT_CHUNK = 1000;
 /** Default players×format work items per backfill invocation (fits Hobby 60s). */
-export const VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT = 40;
-export const VALUE_HISTORY_BACKFILL_MAX_LIMIT = 80;
+export const VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT = 20;
+export const VALUE_HISTORY_BACKFILL_MAX_LIMIT = 40;
 
 export type PlayerValueSnapshotRow = {
   id: string;
@@ -187,25 +191,93 @@ export function fantasyCalcHistoryUrl(format: SeasonLongFormat, fantasyCalcId: n
   return `${FANTASY_CALC_HISTORY_URL}/${fantasyCalcId}?${query.toString()}`;
 }
 
+/** Last row wins for a given PK — required before INSERT … ON CONFLICT. */
+export function dedupePlayerValueSnapshotsById(rows: PlayerValueSnapshotRow[]): PlayerValueSnapshotRow[] {
+  const byId = new Map<string, PlayerValueSnapshotRow>();
+  for (const row of rows) byId.set(row.id, row);
+  return [...byId.values()];
+}
+
+export function chunkPlayerValueSnapshots(
+  rows: PlayerValueSnapshotRow[],
+  chunkSize: number = VALUE_HISTORY_UPSERT_CHUNK,
+): PlayerValueSnapshotRow[][] {
+  const size = Math.max(1, Math.floor(chunkSize));
+  const chunks: PlayerValueSnapshotRow[][] = [];
+  for (let index = 0; index < rows.length; index += size) {
+    const chunk = rows.slice(index, index + size);
+    if (chunk.length) chunks.push(chunk);
+  }
+  return chunks;
+}
+
+/** Prefer the underlying Postgres/driver message over drizzle's "Failed query" wrapper. */
+export function formatDbError(err: unknown): string {
+  if (!err || typeof err !== "object") return String(err);
+  const record = err as {
+    message?: unknown;
+    code?: unknown;
+    detail?: unknown;
+    hint?: unknown;
+    cause?: unknown;
+  };
+  const parts: string[] = [];
+  const walk = (value: unknown, depth: number) => {
+    if (!value || typeof value !== "object" || depth > 3) return;
+    const node = value as {
+      message?: unknown;
+      code?: unknown;
+      detail?: unknown;
+      hint?: unknown;
+      cause?: unknown;
+    };
+    if (typeof node.code === "string" || typeof node.code === "number") {
+      parts.push(`code=${String(node.code)}`);
+    }
+    if (typeof node.message === "string" && node.message.trim()) {
+      parts.push(node.message.trim());
+    }
+    if (typeof node.detail === "string" && node.detail.trim()) {
+      parts.push(`detail=${node.detail.trim()}`);
+    }
+    if (typeof node.hint === "string" && node.hint.trim()) {
+      parts.push(`hint=${node.hint.trim()}`);
+    }
+    if (node.cause) walk(node.cause, depth + 1);
+  };
+  walk(record, 0);
+  if (parts.length > 0) return [...new Set(parts)].join(" | ");
+  return err instanceof Error ? err.message : String(err);
+}
+
 export async function upsertPlayerValueSnapshots(rows: PlayerValueSnapshotRow[]): Promise<number> {
   if (rows.length === 0) return 0;
+  const deduped = dedupePlayerValueSnapshotsById(rows);
+  const chunks = chunkPlayerValueSnapshots(deduped, VALUE_HISTORY_UPSERT_CHUNK);
   let written = 0;
-  for (let index = 0; index < rows.length; index += VALUE_HISTORY_UPSERT_CHUNK) {
-    const chunk = rows.slice(index, index + VALUE_HISTORY_UPSERT_CHUNK);
-    if (!chunk.length) continue;
-    await db
-      .insert(schema.playerValueSnapshots)
-      .values(chunk)
-      .onConflictDoUpdate({
-        target: schema.playerValueSnapshots.id,
-        set: {
-          playerName: sql`excluded.player_name`,
-          position: sql`excluded.position`,
-          value: sql`excluded.value`,
-          capturedAt: sql`excluded.captured_at`,
-        },
-      });
-    written += chunk.length;
+  for (const chunk of chunks) {
+    try {
+      await db
+        .insert(schema.playerValueSnapshots)
+        .values(chunk)
+        .onConflictDoUpdate({
+          target: schema.playerValueSnapshots.id,
+          set: {
+            playerName: sql`excluded.player_name`,
+            position: sql`excluded.position`,
+            value: sql`excluded.value`,
+            capturedAt: sql`excluded.captured_at`,
+          },
+        });
+      written += chunk.length;
+    } catch (err) {
+      console.error(
+        `[player-value-history] upsert failed chunkSize=${chunk.length} written=${written} remaining=${deduped.length - written}:`,
+        formatDbError(err),
+        err,
+      );
+      throw err;
+    }
   }
   return written;
 }

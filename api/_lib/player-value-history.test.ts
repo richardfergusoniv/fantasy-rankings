@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  chunkPlayerValueSnapshots,
   compactPlayerValueSnapshot,
   dailySnapshotRowsFromPreset,
+  dedupePlayerValueSnapshotsById,
   fantasyCalcHistoryUrl,
+  formatDbError,
   historySnapshotRowsFromPoints,
   parseFantasyCalcHistoryDate,
   playerValueSnapshotId,
@@ -10,8 +13,23 @@ import {
   utcDateKey,
   VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
   VALUE_HISTORY_BACKFILL_MAX_LIMIT,
+  VALUE_HISTORY_UPSERT_CHUNK,
+  type PlayerValueSnapshotRow,
 } from "./player-value-history.js";
 import type { FantasyCalcRow } from "./sleeper.js";
+
+function snapshotRow(id: string, value: number): PlayerValueSnapshotRow {
+  return {
+    id,
+    snapshotDate: "2026-10-12",
+    formatKey: "redraft-1qb-12t-0.5ppr",
+    playerId: "9221",
+    playerName: "Jahmyr Gibbs",
+    position: "RB",
+    value,
+    capturedAt: new Date("2026-10-12T00:00:00.000Z"),
+  };
+}
 
 describe("parseFantasyCalcHistoryDate", () => {
   it("parses US M/D/YYYY as UTC midnight", () => {
@@ -179,5 +197,51 @@ describe("backfill batch sizing constants", () => {
   it("keeps default under the max Vercel-friendly cap", () => {
     expect(VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT).toBeLessThanOrEqual(VALUE_HISTORY_BACKFILL_MAX_LIMIT);
     expect(VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT).toBeGreaterThan(0);
+  });
+
+  it("keeps upsert chunks under the Postgres bind-parameter budget", () => {
+    const columnsPerRow = 8;
+    expect(VALUE_HISTORY_UPSERT_CHUNK * columnsPerRow).toBeLessThan(65_535);
+    expect(VALUE_HISTORY_UPSERT_CHUNK).toBe(1000);
+  });
+});
+
+describe("dedupePlayerValueSnapshotsById", () => {
+  it("keeps the last row for duplicate ids", () => {
+    const deduped = dedupePlayerValueSnapshotsById([
+      snapshotRow("2026-10-12:redraft-1qb-12t-0.5ppr:9221", 100),
+      snapshotRow("2026-10-11:redraft-1qb-12t-0.5ppr:9221", 90),
+      snapshotRow("2026-10-12:redraft-1qb-12t-0.5ppr:9221", 105),
+    ]);
+    expect(deduped).toHaveLength(2);
+    expect(deduped.find((row) => row.id.startsWith("2026-10-12"))?.value).toBe(105);
+    expect(deduped.find((row) => row.id.startsWith("2026-10-11"))?.value).toBe(90);
+  });
+});
+
+describe("chunkPlayerValueSnapshots", () => {
+  it("splits deduped rows into fixed-size insert batches", () => {
+    const rows = Array.from({ length: 2505 }, (_, index) =>
+      snapshotRow(`2026-01-${String((index % 28) + 1).padStart(2, "0")}:fmt:p${index}`, index),
+    );
+    const chunks = chunkPlayerValueSnapshots(rows, 1000);
+    expect(chunks.map((chunk) => chunk.length)).toEqual([1000, 1000, 505]);
+    expect(chunks.flat()).toHaveLength(rows.length);
+  });
+
+  it("returns no chunks for an empty list", () => {
+    expect(chunkPlayerValueSnapshots([])).toEqual([]);
+  });
+});
+
+describe("formatDbError", () => {
+  it("surfaces nested Postgres cause details from a Failed query wrapper", () => {
+    const cause = Object.assign(new Error("cannot affect row a second time"), {
+      code: "21000",
+      detail: "Row with id=x appears twice",
+    });
+    const wrapped = Object.assign(new Error("Failed query: insert into \"player_value_snapshots\""), { cause });
+    expect(formatDbError(wrapped)).toContain("cannot affect row a second time");
+    expect(formatDbError(wrapped)).toContain("21000");
   });
 });
