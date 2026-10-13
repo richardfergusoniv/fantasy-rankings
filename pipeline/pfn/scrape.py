@@ -289,7 +289,6 @@ def main():
     force = "--force" in sys.argv
     script_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.environ.get("PFN_DATA_DIR", os.path.join(script_dir, "data"))
-    os.makedirs(os.path.join(data_dir, "snapshots"), exist_ok=True)
 
     fetched_at = datetime.now(timezone.utc).isoformat()
     tables = {}
@@ -314,6 +313,14 @@ def main():
         print("status: unchanged")
         return 0
 
+    # --check must not create dirs or write snapshots, latest.json, the hash,
+    # or staged data. Writing the new hash here would make the next normal run
+    # look unchanged and skip staging forever until PFN changes again.
+    if check_only:
+        print("status: changed")
+        return 0
+
+    os.makedirs(os.path.join(data_dir, "snapshots"), exist_ok=True)
     payload = {"source": "pfn-nfl-hq", "fetched_at": fetched_at, "tables": tables}
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
     snapshot_path = os.path.join(data_dir, "snapshots", f"pfn_tables_{stamp}.json")
@@ -321,9 +328,8 @@ def main():
         json.dump(payload, f, indent=1)
     with open(os.path.join(data_dir, "latest.json"), "w") as f:
         json.dump(payload, f, indent=1)
-    if not check_only:
-        with open(os.path.join(data_dir, "staged_pfn_tables.json"), "w") as f:
-            json.dump(payload, f, separators=(",", ":"))
+    with open(os.path.join(data_dir, "staged_pfn_tables.json"), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
     with open(hash_path, "w") as f:
         json.dump({"hash": digest, "fetched_at": fetched_at}, f, indent=1)
     print(f"snapshot: {snapshot_path}")

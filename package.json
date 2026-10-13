@@ -54,7 +54,7 @@
     "dev": "vite --config frontend/vite.config.ts",
     "lint": "eslint frontend/src api",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p frontend/tsconfig.json"
+    "typecheck": "tsc --noEmit -p frontend/tsconfig.json && tsc --noEmit -p tsconfig.json"
   },
   "type": "module",
   "version": "1.0.0"

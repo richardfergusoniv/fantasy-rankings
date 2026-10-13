@@ -494,6 +494,33 @@ export function seasonLongFormatForLeague(league: SleeperLeague): SeasonLongForm
   };
 }
 
+/** FFC format slug used for ADP requests for a league. */
+export function ffcFormatForLeague(league: SleeperLeague): string {
+  const format = seasonLongFormatForLeague(league);
+  if (format.numQbs === 2) return "2qb";
+  if (format.isDynasty) return "dynasty";
+  if (format.ppr === 1) return "ppr";
+  if (format.ppr === 0.5) return "half-ppr";
+  return "standard";
+}
+
+/**
+ * Cache key for draft-market ADP rows. Content depends on season and the
+ * caller's FFC format/team pairs, so the key must include both — a single
+ * global key lets the first caller's formats poison later users for 24h.
+ */
+export function draftMarketCacheKey(season: number, leagues: SleeperLeague[]): string {
+  const pairs = new Set<string>();
+  for (const league of leagues) {
+    const format = seasonLongFormatForLeague(league);
+    const ffcFormat = ffcFormatForLeague(league);
+    pairs.add(`${ffcFormat}:${format.numTeams}`);
+    if (format.isDynasty) pairs.add(`rookie:${format.numTeams}`);
+  }
+  const suffix = [...pairs].sort().join(",") || "none";
+  return `${DRAFT_MARKET_CACHE_KEY}:${season}:${suffix}`;
+}
+
 export function normalizedAvailabilityStatus(value: string): string {
   return value.trim().toLowerCase().replaceAll("_", " ").replaceAll("-", " ").replace(/\s+/g, " ");
 }

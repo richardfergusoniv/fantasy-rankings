@@ -386,7 +386,7 @@ def run(
     since = pacific_midnight(moment) - CREATED_LOOKBACK
     try:
         prior = find_prior_pull(fetch, api, repo, token, today, current, since)
-    except Exception as exc:
+    except (GuardError, urllib.error.URLError) as exc:
         notes.append(f"Actions run check failed: {scrub(str(exc), secret)}")
         if at_or_after_cutoff(moment):
             return skip(env, out, "warning", notes + [missing_data_message()])

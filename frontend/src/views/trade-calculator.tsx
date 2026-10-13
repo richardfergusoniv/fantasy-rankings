@@ -805,12 +805,33 @@ export function TradeCalculator({
     setGetIds([]);
     setIsResultOpen(false);
     clearTradePlayerRemoveUndoToast();
-  }, [league.id, league.tradeTeams]);
+  }, [league.id]);
 
   useEffect(() => {
     setGiveIds((ids) => ids.filter((id) => assetById.has(id)));
     setGetIds((ids) => ids.filter((id) => assetById.has(id)));
   }, [assetById]);
+
+  // League-adjusted mode only: drop selections that left a roster after a
+  // same-league dashboard refresh. Market mode stays unrestricted.
+  useEffect(() => {
+    if (tradeMode !== "league") return;
+    const idsFor = (team: TradeTeam | null | undefined) => new Set([
+      ...(team?.players ?? []).map((player) => player.playerId),
+      ...(team?.ownedPicks ?? []).map((pick) => pick.playerId),
+    ]);
+    setGiveIds((ids) => ids.filter((id) => idsFor(mine).has(id)));
+    const partnerTeam = theirRosterId === null
+      ? null
+      : league.tradeTeams.find((team) => team.rosterId === theirRosterId && team.rosterId !== mine?.rosterId) ?? null;
+    if (theirRosterId !== null && !partnerTeam) {
+      setTheirRosterId(null);
+      setGetIds([]);
+      return;
+    }
+    if (!partnerTeam) return;
+    setGetIds((ids) => ids.filter((id) => idsFor(partnerTeam).has(id)));
+  }, [league.tradeTeams, mine, theirRosterId, tradeMode]);
 
   useEffect(() => () => {
     clearTradePlayerRemoveUndoToast();
