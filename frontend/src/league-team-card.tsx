@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, type MouseEvent } from "react";
 import type { Dashboard, League, MatchupSelection } from "./dashboard-types";
+import { SectionError } from "./dashboard-shared";
 import { compareByFantasyPosition } from "./fantasy-position-order";
 import { MatchupTag, ModalPortal, points, useDialogFocusTrap } from "./shared";
 
@@ -39,6 +40,9 @@ export function LeagueTeamCard({
   layer = "default",
   selectedPlayerId = null,
   powerLoading = false,
+  powerFailed = false,
+  powerRetrying = false,
+  onRetryPower,
   onPlayerIntent,
   onOpenPlayer,
   onOpenMatchup,
@@ -55,6 +59,10 @@ export function LeagueTeamCard({
   selectedPlayerId?: string | null;
   /** Power rankings still loading — keep the card open with existing shimmers. */
   powerLoading?: boolean;
+  /** League power request failed before rankings arrived. */
+  powerFailed?: boolean;
+  powerRetrying?: boolean;
+  onRetryPower?: () => void;
   onPlayerIntent: (playerId: string) => void;
   onOpenPlayer: (playerId: string) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
@@ -194,32 +202,40 @@ export function LeagueTeamCard({
             <h2 id={`power-team-card-title-${team.rosterId}`} className={team.isUser ? "is-user" : ""}>{team.teamName}</h2>
             <button type="button" onClick={onClose} aria-label={`Close ${team.teamName} team card`}>×</button>
           </header>
-          <div
-            className={`power-team-card-summary${activeMode === "dynasty" && !powerLoading && team.futurePickValue > 0 ? " has-picks" : ""}`}
-            aria-busy={powerLoading || undefined}
-          >
-            <div>
-              <span>Power rank</span>
-              {powerLoading ? <strong className="loading-shimmer power-team-card-metric-loading" aria-hidden="true" /> : <strong>#{team.rank}</strong>}
+          {powerFailed && onRetryPower ? (
+            <div className="power-team-card-power-error">
+              <SectionError title="Team data didn’t load." onRetry={onRetryPower} retrying={powerRetrying} compact />
             </div>
-            <div>
-              <span>{scope === "week" ? "Projection" : "Roster value"}</span>
-              {powerLoading
-                ? <strong className="loading-shimmer power-team-card-metric-loading" aria-hidden="true" />
-                : <strong>{scope === "week" ? points(team.totalValue) : (team.totalValue - team.futurePickValue).toLocaleString()}</strong>}
-            </div>
-            {!powerLoading && activeMode === "dynasty" && team.futurePickValue > 0 ? <div><span>Future picks</span><strong>+{team.futurePickValue.toLocaleString()}</strong></div> : null}
-          </div>
-          <div className="power-team-card-positions" role="list" aria-label={`${team.teamName} position values`} aria-busy={powerLoading || undefined}>
-            {positions.map((position) => (
-              <div key={position} role="listitem">
-                <span>{positionLabel(position)}</span>
-                {powerLoading
-                  ? <strong className="loading-shimmer power-team-card-metric-loading" aria-hidden="true" />
-                  : <strong>{scope === "week" ? points(team.positionValues[position]) : team.positionValues[position].toLocaleString()}</strong>}
+          ) : (
+            <>
+              <div
+                className={`power-team-card-summary${activeMode === "dynasty" && !powerLoading && team.futurePickValue > 0 ? " has-picks" : ""}`}
+                aria-busy={powerLoading || undefined}
+              >
+                <div>
+                  <span>Power rank</span>
+                  {powerLoading ? <strong className="loading-shimmer power-team-card-metric-loading" aria-hidden="true" /> : <strong>#{team.rank}</strong>}
+                </div>
+                <div>
+                  <span>{scope === "week" ? "Projection" : "Roster value"}</span>
+                  {powerLoading
+                    ? <strong className="loading-shimmer power-team-card-metric-loading" aria-hidden="true" />
+                    : <strong>{scope === "week" ? points(team.totalValue) : (team.totalValue - team.futurePickValue).toLocaleString()}</strong>}
+                </div>
+                {!powerLoading && activeMode === "dynasty" && team.futurePickValue > 0 ? <div><span>Future picks</span><strong>+{team.futurePickValue.toLocaleString()}</strong></div> : null}
               </div>
-            ))}
-          </div>
+              <div className="power-team-card-positions" role="list" aria-label={`${team.teamName} position values`} aria-busy={powerLoading || undefined}>
+                {positions.map((position) => (
+                  <div key={position} role="listitem">
+                    <span>{positionLabel(position)}</span>
+                    {powerLoading
+                      ? <strong className="loading-shimmer power-team-card-metric-loading" aria-hidden="true" />
+                      : <strong>{scope === "week" ? points(team.positionValues[position]) : team.positionValues[position].toLocaleString()}</strong>}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
           <div className="power-team-card-roster" role="region" aria-label={`${team.teamName} roster`} aria-busy={powerLoading && rows.length === 0 ? true : undefined}>
             {rows.length > 0 ? (
               <>

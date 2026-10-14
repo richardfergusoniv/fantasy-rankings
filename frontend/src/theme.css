@@ -2365,6 +2365,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .power-roster-empty { padding: 22px 12px; color: var(--dim); text-align: center; font-size: var(--type-caption); line-height: 1.4; }
 .power-team-card-metric-loading { display: block; width: 3.2rem; height: 1.05em; margin-top: 3px; border-radius: var(--radius); }
 .power-team-card-positions .power-team-card-metric-loading { width: 2.4rem; margin-inline: auto; }
+.power-team-card-power-error { padding: 12px 16px; border-bottom: 1px solid var(--hairline); }
 .power-roster-loading { display: grid; gap: 10px; padding: 16px 12px; }
 .power-roster-loading .loading-shimmer { display: block; height: 44px; border-radius: var(--radius); }
 .power-note { margin: 12px 2px 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.45; }

@@ -51,7 +51,7 @@ const EMPTY_POSITION_VALUES: LeagueTeamCardTeam["positionValues"] = {
 /**
  * Resolve a league team card target by roster id.
  * Prefers power rankings when present; otherwise opens immediately from tradeTeams
- * with `powerLoading` until league power data arrives.
+ * with `powerLoading` until league power data arrives (or `powerFailed` if it errored).
  */
 export function resolveLeagueTeamCard(
   league: {
@@ -59,12 +59,15 @@ export function resolveLeagueTeamCard(
     powerRankingsWeek: readonly LeagueTeamCardTeam[];
   },
   rosterId: number,
-  powerPending = false,
-): { team: LeagueTeamCardTeam; powerLoading: boolean } | null {
+  options: { pending?: boolean; failed?: boolean } = {},
+): { team: LeagueTeamCardTeam; powerLoading: boolean; powerFailed: boolean } | null {
+  const powerPending = options.pending ?? false;
+  const powerFailed = options.failed ?? false;
   const ranked = league.powerRankingsWeek.find((team) => team.rosterId === rosterId);
-  if (ranked) return { team: ranked, powerLoading: false };
+  if (ranked) return { team: ranked, powerLoading: false, powerFailed: false };
   const trade = league.tradeTeams.find((team) => team.rosterId === rosterId);
   if (!trade) return null;
+  const waiting = !powerFailed && (powerPending || league.powerRankingsWeek.length === 0);
   return {
     team: {
       rosterId: trade.rosterId,
@@ -76,7 +79,8 @@ export function resolveLeagueTeamCard(
       positionValues: EMPTY_POSITION_VALUES,
       isUser: trade.isUser,
     },
-    powerLoading: powerPending || league.powerRankingsWeek.length === 0,
+    powerLoading: waiting,
+    powerFailed: powerFailed && !waiting,
   };
 }
 

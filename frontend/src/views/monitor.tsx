@@ -44,6 +44,9 @@ export function Monitor({
   playerCardOpen,
   selectedPlayerId = null,
   leaguePowerPending = false,
+  leaguePowerFailed = false,
+  leaguePowerRetrying = false,
+  onRetryLeaguePower,
 }: {
   league: League;
   dashboard: Dashboard;
@@ -56,6 +59,10 @@ export function Monitor({
   selectedPlayerId?: string | null;
   /** League power rankings section still loading. */
   leaguePowerPending?: boolean;
+  /** League power rankings request failed. */
+  leaguePowerFailed?: boolean;
+  leaguePowerRetrying?: boolean;
+  onRetryLeaguePower?: () => void;
 }) {
   const [openRosterId, setOpenRosterId] = useState<number | null>(null);
   const opponent = league.opponentTeam;
@@ -158,7 +165,10 @@ export function Monitor({
 
   const openTeamCard = openRosterId === null
     ? null
-    : resolveLeagueTeamCard(league, openRosterId, leaguePowerPending);
+    : resolveLeagueTeamCard(league, openRosterId, {
+      pending: leaguePowerPending,
+      failed: leaguePowerFailed,
+    });
 
   return (
     <section className="monitor-view" aria-label="Monitor">
@@ -343,6 +353,9 @@ export function Monitor({
           playerCardOpen={playerCardOpen}
           selectedPlayerId={selectedPlayerId}
           powerLoading={openTeamCard.powerLoading}
+          powerFailed={openTeamCard.powerFailed}
+          powerRetrying={leaguePowerRetrying}
+          onRetryPower={onRetryLeaguePower}
           onPlayerIntent={onPlayerIntent}
           onOpenPlayer={onOpenPlayer}
           onOpenMatchup={onOpenMatchup}

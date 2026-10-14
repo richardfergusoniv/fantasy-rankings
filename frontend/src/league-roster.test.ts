@@ -54,15 +54,16 @@ describe("resolveLeagueTeamCard", () => {
       tradeTeams: [{ rosterId: 1, teamName: "Ladz", isUser: true, players: [] }],
       powerRankingsWeek: powerWeek,
     }, 1);
-    expect(resolved).toEqual({ team: powerWeek[0], powerLoading: false });
+    expect(resolved).toEqual({ team: powerWeek[0], powerLoading: false, powerFailed: false });
   });
 
   it("opens immediately from tradeTeams while power rankings are still empty", () => {
     const resolved = resolveLeagueTeamCard({
       tradeTeams: [{ rosterId: 1, teamName: "Ladz", isUser: true, players: [], record: { wins: 1, losses: 0, ties: 0 } }],
       powerRankingsWeek: [],
-    }, 1, true);
+    }, 1, { pending: true });
     expect(resolved?.powerLoading).toBe(true);
+    expect(resolved?.powerFailed).toBe(false);
     expect(resolved?.team).toMatchObject({
       rosterId: 1,
       teamName: "Ladz",
@@ -73,10 +74,18 @@ describe("resolveLeagueTeamCard", () => {
     });
   });
 
+  it("stops loading and surfaces failure when the league request errors", () => {
+    const resolved = resolveLeagueTeamCard({
+      tradeTeams: [{ rosterId: 1, teamName: "Ladz", isUser: true, players: [] }],
+      powerRankingsWeek: [],
+    }, 1, { failed: true });
+    expect(resolved).toMatchObject({ powerLoading: false, powerFailed: true });
+  });
+
   it("returns null when the roster is unknown", () => {
     expect(resolveLeagueTeamCard({
       tradeTeams: [],
       powerRankingsWeek: [],
-    }, 99, true)).toBeNull();
+    }, 99, { pending: true })).toBeNull();
   });
 });
