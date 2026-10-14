@@ -296,7 +296,22 @@ export function TradeValueDialog({
   }, [get, give, marketAssets]);
   const historyQuery = useQuery({
     queryKey: ["fantasycalc-value-history", formatKey, historyRequestIds],
-    queryFn: () => api.getValueHistory({ formatKey, playerIds: historyRequestIds }),
+    queryFn: async () => {
+      // /api/value-history allows at most 24 playerIds per request.
+      const chunkSize = 24;
+      const responses = await Promise.all(
+        Array.from({ length: Math.ceil(historyRequestIds.length / chunkSize) }, (_, index) =>
+          api.getValueHistory({
+            formatKey,
+            playerIds: historyRequestIds.slice(index * chunkSize, (index + 1) * chunkSize),
+          }),
+        ),
+      );
+      return {
+        formatKey: responses[0]?.formatKey ?? formatKey,
+        series: responses.flatMap((response) => response.series),
+      };
+    },
     enabled: historyRequestIds.length > 0,
   });
   const historyByPlayerId = useMemo(() => {

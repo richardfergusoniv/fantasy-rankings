@@ -359,7 +359,9 @@ export function compactPlayerValueSnapshot(input: {
   if (!playerId) return null;
   const position = asTrimmedString(input.position);
   // Picks are dynasty-only market assets (stable FantasyCalc `FP_*` sleeper ids).
-  if (position === "PICK" && !isDynastyFormatKey(input.formatKey)) return null;
+  if (position === "PICK" && (!isDynastyFormatKey(input.formatKey) || !playerId.startsWith("FP_"))) {
+    return null;
+  }
   if (!isAcceptableSnapshotDateKey(input.snapshotDate, now)) return null;
   const rawValue = coerceFiniteNumber(input.value);
   if (rawValue == null) return null;
@@ -415,7 +417,7 @@ export function rankedPicksFromFantasyCalcRows(rows: FantasyCalcRow[]): RankedFa
     const playerId = asTrimmedString(row.player?.sleeperId);
     const fantasyCalcId = row.player?.id;
     const position = asTrimmedString(row.player?.position);
-    if (!playerId || typeof fantasyCalcId !== "number" || position !== "PICK") continue;
+    if (!playerId.startsWith("FP_") || typeof fantasyCalcId !== "number" || position !== "PICK") continue;
     if (seen.has(playerId)) continue;
     seen.add(playerId);
     ranked.push({

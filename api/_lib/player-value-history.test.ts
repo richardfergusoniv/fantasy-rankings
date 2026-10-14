@@ -415,6 +415,18 @@ describe("compactPlayerValueSnapshot", () => {
       compactPlayerValueSnapshot({
         snapshotDate: "2026-10-12",
         formatKey: "dynasty-2qb-12t-1ppr",
+        playerId: "123",
+        playerName: "2027 1st (Mid)",
+        position: "PICK",
+        value: 3041,
+        capturedAt,
+        now,
+      }),
+    ).toBeNull();
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2026-10-12",
+        formatKey: "dynasty-2qb-12t-1ppr",
         playerId: "FP_2027_mid_0",
         playerName: "2027 1st (Mid)",
         position: "PICK",
@@ -722,13 +734,14 @@ describe("rankedPlayersFromFantasyCalcRows", () => {
 });
 
 describe("rankedPicksFromFantasyCalcRows", () => {
-  it("keeps only PICK rows with stable FantasyCalc sleeper ids", () => {
+  it("keeps only PICK rows with stable FantasyCalc FP_* sleeper ids", () => {
     const ranked = rankedPicksFromFantasyCalcRows([
       { player: { id: 1, sleeperId: "9221", name: "Jahmyr Gibbs", position: "RB" } },
       { player: { id: 15352, sleeperId: "FP_2027_mid_0", name: "2027 1st (Mid)", position: "PICK" } },
       { player: { id: 15352, sleeperId: "FP_2027_mid_0", name: "dup", position: "PICK" } },
       { player: { id: 9692, sleeperId: "FP_2027_1", name: "2027 1st", position: "PICK" } },
       { player: { id: 9, sleeperId: "", name: "No id", position: "PICK" } },
+      { player: { id: 10, sleeperId: "123", name: "Numeric pick", position: "PICK" } },
     ]);
     expect(ranked).toEqual([
       {
