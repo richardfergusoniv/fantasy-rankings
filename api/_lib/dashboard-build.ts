@@ -25,9 +25,11 @@ import {
   CACHE_KEY,
 } from "./dashboard-schemas.js";
 import {
+  apiSectionDataFromDashboard,
   buildDashboardCacheWrites,
   DASHBOARD_CACHE_SECTIONS,
   dashboardFromSectionRows,
+  dashboardSnapshotIsLive,
   dashboardAnalyticsCacheSchema,
   dashboardLeagueCacheSchema,
   dashboardTeamCacheSchema,
@@ -40,6 +42,7 @@ import {
   type DashboardTeamApiData,
 } from "./dashboard-section-cache.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
+import { rememberDashboardView, remainingDashboardTtlSeconds } from "./dashboard-response-cache.js";
 import { readOwnerSleeperUserId } from "./auth.js";
 import { readNflState, readUserLeagues } from "./user-leagues.js";
 import {
@@ -1072,20 +1075,8 @@ function sumActualsAndRemainingProjections(players: RosterPlayer[]): number | nu
   return sumLiveForecast(players);
 }
 
-function dashboardHasLiveGame(dashboard: Dashboard): boolean {
-  return dashboard.leagues.some((league) => {
-    const pools = [
-      league.starters,
-      league.bench,
-      league.opponentTeam?.starters ?? [],
-      league.opponentTeam?.bench ?? [],
-    ];
-    return pools.some((players) => players.some((player) => player.gamePhase === "live"));
-  });
-}
-
 function dashboardCacheTtlMs(dashboard: Dashboard): number {
-  return dashboardHasLiveGame(dashboard) ? LIVE_DASHBOARD_CACHE_MS : USER_DASHBOARD_CACHE_MS;
+  return dashboardSnapshotIsLive(dashboard) ? LIVE_DASHBOARD_CACHE_MS : USER_DASHBOARD_CACHE_MS;
 }
 
 function adaptVegasStatsForScorer(
@@ -2410,7 +2401,7 @@ export function sectionCacheTtlMs(live: boolean): number {
 
 async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): Promise<void> {
   const fetchedAt = new Date();
-  const live = dashboardHasLiveGame(dashboard);
+  const live = dashboardSnapshotIsLive(dashboard);
   const writes = buildDashboardCacheWrites({
     cacheKey,
     dashboard,
@@ -2420,6 +2411,44 @@ async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): 
     serializeFull: serializeDashboardForCache,
   });
   await Promise.all(writes.map((row) => upsertSourceCacheRow(row.cacheKey, row.payload, row.fetchedAt)));
+  const prefix = "dashboard:user:";
+  if (!cacheKey.startsWith(prefix)) return;
+  const sleeperUserId = cacheKey.slice(prefix.length);
+  if (!sleeperUserId || sleeperUserId.includes(":")) return;
+  try {
+    await publishUserDashboardResponseCache(sleeperUserId, dashboard, live, fetchedAt.getTime());
+  } catch (error) {
+    // The Postgres write already succeeded. A runtime-cache miss on the
+    // next read falls back to that row.
+    console.error("[dashboard-cache] response cache publish failed", error);
+  }
+}
+
+/** Point every per-user view at this snapshot version so older entries are unused. */
+async function publishUserDashboardResponseCache(
+  sleeperUserId: string,
+  dashboard: Dashboard,
+  live: boolean,
+  fetchedAtMs: number,
+): Promise<void> {
+  const nowMs = Date.now();
+  const ttlSeconds = remainingDashboardTtlSeconds({ fetchedAtMs, nowMs, live });
+  const views: Array<{ view: DashboardCacheSection | "full"; body: unknown }> = [
+    { view: "full", body: { dashboard } },
+    ...DASHBOARD_CACHE_SECTIONS.map((section) => ({
+      view: section,
+      body: { section, data: apiSectionDataFromDashboard(dashboard, section) },
+    })),
+  ];
+  await Promise.all(views.map(({ view, body }) => rememberDashboardView({
+    sleeperUserId,
+    view,
+    version: dashboard.asOf,
+    live,
+    body,
+    ttlSeconds,
+    nowMs,
+  })));
 }
 
 /**
@@ -2479,7 +2508,7 @@ async function readFullUserDashboardRow(
 
 export async function readAllUserDashboardSections(
   sleeperUserId: string,
-): Promise<{ dashboard: Dashboard; fresh: boolean } | null> {
+): Promise<{ dashboard: Dashboard; fresh: boolean; fetchedAtMs: number; live: boolean } | null> {
   const keys = DASHBOARD_CACHE_SECTIONS.map((section) =>
     userDashboardSectionCacheKey(sleeperUserId, section),
   );
@@ -2503,18 +2532,26 @@ export async function readAllUserDashboardSections(
  */
 export async function readUserDashboardCache(
   sleeperUserId: string,
-): Promise<{ dashboard: Dashboard; fresh: boolean } | null> {
+): Promise<{ dashboard: Dashboard; fresh: boolean; fetchedAtMs: number; live: boolean } | null> {
   const fromSections = await readAllUserDashboardSections(sleeperUserId);
   if (fromSections) return fromSections;
   const full = await readFullUserDashboardRow(sleeperUserId);
   if (!full) return null;
-  return { dashboard: full.dashboard, fresh: full.fresh };
+  return {
+    dashboard: full.dashboard,
+    fresh: full.fresh,
+    fetchedAtMs: full.fetchedAt.getTime(),
+    live: dashboardSnapshotIsLive(full.dashboard),
+  };
 }
 
 export type UserDashboardSectionHit<S extends DashboardCacheSection> = {
   data: S extends "team" ? DashboardTeamApiData : DashboardSectionCacheData[S];
   fresh: boolean;
   source: "section" | "full-row";
+  version: string;
+  live: boolean;
+  fetchedAtMs: number;
 };
 
 /**
@@ -2550,6 +2587,7 @@ export async function readUserDashboardSection<S extends DashboardCacheSection>(
     sectionRow: null,
     fullDashboard: full?.dashboard ?? null,
     fullFresh: full?.fresh ?? false,
+    fullFetchedAt: full?.fetchedAt ?? null,
     decode: decodeSourceCachePayload,
     parseSectionData: parseStoredSectionData,
     ttlMs: sectionTtlMs,

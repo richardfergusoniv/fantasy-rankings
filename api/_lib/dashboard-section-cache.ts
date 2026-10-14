@@ -203,6 +203,60 @@ export function wrapSectionEnvelope<T>(
   };
 }
 
+/** True when any rostered player in this snapshot is in a live game. */
+export function dashboardSnapshotIsLive(dashboard: {
+  leagues: Array<{
+    starters?: Array<{ gamePhase?: string | null }>;
+    bench?: Array<{ gamePhase?: string | null }>;
+    opponentTeam?: {
+      starters?: Array<{ gamePhase?: string | null }>;
+      bench?: Array<{ gamePhase?: string | null }>;
+    } | null;
+  }>;
+}): boolean {
+  return dashboard.leagues.some((league) => {
+    const pools = [
+      league.starters ?? [],
+      league.bench ?? [],
+      league.opponentTeam?.starters ?? [],
+      league.opponentTeam?.bench ?? [],
+    ];
+    return pools.some((players) => players.some((player) => player.gamePhase === "live"));
+  });
+}
+
+/**
+ * Section body returned by `/api/dashboard/section` for a freshly built
+ * dashboard. Team matches the slim section row (trade fields empty); the
+ * legacy full-row projection still includes trade data.
+ */
+export function apiSectionDataFromDashboard(
+  dashboard: Dashboard,
+  section: DashboardCacheSection,
+): ProjectedDashboardSection["data"] {
+  const sections = splitDashboardIntoSections(dashboard);
+  switch (section) {
+    case "meta":
+      return sections.meta;
+    case "team":
+      return teamSectionApiData(sections.team, null, null);
+    case "players":
+      return sections.players;
+    case "league":
+      return sections.league;
+    case "analytics":
+      return sections.analytics;
+    case "trade":
+      return sections.trade;
+    case "trade-waiver":
+      return sections["trade-waiver"];
+    default: {
+      const _exhaustive: never = section;
+      return _exhaustive;
+    }
+  }
+}
+
 export type ProjectedDashboardSection =
   | { section: "meta"; data: DashboardSectionCacheData["meta"] }
   | { section: "team"; data: DashboardTeamApiData }
@@ -440,7 +494,7 @@ export function dashboardFromSectionRows(args: {
   ) => DashboardSectionCacheData[S] | null;
   nowMs?: number;
   ttlMs: (live: boolean) => number;
-}): { dashboard: Dashboard; fresh: boolean } | null {
+}): { dashboard: Dashboard; fresh: boolean; fetchedAtMs: number; live: boolean } | null {
   const { sleeperUserId, rows, decode, parseSectionData, ttlMs } = args;
   const nowMs = args.nowMs ?? Date.now();
   if (rows.length < DASHBOARD_CACHE_SECTIONS.length) return null;
@@ -476,6 +530,8 @@ export function dashboardFromSectionRows(args: {
   return {
     dashboard,
     fresh: nowMs - fetchedAtMs < ttlMs(live),
+    fetchedAtMs,
+    live,
   };
 }
 
@@ -495,10 +551,15 @@ export function resolveSectionHitFromRows<S extends DashboardCacheSection>(args:
   ) => DashboardSectionCacheData[T] | null;
   nowMs?: number;
   ttlMs: (live: boolean) => number;
+  /** `fetchedAt` of the legacy full row, when that fallback is eligible. */
+  fullFetchedAt?: Date | null;
 }): {
   data: S extends "team" ? DashboardTeamApiData : DashboardSectionCacheData[S];
   fresh: boolean;
   source: "section" | "full-row";
+  version: string;
+  live: boolean;
+  fetchedAtMs: number;
 } | null {
   const { section, sectionRow, fullDashboard, fullFresh, decode, parseSectionData, ttlMs } = args;
   const nowMs = args.nowMs ?? Date.now();
@@ -517,6 +578,9 @@ export function resolveSectionHitFromRows<S extends DashboardCacheSection>(args:
             data: apiData as S extends "team" ? DashboardTeamApiData : DashboardSectionCacheData[S],
             fresh: nowMs - sectionRow.fetchedAt.getTime() < ttlMs(envelope.live),
             source: "section",
+            version: envelope.version,
+            live: envelope.live,
+            fetchedAtMs: sectionRow.fetchedAt.getTime(),
           };
         }
       }
@@ -532,5 +596,8 @@ export function resolveSectionHitFromRows<S extends DashboardCacheSection>(args:
       : DashboardSectionCacheData[S],
     fresh: fullFresh,
     source: "full-row",
+    version: fullDashboard.asOf,
+    live: dashboardSnapshotIsLive(fullDashboard),
+    fetchedAtMs: args.fullFetchedAt?.getTime() ?? 0,
   };
 }

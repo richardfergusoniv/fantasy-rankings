@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   assembleDashboardFromSections,
+  apiSectionDataFromDashboard,
+  dashboardSnapshotIsLive,
   projectDashboardSection,
   splitDashboardIntoSections,
   teamSectionApiData,
@@ -181,6 +183,30 @@ describe("per-section dashboard cache", () => {
       leagues: Array<{ tradeStarterSlots: string[] }>;
     };
     expect(trade.leagues[0]?.tradeStarterSlots).toEqual(["QB", "RB", "WR", "TE", "FLEX"]);
+  });
+
+  it("serves slim team data from a fresh build and keeps trade on the legacy projection", () => {
+    const api = apiSectionDataFromDashboard(sampleDashboard, "team") as {
+      leagues: Array<{ tradeTeams: unknown[]; tradeWaiverPool: unknown[] }>;
+    };
+    expect(api.leagues[0]?.tradeTeams).toEqual([]);
+    expect(api.leagues[0]?.tradeWaiverPool).toEqual([]);
+    const legacy = projectDashboardSection(sampleDashboard, "team") as {
+      leagues: Array<{ tradeTeams: unknown[] }>;
+    };
+    expect(legacy.leagues[0]?.tradeTeams).toHaveLength(1);
+  });
+
+  it("treats a rostered live game as a live snapshot", () => {
+    expect(dashboardSnapshotIsLive(sampleDashboard)).toBe(false);
+    const live = {
+      ...sampleDashboard,
+      leagues: sampleDashboard.leagues.map((league) => ({
+        ...league,
+        starters: [{ gamePhase: "live" }],
+      })),
+    };
+    expect(dashboardSnapshotIsLive(live)).toBe(true);
   });
 
   it("wraps section envelopes with a shared version and live flag", () => {

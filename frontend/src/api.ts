@@ -55,13 +55,22 @@ type EmptyArgs = Record<string, never>;
 
 export const api = {
   getDashboard: async (args: { force?: boolean } = {}): Promise<Dashboard> => {
-    const body = await request<{ dashboard: Dashboard }>(`/api/dashboard${buildQuery({ force: args.force })}`);
+    // no-store: the browser must not keep a per-user body. Repeat loads are
+    // served from the server's versioned runtime cache, which a new snapshot
+    // replaces without a CDN purge.
+    const body = await request<{ dashboard: Dashboard }>(
+      `/api/dashboard${buildQuery({ force: args.force })}`,
+      { cache: "no-store" },
+    );
     return body.dashboard;
   },
 
   getDashboardSection: (args: {
     section: DashboardSection["section"];
-  }): Promise<DashboardSection> => request(`/api/dashboard/section${buildQuery(args)}`),
+  }): Promise<DashboardSection> => request(
+    `/api/dashboard/section${buildQuery(args)}`,
+    { cache: "no-store" },
+  ),
 
   getDraftCenter: (args: { force?: boolean } = {}): Promise<DraftCenter> =>
     request(`/api/draft-center${buildQuery({ force: args.force })}`),
