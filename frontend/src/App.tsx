@@ -99,7 +99,7 @@ function NavigationIcon({ page }: { page: PrimaryPage }) {
 function primaryPageForTab(tab: Tab): PrimaryPage {
   if (tab === "monitor") return "monitor";
   if (tab === "team") return "team";
-  if (tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison") return "players";
+  if (tab === "rankings" || tab === "waivers" || tab === "comparison") return "players";
   if (tab === "power") return "league";
   if (tab === "trade" || tab === "draft") return "tools";
   const unreachable: never = tab;
@@ -517,7 +517,6 @@ export function App() {
       power: "League",
       draft: "Tools",
       trade: "Tools",
-      charts: "Players",
       comparison: "Players",
     };
     document.title = `${titles[tab]} · Fantasy Rankings`;
@@ -565,8 +564,8 @@ export function App() {
     refetchInterval: pollTeamSection,
   });
   // Matchup player cards need fantasy SOS for Team context ranks.
-  // Monitor reuses the same players + analytics section queries as Charts (no per-panel fetches).
-  const playerSectionActive = tab === "monitor" || tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "charts" || tab === "comparison";
+  // Monitor reuses the same players + analytics section queries as the chart builder (no per-panel fetches).
+  const playerSectionActive = tab === "monitor" || tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "comparison";
   const playersQuery = useQuery({
     queryKey: ["dashboard-section", "players"],
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "players" }), 8_000)),
@@ -593,7 +592,7 @@ export function App() {
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
-    enabled: tab === "monitor" || tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison",
+    enabled: tab === "monitor" || tab === "rankings" || tab === "waivers" || tab === "comparison",
     refetchInterval: pollWhileSectionBuilding,
   });
   // tradeTeams (+ starter slots) for Matchup/Power/Trade. Live-polled with
@@ -845,7 +844,7 @@ export function App() {
     const weekly = currentDashboard.rankings.find((row) => row.playerId === playerId);
     const season = currentDashboard.seasonLongRankings.find((row) => row.playerId === playerId && row.formatKey === league.seasonLongFormat.key);
     // Prefer matchup starters/bench (always in team section), then tradeTeams when loaded.
-    // Rankings/season cover ticker and deep links on Charts/Comparison without trade data.
+    // Rankings/season cover ticker and deep links on Comparison without trade data.
     const rosterPlayer = [...league.starters, ...league.bench, ...(league.opponentTeam?.starters ?? []), ...(league.opponentTeam?.bench ?? [])]
       .find((row) => row.playerId === playerId)
       ?? league.tradeTeams.flatMap((team) => team.players).find((row) => row.playerId === playerId);
@@ -986,7 +985,7 @@ export function App() {
       || ((tab === "rankings" || tab === "waivers" || tab === "draft") && playersQuery.isPending)
       || (tab === "trade" && (playersQuery.isPending || teamQuery.isPending))
       || (tab === "power" && (leagueQuery.isPending || teamQuery.isPending || playersQuery.isPending))
-      || ((tab === "charts" || tab === "comparison") && (analyticsQuery.isPending || playersQuery.isPending))
+      || (tab === "comparison" && (analyticsQuery.isPending || playersQuery.isPending))
     ));
 
   // A signed-in user's first-ever dashboard builds in the background
@@ -1141,7 +1140,6 @@ export function App() {
             <TabsList aria-label="Players views">
               <TabsTrigger value="rankings">Rankings</TabsTrigger>
               <TabsTrigger value="waivers">Waivers</TabsTrigger>
-              <TabsTrigger value="charts">Charts</TabsTrigger>
               <TabsTrigger value="comparison">Comparison</TabsTrigger>
             </TabsList>
           </Tabs>
@@ -1166,7 +1164,6 @@ export function App() {
             power: "League power rankings",
             draft: "Draft assistant",
             trade: "Trade",
-            charts: "Fantasy charts",
             comparison: "Player comparison",
           } satisfies Record<Tab, string>)[tab]}</h1>
           {currentSectionLoading ? <SectionLoading label={`Loading ${({ monitor: "Monitor", team: "Matchup", players: "Players", league: "League", tools: "Tools" } as const)[primaryPage]}…`} />
@@ -1205,8 +1202,6 @@ export function App() {
                 rankingHorizon={dashboardUrl.state.horizon}
                 rankingQuery={dashboardUrl.state.query}
                 onRankingFiltersChange={publishRankingFilters}
-                chartDataset={dashboardUrl.state.chartDataset ?? "advanced"}
-                onChartDatasetChange={publishChartDataset}
                 onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
                 linkedPlayerId={selectedPlayerId}
                 onOpenLinkedPlayer={openLinkedPlayer}

@@ -5,22 +5,20 @@ import type {
   MatchupSelection,
   PlayerLink,
 } from "../dashboard-types";
-import type { ChartDataset, RankingHorizon, RankingPosition } from "../dashboard-url";
+import type { RankingHorizon, RankingPosition } from "../dashboard-url";
 
 /** Modes that share the Players primary page (excludes draft — that is ?tab=draft). */
-export type ExplorerMode = "rankings" | "waivers" | "charts" | "comparison";
+export type ExplorerMode = "rankings" | "waivers" | "comparison";
 
 export function isExplorerMode(tab: string): tab is ExplorerMode {
   return (
     tab === "rankings"
     || tab === "waivers"
-    || tab === "charts"
     || tab === "comparison"
   );
 }
 
 const LazyPlayerPool = lazy(() => import("./player-pool").then((module) => ({ default: module.PlayerPool })));
-const LazyChartsTool = lazy(() => import("../AnalyticsViews").then((module) => ({ default: module.ChartsTool })));
 const LazyComparisonTool = lazy(() => import("../AnalyticsViews").then((module) => ({ default: module.ComparisonTool })));
 
 function ExplorerFallback({ label }: { label: string }) {
@@ -41,8 +39,6 @@ export function Explorer({
   rankingHorizon,
   rankingQuery,
   onRankingFiltersChange,
-  chartDataset,
-  onChartDatasetChange,
   onOpenPlayer,
   linkedPlayerId,
   onOpenLinkedPlayer,
@@ -60,8 +56,6 @@ export function Explorer({
     horizon: RankingHorizon | null;
     query: string | null;
   }) => void;
-  chartDataset: ChartDataset;
-  onChartDatasetChange: (dataset: ChartDataset) => void;
   onOpenPlayer: (playerId: string) => void;
 } & PlayerLink): ReactNode {
   switch (mode) {
@@ -81,18 +75,6 @@ export function Explorer({
             onRankingFiltersChange={onRankingFiltersChange}
             linkedPlayerId={linkedPlayerId}
             onOpenLinkedPlayer={onOpenLinkedPlayer}
-          />
-        </Suspense>
-      );
-    case "charts":
-      return (
-        <Suspense fallback={<ExplorerFallback label="Loading charts…" />}>
-          <LazyChartsTool
-            dashboard={dashboard}
-            league={league}
-            dataset={chartDataset}
-            onDatasetChange={onChartDatasetChange}
-            onOpenMatchup={onOpenMatchup}
           />
         </Suspense>
       );

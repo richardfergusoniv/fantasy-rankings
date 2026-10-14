@@ -47,7 +47,7 @@ describe("filterCommandItems", () => {
       expect.objectContaining({ kind: "page", label: "Trade History", tab: "trade", tradeMode: "history" }),
     ]);
     expect(filterCommandItems("chart", { pages: COMMAND_PAGES, leagues, players })).toEqual([
-      expect.objectContaining({ kind: "page", label: "Charts", tab: "charts" }),
+      expect.objectContaining({ kind: "page", label: "Charts", tab: "monitor" }),
     ]);
   });
 

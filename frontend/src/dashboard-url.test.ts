@@ -41,7 +41,7 @@ describe("dashboard URL state", () => {
   });
 
   it("round-trips older tab values including matchup", () => {
-    for (const tab of ["team", "rankings", "waivers", "power", "draft", "trade", "charts", "comparison"] as const) {
+    for (const tab of ["team", "rankings", "waivers", "power", "draft", "trade", "comparison"] as const) {
       const original = state({ tab });
       expect(parseDashboardSearch(serializeDashboardSearch(original))).toEqual(original);
     }
@@ -68,7 +68,13 @@ describe("dashboard URL state", () => {
     expect(parseDashboardSearch("?tab=strengthOfSchedule&table=offense")).toEqual(state({ tab: "rankings" }));
     expect(parseDashboardSearch("?table=sos")).toEqual(state({ tab: "rankings" }));
     expect(parseDashboardSearch("?dataset=team-overall")).toEqual(state({ tab: "rankings" }));
-    expect(parseDashboardSearch("?tab=charts&table=defense").tab).toBe("charts");
+    expect(parseDashboardSearch("?tab=charts&table=defense").tab).toBe("monitor");
+  });
+
+  it("redirects removed Players Charts URLs onto Monitor", () => {
+    expect(resolveDashboardTab("charts")).toEqual({ tab: "monitor", legacyTradeMode: null });
+    expect(parseDashboardSearch("?tab=charts")).toEqual(emptyDashboardUrlState());
+    expect(parseDashboardSearch("?tab=charts&chart=projections")).toEqual(state({ chartDataset: "projections" }));
   });
 
   it("exposes effectiveTradeMode defaults for the analyzer", () => {
