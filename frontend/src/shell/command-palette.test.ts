@@ -39,15 +39,15 @@ describe("filterCommandItems", () => {
     ]);
   });
 
-  it("finds Draft, Trade History, and Charts from the palette", () => {
+  it("finds Draft, Trade History, and Analytics from the palette", () => {
     expect(filterCommandItems("draft", { pages: COMMAND_PAGES, leagues, players })).toEqual([
       expect.objectContaining({ kind: "page", label: "Draft", tab: "draft" }),
     ]);
     expect(filterCommandItems("history", { pages: COMMAND_PAGES, leagues, players })).toEqual([
       expect.objectContaining({ kind: "page", label: "Trade History", tab: "trade", tradeMode: "history" }),
     ]);
-    expect(filterCommandItems("chart", { pages: COMMAND_PAGES, leagues, players })).toEqual([
-      expect.objectContaining({ kind: "page", label: "Charts", tab: "monitor" }),
+    expect(filterCommandItems("analytics", { pages: COMMAND_PAGES, leagues, players })).toEqual([
+      expect.objectContaining({ kind: "page", label: "Analytics", tab: "monitor" }),
     ]);
   });
 

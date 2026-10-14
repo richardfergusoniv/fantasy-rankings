@@ -17,10 +17,10 @@ function ChartsFallback() {
   return (
     <article className="monitor-panel monitor-builder-chart-panel">
       <header className="monitor-panel-header">
-        <h2>Charts</h2>
+        <h2>Analytics</h2>
       </header>
-      <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading charts…">
-        <span>Loading charts…</span>
+      <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading Analytics…">
+        <span>Loading Analytics…</span>
       </section>
     </article>
   );
