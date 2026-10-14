@@ -528,79 +528,11 @@ main { padding: 12px 16px 0; }
   line-height: 1.2;
   font-weight: 600;
 }
-/* Same shape as the Matchup score card: mine left, VS centered, theirs right. */
-.monitor-matchup-names {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 0 12px;
-  margin: 0;
-  font-size: var(--type-caption);
-  line-height: 16px;
-}
-.monitor-matchup-names > span {
-  color: var(--dim);
-  font-weight: 600;
-  text-transform: uppercase;
-}
-.monitor-matchup-names > :last-child { justify-self: end; text-align: right; }
-.monitor-matchup-names > strong { font-weight: 700; }
-.monitor-matchup-names .monitor-matchup-team-open {
-  position: relative;
-  width: max-content;
-  max-width: 100%;
-  min-height: 0;
-  margin: 0;
-  border: 0;
-  overflow: visible;
-  font-family: inherit;
-  text-align: left;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
 /* Chip stays ~16px; the pseudo-element gives a 44px hit box without taking layout space. */
-.matchup-score-team-open::before,
-.monitor-matchup-team-open::before {
+.matchup-score-team-open::before {
   position: absolute;
   inset: -14px -4px;
   content: "";
-}
-.monitor-matchup-team-open:focus-visible {
-  outline: 2px solid var(--link);
-  outline-offset: 2px;
-}
-.monitor-week-label {
-  margin: 0 0 0 auto;
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 600;
-}
-.monitor-matchup-scores {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 7px;
-}
-.monitor-matchup-scores > div {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-}
-.monitor-matchup-scores > div:last-child { justify-content: flex-end; }
-.monitor-matchup-scores strong {
-  font-size: var(--type-display);
-  line-height: 1;
-  font-weight: 600;
-  letter-spacing: -.02em;
-  font-variant-numeric: lining-nums tabular-nums;
-}
-.monitor-matchup-scores small {
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 600;
-  font-variant-numeric: lining-nums tabular-nums;
-  white-space: nowrap;
 }
 .monitor-empty {
   margin: 0;
@@ -608,120 +540,11 @@ main { padding: 12px 16px 0; }
   font-size: var(--type-body);
   font-weight: 600;
 }
-.monitor-league-list {
-  display: grid;
-  gap: 0;
-  padding: 0;
-  list-style: none;
-  margin: 0 -12px -12px;
-  border-top: 1px solid var(--hairline);
+.monitor-builder-chart-panel {
+  grid-column: 1 / -1;
 }
-.monitor-league-row {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  min-height: var(--league-roster-row-height);
-  padding: 0 12px;
-  border-bottom: 1px solid var(--hairline);
-}
-.monitor-league-row:last-child { border-bottom: 0; }
-.monitor-league-row.is-user { background: var(--roster-highlight-bg); }
-.monitor-league-row.is-opponent { background: var(--opponent-row); }
-.monitor-league-rank { color: var(--dim); font-size: var(--type-body); font-weight: 700; font-variant-numeric: tabular-nums; }
-.monitor-league-row.is-user .monitor-league-rank,
-.monitor-league-row.is-user .monitor-league-team-open,
-.monitor-league-row.is-user .monitor-league-value { color: var(--link); }
-.monitor-league-team {
-  display: flex;
+.monitor-builder-chart {
   min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
-.monitor-league-team-open {
-  display: inline-flex;
-  flex: 1 1 auto;
-  align-items: center;
-  min-width: 44px;
-  max-width: 100%;
-  min-height: 44px;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: var(--type-body);
-  font-weight: 600;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.monitor-league-team-open:focus-visible {
-  outline: 2px solid var(--link);
-  outline-offset: -2px;
-}
-.monitor-league-value {
-  font-size: var(--type-body);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.monitor-movers-list,
-.monitor-alerts-list {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.monitor-mover,
-.monitor-alert {
-  display: flex;
-  width: 100%;
-  min-height: 44px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-button.monitor-mover:hover,
-button.monitor-alert:hover { background: var(--surface-2); }
-.monitor-mover span,
-.monitor-alert strong {
-  overflow: hidden;
-  font-size: var(--type-body);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.monitor-mover strong {
-  flex: none;
-  font-size: var(--type-body);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.monitor-mover.is-up strong { color: var(--give); }
-.monitor-mover.is-down strong { color: var(--danger-text); }
-.monitor-alert {
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 2px;
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
-.monitor-alert span {
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 600;
 }
 .monitor-value-chart-controls {
   display: grid;
@@ -739,7 +562,8 @@ button.monitor-alert:hover { background: var(--surface-2); }
   font-size: var(--type-caption);
   font-weight: 600;
 }
-.monitor-value-chart-field select {
+.monitor-value-chart-field select,
+.monitor-value-chart-advanced {
   width: 100%;
   min-width: 0;
   min-height: var(--compact-control-height, 36px);
@@ -747,18 +571,25 @@ button.monitor-alert:hover { background: var(--surface-2); }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background-color: var(--surface-2);
-  background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
-    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
-  background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
   color: var(--text);
   font: inherit;
   font-size: var(--type-caption);
   font-weight: 600;
   cursor: pointer;
 }
-.monitor-value-chart-field select:focus {
+.monitor-value-chart-field select {
+  background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.monitor-value-chart-advanced {
+  padding-right: 8px;
+  text-align: left;
+}
+.monitor-value-chart-field select:focus,
+.monitor-value-chart-advanced:focus-visible {
   border-color: var(--link);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
   outline: none;
@@ -771,13 +602,49 @@ button.monitor-alert:hover { background: var(--surface-2); }
 .monitor-value-chart .recharts-legend-wrapper {
   padding-top: 2px !important;
 }
-.monitor-game-lines-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
-  gap: 8px;
+/* Inline builder charts reuse Value chart height and surface, not the Charts modal frame. */
+.monitor-builder-chart-panel .monitor-value-chart .scatter-frame,
+.monitor-builder-chart-panel .monitor-value-chart .fpa-heatmap,
+.monitor-builder-chart-panel .monitor-value-chart .tier-cliff-list,
+.monitor-builder-chart-panel .monitor-value-chart .boom-bust-range-list {
+  height: 100%;
+  max-height: 100%;
   margin: 0;
-  padding: 0;
-  list-style: none;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.monitor-builder-chart-panel .monitor-value-chart .scatter-zoom-controls {
+  display: none;
+}
+.monitor-builder-chart-panel .monitor-value-chart .chart-key {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0 2px 2px 0;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.monitor-builder-chart-panel .monitor-value-chart {
+  position: relative;
+}
+.monitor-builder-chart-panel .monitor-value-chart .analytics-empty {
+  display: grid;
+  place-content: center;
+  height: 100%;
+  margin: 0;
+  padding: 0 8px;
+  text-align: center;
+}
+.monitor-builder-chart-empty .analytics-empty {
+  margin: 0;
+}
+.monitor-game-lines-controls {
+  grid-template-columns: minmax(0, 1fr);
 }
 .monitor-game-line-card {
   display: grid;
@@ -2491,7 +2358,8 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   main { padding: 10px 32px 30px; }
   .matchup-score, .lineup-section, .bench-section { max-width: 860px; }
   .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
-  .monitor-view { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 920px; }
+  .monitor-view { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .monitor-builder-chart-panel { grid-column: 1 / -1; }
   .rankings-view, .trade-view, .advanced-stats-view, .analytics-view, .weekly-projections-view, .comparison-view, .power-view { max-width: 920px; }
   .comparison-cards { max-width: 620px; gap: 20px; }
   .comparison-selector-card .comparison-cards { grid-template-columns: minmax(0, 1fr); }

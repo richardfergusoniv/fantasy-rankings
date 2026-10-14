@@ -43,6 +43,11 @@ export type GameLineCard = {
   moneylines: string;
   /** Implied team totals (away / home), or final score once played. */
   totalsOrScore: string;
+  awayTeam: string;
+  homeTeam: string;
+  /** UTC epoch ms; null when kickoff cannot be parsed. */
+  kickoffAtMs: number | null;
+  isFinal: boolean;
 };
 
 const MISSING = "—";
@@ -254,6 +259,7 @@ export function formatMatchup(awayTeam: string, homeTeam: string, location: stri
 }
 
 export function toGameLineCard(row: NflverseGameRow): GameLineCard {
+  const kickoff = etWallTimeToUtc(row.gameday, row.gametime);
   return {
     gameId: row.gameId,
     matchup: formatMatchup(row.awayTeam, row.homeTeam, row.location),
@@ -262,6 +268,10 @@ export function toGameLineCard(row: NflverseGameRow): GameLineCard {
     total: formatTotalLine(row.totalLine),
     moneylines: formatMoneylines(row.awayMoneyline, row.homeMoneyline),
     totalsOrScore: formatTotalsOrScore(row),
+    awayTeam: row.awayTeam,
+    homeTeam: row.homeTeam,
+    kickoffAtMs: kickoff?.getTime() ?? null,
+    isFinal: row.awayScore !== null && row.homeScore !== null,
   };
 }
 
@@ -271,4 +281,64 @@ export function gameLineCardsForWeek(
   week: number,
 ): GameLineCard[] {
   return gamesForSeasonWeek(parseGamesCsv(csv), season, week).map(toGameLineCard);
+}
+
+/** Align Sleeper / sportsbook abbreviations with nflverse team codes. */
+export function normalizeGameLineTeam(team: string): string {
+  const normalized = team.trim().toUpperCase();
+  if (normalized === "JAC") return "JAX";
+  if (normalized === "LA") return "LAR";
+  if (normalized === "LVR" || normalized === "OAK") return "LV";
+  if (normalized === "WSH") return "WAS";
+  return normalized;
+}
+
+function gameInvolvesTeams(card: GameLineCard, teams: ReadonlySet<string>): boolean {
+  return teams.has(normalizeGameLineTeam(card.awayTeam))
+    || teams.has(normalizeGameLineTeam(card.homeTeam));
+}
+
+function byKickoffAscending(left: GameLineCard, right: GameLineCard): number {
+  return (left.kickoffAtMs ?? Number.POSITIVE_INFINITY) - (right.kickoffAtMs ?? Number.POSITIVE_INFINITY);
+}
+
+/**
+ * Default Monitor game: live roster matchup, else next/soonest roster game,
+ * else first upcoming week game, else the first card.
+ */
+export function defaultGameLineCardId(
+  cards: readonly GameLineCard[],
+  rosterTeams: readonly string[],
+  liveTeams: readonly string[],
+  nowMs: number,
+): string | null {
+  if (cards.length === 0) return null;
+  const roster = new Set(
+    rosterTeams.map(normalizeGameLineTeam).filter((team) => team.length > 0),
+  );
+  const live = new Set(
+    liveTeams.map(normalizeGameLineTeam).filter((team) => team.length > 0),
+  );
+
+  const liveRoster = cards.find((card) => !card.isFinal && gameInvolvesTeams(card, live));
+  if (liveRoster) return liveRoster.gameId;
+
+  const nonFinalRoster = cards
+    .filter((card) => !card.isFinal && gameInvolvesTeams(card, roster))
+    .slice()
+    .sort(byKickoffAscending);
+  const upcomingRoster = nonFinalRoster.find(
+    (card) => card.kickoffAtMs === null || card.kickoffAtMs >= nowMs,
+  );
+  if (upcomingRoster) return upcomingRoster.gameId;
+  if (nonFinalRoster[0]) return nonFinalRoster[0].gameId;
+
+  const nonFinal = cards.filter((card) => !card.isFinal).slice().sort(byKickoffAscending);
+  const upcoming = nonFinal.find(
+    (card) => card.kickoffAtMs === null || card.kickoffAtMs >= nowMs,
+  );
+  if (upcoming) return upcoming.gameId;
+  if (nonFinal[0]) return nonFinal[0].gameId;
+
+  return cards[0]?.gameId ?? null;
 }
