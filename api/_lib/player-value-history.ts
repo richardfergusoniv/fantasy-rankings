@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { notInArray, sql } from "drizzle-orm";
 import { db, schema } from "./db.js";
 import {
   FANTASY_CALC_HISTORY_URL,
@@ -16,30 +16,43 @@ import {
  * Rows stay compact — one PK row per (date, format, player) with rounded
  * market value and the name/position needed by the chart API. Writes are
  * idempotent upserts; callers should avoid large snapshot reads.
+ *
+ * Snapshot presets are only the FantasyCalc formats actually used by linked
+ * Sleeper leagues (Value chart / api/value-history). Rankings may still fetch
+ * a broader preset set for synthesis; daily append + backfill stay on this list.
  */
 
 export const FANTASY_CALC_SNAPSHOT_PRESETS: Array<{ format: SeasonLongFormat; url: string }> = [
   { format: { key: "redraft-1qb-12t-0.5ppr", isDynasty: false, numQbs: 1, numTeams: 12, ppr: 0.5, label: "Redraft · 12-team · 1QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=1&numTeams=12&ppr=0.5` },
   { format: { key: "redraft-1qb-10t-0.5ppr", isDynasty: false, numQbs: 1, numTeams: 10, ppr: 0.5, label: "Redraft · 10-team · 1QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=1&numTeams=10&ppr=0.5` },
-  { format: { key: "redraft-1qb-12t-1ppr", isDynasty: false, numQbs: 1, numTeams: 12, ppr: 1, label: "Redraft · 12-team · 1QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=1&numTeams=12&ppr=1` },
-  { format: { key: "redraft-2qb-14t-1ppr", isDynasty: false, numQbs: 2, numTeams: 14, ppr: 1, label: "Redraft · 14-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=2&numTeams=14&ppr=1` },
-  { format: { key: "redraft-2qb-12t-0.5ppr", isDynasty: false, numQbs: 2, numTeams: 12, ppr: 0.5, label: "Redraft · 12-team · Superflex / 2QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=2&numTeams=12&ppr=0.5` },
-  { format: { key: "redraft-2qb-12t-1ppr", isDynasty: false, numQbs: 2, numTeams: 12, ppr: 1, label: "Redraft · 12-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=2&numTeams=12&ppr=1` },
   { format: { key: "dynasty-1qb-10t-0.5ppr", isDynasty: true, numQbs: 1, numTeams: 10, ppr: 0.5, label: "Dynasty · 10-team · 1QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=1&numTeams=10&ppr=0.5` },
   { format: { key: "dynasty-1qb-12t-1ppr", isDynasty: true, numQbs: 1, numTeams: 12, ppr: 1, label: "Dynasty · 12-team · 1QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=1&numTeams=12&ppr=1` },
   { format: { key: "dynasty-2qb-14t-1ppr", isDynasty: true, numQbs: 2, numTeams: 14, ppr: 1, label: "Dynasty · 14-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=2&numTeams=14&ppr=1` },
-  { format: { key: "dynasty-2qb-12t-0.5ppr", isDynasty: true, numQbs: 2, numTeams: 12, ppr: 0.5, label: "Dynasty · 12-team · Superflex / 2QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=2&numTeams=12&ppr=0.5` },
   { format: { key: "dynasty-2qb-12t-1ppr", isDynasty: true, numQbs: 2, numTeams: 12, ppr: 1, label: "Dynasty · 12-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=2&numTeams=12&ppr=1` },
 ];
 
 /** Sensible default when a league format cannot be mapped to a snapshot preset. */
 export const DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY = "redraft-1qb-12t-0.5ppr";
 
+/** Snapshot calendar dates follow FantasyCalc's Pacific publish day. */
+export const VALUE_HISTORY_TIME_ZONE = "America/Los_Angeles";
+
+/**
+ * Keep consecutive daily points for this many Pacific calendar days (inclusive
+ * of today). Older history is downsampled to one point per ISO week.
+ */
+export const VALUE_HISTORY_DAILY_RETENTION_DAYS = 90;
+
 /**
  * Inclusive lower bound for chart/API reads of `player_value_snapshots`.
  * Daily cron + backfill store history; the Monitor Value chart reads from here.
  */
 export const VALUE_HISTORY_CHART_MIN_DATE = "2026-01-01";
+
+export const FANTASY_CALC_SNAPSHOT_FORMAT_KEYS: readonly string[] =
+  FANTASY_CALC_SNAPSHOT_PRESETS.map((preset) => preset.format.key);
+
+const snapshotFormatKeySet = new Set(FANTASY_CALC_SNAPSHOT_FORMAT_KEYS);
 
 const snapshotFormatKeyPattern = /^(dynasty|redraft)-(\d+)qb-(\d+)t-([\d.]+)ppr$/;
 
@@ -165,6 +178,37 @@ export function utcDateKey(date: Date): string {
 }
 
 /**
+ * Calendar YYYY-MM-DD in `timeZone` (default America/Los_Angeles).
+ * Daily FantasyCalc snapshots must use Pacific date, not UTC — evening PT
+ * writes would otherwise land on the next UTC day ("tomorrow").
+ */
+export function zonedDateKey(
+  date: Date,
+  timeZone: string = VALUE_HISTORY_TIME_ZONE,
+): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) {
+    throw new Error(`Failed to format zoned date for timeZone=${timeZone}`);
+  }
+  return `${year}-${month}-${day}`;
+}
+
+/** Add `days` to a YYYY-MM-DD calendar date key (timezone-agnostic arithmetic). */
+export function addDateKeyDays(dateKey: string, days: number): string {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return utcDateKey(date);
+}
+
+/**
  * Accept finite instants on/after 2015-01-01 UTC and at most 1 day ahead of `now`.
  * Rejects NaN dates and absurd far-future years from FantasyCalc history.
  */
@@ -178,12 +222,17 @@ export function isAcceptableValueHistoryInstant(date: Date, now: Date = new Date
   return true;
 }
 
-/** True when snapshot_date is a real YYYY-MM-DD inside the accepted window. */
+/**
+ * True when snapshot_date is a real YYYY-MM-DD on/after the min date and not
+ * after today's Pacific calendar date (rejects UTC-"tomorrow" rows).
+ */
 export function isAcceptableSnapshotDateKey(snapshotDate: string, now: Date = new Date()): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshotDate)) return false;
   const date = new Date(`${snapshotDate}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime()) || utcDateKey(date) !== snapshotDate) return false;
-  return isAcceptableValueHistoryInstant(date, now);
+  if (snapshotDate < VALUE_HISTORY_MIN_SNAPSHOT_DATE) return false;
+  if (snapshotDate > zonedDateKey(now)) return false;
+  return true;
 }
 
 /**
@@ -240,6 +289,18 @@ export function isRetryableHistoryFetchError(err: unknown): boolean {
     return status >= 500 && status <= 599;
   }
   return true;
+}
+
+/**
+ * True when FantasyCalc has no history for this player×format (absent from
+ * that market). Callers should skip these — not count them as hard failures.
+ */
+export function isAbsentPlayerHistoryError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const match = /^Source returned (\d+)$/.exec(err.message);
+  if (!match) return false;
+  const status = Number(match[1]);
+  return status === 404 || status === 204;
 }
 
 export class CorruptFantasyCalcHistoryError extends Error {
@@ -382,11 +443,12 @@ export function dailySnapshotRowsFromPreset(
   now: Date = asOf,
 ): PlayerValueSnapshotBuildResult {
   const out: PlayerValueSnapshotRow[] = [];
+  // Pacific calendar day — not UTC — so evening PT refreshes do not write "tomorrow".
+  const snapshotDate = zonedDateKey(asOf);
   // Date-window rejection only — PICK / missing id / non-finite value are not "skipped".
-  if (!isAcceptableValueHistoryInstant(asOf, now) || !isAcceptableSnapshotDateKey(utcDateKey(asOf), now)) {
+  if (!isAcceptableValueHistoryInstant(asOf, now) || !isAcceptableSnapshotDateKey(snapshotDate, now)) {
     return { rows: out, skipped: rows.length };
   }
-  const snapshotDate = utcDateKey(asOf);
   for (const row of rows) {
     const compact = compactPlayerValueSnapshot({
       snapshotDate,
@@ -553,16 +615,20 @@ async function mapPool<T, R>(
 }
 
 /**
- * Write today's compact market rows for every successfully fetched preset.
- * Idempotent for the same UTC date via PK upsert.
+ * Write today's compact market rows for every kept snapshot preset present in
+ * `presets`. Idempotent for the same Pacific date via PK upsert. Unknown /
+ * unused format keys are ignored so rankings can still cache a broader set.
  */
 export async function appendDailyValueSnapshots(
   presets: Record<string, FantasyCalcRow[]>,
   asOf: Date = new Date(),
 ): Promise<{ formats: number; rows: number; skipped: number }> {
   let skipped = 0;
+  let formats = 0;
   const rows: PlayerValueSnapshotRow[] = [];
   for (const [formatKey, presetRows] of Object.entries(presets)) {
+    if (!snapshotFormatKeySet.has(formatKey)) continue;
+    formats += 1;
     const built = dailySnapshotRowsFromPreset(formatKey, presetRows, asOf, asOf);
     rows.push(...built.rows);
     skipped += built.skipped;
@@ -573,7 +639,81 @@ export async function appendDailyValueSnapshots(
     }
   }
   const written = await upsertPlayerValueSnapshots(rows);
-  return { formats: Object.keys(presets).length, rows: written, skipped };
+  return { formats, rows: written, skipped };
+}
+
+export type PrunePlayerValueSnapshotsResult = {
+  deletedFuture: number;
+  deletedUnusedFormats: number;
+  deletedDownsampled: number;
+  deleted: number;
+  today: string;
+  dailyCutoff: string;
+};
+
+/**
+ * Bound `player_value_snapshots` growth:
+ * - drop rows dated after Pacific "today"
+ * - drop formats outside the kept snapshot preset list
+ * - keep daily points newer than `VALUE_HISTORY_DAILY_RETENTION_DAYS`
+ * - older points: one row per (format, player, ISO week) — last day kept
+ */
+export async function prunePlayerValueSnapshots(
+  asOf: Date = new Date(),
+): Promise<PrunePlayerValueSnapshotsResult> {
+  const today = zonedDateKey(asOf);
+  const dailyCutoff = addDateKeyDays(today, -VALUE_HISTORY_DAILY_RETENTION_DAYS);
+
+  const futureRows = await db.execute(sql`
+    DELETE FROM player_value_snapshots
+    WHERE snapshot_date > ${today}
+    RETURNING 1
+  `);
+  const deletedFuture = Array.isArray(futureRows) ? futureRows.length : 0;
+
+  const unused = await db
+    .delete(schema.playerValueSnapshots)
+    .where(notInArray(schema.playerValueSnapshots.formatKey, [...FANTASY_CALC_SNAPSHOT_FORMAT_KEYS]))
+    .returning({ id: schema.playerValueSnapshots.id });
+  const deletedUnusedFormats = unused.length;
+
+  const downsampledRows = await db.execute(sql`
+    DELETE FROM player_value_snapshots AS p
+    WHERE p.snapshot_date <= ${dailyCutoff}
+      AND NOT EXISTS (
+        SELECT 1
+        FROM (
+          SELECT DISTINCT ON (format_key, player_id, date_trunc('week', snapshot_date::date))
+            id
+          FROM player_value_snapshots
+          WHERE snapshot_date <= ${dailyCutoff}
+          ORDER BY
+            format_key,
+            player_id,
+            date_trunc('week', snapshot_date::date),
+            snapshot_date DESC
+        ) AS keep_weekly
+        WHERE keep_weekly.id = p.id
+      )
+    RETURNING 1
+  `);
+  const deletedDownsampled = Array.isArray(downsampledRows) ? downsampledRows.length : 0;
+  const deleted = deletedFuture + deletedUnusedFormats + deletedDownsampled;
+
+  if (deleted > 0) {
+    console.info(
+      `[player-value-history] prune deleted=${deleted} future=${deletedFuture} unusedFormats=${deletedUnusedFormats} downsampled=${deletedDownsampled} today=${today} dailyCutoff=${dailyCutoff}`,
+    );
+  }
+
+  return {
+    deletedFuture,
+    deletedUnusedFormats,
+    deletedDownsampled,
+    deleted,
+    today,
+    dailyCutoff,
+  };
 }
 
 function clampBackfillLimit(raw: number | undefined): number {
@@ -594,6 +734,8 @@ export type ValueHistoryBackfillResult = {
   processed: number;
   failed: number;
   failedItems: ValueHistoryBackfillFailedItem[];
+  /** Players FantasyCalc returned 404/204 for — absent from that format's market. */
+  skippedAbsent: number;
   upserted: number;
   skipped: number;
   totalWorkItems: number;
@@ -626,6 +768,7 @@ export async function backfillValueHistoryBatch(options: {
   let totalWorkItems = 0;
   let processed = 0;
   let failed = 0;
+  let skippedAbsent = 0;
   let upserted = 0;
   let skipped = 0;
   const failedItems: ValueHistoryBackfillFailedItem[] = [];
@@ -686,10 +829,18 @@ export async function backfillValueHistoryBatch(options: {
       skipped += result.value.skipped;
       continue;
     }
-    failed += 1;
     const item = work[index];
     const formatKey = item?.format.key ?? "?";
     const playerId = item?.player.playerId ?? "?";
+    if (isAbsentPlayerHistoryError(result.reason)) {
+      // Player listed transiently / no implied-trade history for this format.
+      skippedAbsent += 1;
+      console.info(
+        `[player-value-history] backfill skipped absent format=${formatKey} player=${playerId}`,
+      );
+      continue;
+    }
+    failed += 1;
     failedItems.push({ formatKey, playerId });
     const dbText = formatDbError(result.reason);
     const fetchText =
@@ -713,6 +864,7 @@ export async function backfillValueHistoryBatch(options: {
     processed,
     failed,
     failedItems,
+    skippedAbsent,
     upserted,
     skipped,
     totalWorkItems,

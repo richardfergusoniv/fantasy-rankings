@@ -1,6 +1,9 @@
 /**
  * Pure series helpers for the Monitor Value chart: rolling averages and a
  * dampened forward trend cone. Shared by the UI and unit tests.
+ *
+ * Older history may be weekly-sampled; MAs and the trend cone must only use
+ * the trailing consecutive daily section (typically the last 30 days).
  */
 
 export type ValueChartPoint = { date: string; value: number };
@@ -17,6 +20,8 @@ export const TREND_CONE_Z = 1.28;
 export const TREND_CONE_PHI = 0.9;
 export const TREND_CONE_HORIZON_DAYS = 30;
 export const TREND_CONE_LOOKBACK_DAYS = 30;
+/** Moving averages / cone lookback window for consecutive daily points. */
+export const VALUE_CHART_DAILY_INDICATOR_DAYS = 30;
 
 /** Add `days` to a YYYY-MM-DD UTC calendar date. */
 export function addUtcDateKey(dateKey: string, days: number): string {
@@ -26,6 +31,40 @@ export function addUtcDateKey(dateKey: string, days: number): string {
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   const day = String(date.getUTCDate()).padStart(2, "0");
   return `${String(year).padStart(4, "0")}-${month}-${day}`;
+}
+
+/**
+ * Trailing run of consecutive calendar-day points ending at the latest sample.
+ * Weekly-downsampled older history is excluded so MAs / cone stay daily-only.
+ */
+export function trailingConsecutiveDailyPoints(
+  points: ReadonlyArray<ValueChartPoint>,
+): ValueChartPoint[] {
+  if (points.length === 0) return [];
+  let start = points.length - 1;
+  while (start > 0) {
+    const previous = points[start - 1];
+    const current = points[start];
+    if (!previous || !current || addUtcDateKey(previous.date, 1) !== current.date) break;
+    start -= 1;
+  }
+  return points.slice(start).map((point) => ({ date: point.date, value: point.value }));
+}
+
+/**
+ * Consecutive daily points for chart indicators: trailing daily run, clipped
+ * to the last `lookbackDays` calendar days ending at the latest point.
+ */
+export function dailyPointsForIndicators(
+  points: ReadonlyArray<ValueChartPoint>,
+  lookbackDays: number = VALUE_CHART_DAILY_INDICATOR_DAYS,
+): ValueChartPoint[] {
+  const daily = trailingConsecutiveDailyPoints(points);
+  if (daily.length === 0 || lookbackDays < 1) return [];
+  const latest = daily[daily.length - 1];
+  if (!latest) return [];
+  const minDate = addUtcDateKey(latest.date, -(lookbackDays - 1));
+  return daily.filter((point) => point.date >= minDate);
 }
 
 /**
@@ -162,17 +201,13 @@ export function dampenedTrendCone(
   const lookback = options.lookback ?? TREND_CONE_LOOKBACK_DAYS;
   if (points.length === 0 || horizon < 1) return [];
 
-  const recent = points.slice(-lookback);
-  // Slope/σ treat adjacent samples as one calendar day; skip when history gaps.
-  const hasGap = recent.some((point, index) => {
-    const previous = recent[index - 1];
-    return previous !== undefined && addUtcDateKey(previous.date, 1) !== point.date;
-  });
-  if (hasGap) return [];
+  // Only the trailing consecutive daily section (clipped to lookback days).
+  const recent = dailyPointsForIndicators(points, lookback);
+  if (recent.length < 2) return [];
   const values = recent.map((point) => point.value);
   const slope = linearSlope(values);
   const sigma = dailyChangeStdDev(values);
-  const today = points[points.length - 1];
+  const today = recent[recent.length - 1];
   if (!today) return [];
 
   const cone: TrendConePoint[] = [];

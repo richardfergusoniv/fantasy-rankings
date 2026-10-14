@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  addDateKeyDays,
   chunkPlayerValueSnapshots,
   coerceFiniteNumber,
   compactPlayerValueSnapshot,
@@ -8,8 +9,11 @@ import {
   dedupePlayerValueSnapshotsById,
   fantasyCalcHistoryUrl,
   fetchValidatedFantasyCalcHistory,
+  FANTASY_CALC_SNAPSHOT_FORMAT_KEYS,
+  FANTASY_CALC_SNAPSHOT_PRESETS,
   formatDbError,
   historySnapshotRowsFromPoints,
+  isAbsentPlayerHistoryError,
   isAcceptableSnapshotDateKey,
   isAcceptableValueHistoryInstant,
   isRetryableHistoryFetchError,
@@ -19,6 +23,9 @@ import {
   rankedPlayersFromFantasyCalcRows,
   resolveFantasyCalcSnapshotFormatKey,
   utcDateKey,
+  VALUE_HISTORY_DAILY_RETENTION_DAYS,
+  VALUE_HISTORY_TIME_ZONE,
+  zonedDateKey,
   DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY,
   VALUE_HISTORY_BACKFILL_CONCURRENCY,
   VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
@@ -52,7 +59,39 @@ describe("utcDateKey", () => {
   });
 });
 
+describe("zonedDateKey / addDateKeyDays", () => {
+  it("uses America/Los_Angeles for daily snapshot dates", () => {
+    expect(VALUE_HISTORY_TIME_ZONE).toBe("America/Los_Angeles");
+    // Evening Pacific is already the next UTC day — must stay on Pacific date.
+    expect(zonedDateKey(new Date("2026-10-14T06:30:00.000Z"))).toBe("2026-10-13");
+    expect(utcDateKey(new Date("2026-10-14T06:30:00.000Z"))).toBe("2026-10-14");
+    expect(zonedDateKey(new Date("2026-10-13T20:00:00.000Z"))).toBe("2026-10-13");
+  });
+
+  it("adds calendar days to a YYYY-MM-DD key", () => {
+    expect(addDateKeyDays("2026-10-13", -90)).toBe("2026-07-15");
+    expect(addDateKeyDays("2026-01-01", 1)).toBe("2026-01-02");
+  });
+});
+
+describe("kept snapshot formats", () => {
+  it("only snapshots formats used by linked Sleeper leagues", () => {
+    expect([...FANTASY_CALC_SNAPSHOT_FORMAT_KEYS].sort()).toEqual([
+      "dynasty-1qb-10t-0.5ppr",
+      "dynasty-1qb-12t-1ppr",
+      "dynasty-2qb-12t-1ppr",
+      "dynasty-2qb-14t-1ppr",
+      "redraft-1qb-10t-0.5ppr",
+      "redraft-1qb-12t-0.5ppr",
+    ]);
+    expect(FANTASY_CALC_SNAPSHOT_PRESETS).toHaveLength(6);
+    expect(VALUE_HISTORY_DAILY_RETENTION_DAYS).toBe(90);
+    expect(FANTASY_CALC_SNAPSHOT_FORMAT_KEYS).toContain(DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY);
+  });
+});
+
 describe("isAcceptableValueHistoryInstant / isAcceptableSnapshotDateKey", () => {
+  // 12:00 UTC on Oct 13 is still Oct 13 in Pacific.
   const now = new Date("2026-10-13T12:00:00.000Z");
 
   it("accepts dates on/after 2015-01-01 and within one day ahead", () => {
@@ -63,15 +102,26 @@ describe("isAcceptableValueHistoryInstant / isAcceptableSnapshotDateKey", () => 
     expect(isAcceptableSnapshotDateKey(VALUE_HISTORY_MIN_SNAPSHOT_DATE, now)).toBe(true);
   });
 
-  it("rejects invalid, pre-2015, and >1 day future instants", () => {
+  it("rejects invalid, pre-2015, and Pacific-future snapshot dates", () => {
     expect(isAcceptableValueHistoryInstant(new Date(Number.NaN), now)).toBe(false);
     expect(isAcceptableValueHistoryInstant(new Date("2014-12-31T00:00:00.000Z"), now)).toBe(false);
     expect(isAcceptableValueHistoryInstant(new Date("2026-10-14T12:00:01.000Z"), now)).toBe(false);
     expect(isAcceptableValueHistoryInstant(new Date(Date.UTC(12600, 0, 7)), now)).toBe(false);
     expect(isAcceptableSnapshotDateKey("2014-12-31", now)).toBe(false);
+    // UTC "tomorrow" while Pacific is still today must be rejected.
+    expect(isAcceptableSnapshotDateKey("2026-10-14", now)).toBe(false);
     expect(isAcceptableSnapshotDateKey("2026-10-15", now)).toBe(false);
     expect(isAcceptableSnapshotDateKey("not-a-date", now)).toBe(false);
     expect(isAcceptableSnapshotDateKey("2026-02-31", now)).toBe(false);
+  });
+});
+
+describe("isAbsentPlayerHistoryError", () => {
+  it("treats 404/204 as absent (skip), not hard failure", () => {
+    expect(isAbsentPlayerHistoryError(new Error("Source returned 404"))).toBe(true);
+    expect(isAbsentPlayerHistoryError(new Error("Source returned 204"))).toBe(true);
+    expect(isAbsentPlayerHistoryError(new Error("Source returned 500"))).toBe(false);
+    expect(isAbsentPlayerHistoryError(new Error("network down"))).toBe(false);
   });
 });
 
@@ -415,7 +465,8 @@ describe("compactPlayerValueSnapshot", () => {
 });
 
 describe("dailySnapshotRowsFromPreset", () => {
-  it("maps ranked FantasyCalc rows for one UTC day", () => {
+  it("maps ranked FantasyCalc rows for one Pacific day", () => {
+    // 18:30 UTC on Oct 12 is still Oct 12 in Pacific.
     const asOf = new Date("2026-10-12T18:30:00.000Z");
     const rows: FantasyCalcRow[] = [
       {
@@ -446,7 +497,17 @@ describe("dailySnapshotRowsFromPreset", () => {
       ],
       skipped: 0,
     });
-    expect(utcDateKey(asOf)).toBe("2026-10-12");
+    expect(zonedDateKey(asOf)).toBe("2026-10-12");
+  });
+
+  it("uses Pacific date when UTC has already rolled to tomorrow", () => {
+    const asOf = new Date("2026-10-14T06:30:00.000Z"); // 11:30pm PT on Oct 13
+    const rows: FantasyCalcRow[] = [
+      { player: { id: 1, sleeperId: "9221", name: "Jahmyr Gibbs", position: "RB" }, value: 10511 },
+    ];
+    const built = dailySnapshotRowsFromPreset("redraft-1qb-12t-0.5ppr", rows, asOf);
+    expect(built.rows[0]?.snapshotDate).toBe("2026-10-13");
+    expect(utcDateKey(asOf)).toBe("2026-10-14");
   });
 
   it("skips the whole preset when asOf is outside the accepted window", () => {
@@ -531,9 +592,10 @@ describe("resolveFantasyCalcSnapshotFormatKey", () => {
     expect(resolveFantasyCalcSnapshotFormatKey("dynasty-2qb-12t-1ppr")).toBe("dynasty-2qb-12t-1ppr");
   });
 
-  it("maps nearby non-preset keys to the nearest snapshot preset", () => {
+  it("maps nearby non-preset keys to the nearest kept snapshot preset", () => {
     expect(resolveFantasyCalcSnapshotFormatKey("redraft-1qb-12t-0ppr")).toBe("redraft-1qb-12t-0.5ppr");
-    expect(resolveFantasyCalcSnapshotFormatKey("redraft-1qb-11t-1ppr")).toBe("redraft-1qb-12t-1ppr");
+    // Full-PPR 11-team redraft maps to nearest kept 1QB redraft (10t half-PPR ties on distance, sorts first).
+    expect(resolveFantasyCalcSnapshotFormatKey("redraft-1qb-11t-1ppr")).toBe("redraft-1qb-10t-0.5ppr");
   });
 
   it("falls back to the default preset for unparseable keys", () => {

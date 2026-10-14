@@ -73,7 +73,7 @@ import { rankingsForLeagueFormats } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
 import { selectProjectionFeed } from "./projection-fallback.js";
-import { appendDailyValueSnapshots } from "./player-value-history.js";
+import { appendDailyValueSnapshots, prunePlayerValueSnapshots } from "./player-value-history.js";
 import {
   applySnapSharesToRows,
   enrichOpportunityMetrics,
@@ -969,6 +969,7 @@ export async function refreshFantasyCalcCache(): Promise<{
   asOf: string;
   valueSnapshots: number;
   skipped: number;
+  pruned: number;
 }> {
   const presets: Record<string, FantasyCalcRow[]> = {};
   let failed = 0;
@@ -1006,9 +1007,10 @@ export async function refreshFantasyCalcCache(): Promise<{
       set: { payload, fetchedAt },
     });
   rememberFantasyCalcPresets(presets, fetchedAt, fetchedAt.getTime());
-  // Append today's market values for every fetched preset so value history
-  // covers the full ranked universe, not only players opened in the UI.
+  // Append today's values only for kept snapshot formats (subset of rankings
+  // presets). Then prune future-dated / unused-format / >90d daily rows.
   const snapshots = await appendDailyValueSnapshots(presets, fetchedAt);
+  const pruned = await prunePlayerValueSnapshots(fetchedAt);
   return {
     presets: Object.keys(presets).length,
     rows: rowCount,
@@ -1016,6 +1018,7 @@ export async function refreshFantasyCalcCache(): Promise<{
     asOf: fetchedAt.toISOString(),
     valueSnapshots: snapshots.rows,
     skipped: snapshots.skipped,
+    pruned: pruned.deleted,
   };
 }
 

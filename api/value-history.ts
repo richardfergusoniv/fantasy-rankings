@@ -9,13 +9,13 @@ import {
 } from "./_lib/api-utils.js";
 import { resolveSleeperUserId } from "./_lib/auth.js";
 import {
+  addDateKeyDays,
   FANTASY_CALC_SNAPSHOT_PRESETS,
   fantasyCalcHistoryUrl,
   historySnapshotRowsFromPoints,
   resolveFantasyCalcSnapshotFormatKey,
-  startOfUtcDay,
   upsertPlayerValueSnapshots,
-  utcDateKey,
+  zonedDateKey,
   VALUE_HISTORY_CHART_MIN_DATE,
 } from "./_lib/player-value-history.js";
 import {
@@ -32,8 +32,8 @@ import {
  * the FantasyCalc API when the stored snapshots are stale (> 1 day old).
  *
  * Requires a signed-in user with a linked Sleeper account. Responses are
- * cached in-process for the UTC day and sent with private HTTP cache headers
- * (values update once daily).
+ * cached in-process for the Pacific calendar day and sent with private HTTP
+ * cache headers (values update once daily).
  *
  * Query params:
  * - formatKey (required): league season-long format key; mapped to the nearest
@@ -63,16 +63,17 @@ type CacheEntry = {
   body: ValueHistory;
 };
 
-/** In-process cache; keyed per UTC day so daily value refreshes invalidate. */
+/** In-process cache; keyed per Pacific day so daily value refreshes invalidate. */
 const valueHistoryCache = new Map<string, CacheEntry>();
 const VALUE_HISTORY_CACHE_MAX_ENTRIES = 500;
 
 const VALUE_HISTORY_HTTP_CACHE_SECONDS = 60 * 60; // 1 hour
 
-function endOfUtcDayMs(now: Date): number {
-  const end = startOfUtcDay(now);
-  end.setUTCDate(end.getUTCDate() + 1);
-  return end.getTime();
+/** Rough end of the current Pacific calendar day (UTC+14 covers PT year-round). */
+function endOfPacificDayMs(now: Date): number {
+  const today = zonedDateKey(now);
+  const nextDay = addDateKeyDays(today, 1);
+  return Date.parse(`${nextDay}T14:00:00.000Z`);
 }
 
 function cacheKeyFor(formatKey: string, playerIds: string[], dayKey: string): string {
@@ -114,16 +115,14 @@ export async function GET(req: Request): Promise<Response> {
     const formatKey = resolveFantasyCalcSnapshotFormatKey(parsed.data.formatKey);
 
     const now = new Date();
-    const dayKey = utcDateKey(startOfUtcDay(now));
+    const dayKey = zonedDateKey(now);
     const cacheKey = cacheKeyFor(formatKey, playerIds, dayKey);
     const cached = valueHistoryCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
       return cachedResponse(cached.body);
     }
 
-    const yesterdayDate = startOfUtcDay(now);
-    yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
-    const yesterday = utcDateKey(yesterdayDate);
+    const yesterday = addDateKeyDays(dayKey, -1);
     const latestSnapshotRows = await db
       .select({
         playerId: schema.playerValueSnapshots.playerId,
@@ -148,14 +147,13 @@ export async function GET(req: Request): Promise<Response> {
     if (preset && !hasFreshSnapshots) {
       try {
         const currentRows = await fetchJson<FantasyCalcRow[]>(preset.url);
+        // Only players present in this format's current values — others are absent, not failed.
         const selected = currentRows.filter(
           (row) => row.player?.sleeperId
             && playerIds.includes(row.player.sleeperId)
             && typeof row.player.id === "number",
         );
-        const cutoff = startOfUtcDay(now);
-        cutoff.setUTCDate(cutoff.getUTCDate() - 29);
-        const minSnapshotDate = utcDateKey(cutoff);
+        const minSnapshotDate = addDateKeyDays(dayKey, -29);
         const historyResults = await Promise.allSettled(selected.map(async (row) => {
           const playerId = row.player?.sleeperId;
           const fantasyCalcId = row.player?.id;
@@ -222,7 +220,7 @@ export async function GET(req: Request): Promise<Response> {
       }),
     });
 
-    setValueHistoryCache(cacheKey, { body, expiresAt: endOfUtcDayMs(now) });
+    setValueHistoryCache(cacheKey, { body, expiresAt: endOfPacificDayMs(now) });
     return cachedResponse(body);
   } catch (err) {
     return internalError(err);

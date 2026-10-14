@@ -36,8 +36,8 @@ import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
  *   refresh so the snapshot lands on the freshest inputs.
  * - refresh-fantasycalc: refreshes the daily FantasyCalc preset cache that
  *   dashboard builds read instead of hitting the FantasyCalc API 12x each,
- *   and appends today's values into `player_value_snapshots` for every
- *   ranked player in each fetched preset.
+ *   appends today's Pacific-dated values into `player_value_snapshots` for
+ *   kept league formats, then prunes future / unused-format / >90d daily rows.
  * - read-dashboard-snapshot: returns the stored snapshot for the props
  *   verifier. It is not a public read; the cron secret is required, and the
  *   body is the same dashboard the rebuild just wrote.

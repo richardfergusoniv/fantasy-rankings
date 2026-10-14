@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   addUtcDateKey,
   calendarMovingAverage,
+  dailyPointsForIndicators,
   dampenedDriftFactor,
   dampenedTrendCone,
   dailyChangeStdDev,
   linearSlope,
   movingAverage,
+  trailingConsecutiveDailyPoints,
   TREND_CONE_PHI,
   TREND_CONE_Z,
 } from "./value-chart-math.js";
@@ -51,6 +53,27 @@ describe("calendarMovingAverage", () => {
       { date: "2026-01-07", value: 22 },
     ];
     expect(calendarMovingAverage(points, 3)).toEqual([null, null, 12, null, null, 20]);
+  });
+});
+
+describe("trailingConsecutiveDailyPoints / dailyPointsForIndicators", () => {
+  it("drops weekly-downsampled history before the daily run", () => {
+    const points = [
+      { date: "2026-01-06", value: 10 }, // Monday (weekly)
+      { date: "2026-01-13", value: 12 }, // Monday (weekly)
+      { date: "2026-01-20", value: 14 },
+      { date: "2026-01-21", value: 15 },
+      { date: "2026-01-22", value: 16 },
+    ];
+    expect(trailingConsecutiveDailyPoints(points).map((point) => point.date)).toEqual([
+      "2026-01-20",
+      "2026-01-21",
+      "2026-01-22",
+    ]);
+    expect(dailyPointsForIndicators(points, 2).map((point) => point.date)).toEqual([
+      "2026-01-21",
+      "2026-01-22",
+    ]);
   });
 });
 

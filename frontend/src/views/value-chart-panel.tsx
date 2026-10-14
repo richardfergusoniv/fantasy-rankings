@@ -13,6 +13,7 @@ import {
 import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import {
   calendarMovingAverage,
+  dailyPointsForIndicators,
   dampenedTrendCone,
   type ValueChartPoint,
 } from "../../../api/_lib/value-chart-math";
@@ -91,10 +92,15 @@ function buildChartRows(
   primary: ValueChartPoint[],
   compare: ValueChartPoint[] | null,
 ): ChartRow[] {
-  const ma7 = calendarMovingAverage(primary, 7);
-  const ma30 = calendarMovingAverage(primary, 30);
+  // Plot the full series (including weekly-downsampled older points), but compute
+  // MAs / trend cone only on the trailing consecutive daily section.
+  const daily = dailyPointsForIndicators(primary);
+  const ma7 = calendarMovingAverage(daily, 7);
+  const ma30 = calendarMovingAverage(daily, 30);
+  const ma7ByDate = new Map(daily.map((point, index) => [point.date, ma7[index] ?? null]));
+  const ma30ByDate = new Map(daily.map((point, index) => [point.date, ma30[index] ?? null]));
   const compareByDate = new Map((compare ?? []).map((point) => [point.date, point.value]));
-  const cone = dampenedTrendCone(primary);
+  const cone = dampenedTrendCone(daily);
   const coneByDate = new Map(cone.map((point) => [point.date, point]));
 
   const dates = new Set<string>();
@@ -102,15 +108,14 @@ function buildChartRows(
   for (const point of compare ?? []) dates.add(point.date);
   for (const point of cone) dates.add(point.date);
 
-  const primaryByDate = new Map(primary.map((point, index) => [point.date, index]));
+  const primaryByDate = new Map(primary.map((point) => [point.date, point.value]));
   return [...dates].sort().map((date) => {
-    const primaryIndex = primaryByDate.get(date);
     const conePoint = coneByDate.get(date);
     return {
       date,
-      value: primaryIndex === undefined ? null : primary[primaryIndex]?.value ?? null,
-      ma7: primaryIndex === undefined ? null : ma7[primaryIndex] ?? null,
-      ma30: primaryIndex === undefined ? null : ma30[primaryIndex] ?? null,
+      value: primaryByDate.get(date) ?? null,
+      ma7: ma7ByDate.get(date) ?? null,
+      ma30: ma30ByDate.get(date) ?? null,
       compare: compareByDate.get(date) ?? null,
       trendCenter: conePoint?.center ?? null,
       trendBand: conePoint ? [conePoint.low, conePoint.high] : null,
