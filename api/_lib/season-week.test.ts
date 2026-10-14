@@ -18,9 +18,9 @@ describe("isNflValueHistoryInSeason", () => {
     expect(isNflValueHistoryInSeason("post")).toBe(true);
   });
 
-  it("treats the NFL offseason (and unknown types) as out of season", () => {
+  it("treats only the NFL offseason as out of season", () => {
     expect(isNflValueHistoryInSeason("off")).toBe(false);
-    expect(isNflValueHistoryInSeason("")).toBe(false);
-    expect(isNflValueHistoryInSeason("unknown")).toBe(false);
+    expect(isNflValueHistoryInSeason("")).toBe(true);
+    expect(isNflValueHistoryInSeason("unknown")).toBe(true);
   });
 });
