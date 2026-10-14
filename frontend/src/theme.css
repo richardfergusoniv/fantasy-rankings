@@ -584,13 +584,13 @@ main { padding: 12px 16px 0; }
   border-radius: var(--radius);
 }
 .monitor-expanded-chart {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   position: relative;
   width: 100%;
   min-width: 0;
   height: min(70dvh, 560px);
-  gap: 0;
+  align-content: stretch;
 }
 .monitor-expanded-chart .scatter-chart-shell,
 .monitor-expanded-chart .scatter-frame,
@@ -2835,9 +2835,9 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
     padding: 8px 12px max(12px, env(safe-area-inset-bottom));
   }
   .monitor-chart-expand-card .monitor-expanded-chart {
-    display: flex;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
     flex: 1 1 auto;
-    flex-direction: column;
     min-height: 0;
     height: 100%;
   }
