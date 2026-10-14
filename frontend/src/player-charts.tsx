@@ -1,9 +1,14 @@
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import type { TradeAsset, ValueHistorySeries } from "./dashboard-types";
+import {
+  continuousStartAmongValueSeries,
+  sliceValueHistoryFromDate,
+  trimValueHistoryToContinuousStart,
+} from "./value-history-domain";
 
 export function PlayerValueTrend({ name, history, isLoading }: { name: string; history: ValueHistorySeries | undefined; isLoading: boolean }) {
-  const points = history?.points ?? [];
+  const points = trimValueHistoryToContinuousStart(history?.points ?? []);
   const first = points[0];
   const last = points[points.length - 1];
   const change = first && last && points.length > 1 ? last.value - first.value : null;
@@ -61,8 +66,28 @@ export function AggregateTradeHistory({
   const playerSide = (assets: TradeAsset[]) => assets.filter((asset) => asset.position !== "PICK");
   const givePlayers = playerSide(give);
   const getPlayers = playerSide(get);
-  const dates = [...new Set([...givePlayers, ...getPlayers].flatMap((asset) => historyByPlayerId.get(asset.playerId)?.points.map((point) => point.date) ?? []))].sort();
-  const pointMap = new Map([...historyByPlayerId.entries()].map(([id, series]) => [id, new Map(series.points.map((point) => [point.date, point.value]))]));
+  // Per-player continuous trim, then a shared start across plotted players so
+  // one isolated early point cannot pad empty months on the x-axis.
+  const trimmedPointsByPlayerId = new Map(
+    [...historyByPlayerId.entries()].map(([id, series]) => [
+      id,
+      trimValueHistoryToContinuousStart(series.points),
+    ]),
+  );
+  const plottedTrimmedSeries = [...givePlayers, ...getPlayers].flatMap((asset) => {
+    const points = trimmedPointsByPlayerId.get(asset.playerId);
+    return points?.length ? [points] : [];
+  });
+  const startDate = continuousStartAmongValueSeries(plottedTrimmedSeries);
+  const dates = [...new Set(
+    plottedTrimmedSeries.flatMap((points) => sliceValueHistoryFromDate(points, startDate).map((point) => point.date)),
+  )].sort();
+  const pointMap = new Map(
+    [...trimmedPointsByPlayerId.entries()].map(([id, points]) => [
+      id,
+      new Map(sliceValueHistoryFromDate(points, startDate).map((point) => [point.date, point.value])),
+    ]),
+  );
   const totalOn = (assets: TradeAsset[], date: string): number | null => {
     if (assets.length === 0) return null;
     const values = assets.map((asset) => pointMap.get(asset.playerId)?.get(date));
