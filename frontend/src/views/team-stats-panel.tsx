@@ -80,12 +80,16 @@ export function TeamStatsPanel({
   const dataQuery = useQuery({
     queryKey: ["nflverse-team-week-stats", season],
     queryFn: async () => {
-      const [statsCsv, snapsCsv] = await Promise.all([
+      const [statsResult, snapsResult] = await Promise.allSettled([
         fetchText(nflversePlayerWeekStatsUrl(season)),
         fetchText(nflverseSnapCountsUrl(season)),
       ]);
-      const stats = parsePlayerWeekStatsCsv(statsCsv);
-      const snaps = parseTeamWeekSnapCountsCsv(snapsCsv);
+      const stats = statsResult.status === "fulfilled"
+        ? parsePlayerWeekStatsCsv(statsResult.value)
+        : [];
+      const snaps = snapsResult.status === "fulfilled"
+        ? parseTeamWeekSnapCountsCsv(snapsResult.value)
+        : [];
       if (stats.length === 0 && snaps.length === 0) {
         throw new Error("team stats parse failed");
       }
