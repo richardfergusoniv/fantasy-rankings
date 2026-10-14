@@ -1,5 +1,6 @@
-import { sql } from "drizzle-orm";
+import { and, desc, inArray, sql } from "drizzle-orm";
 import { db, schema } from "./db.js";
+import { isNflValueHistoryInSeason } from "./season-week.js";
 import {
   FANTASY_CALC_HISTORY_URL,
   FANTASY_CALC_VALUES_URL,
@@ -8,6 +9,7 @@ import {
   type FantasyCalcRow,
   type SeasonLongFormat,
 } from "./sleeper.js";
+import { readNflState } from "./user-leagues.js";
 
 /**
  * FantasyCalc value-history snapshots: daily append during the
@@ -16,6 +18,11 @@ import {
  * Rows stay compact — one PK row per (date, format, player) with rounded
  * market value and the name/position needed by the chart API. Writes are
  * idempotent upserts; callers should avoid large snapshot reads.
+ *
+ * Redraft formats (`format_key` starting with `redraft`) skip unchanged
+ * player rows during the NFL offseason (Sleeper `season_type === "off"`) to
+ * cut Supabase write/egress. In-season (`pre` | `regular` | `post`) and all
+ * dynasty formats still append every day.
  */
 
 export const FANTASY_CALC_SNAPSHOT_PRESETS: Array<{ format: SeasonLongFormat; url: string }> = [
@@ -571,16 +578,105 @@ async function mapPool<T, R>(
   return results;
 }
 
+/** True when `format_key` is a FantasyCalc redraft (non-dynasty) preset. */
+export function isRedraftFormatKey(formatKey: string): boolean {
+  return formatKey.startsWith("redraft");
+}
+
+/** Map key for the most-recent value lookup: `formatKey` + player. */
+export function priorSnapshotValueKey(formatKey: string, playerId: string): string {
+  return `${formatKey}\0${playerId}`;
+}
+
+/**
+ * During the NFL offseason, drop redraft rows whose rounded value matches the
+ * player's most recent stored value for that format. Dynasty rows and players
+ * with no prior snapshot always pass through. Call only when offseason.
+ */
+export function filterUnchangedRedraftSnapshots(
+  rows: PlayerValueSnapshotRow[],
+  priorValuesByFormatPlayer: ReadonlyMap<string, number>,
+): { rows: PlayerValueSnapshotRow[]; unchangedSkipped: number } {
+  const kept: PlayerValueSnapshotRow[] = [];
+  let unchangedSkipped = 0;
+  for (const row of rows) {
+    if (!isRedraftFormatKey(row.formatKey)) {
+      kept.push(row);
+      continue;
+    }
+    const prior = priorValuesByFormatPlayer.get(priorSnapshotValueKey(row.formatKey, row.playerId));
+    if (prior != null && prior === row.value) {
+      unchangedSkipped += 1;
+      continue;
+    }
+    kept.push(row);
+  }
+  return { rows: kept, unchangedSkipped };
+}
+
+/**
+ * One batched DISTINCT ON query for the latest value per (format_key, player_id).
+ * Returns only those three columns to keep Supabase egress small.
+ */
+export async function fetchLatestSnapshotValues(
+  formatKeys: string[],
+  playerIds: string[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (formatKeys.length === 0 || playerIds.length === 0) return out;
+  const rows = await db
+    .selectDistinctOn(
+      [schema.playerValueSnapshots.formatKey, schema.playerValueSnapshots.playerId],
+      {
+        formatKey: schema.playerValueSnapshots.formatKey,
+        playerId: schema.playerValueSnapshots.playerId,
+        value: schema.playerValueSnapshots.value,
+      },
+    )
+    .from(schema.playerValueSnapshots)
+    .where(and(
+      inArray(schema.playerValueSnapshots.formatKey, formatKeys),
+      inArray(schema.playerValueSnapshots.playerId, playerIds),
+    ))
+    .orderBy(
+      schema.playerValueSnapshots.formatKey,
+      schema.playerValueSnapshots.playerId,
+      desc(schema.playerValueSnapshots.snapshotDate),
+    );
+  for (const row of rows) {
+    out.set(priorSnapshotValueKey(row.formatKey, row.playerId), row.value);
+  }
+  return out;
+}
+
+async function defaultReadNflSeasonType(): Promise<string> {
+  const state = await readNflState();
+  return state.seasonType;
+}
+
+export type AppendDailyValueSnapshotsOptions = {
+  /** Override Sleeper NFL `season_type` (tests). Defaults to `readNflState`. */
+  readSeasonType?: () => Promise<string>;
+  /** Override prior-value lookup (tests). Defaults to one batched DISTINCT ON. */
+  fetchLatestValues?: (formatKeys: string[], playerIds: string[]) => Promise<Map<string, number>>;
+  /** Override upsert (tests). Defaults to `upsertPlayerValueSnapshots`. */
+  upsertRows?: (rows: PlayerValueSnapshotRow[]) => Promise<number>;
+};
+
 /**
  * Write today's compact market rows for every successfully fetched preset.
  * Idempotent for the same America/Los_Angeles calendar date via PK upsert.
+ *
+ * Offseason redraft: skip player rows unchanged vs their most recent stored
+ * value (one batched prior-value query). In-season and dynasty: save daily.
  */
 export async function appendDailyValueSnapshots(
   presets: Record<string, FantasyCalcRow[]>,
   asOf: Date = new Date(),
-): Promise<{ formats: number; rows: number; skipped: number }> {
+  options: AppendDailyValueSnapshotsOptions = {},
+): Promise<{ formats: number; rows: number; skipped: number; unchangedSkipped: number }> {
   let skipped = 0;
-  const rows: PlayerValueSnapshotRow[] = [];
+  let rows: PlayerValueSnapshotRow[] = [];
   for (const [formatKey, presetRows] of Object.entries(presets)) {
     const built = dailySnapshotRowsFromPreset(formatKey, presetRows, asOf, asOf);
     rows.push(...built.rows);
@@ -591,8 +687,43 @@ export async function appendDailyValueSnapshots(
       );
     }
   }
-  const written = await upsertPlayerValueSnapshots(rows);
-  return { formats: Object.keys(presets).length, rows: written, skipped };
+
+  let unchangedSkipped = 0;
+  const readSeasonType = options.readSeasonType ?? defaultReadNflSeasonType;
+  let seasonType = "";
+  try {
+    seasonType = await readSeasonType();
+  } catch (err) {
+    // Fail open: keep dense daily writes if NFL state is unavailable.
+    console.error(
+      `[player-value-history] NFL state unavailable; keeping dense daily snapshots: ${
+        err instanceof Error ? err.message : "unknown error"
+      }`,
+    );
+    seasonType = "regular";
+  }
+
+  if (!isNflValueHistoryInSeason(seasonType)) {
+    const redraftRows = rows.filter((row) => isRedraftFormatKey(row.formatKey));
+    if (redraftRows.length > 0) {
+      const formatKeys = [...new Set(redraftRows.map((row) => row.formatKey))];
+      const playerIds = [...new Set(redraftRows.map((row) => row.playerId))];
+      const fetchLatestValues = options.fetchLatestValues ?? fetchLatestSnapshotValues;
+      const priorValues = await fetchLatestValues(formatKeys, playerIds);
+      const filtered = filterUnchangedRedraftSnapshots(rows, priorValues);
+      rows = filtered.rows;
+      unchangedSkipped = filtered.unchangedSkipped;
+      if (unchangedSkipped > 0) {
+        console.info(
+          `[player-value-history] offseason redraft unchanged skipped=${unchangedSkipped} formats=${formatKeys.length} players=${playerIds.length}`,
+        );
+      }
+    }
+  }
+
+  const upsertRows = options.upsertRows ?? upsertPlayerValueSnapshots;
+  const written = await upsertRows(rows);
+  return { formats: Object.keys(presets).length, rows: written, skipped, unchangedSkipped };
 }
 
 function clampBackfillLimit(raw: number | undefined): number {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  appendDailyValueSnapshots,
   chunkPlayerValueSnapshots,
   coerceFiniteNumber,
   compactPlayerValueSnapshot,
@@ -8,15 +9,18 @@ import {
   dedupePlayerValueSnapshotsById,
   fantasyCalcHistoryUrl,
   fetchValidatedFantasyCalcHistory,
+  filterUnchangedRedraftSnapshots,
   formatDbError,
   historySnapshotRowsFromPoints,
   isAcceptableSnapshotDateKey,
   isAcceptableValueHistoryInstant,
+  isRedraftFormatKey,
   isRetryableHistoryFetchError,
   isValidFantasyCalcHistorySequence,
   parseFantasyCalcHistoryDate,
   pacificDateKey,
   playerValueSnapshotId,
+  priorSnapshotValueKey,
   rankedPlayersFromFantasyCalcRows,
   resolveFantasyCalcSnapshotFormatKey,
   utcDateKey,
@@ -721,5 +725,168 @@ describe("formatDbError", () => {
     expect(formatDbError(wrapped)).not.toContain("Failed query");
     expect(formatDbError(wrapped)).not.toContain("player_value_snapshots");
     expect(formatDbError(new Error("Failed query: insert into x"))).toBe("unknown database error");
+  });
+});
+
+describe("isRedraftFormatKey / filterUnchangedRedraftSnapshots", () => {
+  const asOf = new Date("2026-03-15T18:00:00.000Z");
+
+  function row(
+    formatKey: string,
+    playerId: string,
+    value: number,
+  ): PlayerValueSnapshotRow {
+    return {
+      id: playerValueSnapshotId("2026-03-15", formatKey, playerId),
+      snapshotDate: "2026-03-15",
+      formatKey,
+      playerId,
+      playerName: playerId,
+      position: "RB",
+      value,
+      capturedAt: asOf,
+    };
+  }
+
+  it("detects redraft format keys by prefix", () => {
+    expect(isRedraftFormatKey("redraft-1qb-12t-0.5ppr")).toBe(true);
+    expect(isRedraftFormatKey("redraft")).toBe(true);
+    expect(isRedraftFormatKey("dynasty-2qb-12t-1ppr")).toBe(false);
+    expect(isRedraftFormatKey("startup-1qb-12t-1ppr")).toBe(false);
+  });
+
+  it("skips unchanged redraft values and keeps dynasty / changed / new players", () => {
+    const prior = new Map<string, number>([
+      [priorSnapshotValueKey("redraft-1qb-12t-0.5ppr", "a"), 100],
+      [priorSnapshotValueKey("redraft-1qb-12t-0.5ppr", "b"), 200],
+      [priorSnapshotValueKey("dynasty-2qb-12t-1ppr", "a"), 5000],
+    ]);
+    const filtered = filterUnchangedRedraftSnapshots(
+      [
+        row("redraft-1qb-12t-0.5ppr", "a", 100), // unchanged → skip
+        row("redraft-1qb-12t-0.5ppr", "b", 210), // changed → keep
+        row("redraft-1qb-12t-0.5ppr", "c", 50), // no prior → keep
+        row("dynasty-2qb-12t-1ppr", "a", 5000), // dynasty unchanged → keep
+      ],
+      prior,
+    );
+    expect(filtered.unchangedSkipped).toBe(1);
+    expect(filtered.rows.map((item) => `${item.formatKey}:${item.playerId}:${item.value}`)).toEqual([
+      "redraft-1qb-12t-0.5ppr:b:210",
+      "redraft-1qb-12t-0.5ppr:c:50",
+      "dynasty-2qb-12t-1ppr:a:5000",
+    ]);
+  });
+});
+
+describe("appendDailyValueSnapshots offseason redraft dedupe", () => {
+  const asOf = new Date("2026-03-15T18:00:00.000Z");
+  const redraftKey = "redraft-1qb-12t-0.5ppr";
+  const dynastyKey = "dynasty-2qb-12t-1ppr";
+
+  function fantasyRow(sleeperId: string, value: number): FantasyCalcRow {
+    return {
+      player: { id: Number(sleeperId), sleeperId, name: sleeperId, position: "RB" },
+      value,
+    };
+  }
+
+  it("during offseason skips unchanged redraft rows via one batched prior fetch", async () => {
+    const fetchLatestValues = vi.fn().mockResolvedValue(
+      new Map([
+        [priorSnapshotValueKey(redraftKey, "1"), 100],
+        [priorSnapshotValueKey(redraftKey, "2"), 200],
+      ]),
+    );
+    const upsertRows = vi.fn().mockImplementation(async (rows: PlayerValueSnapshotRow[]) => rows.length);
+
+    const result = await appendDailyValueSnapshots(
+      {
+        [redraftKey]: [fantasyRow("1", 100), fantasyRow("2", 250), fantasyRow("3", 30)],
+        [dynastyKey]: [fantasyRow("1", 9000)],
+      },
+      asOf,
+      {
+        readSeasonType: async () => "off",
+        fetchLatestValues,
+        upsertRows,
+      },
+    );
+
+    expect(fetchLatestValues).toHaveBeenCalledTimes(1);
+    expect(fetchLatestValues).toHaveBeenCalledWith(
+      [redraftKey],
+      expect.arrayContaining(["1", "2", "3"]),
+    );
+    const written = upsertRows.mock.calls[0]?.[0] as PlayerValueSnapshotRow[];
+    expect(written.map((row) => `${row.formatKey}:${row.playerId}:${row.value}`).sort()).toEqual([
+      `${dynastyKey}:1:9000`,
+      `${redraftKey}:2:250`,
+      `${redraftKey}:3:30`,
+    ]);
+    expect(result.unchangedSkipped).toBe(1);
+    expect(result.rows).toBe(3);
+  });
+
+  it("during the season saves every redraft row even when unchanged", async () => {
+    const fetchLatestValues = vi.fn();
+    const upsertRows = vi.fn().mockImplementation(async (rows: PlayerValueSnapshotRow[]) => rows.length);
+
+    const result = await appendDailyValueSnapshots(
+      {
+        [redraftKey]: [fantasyRow("1", 100)],
+      },
+      asOf,
+      {
+        readSeasonType: async () => "regular",
+        fetchLatestValues,
+        upsertRows,
+      },
+    );
+
+    expect(fetchLatestValues).not.toHaveBeenCalled();
+    expect(result.unchangedSkipped).toBe(0);
+    expect(result.rows).toBe(1);
+    expect(upsertRows.mock.calls[0]?.[0]).toHaveLength(1);
+  });
+
+  it("keeps dense writes when NFL state lookup fails", async () => {
+    const fetchLatestValues = vi.fn();
+    const upsertRows = vi.fn().mockImplementation(async (rows: PlayerValueSnapshotRow[]) => rows.length);
+
+    const result = await appendDailyValueSnapshots(
+      { [redraftKey]: [fantasyRow("1", 100)] },
+      asOf,
+      {
+        readSeasonType: async () => {
+          throw new Error("Sleeper NFL state is unavailable");
+        },
+        fetchLatestValues,
+        upsertRows,
+      },
+    );
+
+    expect(fetchLatestValues).not.toHaveBeenCalled();
+    expect(result.unchangedSkipped).toBe(0);
+    expect(result.rows).toBe(1);
+  });
+
+  it("never dedupes dynasty-only batches in the offseason", async () => {
+    const fetchLatestValues = vi.fn();
+    const upsertRows = vi.fn().mockImplementation(async (rows: PlayerValueSnapshotRow[]) => rows.length);
+
+    const result = await appendDailyValueSnapshots(
+      { [dynastyKey]: [fantasyRow("1", 9000), fantasyRow("2", 8000)] },
+      asOf,
+      {
+        readSeasonType: async () => "off",
+        fetchLatestValues,
+        upsertRows,
+      },
+    );
+
+    expect(fetchLatestValues).not.toHaveBeenCalled();
+    expect(result.unchangedSkipped).toBe(0);
+    expect(result.rows).toBe(2);
   });
 });

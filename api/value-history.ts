@@ -12,24 +12,30 @@ import {
   FANTASY_CALC_SNAPSHOT_PRESETS,
   fantasyCalcHistoryUrl,
   historySnapshotRowsFromPoints,
+  isRedraftFormatKey,
   resolveFantasyCalcSnapshotFormatKey,
   startOfUtcDay,
   upsertPlayerValueSnapshots,
   utcDateKey,
   VALUE_HISTORY_CHART_MIN_DATE,
 } from "./_lib/player-value-history.js";
+import { isNflValueHistoryInSeason } from "./_lib/season-week.js";
 import {
   fetchJson,
   type FantasyCalcHistoryResponse,
   type FantasyCalcRow,
 } from "./_lib/sleeper.js";
+import { readNflState } from "./_lib/user-leagues.js";
 
 /**
  * GET /api/value-history?formatKey=&playerIds=a,b,c
  *
  * Replaces `getValueHistory`. Returns FantasyCalc value time series per
  * player from `VALUE_HISTORY_CHART_MIN_DATE` through today, backfilling from
- * the FantasyCalc API when the stored snapshots are stale (> 1 day old).
+ * the FantasyCalc API when the stored snapshots are stale. In-season (and
+ * dynasty year-round) stale means latest snapshot older than yesterday; during
+ * the NFL offseason redraft formats only require any prior snapshot because
+ * the daily cron skips unchanged values.
  *
  * Requires a signed-in user with a linked Sleeper account. Responses are
  * cached in-process for the UTC day and sent with private HTTP cache headers
@@ -141,9 +147,24 @@ export async function GET(req: Request): Promise<Response> {
         latestSnapshotByPlayer.set(row.playerId, row.snapshotDate);
       }
     }
-    const hasFreshSnapshots = playerIds.every(
-      (playerId) => (latestSnapshotByPlayer.get(playerId) ?? "") >= yesterday,
-    );
+    // Offseason redraft cron skips unchanged values, so a multi-day-old
+    // latest row can still be fresh. Dynasty and in-season still need ≥ yesterday.
+    let requireRecentDaily = true;
+    if (isRedraftFormatKey(formatKey)) {
+      try {
+        const state = await readNflState();
+        requireRecentDaily = isNflValueHistoryInSeason(state.seasonType);
+      } catch {
+        // Fail closed: keep the yesterday freshness bar if NFL state is down.
+        requireRecentDaily = true;
+      }
+    }
+    const hasFreshSnapshots = playerIds.every((playerId) => {
+      const latest = latestSnapshotByPlayer.get(playerId);
+      if (!latest) return false;
+      if (!requireRecentDaily) return true;
+      return latest >= yesterday;
+    });
     const preset = FANTASY_CALC_SNAPSHOT_PRESETS.find(({ format }) => format.key === formatKey);
     if (preset && !hasFreshSnapshots) {
       try {
