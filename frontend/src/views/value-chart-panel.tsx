@@ -13,12 +13,17 @@ import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import {
   calendarMovingAverage,
   dampenedTrendCone,
-  trimLeadingNonPositive,
   type ValueChartPoint,
 } from "../../../api/_lib/value-chart-math";
 import { api } from "../api";
 import { ChartDialog } from "../chart-dialog";
 import type { Dashboard, League } from "../dashboard-types";
+import {
+  activeValueHistoryStartDate,
+  isSubstantialValueHistorySeries,
+  sliceValueHistoryForSharedDomain,
+  trimValueHistoryToContinuousStart,
+} from "../value-history-domain";
 import { valueChartYDomain, valueChartZoomStartIndex } from "../value-chart-zoom";
 
 type PickerPlayer = {
@@ -186,10 +191,26 @@ export function ValueChartPanel({
 
   const chartRows = useMemo(() => {
     if (!primarySeries?.points.length) return [];
-    const primary = trimLeadingNonPositive(primarySeries.points);
+    // Drop leading ≤0 values and isolated early outliers (e.g. sparse Jan
+    // redraft rows) so the x-axis starts at the continuous series.
+    const primaryTrimmed = trimValueHistoryToContinuousStart(primarySeries.points);
+    if (!primaryTrimmed.length) return [];
+    const compareTrimmed = compareSeries?.points.length
+      ? trimValueHistoryToContinuousStart(compareSeries.points)
+      : null;
+    const startDate = activeValueHistoryStartDate([
+      primaryTrimmed,
+      ...(compareTrimmed?.length ? [compareTrimmed] : []),
+    ]);
+    let primary = sliceValueHistoryForSharedDomain(primaryTrimmed, startDate);
+    // Keep a substantial non-overlapping primary; do not resurrect an isolated
+    // early outlier that the shared cutoff correctly dropped.
+    if (!primary.length && isSubstantialValueHistorySeries(primaryTrimmed)) {
+      primary = primaryTrimmed;
+    }
     if (!primary.length) return [];
-    const compare = compareSeries?.points.length
-      ? trimLeadingNonPositive(compareSeries.points)
+    const compare = compareTrimmed?.length
+      ? sliceValueHistoryForSharedDomain(compareTrimmed, startDate)
       : null;
     return buildChartRows(primary, compare?.length ? compare : null);
   }, [compareSeries?.points, primarySeries?.points]);
