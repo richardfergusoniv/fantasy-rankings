@@ -6,7 +6,6 @@ export const DASHBOARD_TABS = [
   "power",
   "draft",
   "trade",
-  "charts",
   "comparison",
 ] as const;
 
@@ -82,6 +81,7 @@ function textParam(value: string | null): string | null {
  * - tab=analyze → trade (old Analyze segment)
  * - tab=history → trade + history mode (old History segment)
  * - tab=strengthOfSchedule | tab=tables → rankings (Explorer Tables removed)
+ * - tab=charts → monitor (Players Charts removed; chart builder lives on Monitor)
  */
 export function resolveDashboardTab(rawTab: string | null): {
   tab: DashboardTab;
@@ -94,6 +94,7 @@ export function resolveDashboardTab(rawTab: string | null): {
   if (rawTab === "strengthOfSchedule" || rawTab === "tables") {
     return { tab: "rankings", legacyTradeMode: null };
   }
+  if (rawTab === "charts") return { tab: "monitor", legacyTradeMode: null };
   return { tab: DEFAULT_DASHBOARD_TAB, legacyTradeMode: null };
 }
 
@@ -119,15 +120,21 @@ export function resolveTradeMode(
 
 export function parseDashboardSearch(search: string): DashboardUrlState {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  const { tab, legacyTradeMode } = resolveDashboardTab(params.get("tab"));
+  const rawTab = params.get("tab");
+  const { tab, legacyTradeMode } = resolveDashboardTab(rawTab);
   // Legacy Tables tool used ?table=sos|offense|… (local UI state that sometimes
-  // leaked into shared links). Drop those params by routing to Rankings.
+  // leaked into shared links). Drop those params by routing to Rankings — but not
+  // when the URL explicitly named Charts (now Monitor).
   const legacyTable = params.get("table") ?? params.get("dataset");
   const redirectedFromTablesDataset = Boolean(
     legacyTable && (LEGACY_TABLES_DATASETS as readonly string[]).includes(legacyTable),
   );
+  const forceRankingsFromTables =
+    redirectedFromTablesDataset
+    && tab === DEFAULT_DASHBOARD_TAB
+    && rawTab !== "charts";
   return {
-    tab: redirectedFromTablesDataset && tab === DEFAULT_DASHBOARD_TAB ? "rankings" : tab,
+    tab: forceRankingsFromTables ? "rankings" : tab,
     league: textParam(params.get("league")),
     position: oneOf(params.get("pos"), RANKING_POSITIONS),
     horizon: oneOf(params.get("horizon"), RANKING_HORIZONS),

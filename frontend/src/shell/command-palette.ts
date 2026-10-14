@@ -40,7 +40,7 @@ export const PRIMARY_COMMAND_PAGES: CommandPageItem[] = [
 export const EXTRA_COMMAND_PAGES: CommandPageItem[] = [
   { kind: "page", id: "draft", label: "Draft", tab: "draft" },
   { kind: "page", id: "trade-history", label: "Trade History", tab: "trade", tradeMode: "history" },
-  { kind: "page", id: "charts", label: "Charts", tab: "charts" },
+  { kind: "page", id: "charts", label: "Charts", tab: "monitor" },
   { kind: "page", id: "comparison", label: "Comparison", tab: "comparison" },
 ];
 

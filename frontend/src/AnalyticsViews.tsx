@@ -2275,28 +2275,16 @@ function ToolDatasetToggle({ value, onChange, label }: { value: ToolDataset; onC
   );
 }
 
-export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange, layout = "page" }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout }) {
-  if (layout === "monitor") {
-    return (
-      <article className="monitor-panel monitor-builder-chart-panel">
-        <header className="monitor-panel-header">
-          <h2>Charts</h2>
-        </header>
-        {dataset === "advanced"
-          ? <AnalyticsChart dashboard={dashboard} league={league} layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} />
-          : <WeeklyProjections dashboard={dashboard} league={league} view="charts" layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} />}
-      </article>
-    );
-  }
-
+export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout }) {
   return (
-    <section className="charts-tool">
-      <h2 className="sr-only">Charts</h2>
-      <ToolDatasetToggle value={dataset} onChange={(value) => onDatasetChange?.(value)} label="Chart dataset" />
+    <article className="monitor-panel monitor-builder-chart-panel">
+      <header className="monitor-panel-header">
+        <h2>Charts</h2>
+      </header>
       {dataset === "advanced"
-        ? <AnalyticsChart dashboard={dashboard} league={league} />
-        : <WeeklyProjections dashboard={dashboard} league={league} view="charts" />}
-    </section>
+        ? <AnalyticsChart dashboard={dashboard} league={league} layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} />
+        : <WeeklyProjections dashboard={dashboard} league={league} view="charts" layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} />}
+    </article>
   );
 }
 
