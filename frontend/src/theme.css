@@ -2645,24 +2645,43 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   }
   .monitor-chart-expand-card.chart-result-card,
   .chart-result-card.monitor-chart-expand-card {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     max-width: none;
     height: 100dvh;
     max-height: 100dvh;
+    overflow: hidden;
     border: 0;
     border-radius: 0;
   }
+  .monitor-chart-expand-card .chart-result-header {
+    flex: none;
+  }
   .monitor-chart-expand-card .chart-result-body {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     min-height: 0;
-    flex: 1;
+    overflow: hidden;
     padding: 8px 12px max(12px, env(safe-area-inset-bottom));
   }
   .monitor-chart-expand-card .monitor-expanded-chart {
-    flex: 1;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+  }
+  .monitor-chart-expand-card .monitor-expanded-chart .scatter-frame,
+  .monitor-chart-expand-card .monitor-expanded-chart .monitor-value-chart {
+    flex: 1 1 auto;
+    min-height: 240px;
     height: auto;
-    min-height: 280px;
+    max-height: none;
+  }
+  .monitor-chart-expand-card .monitor-expanded-chart .chart-key {
+    flex: none;
   }
 }
 
