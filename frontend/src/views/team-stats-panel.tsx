@@ -6,12 +6,14 @@ import {
   TEAM_STATS_STAT_OPTIONS,
   TEAM_WEEK_STATS_STALE_MS,
   buildTeamStatsTable,
+  canonicalNflTeam,
   defaultTeamStatsPosition,
   defaultTeamStatsTeam,
   formatTeamStatsPercent,
   formatTeamStatsValue,
   nflversePlayerWeekStatsUrl,
   nflverseSnapCountsUrl,
+  normalizeTeamStatsPlayerName,
   parsePlayerWeekStatsCsv,
   parseTeamWeekSnapCountsCsv,
   teamStatsStatDef,
@@ -20,19 +22,16 @@ import {
 } from "../../../api/_lib/nflverse-team-week-stats";
 import type { League } from "../dashboard-types";
 
-function comparablePlayerName(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/jr$|sr$|ii$|iii$|iv$/g, "");
-}
-
 function isRosteredPlayer(
   player: { name: string; team: string; position: string },
   league: League,
 ): boolean {
-  const entityName = comparablePlayerName(player.name);
+  const entityName = normalizeTeamStatsPlayerName(player.name);
   return [...league.starters, ...league.bench].some((rostered) => (
     rostered.position === player.position
-    && rostered.team === player.team
-    && comparablePlayerName(rostered.name) === entityName
+    && rostered.team != null
+    && canonicalNflTeam(rostered.team) === player.team
+    && normalizeTeamStatsPlayerName(rostered.name) === entityName
   ));
 }
 
