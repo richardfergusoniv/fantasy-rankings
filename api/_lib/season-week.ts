@@ -10,3 +10,14 @@
 export function usesRegularSeasonWeek(seasonType: string): boolean {
   return seasonType === "regular";
 }
+
+/**
+ * True when FantasyCalc redraft value-history capture should keep a dense
+ * daily series. Only Sleeper's literal `off` is treated as offseason (sparse
+ * redraft writes). `pre` / `regular` / `post` are in-season; empty or unknown
+ * values fail closed to dense daily writes so a missing `season_type` cannot
+ * unlock offseason skipping.
+ */
+export function isNflValueHistoryInSeason(seasonType: string): boolean {
+  return seasonType !== "off";
+}
