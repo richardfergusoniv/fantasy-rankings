@@ -244,8 +244,9 @@ export async function refreshNflPlayersCache(): Promise<NflPlayersRefreshResult>
  * when fresh; refreshes from Sleeper when missing, forced, or past the soft
  * freshness window. Never writes the full dump back to Supabase.
  *
- * The stale ceiling only triggers a refresh attempt — on Sleeper failure or a
- * thin dump, any retained cache row is still returned so dashboards stay up.
+ * Past the soft window (or when `forceRefresh` is set), a Sleeper pull is
+ * attempted. On failure or a thin dump, any retained cache row is still
+ * returned so dashboards stay up.
  */
 export async function loadNflPlayersMap(forceRefresh = false): Promise<Record<string, SleeperPlayer>> {
   const cached = await readCachedSnapshot();
