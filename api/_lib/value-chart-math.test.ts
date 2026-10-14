@@ -135,4 +135,13 @@ describe("dampenedTrendCone", () => {
   it("returns an empty cone for empty input", () => {
     expect(dampenedTrendCone([])).toEqual([]);
   });
+
+  it("returns an empty cone when the lookback has calendar gaps", () => {
+    const points = [
+      { date: "2026-01-01", value: 100 },
+      { date: "2026-01-02", value: 102 },
+      { date: "2026-01-04", value: 106 }, // gap on 2026-01-03
+    ];
+    expect(dampenedTrendCone(points, { horizon: 5, lookback: 30 })).toEqual([]);
+  });
 });

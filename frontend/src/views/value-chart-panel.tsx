@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   CartesianGrid,
@@ -126,11 +126,24 @@ export function ValueChartPanel({
   const defaultPlayerId = roster[0]?.playerId ?? pickerPlayers[0]?.playerId ?? "";
   const [playerId, setPlayerId] = useState(defaultPlayerId);
   const [comparePlayerId, setComparePlayerId] = useState("");
+  const previousLeagueIdRef = useRef(league.id);
 
   useEffect(() => {
-    setPlayerId(defaultPlayerId);
-    setComparePlayerId("");
-  }, [defaultPlayerId, league.id]);
+    const leagueChanged = previousLeagueIdRef.current !== league.id;
+    previousLeagueIdRef.current = league.id;
+    const ids = new Set(pickerPlayers.map((player) => player.playerId));
+    const fallbackId = roster[0]?.playerId ?? pickerPlayers[0]?.playerId ?? "";
+
+    if (leagueChanged) {
+      setPlayerId(fallbackId);
+      setComparePlayerId("");
+      return;
+    }
+
+    // Dashboard refresh can reorder starters; keep selections when still valid.
+    setPlayerId((current) => (current && ids.has(current) ? current : fallbackId));
+    setComparePlayerId((current) => (current && ids.has(current) ? current : ""));
+  }, [league.id, pickerPlayers, roster]);
 
   const requestIds = useMemo(() => {
     const ids = [playerId, comparePlayerId].filter(Boolean);

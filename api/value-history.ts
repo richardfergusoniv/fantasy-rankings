@@ -65,6 +65,7 @@ type CacheEntry = {
 
 /** In-process cache; keyed per UTC day so daily value refreshes invalidate. */
 const valueHistoryCache = new Map<string, CacheEntry>();
+const VALUE_HISTORY_CACHE_MAX_ENTRIES = 500;
 
 const VALUE_HISTORY_HTTP_CACHE_SECONDS = 60 * 60; // 1 hour
 
@@ -82,6 +83,19 @@ function cachedResponse(body: ValueHistory): Response {
   return json(body, 200, {
     "Cache-Control": `private, max-age=${VALUE_HISTORY_HTTP_CACHE_SECONDS}`,
   });
+}
+
+/** Drop expired entries and enforce a hard size cap before inserting. */
+function setValueHistoryCache(cacheKey: string, entry: CacheEntry): void {
+  const nowMs = Date.now();
+  for (const [key, cached] of valueHistoryCache) {
+    if (cached.expiresAt <= nowMs) valueHistoryCache.delete(key);
+  }
+  if (valueHistoryCache.size >= VALUE_HISTORY_CACHE_MAX_ENTRIES) {
+    const oldest = valueHistoryCache.keys().next().value;
+    if (oldest !== undefined) valueHistoryCache.delete(oldest);
+  }
+  valueHistoryCache.set(cacheKey, entry);
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -208,7 +222,7 @@ export async function GET(req: Request): Promise<Response> {
       }),
     });
 
-    valueHistoryCache.set(cacheKey, { body, expiresAt: endOfUtcDayMs(now) });
+    setValueHistoryCache(cacheKey, { body, expiresAt: endOfUtcDayMs(now) });
     return cachedResponse(body);
   } catch (err) {
     return internalError(err);

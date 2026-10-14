@@ -139,6 +139,12 @@ export function dampenedTrendCone(
   if (points.length === 0 || horizon < 1) return [];
 
   const recent = points.slice(-lookback);
+  // Slope/σ treat adjacent samples as one calendar day; skip when history gaps.
+  const hasGap = recent.some((point, index) => {
+    const previous = recent[index - 1];
+    return previous !== undefined && addUtcDateKey(previous.date, 1) !== point.date;
+  });
+  if (hasGap) return [];
   const values = recent.map((point) => point.value);
   const slope = linearSlope(values);
   const sigma = dailyChangeStdDev(values);
