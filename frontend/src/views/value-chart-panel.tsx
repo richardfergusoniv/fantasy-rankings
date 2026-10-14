@@ -20,6 +20,7 @@ import { ChartDialog } from "../chart-dialog";
 import type { Dashboard, League } from "../dashboard-types";
 import {
   activeValueHistoryStartDate,
+  isSubstantialValueHistorySeries,
   sliceValueHistoryForSharedDomain,
   trimValueHistoryToContinuousStart,
 } from "../value-history-domain";
@@ -202,9 +203,12 @@ export function ValueChartPanel({
       ...(compareTrimmed?.length ? [compareTrimmed] : []),
     ]);
     let primary = sliceValueHistoryForSharedDomain(primaryTrimmed, startDate);
-    // Never erase the selected player when a non-overlapping compare window
-    // would pull the shared cutoff past primary's history.
-    if (!primary.length) primary = primaryTrimmed;
+    // Keep a substantial non-overlapping primary; do not resurrect an isolated
+    // early outlier that the shared cutoff correctly dropped.
+    if (!primary.length && isSubstantialValueHistorySeries(primaryTrimmed)) {
+      primary = primaryTrimmed;
+    }
+    if (!primary.length) return [];
     const compare = compareTrimmed?.length
       ? sliceValueHistoryForSharedDomain(compareTrimmed, startDate)
       : null;

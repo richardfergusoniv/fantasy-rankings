@@ -92,9 +92,24 @@ export function activeValueHistoryStartDate(
   return chosen.map((window) => window.start).sort()[0] ?? null;
 }
 
+/** Whether a series has enough real history to keep when it misses the shared window. */
+export function isSubstantialValueHistorySeries(
+  points: ReadonlyArray<{ date: string; value: number | null | undefined }>,
+  maxGapDays: number = VALUE_HISTORY_OUTLIER_GAP_DAYS,
+): boolean {
+  const realDates = realValueHistoryDates([points]);
+  if (realDates.length === 0) return false;
+  const first = realDates[0];
+  const last = realDates[realDates.length - 1];
+  if (!first || !last) return false;
+  return realDates.length >= 3 || utcDateKeyDiffDays(first, last) > maxGapDays;
+}
+
 /**
  * Slice to `startDate`, but keep a substantial non-overlapping series that the
  * shared cutoff would otherwise erase. Isolated early outliers stay dropped.
+ * A sliced window that only contains non-positive placeholders does not count
+ * as retaining the series.
  */
 export function sliceValueHistoryForSharedDomain<T extends { date: string; value: number | null | undefined }>(
   points: readonly T[],
@@ -102,15 +117,9 @@ export function sliceValueHistoryForSharedDomain<T extends { date: string; value
   maxGapDays: number = VALUE_HISTORY_OUTLIER_GAP_DAYS,
 ): T[] {
   const sliced = sliceValueHistoryFromDate(points, startDate);
-  if (sliced.length > 0 || points.length === 0 || !startDate) return sliced;
-  const realDates = realValueHistoryDates([points]);
-  if (realDates.length === 0) return sliced;
-  const first = realDates[0];
-  const last = realDates[realDates.length - 1];
-  if (!first || !last) return sliced;
-  const spanDays = utcDateKeyDiffDays(first, last);
-  const substantial = realDates.length >= 3 || spanDays > maxGapDays;
-  if (!substantial) return sliced;
+  if (points.length === 0 || !startDate) return sliced;
+  if (realValueHistoryDates([sliced]).length > 0) return sliced;
+  if (!isSubstantialValueHistorySeries(points, maxGapDays)) return sliced;
   // Non-overlapping but real history: keep it; callers use connectNulls={false}.
   return [...points];
 }

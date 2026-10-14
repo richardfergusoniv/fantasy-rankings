@@ -183,4 +183,17 @@ describe("sliceValueHistoryForSharedDomain", () => {
     ];
     expect(sliceValueHistoryForSharedDomain(early, "2026-05-01")).toEqual(early);
   });
+
+  it("does not treat a non-positive placeholder after the cutoff as retaining the series", () => {
+    const earlyWithZeroPlaceholder = [
+      { date: "2026-01-01", value: 100 },
+      { date: "2026-01-02", value: 110 },
+      { date: "2026-01-03", value: 120 },
+      { date: "2026-02-01", value: 130 },
+      { date: "2026-05-01", value: 0 },
+    ];
+    expect(sliceValueHistoryForSharedDomain(earlyWithZeroPlaceholder, "2026-05-01")).toEqual(
+      earlyWithZeroPlaceholder,
+    );
+  });
 });
