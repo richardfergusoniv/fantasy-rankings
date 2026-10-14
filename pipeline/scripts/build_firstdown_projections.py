@@ -4,7 +4,10 @@
 Input:  JSON list of rows: {"position","rank","player","team","matchup","projected_points","components":{...}}
         via --rows. Also copies K rows verbatim from the latest Vegas projections file.
 Output: data/projections_firstdown_2026_w{n}.json in the same format as the Vegas file,
-        with all 6 leagues, source tagged "first_down". Requires >=150 players or exits 1.
+        with all 6 leagues, source tagged "first_down". No player-count minimum
+        (First Down is the fallback source and its board is not gated); exits 1
+        only when the rows file holds no First Down players at all, so an empty
+        page can never push a kickers-only file over good data.
 
 Name normalization: canonical names come from the Sleeper players cache; explicit
 aliases (e.g. "Josh Palmer" -> "Joshua Palmer") are applied first.
@@ -48,10 +51,14 @@ def main():
     ap.add_argument("--rows", required=True, help="JSON file of FDS rows")
     ap.add_argument("--week", type=int, required=True)
     ap.add_argument("--season", type=int, default=2026)
-    ap.add_argument("--min-players", type=int, default=150)
+    ap.add_argument("--min-players", type=int, default=0)
     args = ap.parse_args()
 
     rows = json.load(open(args.rows))
+    if not rows:
+        print("FAIL: rows file is empty — First Down posted no players; "
+              "refusing to build a kickers-only fallback", file=sys.stderr)
+        return 1
     vegas_file = max(DATA.glob(f"projections_{args.season}_w{args.week}.json"),
                      key=lambda p: p.stat().st_mtime)
     vegas = json.load(open(vegas_file))
