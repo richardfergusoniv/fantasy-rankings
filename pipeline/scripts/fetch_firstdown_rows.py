@@ -14,7 +14,8 @@ replicates one number across all leagues by design). components maps the
 record's stat lines into the Vegas expected_stats vocabulary.
 
 Usage: fetch_firstdown_rows.py --week N --season YYYY --out rows.json
-Exit 0 on success (>=150 skill-position rows), 1 on failure.
+Exit 0 on success (any row count — First Down is the fallback source and
+its board is not gated), 1 on fetch failure.
 """
 from __future__ import annotations
 
@@ -28,7 +29,6 @@ URL = "https://www.firstdown.studio/rankings"
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
       "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 POSITIONS = ("QB", "RB", "WR", "TE")
-MIN_ROWS = 150
 STAT_MAP = {
     "passing_yards": "pass_yards",
     "passing_touchdowns": "pass_tds",
@@ -134,10 +134,6 @@ def main() -> int:
                 "components": components,
             })
 
-    if len(rows) < MIN_ROWS:
-        print(f"FAIL: only {len(rows)} First Down rows for week {args.week} (min {MIN_ROWS})",
-              file=sys.stderr)
-        return 1
     with open(args.out, "w") as f:
         json.dump(rows, f)
     counts = {p: len(by_pos[p]) for p in POSITIONS}
