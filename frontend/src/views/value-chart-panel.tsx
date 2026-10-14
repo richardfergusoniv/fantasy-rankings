@@ -206,8 +206,14 @@ export function ValueChartPanel({
     const zoomStart = valueChartZoomStartIndex(chartRows.length, effectiveZoomed);
     const visibleRows = effectiveZoomed ? chartRows.slice(zoomStart) : chartRows;
     const yDomain = valueChartYDomain(
-      visibleRows.flatMap((row) => [row.value, row.ma7, row.ma30, row.compare, row.trendCenter]
-        .filter((value): value is number => typeof value === "number" && Number.isFinite(value))),
+      visibleRows.flatMap((row) => [
+        row.value,
+        row.ma7,
+        row.ma30,
+        row.compare,
+        row.trendCenter,
+        ...(row.trendBand ?? []),
+      ].filter((value): value is number => typeof value === "number" && Number.isFinite(value))),
       effectiveZoomed,
     );
     const toggleZoom = () => setZoomed((value) => !value);
