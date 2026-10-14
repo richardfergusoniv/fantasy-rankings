@@ -582,7 +582,9 @@ export function App() {
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
-    enabled: tab === "power",
+    // Monitor keeps league section so the shell player inspector can resolve
+    // roster-card teams via leaguePowerTeamForPlayer (no League panel on Monitor).
+    enabled: tab === "monitor" || tab === "power",
     refetchInterval: pollWhileSectionBuilding,
   });
   const analyticsQuery = useQuery({
@@ -596,7 +598,8 @@ export function App() {
   });
   // tradeTeams (+ starter slots) for Matchup/Power/Trade. Live-polled with
   // the team section so LeagueTeamCard projections/gamePhase stay fresh.
-  const tradeSectionActive = tab === "team" || tab === "power" || tab === "trade";
+  // Monitor needs trade when the player inspector opens a league roster card.
+  const tradeSectionActive = tab === "team" || tab === "monitor" || tab === "power" || tab === "trade";
   const tradeMode = effectiveTradeMode(dashboardUrl.state);
   // Waiver pool is only consumed by League-adjusted trade (not Market/History).
   const tradeWaiverActive = tab === "trade" && tradeMode === "league";
@@ -979,7 +982,7 @@ export function App() {
     || tradeWaiverWaiting
     || (!hasCompleteDashboard && (
       (tab === "team" && teamQuery.isPending)
-      || (tab === "monitor" && (teamQuery.isPending || analyticsQuery.isPending || playersQuery.isPending))
+      || (tab === "monitor" && (teamQuery.isPending || leagueQuery.isPending || analyticsQuery.isPending || playersQuery.isPending))
       || ((tab === "rankings" || tab === "waivers" || tab === "draft") && playersQuery.isPending)
       || (tab === "trade" && (playersQuery.isPending || teamQuery.isPending))
       || (tab === "power" && (leagueQuery.isPending || teamQuery.isPending || playersQuery.isPending))
