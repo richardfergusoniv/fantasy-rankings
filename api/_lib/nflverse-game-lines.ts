@@ -306,6 +306,281 @@ function byKickoffAscending(left: GameLineCard, right: GameLineCard): number {
  * Default Monitor game: live roster matchup, else next/soonest roster game,
  * else first upcoming week game, else the first card.
  */
+/** Picker sentinel for listing every current-week prop. */
+export const ALL_GAMES_PICKER_ID = "__all_games__";
+
+export type CoverRecord = {
+  wins: number;
+  losses: number;
+  pushes: number;
+};
+
+export type TeamSeasonRatings = {
+  team: string;
+  games: number;
+  /** Opponent-adjusted points scored per game. */
+  adjPointsFor: number;
+  /** Opponent-adjusted points allowed per game. */
+  adjPointsAgainst: number;
+  ats: CoverRecord;
+  ou: CoverRecord;
+};
+
+export type GameLineProjection = {
+  gameId: string;
+  awayTeam: string;
+  homeTeam: string;
+  spreadLine: number | null;
+  totalLine: number | null;
+  projectedAway: number | null;
+  projectedHome: number | null;
+  projectedTotal: number | null;
+  /** Home − away projected margin (matches nflverse spread sign: + = home favored). */
+  projectedHomeMargin: number | null;
+  spreadEdge: number | null;
+  totalEdge: number | null;
+  awayAts: CoverRecord;
+  homeAts: CoverRecord;
+  awayOu: CoverRecord;
+  homeOu: CoverRecord;
+};
+
+function emptyCover(): CoverRecord {
+  return { wins: 0, losses: 0, pushes: 0 };
+}
+
+function addCover(record: CoverRecord, result: "win" | "loss" | "push"): void {
+  if (result === "win") record.wins += 1;
+  else if (result === "loss") record.losses += 1;
+  else record.pushes += 1;
+}
+
+export function formatCoverRecord(record: CoverRecord): string {
+  if (record.wins + record.losses + record.pushes <= 0) return MISSING;
+  if (record.pushes > 0) return `${record.wins}-${record.losses}-${record.pushes}`;
+  return `${record.wins}-${record.losses}`;
+}
+
+/** Completed regular-season games for `season` with both scores present. */
+export function completedSeasonGames(
+  rows: readonly NflverseGameRow[],
+  season: number,
+  throughWeekExclusive?: number,
+): NflverseGameRow[] {
+  return rows.filter((row) => {
+    if (row.season !== season || row.gameType !== "REG") return false;
+    if (row.awayScore === null || row.homeScore === null) return false;
+    if (throughWeekExclusive !== undefined && row.week >= throughWeekExclusive) return false;
+    return true;
+  });
+}
+
+/**
+ * Home covers when (homeScore - awayScore) > spreadLine.
+ * nflverse: positive spreadLine means the home team is favored.
+ */
+export function homeSpreadResult(
+  homeScore: number,
+  awayScore: number,
+  spreadLine: number,
+): "win" | "loss" | "push" {
+  const margin = homeScore - awayScore;
+  if (margin > spreadLine) return "win";
+  if (margin < spreadLine) return "loss";
+  return "push";
+}
+
+export function totalResult(
+  homeScore: number,
+  awayScore: number,
+  totalLine: number,
+): "win" | "loss" | "push" {
+  const points = homeScore + awayScore;
+  if (points > totalLine) return "win";
+  if (points < totalLine) return "loss";
+  return "push";
+}
+
+type RawTeamTotals = {
+  games: number;
+  pointsFor: number;
+  pointsAgainst: number;
+};
+
+function rawTeamTotals(games: readonly NflverseGameRow[]): Map<string, RawTeamTotals> {
+  const byTeam = new Map<string, RawTeamTotals>();
+  const bump = (team: string, pointsFor: number, pointsAgainst: number) => {
+    const key = normalizeGameLineTeam(team);
+    const acc = byTeam.get(key) ?? { games: 0, pointsFor: 0, pointsAgainst: 0 };
+    acc.games += 1;
+    acc.pointsFor += pointsFor;
+    acc.pointsAgainst += pointsAgainst;
+    byTeam.set(key, acc);
+  };
+  for (const game of games) {
+    if (game.awayScore === null || game.homeScore === null) continue;
+    bump(game.awayTeam, game.awayScore, game.homeScore);
+    bump(game.homeTeam, game.homeScore, game.awayScore);
+  }
+  return byTeam;
+}
+
+/**
+ * Opponent-adjusted scoring rates + ATS / O-U records from completed games.
+ * Offense is credited when scoring against a stingy defense; defense when
+ * holding down a high-scoring offense (league-average baseline).
+ */
+export function buildTeamSeasonRatings(
+  rows: readonly NflverseGameRow[],
+  season: number,
+  throughWeekExclusive?: number,
+): Map<string, TeamSeasonRatings> {
+  const games = completedSeasonGames(rows, season, throughWeekExclusive);
+  const raw = rawTeamTotals(games);
+  let leaguePf = 0;
+  let leaguePa = 0;
+  let leagueGames = 0;
+  for (const totals of raw.values()) {
+    leaguePf += totals.pointsFor;
+    leaguePa += totals.pointsAgainst;
+    leagueGames += totals.games;
+  }
+  const leagueAvgPf = leagueGames > 0 ? leaguePf / leagueGames : 0;
+  const leagueAvgPa = leagueGames > 0 ? leaguePa / leagueGames : 0;
+
+  const adjFor = new Map<string, { sum: number; games: number }>();
+  const adjAgainst = new Map<string, { sum: number; games: number }>();
+  const ats = new Map<string, CoverRecord>();
+  const ou = new Map<string, CoverRecord>();
+
+  const ensureAdj = (map: Map<string, { sum: number; games: number }>, team: string) => {
+    const key = normalizeGameLineTeam(team);
+    const acc = map.get(key) ?? { sum: 0, games: 0 };
+    map.set(key, acc);
+    return acc;
+  };
+
+  for (const game of games) {
+    if (game.awayScore === null || game.homeScore === null) continue;
+    const away = normalizeGameLineTeam(game.awayTeam);
+    const home = normalizeGameLineTeam(game.homeTeam);
+    const awayRaw = raw.get(away);
+    const homeRaw = raw.get(home);
+    const awayAvgPa = awayRaw && awayRaw.games > 0 ? awayRaw.pointsAgainst / awayRaw.games : leagueAvgPa;
+    const homeAvgPa = homeRaw && homeRaw.games > 0 ? homeRaw.pointsAgainst / homeRaw.games : leagueAvgPa;
+    const awayAvgPf = awayRaw && awayRaw.games > 0 ? awayRaw.pointsFor / awayRaw.games : leagueAvgPf;
+    const homeAvgPf = homeRaw && homeRaw.games > 0 ? homeRaw.pointsFor / homeRaw.games : leagueAvgPf;
+
+    // Score vs opponent defensive strength (points allowed).
+    const awayAdjFor = game.awayScore + (leagueAvgPa - homeAvgPa);
+    const homeAdjFor = game.homeScore + (leagueAvgPa - awayAvgPa);
+    // Points allowed vs opponent offensive strength.
+    const awayAdjAgainst = game.homeScore + (leagueAvgPf - homeAvgPf);
+    const homeAdjAgainst = game.awayScore + (leagueAvgPf - awayAvgPf);
+
+    const awayFor = ensureAdj(adjFor, away);
+    awayFor.sum += awayAdjFor;
+    awayFor.games += 1;
+    const homeFor = ensureAdj(adjFor, home);
+    homeFor.sum += homeAdjFor;
+    homeFor.games += 1;
+    const awayAgainst = ensureAdj(adjAgainst, away);
+    awayAgainst.sum += awayAdjAgainst;
+    awayAgainst.games += 1;
+    const homeAgainst = ensureAdj(adjAgainst, home);
+    homeAgainst.sum += homeAdjAgainst;
+    homeAgainst.games += 1;
+
+    if (!ats.has(away)) ats.set(away, emptyCover());
+    if (!ats.has(home)) ats.set(home, emptyCover());
+    if (!ou.has(away)) ou.set(away, emptyCover());
+    if (!ou.has(home)) ou.set(home, emptyCover());
+
+    if (game.spreadLine !== null && Number.isFinite(game.spreadLine)) {
+      const homeAts = homeSpreadResult(game.homeScore, game.awayScore, game.spreadLine);
+      addCover(ats.get(home)!, homeAts);
+      addCover(
+        ats.get(away)!,
+        homeAts === "win" ? "loss" : homeAts === "loss" ? "win" : "push",
+      );
+    }
+    if (game.totalLine !== null && Number.isFinite(game.totalLine)) {
+      const ouResult = totalResult(game.homeScore, game.awayScore, game.totalLine);
+      // For team O/U records, "win" = game went over.
+      addCover(ou.get(home)!, ouResult);
+      addCover(ou.get(away)!, ouResult);
+    }
+  }
+
+  const output = new Map<string, TeamSeasonRatings>();
+  const teams = new Set([...raw.keys(), ...adjFor.keys()]);
+  for (const team of teams) {
+    const forAcc = adjFor.get(team);
+    const againstAcc = adjAgainst.get(team);
+    const gamesPlayed = forAcc?.games ?? 0;
+    output.set(team, {
+      team,
+      games: gamesPlayed,
+      adjPointsFor: gamesPlayed > 0 ? Number((forAcc!.sum / gamesPlayed).toFixed(3)) : 0,
+      adjPointsAgainst: gamesPlayed > 0 ? Number((againstAcc!.sum / gamesPlayed).toFixed(3)) : 0,
+      ats: ats.get(team) ?? emptyCover(),
+      ou: ou.get(team) ?? emptyCover(),
+    });
+  }
+  return output;
+}
+
+/**
+ * Project spread/total from both teams' opponent-adjusted 2026 scoring rates.
+ * Line movement is intentionally omitted here — callers use stored weekly pulls.
+ */
+export function projectGameLine(
+  game: Pick<NflverseGameRow, "gameId" | "awayTeam" | "homeTeam" | "spreadLine" | "totalLine">,
+  ratings: ReadonlyMap<string, TeamSeasonRatings>,
+): GameLineProjection {
+  const awayTeam = normalizeGameLineTeam(game.awayTeam);
+  const homeTeam = normalizeGameLineTeam(game.homeTeam);
+  const away = ratings.get(awayTeam);
+  const home = ratings.get(homeTeam);
+  const canProject = Boolean(away && home && away.games > 0 && home.games > 0);
+  const projectedAway = canProject
+    ? Number(((away!.adjPointsFor + home!.adjPointsAgainst) / 2).toFixed(3))
+    : null;
+  const projectedHome = canProject
+    ? Number(((home!.adjPointsFor + away!.adjPointsAgainst) / 2).toFixed(3))
+    : null;
+  const projectedTotal = projectedAway !== null && projectedHome !== null
+    ? Number((projectedAway + projectedHome).toFixed(3))
+    : null;
+  const projectedHomeMargin = projectedAway !== null && projectedHome !== null
+    ? Number((projectedHome - projectedAway).toFixed(3))
+    : null;
+  const spreadEdge = projectedHomeMargin !== null && game.spreadLine !== null
+    ? Number((projectedHomeMargin - game.spreadLine).toFixed(3))
+    : null;
+  const totalEdge = projectedTotal !== null && game.totalLine !== null
+    ? Number((projectedTotal - game.totalLine).toFixed(3))
+    : null;
+
+  return {
+    gameId: game.gameId,
+    awayTeam,
+    homeTeam,
+    spreadLine: game.spreadLine,
+    totalLine: game.totalLine,
+    projectedAway,
+    projectedHome,
+    projectedTotal,
+    projectedHomeMargin,
+    spreadEdge,
+    totalEdge,
+    awayAts: away?.ats ?? emptyCover(),
+    homeAts: home?.ats ?? emptyCover(),
+    awayOu: away?.ou ?? emptyCover(),
+    homeOu: home?.ou ?? emptyCover(),
+  };
+}
+
 export function defaultGameLineCardId(
   cards: readonly GameLineCard[],
   rosterTeams: readonly string[],

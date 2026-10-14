@@ -1,14 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
-import { lazy, Suspense, useMemo, useState } from "react";
-import {
-  GAME_LINES_STALE_MS,
-  NFLVERSE_GAMES_CSV_URL,
-  defaultGameLineCardId,
-  gameLineCardsForWeek,
-  parseGamesCsv,
-} from "../../../api/_lib/nflverse-game-lines";
+import { lazy, Suspense } from "react";
 import type { Dashboard, League } from "../dashboard-types";
 import type { ChartDataset } from "../dashboard-url";
+import { GameLinesPanel } from "./game-lines-panel";
 import { TeamStatsPanel } from "./team-stats-panel";
 import { ValueChartPanel } from "./value-chart-panel";
 
@@ -38,53 +31,6 @@ export function Monitor({
   chartDataset: ChartDataset;
   onChartDatasetChange: (dataset: ChartDataset) => void;
 }) {
-  const gameLinesQuery = useQuery({
-    queryKey: ["nflverse-game-lines", dashboard.season, dashboard.week],
-    queryFn: async () => {
-      const response = await fetch(NFLVERSE_GAMES_CSV_URL);
-      if (!response.ok) throw new Error(`game lines HTTP ${response.status}`);
-      const csv = await response.text();
-      // Zero parsed rows (empty body or bad headers) is a load failure, not an empty week.
-      if (parseGamesCsv(csv).length === 0) {
-        throw new Error("game lines parse failed");
-      }
-      return gameLineCardsForWeek(csv, dashboard.season, dashboard.week);
-    },
-    staleTime: GAME_LINES_STALE_MS,
-    gcTime: GAME_LINES_STALE_MS * 2,
-    retry: 1,
-  });
-  const gameLineCards = gameLinesQuery.data ?? [];
-  const gameLinesUnavailable = gameLinesQuery.isError;
-
-  const rosterPlayers = useMemo(
-    () => [...league.starters, ...league.bench],
-    [league.bench, league.starters],
-  );
-  const rosterTeams = useMemo(
-    () => rosterPlayers.map((player) => player.team).filter((team): team is string => Boolean(team)),
-    [rosterPlayers],
-  );
-  const liveTeams = useMemo(
-    () => rosterPlayers
-      .filter((player) => player.gamePhase === "live" && player.team)
-      .map((player) => player.team)
-      .filter((team): team is string => Boolean(team)),
-    [rosterPlayers],
-  );
-  const defaultGameId = useMemo(
-    () => defaultGameLineCardId(gameLineCards, rosterTeams, liveTeams, Date.now()),
-    [gameLineCards, liveTeams, rosterTeams],
-  );
-  // Follow live/roster-relevant defaults until the user explicitly picks a game.
-  const [userGameId, setUserGameId] = useState<string | null>(null);
-  const selectedGameId = userGameId && gameLineCards.some((card) => card.gameId === userGameId)
-    ? userGameId
-    : defaultGameId ?? "";
-  const selectedGame = gameLineCards.find((card) => card.gameId === selectedGameId)
-    ?? gameLineCards[0]
-    ?? null;
-
   return (
     <section className="monitor-view" aria-label="Monitor">
       <Suspense fallback={<ChartsFallback />}>
@@ -101,41 +47,7 @@ export function Monitor({
 
       <TeamStatsPanel league={league} season={dashboard.season} week={dashboard.week} />
 
-      <article className="monitor-panel">
-        <header className="monitor-panel-header">
-          <h2>Game lines</h2>
-        </header>
-        {gameLinesUnavailable ? (
-          <p className="monitor-empty">Lines unavailable</p>
-        ) : selectedGame ? (
-          <>
-            <div className="monitor-value-chart-controls monitor-game-lines-controls">
-              <label className="monitor-value-chart-field">
-                <span className="sr-only">Game lines</span>
-                <select
-                  aria-label="Game lines"
-                  value={selectedGame.gameId}
-                  onChange={(event) => setUserGameId(event.target.value)}
-                >
-                  {gameLineCards.map((game) => (
-                    <option key={game.gameId} value={game.gameId}>
-                      {game.matchup}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="monitor-game-line-card">
-              <strong className="monitor-game-line-matchup">{selectedGame.matchup}</strong>
-              <span className="monitor-game-line-kickoff">{selectedGame.kickoffPt}</span>
-              <span className="monitor-game-line-spread">{selectedGame.spread}</span>
-              <span className="monitor-game-line-total">{selectedGame.total}</span>
-              <span className="monitor-game-line-ml">{selectedGame.moneylines}</span>
-              <span className="monitor-game-line-implied">{selectedGame.totalsOrScore}</span>
-            </div>
-          </>
-        ) : null}
-      </article>
+      <GameLinesPanel league={league} season={dashboard.season} week={dashboard.week} />
     </section>
   );
 }

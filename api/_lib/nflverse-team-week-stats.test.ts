@@ -184,6 +184,7 @@ describe("nflverse-team-week-stats", () => {
         playerId: "wr1", name: "Target Hog", team: "KC", position: "WR", week: 1,
         targets: 12, receptions: 8, receivingYards: 100, carries: 0, rushingYards: 0,
         receivingTds: 1, rushingTds: 0, passingTds: 0, fantasyPpr: 24, targetShare: 33,
+        completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
       },
     ];
     const rows = buildTeamStatsTable({

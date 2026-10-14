@@ -272,6 +272,16 @@ export async function refreshNflPlayersCache(): Promise<NflPlayersRefreshResult>
 }
 
 /**
+ * Read the compact roster map from `source_cache` only — no Sleeper refresh.
+ * Used by light read routes (e.g. prop-line enrichment) to avoid egress spikes.
+ */
+export async function readCachedNflPlayersMap(): Promise<Record<string, SleeperPlayer>> {
+  const cached = await readCachedSnapshot();
+  if (!cached) return {};
+  return sleeperPlayersFromRosterMap(cached.snapshot.players);
+}
+
+/**
  * Load the compact roster map as `SleeperPlayer` records. Uses the daily cache
  * when fresh; refreshes from Sleeper when missing, forced, or past the soft
  * freshness window. Never writes the full dump back to Supabase.

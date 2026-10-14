@@ -116,7 +116,8 @@ export const api = {
   deleteChartView: (args: { id: string }): Promise<{ ok: true; deleted: boolean }> =>
     request(`/api/chart-views${buildQuery(args)}`, { method: "DELETE" }),
 
-  getPfnTables: (_args?: EmptyArgs): Promise<PfnTables> => request("/api/pfn-tables"),
+  getPfnTables: (args: { season?: number; week?: number } = {}): Promise<PfnTables> =>
+    request(`/api/pfn-tables${buildQuery({ season: args.season, week: args.week })}`),
 
   getMatchupBoxScore: (args: {
     team: string;
