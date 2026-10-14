@@ -80,8 +80,11 @@ export function AggregateTradeHistory({
       sliceValueHistoryForSharedDomain(points, startDate),
     ]),
   );
+  // Assets with no stored history must not null out a mixed side's aggregate.
+  const chartGive = give.filter((asset) => (chartPointsByPlayerId.get(asset.playerId)?.length ?? 0) > 0);
+  const chartGet = get.filter((asset) => (chartPointsByPlayerId.get(asset.playerId)?.length ?? 0) > 0);
   const dates = [...new Set(
-    [...give, ...get].flatMap((asset) => (
+    [...chartGive, ...chartGet].flatMap((asset) => (
       chartPointsByPlayerId.get(asset.playerId)?.map((point) => point.date) ?? []
     )),
   )].sort();
@@ -96,7 +99,7 @@ export function AggregateTradeHistory({
     const values = assets.map((asset) => pointMap.get(asset.playerId)?.get(date));
     return values.every((value): value is number => typeof value === "number") ? values.reduce((sum, value) => sum + value, 0) : null;
   };
-  const data = dates.map((date) => ({ date, give: totalOn(give, date), get: totalOn(get, date) }));
+  const data = dates.map((date) => ({ date, give: totalOn(chartGive, date), get: totalOn(chartGet, date) }));
   const hasGive = data.some((point) => point.give !== null);
   const hasGet = data.some((point) => point.get !== null);
   const formatDateTick = (value: string): string => {
