@@ -267,6 +267,9 @@ describe("readUserDashboardSection (resolveSectionHitFromRows)", () => {
     });
     expect(hit?.source).toBe("section");
     expect(hit?.fresh).toBe(true);
+    expect(hit?.version).toBe(sampleDashboard.asOf);
+    expect(hit?.live).toBe(true);
+    expect(hit?.fetchedAtMs).toBe(fetchedAt.getTime());
     expect((hit?.data as { leagues: unknown[] }).leagues).toHaveLength(1);
   });
 
