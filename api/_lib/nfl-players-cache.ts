@@ -25,6 +25,12 @@ export const NFL_PLAYERS_CACHE_KEY = "nfl-players-roster-v1";
 export const NFL_PLAYERS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 /** Refuse to replace a good cache with fewer than this many compact rows. */
 export const NFL_PLAYERS_MIN_COUNT = 1_000;
+/**
+ * Refuse to replace a retained snapshot with a dump smaller than this fraction
+ * of its size (guards against partial Sleeper responses that still clear the
+ * absolute minimum).
+ */
+export const NFL_PLAYERS_MIN_RETENTION_RATIO = 0.8;
 
 export type NflPlayerRosterEntry = {
   team: string | null;
@@ -215,10 +221,14 @@ export function selectRosterRefreshOutcome(
   | { action: "keep-previous"; players: Record<string, NflPlayerRosterEntry> }
   | { action: "empty"; players: Record<string, NflPlayerRosterEntry> } {
   const count = Object.keys(compact).length;
-  if (count >= NFL_PLAYERS_MIN_COUNT) {
+  const previousCount = previous ? Object.keys(previous).length : 0;
+  const meetsFloor = count >= NFL_PLAYERS_MIN_COUNT;
+  const notShrunkTooMuch = previousCount === 0
+    || count >= Math.floor(previousCount * NFL_PLAYERS_MIN_RETENTION_RATIO);
+  if (meetsFloor && notShrunkTooMuch) {
     return { action: "commit", players: compact };
   }
-  if (previous && Object.keys(previous).length > 0) {
+  if (previousCount > 0 && previous) {
     return { action: "keep-previous", players: previous };
   }
   return { action: "empty", players: compact };

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   NFL_PLAYERS_MIN_COUNT,
+  NFL_PLAYERS_MIN_RETENTION_RATIO,
   compactSleeperPlayers,
   isActiveNflRosterPlayer,
   resolvePlayerTeam,
@@ -8,6 +9,20 @@ import {
   selectRosterRefreshOutcome,
 } from "./nfl-players-cache.js";
 import type { SleeperPlayer } from "./sleeper.js";
+
+function compactPlayers(count: number, prefix = "p"): Record<string, SleeperPlayer> {
+  return Object.fromEntries(
+    Array.from({ length: count }, (_, index) => [
+      `${prefix}${index + 1}`,
+      {
+        full_name: `Player ${prefix} ${index + 1}`,
+        team: "KC",
+        position: "WR",
+        status: "Active",
+      } satisfies SleeperPlayer,
+    ]),
+  );
+}
 
 describe("compactSleeperPlayers", () => {
   it("keeps roster fields and drops bulky Sleeper metadata", () => {
@@ -115,22 +130,14 @@ describe("rosterEntryToSleeperPlayer", () => {
 });
 
 describe("selectRosterRefreshOutcome", () => {
-  const healthy = compactSleeperPlayers(
-    Object.fromEntries(
-      Array.from({ length: NFL_PLAYERS_MIN_COUNT }, (_, index) => [
-        String(index + 1),
-        {
-          full_name: `Player ${index + 1}`,
-          team: "KC",
-          position: "WR",
-          status: "Active",
-        } satisfies SleeperPlayer,
-      ]),
-    ),
-  );
+  const healthy = compactSleeperPlayers(compactPlayers(NFL_PLAYERS_MIN_COUNT));
+  const large = compactSleeperPlayers(compactPlayers(10_000, "big"));
   const thin = compactSleeperPlayers({
     "1": { full_name: "Only One", team: "KC", position: "QB", status: "Active" },
   });
+  const partialButAboveFloor = compactSleeperPlayers(
+    compactPlayers(NFL_PLAYERS_MIN_COUNT, "partial"),
+  );
 
   it("commits a complete Sleeper dump", () => {
     const outcome = selectRosterRefreshOutcome(healthy, null);
@@ -143,6 +150,15 @@ describe("selectRosterRefreshOutcome", () => {
     expect(outcome).toEqual({ action: "keep-previous", players: healthy });
     expect(Object.keys(outcome.players)).toHaveLength(NFL_PLAYERS_MIN_COUNT);
     expect(outcome.players).not.toBe(thin);
+  });
+
+  it("keeps the previous snapshot when a partial dump clears the floor but shrinks too much", () => {
+    expect(Object.keys(partialButAboveFloor).length).toBeGreaterThanOrEqual(NFL_PLAYERS_MIN_COUNT);
+    expect(Object.keys(partialButAboveFloor).length).toBeLessThan(
+      Math.floor(Object.keys(large).length * NFL_PLAYERS_MIN_RETENTION_RATIO),
+    );
+    const outcome = selectRosterRefreshOutcome(partialButAboveFloor, large);
+    expect(outcome).toEqual({ action: "keep-previous", players: large });
   });
 
   it("reports empty when there is no previous snapshot and the dump is thin", () => {
