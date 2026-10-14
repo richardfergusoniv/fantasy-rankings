@@ -12,8 +12,8 @@ import {
 } from "recharts";
 import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import {
+  calendarMovingAverage,
   dampenedTrendCone,
-  movingAverage,
   type ValueChartPoint,
 } from "../../../api/_lib/value-chart-math";
 import { api } from "../api";
@@ -91,8 +91,8 @@ function buildChartRows(
   primary: ValueChartPoint[],
   compare: ValueChartPoint[] | null,
 ): ChartRow[] {
-  const ma7 = movingAverage(primary.map((point) => point.value), 7);
-  const ma30 = movingAverage(primary.map((point) => point.value), 30);
+  const ma7 = calendarMovingAverage(primary, 7);
+  const ma30 = calendarMovingAverage(primary, 30);
   const compareByDate = new Map((compare ?? []).map((point) => [point.date, point.value]));
   const cone = dampenedTrendCone(primary);
   const coneByDate = new Map(cone.map((point) => [point.date, point]));

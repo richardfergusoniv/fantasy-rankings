@@ -60,6 +60,30 @@ export function movingAverage(
   return out;
 }
 
+/**
+ * Trailing average over `window` consecutive calendar days ending at each
+ * point. Returns null when the trailing window is shorter than `window` or
+ * contains a date gap (sparse snapshot history).
+ */
+export function calendarMovingAverage(
+  points: ReadonlyArray<ValueChartPoint>,
+  window: number,
+): Array<number | null> {
+  if (!Number.isInteger(window) || window < 1) {
+    throw new Error("calendarMovingAverage window must be a positive integer");
+  }
+  return points.map((_point, index) => {
+    if (index + 1 < window) return null;
+    const windowPoints = points.slice(index - window + 1, index + 1);
+    const hasGap = windowPoints.some((point, pointIndex) => {
+      const previous = windowPoints[pointIndex - 1];
+      return previous !== undefined && addUtcDateKey(previous.date, 1) !== point.date;
+    });
+    if (hasGap) return null;
+    return movingAverage(windowPoints.map((point) => point.value), window)[window - 1] ?? null;
+  });
+}
+
 /** Ordinary least-squares slope of `values` against index 0..n-1. */
 export function linearSlope(values: ReadonlyArray<number>): number {
   const n = values.length;

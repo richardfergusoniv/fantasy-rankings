@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addUtcDateKey,
+  calendarMovingAverage,
   dampenedDriftFactor,
   dampenedTrendCone,
   dailyChangeStdDev,
@@ -28,6 +29,28 @@ describe("movingAverage", () => {
 
   it("rejects a non-positive window", () => {
     expect(() => movingAverage([1, 2], 0)).toThrow(/positive integer/);
+  });
+});
+
+describe("calendarMovingAverage", () => {
+  it("matches a plain moving average on consecutive dates", () => {
+    const points = [10, 12, 14, 16, 18, 20, 22].map((value, index) => ({
+      date: addUtcDateKey("2026-01-01", index),
+      value,
+    }));
+    expect(calendarMovingAverage(points, 3)).toEqual(movingAverage(points.map((point) => point.value), 3));
+  });
+
+  it("returns null for windows that span a calendar gap", () => {
+    const points = [
+      { date: "2026-01-01", value: 10 },
+      { date: "2026-01-02", value: 12 },
+      { date: "2026-01-03", value: 14 },
+      { date: "2026-01-05", value: 18 }, // gap on 2026-01-04
+      { date: "2026-01-06", value: 20 },
+      { date: "2026-01-07", value: 22 },
+    ];
+    expect(calendarMovingAverage(points, 3)).toEqual([null, null, 12, null, null, 20]);
   });
 });
 
