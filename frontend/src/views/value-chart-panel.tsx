@@ -220,11 +220,14 @@ export function ValueChartPanel({
       >
         {options.interactiveZoom ? (
           <div className="scatter-zoom-controls">
-            {effectiveZoomed ? (
-              <button type="button" className="scatter-zoom-toggle" onClick={toggleZoom}>
-                Reset
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="scatter-zoom-toggle"
+              aria-pressed={effectiveZoomed}
+              onClick={toggleZoom}
+            >
+              {effectiveZoomed ? "Reset" : "Zoom in"}
+            </button>
             <span className="sr-only">
               Double-tap the chart to {effectiveZoomed ? "reset" : "zoom into recent values"}.
             </span>
