@@ -10,10 +10,12 @@ import {
 import { resolveSleeperUserId } from "./_lib/auth.js";
 import {
   addDateKeyDays,
-  FANTASY_CALC_SNAPSHOT_PRESETS,
   fantasyCalcHistoryUrl,
+  fantasyCalcPresetForFormat,
   historySnapshotRowsFromPoints,
+  readCachedKeptSnapshotFormats,
   resolveFantasyCalcSnapshotFormatKey,
+  seasonLongFormatFromKey,
   upsertPlayerValueSnapshots,
   zonedDateKey,
   VALUE_HISTORY_CHART_MIN_DATE,
@@ -36,8 +38,8 @@ import {
  * cache headers (values update once daily).
  *
  * Query params:
- * - formatKey (required): league season-long format key; mapped to the nearest
- *   FantasyCalc snapshot preset when it is not an exact preset key
+ * - formatKey (required): league season-long format key; exact parseable keys
+ *   pass through, otherwise mapped to the nearest currently kept format
  * - playerIds (required): comma-separated Sleeper player IDs, max 24
  */
 
@@ -112,7 +114,11 @@ export async function GET(req: Request): Promise<Response> {
     });
     if (!parsed.success) return badRequest("Invalid query params", parsed.error.issues);
     const playerIds = parsed.data.playerIds;
-    const formatKey = resolveFantasyCalcSnapshotFormatKey(parsed.data.formatKey);
+    const keptPresets = await readCachedKeptSnapshotFormats();
+    const formatKey = resolveFantasyCalcSnapshotFormatKey(
+      parsed.data.formatKey,
+      keptPresets.map((preset) => preset.format),
+    );
 
     const now = new Date();
     const dayKey = zonedDateKey(now);
@@ -143,7 +149,11 @@ export async function GET(req: Request): Promise<Response> {
     const hasFreshSnapshots = playerIds.every(
       (playerId) => (latestSnapshotByPlayer.get(playerId) ?? "") >= yesterday,
     );
-    const preset = FANTASY_CALC_SNAPSHOT_PRESETS.find(({ format }) => format.key === formatKey);
+    const format = seasonLongFormatFromKey(formatKey);
+    const preset = format
+      ? (keptPresets.find((entry) => entry.format.key === formatKey)
+        ?? fantasyCalcPresetForFormat(format))
+      : null;
     if (preset && !hasFreshSnapshots) {
       try {
         const currentRows = await fetchJson<FantasyCalcRow[]>(preset.url);

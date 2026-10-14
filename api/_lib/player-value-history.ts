@@ -1,38 +1,35 @@
-import { notInArray, sql } from "drizzle-orm";
+import { eq, notInArray, sql } from "drizzle-orm";
+import { readOwnerSleeperUserId } from "./auth.js";
 import { db, schema } from "./db.js";
+import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
 import {
   FANTASY_CALC_HISTORY_URL,
   FANTASY_CALC_VALUES_URL,
   fetchJson,
+  seasonLongFormatForLeague,
   type FantasyCalcHistoryResponse,
   type FantasyCalcRow,
   type SeasonLongFormat,
 } from "./sleeper.js";
+import { readUserLeagues } from "./user-leagues.js";
 
 /**
  * FantasyCalc value-history snapshots: daily append during the
- * `refresh-fantasycalc` cron, plus a resumable one-time history backfill.
+ * `refresh-fantasycalc` cron, plus a resumable history backfill.
  *
- * Rows stay compact — one PK row per (date, format, player) with rounded
- * market value and the name/position needed by the chart API. Writes are
- * idempotent upserts; callers should avoid large snapshot reads.
- *
- * Snapshot presets are only the FantasyCalc formats actually used by linked
- * Sleeper leagues (Value chart / api/value-history). Rankings may still fetch
- * a broader preset set for synthesis; daily append + backfill stay on this list.
+ * Kept formats are discovered dynamically from every linked Sleeper account
+ * in `sleeper_connections` (plus OWNER_SLEEPER_USER_ID when set) — not a
+ * hardcoded list. Rankings may still fetch a broader FantasyCalc preset set
+ * for synthesis; snapshot append / prune / backfill use the discovered set.
  */
 
-export const FANTASY_CALC_SNAPSHOT_PRESETS: Array<{ format: SeasonLongFormat; url: string }> = [
-  { format: { key: "redraft-1qb-12t-0.5ppr", isDynasty: false, numQbs: 1, numTeams: 12, ppr: 0.5, label: "Redraft · 12-team · 1QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=1&numTeams=12&ppr=0.5` },
-  { format: { key: "redraft-1qb-10t-0.5ppr", isDynasty: false, numQbs: 1, numTeams: 10, ppr: 0.5, label: "Redraft · 10-team · 1QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=false&numQbs=1&numTeams=10&ppr=0.5` },
-  { format: { key: "dynasty-1qb-10t-0.5ppr", isDynasty: true, numQbs: 1, numTeams: 10, ppr: 0.5, label: "Dynasty · 10-team · 1QB · Half PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=1&numTeams=10&ppr=0.5` },
-  { format: { key: "dynasty-1qb-12t-1ppr", isDynasty: true, numQbs: 1, numTeams: 12, ppr: 1, label: "Dynasty · 12-team · 1QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=1&numTeams=12&ppr=1` },
-  { format: { key: "dynasty-2qb-14t-1ppr", isDynasty: true, numQbs: 2, numTeams: 14, ppr: 1, label: "Dynasty · 14-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=2&numTeams=14&ppr=1` },
-  { format: { key: "dynasty-2qb-12t-1ppr", isDynasty: true, numQbs: 2, numTeams: 12, ppr: 1, label: "Dynasty · 12-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=2&numTeams=12&ppr=1` },
-];
-
-/** Sensible default when a league format cannot be mapped to a snapshot preset. */
+/** Sensible default when a league format cannot be mapped to a snapshot format. */
 export const DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY = "redraft-1qb-12t-0.5ppr";
+
+/** source_cache key for the last discovered kept format set (plain JSON). */
+export const VALUE_HISTORY_KEPT_FORMATS_CACHE_KEY = "value-history:kept-formats";
+/** Per-format backfill offsets so newly seen formats auto-resume. */
+export const VALUE_HISTORY_BACKFILL_STATE_CACHE_KEY = "value-history:format-backfill";
 
 /** Snapshot calendar dates follow FantasyCalc's Pacific publish day. */
 export const VALUE_HISTORY_TIME_ZONE = "America/Los_Angeles";
@@ -49,10 +46,10 @@ export const VALUE_HISTORY_DAILY_RETENTION_DAYS = 90;
  */
 export const VALUE_HISTORY_CHART_MIN_DATE = "2026-01-01";
 
-export const FANTASY_CALC_SNAPSHOT_FORMAT_KEYS: readonly string[] =
-  FANTASY_CALC_SNAPSHOT_PRESETS.map((preset) => preset.format.key);
-
-const snapshotFormatKeySet = new Set(FANTASY_CALC_SNAPSHOT_FORMAT_KEYS);
+export type FantasyCalcSnapshotPreset = {
+  format: SeasonLongFormat;
+  url: string;
+};
 
 const snapshotFormatKeyPattern = /^(dynasty|redraft)-(\d+)qb-(\d+)t-([\d.]+)ppr$/;
 
@@ -63,7 +60,7 @@ type SnapshotFormatIdentity = {
   ppr: number;
 };
 
-function parseSnapshotFormatKey(formatKey: string): SnapshotFormatIdentity | null {
+export function parseSnapshotFormatKey(formatKey: string): SnapshotFormatIdentity | null {
   const match = snapshotFormatKeyPattern.exec(formatKey);
   if (!match) return null;
   const numQbs = Number(match[2]);
@@ -78,27 +75,71 @@ function parseSnapshotFormatKey(formatKey: string): SnapshotFormatIdentity | nul
   };
 }
 
+export function defaultSnapshotFormat(): SeasonLongFormat {
+  return {
+    key: DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY,
+    isDynasty: false,
+    numQbs: 1,
+    numTeams: 12,
+    ppr: 0.5,
+    label: "Redraft · 12-team · 1QB · Half PPR",
+  };
+}
+
+export function seasonLongFormatFromKey(formatKey: string): SeasonLongFormat | null {
+  const parsed = parseSnapshotFormatKey(formatKey);
+  if (!parsed) return null;
+  const scoring = parsed.ppr === 1 ? "PPR" : parsed.ppr === 0.5 ? "Half PPR" : "Standard";
+  return {
+    key: formatKey,
+    isDynasty: parsed.isDynasty,
+    numQbs: parsed.numQbs,
+    numTeams: parsed.numTeams,
+    ppr: parsed.ppr,
+    label: `${parsed.isDynasty ? "Dynasty" : "Redraft"} · ${parsed.numTeams}-team · ${parsed.numQbs === 2 ? "Superflex / 2QB" : "1QB"} · ${scoring}`,
+  };
+}
+
+export function fantasyCalcValuesUrl(
+  format: Pick<SeasonLongFormat, "isDynasty" | "numQbs" | "numTeams" | "ppr">,
+): string {
+  const query = new URLSearchParams({
+    isDynasty: String(format.isDynasty),
+    numQbs: String(format.numQbs),
+    numTeams: String(format.numTeams),
+    ppr: String(format.ppr),
+  });
+  return `${FANTASY_CALC_VALUES_URL}?${query.toString()}`;
+}
+
+export function fantasyCalcPresetForFormat(format: SeasonLongFormat): FantasyCalcSnapshotPreset {
+  return { format, url: fantasyCalcValuesUrl(format) };
+}
+
 /**
- * Map a league's season-long format key onto a FantasyCalc preset that has
- * rows in `player_value_snapshots`. Exact preset keys pass through; otherwise
- * pick the nearest preset (same dynasty flag, prefer matching QB count, then
- * closest team count and PPR). Falls back to the default half-PPR 12-team
- * redraft preset.
+ * Map a league's season-long format key onto a snapshot format key.
+ * Exact parseable keys pass through (we snapshot each linked league's exact
+ * key). When `keptFormats` is provided and the key is not in that set, pick
+ * the nearest kept format. Falls back to the default half-PPR 12-team redraft.
  */
-export function resolveFantasyCalcSnapshotFormatKey(formatKey: string): string {
-  const presets = FANTASY_CALC_SNAPSHOT_PRESETS.map((preset) => preset.format);
-  if (presets.some((preset) => preset.key === formatKey)) return formatKey;
+export function resolveFantasyCalcSnapshotFormatKey(
+  formatKey: string,
+  keptFormats: readonly SeasonLongFormat[] = [],
+): string {
+  if (keptFormats.some((format) => format.key === formatKey)) return formatKey;
 
   const target = parseSnapshotFormatKey(formatKey);
   if (!target) return DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY;
+  // Exact league keys are the source of truth once discovered/snapshotted.
+  if (keptFormats.length === 0) return formatKey;
 
-  const scored = presets
-    .filter((preset) => preset.isDynasty === target.isDynasty)
-    .map((preset) => ({
-      key: preset.key,
-      qbMismatch: preset.numQbs === target.numQbs ? 0 : 1,
-      teamDistance: Math.abs(preset.numTeams - target.numTeams),
-      pprDistance: Math.abs(preset.ppr - target.ppr),
+  const scored = keptFormats
+    .filter((format) => format.isDynasty === target.isDynasty)
+    .map((format) => ({
+      key: format.key,
+      qbMismatch: format.numQbs === target.numQbs ? 0 : 1,
+      teamDistance: Math.abs(format.numTeams - target.numTeams),
+      pprDistance: Math.abs(format.ppr - target.ppr),
     }))
     .sort((left, right) => (
       left.qbMismatch - right.qbMismatch
@@ -107,7 +148,182 @@ export function resolveFantasyCalcSnapshotFormatKey(formatKey: string): string {
       || left.key.localeCompare(right.key)
     ));
 
-  return scored[0]?.key ?? DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY;
+  return scored[0]?.key ?? formatKey;
+}
+
+/** Every linked Sleeper account, plus the scheduled owner id when set. */
+export async function listSnapshotSleeperUserIds(): Promise<string[]> {
+  const rows = await db
+    .select({ sleeperUserId: schema.sleeperConnections.sleeperUserId })
+    .from(schema.sleeperConnections);
+  const ids = new Set(rows.map((row) => row.sleeperUserId).filter(Boolean));
+  const ownerId = readOwnerSleeperUserId();
+  if (ownerId) ids.add(ownerId);
+  return [...ids].sort();
+}
+
+/**
+ * Unique FantasyCalc snapshot presets used by any linked user's Sleeper
+ * leagues (exact `seasonLongFormatForLeague` keys). Always includes the
+ * default format so prune/append have a safe floor when nobody is linked.
+ */
+export async function discoverKeptSnapshotFormats(): Promise<FantasyCalcSnapshotPreset[]> {
+  const byKey = new Map<string, SeasonLongFormat>();
+  byKey.set(DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY, defaultSnapshotFormat());
+
+  const sleeperUserIds = await listSnapshotSleeperUserIds();
+  const leagueResults = await Promise.allSettled(
+    sleeperUserIds.map((sleeperUserId) => readUserLeagues(sleeperUserId, false)),
+  );
+  for (const result of leagueResults) {
+    if (result.status !== "fulfilled") {
+      console.error(
+        `[player-value-history] kept-format league fetch failed: ${result.reason instanceof Error ? result.reason.message : result.reason}`,
+      );
+      continue;
+    }
+    for (const league of result.value.leagues) {
+      const format = seasonLongFormatForLeague(league);
+      byKey.set(format.key, format);
+    }
+  }
+
+  return [...byKey.values()]
+    .sort((left, right) => left.key.localeCompare(right.key))
+    .map((format) => fantasyCalcPresetForFormat(format));
+}
+
+export type KeptSnapshotFormatsCache = {
+  formatKeys: string[];
+  formats: SeasonLongFormat[];
+  asOf: string;
+};
+
+export async function writeKeptSnapshotFormatsCache(
+  presets: FantasyCalcSnapshotPreset[],
+  asOf: Date = new Date(),
+): Promise<KeptSnapshotFormatsCache> {
+  const payload: KeptSnapshotFormatsCache = {
+    formatKeys: presets.map((preset) => preset.format.key),
+    formats: presets.map((preset) => preset.format),
+    asOf: asOf.toISOString(),
+  };
+  const body = encodeSourceCachePayload(payload);
+  const fetchedAt = asOf;
+  await db
+    .insert(schema.sourceCache)
+    .values({
+      cacheKey: VALUE_HISTORY_KEPT_FORMATS_CACHE_KEY,
+      payload: body,
+      fetchedAt,
+    })
+    .onConflictDoUpdate({
+      target: schema.sourceCache.cacheKey,
+      set: { payload: body, fetchedAt },
+    });
+  return payload;
+}
+
+export async function readCachedKeptSnapshotFormats(): Promise<FantasyCalcSnapshotPreset[]> {
+  const rows = await db
+    .select()
+    .from(schema.sourceCache)
+    .where(eq(schema.sourceCache.cacheKey, VALUE_HISTORY_KEPT_FORMATS_CACHE_KEY))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return [];
+  try {
+    const payload = decodeSourceCachePayload(row.payload) as Partial<KeptSnapshotFormatsCache>;
+    const formats = Array.isArray(payload.formats) ? payload.formats : [];
+    return formats
+      .filter((format): format is SeasonLongFormat => (
+        Boolean(format)
+        && typeof format === "object"
+        && typeof format.key === "string"
+        && typeof format.isDynasty === "boolean"
+        && typeof format.numQbs === "number"
+        && typeof format.numTeams === "number"
+        && typeof format.ppr === "number"
+      ))
+      .map((format) => fantasyCalcPresetForFormat(format));
+  } catch {
+    return [];
+  }
+}
+
+/** Prefer a fresh discovery; fall back to the last cached kept set. */
+export async function loadKeptSnapshotFormats(): Promise<FantasyCalcSnapshotPreset[]> {
+  try {
+    return await discoverKeptSnapshotFormats();
+  } catch (err) {
+    console.error(
+      `[player-value-history] discover kept formats failed: ${err instanceof Error ? err.message : err}`,
+    );
+    const cached = await readCachedKeptSnapshotFormats();
+    if (cached.length > 0) return cached;
+    return [fantasyCalcPresetForFormat(defaultSnapshotFormat())];
+  }
+}
+
+type FormatBackfillStateFile = {
+  formats: Record<string, { nextOffset: number; done: boolean }>;
+};
+
+async function readFormatBackfillState(): Promise<FormatBackfillStateFile> {
+  const rows = await db
+    .select()
+    .from(schema.sourceCache)
+    .where(eq(schema.sourceCache.cacheKey, VALUE_HISTORY_BACKFILL_STATE_CACHE_KEY))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return { formats: {} };
+  try {
+    const payload = decodeSourceCachePayload(row.payload) as Partial<FormatBackfillStateFile>;
+    if (!payload.formats || typeof payload.formats !== "object") return { formats: {} };
+    return { formats: payload.formats };
+  } catch {
+    return { formats: {} };
+  }
+}
+
+async function writeFormatBackfillState(state: FormatBackfillStateFile): Promise<void> {
+  const body = encodeSourceCachePayload(state);
+  const fetchedAt = new Date();
+  await db
+    .insert(schema.sourceCache)
+    .values({
+      cacheKey: VALUE_HISTORY_BACKFILL_STATE_CACHE_KEY,
+      payload: body,
+      fetchedAt,
+    })
+    .onConflictDoUpdate({
+      target: schema.sourceCache.cacheKey,
+      set: { payload: body, fetchedAt },
+    });
+}
+
+/**
+ * Ensure every kept format has a backfill cursor. Newly seen formats start at
+ * offset 0 / not done so the next refresh batch backfills them automatically.
+ */
+export async function syncFormatBackfillState(
+  kept: FantasyCalcSnapshotPreset[],
+): Promise<{ state: FormatBackfillStateFile; newFormatKeys: string[] }> {
+  const state = await readFormatBackfillState();
+  const keptKeys = new Set(kept.map((preset) => preset.format.key));
+  const newFormatKeys: string[] = [];
+  for (const preset of kept) {
+    if (!state.formats[preset.format.key]) {
+      state.formats[preset.format.key] = { nextOffset: 0, done: false };
+      newFormatKeys.push(preset.format.key);
+    }
+  }
+  // Drop cursors for formats no longer kept (pruned from the live set).
+  for (const key of Object.keys(state.formats)) {
+    if (!keptKeys.has(key)) delete state.formats[key];
+  }
+  await writeFormatBackfillState(state);
+  return { state, newFormatKeys };
 }
 
 /**
@@ -615,19 +831,23 @@ async function mapPool<T, R>(
 }
 
 /**
- * Write today's compact market rows for every kept snapshot preset present in
- * `presets`. Idempotent for the same Pacific date via PK upsert. Unknown /
- * unused format keys are ignored so rankings can still cache a broader set.
+ * Write today's compact market rows for every kept format present in
+ * `presets`. Idempotent for the same Pacific date via PK upsert. Keys outside
+ * `keptFormatKeys` are ignored so rankings can still cache a broader set.
  */
 export async function appendDailyValueSnapshots(
   presets: Record<string, FantasyCalcRow[]>,
   asOf: Date = new Date(),
+  keptFormatKeys?: ReadonlySet<string> | readonly string[],
 ): Promise<{ formats: number; rows: number; skipped: number }> {
+  const kept = keptFormatKeys
+    ? (keptFormatKeys instanceof Set ? keptFormatKeys : new Set(keptFormatKeys))
+    : null;
   let skipped = 0;
   let formats = 0;
   const rows: PlayerValueSnapshotRow[] = [];
   for (const [formatKey, presetRows] of Object.entries(presets)) {
-    if (!snapshotFormatKeySet.has(formatKey)) continue;
+    if (kept && !kept.has(formatKey)) continue;
     formats += 1;
     const built = dailySnapshotRowsFromPreset(formatKey, presetRows, asOf, asOf);
     rows.push(...built.rows);
@@ -654,15 +874,25 @@ export type PrunePlayerValueSnapshotsResult = {
 /**
  * Bound `player_value_snapshots` growth:
  * - drop rows dated after Pacific "today"
- * - drop formats outside the kept snapshot preset list
+ * - drop formats outside the dynamic kept set (never deletes a kept key)
  * - keep daily points newer than `VALUE_HISTORY_DAILY_RETENTION_DAYS`
  * - older points: one row per (format, player, ISO week) — last day kept
  */
 export async function prunePlayerValueSnapshots(
   asOf: Date = new Date(),
+  keptFormatKeys?: readonly string[],
 ): Promise<PrunePlayerValueSnapshotsResult> {
   const today = zonedDateKey(asOf);
   const dailyCutoff = addDateKeyDays(today, -VALUE_HISTORY_DAILY_RETENTION_DAYS);
+
+  let keptKeys = keptFormatKeys ? [...keptFormatKeys] : [];
+  if (keptKeys.length === 0) {
+    const cached = await readCachedKeptSnapshotFormats();
+    keptKeys = cached.map((preset) => preset.format.key);
+  }
+  if (keptKeys.length === 0) {
+    keptKeys = [DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY];
+  }
 
   const futureRows = await db.execute(sql`
     DELETE FROM player_value_snapshots
@@ -673,7 +903,7 @@ export async function prunePlayerValueSnapshots(
 
   const unused = await db
     .delete(schema.playerValueSnapshots)
-    .where(notInArray(schema.playerValueSnapshots.formatKey, [...FANTASY_CALC_SNAPSHOT_FORMAT_KEYS]))
+    .where(notInArray(schema.playerValueSnapshots.formatKey, keptKeys))
     .returning({ id: schema.playerValueSnapshots.id });
   const deletedUnusedFormats = unused.length;
 
@@ -744,25 +974,22 @@ export type ValueHistoryBackfillResult = {
 };
 
 /**
- * One resumable backfill batch: walk FantasyCalc-ranked players across all
- * presets (PICK rows skipped), fetch full history for `limit` work items
+ * One resumable backfill batch: walk FantasyCalc-ranked players across kept
+ * formats (PICK rows skipped), fetch full history for `limit` work items
  * starting at `offset`, and upsert compact snapshot rows.
  *
- * Fetches are sequential (`VALUE_HISTORY_BACKFILL_CONCURRENCY = 1`) with a
- * short delay between requests. Each history response must pass whole-sequence
- * validation; corrupt or 5xx responses are retried, then counted as failed
- * with nothing written for that player×format.
- *
- * Avoids reading `player_value_snapshots` — upserts alone are enough for
- * idempotency. `totalWorkItems` is discovered while walking presets so the
- * caller can compute remaining batches.
+ * `presets` defaults to the dynamically discovered kept set (every linked
+ * user's leagues). Fetches are sequential with retries; 404/204 count as
+ * skippedAbsent rather than failed.
  */
 export async function backfillValueHistoryBatch(options: {
   offset?: number;
   limit?: number;
+  presets?: FantasyCalcSnapshotPreset[];
 }): Promise<ValueHistoryBackfillResult> {
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
   const limit = clampBackfillLimit(options.limit);
+  const presets = options.presets ?? await loadKeptSnapshotFormats();
   let skip = offset;
   let remaining = limit;
   let totalWorkItems = 0;
@@ -776,8 +1003,9 @@ export async function backfillValueHistoryBatch(options: {
     format: SeasonLongFormat;
     player: RankedFantasyCalcPlayer;
   }> = [];
+  const keptKeys = presets.map((preset) => preset.format.key);
 
-  for (const preset of FANTASY_CALC_SNAPSHOT_PRESETS) {
+  for (const preset of presets) {
     const currentRows = await fetchJson<FantasyCalcRow[]>(preset.url);
     const ranked = rankedPlayersFromFantasyCalcRows(currentRows);
     totalWorkItems += ranked.length;
@@ -855,7 +1083,7 @@ export async function backfillValueHistoryBatch(options: {
   const nextOffset = offset + work.length;
   // Full-history upserts can restore >90d daily rows; prune after any write so
   // retention holds even when backfill runs without a separate refresh.
-  if (upserted > 0) await prunePlayerValueSnapshots();
+  if (upserted > 0) await prunePlayerValueSnapshots(new Date(), keptKeys);
   const done = nextOffset >= totalWorkItems;
   const batchCount = totalWorkItems === 0 ? 0 : Math.ceil(totalWorkItems / limit);
 
@@ -874,4 +1102,40 @@ export async function backfillValueHistoryBatch(options: {
     batchCount,
     done,
   };
+}
+
+/**
+ * Advance backfill for the first incomplete kept format (prefer newly seen).
+ * Called from the FantasyCalc refresh so new friend-league formats get history
+ * without a separate workflow. No-ops when every kept format is done.
+ */
+export type AutoBackfillResult = ValueHistoryBackfillResult & {
+  formatKey: string;
+  newFormatKeys: string[];
+};
+
+export async function backfillNextIncompleteKeptFormat(options: {
+  kept: FantasyCalcSnapshotPreset[];
+  limit?: number;
+}): Promise<AutoBackfillResult | null> {
+  const { state, newFormatKeys } = await syncFormatBackfillState(options.kept);
+  const preferred = [
+    ...options.kept.filter((preset) => newFormatKeys.includes(preset.format.key)),
+    ...options.kept.filter((preset) => !newFormatKeys.includes(preset.format.key)),
+  ];
+  const target = preferred.find((preset) => state.formats[preset.format.key]?.done !== true);
+  if (!target) return null;
+
+  const cursor = state.formats[target.format.key] ?? { nextOffset: 0, done: false };
+  const result = await backfillValueHistoryBatch({
+    offset: cursor.nextOffset,
+    limit: options.limit,
+    presets: [target],
+  });
+  state.formats[target.format.key] = {
+    nextOffset: result.nextOffset,
+    done: result.done,
+  };
+  await writeFormatBackfillState(state);
+  return { ...result, formatKey: target.format.key, newFormatKeys };
 }

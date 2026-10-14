@@ -73,7 +73,15 @@ import { rankingsForLeagueFormats } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
 import { selectProjectionFeed } from "./projection-fallback.js";
-import { appendDailyValueSnapshots, prunePlayerValueSnapshots } from "./player-value-history.js";
+import {
+  appendDailyValueSnapshots,
+  backfillNextIncompleteKeptFormat,
+  fantasyCalcPresetForFormat,
+  loadKeptSnapshotFormats,
+  prunePlayerValueSnapshots,
+  syncFormatBackfillState,
+  writeKeptSnapshotFormatsCache,
+} from "./player-value-history.js";
 import {
   applySnapSharesToRows,
   enrichOpportunityMetrics,
@@ -970,6 +978,9 @@ export async function refreshFantasyCalcCache(): Promise<{
   valueSnapshots: number;
   skipped: number;
   pruned: number;
+  keptFormats: string[];
+  newFormats: string[];
+  backfill: { formatKey: string; nextOffset: number; done: boolean; upserted: number } | null;
 }> {
   const presets: Record<string, FantasyCalcRow[]> = {};
   let failed = 0;
@@ -992,6 +1003,28 @@ export async function refreshFantasyCalcCache(): Promise<{
     if (rows) presets[preset.format.key] = rows;
     else failed += 1;
   }
+
+  // Dynamic kept set = every linked user's Sleeper league formats (+ default).
+  const kept = await loadKeptSnapshotFormats();
+  const keptKeys = kept.map((preset) => preset.format.key);
+  await writeKeptSnapshotFormatsCache(kept, new Date());
+
+  // Fetch FantasyCalc values for kept formats not already in the rankings cache.
+  for (const preset of kept) {
+    if (presets[preset.format.key]) continue;
+    if (deadlineAt - Date.now() < presetBudgetMs) break;
+    let rows: FantasyCalcRow[] | undefined;
+    for (let attempt = 0; attempt < 2 && !rows; attempt += 1) {
+      try {
+        rows = await fetchJson<FantasyCalcRow[]>(fantasyCalcPresetForFormat(preset.format).url);
+      } catch {
+        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 2_000));
+      }
+    }
+    if (rows) presets[preset.format.key] = rows;
+    else failed += 1;
+  }
+
   const rowCount = Object.values(presets).reduce((total, rows) => total + rows.length, 0);
   const fetchedAt = new Date();
   const payload = encodeSourceCachePayload({ presets });
@@ -1007,10 +1040,30 @@ export async function refreshFantasyCalcCache(): Promise<{
       set: { payload, fetchedAt },
     });
   rememberFantasyCalcPresets(presets, fetchedAt, fetchedAt.getTime());
-  // Append today's values only for kept snapshot formats (subset of rankings
-  // presets). Then prune future-dated / unused-format / >90d daily rows.
-  const snapshots = await appendDailyValueSnapshots(presets, fetchedAt);
-  const pruned = await prunePlayerValueSnapshots(fetchedAt);
+
+  const snapshots = await appendDailyValueSnapshots(presets, fetchedAt, new Set(keptKeys));
+  const pruned = await prunePlayerValueSnapshots(fetchedAt, keptKeys);
+
+  // Auto-backfill newly seen / incomplete kept formats while time remains.
+  let backfill: { formatKey: string; nextOffset: number; done: boolean; upserted: number } | null = null;
+  let newFormats: string[] = [];
+  if (deadlineAt - Date.now() > 12_000) {
+    const batch = await backfillNextIncompleteKeptFormat({ kept, limit: 10 });
+    if (batch) {
+      newFormats = batch.newFormatKeys;
+      backfill = {
+        formatKey: batch.formatKey,
+        nextOffset: batch.nextOffset,
+        done: batch.done,
+        upserted: batch.upserted,
+      };
+    } else {
+      newFormats = (await syncFormatBackfillState(kept)).newFormatKeys;
+    }
+  } else {
+    newFormats = (await syncFormatBackfillState(kept)).newFormatKeys;
+  }
+
   return {
     presets: Object.keys(presets).length,
     rows: rowCount,
@@ -1019,6 +1072,9 @@ export async function refreshFantasyCalcCache(): Promise<{
     valueSnapshots: snapshots.rows,
     skipped: snapshots.skipped,
     pruned: pruned.deleted,
+    keptFormats: keptKeys,
+    newFormats,
+    backfill,
   };
 }
 

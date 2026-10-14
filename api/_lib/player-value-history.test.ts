@@ -6,11 +6,12 @@ import {
   compactPlayerValueSnapshot,
   CorruptFantasyCalcHistoryError,
   dailySnapshotRowsFromPreset,
+  defaultSnapshotFormat,
   dedupePlayerValueSnapshotsById,
   fantasyCalcHistoryUrl,
+  fantasyCalcPresetForFormat,
+  fantasyCalcValuesUrl,
   fetchValidatedFantasyCalcHistory,
-  FANTASY_CALC_SNAPSHOT_FORMAT_KEYS,
-  FANTASY_CALC_SNAPSHOT_PRESETS,
   formatDbError,
   historySnapshotRowsFromPoints,
   isAbsentPlayerHistoryError,
@@ -19,11 +20,14 @@ import {
   isRetryableHistoryFetchError,
   isValidFantasyCalcHistorySequence,
   parseFantasyCalcHistoryDate,
+  parseSnapshotFormatKey,
   playerValueSnapshotId,
   rankedPlayersFromFantasyCalcRows,
   resolveFantasyCalcSnapshotFormatKey,
+  seasonLongFormatFromKey,
   utcDateKey,
   VALUE_HISTORY_DAILY_RETENTION_DAYS,
+  VALUE_HISTORY_KEPT_FORMATS_CACHE_KEY,
   VALUE_HISTORY_TIME_ZONE,
   zonedDateKey,
   DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY,
@@ -37,7 +41,7 @@ import {
   VALUE_HISTORY_UPSERT_CHUNK,
   type PlayerValueSnapshotRow,
 } from "./player-value-history.js";
-import type { FantasyCalcRow } from "./sleeper.js";
+import type { FantasyCalcRow, SeasonLongFormat } from "./sleeper.js";
 
 function snapshotRow(id: string, value: number): PlayerValueSnapshotRow {
   return {
@@ -74,19 +78,23 @@ describe("zonedDateKey / addDateKeyDays", () => {
   });
 });
 
-describe("kept snapshot formats", () => {
-  it("only snapshots formats used by linked Sleeper leagues", () => {
-    expect([...FANTASY_CALC_SNAPSHOT_FORMAT_KEYS].sort()).toEqual([
-      "dynasty-1qb-10t-0.5ppr",
-      "dynasty-1qb-12t-1ppr",
-      "dynasty-2qb-12t-1ppr",
-      "dynasty-2qb-14t-1ppr",
-      "redraft-1qb-10t-0.5ppr",
-      "redraft-1qb-12t-0.5ppr",
-    ]);
-    expect(FANTASY_CALC_SNAPSHOT_PRESETS).toHaveLength(6);
+describe("dynamic kept snapshot formats", () => {
+  it("builds FantasyCalc URLs and default format from league identity keys", () => {
     expect(VALUE_HISTORY_DAILY_RETENTION_DAYS).toBe(90);
-    expect(FANTASY_CALC_SNAPSHOT_FORMAT_KEYS).toContain(DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY);
+    expect(VALUE_HISTORY_KEPT_FORMATS_CACHE_KEY).toBe("value-history:kept-formats");
+    expect(defaultSnapshotFormat().key).toBe(DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY);
+    expect(seasonLongFormatFromKey("dynasty-2qb-12t-1ppr")).toMatchObject({
+      key: "dynasty-2qb-12t-1ppr",
+      isDynasty: true,
+      numQbs: 2,
+      numTeams: 12,
+      ppr: 1,
+    });
+    expect(parseSnapshotFormatKey("not-a-format")).toBeNull();
+    expect(fantasyCalcValuesUrl({ isDynasty: true, numQbs: 2, numTeams: 12, ppr: 1 })).toBe(
+      "https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&numTeams=12&ppr=1",
+    );
+    expect(fantasyCalcPresetForFormat(defaultSnapshotFormat()).url).toContain("isDynasty=false");
   });
 });
 
@@ -588,18 +596,28 @@ describe("historySnapshotRowsFromPoints", () => {
 });
 
 describe("resolveFantasyCalcSnapshotFormatKey", () => {
-  it("passes exact preset keys through", () => {
+  const kept: SeasonLongFormat[] = [
+    defaultSnapshotFormat(),
+    seasonLongFormatFromKey("redraft-1qb-10t-0.5ppr")!,
+    seasonLongFormatFromKey("dynasty-2qb-12t-1ppr")!,
+  ];
+
+  it("passes exact parseable keys through when no kept list is provided", () => {
     expect(resolveFantasyCalcSnapshotFormatKey("dynasty-2qb-12t-1ppr")).toBe("dynasty-2qb-12t-1ppr");
+    expect(resolveFantasyCalcSnapshotFormatKey("redraft-1qb-11t-1ppr")).toBe("redraft-1qb-11t-1ppr");
   });
 
-  it("maps nearby non-preset keys to the nearest kept snapshot preset", () => {
-    expect(resolveFantasyCalcSnapshotFormatKey("redraft-1qb-12t-0ppr")).toBe("redraft-1qb-12t-0.5ppr");
-    // Full-PPR 11-team redraft maps to nearest kept 1QB redraft (10t half-PPR ties on distance, sorts first).
-    expect(resolveFantasyCalcSnapshotFormatKey("redraft-1qb-11t-1ppr")).toBe("redraft-1qb-10t-0.5ppr");
+  it("passes through keys that are already in the kept set", () => {
+    expect(resolveFantasyCalcSnapshotFormatKey("dynasty-2qb-12t-1ppr", kept)).toBe("dynasty-2qb-12t-1ppr");
+  });
+
+  it("maps unknown parseable keys to the nearest kept format", () => {
+    expect(resolveFantasyCalcSnapshotFormatKey("redraft-1qb-12t-0ppr", kept)).toBe("redraft-1qb-12t-0.5ppr");
+    expect(resolveFantasyCalcSnapshotFormatKey("redraft-1qb-11t-1ppr", kept)).toBe("redraft-1qb-10t-0.5ppr");
   });
 
   it("falls back to the default preset for unparseable keys", () => {
-    expect(resolveFantasyCalcSnapshotFormatKey("not-a-format")).toBe(DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY);
+    expect(resolveFantasyCalcSnapshotFormatKey("not-a-format", kept)).toBe(DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY);
   });
 });
 

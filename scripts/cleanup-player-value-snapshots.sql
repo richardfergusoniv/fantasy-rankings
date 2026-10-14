@@ -2,26 +2,39 @@
 -- Run manually in the Supabase SQL editor against the production DB.
 --
 -- Goals:
---   1. Delete formats the app no longer snapshots
+--   1. Delete formats not in the dynamic kept set
 --   2. Delete "tomorrow"-dated rows written via UTC instead of America/Los_Angeles
 --   3. Downsample rows older than 90 Pacific days to one point per ISO week
 --   4. Report estimated rows remaining (and note VACUUM FULL for space reclaim)
 --
--- Kept formats (Sleeper leagues actually used by the app):
---   redraft-1qb-12t-0.5ppr
---   redraft-1qb-10t-0.5ppr
---   dynasty-1qb-10t-0.5ppr
---   dynasty-1qb-12t-1ppr
---   dynasty-2qb-14t-1ppr
---   dynasty-2qb-12t-1ppr
+-- =============================================================================
+-- DYNAMIC KEPT FORMAT SET
+-- =============================================================================
+-- Kept formats are NOT hardcoded. They are every distinct
+-- seasonLongFormatForLeague(key) across:
+--   - all sleeper_connections.sleeper_user_id (every signed-in / linked user)
+--   - plus OWNER_SLEEPER_USER_ID when set
+-- discovered at runtime by refresh-fantasycalc and cached at:
+--   source_cache.cache_key = 'value-history:kept-formats'
+--   payload JSON: { "formatKeys": [...], "formats": [...], "asOf": "..." }
+--   (usually uncompressed; may be gz1: if ever large)
 --
--- Estimated remaining after this script (as of 2026-10-13 PT):
---   ~243k rows (~88 MB table+indexes before VACUUM; reclaim requires VACUUM FULL)
---   vs ~934k rows / 338 MB before cleanup.
+-- Preview the last discovered set (after at least one refresh):
 --
--- After DELETE, Supabase free-tier disk is not reclaimed until:
---   VACUUM FULL player_value_snapshots;
--- (takes an ACCESS EXCLUSIVE lock — run during a quiet window.)
+--   SELECT payload
+--   FROM source_cache
+--   WHERE cache_key = 'value-history:kept-formats';
+--
+-- Or rebuild the set yourself from linked users + Sleeper:
+--   1) SELECT sleeper_user_id FROM sleeper_connections;
+--   2) For each id: GET https://api.sleeper.app/v1/user/{id}/leagues/nfl/{season}
+--   3) Derive format key = {dynasty|redraft}-{N}qb-{teams}t-{ppr}ppr
+--      (same rules as api/_lib/sleeper.ts seasonLongFormatForLeague)
+--   4) Always include default: redraft-1qb-12t-0.5ppr
+--
+-- Replace the VALUES list below with those keys before running the DELETEs.
+-- Example from owner leagues as of 2026-10-13 (verify against the cache row):
+-- =============================================================================
 
 BEGIN;
 
@@ -31,11 +44,11 @@ SELECT
   COUNT(*) FILTER (
     WHERE format_key NOT IN (
       'redraft-1qb-12t-0.5ppr',
-      'redraft-1qb-10t-0.5ppr',
       'dynasty-1qb-10t-0.5ppr',
       'dynasty-1qb-12t-1ppr',
       'dynasty-2qb-14t-1ppr',
       'dynasty-2qb-12t-1ppr'
+      -- add any additional keys from value-history:kept-formats / Sleeper discovery
     )
   ) AS unused_format_rows,
   COUNT(*) FILTER (
@@ -43,15 +56,15 @@ SELECT
   ) AS future_dated_rows
 FROM player_value_snapshots;
 
--- 1) Drop unused FantasyCalc formats.
+-- 1) Drop formats outside the dynamic kept set (UPDATE THE VALUES LIST).
 DELETE FROM player_value_snapshots
 WHERE format_key NOT IN (
   'redraft-1qb-12t-0.5ppr',
-  'redraft-1qb-10t-0.5ppr',
   'dynasty-1qb-10t-0.5ppr',
   'dynasty-1qb-12t-1ppr',
   'dynasty-2qb-14t-1ppr',
   'dynasty-2qb-12t-1ppr'
+  -- add any additional keys from value-history:kept-formats / Sleeper discovery
 );
 
 -- 2) Drop rows dated after Pacific "today" (UTC-"tomorrow" bug).
