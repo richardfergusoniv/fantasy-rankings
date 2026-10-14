@@ -14,6 +14,7 @@ import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import {
   calendarMovingAverage,
   dampenedTrendCone,
+  trimLeadingNonPositive,
   type ValueChartPoint,
 } from "../../../api/_lib/value-chart-math";
 import { api } from "../api";
@@ -178,14 +179,19 @@ export function ValueChartPanel({
 
   const chartRows = useMemo(() => {
     if (!primarySeries?.points.length) return [];
-    return buildChartRows(
-      primarySeries.points,
-      compareSeries?.points.length ? compareSeries.points : null,
-    );
+    const primary = trimLeadingNonPositive(primarySeries.points);
+    if (!primary.length) return [];
+    const compare = compareSeries?.points.length
+      ? trimLeadingNonPositive(compareSeries.points)
+      : null;
+    return buildChartRows(primary, compare?.length ? compare : null);
   }, [compareSeries?.points, primarySeries?.points]);
 
+  // Empty after trim (all ≤0) counts as unavailable — same empty copy as no history.
   const unavailable = historyQuery.isError
-    || (!historyQuery.isPending && requestIds.length > 0 && !primarySeries?.points.length);
+    || (!historyQuery.isPending && requestIds.length > 0 && (
+      !primarySeries?.points.length || chartRows.length === 0
+    ));
   const showChart = chartRows.length > 0 && !unavailable;
 
   return (

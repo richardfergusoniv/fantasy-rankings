@@ -165,6 +165,24 @@ export function utcDateKey(date: Date): string {
 }
 
 /**
+ * YYYY-MM-DD for the America/Los_Angeles calendar day of `date`.
+ * Daily cron appends use this so late-evening PT runs are not dated "tomorrow"
+ * via UTC (`getUTC*` / `toISOString`).
+ */
+export function pacificDateKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Accept finite instants on/after 2015-01-01 UTC and at most 1 day ahead of `now`.
  * Rejects NaN dates and absurd far-future years from FantasyCalc history.
  */
@@ -336,7 +354,8 @@ export function compactPlayerValueSnapshot(input: {
   const rawValue = coerceFiniteNumber(input.value);
   if (rawValue == null) return null;
   const value = Math.round(rawValue);
-  if (!Number.isFinite(value)) return null;
+  // FantasyCalc redraft history is often 0 before market open; never store ≤0.
+  if (!Number.isFinite(value) || value <= 0) return null;
   const capturedAt =
     input.capturedAt instanceof Date && !Number.isNaN(input.capturedAt.getTime())
       ? input.capturedAt
@@ -382,11 +401,11 @@ export function dailySnapshotRowsFromPreset(
   now: Date = asOf,
 ): PlayerValueSnapshotBuildResult {
   const out: PlayerValueSnapshotRow[] = [];
-  // Date-window rejection only — PICK / missing id / non-finite value are not "skipped".
-  if (!isAcceptableValueHistoryInstant(asOf, now) || !isAcceptableSnapshotDateKey(utcDateKey(asOf), now)) {
+  // Date-window rejection only — PICK / missing id / non-finite / ≤0 value are not "skipped".
+  const snapshotDate = pacificDateKey(asOf);
+  if (!isAcceptableValueHistoryInstant(asOf, now) || !isAcceptableSnapshotDateKey(snapshotDate, now)) {
     return { rows: out, skipped: rows.length };
   }
-  const snapshotDate = utcDateKey(asOf);
   for (const row of rows) {
     const compact = compactPlayerValueSnapshot({
       snapshotDate,
@@ -554,7 +573,7 @@ async function mapPool<T, R>(
 
 /**
  * Write today's compact market rows for every successfully fetched preset.
- * Idempotent for the same UTC date via PK upsert.
+ * Idempotent for the same America/Los_Angeles calendar date via PK upsert.
  */
 export async function appendDailyValueSnapshots(
   presets: Record<string, FantasyCalcRow[]>,

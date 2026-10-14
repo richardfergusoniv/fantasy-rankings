@@ -15,6 +15,7 @@ import {
   isRetryableHistoryFetchError,
   isValidFantasyCalcHistorySequence,
   parseFantasyCalcHistoryDate,
+  pacificDateKey,
   playerValueSnapshotId,
   rankedPlayersFromFantasyCalcRows,
   resolveFantasyCalcSnapshotFormatKey,
@@ -49,6 +50,16 @@ describe("utcDateKey", () => {
   it("formats UTC calendar dates without Date#toISOString", () => {
     expect(utcDateKey(new Date(Date.UTC(2026, 9, 12)))).toBe("2026-10-12");
     expect(utcDateKey(new Date(Date.UTC(2015, 0, 1)))).toBe("2015-01-01");
+  });
+});
+
+describe("pacificDateKey", () => {
+  it("formats America/Los_Angeles calendar dates", () => {
+    // Afternoon PT is still the same UTC calendar day.
+    expect(pacificDateKey(new Date("2026-10-12T18:30:00.000Z"))).toBe("2026-10-12");
+    // Late evening PT is already the next day in UTC — keep the PT date.
+    expect(pacificDateKey(new Date("2026-10-13T06:30:00.000Z"))).toBe("2026-10-12");
+    expect(utcDateKey(new Date("2026-10-13T06:30:00.000Z"))).toBe("2026-10-13");
   });
 });
 
@@ -412,10 +423,63 @@ describe("compactPlayerValueSnapshot", () => {
       }),
     ).toBeNull();
   });
+
+  it("skips non-positive rounded values", () => {
+    const capturedAt = new Date("2026-10-12T00:00:00.000Z");
+    const now = new Date("2026-10-13T00:00:00.000Z");
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2026-10-12",
+        formatKey: "redraft-1qb-12t-0.5ppr",
+        playerId: "9221",
+        playerName: "X",
+        position: "RB",
+        value: 0,
+        capturedAt,
+        now,
+      }),
+    ).toBeNull();
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2026-10-12",
+        formatKey: "redraft-1qb-12t-0.5ppr",
+        playerId: "9221",
+        playerName: "X",
+        position: "RB",
+        value: 0.4,
+        capturedAt,
+        now,
+      }),
+    ).toBeNull();
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2026-10-12",
+        formatKey: "redraft-1qb-12t-0.5ppr",
+        playerId: "9221",
+        playerName: "X",
+        position: "RB",
+        value: -10,
+        capturedAt,
+        now,
+      }),
+    ).toBeNull();
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2026-10-12",
+        formatKey: "redraft-1qb-12t-0.5ppr",
+        playerId: "9221",
+        playerName: "X",
+        position: "RB",
+        value: 0.6,
+        capturedAt,
+        now,
+      })?.value,
+    ).toBe(1);
+  });
 });
 
 describe("dailySnapshotRowsFromPreset", () => {
-  it("maps ranked FantasyCalc rows for one UTC day", () => {
+  it("maps ranked FantasyCalc rows for one Pacific calendar day", () => {
     const asOf = new Date("2026-10-12T18:30:00.000Z");
     const rows: FantasyCalcRow[] = [
       {
@@ -429,6 +493,10 @@ describe("dailySnapshotRowsFromPreset", () => {
       {
         player: { id: 3, sleeperId: null, name: "No Sleeper", position: "WR" },
         value: 1000,
+      },
+      {
+        player: { id: 4, sleeperId: "6806", name: "Zero Value", position: "WR" },
+        value: 0,
       },
     ];
     expect(dailySnapshotRowsFromPreset("redraft-1qb-12t-0.5ppr", rows, asOf)).toEqual({
@@ -446,7 +514,22 @@ describe("dailySnapshotRowsFromPreset", () => {
       ],
       skipped: 0,
     });
-    expect(utcDateKey(asOf)).toBe("2026-10-12");
+    expect(pacificDateKey(asOf)).toBe("2026-10-12");
+  });
+
+  it("uses America/Los_Angeles date when UTC has already rolled to tomorrow", () => {
+    // 2026-10-12 23:30 PT == 2026-10-13 06:30 UTC
+    const asOf = new Date("2026-10-13T06:30:00.000Z");
+    const rows: FantasyCalcRow[] = [
+      { player: { id: 1, sleeperId: "9221", name: "Jahmyr Gibbs", position: "RB" }, value: 10511 },
+    ];
+    const built = dailySnapshotRowsFromPreset("redraft-1qb-12t-0.5ppr", rows, asOf);
+    expect(built.rows).toHaveLength(1);
+    expect(built.rows[0]?.snapshotDate).toBe("2026-10-12");
+    expect(built.rows[0]?.id).toBe(
+      playerValueSnapshotId("2026-10-12", "redraft-1qb-12t-0.5ppr", "9221"),
+    );
+    expect(utcDateKey(asOf)).toBe("2026-10-13");
   });
 
   it("skips the whole preset when asOf is outside the accepted window", () => {
@@ -473,6 +556,7 @@ describe("historySnapshotRowsFromPoints", () => {
       { date: "10/12/2026", value: 10511 },
       { date: "bad", value: 1 },
       { date: "10/13/2026", value: undefined },
+      { date: "04/01/2026", value: 0 },
     ];
     const all = historySnapshotRowsFromPoints({
       formatKey: "dynasty-2qb-12t-1ppr",
@@ -485,7 +569,7 @@ describe("historySnapshotRowsFromPoints", () => {
     });
     expect(all.rows.map((row) => row.snapshotDate)).toEqual(["2026-01-01", "2026-03-15", "2026-10-12"]);
     expect(all.rows[1]?.value).toBe(9500);
-    // "bad" + undefined-value point with valid date that fails compact
+    // "bad" date only; undefined / ≤0 values fail compact without counting as skipped
     expect(all.skipped).toBe(1);
 
     const recent = historySnapshotRowsFromPoints({

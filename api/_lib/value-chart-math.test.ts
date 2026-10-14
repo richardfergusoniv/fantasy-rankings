@@ -7,9 +7,52 @@ import {
   dailyChangeStdDev,
   linearSlope,
   movingAverage,
+  trimLeadingNonPositive,
   TREND_CONE_PHI,
   TREND_CONE_Z,
 } from "./value-chart-math.js";
+
+describe("trimLeadingNonPositive", () => {
+  it("drops leading zeros/negatives and keeps the first positive value onward", () => {
+    const points = [
+      { date: "2026-01-01", value: 0 },
+      { date: "2026-01-02", value: 0 },
+      { date: "2026-01-03", value: -1 },
+      { date: "2026-01-04", value: 100 },
+      { date: "2026-01-05", value: 0 },
+      { date: "2026-01-06", value: 120 },
+    ];
+    expect(trimLeadingNonPositive(points)).toEqual([
+      { date: "2026-01-04", value: 100 },
+      { date: "2026-01-05", value: 0 },
+      { date: "2026-01-06", value: 120 },
+    ]);
+  });
+
+  it("returns an empty array when every point is non-positive", () => {
+    expect(trimLeadingNonPositive([
+      { date: "2026-01-01", value: 0 },
+      { date: "2026-01-02", value: -5 },
+    ])).toEqual([]);
+  });
+
+  it("leaves MA and trend cone usable after trimming leading zeros", () => {
+    const raw = [
+      { date: "2026-04-28", value: 0 },
+      { date: "2026-04-29", value: 0 },
+      { date: "2026-04-30", value: 0 },
+      ...[10, 12, 14, 16, 18, 20, 22].map((value, index) => ({
+        date: addUtcDateKey("2026-05-01", index),
+        value,
+      })),
+    ];
+    const trimmed = trimLeadingNonPositive(raw);
+    expect(trimmed[0]?.date).toBe("2026-05-01");
+    const ma3 = calendarMovingAverage(trimmed, 3);
+    expect(ma3[2]).toBeCloseTo(12);
+    expect(dampenedTrendCone(trimmed).length).toBe(30);
+  });
+});
 
 describe("movingAverage", () => {
   it("returns null until a full window is available", () => {
