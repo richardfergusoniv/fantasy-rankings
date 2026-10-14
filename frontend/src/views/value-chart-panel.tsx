@@ -42,6 +42,15 @@ function formatDateTick(value: string): string {
     : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
 }
 
+/** Whole-number FantasyCalc values with thousands separators for tooltips. */
+function formatWholeValue(value: number): string {
+  return Math.round(value).toLocaleString();
+}
+
+/** Light gray (7D solid) vs darker gray (30D dotted) — both neutral. */
+const MA7_STROKE = "#c5ccd8";
+const MA30_STROKE = "#6b7588";
+
 function rosterPlayers(league: League): PickerPlayer[] {
   const seen = new Set<string>();
   const out: PickerPlayer[] = [];
@@ -236,8 +245,8 @@ export function ValueChartPanel({
               <ChartContainer
                 config={{
                   value: { label: "Value", color: "var(--chart-1)" },
-                  ma7: { label: "7D avg", color: "var(--chart-2)" },
-                  ma30: { label: "30D avg", color: "var(--chart-2)" },
+                  ma7: { label: "7D avg", color: MA7_STROKE },
+                  ma30: { label: "30D avg", color: MA30_STROKE },
                   trendBand: { label: "Trend projection", color: "var(--chart-2)" },
                   compare: { label: compareName, color: "var(--chart-5)" },
                 }}
@@ -282,12 +291,12 @@ export function ValueChartPanel({
                     formatter={(value, name) => {
                       if (Array.isArray(value)) {
                         return [
-                          `${Number(value[0]).toLocaleString()} – ${Number(value[1]).toLocaleString()}`,
+                          `${formatWholeValue(Number(value[0]))} – ${formatWholeValue(Number(value[1]))}`,
                           "Trend projection",
                         ];
                       }
                       if (value == null || Number.isNaN(Number(value))) return ["—", String(name)];
-                      return [Number(value).toLocaleString(), String(name)];
+                      return [formatWholeValue(Number(value)), String(name)];
                     }}
                   />
                   <Legend
@@ -296,8 +305,8 @@ export function ValueChartPanel({
                     wrapperStyle={{ fontSize: 11, color: "var(--dim)" }}
                     payload={[
                       { value: "Value", type: "line", id: "value", color: "var(--chart-1)" },
-                      { value: "7D avg", type: "line", id: "ma7", color: "var(--chart-2)" },
-                      { value: "30D avg", type: "line", id: "ma30", color: "var(--chart-2)" },
+                      { value: "7D avg", type: "line", id: "ma7", color: MA7_STROKE },
+                      { value: "30D avg", type: "line", id: "ma30", color: MA30_STROKE },
                       { value: "Trend projection", type: "square", id: "trend", color: "var(--chart-2)" },
                       ...(comparePlayerId
                         ? [{ value: compareName, type: "line" as const, id: "compare", color: "var(--chart-5)" }]
@@ -333,7 +342,7 @@ export function ValueChartPanel({
                     type="monotone"
                     dataKey="ma7"
                     name="7D avg"
-                    stroke="var(--chart-2)"
+                    stroke={MA7_STROKE}
                     strokeWidth={1}
                     dot={false}
                     connectNulls={false}
@@ -344,7 +353,7 @@ export function ValueChartPanel({
                     type="monotone"
                     dataKey="ma30"
                     name="30D avg"
-                    stroke="var(--chart-2)"
+                    stroke={MA30_STROKE}
                     strokeWidth={1}
                     strokeDasharray="2 3"
                     dot={false}
