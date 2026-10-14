@@ -643,13 +643,8 @@ main { padding: 12px 16px 0; }
 .monitor-builder-chart-empty .analytics-empty {
   margin: 0;
 }
-.monitor-game-lines-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.monitor-game-lines-controls {
+  grid-template-columns: minmax(0, 1fr);
 }
 .monitor-game-line-card {
   display: grid;

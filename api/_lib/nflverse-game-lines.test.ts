@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  defaultGameLineCardId,
   etWallTimeToUtc,
   formatKickoffPt,
   formatMatchup,
@@ -11,6 +12,7 @@ import {
   gameLineCardsForWeek,
   gamesForSeasonWeek,
   impliedTeamTotals,
+  normalizeGameLineTeam,
   parseGamesCsv,
   toGameLineCard,
 } from "./nflverse-game-lines.js";
@@ -229,6 +231,7 @@ describe("display helpers", () => {
 describe("gameLineCardsForWeek", () => {
   it("builds compact cards for the current week", () => {
     const cards = gameLineCardsForWeek(SAMPLE_CSV, 2026, 6);
+    const kickoffAtMs = etWallTimeToUtc("2026-10-15", "20:15")?.getTime() ?? null;
     expect(cards[0]).toEqual({
       gameId: "2026_06_SEA_DEN",
       matchup: "SEA @ DEN",
@@ -237,6 +240,10 @@ describe("gameLineCardsForWeek", () => {
       total: "O/U 40.5",
       moneylines: "-148 / +124",
       totalsOrScore: "21.5 / 19",
+      awayTeam: "SEA",
+      homeTeam: "DEN",
+      kickoffAtMs,
+      isFinal: false,
     });
     expect(cards.find((card) => card.gameId === "2026_06_HOU_JAX")?.matchup).toBe("HOU vs JAX");
     expect(cards.find((card) => card.gameId === "2026_06_NO_LINES")).toMatchObject({
@@ -248,5 +255,39 @@ describe("gameLineCardsForWeek", () => {
     const played = toGameLineCard(parseGamesCsv(SAMPLE_CSV).find((row) => row.gameId === "2026_05_DAL_PHI")!);
     expect(played.totalsOrScore).toBe("20 / 24");
     expect(played.spread).toBe("PHI -8.5");
+    expect(played.isFinal).toBe(true);
+  });
+});
+
+describe("defaultGameLineCardId", () => {
+  const cards = gameLineCardsForWeek(SAMPLE_CSV, 2026, 6);
+  const seaKickoff = cards.find((card) => card.gameId === "2026_06_SEA_DEN")!.kickoffAtMs!;
+  const tenKickoff = cards.find((card) => card.gameId === "2026_06_TEN_IND")!.kickoffAtMs!;
+
+  it("normalizes sleeper team codes for matching", () => {
+    expect(normalizeGameLineTeam("jac")).toBe("JAX");
+    expect(normalizeGameLineTeam("WSH")).toBe("WAS");
+  });
+
+  it("prefers a live roster game", () => {
+    expect(defaultGameLineCardId(cards, ["SEA", "KC"], ["SEA"], seaKickoff - 60_000))
+      .toBe("2026_06_SEA_DEN");
+  });
+
+  it("prefers the next upcoming roster game", () => {
+    expect(defaultGameLineCardId(cards, ["IND"], [], seaKickoff - 60_000))
+      .toBe("2026_06_TEN_IND");
+  });
+
+  it("falls back to the first upcoming week game", () => {
+    expect(defaultGameLineCardId(cards, ["KC"], [], seaKickoff - 60_000))
+      .toBe("2026_06_SEA_DEN");
+  });
+
+  it("uses an in-progress roster game when kickoff has passed", () => {
+    expect(defaultGameLineCardId(cards, ["SEA"], [], seaKickoff + 60_000))
+      .toBe("2026_06_SEA_DEN");
+    expect(defaultGameLineCardId(cards, ["IND"], [], tenKickoff + 60_000))
+      .toBe("2026_06_TEN_IND");
   });
 });
