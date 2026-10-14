@@ -1005,14 +1005,28 @@ export async function refreshFantasyCalcCache(): Promise<{
   }
 
   // Dynamic kept set = every linked user's Sleeper league formats (+ default).
-  const kept = await loadKeptSnapshotFormats();
+  const keptLoad = await loadKeptSnapshotFormats();
+  const kept = keptLoad.presets;
   const keptKeys = kept.map((preset) => preset.format.key);
-  await writeKeptSnapshotFormatsCache(kept, new Date());
+  // Only overwrite the kept-formats cache with an authoritative discovery so a
+  // default-only fallback cannot shrink the persisted set.
+  if (keptLoad.authoritative) {
+    await writeKeptSnapshotFormatsCache(kept, new Date());
+  }
 
   // Fetch FantasyCalc values for kept formats not already in the rankings cache.
+  // If the budget expires, preserve prior cache rows for skipped formats so we
+  // never publish a presets blob that drops a previously successful format.
+  const previousPresets = await readFantasyCalcCache();
+  let keptFetchIncomplete = false;
   for (const preset of kept) {
     if (presets[preset.format.key]) continue;
-    if (deadlineAt - Date.now() < presetBudgetMs) break;
+    if (deadlineAt - Date.now() < presetBudgetMs) {
+      keptFetchIncomplete = true;
+      const prior = previousPresets?.presets[preset.format.key];
+      if (prior) presets[preset.format.key] = prior;
+      continue;
+    }
     let rows: FantasyCalcRow[] | undefined;
     for (let attempt = 0; attempt < 2 && !rows; attempt += 1) {
       try {
@@ -1022,7 +1036,16 @@ export async function refreshFantasyCalcCache(): Promise<{
       }
     }
     if (rows) presets[preset.format.key] = rows;
-    else failed += 1;
+    else {
+      failed += 1;
+      const prior = previousPresets?.presets[preset.format.key];
+      if (prior) presets[preset.format.key] = prior;
+    }
+  }
+  if (keptFetchIncomplete) {
+    console.info(
+      `[fantasycalc] kept-format fetch incomplete within time budget; preserved prior cache rows where available`,
+    );
   }
 
   const rowCount = Object.values(presets).reduce((total, rows) => total + rows.length, 0);
@@ -1042,7 +1065,10 @@ export async function refreshFantasyCalcCache(): Promise<{
   rememberFantasyCalcPresets(presets, fetchedAt, fetchedAt.getTime());
 
   const snapshots = await appendDailyValueSnapshots(presets, fetchedAt, new Set(keptKeys));
-  const pruned = await prunePlayerValueSnapshots(fetchedAt, keptKeys);
+  // Never prune unused formats from a non-authoritative (default-only) fallback.
+  const pruned = await prunePlayerValueSnapshots(fetchedAt, keptKeys, {
+    deleteUnusedFormats: keptLoad.authoritative,
+  });
 
   // Auto-backfill newly seen / incomplete kept formats while time remains.
   let backfill: { formatKey: string; nextOffset: number; done: boolean; upserted: number } | null = null;

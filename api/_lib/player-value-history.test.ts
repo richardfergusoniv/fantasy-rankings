@@ -23,6 +23,7 @@ import {
   parseSnapshotFormatKey,
   playerValueSnapshotId,
   rankedPlayersFromFantasyCalcRows,
+  resolveBackfillPruneKeys,
   resolveFantasyCalcSnapshotFormatKey,
   seasonLongFormatFromKey,
   utcDateKey,
@@ -592,6 +593,29 @@ describe("historySnapshotRowsFromPoints", () => {
       { date: "2026-10-12", value: 10511 },
     ]);
     expect(built.skipped).toBe(5);
+  });
+});
+
+describe("resolveBackfillPruneKeys", () => {
+  it("uses the full kept set when provided, not just the batch presets", () => {
+    const target = fantasyCalcPresetForFormat(seasonLongFormatFromKey("dynasty-2qb-12t-1ppr")!);
+    const keptKeys = [
+      DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY,
+      "dynasty-1qb-12t-1ppr",
+      "dynasty-2qb-12t-1ppr",
+    ];
+    expect(resolveBackfillPruneKeys([target], keptKeys)).toEqual(keptKeys);
+  });
+
+  it("falls back to the processed presets when no kept list is provided", () => {
+    const presets = [
+      fantasyCalcPresetForFormat(defaultSnapshotFormat()),
+      fantasyCalcPresetForFormat(seasonLongFormatFromKey("dynasty-2qb-12t-1ppr")!),
+    ];
+    expect(resolveBackfillPruneKeys(presets)).toEqual([
+      DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY,
+      "dynasty-2qb-12t-1ppr",
+    ]);
   });
 });
 

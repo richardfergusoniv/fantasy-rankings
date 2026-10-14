@@ -162,12 +162,27 @@ export async function listSnapshotSleeperUserIds(): Promise<string[]> {
   return [...ids].sort();
 }
 
+export type DiscoverKeptSnapshotFormatsResult = {
+  presets: FantasyCalcSnapshotPreset[];
+  /**
+   * True when the set is safe for unused-format pruning. False only when
+   * discovery failed open (no linked-user data and no prior cache) — then
+   * the set is just the default and must not wipe other formats.
+   */
+  authoritative: boolean;
+  /** True when at least one linked-user league fetch failed. */
+  partial: boolean;
+};
+
 /**
  * Unique FantasyCalc snapshot presets used by any linked user's Sleeper
  * leagues (exact `seasonLongFormatForLeague` keys). Always includes the
  * default format so prune/append have a safe floor when nobody is linked.
+ *
+ * On any per-user fetch failure, merges the previously cached kept set so a
+ * Sleeper blip cannot shrink the set and cause prune to delete history.
  */
-export async function discoverKeptSnapshotFormats(): Promise<FantasyCalcSnapshotPreset[]> {
+export async function discoverKeptSnapshotFormats(): Promise<DiscoverKeptSnapshotFormatsResult> {
   const byKey = new Map<string, SeasonLongFormat>();
   byKey.set(DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY, defaultSnapshotFormat());
 
@@ -175,8 +190,10 @@ export async function discoverKeptSnapshotFormats(): Promise<FantasyCalcSnapshot
   const leagueResults = await Promise.allSettled(
     sleeperUserIds.map((sleeperUserId) => readUserLeagues(sleeperUserId, false)),
   );
+  let anyFailed = false;
   for (const result of leagueResults) {
     if (result.status !== "fulfilled") {
+      anyFailed = true;
       console.error(
         `[player-value-history] kept-format league fetch failed: ${result.reason instanceof Error ? result.reason.message : result.reason}`,
       );
@@ -188,9 +205,24 @@ export async function discoverKeptSnapshotFormats(): Promise<FantasyCalcSnapshot
     }
   }
 
-  return [...byKey.values()]
+  if (anyFailed) {
+    // Never shrink the kept set on partial discovery; keep last known formats.
+    for (const preset of await readCachedKeptSnapshotFormats()) {
+      if (!byKey.has(preset.format.key)) byKey.set(preset.format.key, preset.format);
+    }
+  }
+
+  const presets = [...byKey.values()]
     .sort((left, right) => left.key.localeCompare(right.key))
     .map((format) => fantasyCalcPresetForFormat(format));
+
+  // Authoritative unless we only have the default after a failed discovery
+  // with no prior cache to merge (would otherwise wipe every other format).
+  const authoritative = !anyFailed
+    || presets.length > 1
+    || sleeperUserIds.length === 0;
+
+  return { presets, authoritative, partial: anyFailed };
 }
 
 export type KeptSnapshotFormatsCache = {
@@ -251,8 +283,10 @@ export async function readCachedKeptSnapshotFormats(): Promise<FantasyCalcSnapsh
   }
 }
 
+export type LoadKeptSnapshotFormatsResult = DiscoverKeptSnapshotFormatsResult;
+
 /** Prefer a fresh discovery; fall back to the last cached kept set. */
-export async function loadKeptSnapshotFormats(): Promise<FantasyCalcSnapshotPreset[]> {
+export async function loadKeptSnapshotFormats(): Promise<LoadKeptSnapshotFormatsResult> {
   try {
     return await discoverKeptSnapshotFormats();
   } catch (err) {
@@ -260,13 +294,28 @@ export async function loadKeptSnapshotFormats(): Promise<FantasyCalcSnapshotPres
       `[player-value-history] discover kept formats failed: ${err instanceof Error ? err.message : err}`,
     );
     const cached = await readCachedKeptSnapshotFormats();
-    if (cached.length > 0) return cached;
-    return [fantasyCalcPresetForFormat(defaultSnapshotFormat())];
+    if (cached.length > 0) {
+      return { presets: cached, authoritative: true, partial: true };
+    }
+    // Default-only fallback must not authorize unused-format deletes.
+    return {
+      presets: [fantasyCalcPresetForFormat(defaultSnapshotFormat())],
+      authoritative: false,
+      partial: true,
+    };
   }
 }
 
+type FormatBackfillCursor = {
+  nextOffset: number;
+  done: boolean;
+  /** ISO timestamp of the last format-level failure (values/current or batch). */
+  lastErrorAt?: string;
+  consecutiveErrors?: number;
+};
+
 type FormatBackfillStateFile = {
-  formats: Record<string, { nextOffset: number; done: boolean }>;
+  formats: Record<string, FormatBackfillCursor>;
 };
 
 async function readFormatBackfillState(): Promise<FormatBackfillStateFile> {
@@ -874,16 +923,21 @@ export type PrunePlayerValueSnapshotsResult = {
 /**
  * Bound `player_value_snapshots` growth:
  * - drop rows dated after Pacific "today"
- * - drop formats outside the dynamic kept set (never deletes a kept key)
+ * - optionally drop formats outside the dynamic kept set (never deletes a kept key)
  * - keep daily points newer than `VALUE_HISTORY_DAILY_RETENTION_DAYS`
  * - older points: one row per (format, player, ISO week) — last day kept
+ *
+ * Pass `deleteUnusedFormats: false` when the kept set is a non-authoritative
+ * fallback (e.g. default-only after Sleeper discovery failed with no cache).
  */
 export async function prunePlayerValueSnapshots(
   asOf: Date = new Date(),
   keptFormatKeys?: readonly string[],
+  options: { deleteUnusedFormats?: boolean } = {},
 ): Promise<PrunePlayerValueSnapshotsResult> {
   const today = zonedDateKey(asOf);
   const dailyCutoff = addDateKeyDays(today, -VALUE_HISTORY_DAILY_RETENTION_DAYS);
+  const deleteUnusedFormats = options.deleteUnusedFormats !== false;
 
   let keptKeys = keptFormatKeys ? [...keptFormatKeys] : [];
   if (keptKeys.length === 0) {
@@ -901,11 +955,14 @@ export async function prunePlayerValueSnapshots(
   `);
   const deletedFuture = Array.isArray(futureRows) ? futureRows.length : 0;
 
-  const unused = await db
-    .delete(schema.playerValueSnapshots)
-    .where(notInArray(schema.playerValueSnapshots.formatKey, keptKeys))
-    .returning({ id: schema.playerValueSnapshots.id });
-  const deletedUnusedFormats = unused.length;
+  let deletedUnusedFormats = 0;
+  if (deleteUnusedFormats) {
+    const unused = await db
+      .delete(schema.playerValueSnapshots)
+      .where(notInArray(schema.playerValueSnapshots.formatKey, keptKeys))
+      .returning({ id: schema.playerValueSnapshots.id });
+    deletedUnusedFormats = unused.length;
+  }
 
   const downsampledRows = await db.execute(sql`
     DELETE FROM player_value_snapshots AS p
@@ -974,6 +1031,18 @@ export type ValueHistoryBackfillResult = {
 };
 
 /**
+ * Keys retained during post-backfill prune. Explicit `keptFormatKeys` wins so
+ * a single-format auto-backfill batch cannot wipe every other format.
+ */
+export function resolveBackfillPruneKeys(
+  processedPresets: readonly FantasyCalcSnapshotPreset[],
+  keptFormatKeys?: readonly string[],
+): string[] {
+  if (keptFormatKeys && keptFormatKeys.length > 0) return [...keptFormatKeys];
+  return processedPresets.map((preset) => preset.format.key);
+}
+
+/**
  * One resumable backfill batch: walk FantasyCalc-ranked players across kept
  * formats (PICK rows skipped), fetch full history for `limit` work items
  * starting at `offset`, and upsert compact snapshot rows.
@@ -985,11 +1054,19 @@ export type ValueHistoryBackfillResult = {
 export async function backfillValueHistoryBatch(options: {
   offset?: number;
   limit?: number;
+  /** Formats to fetch history for in this batch. */
   presets?: FantasyCalcSnapshotPreset[];
+  /**
+   * Full kept set for post-write pruning. Defaults to the formats being
+   * processed — callers that backfill a single format MUST pass every kept
+   * key here so prune does not delete the rest of the table.
+   */
+  keptFormatKeys?: readonly string[];
 }): Promise<ValueHistoryBackfillResult> {
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
   const limit = clampBackfillLimit(options.limit);
-  const presets = options.presets ?? await loadKeptSnapshotFormats();
+  const loaded = options.presets ? null : await loadKeptSnapshotFormats();
+  const presets = options.presets ?? loaded!.presets;
   let skip = offset;
   let remaining = limit;
   let totalWorkItems = 0;
@@ -1003,7 +1080,7 @@ export async function backfillValueHistoryBatch(options: {
     format: SeasonLongFormat;
     player: RankedFantasyCalcPlayer;
   }> = [];
-  const keptKeys = presets.map((preset) => preset.format.key);
+  const keptKeys = resolveBackfillPruneKeys(presets, options.keptFormatKeys);
 
   for (const preset of presets) {
     const currentRows = await fetchJson<FantasyCalcRow[]>(preset.url);
@@ -1083,7 +1160,13 @@ export async function backfillValueHistoryBatch(options: {
   const nextOffset = offset + work.length;
   // Full-history upserts can restore >90d daily rows; prune after any write so
   // retention holds even when backfill runs without a separate refresh.
-  if (upserted > 0) await prunePlayerValueSnapshots(new Date(), keptKeys);
+  if (upserted > 0) {
+    await prunePlayerValueSnapshots(new Date(), keptKeys, {
+      // Only drop unused formats when the prune key list is the full kept set
+      // (or larger than the batch). Single-format callers must pass keptFormatKeys.
+      deleteUnusedFormats: keptKeys.length > 0,
+    });
+  }
   const done = nextOffset >= totalWorkItems;
   const batchCount = totalWorkItems === 0 ? 0 : Math.ceil(totalWorkItems / limit);
 
@@ -1105,9 +1188,10 @@ export async function backfillValueHistoryBatch(options: {
 }
 
 /**
- * Advance backfill for the first incomplete kept format (prefer newly seen).
+ * Advance backfill for an incomplete kept format (prefer newly seen).
  * Called from the FantasyCalc refresh so new friend-league formats get history
- * without a separate workflow. No-ops when every kept format is done.
+ * without a separate workflow. Format-level failures are logged and skipped so
+ * one bad format cannot block the rest; failed formats retry on a later refresh.
  */
 export type AutoBackfillResult = ValueHistoryBackfillResult & {
   formatKey: string;
@@ -1123,19 +1207,41 @@ export async function backfillNextIncompleteKeptFormat(options: {
     ...options.kept.filter((preset) => newFormatKeys.includes(preset.format.key)),
     ...options.kept.filter((preset) => !newFormatKeys.includes(preset.format.key)),
   ];
-  const target = preferred.find((preset) => state.formats[preset.format.key]?.done !== true);
-  if (!target) return null;
+  const incomplete = preferred.filter((preset) => state.formats[preset.format.key]?.done !== true);
+  if (incomplete.length === 0) return null;
 
-  const cursor = state.formats[target.format.key] ?? { nextOffset: 0, done: false };
-  const result = await backfillValueHistoryBatch({
-    offset: cursor.nextOffset,
-    limit: options.limit,
-    presets: [target],
-  });
-  state.formats[target.format.key] = {
-    nextOffset: result.nextOffset,
-    done: result.done,
-  };
-  await writeFormatBackfillState(state);
-  return { ...result, formatKey: target.format.key, newFormatKeys };
+  const keptFormatKeys = options.kept.map((preset) => preset.format.key);
+
+  for (const target of incomplete) {
+    const cursor = state.formats[target.format.key] ?? { nextOffset: 0, done: false };
+    try {
+      const result = await backfillValueHistoryBatch({
+        offset: cursor.nextOffset,
+        limit: options.limit,
+        presets: [target],
+        keptFormatKeys,
+      });
+      state.formats[target.format.key] = {
+        nextOffset: result.nextOffset,
+        done: result.done,
+        consecutiveErrors: 0,
+        lastErrorAt: undefined,
+      };
+      await writeFormatBackfillState(state);
+      return { ...result, formatKey: target.format.key, newFormatKeys };
+    } catch (err) {
+      console.error(
+        `[player-value-history] auto-backfill format failed format=${target.format.key}: ${err instanceof Error ? err.message : err}`,
+      );
+      state.formats[target.format.key] = {
+        nextOffset: cursor.nextOffset,
+        done: false,
+        lastErrorAt: new Date().toISOString(),
+        consecutiveErrors: (cursor.consecutiveErrors ?? 0) + 1,
+      };
+      await writeFormatBackfillState(state);
+      // Try the next incomplete format so one failure cannot block progress.
+    }
+  }
+  return null;
 }
