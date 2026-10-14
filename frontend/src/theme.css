@@ -2358,7 +2358,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   main { padding: 10px 32px 30px; }
   .matchup-score, .lineup-section, .bench-section { max-width: 860px; }
   .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
-  .monitor-view { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 920px; }
+  .monitor-view { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
   .monitor-builder-chart-panel { grid-column: 1 / -1; }
   .rankings-view, .trade-view, .advanced-stats-view, .analytics-view, .weekly-projections-view, .comparison-view, .power-view { max-width: 920px; }
   .comparison-cards { max-width: 620px; gap: 20px; }
