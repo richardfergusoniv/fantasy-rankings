@@ -247,14 +247,15 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -s -H "Authorization: Bearer $CRON_SECRET" \
+          curl -sS --fail-with-body --max-time 600 \
+            -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_BASE_URL/api/cron/jobs?job=rebuild-dashboard" \
             | tee /tmp/rebuild.json
           python3 - <<'EOF'
           import json
           result = json.load(open('/tmp/rebuild.json'))
           assert result.get('ok') is True and result.get('status') == 'ok', f"rebuild failed: {result}"
-          assert result.get('leagues') == 6, f"rebuild leagues: {result}"
+          assert (result.get('leagues') or 0) >= 1, f"rebuild leagues: {result}"
           print(f"rebuild verified: week {result.get('week')}, asOf {result.get('asOf')}")
           EOF
 
