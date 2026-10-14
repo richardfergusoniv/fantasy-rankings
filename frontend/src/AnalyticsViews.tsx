@@ -828,8 +828,8 @@ function AdaptiveChartLabels({ data, leaderIds, selectedTeamIds, highlightedId =
       }
     }
     const keepAlways = point.datum.id === highlightedId || selectedTeamIds.has(point.datum.id);
-    // Drop field labels that still collide hard after placement search.
-    if (!keepAlways && bestScore > 1200) continue;
+    // Drop field labels that still collide after placement search.
+    if (!keepAlways && bestScore > 500) continue;
     if (best) placed.push({ ...best, datum: point.datum });
   }
 
@@ -942,12 +942,59 @@ function ScatterPlot({
   const yDomain = scatterAxisDomain(plottedData.map((point) => point.y), zoomed);
   const toggleZoom = () => setZoomed((value) => !value);
   const margin = compact
-    ? { top: 8, right: 8, bottom: 20, left: 4 }
-    : { top: 14, right: 14, bottom: 36, left: 8 };
+    ? { top: 8, right: 8, bottom: 16, left: 2 }
+    : { top: 10, right: 12, bottom: 18, left: 4 };
   const axisTitle = `${xAxis.short}${xAxis.titleSuffix}`;
   const yAxisTitle = `${yAxis.short}${yAxis.titleSuffix}`;
+  const plot = (
+    <div
+      aria-hidden="true"
+      className="scatter-plot-body"
+      onDoubleClick={(event) => {
+        event.preventDefault();
+        toggleZoom();
+      }}
+    >
+      <ChartContainer config={{ field: { label: "Field", color: "var(--chart-2)" }, team: { label: "My team", color: "var(--chart-1)" } }} className="aspect-auto h-full">
+        <ScatterChart margin={margin}>
+          <CartesianGrid stroke="var(--hairline)" strokeDasharray="1 6" vertical={false} />
+          <XAxis
+            type="number"
+            dataKey="x"
+            name={axisTitle}
+            domain={xDomain}
+            allowDataOverflow={zoomed}
+            reversed={xAxis.lowerIsBetter}
+            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tickLine={false}
+            axisLine={{ stroke: "var(--hairline)" }}
+          />
+          <YAxis
+            type="number"
+            dataKey="y"
+            name={yAxisTitle}
+            domain={yDomain}
+            allowDataOverflow={zoomed}
+            reversed={yAxis.lowerIsBetter}
+            width={compact ? 30 : 34}
+            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tickLine={false}
+            axisLine={false}
+          />
+          <Tooltip cursor={{ stroke: "var(--dim)", strokeDasharray: "3 3", strokeOpacity: 0.45 }} contentStyle={chartTooltipStyle} />
+          {showQuadrants ? <ReferenceLine x={xCutoff} stroke="var(--hairline)" strokeWidth={1} strokeDasharray="4 8" /> : null}
+          {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--hairline)" strokeWidth={1} strokeDasharray="4 8" /> : null}
+          <Scatter name="Field" data={others} fill="var(--chart-2)" fillOpacity={0.7} />
+          <Scatter name="Smash spots" data={leadersWithoutSelectedTeam} fill="var(--chart-2)" fillOpacity={0.7} />
+          <Scatter name="My team" data={selectedTeamPlayers} fill="var(--chart-1)" stroke="var(--chart-1)" strokeWidth={1} />
+          {!compact && plottedData.length > 1 ? <Customized component={<ScatterTrendLine data={plottedData} />} /> : null}
+          {labelData.length ? <Customized component={<AdaptiveChartLabels data={labelData} leaderIds={leaderIds} selectedTeamIds={selectedTeamIds} highlightedId={highlightedId} />} /> : null}
+        </ScatterChart>
+      </ChartContainer>
+    </div>
+  );
   return (
-    <div className={`scatter-frame${compact ? " is-compact" : ""}`} role="group" aria-label={ariaLabel}>
+    <div className={`scatter-chart-shell${compact ? " is-compact" : ""}`} role="group" aria-label={ariaLabel}>
       <div className="scatter-zoom-controls">
         <button
           type="button"
@@ -960,53 +1007,15 @@ function ScatterPlot({
         <span className="sr-only">Double-tap the chart to {zoomed ? "reset" : "zoom into the denser central region of plotted points"}.</span>
       </div>
       <p className="sr-only">{ariaLabel}. {plottedData.map((point) => `${point.name}, ${point.team}: ${xAxis.short} ${point.x}, ${yAxis.short} ${point.y}`).join("; ")}{zoomed ? " Chart is zoomed into the central region of plotted points." : ""}</p>
-      <div
-        aria-hidden="true"
-        className="scatter-plot-body"
-        onDoubleClick={(event) => {
-          event.preventDefault();
-          toggleZoom();
-        }}
-      >
-      <ChartContainer config={{ field: { label: "Field", color: "var(--chart-2)" }, team: { label: "My team", color: "var(--chart-1)" } }} className="aspect-auto h-full">
-        <ScatterChart margin={margin}>
-          <CartesianGrid stroke="var(--border)" strokeDasharray="3 6" strokeOpacity={0.45} vertical={false} />
-          <XAxis
-            type="number"
-            dataKey="x"
-            name={axisTitle}
-            domain={xDomain}
-            allowDataOverflow={zoomed}
-            reversed={xAxis.lowerIsBetter}
-            tick={{ fill: "var(--dim)", fontSize: 10 }}
-            tickLine={false}
-            axisLine={{ stroke: "var(--hairline)" }}
-            label={compact ? undefined : { value: axisTitle, position: "insideBottom", offset: -22, fill: "var(--dim)", fontSize: 11, fontWeight: 700 }}
-          />
-          <YAxis
-            type="number"
-            dataKey="y"
-            name={yAxisTitle}
-            domain={yDomain}
-            allowDataOverflow={zoomed}
-            reversed={yAxis.lowerIsBetter}
-            width={compact ? 32 : 42}
-            tick={{ fill: "var(--dim)", fontSize: 10 }}
-            tickLine={false}
-            axisLine={false}
-            label={compact ? undefined : { value: yAxisTitle, angle: -90, position: "insideLeft", offset: 8, fill: "var(--dim)", fontSize: 11, fontWeight: 700 }}
-          />
-          <Tooltip cursor={{ stroke: "var(--dim)", strokeDasharray: "3 3", strokeOpacity: 0.6 }} contentStyle={chartTooltipStyle} />
-          {showQuadrants ? <ReferenceLine x={xCutoff} stroke="var(--dim)" strokeWidth={1} strokeDasharray="4 6" strokeOpacity={0.35} /> : null}
-          {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--dim)" strokeWidth={1} strokeDasharray="4 6" strokeOpacity={0.35} /> : null}
-          <Scatter name="Field" data={others} fill="var(--chart-2)" fillOpacity={0.7} />
-          <Scatter name="Smash spots" data={leadersWithoutSelectedTeam} fill="var(--chart-2)" fillOpacity={0.7} />
-          <Scatter name="My team" data={selectedTeamPlayers} fill="var(--chart-1)" stroke="var(--chart-1)" strokeWidth={1} />
-          {plottedData.length > 1 ? <Customized component={<ScatterTrendLine data={plottedData} />} /> : null}
-          {labelData.length ? <Customized component={<AdaptiveChartLabels data={labelData} leaderIds={leaderIds} selectedTeamIds={selectedTeamIds} highlightedId={highlightedId} />} /> : null}
-        </ScatterChart>
-      </ChartContainer>
-      </div>
+      {compact ? (
+        <div className="scatter-frame is-compact">{plot}</div>
+      ) : (
+        <div className="scatter-axis-rail">
+          <span className="scatter-axis-y" aria-hidden="true">{yAxisTitle}</span>
+          <div className="scatter-frame">{plot}</div>
+          <span className="scatter-axis-x" aria-hidden="true">{axisTitle}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,6 @@ import {
   Area,
   CartesianGrid,
   ComposedChart,
-  Legend,
   Line,
   Tooltip,
   XAxis,
@@ -234,92 +233,62 @@ export function ValueChartPanel({
             </span>
           </div>
         ) : null}
-        <div
-          className="scatter-plot-body"
-          onDoubleClick={options.interactiveZoom ? (event) => {
-            event.preventDefault();
-            toggleZoom();
-          } : undefined}
-        >
-          <ChartContainer
-            config={{
-              value: { label: "Value", color: "var(--chart-1)" },
-              ma7: { label: "7D avg", color: MA7_STROKE },
-              ma30: { label: "30D avg", color: MA30_STROKE },
-              trendBand: { label: "Trend projection", color: "var(--chart-2)" },
-              compare: { label: compareName, color: "var(--chart-5)" },
-            }}
-            className="aspect-auto h-full"
+        <div className={compact ? undefined : "scatter-axis-rail"}>
+          {compact ? null : <span className="scatter-axis-y" aria-hidden="true">Value</span>}
+          <div
+            className="scatter-plot-body"
+            onDoubleClick={options.interactiveZoom ? (event) => {
+              event.preventDefault();
+              toggleZoom();
+            } : undefined}
           >
-            <ComposedChart
-              data={visibleRows}
-              margin={compact
-                ? { top: 6, right: 6, bottom: 2, left: 0 }
-                : { top: 10, right: 10, bottom: 28, left: 4 }}
+            <ChartContainer
+              config={{
+                value: { label: "Value", color: "var(--chart-1)" },
+                ma7: { label: "7D avg", color: MA7_STROKE },
+                ma30: { label: "30D avg", color: MA30_STROKE },
+                trendBand: { label: "Trend projection", color: "var(--chart-2)" },
+                compare: { label: compareName, color: "var(--chart-5)" },
+              }}
+              className="aspect-auto h-full"
             >
-              <CartesianGrid stroke="var(--border)" strokeDasharray="3 6" strokeOpacity={0.45} vertical={false} />
-              <XAxis
-                dataKey="date"
-                tickFormatter={formatDateTick}
-                tick={{ fill: "var(--dim)", fontSize: 10 }}
-                tickLine={false}
-                axisLine={{ stroke: "var(--hairline)" }}
-                minTickGap={28}
-                label={compact ? undefined : {
-                  value: "Date",
-                  position: "insideBottom",
-                  offset: -18,
-                  fill: "var(--dim)",
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              />
-              <YAxis
-                width={compact ? 34 : 42}
-                tick={{ fill: "var(--dim)", fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                domain={yDomain}
-                allowDataOverflow={effectiveZoomed}
-                label={compact ? undefined : {
-                  value: "Value",
-                  angle: -90,
-                  position: "insideLeft",
-                  offset: 8,
-                  fill: "var(--dim)",
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              />
-              <Tooltip
-                labelFormatter={(label) => formatDateTick(String(label))}
-                contentStyle={chartTooltipStyle}
-                formatter={(value, name) => {
-                  if (Array.isArray(value)) {
-                    return [
-                      `${formatWholeValue(Number(value[0]))} – ${formatWholeValue(Number(value[1]))}`,
-                      "Trend projection",
-                    ];
-                  }
-                  if (value == null || Number.isNaN(Number(value))) return ["—", String(name)];
-                  return [formatWholeValue(Number(value)), String(name)];
-                }}
-              />
-              <Legend
-                verticalAlign="bottom"
-                height={compact ? 28 : 32}
-                wrapperStyle={{ fontSize: 11, color: "var(--dim)", paddingTop: 2 }}
-                iconSize={8}
-                payload={[
-                  { value: "Value", type: "line", id: "value", color: "var(--chart-1)" },
-                  { value: "7D avg", type: "line", id: "ma7", color: MA7_STROKE },
-                  { value: "30D avg", type: "line", id: "ma30", color: MA30_STROKE },
-                  { value: "Trend projection", type: "square", id: "trend", color: "var(--chart-2)" },
-                  ...(comparePlayerId
-                    ? [{ value: compareName, type: "line" as const, id: "compare", color: "var(--chart-5)" }]
-                    : []),
-                ]}
-              />
+              <ComposedChart
+                data={visibleRows}
+                margin={compact
+                  ? { top: 6, right: 6, bottom: 2, left: 0 }
+                  : { top: 8, right: 8, bottom: 8, left: 0 }}
+              >
+                <CartesianGrid stroke="var(--hairline)" strokeDasharray="1 6" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={formatDateTick}
+                  tick={{ fill: "var(--dim)", fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={{ stroke: "var(--hairline)" }}
+                  minTickGap={28}
+                />
+                <YAxis
+                  width={compact ? 32 : 36}
+                  tick={{ fill: "var(--dim)", fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={false}
+                  domain={yDomain}
+                  allowDataOverflow={effectiveZoomed}
+                />
+                <Tooltip
+                  labelFormatter={(label) => formatDateTick(String(label))}
+                  contentStyle={chartTooltipStyle}
+                  formatter={(value, name) => {
+                    if (Array.isArray(value)) {
+                      return [
+                        `${formatWholeValue(Number(value[0]))} – ${formatWholeValue(Number(value[1]))}`,
+                        "Trend projection",
+                      ];
+                    }
+                    if (value == null || Number.isNaN(Number(value))) return ["—", String(name)];
+                    return [formatWholeValue(Number(value)), String(name)];
+                  }}
+                />
               <Area
                 type="monotone"
                 dataKey="trendBand"
@@ -394,7 +363,16 @@ export function ValueChartPanel({
               ) : null}
             </ComposedChart>
           </ChartContainer>
+          </div>
+          {compact ? null : <span className="scatter-axis-x" aria-hidden="true">Date</span>}
         </div>
+        <ul className="monitor-pricing-key" aria-hidden="true">
+          <li><i className="is-value" />Value</li>
+          <li><i className="is-ma7" />7D avg</li>
+          <li><i className="is-ma30" />30D avg</li>
+          <li><i className="is-trend" />Trend projection</li>
+          {comparePlayerId ? <li><i className="is-compare" />{compareName}</li> : null}
+        </ul>
       </div>
     );
   }

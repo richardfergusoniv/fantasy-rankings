@@ -592,6 +592,7 @@ main { padding: 12px 16px 0; }
   height: min(70dvh, 560px);
   gap: 0;
 }
+.monitor-expanded-chart .scatter-chart-shell,
 .monitor-expanded-chart .scatter-frame,
 .monitor-expanded-chart .fpa-heatmap,
 .monitor-expanded-chart .tier-cliff-list,
@@ -602,6 +603,9 @@ main { padding: 12px 16px 0; }
   height: auto;
   max-height: none;
   margin: 0;
+}
+.monitor-expanded-chart .scatter-axis-rail {
+  min-height: 0;
 }
 .monitor-expanded-chart .chart-key {
   flex: none;
@@ -655,35 +659,43 @@ main { padding: 12px 16px 0; }
   font-weight: 600;
   cursor: pointer;
 }
+.monitor-builder-chart .monitor-value-chart-controls > .monitor-value-chart-field:nth-child(3) {
+  grid-column: 1 / -1;
+}
 .monitor-chart-advanced-trigger {
   grid-column: 1 / -1;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: var(--compact-control-height);
-  margin: 0;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--dim);
+  justify-content: flex-start;
+  width: auto;
+  min-height: auto;
+  margin: 2px 0 0;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--link);
   font: inherit;
   font-size: var(--type-caption);
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.2;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
   cursor: pointer;
 }
 .monitor-chart-advanced-trigger:hover {
-  border-color: var(--link);
-  background: var(--accent-soft);
   color: var(--text);
 }
-.monitor-value-chart-field select:focus,
-.monitor-chart-advanced-trigger:focus-visible {
+.monitor-value-chart-field select:focus {
   border-color: var(--link);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
   outline: none;
+}
+.monitor-chart-advanced-trigger:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 .monitor-value-chart {
   display: flex;
@@ -692,33 +704,63 @@ main { padding: 12px 16px 0; }
   min-width: 0;
   height: 220px;
 }
-.monitor-value-chart .recharts-legend-wrapper {
-  padding-top: 0 !important;
+.monitor-pricing-key {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 0;
+  padding: 8px 0 0;
+  list-style: none;
+  color: var(--dim);
+  font-size: var(--type-caption);
+  font-weight: 600;
 }
+.monitor-pricing-key li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.monitor-pricing-key i {
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--dim);
+}
+.monitor-pricing-key i.is-value { background: var(--chart-1); height: 3px; }
+.monitor-pricing-key i.is-ma7 { background: #c5ccd8; }
+.monitor-pricing-key i.is-ma30 { background: #6b7588; }
+.monitor-pricing-key i.is-trend {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--chart-2) 55%, transparent);
+}
+.monitor-pricing-key i.is-compare { background: var(--chart-5); height: 3px; }
 .monitor-value-chart-panel .monitor-value-chart {
-  height: 200px;
+  height: auto;
+}
+.monitor-value-chart-panel .monitor-value-chart .scatter-plot-body {
+  height: 168px;
 }
 /* Inline builder charts reuse Pricing chart height; keep plot and key stacked. */
 .monitor-builder-chart-panel .monitor-value-chart {
   position: relative;
-  height: 236px;
+  height: auto;
 }
+.monitor-builder-chart-panel .monitor-value-chart .scatter-chart-shell,
 .monitor-builder-chart-panel .monitor-value-chart .scatter-frame,
 .monitor-builder-chart-panel .monitor-value-chart .fpa-heatmap,
 .monitor-builder-chart-panel .monitor-value-chart .tier-cliff-list,
 .monitor-builder-chart-panel .monitor-value-chart .boom-bust-range-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: auto;
+  flex: none;
+  height: 196px;
   max-height: none;
   margin: 0;
   overflow: hidden;
   border: 0;
   border-radius: 0;
   background: transparent;
-}
-.monitor-builder-chart-panel .monitor-value-chart .scatter-zoom-controls {
-  display: none;
 }
 .monitor-builder-chart-panel .monitor-value-chart .chart-key {
   flex: none;
@@ -2112,19 +2154,69 @@ button.league-partner-change:active { color: var(--link-active); }
 .chart-heading > div:first-child > span, .chart-count span { display: block; margin-top: 4px; color: var(--dim); font-size: var(--type-caption); }
 .chart-count { flex: none; text-align: right; }
 .chart-count strong { display: block; font-size: var(--type-display); line-height: 1; font-weight: 700; }
+.scatter-chart-shell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 520px;
+  margin-top: 4px;
+}
+.scatter-chart-shell.is-compact {
+  height: 100%;
+  margin-top: 0;
+}
+.scatter-axis-rail {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 4px 6px;
+  min-height: 0;
+}
+.scatter-axis-y {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: center;
+  justify-self: center;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+.scatter-axis-x {
+  grid-row: 2;
+  grid-column: 2;
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-align: center;
+}
 .scatter-frame {
   display: flex;
   flex-direction: column;
   position: relative;
-  height: 520px;
-  margin-top: 4px;
+  grid-row: 1;
+  grid-column: 2;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
   background: var(--surface);
 }
+.scatter-chart-shell > .scatter-frame {
+  flex: 1 1 auto;
+  height: auto;
+}
 .scatter-frame.is-compact {
   margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .scatter-plot-body {
   flex: 1 1 auto;
@@ -2144,7 +2236,13 @@ button.league-partner-change:active { color: var(--link-active); }
   flex: none;
   align-items: center;
   gap: 8px;
-  padding: 0 0 8px;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.scatter-chart-shell.is-compact .scatter-zoom-controls,
+.monitor-builder-chart-panel .scatter-zoom-controls,
+.monitor-value-chart.is-compact .scatter-zoom-controls {
+  display: none;
 }
 .scatter-zoom-toggle {
   min-height: var(--compact-control-height);
@@ -2743,6 +2841,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
     min-height: 0;
     height: 100%;
   }
+  .monitor-chart-expand-card .monitor-expanded-chart .scatter-chart-shell,
   .monitor-chart-expand-card .monitor-expanded-chart .scatter-frame,
   .monitor-chart-expand-card .monitor-expanded-chart .monitor-value-chart {
     display: flex;
