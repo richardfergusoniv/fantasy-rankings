@@ -16,6 +16,7 @@ import {
   recallDashboardView,
   remainingDashboardTtlSeconds,
   rememberDashboardView,
+  responseCacheFetchedAtMs,
   type DashboardViewStore,
 } from "./dashboard-response-cache.js";
 
@@ -75,6 +76,20 @@ describe("dashboard view TTL", () => {
     expect(remainingDashboardTtlSeconds({ fetchedAtMs: 0, nowMs: 150_000, live: true })).toBe(0);
     expect(remainingDashboardTtlSeconds({ fetchedAtMs: 0, nowMs: 200_000, live: true })).toBe(0);
     expect(remainingDashboardTtlSeconds({ fetchedAtMs: 1_000, nowMs: 1_000, live: false })).toBe(600);
+  });
+
+  it("does not cache a stale or owner-snapshot fallback as a fresh build", () => {
+    const nowMs = 1_700_000_000_000;
+    const builtAt = responseCacheFetchedAtMs("built", nowMs);
+    const freshAt = responseCacheFetchedAtMs("fresh", nowMs, nowMs - 60_000);
+    const fallbackAt = responseCacheFetchedAtMs("fallback", nowMs);
+    expect(builtAt).toBe(nowMs);
+    expect(freshAt).toBe(nowMs - 60_000);
+    expect(fallbackAt).toBe(0);
+    expect(remainingDashboardTtlSeconds({ fetchedAtMs: builtAt, nowMs, live: false })).toBe(600);
+    expect(remainingDashboardTtlSeconds({ fetchedAtMs: freshAt, nowMs, live: false })).toBe(540);
+    expect(remainingDashboardTtlSeconds({ fetchedAtMs: fallbackAt, nowMs, live: false })).toBe(0);
+    expect(remainingDashboardTtlSeconds({ fetchedAtMs: fallbackAt, nowMs, live: true })).toBe(0);
   });
 });
 

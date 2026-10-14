@@ -42,7 +42,7 @@ import {
   type DashboardTeamApiData,
 } from "./dashboard-section-cache.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
-import { rememberDashboardView, remainingDashboardTtlSeconds } from "./dashboard-response-cache.js";
+import { rememberDashboardView, remainingDashboardTtlSeconds, responseCacheFetchedAtMs } from "./dashboard-response-cache.js";
 import { readOwnerSleeperUserId } from "./auth.js";
 import { readNflState, readUserLeagues } from "./user-leagues.js";
 import {
@@ -2300,13 +2300,22 @@ export function userDashboardCacheKey(sleeperUserId: string): string {
  * check. A failed/slow build falls back to the stale per-user cache when
  * one exists. The scheduled owner, and only that owner, can then fall
  * back to the stored snapshot. Any other miss propagates (→ 500 at the route).
+ *
+ * `fetchedAtMs` is 0 for those fallbacks so the response cache does not
+ * store them as a fresh build. Only a finished build is timestamped now.
  */
-export async function loadOrBuildUserDashboard(sleeperUserId: string, force = false): Promise<Dashboard> {
+export async function loadOrBuildUserDashboard(
+  sleeperUserId: string,
+  force = false,
+): Promise<{ dashboard: Dashboard; fetchedAtMs: number }> {
   const cacheKey = userDashboardCacheKey(sleeperUserId);
   const cached = await readUserDashboardCache(sleeperUserId);
   const cachedDashboard = cached?.dashboard ?? null;
   if (!force && cachedDashboard && cached?.fresh) {
-    return cachedDashboard;
+    return {
+      dashboard: cachedDashboard,
+      fetchedAtMs: responseCacheFetchedAtMs("fresh", Date.now(), cached.fetchedAtMs),
+    };
   }
 
   try {
@@ -2316,12 +2325,19 @@ export async function loadOrBuildUserDashboard(sleeperUserId: string, force = fa
     buildPromise.catch(() => undefined);
     const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
     await writeUserDashboardCache(cacheKey, dashboard);
-    return dashboard;
+    return {
+      dashboard,
+      fetchedAtMs: responseCacheFetchedAtMs("built", Date.now()),
+    };
   } catch (error) {
-    if (cachedDashboard) return cachedDashboard; // stale beats an error
+    if (cachedDashboard) {
+      return { dashboard: cachedDashboard, fetchedAtMs: responseCacheFetchedAtMs("fallback", Date.now()) };
+    }
     if (readOwnerSleeperUserId() === sleeperUserId) {
       const snapshot = await readGlobalDashboardSnapshot();
-      if (snapshot) return snapshot;
+      if (snapshot) {
+        return { dashboard: snapshot, fetchedAtMs: responseCacheFetchedAtMs("fallback", Date.now()) };
+      }
     }
     throw error;
   }

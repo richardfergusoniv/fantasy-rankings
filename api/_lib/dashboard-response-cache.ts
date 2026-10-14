@@ -75,6 +75,31 @@ export function remainingDashboardTtlSeconds(args: {
   return Math.floor(remainingMs / 1000);
 }
 
+/**
+ * Timestamp stored with a load-or-build result. A finished build uses `nowMs`.
+ * A fresh per-user row keeps its own `fetchedAt`. A stale row or the owner
+ * snapshot is a fallback: `0` makes `remainingDashboardTtlSeconds` return 0
+ * on a real clock, so the response cache does not store it.
+ */
+export function responseCacheFetchedAtMs(
+  outcome: "built" | "fresh" | "fallback",
+  nowMs: number,
+  freshFetchedAtMs = 0,
+): number {
+  switch (outcome) {
+    case "built":
+      return nowMs;
+    case "fresh":
+      return freshFetchedAtMs;
+    case "fallback":
+      return 0;
+    default: {
+      const _exhaustive: never = outcome;
+      return _exhaustive;
+    }
+  }
+}
+
 export function dashboardViewCacheKey(
   sleeperUserId: string,
   view: DashboardResponseView,

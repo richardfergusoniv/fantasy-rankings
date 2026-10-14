@@ -106,11 +106,12 @@ async function handleDashboard(
           };
         },
         buildOwn: async (id) => {
-          const dashboard = await loadOrBuildUserDashboard(id, force);
+          const loaded = await loadOrBuildUserDashboard(id, force);
           return {
-            dashboard,
-            live: dashboardSnapshotIsLive(dashboard),
-            fetchedAtMs: Date.now(),
+            dashboard: loaded.dashboard,
+            live: dashboardSnapshotIsLive(loaded.dashboard),
+            // 0 when the build fell back to a stale row or the owner snapshot.
+            fetchedAtMs: loaded.fetchedAtMs,
           };
         },
       });
