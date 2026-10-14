@@ -9,6 +9,7 @@ import {
 } from "../../../api/_lib/nflverse-game-lines";
 import type { Dashboard, League } from "../dashboard-types";
 import type { ChartDataset } from "../dashboard-url";
+import { TeamStatsPanel } from "./team-stats-panel";
 import { ValueChartPanel } from "./value-chart-panel";
 
 const LazyChartsTool = lazy(() => import("../AnalyticsViews").then((module) => ({ default: module.ChartsTool })));
@@ -97,6 +98,8 @@ export function Monitor({
       </Suspense>
 
       <ValueChartPanel league={league} dashboard={dashboard} />
+
+      <TeamStatsPanel league={league} season={dashboard.season} week={dashboard.week} />
 
       <article className="monitor-panel">
         <header className="monitor-panel-header">
