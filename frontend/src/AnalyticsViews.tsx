@@ -1142,7 +1142,7 @@ function TeamScatterPlot({
       others={data.filter((row) => !row.isSelectedTeam)}
       leadersWithoutSelectedTeam={[]}
       selectedTeamPlayers={data.filter((row) => row.isSelectedTeam)}
-      labelData={showLabels ? data : []}
+      labelData={showLabels ? data : data.filter((row) => row.isSelectedTeam)}
       leaderIds={new Set()}
       selectedTeamIds={new Set(data.filter((row) => row.isSelectedTeam).map((row) => row.id))}
       highlightedId={null}
@@ -1599,7 +1599,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
             others={others}
             leadersWithoutSelectedTeam={leadersWithoutSelectedTeam}
             selectedTeamPlayers={selectedTeamPlayers}
-            labelData={showLabels ? labelData : []}
+            labelData={showLabels ? labelData : selectedTeamPlayers}
             leaderIds={leaderIds}
             selectedTeamIds={selectedTeamIds}
             highlightedId={selectedTeamPlayers[0]?.id ?? null}
@@ -2167,7 +2167,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
               others={others}
               leadersWithoutSelectedTeam={leadersWithoutSelectedTeam}
               selectedTeamPlayers={selectedTeamPlayers}
-              labelData={showLabels ? labelData : []}
+              labelData={showLabels ? labelData : selectedTeamPlayers}
               leaderIds={leaderIds}
               selectedTeamIds={selectedTeamIds}
               highlightedId={selectedTeamPlayers[0]?.id ?? null}

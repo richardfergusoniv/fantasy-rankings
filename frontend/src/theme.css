@@ -2267,6 +2267,10 @@ button.league-partner-change:active { color: var(--link-active); }
 .adaptive-chart-label { fill: var(--text); stroke: var(--surface); stroke-width: 2.5px; paint-order: stroke fill; font-size: 10px; font-weight: 600; pointer-events: none; }
 .adaptive-chart-label.leader { fill: var(--text); font-weight: 600; }
 .adaptive-chart-label.selected-team { fill: var(--chart-1); font-weight: 700; }
+.scatter-frame.is-compact .adaptive-chart-label.selected-team {
+  font-size: 11px;
+  stroke-width: 3.5px;
+}
 .adaptive-chart-label-box { fill: var(--surface); stroke: var(--text); stroke-width: 1px; }
 .chart-key { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 8px 2px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .chart-key span { display: inline-flex; align-items: center; gap: 5px; }
