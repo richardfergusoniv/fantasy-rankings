@@ -23,11 +23,6 @@ import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cac
 export const NFL_PLAYERS_CACHE_KEY = "nfl-players-roster-v1";
 /** Soft freshness window for consumers (dashboard, trades, draft). */
 export const NFL_PLAYERS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-/**
- * Hard ceiling: prefer a forced Sleeper refresh when the compact row is older
- * than this, even if a consumer did not pass `forceRefresh`.
- */
-export const NFL_PLAYERS_CACHE_STALE_MS = 36 * 60 * 60 * 1000;
 
 export type NflPlayerRosterEntry = {
   team: string | null;
@@ -246,13 +241,15 @@ export async function refreshNflPlayersCache(): Promise<NflPlayersRefreshResult>
 
 /**
  * Load the compact roster map as `SleeperPlayer` records. Uses the daily cache
- * when fresh; refreshes from Sleeper when missing, forced, or past the stale
- * ceiling. Never writes the full dump back to Supabase.
+ * when fresh; refreshes from Sleeper when missing, forced, or past the soft
+ * freshness window. Never writes the full dump back to Supabase.
+ *
+ * The stale ceiling only triggers a refresh attempt — on Sleeper failure or a
+ * thin dump, any retained cache row is still returned so dashboards stay up.
  */
 export async function loadNflPlayersMap(forceRefresh = false): Promise<Record<string, SleeperPlayer>> {
   const cached = await readCachedSnapshot();
   const ageMs = cached ? Date.now() - cached.fetchedAt.getTime() : Number.POSITIVE_INFINITY;
-  const cacheUsable = cached && ageMs < NFL_PLAYERS_CACHE_STALE_MS;
   if (!forceRefresh && cached && ageMs < NFL_PLAYERS_CACHE_MAX_AGE_MS) {
     return sleeperPlayersFromRosterMap(cached.snapshot.players);
   }
@@ -262,10 +259,13 @@ export async function loadNflPlayersMap(forceRefresh = false): Promise<Record<st
     const compact = compactSleeperPlayers(fresh);
     if (Object.keys(compact).length >= 1_000) {
       await writePlayersSnapshot(compact, new Date());
+      return sleeperPlayersFromRosterMap(compact);
     }
+    // Thin/truncated Sleeper response: keep serving the last good snapshot.
+    if (cached) return sleeperPlayersFromRosterMap(cached.snapshot.players);
     return sleeperPlayersFromRosterMap(compact);
   } catch (error) {
-    if (cacheUsable && cached) {
+    if (cached) {
       return sleeperPlayersFromRosterMap(cached.snapshot.players);
     }
     throw error;

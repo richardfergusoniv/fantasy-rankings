@@ -111,3 +111,12 @@ describe("rosterEntryToSleeperPlayer", () => {
     expect(isActiveNflRosterPlayer(sleeper)).toBe(false);
   });
 });
+
+describe("compact roster size gate", () => {
+  it("treats a sub-1000 map as too thin to replace a good cache", () => {
+    const thin = compactSleeperPlayers({
+      "1": { full_name: "Only One", team: "KC", position: "QB", status: "Active" },
+    });
+    expect(Object.keys(thin).length).toBeLessThan(1000);
+  });
+});

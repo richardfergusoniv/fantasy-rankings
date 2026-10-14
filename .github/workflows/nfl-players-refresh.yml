@@ -36,6 +36,10 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-ten.vercel.app' }}
         run: |
+          case "$APP_BASE_URL" in
+            https://*) ;;
+            *) echo "APP_BASE_URL must use HTTPS" >&2; exit 1 ;;
+          esac
           curl -sS --fail-with-body --max-time 300 \
             -H "Authorization: Bearer $CRON_SECRET" \
             "$APP_BASE_URL/api/cron/jobs?job=refresh-nfl-players" | tee /tmp/nfl-players.json
@@ -44,7 +48,9 @@ jobs:
           result = json.load(open('/tmp/nfl-players.json'))
           assert result.get('ok') is True, f"refresh not ok: {result}"
           assert result.get('job') == 'refresh-nfl-players', f"unexpected job: {result}"
-          assert result.get('status') in ('committed', 'kept-previous'), f"unexpected status: {result}"
+          # kept-previous means Sleeper failed or returned a thin dump — fail
+          # the timer so a silent stale day is visible in Actions.
+          assert result.get('status') == 'committed', f"refresh did not commit: {result}"
           assert (result.get('players') or 0) >= 1000, f"player count too low: {result}"
           print(f"NFL players refresh verified: {result}")
           EOF
