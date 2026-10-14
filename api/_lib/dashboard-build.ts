@@ -78,6 +78,11 @@ import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-ti
 import { selectProjectionFeed } from "./projection-fallback.js";
 import { appendDailyValueSnapshots } from "./player-value-history.js";
 import {
+  isActiveNflRosterPlayer,
+  loadNflPlayersMap,
+  resolvePlayerTeam,
+} from "./nfl-players-cache.js";
+import {
   applySnapSharesToRows,
   enrichOpportunityMetrics,
   weeklySnapsByPlayerId,
@@ -942,7 +947,8 @@ function mapPresetRows(
       formatKey: format.key,
       playerId,
       name: row.player.name,
-      team: row.player.maybeTeam ?? null,
+      // FantasyCalc maybeTeam lags trades/cuts; Sleeper is authoritative (null = FA).
+      team: resolvePlayerTeam(sleeperPlayers[playerId], row.player.maybeTeam),
       position: position as "QB" | "RB" | "WR" | "TE" | "PICK",
       overallRank: row.overallRank,
       positionRank: row.positionRank,
@@ -1634,7 +1640,8 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
 
   const [leagueResult, playersResult, sleeperProjectionResult, scheduleResult, currentStatsResult, previousStatsResult, kickoffResult] = await Promise.allSettled([
     readUserLeagues(sleeperUserId, fresh),
-    fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`),
+    // Compact daily cache (cron refresh-nfl-players) — not the full Sleeper dump in Supabase.
+    loadNflPlayersMap(fresh),
     attachWeekContext
       ? fetchJson<SleeperProjection[]>(`${SLEEPER_PROJECTIONS_BASE}/projections/nfl/${season}/${week}?season_type=regular&order_by=pts_ppr`)
       : Promise.resolve([] as SleeperProjection[]),
@@ -1764,10 +1771,10 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   }
   const scheduleWeekAvailable = opponentByTeam.size >= 24;
   const vegasBaseRows: Ranking[] = Object.entries(playersResult.value).flatMap(([playerId, player]) => {
+    if (!isActiveNflRosterPlayer(player)) return [];
     const position = normalizePosition(player.position);
-    const team = player.team ? canonicalTeam(player.team) : "";
+    const team = canonicalTeam(player.team ?? "");
     const name = player.full_name ?? [player.first_name, player.last_name].filter(Boolean).join(" ");
-    if (!name || !team || !["QB", "RB", "WR", "TE", "K"].includes(position)) return [];
     return [{
       leagueId: "",
       playerId,
