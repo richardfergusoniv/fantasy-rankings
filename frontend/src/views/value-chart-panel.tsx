@@ -212,9 +212,10 @@ export function ValueChartPanel({
       effectiveZoomed,
     );
     const toggleZoom = () => setZoomed((value) => !value);
+    const compact = !options.interactiveZoom;
     return (
       <div
-        className={`monitor-value-chart${options.interactiveZoom ? " is-expanded-pricing" : ""}`}
+        className={`monitor-value-chart${options.interactiveZoom ? " is-expanded-pricing" : " is-compact"}`}
         role="img"
         aria-label={`${primarySeries?.name ?? "Player"} FantasyCalc value chart`}
       >
@@ -234,7 +235,7 @@ export function ValueChartPanel({
           </div>
         ) : null}
         <div
-          className="h-full"
+          className="scatter-plot-body"
           onDoubleClick={options.interactiveZoom ? (event) => {
             event.preventDefault();
             toggleZoom();
@@ -250,38 +251,44 @@ export function ValueChartPanel({
             }}
             className="aspect-auto h-full"
           >
-            <ComposedChart data={visibleRows} margin={{ top: 8, right: 6, bottom: 4, left: 0 }}>
-              <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
+            <ComposedChart
+              data={visibleRows}
+              margin={compact
+                ? { top: 6, right: 6, bottom: 2, left: 0 }
+                : { top: 10, right: 10, bottom: 28, left: 4 }}
+            >
+              <CartesianGrid stroke="var(--border)" strokeDasharray="3 6" strokeOpacity={0.45} vertical={false} />
               <XAxis
                 dataKey="date"
                 tickFormatter={formatDateTick}
-                tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+                tick={{ fill: "var(--dim)", fontSize: 10 }}
                 tickLine={false}
-                axisLine={{ stroke: "var(--border)" }}
+                axisLine={{ stroke: "var(--hairline)" }}
                 minTickGap={28}
-                label={{
+                label={compact ? undefined : {
                   value: "Date",
                   position: "insideBottom",
-                  offset: -2,
+                  offset: -18,
                   fill: "var(--dim)",
-                  fontSize: 10,
-                  fontWeight: 600,
+                  fontSize: 11,
+                  fontWeight: 700,
                 }}
               />
               <YAxis
-                width={40}
-                tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
+                width={compact ? 34 : 42}
+                tick={{ fill: "var(--dim)", fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
                 domain={yDomain}
                 allowDataOverflow={effectiveZoomed}
-                label={{
+                label={compact ? undefined : {
                   value: "Value",
                   angle: -90,
                   position: "insideLeft",
+                  offset: 8,
                   fill: "var(--dim)",
-                  fontSize: 10,
-                  fontWeight: 600,
+                  fontSize: 11,
+                  fontWeight: 700,
                 }}
               />
               <Tooltip
@@ -300,8 +307,9 @@ export function ValueChartPanel({
               />
               <Legend
                 verticalAlign="bottom"
-                height={36}
-                wrapperStyle={{ fontSize: 11, color: "var(--dim)" }}
+                height={compact ? 28 : 32}
+                wrapperStyle={{ fontSize: 11, color: "var(--dim)", paddingTop: 2 }}
+                iconSize={8}
                 payload={[
                   { value: "Value", type: "line", id: "value", color: "var(--chart-1)" },
                   { value: "7D avg", type: "line", id: "ma7", color: MA7_STROKE },

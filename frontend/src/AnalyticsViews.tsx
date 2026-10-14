@@ -624,12 +624,14 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
       </div>
     )}
     {layout === "monitor" ? (
-      <div className="monitor-value-chart-field">
-        <span aria-hidden="true">Advanced chart controls</span>
-        <button type="button" className="monitor-value-chart-advanced" aria-haspopup="dialog" onClick={() => onAdvancedOpenChange(true)}>
-          Advanced chart controls
-        </button>
-      </div>
+      <button
+        type="button"
+        className="monitor-chart-advanced-trigger"
+        aria-haspopup="dialog"
+        onClick={() => onAdvancedOpenChange(true)}
+      >
+        Advanced chart controls
+      </button>
     ) : (
       <Button type="button" variant="outline" className="chart-advanced-trigger" aria-haspopup="dialog" onClick={() => onAdvancedOpenChange(true)}>Advanced chart controls</Button>
     )}
@@ -825,34 +827,28 @@ function AdaptiveChartLabels({ data, leaderIds, selectedTeamIds, highlightedId =
         bestScore = score;
       }
     }
+    const keepAlways = point.datum.id === highlightedId || selectedTeamIds.has(point.datum.id);
+    // Drop field labels that still collide hard after placement search.
+    if (!keepAlways && bestScore > 1200) continue;
     if (best) placed.push({ ...best, datum: point.datum });
   }
 
   return (
     <g className="adaptive-chart-labels" aria-hidden="true">
       {placed.map((placement) => {
+        const isSelected = selectedTeamIds.has(placement.datum.id);
+        const isLeader = leaderIds.has(placement.datum.id);
         const isHighlighted = placement.datum.id === highlightedId;
         return (
-          <g key={placement.datum.id}>
-            {isHighlighted ? (
-              <rect
-                className="adaptive-chart-label-box"
-                x={placement.left - 2}
-                y={placement.top - 1}
-                width={placement.width + 4}
-                height={placement.height + 2}
-                rx={2}
-              />
-            ) : null}
-            <text
-              className={selectedTeamIds.has(placement.datum.id) ? "adaptive-chart-label selected-team" : leaderIds.has(placement.datum.id) ? "adaptive-chart-label leader" : "adaptive-chart-label"}
-              x={placement.textX}
-              y={placement.textY}
-              textAnchor={placement.anchor}
-            >
-              {placement.datum.label}
-            </text>
-          </g>
+          <text
+            key={placement.datum.id}
+            className={isSelected || isHighlighted ? "adaptive-chart-label selected-team" : isLeader ? "adaptive-chart-label leader" : "adaptive-chart-label"}
+            x={placement.textX}
+            y={placement.textY}
+            textAnchor={placement.anchor}
+          >
+            {placement.datum.label}
+          </text>
         );
       })}
     </g>
@@ -893,8 +889,8 @@ function ScatterTrendLine({ data, xAxisMap, yAxisMap, offset }: {
       y2={yScale(y2)}
       stroke="var(--dim)"
       strokeWidth={1}
-      strokeOpacity={0.35}
-      strokeDasharray="4 4"
+      strokeOpacity={0.2}
+      strokeDasharray="5 6"
     />
   );
 }
@@ -919,6 +915,7 @@ type ScatterPlotProps = {
   xCutoff: number;
   yCutoff: number;
   ariaLabel: string;
+  compact?: boolean;
 };
 
 function ScatterPlot({
@@ -935,6 +932,7 @@ function ScatterPlot({
   xCutoff,
   yCutoff,
   ariaLabel,
+  compact = false,
 }: ScatterPlotProps) {
   const [zoomed, setZoomed] = useState(false);
   const plottedData = Array.from(new Map(
@@ -943,8 +941,13 @@ function ScatterPlot({
   const xDomain = scatterAxisDomain(plottedData.map((point) => point.x), zoomed);
   const yDomain = scatterAxisDomain(plottedData.map((point) => point.y), zoomed);
   const toggleZoom = () => setZoomed((value) => !value);
+  const margin = compact
+    ? { top: 8, right: 8, bottom: 20, left: 4 }
+    : { top: 14, right: 14, bottom: 36, left: 8 };
+  const axisTitle = `${xAxis.short}${xAxis.titleSuffix}`;
+  const yAxisTitle = `${yAxis.short}${yAxis.titleSuffix}`;
   return (
-    <div className="scatter-frame" role="group" aria-label={ariaLabel}>
+    <div className={`scatter-frame${compact ? " is-compact" : ""}`} role="group" aria-label={ariaLabel}>
       <div className="scatter-zoom-controls">
         <button
           type="button"
@@ -959,45 +962,45 @@ function ScatterPlot({
       <p className="sr-only">{ariaLabel}. {plottedData.map((point) => `${point.name}, ${point.team}: ${xAxis.short} ${point.x}, ${yAxis.short} ${point.y}`).join("; ")}{zoomed ? " Chart is zoomed into the central region of plotted points." : ""}</p>
       <div
         aria-hidden="true"
-        className="h-full"
+        className="scatter-plot-body"
         onDoubleClick={(event) => {
           event.preventDefault();
           toggleZoom();
         }}
       >
       <ChartContainer config={{ field: { label: "Field", color: "var(--chart-2)" }, team: { label: "My team", color: "var(--chart-1)" } }} className="aspect-auto h-full">
-        <ScatterChart margin={{ top: 22, right: 10, bottom: 28, left: 2 }}>
-          <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" />
+        <ScatterChart margin={margin}>
+          <CartesianGrid stroke="var(--border)" strokeDasharray="3 6" strokeOpacity={0.45} vertical={false} />
           <XAxis
             type="number"
             dataKey="x"
-            name={`${xAxis.short}${xAxis.titleSuffix}`}
+            name={axisTitle}
             domain={xDomain}
             allowDataOverflow={zoomed}
             reversed={xAxis.lowerIsBetter}
             tick={{ fill: "var(--dim)", fontSize: 10 }}
             tickLine={false}
-            axisLine={{ stroke: "var(--border)" }}
-            label={{ value: `${xAxis.short}${xAxis.titleSuffix}`, position: "insideBottom", offset: -12, fill: "var(--text)", fontSize: 10, fontWeight: 700 }}
+            axisLine={{ stroke: "var(--hairline)" }}
+            label={compact ? undefined : { value: axisTitle, position: "insideBottom", offset: -22, fill: "var(--dim)", fontSize: 11, fontWeight: 700 }}
           />
           <YAxis
             type="number"
             dataKey="y"
-            name={`${yAxis.short}${yAxis.titleSuffix}`}
+            name={yAxisTitle}
             domain={yDomain}
             allowDataOverflow={zoomed}
             reversed={yAxis.lowerIsBetter}
-            width={36}
+            width={compact ? 32 : 42}
             tick={{ fill: "var(--dim)", fontSize: 10 }}
             tickLine={false}
-            axisLine={{ stroke: "var(--border)" }}
-            label={{ value: `${yAxis.short}${yAxis.titleSuffix}`, angle: -90, position: "insideLeft", fill: "var(--text)", fontSize: 10, fontWeight: 700 }}
+            axisLine={false}
+            label={compact ? undefined : { value: yAxisTitle, angle: -90, position: "insideLeft", offset: 8, fill: "var(--dim)", fontSize: 11, fontWeight: 700 }}
           />
-          <Tooltip cursor={{ stroke: "var(--foreground)", strokeDasharray: "3 3" }} contentStyle={chartTooltipStyle} />
-          {showQuadrants ? <ReferenceLine x={xCutoff} stroke="var(--text)" strokeWidth={1} strokeDasharray="3 4" strokeOpacity={0.7} /> : null}
-          {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--text)" strokeWidth={1} strokeDasharray="3 4" strokeOpacity={0.7} /> : null}
-          <Scatter name="Field" data={others} fill="var(--chart-2)" fillOpacity={0.72} />
-          <Scatter name="Smash spots" data={leadersWithoutSelectedTeam} fill="var(--chart-2)" fillOpacity={0.72} />
+          <Tooltip cursor={{ stroke: "var(--dim)", strokeDasharray: "3 3", strokeOpacity: 0.6 }} contentStyle={chartTooltipStyle} />
+          {showQuadrants ? <ReferenceLine x={xCutoff} stroke="var(--dim)" strokeWidth={1} strokeDasharray="4 6" strokeOpacity={0.35} /> : null}
+          {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--dim)" strokeWidth={1} strokeDasharray="4 6" strokeOpacity={0.35} /> : null}
+          <Scatter name="Field" data={others} fill="var(--chart-2)" fillOpacity={0.7} />
+          <Scatter name="Smash spots" data={leadersWithoutSelectedTeam} fill="var(--chart-2)" fillOpacity={0.7} />
           <Scatter name="My team" data={selectedTeamPlayers} fill="var(--chart-1)" stroke="var(--chart-1)" strokeWidth={1} />
           {plottedData.length > 1 ? <Customized component={<ScatterTrendLine data={plottedData} />} /> : null}
           {labelData.length ? <Customized component={<AdaptiveChartLabels data={labelData} leaderIds={leaderIds} selectedTeamIds={selectedTeamIds} highlightedId={highlightedId} />} /> : null}
@@ -1116,12 +1119,14 @@ function TeamScatterPlot({
   yShort,
   ariaLabel,
   showLabels = true,
+  compact = false,
 }: {
   data: ChartDatum[];
   xShort: string;
   yShort: string;
   ariaLabel: string;
   showLabels?: boolean;
+  compact?: boolean;
 }) {
   return (
     <ScatterPlot
@@ -1138,6 +1143,7 @@ function TeamScatterPlot({
       xCutoff={0}
       yCutoff={0}
       ariaLabel={ariaLabel}
+      compact={compact}
     />
   );
 }
@@ -1575,7 +1581,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
       ) : null}
       {chartKind === "team-scatter" ? (
         teamScatterData.length > 0
-          ? <TeamScatterPlot data={teamScatterData} xShort="Plays/g" yShort="PROE" ariaLabel="Team pace versus pass rate over expected" showLabels={showLabels} />
+          ? <TeamScatterPlot data={teamScatterData} xShort="Plays/g" yShort="PROE" ariaLabel="Team pace versus pass rate over expected" showLabels={showLabels} compact={!showLabels && layout === "monitor"} />
           : <div className="analytics-empty"><strong>No pace or PROE data yet.</strong></div>
       ) : null}
       {chartKind === "scatter" && selectedX && selectedY ? (
@@ -1594,6 +1600,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
             xCutoff={xCutoff}
             yCutoff={yCutoff}
             ariaLabel={`${position === "DEF" ? "DST" : position} scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
+            compact={!showLabels && layout === "monitor"}
           />
           <ChartKey teamName={fantasyTeamName(league)} />
           {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
@@ -2147,23 +2154,24 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
                 : <div className="analytics-empty"><strong>No scoring ranges yet.</strong><span>At least two played games are required for a floor-to-ceiling range.</span></div>
           ) : (
             <>
-              <ScatterPlot
-                others={others}
-                leadersWithoutSelectedTeam={leadersWithoutSelectedTeam}
-                selectedTeamPlayers={selectedTeamPlayers}
-                labelData={showLabels ? labelData : []}
-                leaderIds={leaderIds}
-                selectedTeamIds={selectedTeamIds}
-                highlightedId={selectedTeamPlayers[0]?.id ?? null}
-                xAxis={{ short: selectedX.short, lowerIsBetter: selectedX.lowerIsBetter, titleSuffix: "" }}
-                yAxis={{ short: selectedY.short, lowerIsBetter: selectedY.lowerIsBetter, titleSuffix: "" }}
-                showQuadrants={showQuadrants}
-                xCutoff={xCutoff}
-                yCutoff={yCutoff}
-                ariaLabel={`${position === "DEF" ? "DST" : position} weekly projection scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
-              />
-              <ChartKey teamName={fantasyTeamName(league)} />
-              {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
+            <ScatterPlot
+              others={others}
+              leadersWithoutSelectedTeam={leadersWithoutSelectedTeam}
+              selectedTeamPlayers={selectedTeamPlayers}
+              labelData={showLabels ? labelData : []}
+              leaderIds={leaderIds}
+              selectedTeamIds={selectedTeamIds}
+              highlightedId={selectedTeamPlayers[0]?.id ?? null}
+              xAxis={{ short: selectedX.short, lowerIsBetter: selectedX.lowerIsBetter, titleSuffix: "" }}
+              yAxis={{ short: selectedY.short, lowerIsBetter: selectedY.lowerIsBetter, titleSuffix: "" }}
+              showQuadrants={showQuadrants}
+              xCutoff={xCutoff}
+              yCutoff={yCutoff}
+              ariaLabel={`${position === "DEF" ? "DST" : position} weekly projection scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
+              compact={!showLabels && layout === "monitor"}
+            />
+            <ChartKey teamName={fantasyTeamName(league)} />
+            {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
             </>
           )
         );
