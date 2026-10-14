@@ -187,8 +187,11 @@ export function ValueChartPanel({
     return buildChartRows(primary, compare?.length ? compare : null);
   }, [compareSeries?.points, primarySeries?.points]);
 
+  // Empty after trim (all ≤0) counts as unavailable — same empty copy as no history.
   const unavailable = historyQuery.isError
-    || (!historyQuery.isPending && requestIds.length > 0 && !primarySeries?.points.length);
+    || (!historyQuery.isPending && requestIds.length > 0 && (
+      !primarySeries?.points.length || chartRows.length === 0
+    ));
   const showChart = chartRows.length > 0 && !unavailable;
 
   return (
