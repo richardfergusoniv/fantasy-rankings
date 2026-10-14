@@ -435,6 +435,8 @@ const defaultWeeklyAxes: Record<BasePosition, [string, string]> = {
 
 type ChartPickerMode = "blank" | "derived";
 
+type ChartLayout = "page" | "monitor";
+
 type SavedViewControlsProps = {
   dataset: ToolDataset;
   presets: ChartPreset[];
@@ -448,9 +450,10 @@ type SavedViewControlsProps = {
   advancedOpen: boolean;
   onAdvancedOpenChange: (open: boolean) => void;
   children: ReactNode;
+  layout?: ChartLayout;
 };
 
-function SavedViewControls({ dataset, presets, validPositions, config, pickerMode, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, advancedOpen, onAdvancedOpenChange, children }: SavedViewControlsProps) {
+function SavedViewControls({ dataset, presets, validPositions, config, pickerMode, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, advancedOpen, onAdvancedOpenChange, children, layout = "page" }: SavedViewControlsProps) {
   const queryClient = useQueryClient();
   const [isNaming, setIsNaming] = useState(false);
   const [name, setName] = useState("");
@@ -567,48 +570,68 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
     saveMutation.mutate(trimmed);
   }
 
+  const savedViewSelect = (
+    <select
+      aria-label={`Choose ${dataset === "advanced" ? "advanced" : "weekly"} saved chart view`}
+      value={pickerValue}
+      onChange={(event) => {
+        const nextValue = event.target.value;
+        setMessageIsError(false);
+        setMessage("");
+        if (!nextValue) return;
+        if (nextValue.startsWith("saved:")) {
+          const view = views.find((item) => `saved:${item.id}` === nextValue);
+          if (view) onApplySavedView(view);
+          return;
+        }
+        if (nextValue.startsWith("builtin:")) {
+          const preset = presets.find((item) => `builtin:${item.x}|${item.y}` === nextValue);
+          if (preset) onApplyBuiltIn(preset);
+        }
+      }}
+    >
+      <option value="" disabled hidden>Choose a view</option>
+      <optgroup label="Built-in views">
+        {presets.map((preset) => <option key={`${preset.x}-${preset.y}`} value={`builtin:${preset.x}|${preset.y}`}>{preset.label}</option>)}
+      </optgroup>
+      {views.length > 0 ? <optgroup label="My saved views">{views.map((view) => <option key={view.id} value={`saved:${view.id}`}>{view.name}</option>)}</optgroup> : null}
+      {pickerValue === "custom" ? <option value="custom" disabled hidden>Custom</option> : null}
+    </select>
+  );
+
   return (
     <>
-    <div className="saved-view-block">
-      <div className="saved-view-row">
-        <label className="chart-preset-select">
-          <span>Saved view</span>
-          <select
-            aria-label={`Choose ${dataset === "advanced" ? "advanced" : "weekly"} saved chart view`}
-            value={pickerValue}
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              setMessageIsError(false);
-              setMessage("");
-              if (!nextValue) return;
-              if (nextValue.startsWith("saved:")) {
-                const view = views.find((item) => `saved:${item.id}` === nextValue);
-                if (view) onApplySavedView(view);
-                return;
-              }
-              if (nextValue.startsWith("builtin:")) {
-                const preset = presets.find((item) => `builtin:${item.x}|${item.y}` === nextValue);
-                if (preset) onApplyBuiltIn(preset);
-              }
-            }}
-          >
-            <option value="" disabled hidden>Choose a view</option>
-            <optgroup label="Built-in views">
-              {presets.map((preset) => <option key={`${preset.x}-${preset.y}`} value={`builtin:${preset.x}|${preset.y}`}>{preset.label}</option>)}
-            </optgroup>
-            {views.length > 0 ? <optgroup label="My saved views">{views.map((view) => <option key={view.id} value={`saved:${view.id}`}>{view.name}</option>)}</optgroup> : null}
-            {pickerValue === "custom" ? <option value="custom" disabled hidden>Custom</option> : null}
-          </select>
-        </label>
-      </div>
-      {pickerMode === "derived" && matchingPreset?.research ? (
-        <div className="chart-research-note">
-          <p>{matchingPreset.research.insight}</p>
-          <a href={matchingPreset.research.sourceUrl} target="_blank" rel="noreferrer">Research: {matchingPreset.research.source} ↗<span className="sr-only"> (opens in a new tab)</span></a>
+    {layout === "monitor" ? (
+      <label className="monitor-value-chart-field">
+        <span>Saved view</span>
+        {savedViewSelect}
+      </label>
+    ) : (
+      <div className="saved-view-block">
+        <div className="saved-view-row">
+          <label className="chart-preset-select">
+            <span>Saved view</span>
+            {savedViewSelect}
+          </label>
         </div>
-      ) : null}
-    </div>
-    <Button type="button" variant="outline" className="chart-advanced-trigger" aria-haspopup="dialog" onClick={() => onAdvancedOpenChange(true)}>Advanced chart controls</Button>
+        {pickerMode === "derived" && matchingPreset?.research ? (
+          <div className="chart-research-note">
+            <p>{matchingPreset.research.insight}</p>
+            <a href={matchingPreset.research.sourceUrl} target="_blank" rel="noreferrer">Research: {matchingPreset.research.source} ↗<span className="sr-only"> (opens in a new tab)</span></a>
+          </div>
+        ) : null}
+      </div>
+    )}
+    {layout === "monitor" ? (
+      <label className="monitor-value-chart-field">
+        <span>Advanced chart controls</span>
+        <button type="button" className="monitor-value-chart-advanced" aria-haspopup="dialog" onClick={() => onAdvancedOpenChange(true)}>
+          Advanced chart controls
+        </button>
+      </label>
+    ) : (
+      <Button type="button" variant="outline" className="chart-advanced-trigger" aria-haspopup="dialog" onClick={() => onAdvancedOpenChange(true)}>Advanced chart controls</Button>
+    )}
     <Dialog open={advancedOpen} onOpenChange={onAdvancedOpenChange}>
       <DialogContent className="chart-advanced-dialog">
         <DialogHeader>
@@ -1345,12 +1368,13 @@ export function AdvancedStats({ dashboard, league, selectedPlayer, onSelectedPla
   );
 }
 
-function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: League }) {
+function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advanced", onDatasetChange }: { dashboard: Dashboard; league: League; layout?: ChartLayout; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void }) {
+  const monitorDefaultPreset = sharedSkillPresets.find((preset) => preset.label === "Usage vs Production") ?? sharedSkillPresets[0]!;
   const [position, setPosition] = useState<BasePosition>("RB");
   const [window, setWindow] = useState<AnalyticsWindow>("season");
-  const [xMetric, setXMetric] = useState(defaultAnalyticsAxes.RB[0]);
-  const [yMetric, setYMetric] = useState(defaultAnalyticsAxes.RB[1]);
-  const [chartKind, setChartKind] = useState<ChartKind>("scatter");
+  const [xMetric, setXMetric] = useState(layout === "monitor" ? monitorDefaultPreset.x : defaultAnalyticsAxes.RB[0]);
+  const [yMetric, setYMetric] = useState(layout === "monitor" ? monitorDefaultPreset.y : defaultAnalyticsAxes.RB[1]);
+  const [chartKind, setChartKind] = useState<ChartKind>(layout === "monitor" ? (monitorDefaultPreset.kind ?? "scatter") : "scatter");
   const [plotLimit, setPlotLimit] = useState<PlotLimit>("40");
   const [showQuadrants, setShowQuadrants] = useState(true);
   const [xPercentile, setXPercentile] = useState(50);
@@ -1358,7 +1382,8 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
   const [selectedSavedViewId, setSelectedSavedViewId] = useState<string | null>(null);
   // Shareable chart links only carry the dataset (`?chart=`). Axes and saved
   // views are not in the URL, so the picker stays blank until the user chooses.
-  const [pickerMode, setPickerMode] = useState<ChartPickerMode>("blank");
+  // Monitor defaults into Usage vs Production so the inline chart matches Value chart.
+  const [pickerMode, setPickerMode] = useState<ChartPickerMode>(layout === "monitor" ? "derived" : "blank");
   const [isChartOpen, setIsChartOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
@@ -1383,6 +1408,26 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
   }
 
   function choosePosition(nextPosition: BasePosition) {
+    if (layout === "monitor") {
+      const nextPresets = analyticsPresets[nextPosition];
+      const preferred = nextPresets.find((preset) => preset.label === "Usage vs Production") ?? nextPresets[0];
+      setPosition(nextPosition);
+      if (preferred) {
+        setXMetric(preferred.x);
+        setYMetric(preferred.y);
+        setChartKind(preferred.kind ?? "scatter");
+        setSelectedSavedViewId(null);
+        setPickerMode("derived");
+      } else {
+        const [nextX, nextY] = defaultAnalyticsAxes[nextPosition];
+        setXMetric(nextX);
+        setYMetric(nextY);
+        setChartKind("scatter");
+        setSelectedSavedViewId(null);
+        setPickerMode("blank");
+      }
+      return;
+    }
     const [nextX, nextY] = defaultAnalyticsAxes[nextPosition];
     setPosition(nextPosition);
     setXMetric(nextX);
@@ -1537,12 +1582,132 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
 
   if (!dashboard.analytics.entities.length || !selectedX || !selectedY) {
     return (
-      <section className="analytics-view">
+      <section className={layout === "monitor" ? "monitor-builder-chart-empty" : "analytics-view"}>
         <div className="analytics-empty">
           <strong>No advanced stats yet.</strong>
           <span>Refresh after nflverse publishes the next weekly file.</span>
         </div>
       </section>
+    );
+  }
+
+  const chartPlot = (
+    <>
+      {chartKind === "snap-trend" ? (
+        snapTrendSeries.length > 0
+          ? <SnapShareTrendChart series={snapTrendSeries} ariaLabel={`${position} weekly offensive snap share`} />
+          : <div className="analytics-empty"><strong>No snap share data yet.</strong></div>
+      ) : null}
+      {chartKind === "heatmap" ? (
+        sosEntry?.table && Object.keys(sosEntry.table).length > 0
+          ? <FpaHeatmap table={sosEntry.table} />
+          : <div className="analytics-empty"><strong>No FPA data yet.</strong></div>
+      ) : null}
+      {chartKind === "team-scatter" ? (
+        teamScatterData.length > 0
+          ? <TeamScatterPlot data={teamScatterData} xShort="Plays/g" yShort="PROE" ariaLabel="Team pace versus pass rate over expected" />
+          : <div className="analytics-empty"><strong>No pace or PROE data yet.</strong></div>
+      ) : null}
+      {chartKind === "scatter" && selectedX && selectedY ? (
+        <>
+          <ScatterPlot
+            others={others}
+            leadersWithoutSelectedTeam={leadersWithoutSelectedTeam}
+            selectedTeamPlayers={selectedTeamPlayers}
+            labelData={labelData}
+            leaderIds={leaderIds}
+            selectedTeamIds={selectedTeamIds}
+            highlightedId={selectedTeamPlayers[0]?.id ?? null}
+            xAxis={{ short: selectedX.short, lowerIsBetter: selectedX.lowerIsBetter, titleSuffix: " / game" }}
+            yAxis={{ short: selectedY.short, lowerIsBetter: selectedY.lowerIsBetter, titleSuffix: " / game" }}
+            showQuadrants={showQuadrants}
+            xCutoff={xCutoff}
+            yCutoff={yCutoff}
+            ariaLabel={`${position === "DEF" ? "DST" : position} scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
+          />
+          <ChartKey teamName={fantasyTeamName(league)} />
+          {layout === "page" ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
+        </>
+      ) : null}
+    </>
+  );
+
+  const advancedControls = (
+    <SavedViewControls
+      dataset="advanced"
+      presets={presets}
+      validPositions={validPositions}
+      config={config}
+      pickerMode={pickerMode}
+      selectedSavedViewId={selectedSavedViewId}
+      onSelectedSavedViewIdChange={setSelectedSavedViewId}
+      onApplySavedView={applySavedView}
+      onApplyBuiltIn={applyBuiltInPreset}
+      advancedOpen={advancedOpen}
+      onAdvancedOpenChange={setAdvancedOpen}
+      layout={layout}
+    >
+      <SegmentedControl
+        className="lineup-mode-toggle analytics-window-toggle"
+        value={window}
+        onChange={(value) => { setWindow(value); setSelectedSavedViewId(null); setPickerMode("derived"); setChartKind("scatter"); }}
+        label="Advanced stat window"
+        options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]}
+      />
+      <div className="analytics-selectors advanced-only-selectors">
+        <label><span>X axis</span><select aria-label="Choose horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setChartKind("scatter"); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
+        <label><span>Y axis</span><select aria-label="Choose vertical axis" value={selectedY.key} onChange={(event) => { setYMetric(event.target.value); setChartKind("scatter"); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
+        <label className="plot-limit"><span>Players shown</span><select aria-label="Choose number of players shown" value={plotLimit} onChange={(event) => { setPlotLimit(event.target.value as PlotLimit); setSelectedSavedViewId(null); setPickerMode("derived"); }}><option value="24">Top 24 + my team</option><option value="40">Top 40 + my team</option><option value="all">All with data</option></select></label>
+        <PercentileCutoffSelect axis="X" value={xPercentile} onChange={(value) => { setXPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
+        <PercentileCutoffSelect axis="Y" value={yPercentile} onChange={(value) => { setYPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
+      </div>
+      <label className="chart-checkbox"><input type="checkbox" checked={showQuadrants} onChange={(event) => { setShowQuadrants(event.target.checked); setSelectedSavedViewId(null); setPickerMode("derived"); }} /><span>Show quadrant guides and percentile cutoffs</span></label>
+    </SavedViewControls>
+  );
+
+  if (layout === "monitor") {
+    return (
+      <div className="monitor-builder-chart">
+        <div className="monitor-value-chart-controls">
+          {onDatasetChange ? (
+            <label className="monitor-value-chart-field">
+              <span>Chart dataset</span>
+              <select
+                aria-label="Chart dataset"
+                value={dataset}
+                onChange={(event) => onDatasetChange(event.target.value as ToolDataset)}
+              >
+                <option value="advanced">Advanced Stats</option>
+                <option value="projections">Projections</option>
+              </select>
+            </label>
+          ) : null}
+          <label className="monitor-value-chart-field">
+            <span>Chart position</span>
+            <select
+              aria-label="Chart position"
+              value={position}
+              onChange={(event) => choosePosition(event.target.value as BasePosition)}
+            >
+              {validPositions.map((item) => (
+                <option key={item} value={item}>{item === "DEF" ? "DST" : item}</option>
+              ))}
+            </select>
+          </label>
+          {advancedControls}
+        </div>
+        {pickerMode === "blank" ? (
+          <p className="monitor-empty">Choose a view</p>
+        ) : (
+          <div
+            className="monitor-value-chart"
+            role="img"
+            aria-label={chartKind === "heatmap" ? "FPA" : chartKind === "team-scatter" ? "Pace x PROE" : chartKind === "snap-trend" ? "Snap share" : `${position === "DEF" ? "DST" : position} field`}
+          >
+            {chartPlot}
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -1556,35 +1721,7 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
         options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
       />
 
-      <SavedViewControls
-        dataset="advanced"
-        presets={presets}
-        validPositions={validPositions}
-        config={config}
-        pickerMode={pickerMode}
-        selectedSavedViewId={selectedSavedViewId}
-        onSelectedSavedViewIdChange={setSelectedSavedViewId}
-        onApplySavedView={applySavedView}
-        onApplyBuiltIn={applyBuiltInPreset}
-        advancedOpen={advancedOpen}
-        onAdvancedOpenChange={setAdvancedOpen}
-      >
-          <SegmentedControl
-            className="lineup-mode-toggle analytics-window-toggle"
-            value={window}
-            onChange={(value) => { setWindow(value); setSelectedSavedViewId(null); setPickerMode("derived"); setChartKind("scatter"); }}
-            label="Advanced stat window"
-            options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]}
-          />
-          <div className="analytics-selectors advanced-only-selectors">
-            <label><span>X axis</span><select aria-label="Choose horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setChartKind("scatter"); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
-            <label><span>Y axis</span><select aria-label="Choose vertical axis" value={selectedY.key} onChange={(event) => { setYMetric(event.target.value); setChartKind("scatter"); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
-            <label className="plot-limit"><span>Players shown</span><select aria-label="Choose number of players shown" value={plotLimit} onChange={(event) => { setPlotLimit(event.target.value as PlotLimit); setSelectedSavedViewId(null); setPickerMode("derived"); }}><option value="24">Top 24 + my team</option><option value="40">Top 40 + my team</option><option value="all">All with data</option></select></label>
-            <PercentileCutoffSelect axis="X" value={xPercentile} onChange={(value) => { setXPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
-            <PercentileCutoffSelect axis="Y" value={yPercentile} onChange={(value) => { setYPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
-          </div>
-          <label className="chart-checkbox"><input type="checkbox" checked={showQuadrants} onChange={(event) => { setShowQuadrants(event.target.checked); setSelectedSavedViewId(null); setPickerMode("derived"); }} /><span>Show quadrant guides and percentile cutoffs</span></label>
-      </SavedViewControls>
+      {advancedControls}
 
       <button type="button" className="chart-open-button" disabled={pickerMode === "blank"} aria-disabled={pickerMode === "blank"} onClick={() => { if (pickerMode !== "blank") setIsChartOpen(true); }}>View chart</button>
       <ChartDialog
@@ -1596,42 +1733,7 @@ function AnalyticsChart({ dashboard, league }: { dashboard: Dashboard; league: L
         countLabel={chartKind === "heatmap" || chartKind === "team-scatter" ? "teams" : position === "DEF" ? "teams" : "players"}
         showCount={chartKind !== "heatmap"}
       >
-        {chartKind === "snap-trend" ? (
-          snapTrendSeries.length > 0
-            ? <SnapShareTrendChart series={snapTrendSeries} ariaLabel={`${position} weekly offensive snap share`} />
-            : <div className="analytics-empty"><strong>No snap share data yet.</strong></div>
-        ) : null}
-        {chartKind === "heatmap" ? (
-          sosEntry?.table && Object.keys(sosEntry.table).length > 0
-            ? <FpaHeatmap table={sosEntry.table} />
-            : <div className="analytics-empty"><strong>No FPA data yet.</strong></div>
-        ) : null}
-        {chartKind === "team-scatter" ? (
-          teamScatterData.length > 0
-            ? <TeamScatterPlot data={teamScatterData} xShort="Plays/g" yShort="PROE" ariaLabel="Team pace versus pass rate over expected" />
-            : <div className="analytics-empty"><strong>No pace or PROE data yet.</strong></div>
-        ) : null}
-        {chartKind === "scatter" && selectedX && selectedY ? (
-          <>
-            <ScatterPlot
-              others={others}
-              leadersWithoutSelectedTeam={leadersWithoutSelectedTeam}
-              selectedTeamPlayers={selectedTeamPlayers}
-              labelData={labelData}
-              leaderIds={leaderIds}
-              selectedTeamIds={selectedTeamIds}
-              highlightedId={selectedTeamPlayers[0]?.id ?? null}
-              xAxis={{ short: selectedX.short, lowerIsBetter: selectedX.lowerIsBetter, titleSuffix: " / game" }}
-              yAxis={{ short: selectedY.short, lowerIsBetter: selectedY.lowerIsBetter, titleSuffix: " / game" }}
-              showQuadrants={showQuadrants}
-              xCutoff={xCutoff}
-              yCutoff={yCutoff}
-              ariaLabel={`${position === "DEF" ? "DST" : position} scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
-            />
-            <ChartKey teamName={fantasyTeamName(league)} />
-            <OmittedChartLabels omittedNames={omittedNames} />
-          </>
-        ) : null}
+        {chartPlot}
       </ChartDialog>
     </section>
   );
@@ -1784,13 +1886,14 @@ function BoomBustRangePlot({ data, entities }: { data: ChartDatum[]; entities: W
   );
 }
 
-function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onSelectedPlayerChange }: { dashboard: Dashboard; league: League; view: "charts" | "percentiles"; selectedPlayer?: PlayerSelection | null; onSelectedPlayerChange?: (player: PlayerSelection | null) => void }) {
+function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onSelectedPlayerChange, layout = "page", dataset = "projections", onDatasetChange }: { dashboard: Dashboard; league: League; view: "charts" | "percentiles"; selectedPlayer?: PlayerSelection | null; onSelectedPlayerChange?: (player: PlayerSelection | null) => void; layout?: ChartLayout; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void }) {
   const entities = useMemo(() => buildWeeklyEntities(dashboard, league), [dashboard, league.id]);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const [playerQuery, setPlayerQuery] = useState("");
+  const monitorDefaultPreset = projectionPresets[0]!;
   const [position, setPosition] = useState<BasePosition>("RB");
-  const [xMetric, setXMetric] = useState(defaultWeeklyAxes.RB[0]);
-  const [yMetric, setYMetric] = useState(defaultWeeklyAxes.RB[1]);
+  const [xMetric, setXMetric] = useState(layout === "monitor" ? monitorDefaultPreset.x : defaultWeeklyAxes.RB[0]);
+  const [yMetric, setYMetric] = useState(layout === "monitor" ? monitorDefaultPreset.y : defaultWeeklyAxes.RB[1]);
   const [plotLimit, setPlotLimit] = useState<PlotLimit>("40");
   const [showQuadrants, setShowQuadrants] = useState(true);
   const [xPercentile, setXPercentile] = useState(50);
@@ -1798,7 +1901,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   const [selectedSavedViewId, setSelectedSavedViewId] = useState<string | null>(null);
   // Shareable chart links only carry the dataset (`?chart=`). Axes and saved
   // views are not in the URL, so the picker stays blank until the user chooses.
-  const [pickerMode, setPickerMode] = useState<ChartPickerMode>("blank");
+  const [pickerMode, setPickerMode] = useState<ChartPickerMode>(layout === "monitor" ? "derived" : "blank");
   const [isChartOpen, setIsChartOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
@@ -1879,6 +1982,24 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   }
 
   function choosePosition(nextPosition: BasePosition) {
+    if (layout === "monitor") {
+      const nextPresets = weeklyPresets[nextPosition];
+      const preferred = nextPresets[0];
+      setPosition(nextPosition);
+      if (preferred) {
+        setXMetric(preferred.x);
+        setYMetric(preferred.y);
+        setSelectedSavedViewId(null);
+        setPickerMode("derived");
+      } else {
+        const [nextX, nextY] = defaultWeeklyAxes[nextPosition];
+        setXMetric(nextX);
+        setYMetric(nextY);
+        setSelectedSavedViewId(null);
+        setPickerMode("blank");
+      }
+      return;
+    }
     const [nextX, nextY] = defaultWeeklyAxes[nextPosition];
     setPosition(nextPosition);
     setXMetric(nextX);
@@ -2026,40 +2147,8 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
       ) : null}
       </> : null}
 
-      {view === "charts" ? <>
-      <SegmentedControl className="analytics-position-tabs" value={position} onChange={choosePosition} label="Weekly chart position" options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))} />
-      <SavedViewControls
-        dataset="projections"
-        presets={presets}
-        validPositions={validPositions}
-        config={config}
-        pickerMode={pickerMode}
-        selectedSavedViewId={selectedSavedViewId}
-        onSelectedSavedViewIdChange={setSelectedSavedViewId}
-        onApplySavedView={applySavedView}
-        onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); setPickerMode("derived"); closeAdvancedControls(); }}
-        advancedOpen={advancedOpen}
-        onAdvancedOpenChange={setAdvancedOpen}
-      >
-          <div className="analytics-selectors advanced-only-selectors">
-            <label><span>X axis</span><select aria-label="Choose weekly horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
-            <label><span>Y axis</span><select aria-label="Choose weekly vertical axis" value={selectedY.key} onChange={(event) => { setYMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
-            <label className="plot-limit"><span>Players shown</span><select aria-label="Choose weekly players shown" value={plotLimit} onChange={(event) => { setPlotLimit(event.target.value as PlotLimit); setSelectedSavedViewId(null); setPickerMode("derived"); }}><option value="24">Top 24 + my team</option><option value="40">Top 40 + my team</option><option value="all">All with data</option></select></label>
-            <PercentileCutoffSelect axis="X" value={xPercentile} onChange={(value) => { setXPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
-            <PercentileCutoffSelect axis="Y" value={yPercentile} onChange={(value) => { setYPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
-          </div>
-          <label className="chart-checkbox"><input type="checkbox" checked={showQuadrants} onChange={(event) => { setShowQuadrants(event.target.checked); setSelectedSavedViewId(null); setPickerMode("derived"); }} /><span>Show quadrant guides and percentile cutoffs</span></label>
-      </SavedViewControls>
-      <button type="button" className="chart-open-button" disabled={pickerMode === "blank"} aria-disabled={pickerMode === "blank"} onClick={() => { if (pickerMode !== "blank") setIsChartOpen(true); }}>View chart</button>
-      <ChartDialog
-        isOpen={isChartOpen}
-        onClose={() => setIsChartOpen(false)}
-        title={`${position === "DEF" ? "DST" : position} field`}
-        subtitle={`Week ${dashboard.week} projections`}
-        count={chartData.length}
-        countLabel={position === "DEF" ? "teams" : "players"}
-      >
-        {isTierCliffView ? (
+      {view === "charts" ? (() => {
+        const weeklyPlot = isTierCliffView ? (
           <TierCliffPlot data={chartData} />
         ) : isBoomBustView ? (
           boomBustRangesQuery.isPending
@@ -2085,11 +2174,95 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
               ariaLabel={`${position === "DEF" ? "DST" : position} weekly projection scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
             />
             <ChartKey teamName={fantasyTeamName(league)} />
-            <OmittedChartLabels omittedNames={omittedNames} />
+            {layout === "page" ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
           </>
-        )}
-      </ChartDialog>
-      </> : null}
+        );
+        const weeklyControls = (
+          <SavedViewControls
+            dataset="projections"
+            presets={presets}
+            validPositions={validPositions}
+            config={config}
+            pickerMode={pickerMode}
+            selectedSavedViewId={selectedSavedViewId}
+            onSelectedSavedViewIdChange={setSelectedSavedViewId}
+            onApplySavedView={applySavedView}
+            onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); setPickerMode("derived"); closeAdvancedControls(); }}
+            advancedOpen={advancedOpen}
+            onAdvancedOpenChange={setAdvancedOpen}
+            layout={layout}
+          >
+            <div className="analytics-selectors advanced-only-selectors">
+              <label><span>X axis</span><select aria-label="Choose weekly horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
+              <label><span>Y axis</span><select aria-label="Choose weekly vertical axis" value={selectedY.key} onChange={(event) => { setYMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
+              <label className="plot-limit"><span>Players shown</span><select aria-label="Choose weekly players shown" value={plotLimit} onChange={(event) => { setPlotLimit(event.target.value as PlotLimit); setSelectedSavedViewId(null); setPickerMode("derived"); }}><option value="24">Top 24 + my team</option><option value="40">Top 40 + my team</option><option value="all">All with data</option></select></label>
+              <PercentileCutoffSelect axis="X" value={xPercentile} onChange={(value) => { setXPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
+              <PercentileCutoffSelect axis="Y" value={yPercentile} onChange={(value) => { setYPercentile(value); setSelectedSavedViewId(null); setPickerMode("derived"); }} />
+            </div>
+            <label className="chart-checkbox"><input type="checkbox" checked={showQuadrants} onChange={(event) => { setShowQuadrants(event.target.checked); setSelectedSavedViewId(null); setPickerMode("derived"); }} /><span>Show quadrant guides and percentile cutoffs</span></label>
+          </SavedViewControls>
+        );
+
+        if (layout === "monitor") {
+          return (
+            <div className="monitor-builder-chart">
+              <div className="monitor-value-chart-controls">
+                {onDatasetChange ? (
+                  <label className="monitor-value-chart-field">
+                    <span>Chart dataset</span>
+                    <select
+                      aria-label="Chart dataset"
+                      value={dataset}
+                      onChange={(event) => onDatasetChange(event.target.value as ToolDataset)}
+                    >
+                      <option value="advanced">Advanced Stats</option>
+                      <option value="projections">Projections</option>
+                    </select>
+                  </label>
+                ) : null}
+                <label className="monitor-value-chart-field">
+                  <span>Chart position</span>
+                  <select
+                    aria-label="Weekly chart position"
+                    value={position}
+                    onChange={(event) => choosePosition(event.target.value as BasePosition)}
+                  >
+                    {validPositions.map((item) => (
+                      <option key={item} value={item}>{item === "DEF" ? "DST" : item}</option>
+                    ))}
+                  </select>
+                </label>
+                {weeklyControls}
+              </div>
+              {pickerMode === "blank" ? (
+                <p className="monitor-empty">Choose a view</p>
+              ) : (
+                <div className="monitor-value-chart" role="img" aria-label={`${position === "DEF" ? "DST" : position} field`}>
+                  {weeklyPlot}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        return (
+          <>
+            <SegmentedControl className="analytics-position-tabs" value={position} onChange={choosePosition} label="Weekly chart position" options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))} />
+            {weeklyControls}
+            <button type="button" className="chart-open-button" disabled={pickerMode === "blank"} aria-disabled={pickerMode === "blank"} onClick={() => { if (pickerMode !== "blank") setIsChartOpen(true); }}>View chart</button>
+            <ChartDialog
+              isOpen={isChartOpen}
+              onClose={() => setIsChartOpen(false)}
+              title={`${position === "DEF" ? "DST" : position} field`}
+              subtitle={`Week ${dashboard.week} projections`}
+              count={chartData.length}
+              countLabel={position === "DEF" ? "teams" : "players"}
+            >
+              {weeklyPlot}
+            </ChartDialog>
+          </>
+        );
+      })() : null}
     </section>
   );
 }
@@ -2106,7 +2279,20 @@ function ToolDatasetToggle({ value, onChange, label }: { value: ToolDataset; onC
   );
 }
 
-export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
+export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange, layout = "page" }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout }) {
+  if (layout === "monitor") {
+    return (
+      <article className="monitor-panel monitor-builder-chart-panel">
+        <header className="monitor-panel-header">
+          <h2>Charts</h2>
+        </header>
+        {dataset === "advanced"
+          ? <AnalyticsChart dashboard={dashboard} league={league} layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} />
+          : <WeeklyProjections dashboard={dashboard} league={league} view="charts" layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} />}
+      </article>
+    );
+  }
+
   return (
     <section className="charts-tool">
       <h2 className="sr-only">Charts</h2>

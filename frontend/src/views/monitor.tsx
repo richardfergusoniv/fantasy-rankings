@@ -14,9 +14,14 @@ const LazyChartsTool = lazy(() => import("../AnalyticsViews").then((module) => (
 
 function ChartsFallback() {
   return (
-    <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading charts…">
-      <span>Loading charts…</span>
-    </section>
+    <article className="monitor-panel monitor-builder-chart-panel">
+      <header className="monitor-panel-header">
+        <h2>Charts</h2>
+      </header>
+      <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading charts…">
+        <span>Loading charts…</span>
+      </section>
+    </article>
   );
 }
 
@@ -35,7 +40,7 @@ export function Monitor({
     queryKey: ["nflverse-game-lines", dashboard.season, dashboard.week],
     queryFn: async () => {
       const response = await fetch(NFLVERSE_GAMES_CSV_URL);
-      if (!response.ok) throw new Error(`games lines HTTP ${response.status}`);
+      if (!response.ok) throw new Error(`game lines HTTP ${response.status}`);
       const csv = await response.text();
       // Zero parsed rows (empty body or bad headers) is a load failure, not an empty week.
       if (parseGamesCsv(csv).length === 0) {
@@ -52,16 +57,15 @@ export function Monitor({
 
   return (
     <section className="monitor-view" aria-label="Monitor">
-      <article className="monitor-panel monitor-charts-panel">
-        <Suspense fallback={<ChartsFallback />}>
-          <LazyChartsTool
-            dashboard={dashboard}
-            league={league}
-            dataset={chartDataset}
-            onDatasetChange={onChartDatasetChange}
-          />
-        </Suspense>
-      </article>
+      <Suspense fallback={<ChartsFallback />}>
+        <LazyChartsTool
+          dashboard={dashboard}
+          league={league}
+          dataset={chartDataset}
+          onDatasetChange={onChartDatasetChange}
+          layout="monitor"
+        />
+      </Suspense>
 
       <ValueChartPanel league={league} dashboard={dashboard} />
 
