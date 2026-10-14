@@ -623,12 +623,12 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
       </div>
     )}
     {layout === "monitor" ? (
-      <label className="monitor-value-chart-field">
-        <span>Advanced chart controls</span>
+      <div className="monitor-value-chart-field">
+        <span aria-hidden="true">Advanced chart controls</span>
         <button type="button" className="monitor-value-chart-advanced" aria-haspopup="dialog" onClick={() => onAdvancedOpenChange(true)}>
           Advanced chart controls
         </button>
-      </label>
+      </div>
     ) : (
       <Button type="button" variant="outline" className="chart-advanced-trigger" aria-haspopup="dialog" onClick={() => onAdvancedOpenChange(true)}>Advanced chart controls</Button>
     )}
@@ -1699,11 +1699,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
         {pickerMode === "blank" ? (
           <p className="monitor-empty">Choose a view</p>
         ) : (
-          <div
-            className="monitor-value-chart"
-            role="img"
-            aria-label={chartKind === "heatmap" ? "FPA" : chartKind === "team-scatter" ? "Pace x PROE" : chartKind === "snap-trend" ? "Snap share" : `${position === "DEF" ? "DST" : position} field`}
-          >
+          <div className="monitor-value-chart">
             {chartPlot}
           </div>
         )}
@@ -2237,7 +2233,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
               {pickerMode === "blank" ? (
                 <p className="monitor-empty">Choose a view</p>
               ) : (
-                <div className="monitor-value-chart" role="img" aria-label={`${position === "DEF" ? "DST" : position} field`}>
+                <div className="monitor-value-chart">
                   {weeklyPlot}
                 </div>
               )}

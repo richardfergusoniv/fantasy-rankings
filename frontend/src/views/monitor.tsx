@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import {
   GAME_LINES_STALE_MS,
   NFLVERSE_GAMES_CSV_URL,
@@ -75,13 +75,11 @@ export function Monitor({
     () => defaultGameLineCardId(gameLineCards, rosterTeams, liveTeams, Date.now()),
     [gameLineCards, liveTeams, rosterTeams],
   );
-  const [selectedGameId, setSelectedGameId] = useState("");
-  useEffect(() => {
-    setSelectedGameId((current) => {
-      if (current && gameLineCards.some((card) => card.gameId === current)) return current;
-      return defaultGameId ?? "";
-    });
-  }, [defaultGameId, gameLineCards]);
+  // Follow live/roster-relevant defaults until the user explicitly picks a game.
+  const [userGameId, setUserGameId] = useState<string | null>(null);
+  const selectedGameId = userGameId && gameLineCards.some((card) => card.gameId === userGameId)
+    ? userGameId
+    : defaultGameId ?? "";
   const selectedGame = gameLineCards.find((card) => card.gameId === selectedGameId)
     ?? gameLineCards[0]
     ?? null;
@@ -114,7 +112,7 @@ export function Monitor({
                 <select
                   aria-label="Game lines"
                   value={selectedGame.gameId}
-                  onChange={(event) => setSelectedGameId(event.target.value)}
+                  onChange={(event) => setUserGameId(event.target.value)}
                 >
                   {gameLineCards.map((game) => (
                     <option key={game.gameId} value={game.gameId}>
