@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  NFL_PLAYERS_MIN_COUNT,
   compactSleeperPlayers,
   isActiveNflRosterPlayer,
   resolvePlayerTeam,
   rosterEntryToSleeperPlayer,
+  selectRosterRefreshOutcome,
 } from "./nfl-players-cache.js";
 import type { SleeperPlayer } from "./sleeper.js";
 
@@ -112,11 +114,41 @@ describe("rosterEntryToSleeperPlayer", () => {
   });
 });
 
-describe("compact roster size gate", () => {
-  it("treats a sub-1000 map as too thin to replace a good cache", () => {
-    const thin = compactSleeperPlayers({
-      "1": { full_name: "Only One", team: "KC", position: "QB", status: "Active" },
+describe("selectRosterRefreshOutcome", () => {
+  const healthy = compactSleeperPlayers(
+    Object.fromEntries(
+      Array.from({ length: NFL_PLAYERS_MIN_COUNT }, (_, index) => [
+        String(index + 1),
+        {
+          full_name: `Player ${index + 1}`,
+          team: "KC",
+          position: "WR",
+          status: "Active",
+        } satisfies SleeperPlayer,
+      ]),
+    ),
+  );
+  const thin = compactSleeperPlayers({
+    "1": { full_name: "Only One", team: "KC", position: "QB", status: "Active" },
+  });
+
+  it("commits a complete Sleeper dump", () => {
+    const outcome = selectRosterRefreshOutcome(healthy, null);
+    expect(outcome.action).toBe("commit");
+    expect(Object.keys(outcome.players)).toHaveLength(NFL_PLAYERS_MIN_COUNT);
+  });
+
+  it("keeps the previous snapshot when Sleeper returns a thin dump", () => {
+    const outcome = selectRosterRefreshOutcome(thin, healthy);
+    expect(outcome).toEqual({ action: "keep-previous", players: healthy });
+    expect(Object.keys(outcome.players)).toHaveLength(NFL_PLAYERS_MIN_COUNT);
+    expect(outcome.players).not.toBe(thin);
+  });
+
+  it("reports empty when there is no previous snapshot and the dump is thin", () => {
+    expect(selectRosterRefreshOutcome(thin, null)).toEqual({
+      action: "empty",
+      players: thin,
     });
-    expect(Object.keys(thin).length).toBeLessThan(1000);
   });
 });

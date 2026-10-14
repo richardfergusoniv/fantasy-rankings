@@ -23,6 +23,8 @@ import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cac
 export const NFL_PLAYERS_CACHE_KEY = "nfl-players-roster-v1";
 /** Soft freshness window for consumers (dashboard, trades, draft). */
 export const NFL_PLAYERS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/** Refuse to replace a good cache with fewer than this many compact rows. */
+export const NFL_PLAYERS_MIN_COUNT = 1_000;
 
 export type NflPlayerRosterEntry = {
   team: string | null;
@@ -202,31 +204,51 @@ async function writePlayersSnapshot(
 }
 
 /**
+ * Decide whether a freshly compacted Sleeper map is complete enough to store,
+ * or whether callers should keep serving `previous`. Pure so retention stays
+ * unit-testable without DB / network mocks.
+ */
+export function selectRosterRefreshOutcome(
+  compact: Record<string, NflPlayerRosterEntry>,
+  previous: Record<string, NflPlayerRosterEntry> | null,
+): { action: "commit"; players: Record<string, NflPlayerRosterEntry> }
+  | { action: "keep-previous"; players: Record<string, NflPlayerRosterEntry> }
+  | { action: "empty"; players: Record<string, NflPlayerRosterEntry> } {
+  const count = Object.keys(compact).length;
+  if (count >= NFL_PLAYERS_MIN_COUNT) {
+    return { action: "commit", players: compact };
+  }
+  if (previous && Object.keys(previous).length > 0) {
+    return { action: "keep-previous", players: previous };
+  }
+  return { action: "empty", players: compact };
+}
+
+/**
  * Fetch Sleeper `/players/nfl`, compact it, and replace the cache when the
  * dump looks complete. On failure or a thin response, keep the last snapshot.
  */
 export async function refreshNflPlayersCache(): Promise<NflPlayersRefreshResult> {
   const previous = await readCachedSnapshot();
+  const previousPlayers = previous?.snapshot.players ?? null;
   try {
     const fresh = await fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`);
     const compact = compactSleeperPlayers(fresh);
-    const count = Object.keys(compact).length;
-    // Sleeper's dump is always thousands of players; refuse to clobber a good
-    // cache with an empty/truncated response.
-    if (count < 1_000) {
+    const outcome = selectRosterRefreshOutcome(compact, previousPlayers);
+    if (outcome.action !== "commit") {
       return {
         ok: true,
-        status: previous ? "kept-previous" : "empty",
-        players: previous ? Object.keys(previous.snapshot.players).length : 0,
+        status: outcome.action === "keep-previous" ? "kept-previous" : "empty",
+        players: Object.keys(outcome.players).length,
         fetchedAt: previous?.snapshot.fetchedAt ?? null,
       };
     }
     const fetchedAt = new Date();
-    const snapshot = await writePlayersSnapshot(compact, fetchedAt);
+    const snapshot = await writePlayersSnapshot(outcome.players, fetchedAt);
     return {
       ok: true,
       status: "committed",
-      players: count,
+      players: Object.keys(outcome.players).length,
       fetchedAt: snapshot.fetchedAt,
     };
   } catch {
@@ -258,13 +280,11 @@ export async function loadNflPlayersMap(forceRefresh = false): Promise<Record<st
   try {
     const fresh = await fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`);
     const compact = compactSleeperPlayers(fresh);
-    if (Object.keys(compact).length >= 1_000) {
-      await writePlayersSnapshot(compact, new Date());
-      return sleeperPlayersFromRosterMap(compact);
+    const outcome = selectRosterRefreshOutcome(compact, cached?.snapshot.players ?? null);
+    if (outcome.action === "commit") {
+      await writePlayersSnapshot(outcome.players, new Date());
     }
-    // Thin/truncated Sleeper response: keep serving the last good snapshot.
-    if (cached) return sleeperPlayersFromRosterMap(cached.snapshot.players);
-    return sleeperPlayersFromRosterMap(compact);
+    return sleeperPlayersFromRosterMap(outcome.players);
   } catch (error) {
     if (cached) {
       return sleeperPlayersFromRosterMap(cached.snapshot.players);
