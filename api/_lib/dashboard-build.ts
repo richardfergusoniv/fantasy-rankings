@@ -983,6 +983,8 @@ export async function refreshFantasyCalcCache(): Promise<{
   backfill: { formatKey: string; nextOffset: number; done: boolean; upserted: number } | null;
 }> {
   const presets: Record<string, FantasyCalcRow[]> = {};
+  /** Format keys whose FantasyCalc rows were fetched in this run (not restored). */
+  const freshFormatKeys = new Set<string>();
   let failed = 0;
   // Leave room for one timed-out fetch before the 60s Hobby cap.
   // Stopping here skips the cache write, so the previous snapshot stays.
@@ -1000,8 +1002,10 @@ export async function refreshFantasyCalcCache(): Promise<{
         if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
     }
-    if (rows) presets[preset.format.key] = rows;
-    else failed += 1;
+    if (rows) {
+      presets[preset.format.key] = rows;
+      freshFormatKeys.add(preset.format.key);
+    } else failed += 1;
   }
 
   // Dynamic kept set = every linked user's Sleeper league formats (+ default).
@@ -1017,6 +1021,7 @@ export async function refreshFantasyCalcCache(): Promise<{
   // Fetch FantasyCalc values for kept formats not already in the rankings cache.
   // If the budget expires, preserve prior cache rows for skipped formats so we
   // never publish a presets blob that drops a previously successful format.
+  // Restored rows stay in the cache only — they must not become today's snapshots.
   const previousPresets = await readFantasyCalcCache();
   let keptFetchIncomplete = false;
   for (const preset of kept) {
@@ -1035,8 +1040,10 @@ export async function refreshFantasyCalcCache(): Promise<{
         if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
     }
-    if (rows) presets[preset.format.key] = rows;
-    else {
+    if (rows) {
+      presets[preset.format.key] = rows;
+      freshFormatKeys.add(preset.format.key);
+    } else {
       failed += 1;
       const prior = previousPresets?.presets[preset.format.key];
       if (prior) presets[preset.format.key] = prior;
@@ -1064,7 +1071,9 @@ export async function refreshFantasyCalcCache(): Promise<{
     });
   rememberFantasyCalcPresets(presets, fetchedAt, fetchedAt.getTime());
 
-  const snapshots = await appendDailyValueSnapshots(presets, fetchedAt, new Set(keptKeys));
+  // Daily snapshots only for formats freshly fetched this run ∩ kept set.
+  const snapshotKeys = keptKeys.filter((key) => freshFormatKeys.has(key));
+  const snapshots = await appendDailyValueSnapshots(presets, fetchedAt, new Set(snapshotKeys));
   // Never prune unused formats from a non-authoritative (default-only) fallback.
   const pruned = await prunePlayerValueSnapshots(fetchedAt, keptKeys, {
     deleteUnusedFormats: keptLoad.authoritative,
