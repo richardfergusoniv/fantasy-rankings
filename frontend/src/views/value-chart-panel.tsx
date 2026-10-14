@@ -15,6 +15,8 @@ import {
   calendarMovingAverage,
   dailyPointsForIndicators,
   dampenedTrendCone,
+  trailingConsecutiveDailyPoints,
+  VALUE_CHART_DAILY_INDICATOR_DAYS,
   type ValueChartPoint,
 } from "../../../api/_lib/value-chart-math";
 import { api } from "../api";
@@ -92,15 +94,26 @@ function buildChartRows(
   primary: ValueChartPoint[],
   compare: ValueChartPoint[] | null,
 ): ChartRow[] {
-  // Plot the full series (including weekly-downsampled older points), but compute
-  // MAs / trend cone only on the trailing consecutive daily section.
-  const daily = dailyPointsForIndicators(primary);
-  const ma7 = calendarMovingAverage(daily, 7);
-  const ma30 = calendarMovingAverage(daily, 30);
-  const ma7ByDate = new Map(daily.map((point, index) => [point.date, ma7[index] ?? null]));
-  const ma30ByDate = new Map(daily.map((point, index) => [point.date, ma30[index] ?? null]));
+  // Plot the full series (including weekly-downsampled older points).
+  // MAs need a longer consecutive daily warmup than the 30-day display window
+  // so ma30 can form a line across the last 30 days; cone stays on that window.
+  const dailyForMa = trailingConsecutiveDailyPoints(primary);
+  const dailyForCone = dailyPointsForIndicators(primary, VALUE_CHART_DAILY_INDICATOR_DAYS);
+  const maDisplayDates = new Set(dailyForCone.map((point) => point.date));
+  const ma7 = calendarMovingAverage(dailyForMa, 7);
+  const ma30 = calendarMovingAverage(dailyForMa, 30);
+  const ma7ByDate = new Map(
+    dailyForMa.flatMap((point, index) => (
+      maDisplayDates.has(point.date) ? [[point.date, ma7[index] ?? null] as const] : []
+    )),
+  );
+  const ma30ByDate = new Map(
+    dailyForMa.flatMap((point, index) => (
+      maDisplayDates.has(point.date) ? [[point.date, ma30[index] ?? null] as const] : []
+    )),
+  );
   const compareByDate = new Map((compare ?? []).map((point) => [point.date, point.value]));
-  const cone = dampenedTrendCone(daily);
+  const cone = dampenedTrendCone(dailyForCone);
   const coneByDate = new Map(cone.map((point) => [point.date, point]));
 
   const dates = new Set<string>();

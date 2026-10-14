@@ -853,6 +853,9 @@ export async function backfillValueHistoryBatch(options: {
   }
 
   const nextOffset = offset + work.length;
+  // Full-history upserts can restore >90d daily rows; prune after any write so
+  // retention holds even when backfill runs without a separate refresh.
+  if (upserted > 0) await prunePlayerValueSnapshots();
   const done = nextOffset >= totalWorkItems;
   const batchCount = totalWorkItems === 0 ? 0 : Math.ceil(totalWorkItems / limit);
 

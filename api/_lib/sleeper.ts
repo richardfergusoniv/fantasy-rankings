@@ -176,7 +176,11 @@ export async function fetchJson<T>(url: string): Promise<T> {
   const controller = new AbortController();
   return await withDeadline((async () => {
     const response = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
-    if (!response.ok) throw new Error(`Source returned ${response.status}`);
+    // 204 is "ok" but has an empty body — reject before response.json() so callers
+    // (e.g. value-history absent-player handling) see `Source returned 204`.
+    if (!response.ok || response.status === 204) {
+      throw new Error(`Source returned ${response.status}`);
+    }
     return (await response.json()) as T;
   })(), SOURCE_TIMEOUT_MS, () => controller.abort());
 }
