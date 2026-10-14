@@ -335,6 +335,15 @@ export function coerceFiniteNumber(value: unknown): number | null {
   return null;
 }
 
+/**
+ * True when `formatKey` is a dynasty FantasyCalc preset/league key.
+ * Draft-pick market rows (`position === "PICK"`, sleeper ids like `FP_2027_mid_0`)
+ * are only stored for dynasty formats.
+ */
+export function isDynastyFormatKey(formatKey: string): boolean {
+  return formatKey.startsWith("dynasty");
+}
+
 export function compactPlayerValueSnapshot(input: {
   snapshotDate: string;
   formatKey: string;
@@ -349,7 +358,8 @@ export function compactPlayerValueSnapshot(input: {
   const playerId = asTrimmedString(input.playerId);
   if (!playerId) return null;
   const position = asTrimmedString(input.position);
-  if (position === "PICK") return null;
+  // Picks are dynasty-only market assets (stable FantasyCalc `FP_*` sleeper ids).
+  if (position === "PICK" && !isDynastyFormatKey(input.formatKey)) return null;
   if (!isAcceptableSnapshotDateKey(input.snapshotDate, now)) return null;
   const rawValue = coerceFiniteNumber(input.value);
   if (rawValue == null) return null;
@@ -394,6 +404,30 @@ export function rankedPlayersFromFantasyCalcRows(rows: FantasyCalcRow[]): Ranked
   return ranked;
 }
 
+/**
+ * Dynasty draft-pick rows from a FantasyCalc current-values payload.
+ * Uses FantasyCalc's stable `FP_*` sleeper ids (same ids season-long rankings use).
+ */
+export function rankedPicksFromFantasyCalcRows(rows: FantasyCalcRow[]): RankedFantasyCalcPlayer[] {
+  const seen = new Set<string>();
+  const ranked: RankedFantasyCalcPlayer[] = [];
+  for (const row of rows) {
+    const playerId = asTrimmedString(row.player?.sleeperId);
+    const fantasyCalcId = row.player?.id;
+    const position = asTrimmedString(row.player?.position);
+    if (!playerId || typeof fantasyCalcId !== "number" || position !== "PICK") continue;
+    if (seen.has(playerId)) continue;
+    seen.add(playerId);
+    ranked.push({
+      fantasyCalcId,
+      playerId,
+      playerName: asTrimmedString(row.player?.name),
+      position: "PICK",
+    });
+  }
+  return ranked;
+}
+
 export function dailySnapshotRowsFromPreset(
   formatKey: string,
   rows: FantasyCalcRow[],
@@ -401,7 +435,8 @@ export function dailySnapshotRowsFromPreset(
   now: Date = asOf,
 ): PlayerValueSnapshotBuildResult {
   const out: PlayerValueSnapshotRow[] = [];
-  // Date-window rejection only — PICK / missing id / non-finite / ≤0 value are not "skipped".
+  // Date-window rejection only — missing id / non-finite / ≤0 / non-dynasty PICK
+  // are dropped by compact without counting as "skipped".
   const snapshotDate = pacificDateKey(asOf);
   if (!isAcceptableValueHistoryInstant(asOf, now) || !isAcceptableSnapshotDateKey(snapshotDate, now)) {
     return { rows: out, skipped: rows.length };
@@ -605,8 +640,7 @@ export type ValueHistoryBackfillFailedItem = {
   playerId: string;
 };
 
-export type ValueHistoryBackfillResult = {
-  job: "backfill-value-history";
+export type ValueHistoryBackfillResultBase = {
   offset: number;
   limit: number;
   nextOffset: number;
@@ -620,24 +654,23 @@ export type ValueHistoryBackfillResult = {
   done: boolean;
 };
 
-/**
- * One resumable backfill batch: walk FantasyCalc-ranked players across all
- * presets (PICK rows skipped), fetch full history for `limit` work items
- * starting at `offset`, and upsert compact snapshot rows.
- *
- * Fetches are sequential (`VALUE_HISTORY_BACKFILL_CONCURRENCY = 1`) with a
- * short delay between requests. Each history response must pass whole-sequence
- * validation; corrupt or 5xx responses are retried, then counted as failed
- * with nothing written for that player×format.
- *
- * Avoids reading `player_value_snapshots` — upserts alone are enough for
- * idempotency. `totalWorkItems` is discovered while walking presets so the
- * caller can compute remaining batches.
- */
-export async function backfillValueHistoryBatch(options: {
+export type ValueHistoryBackfillResult = ValueHistoryBackfillResultBase & {
+  job: "backfill-value-history";
+};
+
+export type PickValueHistoryBackfillResult = ValueHistoryBackfillResultBase & {
+  job: "backfill-pick-value-history";
+};
+
+async function runValueHistoryBackfillBatch<Job extends string>(options: {
+  job: Job;
   offset?: number;
   limit?: number;
-}): Promise<ValueHistoryBackfillResult> {
+  presets: Array<{ format: SeasonLongFormat; url: string }>;
+  rankRows: (rows: FantasyCalcRow[]) => RankedFantasyCalcPlayer[];
+  /** Inclusive lower bound on snapshot_date, or null for full FantasyCalc history. */
+  minSnapshotDate: string | null;
+}): Promise<ValueHistoryBackfillResultBase & { job: Job }> {
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
   const limit = clampBackfillLimit(options.limit);
   let skip = offset;
@@ -653,9 +686,9 @@ export async function backfillValueHistoryBatch(options: {
     player: RankedFantasyCalcPlayer;
   }> = [];
 
-  for (const preset of FANTASY_CALC_SNAPSHOT_PRESETS) {
+  for (const preset of options.presets) {
     const currentRows = await fetchJson<FantasyCalcRow[]>(preset.url);
-    const ranked = rankedPlayersFromFantasyCalcRows(currentRows);
+    const ranked = options.rankRows(currentRows);
     totalWorkItems += ranked.length;
     if (remaining <= 0) continue;
     if (skip >= ranked.length) {
@@ -686,7 +719,7 @@ export async function backfillValueHistoryBatch(options: {
         playerName: player.playerName,
         position: player.position,
         points: history.historicalValues ?? [],
-        minSnapshotDate: null,
+        minSnapshotDate: options.minSnapshotDate,
       });
       if (built.skipped > 0) {
         console.info(
@@ -725,7 +758,7 @@ export async function backfillValueHistoryBatch(options: {
   const batchCount = totalWorkItems === 0 ? 0 : Math.ceil(totalWorkItems / limit);
 
   return {
-    job: "backfill-value-history",
+    job: options.job,
     offset,
     limit,
     nextOffset: done ? totalWorkItems : nextOffset,
@@ -738,4 +771,55 @@ export async function backfillValueHistoryBatch(options: {
     batchCount,
     done,
   };
+}
+
+/**
+ * One resumable backfill batch: walk FantasyCalc-ranked players across all
+ * presets (PICK rows skipped), fetch full history for `limit` work items
+ * starting at `offset`, and upsert compact snapshot rows.
+ *
+ * Fetches are sequential (`VALUE_HISTORY_BACKFILL_CONCURRENCY = 1`) with a
+ * short delay between requests. Each history response must pass whole-sequence
+ * validation; corrupt or 5xx responses are retried, then counted as failed
+ * with nothing written for that player×format.
+ *
+ * Avoids reading `player_value_snapshots` — upserts alone are enough for
+ * idempotency. `totalWorkItems` is discovered while walking presets so the
+ * caller can compute remaining batches.
+ */
+export async function backfillValueHistoryBatch(options: {
+  offset?: number;
+  limit?: number;
+}): Promise<ValueHistoryBackfillResult> {
+  return runValueHistoryBackfillBatch({
+    job: "backfill-value-history",
+    offset: options.offset,
+    limit: options.limit,
+    presets: FANTASY_CALC_SNAPSHOT_PRESETS,
+    rankRows: rankedPlayersFromFantasyCalcRows,
+    minSnapshotDate: null,
+  });
+}
+
+/**
+ * One resumable dynasty draft-pick history backfill batch.
+ *
+ * Walks only dynasty FantasyCalc presets, ranks `position === "PICK"` rows
+ * (stable `FP_*` sleeper ids), fetches implied-trade history, and upserts
+ * compact rows from `VALUE_HISTORY_CHART_MIN_DATE` forward. Same pacing /
+ * retry / no-full-table-read contract as `backfillValueHistoryBatch`.
+ */
+export async function backfillPickValueHistoryBatch(options: {
+  offset?: number;
+  limit?: number;
+}): Promise<PickValueHistoryBackfillResult> {
+  const dynastyPresets = FANTASY_CALC_SNAPSHOT_PRESETS.filter((preset) => preset.format.isDynasty);
+  return runValueHistoryBackfillBatch({
+    job: "backfill-pick-value-history",
+    offset: options.offset,
+    limit: options.limit,
+    presets: dynastyPresets,
+    rankRows: rankedPicksFromFantasyCalcRows,
+    minSnapshotDate: VALUE_HISTORY_CHART_MIN_DATE,
+  });
 }

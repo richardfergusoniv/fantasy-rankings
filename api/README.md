@@ -16,7 +16,7 @@ Live handlers export named `GET`, `POST`, and `DELETE` functions. Several Hatch 
 | `box-score.ts` | GET | `/api/box-score` |
 | `player-news.ts` | GET, POST | `/api/player-news`. A `CRON_SECRET` bearer on GET/POST runs the Sleeper refresh into `shared_player_news`; signed-in GETs read the shared 30-day feed. |
 | `ingest/[target].ts` | POST | `/api/ingest/projections`, `/api/ingest/matchup-grades`, `/api/ingest/pfn-tables`, `/api/ingest/player-news-x` |
-| `cron/jobs.ts` | GET | `/api/cron/jobs?job=rebuild-dashboard`, `?job=refresh-fantasycalc`, or `?job=read-dashboard-snapshot` |
+| `cron/jobs.ts` | GET | `/api/cron/jobs?job=rebuild-dashboard`, `?job=refresh-fantasycalc`, `?job=read-dashboard-snapshot`, `?job=backfill-value-history`, or `?job=backfill-pick-value-history` |
 | `user.ts` | GET, POST | `/api/user` |
 
 ## Conventions

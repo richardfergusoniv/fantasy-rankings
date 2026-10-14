@@ -9,6 +9,7 @@ import type {
   League,
   TradeAsset,
   TradeTeam,
+  ValueHistorySeries,
 } from "../dashboard-types";
 import type { TradeMode } from "../dashboard-url";
 import {
@@ -21,7 +22,15 @@ import {
   sleeperInjuryTag,
   tradeTotal,
 } from "../dashboard-shared";
-import { buildLeagueRosterRows, compactAssetName, formatTeamRecord, rosterPositionLabel, type LeagueRosterRow, type TeamRecord } from "../league-trade";
+import {
+  buildLeagueRosterRows,
+  compactAssetName,
+  formatTeamRecord,
+  resolveValueHistoryPlayerId,
+  rosterPositionLabel,
+  type LeagueRosterRow,
+  type TeamRecord,
+} from "../league-trade";
 import { AggregateTradeHistory } from "../player-charts";
 import { SegmentedControl } from "../shared";
 import { clearTradeSide, removeTradePlayer, restoreTradePlayer } from "../undo";
@@ -254,6 +263,7 @@ export function TradeValueDialog({
   give,
   get,
   formatKey,
+  marketAssets = [],
   onClose,
   giveLabel = "You give",
   getLabel = "You get",
@@ -263,6 +273,8 @@ export function TradeValueDialog({
   give: TradeAsset[];
   get: TradeAsset[];
   formatKey: string;
+  /** FantasyCalc market rows for this format (used to map owned picks → `FP_*` ids). */
+  marketAssets?: TradeAsset[];
   onClose: () => void;
   giveLabel?: string;
   getLabel?: string;
@@ -278,19 +290,26 @@ export function TradeValueDialog({
     const floor = count * 48 + (count - 1) * 2;
     return Math.max(floor, Math.round((total / maxTotal) * 360));
   };
-  const historyPlayerIds = useMemo(
-    () => [...give, ...get].filter((asset) => asset.position !== "PICK").map((asset) => asset.playerId).sort(),
-    [get, give],
-  );
+  const historyRequestIds = useMemo(() => {
+    const ids = [...give, ...get].map((asset) => resolveValueHistoryPlayerId(asset, marketAssets));
+    return [...new Set(ids)].sort();
+  }, [get, give, marketAssets]);
   const historyQuery = useQuery({
-    queryKey: ["fantasycalc-value-history", formatKey, historyPlayerIds],
-    queryFn: () => api.getValueHistory({ formatKey, playerIds: historyPlayerIds }),
-    enabled: historyPlayerIds.length > 0,
+    queryKey: ["fantasycalc-value-history", formatKey, historyRequestIds],
+    queryFn: () => api.getValueHistory({ formatKey, playerIds: historyRequestIds }),
+    enabled: historyRequestIds.length > 0,
   });
-  const historyByPlayerId = useMemo(
-    () => new Map((historyQuery.data?.series ?? []).map((series) => [series.playerId, series])),
-    [historyQuery.data],
-  );
+  const historyByPlayerId = useMemo(() => {
+    const byMarketId = new Map((historyQuery.data?.series ?? []).map((series) => [series.playerId, series]));
+    const byAssetId = new Map<string, ValueHistorySeries>();
+    for (const asset of [...give, ...get]) {
+      const marketId = resolveValueHistoryPlayerId(asset, marketAssets);
+      const series = byMarketId.get(marketId);
+      if (!series) continue;
+      byAssetId.set(asset.playerId, { ...series, playerId: asset.playerId });
+    }
+    return byAssetId;
+  }, [get, give, historyQuery.data, marketAssets]);
   const bodyRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const node = bodyRef.current;
@@ -336,12 +355,11 @@ export function TradeValueDialog({
             give={give}
             get={get}
             historyByPlayerId={historyByPlayerId}
-            isLoading={historyPlayerIds.length > 0 && historyQuery.isPending}
+            isLoading={historyRequestIds.length > 0 && historyQuery.isPending}
             giveColor={giveColor}
             getColor={getColor}
             giveStrokeWidth={giveStrokeWidth}
             getStrokeWidth={getStrokeWidth}
-            showPickNote={false}
           />
         </div>
       </DialogContent>
@@ -462,6 +480,7 @@ export function LeagueAdjustedTrade({
           giveLabel={mine.teamName}
           getLabel={theirs.teamName}
           formatKey={formatKey}
+          marketAssets={[...assetById.values()]}
           onClose={() => setIsResultOpen(false)}
         />
       ) : null}
@@ -751,6 +770,7 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
           getLabel={counterpart && selectedTrade.teams.length === 2 ? counterpart.teamName : "You get"}
           subtitle={<>Week {selectedTrade.week}, {selectedTrade.season} · <HistoricalTeamMatchup trade={selectedTrade} league={league} /></>}
           formatKey={league.seasonLongFormat.key}
+          marketAssets={formatAssets}
           onClose={() => setSelectedTradeId(null)}
         />
       ) : null}
@@ -919,6 +939,7 @@ export function TradeCalculator({
               give={give}
               get={get}
               formatKey={league.seasonLongFormat.key}
+              marketAssets={assets}
               onClose={() => setIsResultOpen(false)}
             />
           ) : null}

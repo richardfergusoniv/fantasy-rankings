@@ -74,8 +74,13 @@ function rosterPlayers(league: League): PickerPlayer[] {
 }
 
 function rankingPlayers(dashboard: Dashboard, formatKey: string): PickerPlayer[] {
+  const includePicks = formatKey.startsWith("dynasty");
   return dashboard.seasonLongRankings
-    .filter((row) => row.formatKey === formatKey && row.position !== "PICK" && row.playerId)
+    .filter((row) => (
+      row.formatKey === formatKey
+      && row.playerId
+      && (includePicks || row.position !== "PICK")
+    ))
     .map((row) => ({
       playerId: row.playerId,
       name: row.name,
