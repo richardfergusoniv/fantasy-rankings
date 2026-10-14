@@ -565,7 +565,8 @@ export function App() {
     refetchInterval: pollTeamSection,
   });
   // Matchup player cards need fantasy SOS for Team context ranks.
-  const playerSectionActive = tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "charts" || tab === "comparison";
+  // Monitor reuses the same players + analytics section queries as Charts (no per-panel fetches).
+  const playerSectionActive = tab === "monitor" || tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "charts" || tab === "comparison";
   const playersQuery = useQuery({
     queryKey: ["dashboard-section", "players"],
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "players" }), 8_000)),
@@ -581,7 +582,7 @@ export function App() {
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
-    enabled: tab === "power" || tab === "monitor",
+    enabled: tab === "power",
     refetchInterval: pollWhileSectionBuilding,
   });
   const analyticsQuery = useQuery({
@@ -590,12 +591,12 @@ export function App() {
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
-    enabled: tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison",
+    enabled: tab === "monitor" || tab === "rankings" || tab === "waivers" || tab === "charts" || tab === "comparison",
     refetchInterval: pollWhileSectionBuilding,
   });
-  // tradeTeams (+ starter slots) for Matchup/Monitor/Power/Trade. Live-polled with
+  // tradeTeams (+ starter slots) for Matchup/Power/Trade. Live-polled with
   // the team section so LeagueTeamCard projections/gamePhase stay fresh.
-  const tradeSectionActive = tab === "team" || tab === "monitor" || tab === "power" || tab === "trade";
+  const tradeSectionActive = tab === "team" || tab === "power" || tab === "trade";
   const tradeMode = effectiveTradeMode(dashboardUrl.state);
   // Waiver pool is only consumed by League-adjusted trade (not Market/History).
   const tradeWaiverActive = tab === "trade" && tradeMode === "league";
@@ -978,7 +979,7 @@ export function App() {
     || tradeWaiverWaiting
     || (!hasCompleteDashboard && (
       (tab === "team" && teamQuery.isPending)
-      || (tab === "monitor" && (teamQuery.isPending || leagueQuery.isPending))
+      || (tab === "monitor" && (teamQuery.isPending || analyticsQuery.isPending || playersQuery.isPending))
       || ((tab === "rankings" || tab === "waivers" || tab === "draft") && playersQuery.isPending)
       || (tab === "trade" && (playersQuery.isPending || teamQuery.isPending))
       || (tab === "power" && (leagueQuery.isPending || teamQuery.isPending || playersQuery.isPending))
@@ -1168,7 +1169,14 @@ export function App() {
           {currentSectionLoading ? <SectionLoading label={`Loading ${({ monitor: "Monitor", team: "Matchup", players: "Players", league: "League", tools: "Tools" } as const)[primaryPage]}…`} />
             : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
             : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
-            : tab === "monitor" ? <Monitor league={league} dashboard={activeDashboard} draftData={draftQuery.data} news={newsQuery.data} onOpenPlayer={openTickerPlayer} onPlayerIntent={prefetchDashboardPlayer} onOpenMatchup={setSelectedMatchup} playerCardOpen={playerHistory.isOpen} selectedPlayerId={selectedPlayerId} />
+            : tab === "monitor" ? (
+              <Monitor
+                league={league}
+                dashboard={activeDashboard}
+                chartDataset={dashboardUrl.state.chartDataset ?? "advanced"}
+                onChartDatasetChange={publishChartDataset}
+              />
+            )
             : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={(rosterId) => setRosterCardRosterId(rosterId)} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
             : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} dashboard={activeDashboard} onPlayerIntent={prefetchDashboardPlayer} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} onOpenMatchup={setSelectedMatchup} playerCardOpen={playerHistory.isOpen} selectedPlayerId={selectedPlayerId} /></Suspense>
             : tab === "draft" ? <Suspense fallback={<SectionLoading label="Loading draft…" />}><LazyDraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} loading={draftQuery.isPending} onRefresh={() => draftRefresh.mutate()} refreshing={draftRefresh.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} /></Suspense>
