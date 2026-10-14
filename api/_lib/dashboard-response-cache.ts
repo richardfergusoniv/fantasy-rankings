@@ -125,6 +125,40 @@ export function dashboardViewLatestKey(
   return `v1:${sleeperUserId}:${view}:latest`;
 }
 
+/** Fixed lanes so a publish does not overwrite every copy of a newer version. */
+const DASHBOARD_VIEW_LANE_COUNT = 16;
+const DASHBOARD_VIEW_LANE_COPIES = 4;
+
+export function dashboardViewLaneKey(
+  sleeperUserId: string,
+  view: DashboardResponseView,
+  lane: number,
+): string {
+  return `v1:${sleeperUserId}:${view}:lane:${lane}`;
+}
+
+function laneIndex(version: string, salt: number): number {
+  let hash = 2166136261;
+  const input = `${salt}:${version}`;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) % DASHBOARD_VIEW_LANE_COUNT;
+}
+
+/** Several lanes per version. An older publish cannot cover all of them. */
+function lanesForVersion(version: string): number[] {
+  const lanes: number[] = [];
+  let salt = 0;
+  while (lanes.length < DASHBOARD_VIEW_LANE_COPIES && salt < DASHBOARD_VIEW_LANE_COUNT * 2) {
+    const lane = laneIndex(version, salt);
+    if (!lanes.includes(lane)) lanes.push(lane);
+    salt += 1;
+  }
+  return lanes;
+}
+
 /** Drop blank or oversized caller-supplied versions. They are a hint, not auth. */
 export function normalizeRequestedSnapshotVersion(version: string | null | undefined): string | null {
   if (!version) return null;
@@ -230,12 +264,11 @@ export function decodeStoredEntry(value: unknown, nowMs: number): DashboardViewC
   };
 }
 
-function decodeLatest(value: unknown, nowMs: number): LatestPointer | null {
+function decodePointer(value: unknown): LatestPointer | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
   if (typeof record.version !== "string" || typeof record.expiresAtMs !== "number") return null;
-  if (record.expiresAtMs <= nowMs) return null;
-  // A full entry also has `body`. Latest pointers do not.
+  // A full entry also has `body`. Lane pointers do not.
   if ("body" in record || "bodyGz" in record) return null;
   return { version: record.version, expiresAtMs: record.expiresAtMs };
 }
@@ -305,6 +338,7 @@ function preferCachedValue(local: unknown, remote: unknown): unknown {
 type RuntimeViewCache = {
   get(key: string): Promise<unknown>;
   set(key: string, value: unknown, options: { ttl: number; name: string }): Promise<unknown>;
+  delete(key: string): Promise<void>;
 };
 
 function defaultRuntimeViewCache(): RuntimeViewCache {
@@ -314,6 +348,9 @@ function defaultRuntimeViewCache(): RuntimeViewCache {
     },
     async set(key, value, options) {
       await getCache({ namespace: CACHE_NAMESPACE }).set(key, value, options);
+    },
+    async delete(key) {
+      await getCache({ namespace: CACHE_NAMESPACE }).delete(key);
     },
   };
 }
@@ -337,7 +374,14 @@ export function createTieredDashboardViewStore(
     },
     async set(key, value, ttlSeconds) {
       await memory.set(key, value, ttlSeconds);
-      if (ttlSeconds <= 0) return true;
+      if (ttlSeconds <= 0) {
+        try {
+          await runtime.delete(key);
+        } catch (error) {
+          console.error("[dashboard-cache] runtime delete failed", error);
+        }
+        return true;
+      }
       try {
         const payload = isCacheEntry(value) ? encodeForRuntime(value, maxBytes) : value;
         if (payload == null) return false;
@@ -379,6 +423,45 @@ function resolveStore(store: DashboardViewStore | undefined): DashboardViewStore
   return store ?? getDashboardViewStore();
 }
 
+async function readLanePointers(
+  store: DashboardViewStore,
+  sleeperUserId: string,
+  view: DashboardResponseView,
+): Promise<Array<LatestPointer & { lane: number }>> {
+  const values = await Promise.all(
+    Array.from({ length: DASHBOARD_VIEW_LANE_COUNT }, (_, lane) =>
+      store.get(dashboardViewLaneKey(sleeperUserId, view, lane)),
+    ),
+  );
+  const pointers: Array<LatestPointer & { lane: number }> = [];
+  for (let lane = 0; lane < values.length; lane += 1) {
+    const pointer = decodePointer(values[lane]);
+    if (pointer) pointers.push({ ...pointer, lane });
+  }
+  return pointers;
+}
+
+function greatestPointer(pointers: readonly LatestPointer[]): LatestPointer | null {
+  let best: LatestPointer | null = null;
+  for (const pointer of pointers) {
+    if (!best || pointer.version > best.version) best = pointer;
+  }
+  return best;
+}
+
+async function clearLaneVersion(
+  store: DashboardViewStore,
+  sleeperUserId: string,
+  view: DashboardResponseView,
+  lane: number,
+  version: string,
+): Promise<void> {
+  const key = dashboardViewLaneKey(sleeperUserId, view, lane);
+  const current = decodePointer(await store.get(key));
+  if (!current || current.version !== version) return;
+  await store.set(key, current, 0);
+}
+
 export async function recallDashboardView(args: {
   sleeperUserId: string;
   view: DashboardResponseView;
@@ -389,11 +472,8 @@ export async function recallDashboardView(args: {
   const nowMs = args.nowMs ?? Date.now();
   const store = resolveStore(args.store);
   const requestedVersion = normalizeRequestedSnapshotVersion(args.requestedVersion);
-  const latest = decodeLatest(
-    await store.get(dashboardViewLatestKey(args.sleeperUserId, args.view)),
-    nowMs,
-  );
-  if (!latest) return null;
+  const latest = greatestPointer(await readLanePointers(store, args.sleeperUserId, args.view));
+  if (!latest || latest.expiresAtMs <= nowMs) return null;
   if (requestedVersion && requestedVersion !== latest.version) return null;
   return decodeStoredEntry(
     await store.get(dashboardViewCacheKey(args.sleeperUserId, args.view, latest.version)),
@@ -416,11 +496,18 @@ export async function rememberDashboardView(args: {
   if (!version) return;
   const nowMs = args.nowMs ?? Date.now();
   const store = resolveStore(args.store);
-  const latestKey = dashboardViewLatestKey(args.sleeperUserId, args.view);
-  const current = decodeLatest(await store.get(latestKey), nowMs);
-  // A slower read of an older snapshot must not clobber a newer publish.
-  if (current && current.version > version) return;
   const expiresAtMs = nowMs + args.ttlSeconds * 1000;
+  const pointer = { version, expiresAtMs } satisfies LatestPointer;
+  const ownLanes = lanesForVersion(version);
+
+  const visible = greatestPointer(await readLanePointers(store, args.sleeperUserId, args.view));
+  if (visible && visible.version > version) {
+    for (const lane of ownLanes) {
+      await clearLaneVersion(store, args.sleeperUserId, args.view, lane, version);
+    }
+    return;
+  }
+
   const entry: DashboardViewCacheEntry = {
     version,
     live: args.live,
@@ -432,14 +519,38 @@ export async function rememberDashboardView(args: {
     entry,
     args.ttlSeconds,
   );
-  const pointer = { version, expiresAtMs } satisfies LatestPointer;
-  // Other instances must not see `latest` unless they can also read the body.
-  // This instance still keeps the pointer so its own next read is a hit.
+  // A shared pointer without the body makes every other instance miss.
   if (entryStored === false && store.setLocal) {
-    await store.setLocal(latestKey, pointer, args.ttlSeconds);
+    for (const lane of ownLanes) {
+      await store.setLocal(
+        dashboardViewLaneKey(args.sleeperUserId, args.view, lane),
+        pointer,
+        args.ttlSeconds,
+      );
+    }
     return;
   }
-  await store.set(latestKey, pointer, args.ttlSeconds);
+
+  for (const lane of ownLanes) {
+    const key = dashboardViewLaneKey(args.sleeperUserId, args.view, lane);
+    const current = decodePointer(await store.get(key));
+    if (current && current.version > version) continue;
+    await store.set(key, pointer, args.ttlSeconds);
+  }
+
+  const after = await readLanePointers(store, args.sleeperUserId, args.view);
+  const best = greatestPointer(after);
+  if (best && best.version > version) {
+    for (const lane of ownLanes) {
+      await clearLaneVersion(store, args.sleeperUserId, args.view, lane, version);
+    }
+    return;
+  }
+  for (const lanePointer of after) {
+    if (lanePointer.version < version) {
+      await clearLaneVersion(store, args.sleeperUserId, args.view, lanePointer.lane, lanePointer.version);
+    }
+  }
 }
 
 export type DashboardOriginResult<T> =

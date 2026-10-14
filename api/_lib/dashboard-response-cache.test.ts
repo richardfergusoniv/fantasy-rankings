@@ -180,6 +180,106 @@ describe("snapshot version cache", () => {
     expect(hit?.body).toEqual({ section: "meta", data: "new" });
   });
 
+  it("keeps a newer snapshot when an older publish already passed its read", async () => {
+    const inner = createMemoryDashboardViewStore(() => 1_000);
+    let pauseStaleReads = true;
+    const waiting: Array<() => void> = [];
+    let markStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const store: DashboardViewStore = {
+      async get(key) {
+        if (pauseStaleReads && key.includes(":lane:")) {
+          if (waiting.length === 0) markStarted();
+          await new Promise<void>((resolve) => {
+            waiting.push(resolve);
+          });
+          return null;
+        }
+        return inner.get(key);
+      },
+      async set(key, value, ttlSeconds) {
+        return inner.set(key, value, ttlSeconds);
+      },
+    };
+    const older = rememberDashboardView({
+      sleeperUserId: "user-a",
+      view: "meta",
+      version: V1,
+      live: false,
+      body: { section: "meta", data: "old" },
+      ttlSeconds: 600,
+      nowMs: 1_000,
+      store,
+    });
+    await started;
+    await vi.waitUntil(() => waiting.length === 16);
+    await rememberDashboardView({
+      sleeperUserId: "user-a",
+      view: "meta",
+      version: V2,
+      live: false,
+      body: { section: "meta", data: "new" },
+      ttlSeconds: 600,
+      nowMs: 1_000,
+      store: inner,
+    });
+    pauseStaleReads = false;
+    for (const release of waiting) release();
+    await older;
+    const hit = await recallDashboardView({
+      sleeperUserId: "user-a",
+      view: "meta",
+      requestedVersion: null,
+      nowMs: 1_000,
+      store: inner,
+    });
+    expect(hit?.version).toBe(V2);
+    expect(hit?.body).toEqual({ section: "meta", data: "new" });
+  });
+
+  it("does not serve an older snapshot after the newer one expires", async () => {
+    let now = 10_000;
+    const store = createMemoryDashboardViewStore(() => now);
+    await rememberDashboardView({
+      sleeperUserId: "user-a",
+      view: "meta",
+      version: V1,
+      live: false,
+      body: { section: "meta", data: "old" },
+      ttlSeconds: 600,
+      nowMs: now,
+      store,
+    });
+    await rememberDashboardView({
+      sleeperUserId: "user-a",
+      view: "meta",
+      version: V2,
+      live: true,
+      body: { section: "meta", data: "new" },
+      ttlSeconds: 150,
+      nowMs: now,
+      store,
+    });
+    now += 149_000;
+    expect((await recallDashboardView({
+      sleeperUserId: "user-a",
+      view: "meta",
+      requestedVersion: null,
+      nowMs: now,
+      store,
+    }))?.version).toBe(V2);
+    now += 1_000;
+    expect(await recallDashboardView({
+      sleeperUserId: "user-a",
+      view: "meta",
+      requestedVersion: null,
+      nowMs: now,
+      store,
+    })).toBeNull();
+  });
+
   it("keeps two users on the same snapshot version apart", async () => {
     const store = createMemoryDashboardViewStore();
     await rememberDashboardView({
@@ -454,6 +554,9 @@ describe("shared cache pointer", () => {
         async set(key: string, value: unknown) {
           remote.set(key, value);
         },
+        async delete(key: string) {
+          remote.delete(key);
+        },
       },
     };
   }
@@ -489,9 +592,11 @@ describe("shared cache pointer", () => {
       async get(key: string) {
         return remote.get(key) ?? null;
       },
-      async set(key: string, value: unknown) {
-        if (!key.endsWith(":latest")) throw new Error("runtime full");
-        remote.set(key, value);
+      async set() {
+        throw new Error("runtime full");
+      },
+      async delete() {
+        return undefined;
       },
     };
     try {
@@ -506,7 +611,7 @@ describe("shared cache pointer", () => {
         nowMs: 1_000,
         store: writer,
       });
-      expect(remote.has(dashboardViewLatestKey("user-a", view))).toBe(false);
+      expect([...remote.keys()]).toEqual([]);
       const local = await recallDashboardView({
         sleeperUserId: "user-a",
         view,
@@ -521,6 +626,9 @@ describe("shared cache pointer", () => {
         },
         async set() {
           throw new Error("unused");
+        },
+        async delete() {
+          return undefined;
         },
       });
       expect(await recallDashboardView({
@@ -548,7 +656,7 @@ describe("shared cache pointer", () => {
       nowMs: 1_000,
       store: writer,
     });
-    expect(remote.has(dashboardViewLatestKey("user-a", view))).toBe(false);
+    expect([...remote.keys()]).toEqual([]);
     const local = await recallDashboardView({
       sleeperUserId: "user-a",
       view,
