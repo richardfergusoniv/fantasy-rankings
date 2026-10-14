@@ -583,6 +583,24 @@ export function isRedraftFormatKey(formatKey: string): boolean {
   return formatKey.startsWith("redraft");
 }
 
+export type ValueHistoryChartPoint = { date: string; value: number };
+
+/**
+ * During offseason redraft (sparse daily rows), carry the last stored value
+ * forward to `today` so charts do not end on the last change date. No-op when
+ * `extend` is false, the series is empty, or today is already present.
+ */
+export function extendSparseValueHistoryThroughToday(
+  points: ValueHistoryChartPoint[],
+  today: string,
+  extend: boolean,
+): ValueHistoryChartPoint[] {
+  if (!extend || points.length === 0) return points;
+  const latest = points[points.length - 1];
+  if (!latest || latest.date >= today) return points;
+  return [...points, { date: today, value: latest.value }];
+}
+
 /** Map key for the most-recent value lookup: `formatKey` + player. */
 export function priorSnapshotValueKey(formatKey: string, playerId: string): string {
   return `${formatKey}\0${playerId}`;
@@ -709,7 +727,23 @@ export async function appendDailyValueSnapshots(
       const formatKeys = [...new Set(redraftRows.map((row) => row.formatKey))];
       const playerIds = [...new Set(redraftRows.map((row) => row.playerId))];
       const fetchLatestValues = options.fetchLatestValues ?? fetchLatestSnapshotValues;
-      const priorValues = await fetchLatestValues(formatKeys, playerIds);
+      // Fail open on lookup errors: keep dense writes (including dynasty) rather
+      // than aborting the whole append after the FantasyCalc cache was already saved.
+      let priorValues = new Map<string, number>();
+      try {
+        priorValues = await fetchLatestValues(formatKeys, playerIds);
+      } catch (err) {
+        const dbText = formatDbError(err);
+        const errText =
+          err instanceof Error && !err.message.startsWith("Failed query:")
+            ? err.message
+            : "";
+        console.error(
+          `[player-value-history] prior-value lookup failed; keeping dense snapshots: ${
+            dbText !== "unknown database error" ? dbText : errText || dbText
+          }`,
+        );
+      }
       const filtered = filterUnchangedRedraftSnapshots(rows, priorValues);
       rows = filtered.rows;
       unchangedSkipped = filtered.unchangedSkipped;

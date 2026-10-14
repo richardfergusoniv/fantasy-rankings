@@ -9,6 +9,7 @@ import {
 } from "./_lib/api-utils.js";
 import { resolveSleeperUserId } from "./_lib/auth.js";
 import {
+  extendSparseValueHistoryThroughToday,
   FANTASY_CALC_SNAPSHOT_PRESETS,
   fantasyCalcHistoryUrl,
   historySnapshotRowsFromPoints,
@@ -234,11 +235,17 @@ export async function GET(req: Request): Promise<Response> {
         if (!history?.length) return [];
         const latest = history[history.length - 1];
         if (!latest) return [];
+        const points = extendSparseValueHistoryThroughToday(
+          history.map((row) => ({ date: row.snapshotDate, value: row.value })),
+          today,
+          // Offseason redraft stores only on change; carry the last value to today.
+          !requireRecentDaily,
+        );
         return [{
           playerId,
           name: latest.playerName,
           position: latest.position,
-          points: history.map((row) => ({ date: row.snapshotDate, value: row.value })),
+          points,
         }];
       }),
     });

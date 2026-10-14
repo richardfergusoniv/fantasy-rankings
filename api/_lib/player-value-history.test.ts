@@ -7,6 +7,7 @@ import {
   CorruptFantasyCalcHistoryError,
   dailySnapshotRowsFromPreset,
   dedupePlayerValueSnapshotsById,
+  extendSparseValueHistoryThroughToday,
   fantasyCalcHistoryUrl,
   fetchValidatedFantasyCalcHistory,
   filterUnchangedRedraftSnapshots,
@@ -888,5 +889,57 @@ describe("appendDailyValueSnapshots offseason redraft dedupe", () => {
     expect(fetchLatestValues).not.toHaveBeenCalled();
     expect(result.unchangedSkipped).toBe(0);
     expect(result.rows).toBe(2);
+  });
+
+  it("keeps dense writes when the prior-value lookup fails", async () => {
+    const fetchLatestValues = vi.fn().mockRejectedValue(new Error("db unavailable"));
+    const upsertRows = vi.fn().mockImplementation(async (rows: PlayerValueSnapshotRow[]) => rows.length);
+
+    const result = await appendDailyValueSnapshots(
+      {
+        [redraftKey]: [fantasyRow("1", 100), fantasyRow("2", 200)],
+        [dynastyKey]: [fantasyRow("1", 9000)],
+      },
+      asOf,
+      {
+        readSeasonType: async () => "off",
+        fetchLatestValues,
+        upsertRows,
+      },
+    );
+
+    expect(fetchLatestValues).toHaveBeenCalledTimes(1);
+    expect(result.unchangedSkipped).toBe(0);
+    expect(result.rows).toBe(3);
+    expect(upsertRows.mock.calls[0]?.[0]).toHaveLength(3);
+  });
+});
+
+describe("extendSparseValueHistoryThroughToday", () => {
+  it("appends today with the latest value when the series is sparse", () => {
+    expect(
+      extendSparseValueHistoryThroughToday(
+        [
+          { date: "2026-02-01", value: 100 },
+          { date: "2026-02-10", value: 110 },
+        ],
+        "2026-03-15",
+        true,
+      ),
+    ).toEqual([
+      { date: "2026-02-01", value: 100 },
+      { date: "2026-02-10", value: 110 },
+      { date: "2026-03-15", value: 110 },
+    ]);
+  });
+
+  it("does not duplicate today or mutate when extend is false", () => {
+    const points = [
+      { date: "2026-03-14", value: 90 },
+      { date: "2026-03-15", value: 95 },
+    ];
+    expect(extendSparseValueHistoryThroughToday(points, "2026-03-15", true)).toEqual(points);
+    expect(extendSparseValueHistoryThroughToday(points, "2026-03-20", false)).toEqual(points);
+    expect(extendSparseValueHistoryThroughToday([], "2026-03-15", true)).toEqual([]);
   });
 });
