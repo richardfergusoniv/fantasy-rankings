@@ -2663,7 +2663,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
     flex: 1 1 auto;
     flex-direction: column;
     min-height: 0;
-    overflow: hidden;
+    overflow: hidden auto;
     padding: 8px 12px max(12px, env(safe-area-inset-bottom));
   }
   .monitor-chart-expand-card .monitor-expanded-chart {
