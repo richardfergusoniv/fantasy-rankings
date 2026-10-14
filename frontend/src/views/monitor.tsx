@@ -15,6 +15,7 @@ import type {
   PlayerNews,
 } from "../dashboard-types";
 import { formatProjectionPoints } from "../dashboard-shared";
+import { resolveLeagueTeamCard } from "../league-roster";
 import { formatRecord, LeagueTeamCard } from "../league-team-card";
 import { formatDecimal } from "../lib/format-number";
 import { weeklyOpponentRosterId } from "../power-opponent";
@@ -42,6 +43,7 @@ export function Monitor({
   onOpenMatchup,
   playerCardOpen,
   selectedPlayerId = null,
+  leaguePowerPending = false,
 }: {
   league: League;
   dashboard: Dashboard;
@@ -52,6 +54,8 @@ export function Monitor({
   onOpenMatchup: (matchup: MatchupSelection) => void;
   playerCardOpen: boolean;
   selectedPlayerId?: string | null;
+  /** League power rankings section still loading. */
+  leaguePowerPending?: boolean;
 }) {
   const [openRosterId, setOpenRosterId] = useState<number | null>(null);
   const opponent = league.opponentTeam;
@@ -152,9 +156,9 @@ export function Monitor({
   const gameLineCards = gameLinesQuery.data ?? [];
   const gameLinesUnavailable = gameLinesQuery.isError;
 
-  const openTeam = openRosterId === null
+  const openTeamCard = openRosterId === null
     ? null
-    : league.powerRankingsWeek.find((team) => team.rosterId === openRosterId) ?? null;
+    : resolveLeagueTeamCard(league, openRosterId, leaguePowerPending);
 
   return (
     <section className="monitor-view" aria-label="Monitor">
@@ -329,15 +333,16 @@ export function Monitor({
           </ul>
         ) : null}
       </article>
-      {openTeam ? (
+      {openTeamCard ? (
         <LeagueTeamCard
-          team={openTeam}
+          team={openTeamCard.team}
           league={league}
           dashboard={dashboard}
           scope="week"
           mode="seasonLong"
           playerCardOpen={playerCardOpen}
           selectedPlayerId={selectedPlayerId}
+          powerLoading={openTeamCard.powerLoading}
           onPlayerIntent={onPlayerIntent}
           onOpenPlayer={onOpenPlayer}
           onOpenMatchup={onOpenMatchup}

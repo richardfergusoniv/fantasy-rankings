@@ -2363,6 +2363,10 @@ button.league-partner-change:active { color: var(--link-active); }
 .power-slot-chip { flex: none; max-width: 74px; overflow: hidden; padding: 2px 4px 1px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); line-height: 1.2; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .power-bench-heading { min-height: 27px; display: flex; align-items: center; padding: 0 10px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .power-roster-empty { padding: 22px 12px; color: var(--dim); text-align: center; font-size: var(--type-caption); line-height: 1.4; }
+.power-team-card-metric-loading { display: block; width: 3.2rem; height: 1.05em; margin-top: 3px; border-radius: var(--radius); }
+.power-team-card-positions .power-team-card-metric-loading { width: 2.4rem; margin-inline: auto; }
+.power-roster-loading { display: grid; gap: 10px; padding: 16px 12px; }
+.power-roster-loading .loading-shimmer { display: block; height: 44px; border-radius: var(--radius); }
 .power-note { margin: 12px 2px 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.45; }
 
 .news-view { max-width: 860px; overscroll-behavior-y: contain; }
