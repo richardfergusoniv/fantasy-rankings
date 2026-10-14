@@ -290,7 +290,10 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.environ.get("PFN_DATA_DIR", os.path.join(script_dir, "data"))
 
-    fetched_at = datetime.now(timezone.utc).isoformat()
+    # Z-form required: the ingest schema validates fetched_at as a strict
+    # ISO datetime (z.string().datetime()), which rejects the +00:00 offset
+    # that isoformat() emits for UTC.
+    fetched_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     tables = {}
     for i, (slug, url) in enumerate(TABLES.items()):
         if i > 0:
