@@ -2,8 +2,8 @@ import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts"
 import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import type { TradeAsset, ValueHistorySeries } from "./dashboard-types";
 import {
-  continuousStartAmongValueSeries,
-  sliceValueHistoryFromDate,
+  activeValueHistoryStartDate,
+  sliceValueHistoryForSharedDomain,
   trimValueHistoryToContinuousStart,
 } from "./value-history-domain";
 
@@ -78,14 +78,22 @@ export function AggregateTradeHistory({
     const points = trimmedPointsByPlayerId.get(asset.playerId);
     return points?.length ? [points] : [];
   });
-  const startDate = continuousStartAmongValueSeries(plottedTrimmedSeries);
-  const dates = [...new Set(
-    plottedTrimmedSeries.flatMap((points) => sliceValueHistoryFromDate(points, startDate).map((point) => point.date)),
-  )].sort();
-  const pointMap = new Map(
+  const startDate = activeValueHistoryStartDate(plottedTrimmedSeries);
+  const chartPointsByPlayerId = new Map(
     [...trimmedPointsByPlayerId.entries()].map(([id, points]) => [
       id,
-      new Map(sliceValueHistoryFromDate(points, startDate).map((point) => [point.date, point.value])),
+      sliceValueHistoryForSharedDomain(points, startDate),
+    ]),
+  );
+  const dates = [...new Set(
+    [...givePlayers, ...getPlayers].flatMap((asset) => (
+      chartPointsByPlayerId.get(asset.playerId)?.map((point) => point.date) ?? []
+    )),
+  )].sort();
+  const pointMap = new Map(
+    [...chartPointsByPlayerId.entries()].map(([id, points]) => [
+      id,
+      new Map(points.map((point) => [point.date, point.value])),
     ]),
   );
   const totalOn = (assets: TradeAsset[], date: string): number | null => {

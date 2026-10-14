@@ -64,6 +64,57 @@ export function continuousStartAmongValueSeries(
   return continuousValueHistoryStartDate(realValueHistoryDates(seriesList), maxGapDays);
 }
 
+/**
+ * Domain start for multiple plotted series: among series whose continuous
+ * window still reaches near the latest endpoint, take the earliest start.
+ * Entirely-early outlier series (end far before the latest end) are ignored
+ * so they cannot pad the x-axis, while a still-active early series is kept.
+ */
+export function activeValueHistoryStartDate(
+  seriesList: ReadonlyArray<ReadonlyArray<{ date: string; value: number | null | undefined }>>,
+  maxGapDays: number = VALUE_HISTORY_OUTLIER_GAP_DAYS,
+): string | null {
+  const windows: Array<{ start: string; end: string }> = [];
+  for (const series of seriesList) {
+    const dates = realValueHistoryDates([series]);
+    if (dates.length === 0) continue;
+    const start = continuousValueHistoryStartDate(dates, maxGapDays);
+    const end = dates[dates.length - 1];
+    if (start && end) windows.push({ start, end });
+  }
+  if (windows.length === 0) return null;
+  const latestEnd = windows.map((window) => window.end).sort().at(-1);
+  if (!latestEnd) return null;
+  const active = windows.filter(
+    (window) => utcDateKeyDiffDays(window.end, latestEnd) <= maxGapDays,
+  );
+  const chosen = active.length > 0 ? active : windows;
+  return chosen.map((window) => window.start).sort()[0] ?? null;
+}
+
+/**
+ * Slice to `startDate`, but keep a substantial non-overlapping series that the
+ * shared cutoff would otherwise erase. Isolated early outliers stay dropped.
+ */
+export function sliceValueHistoryForSharedDomain<T extends { date: string; value: number | null | undefined }>(
+  points: readonly T[],
+  startDate: string | null,
+  maxGapDays: number = VALUE_HISTORY_OUTLIER_GAP_DAYS,
+): T[] {
+  const sliced = sliceValueHistoryFromDate(points, startDate);
+  if (sliced.length > 0 || points.length === 0 || !startDate) return sliced;
+  const realDates = realValueHistoryDates([points]);
+  if (realDates.length === 0) return sliced;
+  const first = realDates[0];
+  const last = realDates[realDates.length - 1];
+  if (!first || !last) return sliced;
+  const spanDays = utcDateKeyDiffDays(first, last);
+  const substantial = realDates.length >= 3 || spanDays > maxGapDays;
+  if (!substantial) return sliced;
+  // Non-overlapping but real history: keep it; callers use connectNulls={false}.
+  return [...points];
+}
+
 /** Drop points strictly before `startDate` (inclusive keep). */
 export function sliceValueHistoryFromDate<T extends { date: string }>(
   points: readonly T[],

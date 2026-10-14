@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeValueHistoryStartDate,
   continuousStartAmongValueSeries,
   continuousValueHistoryStartDate,
   isRealValueHistoryValue,
+  sliceValueHistoryForSharedDomain,
   sliceValueHistoryFromDate,
   trimValueHistoryToContinuousStart,
   utcDateKeyDiffDays,
@@ -132,5 +134,53 @@ describe("sliceValueHistoryFromDate", () => {
       { date: "2026-05-01", value: 2 },
       { date: "2026-05-02", value: 3 },
     ]);
+  });
+});
+
+describe("activeValueHistoryStartDate", () => {
+  it("ignores an early-only outlier series when another series is active later", () => {
+    const earlyOnly = [{ date: "2026-01-03", value: 80 }];
+    const active = [
+      { date: "2026-05-01", value: 100 },
+      { date: "2026-05-02", value: 110 },
+      { date: "2026-05-03", value: 120 },
+    ];
+    expect(activeValueHistoryStartDate([earlyOnly, active])).toBe("2026-05-01");
+  });
+
+  it("keeps the earlier start when both series remain active near the end", () => {
+    // Dynasty-style samples stay within the 30-day continuity threshold.
+    const earlyActive = [
+      { date: "2026-01-02", value: 500 },
+      { date: "2026-01-20", value: 510 },
+      { date: "2026-02-10", value: 520 },
+      { date: "2026-03-01", value: 530 },
+      { date: "2026-03-20", value: 540 },
+      { date: "2026-04-10", value: 550 },
+      { date: "2026-05-01", value: 600 },
+      { date: "2026-05-02", value: 610 },
+    ];
+    const later = [
+      { date: "2026-05-01", value: 100 },
+      { date: "2026-05-02", value: 110 },
+    ];
+    expect(activeValueHistoryStartDate([earlyActive, later])).toBe("2026-01-02");
+  });
+});
+
+describe("sliceValueHistoryForSharedDomain", () => {
+  it("drops isolated early outliers that fall before the shared start", () => {
+    const outlier = [{ date: "2026-01-03", value: 80 }];
+    expect(sliceValueHistoryForSharedDomain(outlier, "2026-05-01")).toEqual([]);
+  });
+
+  it("keeps a substantial non-overlapping series instead of erasing it", () => {
+    const early = [
+      { date: "2026-01-01", value: 100 },
+      { date: "2026-01-02", value: 110 },
+      { date: "2026-01-03", value: 120 },
+      { date: "2026-02-01", value: 130 },
+    ];
+    expect(sliceValueHistoryForSharedDomain(early, "2026-05-01")).toEqual(early);
   });
 });
