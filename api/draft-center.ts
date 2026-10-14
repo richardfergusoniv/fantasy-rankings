@@ -10,6 +10,7 @@ import {
 import { resolveSleeperUserId } from "./_lib/auth.js";
 import { readUserLeagues } from "./_lib/user-leagues.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./_lib/source-cache-payload.js";
+import { loadNflPlayersMap } from "./_lib/nfl-players-cache.js";
 import {
   DRAFT_MARKET_CACHE_MS,
   FFC_BASE_URL,
@@ -410,7 +411,7 @@ export async function GET(req: Request): Promise<Response> {
     const errors: string[] = [];
     const [leaguesResult, playersResult] = await Promise.allSettled([
       readUserLeagues(sleeperUserId, force),
-      fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`),
+      loadNflPlayersMap(force),
     ]);
     const season = leaguesResult.status === "fulfilled"
       ? leaguesResult.value.season

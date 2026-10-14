@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, schema } from "./db.js";
+import { loadNflPlayersMap } from "./nfl-players-cache.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
 
 /**
@@ -19,8 +20,6 @@ import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cac
 
 const SLEEPER_BASE = "https://api.sleeper.app/v1";
 const HISTORICAL_TRADES_CACHE_MS = 24 * 60 * 60 * 1000;
-const HISTORICAL_PLAYERS_CACHE_KEY = "sleeper-players-nfl";
-const HISTORICAL_PLAYERS_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
 /** Current-season draft maps can still grow as rookie drafts finish; refresh daily. */
 export const HISTORICAL_DRAFT_PICK_MAP_CACHE_MS = 24 * 60 * 60 * 1000;
 
@@ -549,48 +548,9 @@ async function loadHistoricalDraftPickMap(
   return { byOriginalPick: draftedPlayersByOriginalPick, placeholderByLeagueId };
 }
 
-function parseHistoricalPlayerMap(payload: string): Record<string, SleeperPlayer> {
-  const parsed: unknown = decodeSourceCachePayload(payload);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Sleeper player cache is malformed.");
-  }
-  return parsed as Record<string, SleeperPlayer>;
-}
-
+/** Compact daily NFL roster cache — no full Sleeper dump in Supabase. */
 async function loadHistoricalPlayerMap(forceRefresh: boolean): Promise<Record<string, SleeperPlayer>> {
-  const cachedRows = await db
-    .select()
-    .from(schema.sourceCache)
-    .where(eq(schema.sourceCache.cacheKey, HISTORICAL_PLAYERS_CACHE_KEY))
-    .limit(1);
-  const cached = cachedRows[0];
-  if (!forceRefresh && cached && Date.now() - cached.fetchedAt.getTime() < HISTORICAL_PLAYERS_CACHE_MS) {
-    try {
-      return parseHistoricalPlayerMap(cached.payload);
-    } catch {
-      // Replace malformed cached player metadata below.
-    }
-  }
-
-  try {
-    const fresh = await fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`);
-    const fetchedAt = new Date();
-    const payload = encodeSourceCachePayload(fresh);
-    await db.insert(schema.sourceCache).values({ cacheKey: HISTORICAL_PLAYERS_CACHE_KEY, payload, fetchedAt }).onConflictDoUpdate({
-      target: schema.sourceCache.cacheKey,
-      set: { payload, fetchedAt },
-    });
-    return fresh;
-  } catch (error) {
-    if (cached) {
-      try {
-        return parseHistoricalPlayerMap(cached.payload);
-      } catch {
-        // Preserve the original Sleeper fetch failure when no usable cache exists.
-      }
-    }
-    throw error;
-  }
+  return loadNflPlayersMap(forceRefresh);
 }
 
 // ---------------------------------------------------------------------------

@@ -24,7 +24,8 @@ import {
   retentionCutoff,
   xNewsBatchSchema,
 } from "../_lib/player-news-shared.js";
-import { SLEEPER_BASE, fetchJson, type SleeperPlayer } from "../_lib/sleeper.js";
+import { loadNflPlayersMap } from "../_lib/nfl-players-cache.js";
+import { type SleeperPlayer } from "../_lib/sleeper.js";
 import {
   propLineSnapshotPayloadSchema,
   toPropLineSnapshotRows,
@@ -264,7 +265,7 @@ async function loadPlayerNameIndex(): Promise<{
   byId: Map<string, { player: string; team: string }>;
   byName: Map<string, string>;
 }> {
-  const players = await fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`);
+  const players = await loadNflPlayersMap(false);
   const byId = new Map<string, { player: string; team: string }>();
   const byName = new Map<string, string>();
   for (const [playerId, player] of Object.entries(players)) {

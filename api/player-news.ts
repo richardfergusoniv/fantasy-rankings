@@ -20,11 +20,10 @@ import {
   type NotesSnapshot,
   type SharedNewsDraft,
 } from "./_lib/player-news-shared.js";
+import { loadNflPlayersMap } from "./_lib/nfl-players-cache.js";
 import {
   PLAYER_NEWS_SNAPSHOT_KEY,
   REFRESH_TIMEOUT_MS,
-  SLEEPER_BASE,
-  fetchJson,
   parseInjurySnapshot,
   weeklyAvailabilityStatus,
   withDeadline,
@@ -228,7 +227,8 @@ async function buildInjuryUniverse(): Promise<{
   if (state.seasonType !== "regular" && state.seasonType !== "post") {
     return { active: false, season: state.season, week: state.week, players: [] };
   }
-  const players = await fetchJson<Record<string, SleeperPlayer>>(`${SLEEPER_BASE}/players/nfl`);
+  // Force refresh so injury status tracks Sleeper at least as often as the cron.
+  const players = await loadNflPlayersMap(true);
   const rosteredPlayers = Object.entries(players).flatMap(([playerId, player]) => {
     if (!isFantasyPlayer(playerId, player)) return [];
     return [{
