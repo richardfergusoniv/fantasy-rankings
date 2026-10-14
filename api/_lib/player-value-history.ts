@@ -32,6 +32,71 @@ export const FANTASY_CALC_SNAPSHOT_PRESETS: Array<{ format: SeasonLongFormat; ur
   { format: { key: "dynasty-2qb-12t-1ppr", isDynasty: true, numQbs: 2, numTeams: 12, ppr: 1, label: "Dynasty · 12-team · Superflex / 2QB · PPR" }, url: `${FANTASY_CALC_VALUES_URL}?isDynasty=true&numQbs=2&numTeams=12&ppr=1` },
 ];
 
+/** Sensible default when a league format cannot be mapped to a snapshot preset. */
+export const DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY = "redraft-1qb-12t-0.5ppr";
+
+/**
+ * Inclusive lower bound for chart/API reads of `player_value_snapshots`.
+ * Daily cron + backfill store history; the Monitor Value chart reads from here.
+ */
+export const VALUE_HISTORY_CHART_MIN_DATE = "2026-01-01";
+
+const snapshotFormatKeyPattern = /^(dynasty|redraft)-(\d+)qb-(\d+)t-([\d.]+)ppr$/;
+
+type SnapshotFormatIdentity = {
+  isDynasty: boolean;
+  numQbs: number;
+  numTeams: number;
+  ppr: number;
+};
+
+function parseSnapshotFormatKey(formatKey: string): SnapshotFormatIdentity | null {
+  const match = snapshotFormatKeyPattern.exec(formatKey);
+  if (!match) return null;
+  const numQbs = Number(match[2]);
+  const numTeams = Number(match[3]);
+  const ppr = Number(match[4]);
+  if (!Number.isFinite(numQbs) || !Number.isFinite(numTeams) || !Number.isFinite(ppr)) return null;
+  return {
+    isDynasty: match[1] === "dynasty",
+    numQbs,
+    numTeams,
+    ppr,
+  };
+}
+
+/**
+ * Map a league's season-long format key onto a FantasyCalc preset that has
+ * rows in `player_value_snapshots`. Exact preset keys pass through; otherwise
+ * pick the nearest preset (same dynasty flag, prefer matching QB count, then
+ * closest team count and PPR). Falls back to the default half-PPR 12-team
+ * redraft preset.
+ */
+export function resolveFantasyCalcSnapshotFormatKey(formatKey: string): string {
+  const presets = FANTASY_CALC_SNAPSHOT_PRESETS.map((preset) => preset.format);
+  if (presets.some((preset) => preset.key === formatKey)) return formatKey;
+
+  const target = parseSnapshotFormatKey(formatKey);
+  if (!target) return DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY;
+
+  const scored = presets
+    .filter((preset) => preset.isDynasty === target.isDynasty)
+    .map((preset) => ({
+      key: preset.key,
+      qbMismatch: preset.numQbs === target.numQbs ? 0 : 1,
+      teamDistance: Math.abs(preset.numTeams - target.numTeams),
+      pprDistance: Math.abs(preset.ppr - target.ppr),
+    }))
+    .sort((left, right) => (
+      left.qbMismatch - right.qbMismatch
+      || left.teamDistance - right.teamDistance
+      || left.pprDistance - right.pprDistance
+      || left.key.localeCompare(right.key)
+    ));
+
+  return scored[0]?.key ?? DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY;
+}
+
 /**
  * Rows per INSERT. 1000 × 8 columns = 8000 bind params, well under Postgres's
  * 65,535 limit. Backfill batches of ~20 players × ~285 days need several chunks.

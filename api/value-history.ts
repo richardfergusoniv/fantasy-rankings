@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db, schema } from "./_lib/db.js";
 import {
   badRequest,
@@ -12,8 +12,11 @@ import {
   FANTASY_CALC_SNAPSHOT_PRESETS,
   fantasyCalcHistoryUrl,
   historySnapshotRowsFromPoints,
+  resolveFantasyCalcSnapshotFormatKey,
   startOfUtcDay,
   upsertPlayerValueSnapshots,
+  utcDateKey,
+  VALUE_HISTORY_CHART_MIN_DATE,
 } from "./_lib/player-value-history.js";
 import {
   fetchJson,
@@ -25,11 +28,16 @@ import {
  * GET /api/value-history?formatKey=&playerIds=a,b,c
  *
  * Replaces `getValueHistory`. Returns FantasyCalc value time series per
- * player, backfilling from the FantasyCalc API when the stored snapshots
- * are stale (> 1 day old).
+ * player from `VALUE_HISTORY_CHART_MIN_DATE` through today, backfilling from
+ * the FantasyCalc API when the stored snapshots are stale (> 1 day old).
+ *
+ * Requires a signed-in user with a linked Sleeper account. Responses are
+ * cached in-process for the UTC day and sent with private HTTP cache headers
+ * (values update once daily).
  *
  * Query params:
- * - formatKey (required): e.g. "redraft-1qb-12t-0.5ppr"
+ * - formatKey (required): league season-long format key; mapped to the nearest
+ *   FantasyCalc snapshot preset when it is not an exact preset key
  * - playerIds (required): comma-separated Sleeper player IDs, max 24
  */
 
@@ -45,9 +53,50 @@ const valueHistoryResponse = z.object({
     position: z.string(),
     points: z.array(z.object({ date: z.string(), value: z.number().int() })),
   })),
+  formatKey: z.string(),
 });
 
 export type ValueHistory = z.infer<typeof valueHistoryResponse>;
+
+type CacheEntry = {
+  expiresAt: number;
+  body: ValueHistory;
+};
+
+/** In-process cache; keyed per UTC day so daily value refreshes invalidate. */
+const valueHistoryCache = new Map<string, CacheEntry>();
+const VALUE_HISTORY_CACHE_MAX_ENTRIES = 500;
+
+const VALUE_HISTORY_HTTP_CACHE_SECONDS = 60 * 60; // 1 hour
+
+function endOfUtcDayMs(now: Date): number {
+  const end = startOfUtcDay(now);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return end.getTime();
+}
+
+function cacheKeyFor(formatKey: string, playerIds: string[], dayKey: string): string {
+  return `${dayKey}|${formatKey}|${[...playerIds].sort().join(",")}`;
+}
+
+function cachedResponse(body: ValueHistory): Response {
+  return json(body, 200, {
+    "Cache-Control": `private, max-age=${VALUE_HISTORY_HTTP_CACHE_SECONDS}`,
+  });
+}
+
+/** Drop expired entries and enforce a hard size cap before inserting. */
+function setValueHistoryCache(cacheKey: string, entry: CacheEntry): void {
+  const nowMs = Date.now();
+  for (const [key, cached] of valueHistoryCache) {
+    if (cached.expiresAt <= nowMs) valueHistoryCache.delete(key);
+  }
+  if (valueHistoryCache.size >= VALUE_HISTORY_CACHE_MAX_ENTRIES) {
+    const oldest = valueHistoryCache.keys().next().value;
+    if (oldest !== undefined) valueHistoryCache.delete(oldest);
+  }
+  valueHistoryCache.set(cacheKey, entry);
+}
 
 export async function GET(req: Request): Promise<Response> {
   try {
@@ -61,29 +110,52 @@ export async function GET(req: Request): Promise<Response> {
       playerIds: rawPlayerIds.split(",").map((id) => id.trim()).filter(Boolean),
     });
     if (!parsed.success) return badRequest("Invalid query params", parsed.error.issues);
-    const { formatKey, playerIds } = parsed.data;
+    const playerIds = parsed.data.playerIds;
+    const formatKey = resolveFantasyCalcSnapshotFormatKey(parsed.data.formatKey);
 
-    const yesterdayDate = startOfUtcDay(new Date());
+    const now = new Date();
+    const dayKey = utcDateKey(startOfUtcDay(now));
+    const cacheKey = cacheKeyFor(formatKey, playerIds, dayKey);
+    const cached = valueHistoryCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cachedResponse(cached.body);
+    }
+
+    const yesterdayDate = startOfUtcDay(now);
     yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
-    const yesterday = yesterdayDate.toISOString().slice(0, 10);
+    const yesterday = utcDateKey(yesterdayDate);
     const latestSnapshotRows = await db
-      .select({ playerId: schema.playerValueSnapshots.playerId, snapshotDate: schema.playerValueSnapshots.snapshotDate })
+      .select({
+        playerId: schema.playerValueSnapshots.playerId,
+        snapshotDate: schema.playerValueSnapshots.snapshotDate,
+      })
       .from(schema.playerValueSnapshots)
-      .where(and(eq(schema.playerValueSnapshots.formatKey, formatKey), inArray(schema.playerValueSnapshots.playerId, playerIds)))
+      .where(and(
+        eq(schema.playerValueSnapshots.formatKey, formatKey),
+        inArray(schema.playerValueSnapshots.playerId, playerIds),
+      ))
       .orderBy(desc(schema.playerValueSnapshots.snapshotDate));
     const latestSnapshotByPlayer = new Map<string, string>();
     for (const row of latestSnapshotRows) {
-      if (!latestSnapshotByPlayer.has(row.playerId)) latestSnapshotByPlayer.set(row.playerId, row.snapshotDate);
+      if (!latestSnapshotByPlayer.has(row.playerId)) {
+        latestSnapshotByPlayer.set(row.playerId, row.snapshotDate);
+      }
     }
-    const hasFreshSnapshots = playerIds.every((playerId) => (latestSnapshotByPlayer.get(playerId) ?? "") >= yesterday);
+    const hasFreshSnapshots = playerIds.every(
+      (playerId) => (latestSnapshotByPlayer.get(playerId) ?? "") >= yesterday,
+    );
     const preset = FANTASY_CALC_SNAPSHOT_PRESETS.find(({ format }) => format.key === formatKey);
     if (preset && !hasFreshSnapshots) {
       try {
         const currentRows = await fetchJson<FantasyCalcRow[]>(preset.url);
-        const selected = currentRows.filter((row) => row.player?.sleeperId && playerIds.includes(row.player.sleeperId) && typeof row.player.id === "number");
-        const cutoff = startOfUtcDay(new Date());
+        const selected = currentRows.filter(
+          (row) => row.player?.sleeperId
+            && playerIds.includes(row.player.sleeperId)
+            && typeof row.player.id === "number",
+        );
+        const cutoff = startOfUtcDay(now);
         cutoff.setUTCDate(cutoff.getUTCDate() - 29);
-        const minSnapshotDate = cutoff.toISOString().slice(0, 10);
+        const minSnapshotDate = utcDateKey(cutoff);
         const historyResults = await Promise.allSettled(selected.map(async (row) => {
           const playerId = row.player?.sleeperId;
           const fantasyCalcId = row.player?.id;
@@ -100,28 +172,42 @@ export async function GET(req: Request): Promise<Response> {
             minSnapshotDate,
           }).rows;
         }));
-        const backfillRows = historyResults.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+        const backfillRows = historyResults.flatMap(
+          (result) => (result.status === "fulfilled" ? result.value : []),
+        );
         await upsertPlayerValueSnapshots(backfillRows);
       } catch {
         // Stored daily snapshots still provide an honest partial history.
       }
     }
+
+    const today = dayKey;
     const rows = await db
-      .select()
+      .select({
+        snapshotDate: schema.playerValueSnapshots.snapshotDate,
+        playerId: schema.playerValueSnapshots.playerId,
+        playerName: schema.playerValueSnapshots.playerName,
+        position: schema.playerValueSnapshots.position,
+        value: schema.playerValueSnapshots.value,
+      })
       .from(schema.playerValueSnapshots)
-      .where(and(eq(schema.playerValueSnapshots.formatKey, formatKey), inArray(schema.playerValueSnapshots.playerId, playerIds)))
+      .where(and(
+        eq(schema.playerValueSnapshots.formatKey, formatKey),
+        inArray(schema.playerValueSnapshots.playerId, playerIds),
+        gte(schema.playerValueSnapshots.snapshotDate, VALUE_HISTORY_CHART_MIN_DATE),
+        lte(schema.playerValueSnapshots.snapshotDate, today),
+      ))
       .orderBy(asc(schema.playerValueSnapshots.snapshotDate));
-    const cutoffDate = startOfUtcDay(new Date());
-    cutoffDate.setUTCDate(cutoffDate.getUTCDate() - 29);
-    const cutoff = cutoffDate.toISOString().slice(0, 10);
+
     const grouped = new Map<string, typeof rows>();
     for (const row of rows) {
-      if (row.snapshotDate < cutoff) continue;
       const group = grouped.get(row.playerId) ?? [];
       group.push(row);
       grouped.set(row.playerId, group);
     }
-    return json(valueHistoryResponse.parse({
+
+    const body = valueHistoryResponse.parse({
+      formatKey,
       series: playerIds.flatMap((playerId) => {
         const history = grouped.get(playerId);
         if (!history?.length) return [];
@@ -134,7 +220,10 @@ export async function GET(req: Request): Promise<Response> {
           points: history.map((row) => ({ date: row.snapshotDate, value: row.value })),
         }];
       }),
-    }));
+    });
+
+    setValueHistoryCache(cacheKey, { body, expiresAt: endOfUtcDayMs(now) });
+    return cachedResponse(body);
   } catch (err) {
     return internalError(err);
   }

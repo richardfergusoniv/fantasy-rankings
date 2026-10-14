@@ -723,6 +723,54 @@ button.monitor-alert:hover { background: var(--surface-2); }
   font-size: var(--type-caption);
   font-weight: 600;
 }
+.monitor-value-chart-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.monitor-value-chart-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.monitor-value-chart-field > span {
+  color: var(--dim);
+  font-size: var(--type-caption);
+  font-weight: 600;
+}
+.monitor-value-chart-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--compact-control-height, 36px);
+  padding: 0 26px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--surface-2);
+  background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%),
+    linear-gradient(135deg, var(--dim) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--type-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+.monitor-value-chart-field select:focus {
+  border-color: var(--link);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+  outline: none;
+}
+.monitor-value-chart {
+  width: 100%;
+  min-width: 0;
+  height: 220px;
+}
+.monitor-value-chart .recharts-legend-wrapper {
+  padding-top: 2px !important;
+}
 .monitor-game-lines-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));

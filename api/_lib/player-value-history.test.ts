@@ -17,7 +17,9 @@ import {
   parseFantasyCalcHistoryDate,
   playerValueSnapshotId,
   rankedPlayersFromFantasyCalcRows,
+  resolveFantasyCalcSnapshotFormatKey,
   utcDateKey,
+  DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY,
   VALUE_HISTORY_BACKFILL_CONCURRENCY,
   VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
   VALUE_HISTORY_BACKFILL_MAX_LIMIT,
@@ -521,6 +523,21 @@ describe("historySnapshotRowsFromPoints", () => {
       { date: "2026-10-12", value: 10511 },
     ]);
     expect(built.skipped).toBe(5);
+  });
+});
+
+describe("resolveFantasyCalcSnapshotFormatKey", () => {
+  it("passes exact preset keys through", () => {
+    expect(resolveFantasyCalcSnapshotFormatKey("dynasty-2qb-12t-1ppr")).toBe("dynasty-2qb-12t-1ppr");
+  });
+
+  it("maps nearby non-preset keys to the nearest snapshot preset", () => {
+    expect(resolveFantasyCalcSnapshotFormatKey("redraft-1qb-12t-0ppr")).toBe("redraft-1qb-12t-0.5ppr");
+    expect(resolveFantasyCalcSnapshotFormatKey("redraft-1qb-11t-1ppr")).toBe("redraft-1qb-12t-1ppr");
+  });
+
+  it("falls back to the default preset for unparseable keys", () => {
+    expect(resolveFantasyCalcSnapshotFormatKey("not-a-format")).toBe(DEFAULT_FANTASY_CALC_SNAPSHOT_FORMAT_KEY);
   });
 });
 

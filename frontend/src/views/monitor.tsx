@@ -18,6 +18,7 @@ import { formatProjectionPoints } from "../dashboard-shared";
 import { formatRecord, LeagueTeamCard } from "../league-team-card";
 import { formatDecimal } from "../lib/format-number";
 import { weeklyOpponentRosterId } from "../power-opponent";
+import { ValueChartPanel } from "./value-chart-panel";
 
 type MonitorAlert = {
   key: string;
@@ -267,6 +268,8 @@ export function Monitor({
           </ul>
         )}
       </article>
+
+      <ValueChartPanel league={league} dashboard={dashboard} />
 
       <article className="monitor-panel">
         <header className="monitor-panel-header">

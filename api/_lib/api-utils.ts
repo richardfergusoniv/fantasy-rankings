@@ -14,10 +14,14 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 // Response helpers
 // ---------------------------------------------------------------------------
 
-export function json(data: unknown, status = 200): Response {
+export function json(
+  data: unknown,
+  status = 200,
+  headers?: Record<string, string>,
+): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
   });
 }
 
