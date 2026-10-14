@@ -53,7 +53,17 @@ type LatestPointer = {
 
 export type DashboardViewStore = {
   get(key: string): Promise<unknown | null>;
-  set(key: string, value: unknown, ttlSeconds: number): Promise<void>;
+  /**
+   * Store `value`. Returns true when other instances can read it.
+   * A memory-only store returns true. The shared tier returns false when
+   * that write fails or the body does not fit; the local copy is still kept.
+   */
+  set(key: string, value: unknown, ttlSeconds: number): Promise<boolean>;
+  /**
+   * Write this instance only. Used so a shared `latest` pointer is not
+   * published when the versioned body never reached the shared cache.
+   */
+  setLocal?(key: string, value: unknown, ttlSeconds: number): Promise<void>;
 };
 
 export function dashboardResponseTtlSeconds(live: boolean): number {
@@ -245,9 +255,10 @@ export function createMemoryDashboardViewStore(now: () => number = Date.now): Da
     async set(key, value, ttlSeconds) {
       if (ttlSeconds <= 0) {
         rows.delete(key);
-        return;
+        return true;
       }
       rows.set(key, { value, expiresAtMs: now() + ttlSeconds * 1000 });
+      return true;
     },
   };
 }
@@ -291,14 +302,33 @@ function preferCachedValue(local: unknown, remote: unknown): unknown {
   return local ?? remote;
 }
 
-function createTieredDashboardViewStore(): DashboardViewStore {
+type RuntimeViewCache = {
+  get(key: string): Promise<unknown>;
+  set(key: string, value: unknown, options: { ttl: number; name: string }): Promise<unknown>;
+};
+
+function defaultRuntimeViewCache(): RuntimeViewCache {
+  return {
+    async get(key) {
+      return getCache({ namespace: CACHE_NAMESPACE }).get(key);
+    },
+    async set(key, value, options) {
+      await getCache({ namespace: CACHE_NAMESPACE }).set(key, value, options);
+    },
+  };
+}
+
+export function createTieredDashboardViewStore(
+  runtime: RuntimeViewCache = defaultRuntimeViewCache(),
+  maxBytes: number = RUNTIME_CACHE_MAX_BYTES,
+): DashboardViewStore {
   const memory = createMemoryDashboardViewStore();
   return {
     async get(key) {
       const local = await memory.get(key);
       let remote: unknown = null;
       try {
-        const cached = await getCache({ namespace: CACHE_NAMESPACE }).get(key);
+        const cached = await runtime.get(key);
         if (cached != null) remote = unpackRuntimeValue(cached);
       } catch (error) {
         console.error("[dashboard-cache] runtime get failed", error);
@@ -307,17 +337,19 @@ function createTieredDashboardViewStore(): DashboardViewStore {
     },
     async set(key, value, ttlSeconds) {
       await memory.set(key, value, ttlSeconds);
-      if (ttlSeconds <= 0) return;
+      if (ttlSeconds <= 0) return true;
       try {
-        const payload = isCacheEntry(value) ? encodeForRuntime(value) : value;
-        if (payload == null) return;
-        await getCache({ namespace: CACHE_NAMESPACE }).set(key, payload, {
-          ttl: ttlSeconds,
-          name: "dashboard-view",
-        });
+        const payload = isCacheEntry(value) ? encodeForRuntime(value, maxBytes) : value;
+        if (payload == null) return false;
+        await runtime.set(key, payload, { ttl: ttlSeconds, name: "dashboard-view" });
+        return true;
       } catch (error) {
         console.error("[dashboard-cache] runtime set failed", error);
+        return false;
       }
+    },
+    async setLocal(key, value, ttlSeconds) {
+      await memory.set(key, value, ttlSeconds);
     },
   };
 }
@@ -395,8 +427,19 @@ export async function rememberDashboardView(args: {
     expiresAtMs,
     body: args.body,
   };
-  await store.set(dashboardViewCacheKey(args.sleeperUserId, args.view, version), entry, args.ttlSeconds);
-  await store.set(latestKey, { version, expiresAtMs } satisfies LatestPointer, args.ttlSeconds);
+  const entryStored = await store.set(
+    dashboardViewCacheKey(args.sleeperUserId, args.view, version),
+    entry,
+    args.ttlSeconds,
+  );
+  const pointer = { version, expiresAtMs } satisfies LatestPointer;
+  // Other instances must not see `latest` unless they can also read the body.
+  // This instance still keeps the pointer so its own next read is a hit.
+  if (entryStored === false && store.setLocal) {
+    await store.setLocal(latestKey, pointer, args.ttlSeconds);
+    return;
+  }
+  await store.set(latestKey, pointer, args.ttlSeconds);
 }
 
 export type DashboardOriginResult<T> =

@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LIVE_DASHBOARD_CACHE_MS, USER_DASHBOARD_CACHE_MS } from "./dashboard-build.js";
 import {
   createMemoryDashboardViewStore,
+  createTieredDashboardViewStore,
   dashboardDeniedHeaders,
   dashboardResponseTtlSeconds,
   dashboardViewCacheKey,
@@ -38,7 +39,7 @@ function countingStore(inner: DashboardViewStore): DashboardViewStore & { gets: 
     },
     async set(key, value, ttlSeconds) {
       counts.sets += 1;
-      await inner.set(key, value, ttlSeconds);
+      return inner.set(key, value, ttlSeconds);
     },
   };
 }
@@ -435,6 +436,127 @@ describe("dashboard response headers", () => {
     });
     expect(injected["Cache-Control"]).toBe("private, no-store");
     expect(JSON.stringify(injected)).not.toContain("X-Injected");
+  });
+});
+
+describe("shared cache pointer", () => {
+  const view = "trade" as const;
+  const body = { section: "trade", data: { leagues: ["a"] } };
+
+  function sharedRuntime() {
+    const remote = new Map<string, unknown>();
+    return {
+      remote,
+      runtime: {
+        async get(key: string) {
+          return remote.get(key) ?? null;
+        },
+        async set(key: string, value: unknown) {
+          remote.set(key, value);
+        },
+      },
+    };
+  }
+
+  it("lets another instance read the body when the shared write succeeds", async () => {
+    const { runtime } = sharedRuntime();
+    const writer = createTieredDashboardViewStore(runtime);
+    await rememberDashboardView({
+      sleeperUserId: "user-a",
+      view,
+      version: V1,
+      live: false,
+      body,
+      ttlSeconds: 600,
+      nowMs: 1_000,
+      store: writer,
+    });
+    const reader = createTieredDashboardViewStore(runtime);
+    const hit = await recallDashboardView({
+      sleeperUserId: "user-a",
+      view,
+      requestedVersion: null,
+      nowMs: 1_000,
+      store: reader,
+    });
+    expect(hit?.body).toEqual(body);
+  });
+
+  it("does not publish latest when the shared body write fails", async () => {
+    const remote = new Map<string, unknown>();
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const runtime = {
+      async get(key: string) {
+        return remote.get(key) ?? null;
+      },
+      async set(key: string, value: unknown) {
+        if (!key.endsWith(":latest")) throw new Error("runtime full");
+        remote.set(key, value);
+      },
+    };
+    try {
+      const writer = createTieredDashboardViewStore(runtime);
+      await rememberDashboardView({
+        sleeperUserId: "user-a",
+        view,
+        version: V1,
+        live: false,
+        body,
+        ttlSeconds: 600,
+        nowMs: 1_000,
+        store: writer,
+      });
+      expect(remote.has(dashboardViewLatestKey("user-a", view))).toBe(false);
+      const local = await recallDashboardView({
+        sleeperUserId: "user-a",
+        view,
+        requestedVersion: null,
+        nowMs: 1_000,
+        store: writer,
+      });
+      expect(local?.version).toBe(V1);
+      const reader = createTieredDashboardViewStore({
+        async get(key: string) {
+          return remote.get(key) ?? null;
+        },
+        async set() {
+          throw new Error("unused");
+        },
+      });
+      expect(await recallDashboardView({
+        sleeperUserId: "user-a",
+        view,
+        requestedVersion: null,
+        nowMs: 1_000,
+        store: reader,
+      })).toBeNull();
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it("does not publish latest when the body does not fit the shared cache", async () => {
+    const { remote, runtime } = sharedRuntime();
+    const writer = createTieredDashboardViewStore(runtime, 32);
+    await rememberDashboardView({
+      sleeperUserId: "user-a",
+      view,
+      version: V1,
+      live: true,
+      body: { blob: "y".repeat(2_000) },
+      ttlSeconds: 150,
+      nowMs: 1_000,
+      store: writer,
+    });
+    expect(remote.has(dashboardViewLatestKey("user-a", view))).toBe(false);
+    const local = await recallDashboardView({
+      sleeperUserId: "user-a",
+      view,
+      requestedVersion: null,
+      nowMs: 1_000,
+      store: writer,
+    });
+    expect(local?.body).toEqual({ blob: "y".repeat(2_000) });
   });
 });
 
