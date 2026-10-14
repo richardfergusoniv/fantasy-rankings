@@ -5,6 +5,17 @@
 
 export type ValueChartPoint = { date: string; value: number };
 
+/**
+ * Drop leading points with value ≤ 0 so the Monitor chart starts at the first
+ * real market value (FantasyCalc redraft often stores zeros before open).
+ */
+export function trimLeadingNonPositive(
+  points: ReadonlyArray<ValueChartPoint>,
+): ValueChartPoint[] {
+  const start = points.findIndex((point) => point.value > 0);
+  return start < 0 ? [] : points.slice(start);
+}
+
 export type TrendConePoint = {
   date: string;
   center: number;
