@@ -8,6 +8,15 @@ import {
 } from "./_lib/team-situational.js";
 import { decodeSourceCachePayload } from "./_lib/source-cache-payload.js";
 import { loadPropLineWeek, type PropLineWeekPayload } from "./_lib/prop-line-week.js";
+import {
+  TEAM_WEEK_STATS_STALE_MS,
+  nflversePlayerWeekStatsUrl,
+  nflverseSnapCountsUrl,
+  parsePlayerWeekStatsCsv,
+  parseTeamWeekSnapCountsCsv,
+  type TeamWeekSnapRow,
+  type TeamWeekStatRow,
+} from "./_lib/nflverse-team-week-stats.js";
 
 /**
  * GET /api/pfn-tables
@@ -18,6 +27,12 @@ import { loadPropLineWeek, type PropLineWeekPayload } from "./_lib/prop-line-wee
  * Also serves current-week prop lines from `prop_line_snapshots` (one compact
  * season/week query, in-process cached) so Monitor Props stays inside the
  * existing function budget — no new Vercel route file.
+ *
+ * `?team-week-stats=1&season=<year>` serves parsed nflverse week-by-week
+ * player stats + snap counts for the Monitor Team stats panel and the game
+ * lines hit-history. The CSVs are fetched and parsed here, server-side:
+ * GitHub release assets send no CORS headers, so the browser cannot fetch
+ * them directly (both panels came up empty when they tried).
  *
  * Optional query: `season`, `week` (defaults to current NFL state).
  */
@@ -61,6 +76,51 @@ export type PfnTables = {
   teamSituational: TeamSituationalSnapshot | null;
   propLines: PropLineWeekPayload;
 };
+
+export type TeamWeekStats = {
+  season: number;
+  stats: TeamWeekStatRow[];
+  snaps: TeamWeekSnapRow[];
+};
+
+// Parsed once per function instance and reused for the panels' stale
+// window; the upstream nflverse files update a few times a day at most.
+let teamWeekStatsCache: { season: number; fetchedAtMs: number; payload: TeamWeekStats } | null = null;
+
+async function fetchNflverseCsv(url: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`nflverse team-week stats HTTP ${response.status}`);
+  return response.text();
+}
+
+async function loadTeamWeekStats(season: number): Promise<TeamWeekStats> {
+  const now = Date.now();
+  if (
+    teamWeekStatsCache
+    && teamWeekStatsCache.season === season
+    && now - teamWeekStatsCache.fetchedAtMs < TEAM_WEEK_STATS_STALE_MS
+  ) {
+    return teamWeekStatsCache.payload;
+  }
+  const [statsResult, snapsResult] = await Promise.allSettled([
+    fetchNflverseCsv(nflversePlayerWeekStatsUrl(season)),
+    fetchNflverseCsv(nflverseSnapCountsUrl(season)),
+  ]);
+  const stats = statsResult.status === "fulfilled"
+    ? parsePlayerWeekStatsCsv(statsResult.value)
+    : [];
+  const snaps = snapsResult.status === "fulfilled"
+    ? parseTeamWeekSnapCountsCsv(snapsResult.value)
+    : [];
+  if (stats.length === 0 && snaps.length === 0) {
+    throw new Error("nflverse team-week stats unavailable");
+  }
+  const payload: TeamWeekStats = { season, stats, snaps };
+  teamWeekStatsCache = { season, fetchedAtMs: now, payload };
+  return payload;
+}
+
+const teamWeekStatsSeasonSchema = z.number().int().min(2020).max(2100);
 
 const PROP_LINES_HTTP_CACHE_SECONDS = 15 * 60;
 
@@ -109,6 +169,19 @@ async function loadPfnTables(): Promise<PfnTables["tables"]> {
 export async function GET(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url, "https://localhost");
+    if (url.searchParams.has("team-week-stats")) {
+      const seasonRaw = url.searchParams.get("season");
+      const parsedSeason = teamWeekStatsSeasonSchema.safeParse(
+        seasonRaw == null || seasonRaw === "" ? Number.NaN : Number(seasonRaw),
+      );
+      if (!parsedSeason.success) {
+        return badRequest("Invalid or missing `season` query param.", parsedSeason.error.issues);
+      }
+      const payload = await loadTeamWeekStats(parsedSeason.data);
+      return json(payload, 200, {
+        "Cache-Control": `private, max-age=${PROP_LINES_HTTP_CACHE_SECONDS}`,
+      });
+    }
     const seasonRaw = url.searchParams.get("season");
     const weekRaw = url.searchParams.get("week");
     const parsedQuery = propWeekQuerySchema.safeParse({
