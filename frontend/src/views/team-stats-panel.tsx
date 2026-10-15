@@ -41,6 +41,12 @@ const TEAM_STATS_PALETTE = [
 ];
 const TEAM_STATS_OTHER_COLOR = "color-mix(in srgb, var(--chart-2) 65%, black)";
 
+/** Legend averages keep one decimal (season totals in the chart stay whole). */
+function formatTeamStatsAverage(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
 function isRosteredPlayer(
   player: { name: string; team: string; position: string },
   league: League,
@@ -112,6 +118,13 @@ export function TeamStatsPanel({
   }, [dataQuery.data, selectedPosition, selectedTeam, statId, throughWeek]);
 
   const stacks = useMemo(() => buildTeamStatsWeekStacks(rows), [rows]);
+
+  // Weeks the team actually produced in (excludes byes and the in-progress
+  // week) — the denominator for the legend's per-week average.
+  const playedWeeks = useMemo(
+    () => Math.max(1, stacks.filter((stack) => stack.total > 0).length),
+    [stacks],
+  );
 
   const playerMeta = useMemo(() => {
     const meta = new Map<string, { color: string; rostered: boolean }>();
@@ -191,7 +204,6 @@ export function TeamStatsPanel({
                 <div className="team-stats-bar">
                   {stack.segments.map((segment) => {
                     const meta = playerMeta.get(segment.key);
-                    const rostered = segment.key === "__other__" ? false : meta?.rostered ?? false;
                     return (
                       <span
                         key={segment.key}
@@ -201,8 +213,6 @@ export function TeamStatsPanel({
                           backgroundColor: segment.key === "__other__"
                             ? TEAM_STATS_OTHER_COLOR
                             : meta?.color ?? TEAM_STATS_OTHER_COLOR,
-                          outline: rostered ? "2px solid var(--foreground)" : undefined,
-                          outlineOffset: rostered ? "-2px" : undefined,
                         }}
                         title={`${segment.name} · W${stack.week}: ${formatTeamStatsValue(statId, segment.value)} (${formatTeamStatsPercent(segment.share * 100)})`}
                       />
@@ -223,7 +233,9 @@ export function TeamStatsPanel({
                 <li key={row.key} className={meta?.rostered ? "is-my-roster" : undefined}>
                   <i style={{ backgroundColor: meta?.color ?? TEAM_STATS_OTHER_COLOR }} />
                   <span className="team-stats-legend-name">{row.name}</span>
-                  <span className="team-stats-legend-total">{formatTeamStatsValue(statId, row.total)}</span>
+                  <span className="team-stats-legend-total">
+                    {formatTeamStatsAverage(row.total / playedWeeks)}
+                  </span>
                 </li>
               );
             })}
