@@ -124,7 +124,7 @@ export function TeamStatsPanel({
   const playedWeeks = useMemo(
     () => Math.max(
       1,
-      stacks.filter((stack) => stack.week < week && stack.total > 0).length,
+      stacks.filter((stack) => stack.week < week && stack.hasActivity).length,
     ),
     [stacks, week],
   );
