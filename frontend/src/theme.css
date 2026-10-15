@@ -2291,7 +2291,6 @@ button.league-partner-change:active { color: var(--link-active); }
   align-items: center;
   gap: 8px;
 }
-.comparison-data-side.left { flex-direction: row-reverse; }
 .comparison-data-value {
   flex: none;
   font-size: var(--type-body);
