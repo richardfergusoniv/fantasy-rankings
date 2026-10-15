@@ -53,7 +53,7 @@ type PropTableRow = {
   unders: number;
   cells: Array<{ week: number; actual: number; result: PropGameResult }>;
   rostered: boolean;
-  /** Rostered by another team in this league. */
+  /** On this week's opponent's roster in this league. */
   opponent: boolean;
   /** His players are played as unders; everyone else as overs. */
   direction: "over" | "under";
@@ -229,11 +229,13 @@ export function GameLinesPanel({
 
   const rosterIds = useMemo(() => rosterIdSet(league), [league]);
   const rosterKeys = useMemo(() => rosterMatchKeys(league), [league]);
+  // The opponent is this week's matchup opponent only, the same team
+  // the League page highlights — not every other roster in the league.
   const opponentIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const team of league.tradeTeams) {
-      if (team.isUser) continue;
-      for (const player of team.players) {
+    const opponent = league.opponentTeam;
+    if (opponent) {
+      for (const player of [...opponent.starters, ...opponent.bench]) {
         if (player.playerId) ids.add(player.playerId);
       }
     }
@@ -241,9 +243,9 @@ export function GameLinesPanel({
   }, [league]);
   const opponentKeys = useMemo(() => {
     const keys = new Set<string>();
-    for (const team of league.tradeTeams) {
-      if (team.isUser) continue;
-      for (const player of team.players) {
+    const opponent = league.opponentTeam;
+    if (opponent) {
+      for (const player of [...opponent.starters, ...opponent.bench]) {
         if (!player.name || !player.position) continue;
         keys.add(propPlayerMatchKey(player.name, player.team, player.position));
       }
