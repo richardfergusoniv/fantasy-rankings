@@ -413,43 +413,54 @@ export function buildOpponentGroupAllowances(
 
 /**
  * Each player's share of his own team's position-group production, per
- * stat: player total ÷ group total over the given rows, keyed
- * `${playerMatchKey}|${stat}`. Clamped to [0, 1] because small negative
- * rushing/receiving weeks can otherwise skew the ratio. Pairs whose
- * group produced nothing are omitted (no basis for a share).
+ * stat, keyed `${playerMatchKey}|${stat}`. The share is his average
+ * WEEKLY share across the weeks he actually played: season totals
+ * penalize players who missed time (their role when active is bigger
+ * than their total suggests), while raw per-game rates crown one-game
+ * wonders (a backup's single spot start). A missed week simply does not
+ * enter his average. Clamped to [0, 1]; weeks where the group produced
+ * nothing are skipped, and pairs with no usable week are omitted.
  */
 export function buildPlayerStatShares(
   stats: readonly TeamWeekStatRow[],
 ): Map<string, number> {
-  const playerTotals = new Map<string, number>();
-  const groupTotals = new Map<string, number>();
+  // Canonicalize once: propPlayerMatchKey uppercases but does not map
+  // variant codes (LA -> LAR), so every key must start from the same
+  // canonical team or Rams players silently get no share (CodeRabbit).
+  // team|position|stat|week -> the group's total that week.
+  const groupWeekTotals = new Map<string, number>();
+  // playerMatchKey|stat -> (week -> the player's actual that week).
+  const playerWeeks = new Map<string, Map<number, number>>();
+  // playerMatchKey|stat -> team|position|stat (for the group lookups).
+  const playerGroup = new Map<string, string>();
   for (const row of stats) {
-    // Canonicalize once: propPlayerMatchKey uppercases but does not map
-    // variant codes (LA -> LAR), so both keys must start from the same
-    // canonical team or Rams players silently get no share (CodeRabbit).
     const team = canonicalNflTeam(row.team);
     const playerKey = propPlayerMatchKey(row.name, team, row.position);
-    const groupKey = `${team}|${row.position}`;
     for (const stat of PROP_STAT_IDS) {
       const actual = propStatActual(stat, row);
       if (actual === null) continue;
+      const gwKey = `${team}|${row.position}|${stat}|${row.week}`;
+      groupWeekTotals.set(gwKey, (groupWeekTotals.get(gwKey) ?? 0) + actual);
       const pKey = `${playerKey}|${stat}`;
-      playerTotals.set(pKey, (playerTotals.get(pKey) ?? 0) + actual);
-      const gKey = `${groupKey}|${stat}`;
-      groupTotals.set(gKey, (groupTotals.get(gKey) ?? 0) + actual);
+      const weeks = playerWeeks.get(pKey) ?? new Map<number, number>();
+      weeks.set(row.week, actual);
+      playerWeeks.set(pKey, weeks);
+      playerGroup.set(pKey, `${team}|${row.position}|${stat}`);
     }
   }
   const shares = new Map<string, number>();
-  for (const [pKey, total] of playerTotals) {
-    // Match keys are `${position}|${team}|${name}`; the stat rides last.
-    const parts = pKey.split("|");
-    const stat = parts[parts.length - 1] ?? "";
-    const position = parts[0] ?? "";
-    const team = parts[1] ?? "";
-    const groupTotal = groupTotals.get(`${team}|${position}|${stat}`) ?? 0;
-    if (groupTotal <= 0) continue;
-    const share = Math.min(1, Math.max(0, total / groupTotal));
-    shares.set(pKey, Number(share.toFixed(4)));
+  for (const [pKey, weeks] of playerWeeks) {
+    const groupKey = playerGroup.get(pKey);
+    if (!groupKey) continue;
+    const weeklyShares: number[] = [];
+    for (const [week, actual] of weeks) {
+      const groupTotal = groupWeekTotals.get(`${groupKey}|${week}`) ?? 0;
+      if (groupTotal <= 0) continue;
+      weeklyShares.push(actual / groupTotal);
+    }
+    if (weeklyShares.length === 0) continue;
+    const mean = weeklyShares.reduce((sum, share) => sum + share, 0) / weeklyShares.length;
+    shares.set(pKey, Number(Math.min(1, Math.max(0, mean)).toFixed(4)));
   }
   return shares;
 }
