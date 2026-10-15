@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rankingsForLeagueFormats, type SeasonFormatRanking, type SeasonFormatTarget } from "./season-long-format.js";
+import { rankingsForLeagueFormats, redraftTwinFormat, type SeasonFormatRanking, type SeasonFormatTarget } from "./season-long-format.js";
 
 function row(formatKey: string, playerId: string, value: number, position: SeasonFormatRanking["position"] = "WR"): SeasonFormatRanking {
   return {
@@ -62,6 +62,17 @@ describe("rankingsForLeagueFormats", () => {
     const eleven = rows.filter((entry) => entry.formatKey === "redraft-1qb-11t-0.5ppr");
     expect(eleven.find((entry) => entry.playerId === "alpha")).toMatchObject({ value: 130, overallRank: 1 });
     expect(eleven.find((entry) => entry.playerId === "only-ten")).toMatchObject({ value: 40, overallRank: 2 });
+  });
+
+  it("builds the redraft twin of a dynasty format, keeping its settings", () => {
+    const twin = redraftTwinFormat(format("dynasty-2qb-12t-0.5ppr"));
+    expect(twin).toMatchObject({
+      key: "redraft-2qb-12t-0.5ppr",
+      isDynasty: false,
+      numQbs: 2,
+      numTeams: 12,
+      ppr: 0.5,
+    });
   });
 
   it("leaves an exact preset in place and still carries dynasty pick rows onto a synthesized format", () => {

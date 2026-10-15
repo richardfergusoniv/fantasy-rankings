@@ -72,7 +72,7 @@ import {
   type SleeperRoster,
 } from "./sleeper.js";
 import { activeBenchIds, eligibleForSlot, espnStatusToPhase, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, normalizeGamePhase, optimizeLineup, sumLiveForecast } from "./lineup-optimizer.js";
-import { rankingsForLeagueFormats } from "./season-long-format.js";
+import { rankingsForLeagueFormats, redraftTwinFormat } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
 import { selectProjectionFeed } from "./projection-fallback.js";
@@ -1845,14 +1845,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const fantasyCalcResult = await fantasyCalcPromise;
   const seasonLongFormats = sleeperLeagues.flatMap((league) => {
     const leagueFormat = seasonLongFormatForLeague(league);
-    return [
-      leagueFormat,
-      {
-        ...leagueFormat,
-        isDynasty: false,
-        key: `redraft-${leagueFormat.numQbs}qb-${leagueFormat.numTeams}t-${leagueFormat.ppr}ppr`,
-      },
-    ];
+    return [leagueFormat, redraftTwinFormat(leagueFormat)];
   });
   const seasonLongRankings = rankingsForLeagueFormats(fantasyCalcResult.rows, seasonLongFormats);
   if (fantasyCalcResult.failedPresets > 0) sourceErrors.push("FantasyCalc season-long rankings are unavailable for one or more league formats.");

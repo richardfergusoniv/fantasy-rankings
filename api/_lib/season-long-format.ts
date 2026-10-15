@@ -28,6 +28,20 @@ type PresetIdentity = {
 
 const formatKeyPattern = /^(dynasty|redraft)-(\d+)qb-(\d+)t-([\d.]+)ppr$/;
 
+/**
+ * The redraft twin of a format: same QB count, team count, and scoring,
+ * priced on the redraft market. The dashboard builder ships the twin of
+ * every league format so surfaces can flip a dynasty league to redraft
+ * values without another fetch.
+ */
+export function redraftTwinFormat<T extends SeasonFormatTarget>(format: T): T {
+  return {
+    ...format,
+    isDynasty: false,
+    key: `redraft-${format.numQbs}qb-${format.numTeams}t-${format.ppr}ppr`,
+  };
+}
+
 function presetIdentity(formatKey: string): PresetIdentity | null {
   const match = formatKeyPattern.exec(formatKey);
   if (!match) return null;

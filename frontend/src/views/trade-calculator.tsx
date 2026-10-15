@@ -33,6 +33,7 @@ import {
 } from "../league-trade";
 import { AggregateTradeHistory } from "../player-charts";
 import { SegmentedControl } from "../shared";
+import { redraftTwinFormat } from "../../../api/_lib/season-long-format";
 import { clearTradeSide, removeTradePlayer, restoreTradePlayer } from "../undo";
 import { useUnsavedLeaveWarning } from "../unsaved-input";
 
@@ -812,11 +813,27 @@ export function TradeCalculator({
   const [isResultOpen, setIsResultOpen] = useState(false);
   const userTeam = league.tradeTeams.find((team) => team.isUser) ?? league.tradeTeams[0];
   const [theirRosterId, setTheirRosterId] = useState<number | null>(null);
+  // Market mode in a dynasty league can flip between the league's dynasty
+  // values and its redraft twin (same teams/QBs/scoring, redraft market).
+  const [marketBasis, setMarketBasis] = useState<"dynasty" | "redraft">("dynasty");
+  const isDynastyLeague = league.seasonLongFormat.isDynasty;
+  const marketFormatKey = isDynastyLeague && marketBasis === "redraft"
+    ? redraftTwinFormat(league.seasonLongFormat).key
+    : league.seasonLongFormat.key;
   const assets = useMemo(() => dashboard.seasonLongRankings.filter((row) => row.formatKey === league.seasonLongFormat.key).sort((a, b) => a.overallRank - b.overallRank), [dashboard.seasonLongRankings, league.seasonLongFormat.key]);
+  const marketAssets = useMemo(() => dashboard.seasonLongRankings.filter((row) => row.formatKey === marketFormatKey).sort((a, b) => a.overallRank - b.overallRank), [dashboard.seasonLongRankings, marketFormatKey]);
   const teamPickAssets = useMemo(() => league.tradeTeams.flatMap((team) => team.ownedPicks), [league.tradeTeams]);
   const assetById = useMemo(() => new Map([...assets, ...teamPickAssets].map((asset) => [asset.playerId, asset])), [assets, teamPickAssets]);
-  const give = giveIds.flatMap((id) => assetById.get(id) ?? []);
-  const get = getIds.flatMap((id) => assetById.get(id) ?? []);
+  // Picks have no redraft market price, so under a redraft flip they are
+  // not resolvable in Market mode and drop out of both sides.
+  const marketAssetById = useMemo(
+    () => new Map([...marketAssets, ...(marketFormatKey === league.seasonLongFormat.key ? teamPickAssets : [])].map((asset) => [asset.playerId, asset])),
+    [marketAssets, marketFormatKey, league.seasonLongFormat.key, teamPickAssets],
+  );
+  const activeAssetById = tradeMode === "market" ? marketAssetById : assetById;
+  const activeAssets = tradeMode === "market" ? marketAssets : assets;
+  const give = giveIds.flatMap((id) => activeAssetById.get(id) ?? []);
+  const get = getIds.flatMap((id) => activeAssetById.get(id) ?? []);
   const selectedIds = new Set([...giveIds, ...getIds]);
   const mine = userTeam;
   const recordByRosterId = useMemo(() => {
@@ -832,20 +849,21 @@ export function TradeCalculator({
     return records;
   }, [league.powerRankingsDynasty, league.powerRankingsSeasonLong, league.powerRankingsWeek, league.tradeTeams]);
   const partner = league.tradeTeams.find((team) => team.rosterId === theirRosterId && team.rosterId !== mine?.rosterId) ?? null;
-  const unrestrictedAssets = assets.filter((asset) => !selectedIds.has(asset.playerId));
+  const unrestrictedAssets = activeAssets.filter((asset) => !selectedIds.has(asset.playerId));
 
   useEffect(() => {
     setTheirRosterId(null);
     setGiveIds([]);
     setGetIds([]);
     setIsResultOpen(false);
+    setMarketBasis("dynasty");
     clearTradePlayerRemoveUndoToast();
   }, [league.id]);
 
   useEffect(() => {
-    setGiveIds((ids) => ids.filter((id) => assetById.has(id)));
-    setGetIds((ids) => ids.filter((id) => assetById.has(id)));
-  }, [assetById]);
+    setGiveIds((ids) => ids.filter((id) => activeAssetById.has(id)));
+    setGetIds((ids) => ids.filter((id) => activeAssetById.has(id)));
+  }, [activeAssetById]);
 
   // League-adjusted mode only: drop selections that left a roster after a
   // same-league dashboard refresh. Market mode stays unrestricted.
@@ -920,6 +938,18 @@ export function TradeCalculator({
           label="Trade mode"
           className="trade-valuation-toggle"
         />
+        {tradeMode === "market" && isDynastyLeague ? (
+          <SegmentedControl
+            value={marketBasis}
+            options={[
+              { value: "dynasty", label: "Dynasty" },
+              { value: "redraft", label: "Redraft" },
+            ]}
+            onChange={setMarketBasis}
+            label="Market basis"
+            className="trade-valuation-toggle"
+          />
+        ) : null}
       </div>
 
       {tradeMode === "history" ? (
@@ -945,7 +975,7 @@ export function TradeCalculator({
             <TradeSide title="You give" assets={give} availableAssets={unrestrictedAssets} onAdd={(id) => addAsset(id, "give")} onRemove={(id) => removeSidePlayer("give", id)} onClear={() => clearSide("give")} onOpenPlayer={onOpenPlayer} />
             <TradeSide title="You get" assets={get} availableAssets={unrestrictedAssets} onAdd={(id) => addAsset(id, "get")} onRemove={(id) => removeSidePlayer("get", id)} onClear={() => clearSide("get")} onOpenPlayer={onOpenPlayer} />
           </div>
-          {assets.length === 0 ? <div className="empty-inline empty-stack"><strong>No trade values for this format.</strong><span>Choose another league to compare assets.</span></div> : null}
+          {marketAssets.length === 0 ? <div className="empty-inline empty-stack"><strong>No trade values for this format.</strong><span>Choose another league to compare assets.</span></div> : null}
           <div className="trade-calculate-wrap">
             <button type="button" className="trade-calculate-button" disabled={give.length === 0 || get.length === 0} onClick={() => setIsResultOpen(true)}>Calculate trade</button>
           </div>
@@ -953,8 +983,8 @@ export function TradeCalculator({
             <TradeValueDialog
               give={give}
               get={get}
-              formatKey={league.seasonLongFormat.key}
-              marketAssets={assets}
+              formatKey={marketFormatKey}
+              marketAssets={marketAssets}
               onClose={() => setIsResultOpen(false)}
             />
           ) : null}
