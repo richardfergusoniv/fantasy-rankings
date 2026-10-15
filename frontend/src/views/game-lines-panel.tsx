@@ -21,10 +21,6 @@ import {
 import {
   TEAM_WEEK_STATS_STALE_MS,
   canonicalNflTeam,
-  nflversePlayerWeekStatsUrl,
-  nflverseSnapCountsUrl,
-  parsePlayerWeekStatsCsv,
-  parseTeamWeekSnapCountsCsv,
   type TeamWeekStatRow,
 } from "../../../api/_lib/nflverse-team-week-stats";
 import {
@@ -199,22 +195,9 @@ export function GameLinesPanel({
 
   const historyQuery = useQuery({
     queryKey: ["nflverse-team-week-stats", season],
-    queryFn: async () => {
-      const [statsResult, snapsResult] = await Promise.allSettled([
-        fetchText(nflversePlayerWeekStatsUrl(season)),
-        fetchText(nflverseSnapCountsUrl(season)),
-      ]);
-      const stats = statsResult.status === "fulfilled"
-        ? parsePlayerWeekStatsCsv(statsResult.value)
-        : [];
-      const snaps = snapsResult.status === "fulfilled"
-        ? parseTeamWeekSnapCountsCsv(snapsResult.value)
-        : [];
-      if (stats.length === 0 && snaps.length === 0) {
-        throw new Error("props history parse failed");
-      }
-      return { stats, snaps };
-    },
+    // Same server-parsed payload as the Team stats panel (shared query
+    // key): GitHub release assets send no CORS headers for browser fetch.
+    queryFn: () => api.getTeamWeekStats({ season }),
     staleTime: TEAM_WEEK_STATS_STALE_MS,
     gcTime: TEAM_WEEK_STATS_STALE_MS * 2,
     retry: 1,
