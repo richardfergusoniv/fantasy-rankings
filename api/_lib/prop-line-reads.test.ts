@@ -240,13 +240,14 @@ describe("buildOpponentGroupAllowances", () => {
 });
 
 describe("buildPlayerStatShares", () => {
-  it("averages each player's weekly share of his group", () => {
+  it("averages each player's weekly share of his group's opportunities", () => {
     const shares = buildPlayerStatShares([
-      // Week 1: Alpha 60 of 100 (0.6); week 2: Alpha 30 of 90 (1/3).
-      weekRow({ week: 1, name: "Alpha", team: "CIN", position: "WR", receivingYards: 60 }),
-      weekRow({ week: 2, name: "Alpha", team: "CIN", position: "WR", receivingYards: 30 }),
-      weekRow({ week: 1, name: "Beta", team: "CIN", position: "WR", receivingYards: 40 }),
-      weekRow({ week: 2, name: "Beta", team: "CIN", position: "WR", receivingYards: 60 }),
+      // Receiving shares run on targets: week 1 Alpha 6 of 10 (0.6);
+      // week 2 Alpha 3 of 9 (1/3).
+      weekRow({ week: 1, name: "Alpha", team: "CIN", position: "WR", targets: 6 }),
+      weekRow({ week: 2, name: "Alpha", team: "CIN", position: "WR", targets: 3 }),
+      weekRow({ week: 1, name: "Beta", team: "CIN", position: "WR", targets: 4 }),
+      weekRow({ week: 2, name: "Beta", team: "CIN", position: "WR", targets: 6 }),
     ]);
     expect(shares.get(`${propPlayerMatchKey("Alpha", "CIN", "WR")}|rec_yards`)).toBe(0.4667);
     expect(shares.get(`${propPlayerMatchKey("Beta", "CIN", "WR")}|rec_yards`)).toBe(0.5333);
@@ -256,36 +257,58 @@ describe("buildPlayerStatShares", () => {
 
   it("does not penalize a player for weeks he missed", () => {
     const shares = buildPlayerStatShares([
-      weekRow({ week: 1, name: "Alpha", team: "CIN", position: "WR", receivingYards: 60 }),
-      weekRow({ week: 1, name: "Beta", team: "CIN", position: "WR", receivingYards: 40 }),
-      // Week 2: Alpha is out; Beta takes the whole group.
-      weekRow({ week: 2, name: "Beta", team: "CIN", position: "WR", receivingYards: 100 }),
-      weekRow({ week: 3, name: "Alpha", team: "CIN", position: "WR", receivingYards: 90 }),
-      weekRow({ week: 3, name: "Beta", team: "CIN", position: "WR", receivingYards: 60 }),
+      weekRow({ week: 1, name: "Alpha", team: "CIN", position: "WR", targets: 6 }),
+      weekRow({ week: 1, name: "Beta", team: "CIN", position: "WR", targets: 4 }),
+      // Week 2: Alpha is out; Beta takes every target.
+      weekRow({ week: 2, name: "Beta", team: "CIN", position: "WR", targets: 10 }),
+      weekRow({ week: 3, name: "Alpha", team: "CIN", position: "WR", targets: 9 }),
+      weekRow({ week: 3, name: "Beta", team: "CIN", position: "WR", targets: 6 }),
     ]);
     // Alpha's weekly shares are 0.6 and 0.6 — the missed week never
-    // enters his average. (Season totals would say 150/350 = 0.43.)
+    // enters his average. (Season totals would say 15/29 = 0.52.)
     expect(shares.get(`${propPlayerMatchKey("Alpha", "CIN", "WR")}|rec_yards`)).toBe(0.6);
     expect(shares.get(`${propPlayerMatchKey("Beta", "CIN", "WR")}|rec_yards`)).toBe(0.6);
+  });
+
+  it("follows opportunities, not production, for the share", () => {
+    const shares = buildPlayerStatShares([
+      // Deep threat: 2 targets, one long TD. Possession guy: 8 targets.
+      weekRow({ week: 1, name: "Deep", team: "CIN", position: "WR", targets: 2, receivingYards: 80 }),
+      weekRow({ week: 1, name: "Possession", team: "CIN", position: "WR", targets: 8, receivingYards: 40 }),
+    ]);
+    // Yardage share would be 0.67/0.33; the opportunity share is 0.2/0.8.
+    expect(shares.get(`${propPlayerMatchKey("Deep", "CIN", "WR")}|rec_yards`)).toBe(0.2);
+    expect(shares.get(`${propPlayerMatchKey("Possession", "CIN", "WR")}|rec_yards`)).toBe(0.8);
+  });
+
+  it("uses pass attempts for quarterback shares", () => {
+    const shares = buildPlayerStatShares([
+      weekRow({ week: 1, name: "Starter", team: "CIN", position: "QB", passAttempts: 30 }),
+      weekRow({ week: 1, name: "Relief", team: "CIN", position: "QB", passAttempts: 10 }),
+    ]);
+    expect(shares.get(`${propPlayerMatchKey("Starter", "CIN", "QB")}|pass_yards`)).toBe(0.75);
+    expect(shares.get(`${propPlayerMatchKey("Relief", "CIN", "QB")}|pass_yards`)).toBe(0.25);
   });
 
   it("canonicalizes variant team codes so both share keys agree", () => {
     // nflverse calls the Rams "LA"; the canonical code is LAR.
     const shares = buildPlayerStatShares([
-      weekRow({ week: 1, name: "Ram One", team: "LA", position: "WR", receivingYards: 75 }),
-      weekRow({ week: 1, name: "Ram Two", team: "LA", position: "WR", receivingYards: 25 }),
+      weekRow({ week: 1, name: "Ram One", team: "LA", position: "WR", targets: 6 }),
+      weekRow({ week: 1, name: "Ram Two", team: "LA", position: "WR", targets: 2 }),
     ]);
     expect(shares.get(`${propPlayerMatchKey("Ram One", "LAR", "WR")}|rec_yards`)).toBe(0.75);
     expect(shares.get(`${propPlayerMatchKey("Ram Two", "LAR", "WR")}|rec_yards`)).toBe(0.25);
   });
 
-  it("clamps negative player totals to a zero share", () => {
+  it("uses carries for rushing shares", () => {
     const shares = buildPlayerStatShares([
-      weekRow({ week: 1, name: "Neg", team: "CIN", position: "RB", rushingYards: -5 }),
-      weekRow({ week: 1, name: "Pos", team: "CIN", position: "RB", rushingYards: 105 }),
+      weekRow({ week: 1, name: "Bellcow", team: "CIN", position: "RB", carries: 18, rushingYards: 60 }),
+      weekRow({ week: 1, name: "Changeup", team: "CIN", position: "RB", carries: 6, rushingYards: 55 }),
     ]);
-    expect(shares.get(`${propPlayerMatchKey("Neg", "CIN", "RB")}|rush_yards`)).toBe(0);
-    expect(shares.get(`${propPlayerMatchKey("Pos", "CIN", "RB")}|rush_yards`)).toBe(1);
+    // The changeup was more efficient per carry; the share still follows
+    // the workload split (18 of 24 carries).
+    expect(shares.get(`${propPlayerMatchKey("Bellcow", "CIN", "RB")}|rush_yards`)).toBe(0.75);
+    expect(shares.get(`${propPlayerMatchKey("Changeup", "CIN", "RB")}|rush_yards`)).toBe(0.25);
   });
 });
 
