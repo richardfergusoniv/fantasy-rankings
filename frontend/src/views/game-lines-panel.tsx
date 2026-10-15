@@ -374,10 +374,13 @@ export function GameLinesPanel({
           cmp = a.line - b.line;
           break;
         case "move": {
-          if (a.move === null && b.move === null) cmp = 0;
-          else if (a.move === null) return 1;
-          else if (b.move === null) return -1;
-          else cmp = a.move - b.move;
+          // formatMove displays 0 as "—", so a zero move sorts as missing.
+          const aMove = a.move === 0 ? null : a.move;
+          const bMove = b.move === 0 ? null : b.move;
+          if (aMove === null && bMove === null) cmp = 0;
+          else if (aMove === null) return 1;
+          else if (bMove === null) return -1;
+          else cmp = aMove - bMove;
           break;
         }
         case "odds": {
