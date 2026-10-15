@@ -220,7 +220,18 @@ describe("buildOpponentTopAllowances", () => {
       weekRow({ week: 1, name: "No Opp", team: "BUF", opponent: "", position: "WR", receivingYards: 200 }),
     ]);
     expect(allowances.get(opponentAllowanceKey("KC", "WR", "rec_yards"))).toEqual({ allowed: 90, games: 2 });
-    expect(allowances.get(opponentAllowanceKey("KC", "RB", "rec_yards"))).toEqual({ allowed: 55, games: 1 });
+    // KC played 2 games; no RB recorded receiving yards against them in
+    // week 2, so that game counts as 0 in the average.
+    expect(allowances.get(opponentAllowanceKey("KC", "RB", "rec_yards"))).toEqual({ allowed: 27.5, games: 2 });
     expect(allowances.get(opponentAllowanceKey("BUF", "WR", "rec_yards"))).toBeUndefined();
+  });
+
+  it("counts games where the defense faced no recorded player at the position as allowing 0", () => {
+    const allowances = buildOpponentTopAllowances([
+      weekRow({ week: 1, name: "WR One", team: "BUF", opponent: "KC", position: "WR", receivingYards: 110 }),
+      // Week 2 vs KC: only a QB row — KC played, but no WR recorded anything.
+      weekRow({ week: 2, name: "QB Two", team: "DEN", opponent: "KC", position: "QB", passingYards: 200 }),
+    ]);
+    expect(allowances.get(opponentAllowanceKey("KC", "WR", "rec_yards"))).toEqual({ allowed: 55, games: 2 });
   });
 });
