@@ -29,13 +29,13 @@ import type { League } from "../dashboard-types";
 const TEAM_STATS_PALETTE = [
   "var(--chart-1)",
   "var(--chart-5)",
-  "var(--accent)",
-  "color-mix(in srgb, var(--chart-5) 55%, white)",
   "var(--chart-2)",
-  "var(--accent-2)",
+  "var(--accent)",
   "color-mix(in srgb, var(--chart-5) 60%, black)",
+  "color-mix(in srgb, var(--chart-2) 45%, white)",
+  "var(--accent-2)",
+  "color-mix(in srgb, var(--chart-5) 55%, white)",
   "var(--input)",
-  "color-mix(in srgb, var(--chart-1) 45%, var(--chart-2))",
   "color-mix(in srgb, var(--chart-5) 40%, var(--chart-2))",
 ];
 const TEAM_STATS_OTHER_COLOR = "var(--opponent-row)";
