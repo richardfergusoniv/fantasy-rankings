@@ -123,6 +123,8 @@ export type PropHistory = {
   pushes: number;
   /** overs / (overs + unders); null when no decided games. */
   hitRate: number | null;
+  /** unders / (overs + unders); null when no decided games. */
+  underRate: number | null;
   /** Per-game results vs the current line, oldest → newest. */
   cells: PropGameCell[];
 };
@@ -277,7 +279,7 @@ export function buildPropHistory(
     });
   }
   if (cells.length === 0 || !Number.isFinite(line)) {
-    return { games: 0, overs: 0, unders: 0, pushes: 0, hitRate: null, cells: [] };
+    return { games: 0, overs: 0, unders: 0, pushes: 0, hitRate: null, underRate: null, cells: [] };
   }
   const overs = cells.filter((cell) => cell.result === "over").length;
   const unders = cells.filter((cell) => cell.result === "under").length;
@@ -289,6 +291,7 @@ export function buildPropHistory(
     unders,
     pushes,
     hitRate: decided > 0 ? Number((overs / decided).toFixed(3)) : null,
+    underRate: decided > 0 ? Number((unders / decided).toFixed(3)) : null,
     cells,
   };
 }
