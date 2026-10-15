@@ -350,8 +350,8 @@ export function buildPropEdgeHistory(
   };
 }
 
-export type OpponentTopAllowance = {
-  /** Mean of the per-game maxima (see below). */
+export type OpponentAllowance = {
+  /** Mean of the per-game position-group totals allowed (see below). */
   allowed: number;
   /** Games (weeks) the average is built from. */
   games: number;
@@ -363,19 +363,22 @@ export function opponentAllowanceKey(defenseTeam: string, position: string, stat
 }
 
 /**
- * What a defense has allowed to the TOP opposing player at each position,
- * per game: for every (defense, week) take the best single-player actual
- * among opponents at the position, then average those maxima across games.
- * Unlike a position-group total, this is on the same scale as one player's
- * line/projection, so a projection can be spread against it directly.
+ * What a defense allows an entire position group per game: for every
+ * (defense, week) sum every opposing player's actual at the position,
+ * then average those group totals across the games the defense played
+ * (a game where the group recorded nothing counts as 0, per PR #128).
+ * A player's personal Opp figure is this total times his share of his
+ * own group's production — see buildPlayerStatShares. Per-coverage (CB)
+ * matchup data does not exist in nflverse, so the share split is the
+ * finest granularity available.
  */
-export function buildOpponentTopAllowances(
+export function buildOpponentGroupAllowances(
   stats: readonly TeamWeekStatRow[],
-): Map<string, OpponentTopAllowance> {
+): Map<string, OpponentAllowance> {
   // defense -> weeks it actually played (appeared as an opponent).
   const defenseWeeks = new Map<string, Set<number>>();
-  // defense|position|stat|week -> best opposing actual that week.
-  const maxima = new Map<string, number>();
+  // defense|position|stat|week -> the whole group's actual that week.
+  const gameTotals = new Map<string, number>();
   // Position|stat pairs that produced a value for at least one defense.
   const applicablePairs = new Set<string>();
   for (const row of stats) {
@@ -389,19 +392,15 @@ export function buildOpponentTopAllowances(
       if (actual === null) continue;
       applicablePairs.add(`${row.position}|${stat}`);
       const key = `${defense}|${row.position}|${stat}|${row.week}`;
-      const current = maxima.get(key);
-      if (current === undefined || actual > current) maxima.set(key, actual);
+      gameTotals.set(key, (gameTotals.get(key) ?? 0) + actual);
     }
   }
-  const output = new Map<string, OpponentTopAllowance>();
+  const output = new Map<string, OpponentAllowance>();
   for (const [defense, weeks] of defenseWeeks) {
     for (const pair of applicablePairs) {
-      // A game the defense played with no recorded opposing player at this
-      // position/stat counts as allowing 0 — it still belongs in the
-      // denominator (CodeRabbit, PR #128).
       let sum = 0;
       for (const week of weeks) {
-        sum += maxima.get(`${defense}|${pair}|${week}`) ?? 0;
+        sum += gameTotals.get(`${defense}|${pair}|${week}`) ?? 0;
       }
       output.set(`${defense}|${pair}`, {
         allowed: Number((sum / weeks.size).toFixed(3)),
@@ -413,10 +412,50 @@ export function buildOpponentTopAllowances(
 }
 
 /**
- * The Edge shown in the props table: the player's projection and the
- * opponent allowance are two independent estimates of the same game, so
- * they get equal weight — edge = mean(projection, allowance) − line.
- * Without an allowance it falls back to projection − line.
+ * Each player's share of his own team's position-group production, per
+ * stat: player total ÷ group total over the given rows, keyed
+ * `${playerMatchKey}|${stat}`. Clamped to [0, 1] because small negative
+ * rushing/receiving weeks can otherwise skew the ratio. Pairs whose
+ * group produced nothing are omitted (no basis for a share).
+ */
+export function buildPlayerStatShares(
+  stats: readonly TeamWeekStatRow[],
+): Map<string, number> {
+  const playerTotals = new Map<string, number>();
+  const groupTotals = new Map<string, number>();
+  for (const row of stats) {
+    const playerKey = propPlayerMatchKey(row.name, row.team, row.position);
+    const groupKey = `${canonicalNflTeam(row.team)}|${row.position}`;
+    for (const stat of PROP_STAT_IDS) {
+      const actual = propStatActual(stat, row);
+      if (actual === null) continue;
+      const pKey = `${playerKey}|${stat}`;
+      playerTotals.set(pKey, (playerTotals.get(pKey) ?? 0) + actual);
+      const gKey = `${groupKey}|${stat}`;
+      groupTotals.set(gKey, (groupTotals.get(gKey) ?? 0) + actual);
+    }
+  }
+  const shares = new Map<string, number>();
+  for (const [pKey, total] of playerTotals) {
+    // Match keys are `${position}|${team}|${name}`; the stat rides last.
+    const parts = pKey.split("|");
+    const stat = parts[parts.length - 1] ?? "";
+    const position = parts[0] ?? "";
+    const team = parts[1] ?? "";
+    const groupTotal = groupTotals.get(`${team}|${position}|${stat}`) ?? 0;
+    if (groupTotal <= 0) continue;
+    const share = Math.min(1, Math.max(0, total / groupTotal));
+    shares.set(pKey, Number(share.toFixed(4)));
+  }
+  return shares;
+}
+
+/**
+ * The Edge shown in the props table: the player's projection and his
+ * share-adjusted opponent allowance are two independent estimates of
+ * the same game, so they get equal weight — edge = mean(projection,
+ * allowance) − line. Without an allowance it falls back to
+ * projection − line.
  */
 export function blendedPropEdge(
   projection: number | null,
