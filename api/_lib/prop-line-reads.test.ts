@@ -240,16 +240,33 @@ describe("buildOpponentGroupAllowances", () => {
 });
 
 describe("buildPlayerStatShares", () => {
-  it("splits a group's production across its players", () => {
+  it("averages each player's weekly share of his group", () => {
     const shares = buildPlayerStatShares([
+      // Week 1: Alpha 60 of 100 (0.6); week 2: Alpha 30 of 90 (1/3).
       weekRow({ week: 1, name: "Alpha", team: "CIN", position: "WR", receivingYards: 60 }),
       weekRow({ week: 2, name: "Alpha", team: "CIN", position: "WR", receivingYards: 30 }),
-      weekRow({ week: 1, name: "Beta", team: "CIN", position: "WR", receivingYards: 60 }),
+      weekRow({ week: 1, name: "Beta", team: "CIN", position: "WR", receivingYards: 40 }),
+      weekRow({ week: 2, name: "Beta", team: "CIN", position: "WR", receivingYards: 60 }),
     ]);
-    expect(shares.get(`${propPlayerMatchKey("Alpha", "CIN", "WR")}|rec_yards`)).toBe(0.6);
-    expect(shares.get(`${propPlayerMatchKey("Beta", "CIN", "WR")}|rec_yards`)).toBe(0.4);
+    expect(shares.get(`${propPlayerMatchKey("Alpha", "CIN", "WR")}|rec_yards`)).toBe(0.4667);
+    expect(shares.get(`${propPlayerMatchKey("Beta", "CIN", "WR")}|rec_yards`)).toBe(0.5333);
     // A different team/position group is independent.
     expect(shares.get(`${propPlayerMatchKey("Alpha", "CIN", "WR")}|pass_yards`)).toBeUndefined();
+  });
+
+  it("does not penalize a player for weeks he missed", () => {
+    const shares = buildPlayerStatShares([
+      weekRow({ week: 1, name: "Alpha", team: "CIN", position: "WR", receivingYards: 60 }),
+      weekRow({ week: 1, name: "Beta", team: "CIN", position: "WR", receivingYards: 40 }),
+      // Week 2: Alpha is out; Beta takes the whole group.
+      weekRow({ week: 2, name: "Beta", team: "CIN", position: "WR", receivingYards: 100 }),
+      weekRow({ week: 3, name: "Alpha", team: "CIN", position: "WR", receivingYards: 90 }),
+      weekRow({ week: 3, name: "Beta", team: "CIN", position: "WR", receivingYards: 60 }),
+    ]);
+    // Alpha's weekly shares are 0.6 and 0.6 — the missed week never
+    // enters his average. (Season totals would say 150/350 = 0.43.)
+    expect(shares.get(`${propPlayerMatchKey("Alpha", "CIN", "WR")}|rec_yards`)).toBe(0.6);
+    expect(shares.get(`${propPlayerMatchKey("Beta", "CIN", "WR")}|rec_yards`)).toBe(0.6);
   });
 
   it("canonicalizes variant team codes so both share keys agree", () => {
