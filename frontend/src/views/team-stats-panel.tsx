@@ -20,18 +20,26 @@ import { api } from "../api";
 import type { League } from "../dashboard-types";
 
 /**
- * Player colors for the stacked bars. Anchored on the app's two saturated
- * chart hues (amber chart-1, blue chart-5) and extended at the same vivid
- * register — categorical data colors need high chroma to stay legible as
- * thin segments on the dark surface, which the muted UI tokens can't do.
- * Consecutive ranks jump hue families so neighbors never blend. Green and
- * red stay reserved for good/bad semantics (hit colors, stat strength).
+ * Player colors for the stacked bars, built from the app's three chart
+ * families (amber chart-1, blue chart-5, slate chart-2). Each family spans
+ * its full lightness range — pale tint, base, deep shade — and the rank
+ * order cycles families while alternating ends, so a hue only ever repeats
+ * at the opposite end of its scale (bright gold vs deep bronze, never two
+ * mid-tones side by side). Green and red stay reserved for good/bad.
  */
 const TEAM_STATS_PALETTE = [
-  "#f0b429", "#60a5fa", "#f472b6", "#22d3ee", "#a78bfa",
-  "#fb923c", "#e879f9", "#f5c16a", "#93c5fd", "#c4b5fd",
+  "var(--chart-1)",
+  "color-mix(in srgb, var(--chart-5) 45%, black)",
+  "color-mix(in srgb, var(--chart-2) 40%, white)",
+  "color-mix(in srgb, var(--chart-1) 45%, black)",
+  "var(--chart-5)",
+  "color-mix(in srgb, var(--chart-2) 50%, black)",
+  "var(--accent)",
+  "color-mix(in srgb, var(--chart-5) 40%, white)",
+  "var(--chart-2)",
+  "color-mix(in srgb, var(--chart-5) 35%, var(--chart-2))",
 ];
-const TEAM_STATS_OTHER_COLOR = "#64748b";
+const TEAM_STATS_OTHER_COLOR = "color-mix(in srgb, var(--chart-2) 65%, black)";
 
 function isRosteredPlayer(
   player: { name: string; team: string; position: string },
