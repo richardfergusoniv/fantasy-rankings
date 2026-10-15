@@ -297,6 +297,15 @@ export function buildPropHistory(
 }
 
 /**
+ * Implied probability of an American odds price: -150 -> 0.6, +150 -> 0.4.
+ * Null for missing or invalid prices (0 is not a real price).
+ */
+export function impliedProbability(odds: number | null): number | null {
+  if (odds === null || !Number.isFinite(odds) || odds === 0) return null;
+  return odds < 0 ? -odds / (-odds + 100) : 100 / (odds + 100);
+}
+
+/**
  * Props table order: best over hit rate first. Rows with no decided games
  * (hitRate null) sink below every rated row, including a 0% rate; ties
  * fall back to player name, then stat.
