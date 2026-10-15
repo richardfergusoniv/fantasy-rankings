@@ -28,6 +28,7 @@ import {
   blendedPropEdge,
   buildOpponentGroupAllowances,
   buildPlayerStatShares,
+  propOpportunityLabel,
   buildPropEdgeHistory,
   indexWeekStatsByPlayer,
   isPropStatId,
@@ -36,6 +37,7 @@ import {
   propStatDef,
   type PropGameResult,
   type PropPosition,
+  type PropStatId,
 } from "../../../api/_lib/prop-line-reads";
 import { api } from "../api";
 import type { League } from "../dashboard-types";
@@ -49,7 +51,7 @@ type PropTableRow = {
   name: string;
   team: string | null;
   position: string;
-  stat: string;
+  stat: PropStatId;
   statLabel: string;
   line: number;
   move: number | null;
@@ -549,7 +551,7 @@ export function GameLinesPanel({
                           ) : (
                             <span
                               title={row.oppTotal !== null && row.oppShare !== null
-                                ? `${row.opponent} allows ${formatPropNumber(row.oppTotal, 1)} per game to ${row.position}s (${row.oppGames} games); ${row.name} takes ${Math.round(row.oppShare * 100)}% of ${row.team ?? "his team"}'s ${row.position} production in this stat`
+                                ? `${row.opponent} allows ${formatPropNumber(row.oppTotal, 1)} per game to ${row.position}s (${row.oppGames} games); ${row.name} gets ${Math.round(row.oppShare * 100)}% of ${row.team ?? "his team"}'s ${row.position} ${propOpportunityLabel(row.stat)} when active`
                                 : undefined}
                             >
                               {formatPropNumber(row.oppAllowed, 1)}
