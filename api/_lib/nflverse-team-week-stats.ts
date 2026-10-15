@@ -406,6 +406,12 @@ export type TeamStatsWeekStack = {
   week: number;
   /** Sum of the week's values across the position group. */
   total: number;
+  /**
+   * Whether any player recorded a nonzero value that week. Negative
+   * values (a QB's fantasy_ppr after interceptions) count as activity
+   * even though they never enter the positive-only bar total.
+   */
+  hasActivity: boolean;
   /** Largest first; sub-`minShare` players are merged into a trailing "Other". */
   segments: TeamStatsStackSegment[];
 };
@@ -426,14 +432,17 @@ export function buildTeamStatsWeekStacks(
   for (const week of [...weekNumbers].sort((a, b) => a - b)) {
     const segments: TeamStatsStackSegment[] = [];
     let total = 0;
+    let hasActivity = false;
     for (const row of rows) {
       const cell = row.weeks.find((candidate) => candidate.week === week);
-      if (!cell || cell.value <= 0) continue;
+      if (!cell) continue;
+      if (cell.value !== 0) hasActivity = true;
+      if (cell.value <= 0) continue;
       total += cell.value;
       segments.push({ key: row.key, name: row.name, value: cell.value, share: 0 });
     }
     if (total <= 0) {
-      stacks.push({ week, total: 0, segments: [] });
+      stacks.push({ week, total: 0, hasActivity, segments: [] });
       continue;
     }
     segments.sort((left, right) => right.value - left.value);
@@ -450,7 +459,7 @@ export function buildTeamStatsWeekStacks(
     if (otherValue > 0) {
       kept.push({ key: "__other__", name: "Other", value: otherValue, share: otherValue / total });
     }
-    stacks.push({ week, total: Number(total.toFixed(2)), segments: kept });
+    stacks.push({ week, total: Number(total.toFixed(2)), hasActivity, segments: kept });
   }
   return stacks;
 }
