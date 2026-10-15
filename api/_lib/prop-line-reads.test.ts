@@ -252,6 +252,16 @@ describe("buildPlayerStatShares", () => {
     expect(shares.get(`${propPlayerMatchKey("Alpha", "CIN", "WR")}|pass_yards`)).toBeUndefined();
   });
 
+  it("canonicalizes variant team codes so both share keys agree", () => {
+    // nflverse calls the Rams "LA"; the canonical code is LAR.
+    const shares = buildPlayerStatShares([
+      weekRow({ week: 1, name: "Ram One", team: "LA", position: "WR", receivingYards: 75 }),
+      weekRow({ week: 1, name: "Ram Two", team: "LA", position: "WR", receivingYards: 25 }),
+    ]);
+    expect(shares.get(`${propPlayerMatchKey("Ram One", "LAR", "WR")}|rec_yards`)).toBe(0.75);
+    expect(shares.get(`${propPlayerMatchKey("Ram Two", "LAR", "WR")}|rec_yards`)).toBe(0.25);
+  });
+
   it("clamps negative player totals to a zero share", () => {
     const shares = buildPlayerStatShares([
       weekRow({ week: 1, name: "Neg", team: "CIN", position: "RB", rushingYards: -5 }),
