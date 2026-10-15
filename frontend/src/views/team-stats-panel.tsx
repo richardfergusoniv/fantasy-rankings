@@ -6,18 +6,25 @@ import {
   TEAM_STATS_STAT_OPTIONS,
   TEAM_WEEK_STATS_STALE_MS,
   buildTeamStatsTable,
+  buildTeamStatsWeekStacks,
   canonicalNflTeam,
   defaultTeamStatsPosition,
   defaultTeamStatsTeam,
   formatTeamStatsPercent,
   formatTeamStatsValue,
   normalizeTeamStatsPlayerName,
-  teamStatsStatDef,
   type TeamStatsPosition,
   type TeamStatsStatId,
 } from "../../../api/_lib/nflverse-team-week-stats";
 import { api } from "../api";
 import type { League } from "../dashboard-types";
+
+/** Categorical player colors for the stacked bars (never the good/bad green/red). */
+const TEAM_STATS_PALETTE = [
+  "#f0b429", "#60a5fa", "#a78bfa", "#fb923c", "#22d3ee",
+  "#f472b6", "#818cf8", "#facc15", "#9aa3b5", "#e879f9",
+];
+const TEAM_STATS_OTHER_COLOR = "#4b5563";
 
 function isRosteredPlayer(
   player: { name: string; team: string; position: string },
@@ -64,7 +71,6 @@ export function TeamStatsPanel({
   const selectedPosition = userPosition ?? defaultPosition;
 
   const [statId, setStatId] = useState<TeamStatsStatId>("snaps");
-  const statDef = teamStatsStatDef(statId);
 
   const throughWeek = Math.max(1, week);
 
@@ -90,10 +96,18 @@ export function TeamStatsPanel({
     });
   }, [dataQuery.data, selectedPosition, selectedTeam, statId, throughWeek]);
 
-  const weekColumns = useMemo(
-    () => Array.from({ length: throughWeek }, (_, index) => index + 1),
-    [throughWeek],
-  );
+  const stacks = useMemo(() => buildTeamStatsWeekStacks(rows), [rows]);
+
+  const playerMeta = useMemo(() => {
+    const meta = new Map<string, { color: string; rostered: boolean }>();
+    rows.forEach((row, index) => {
+      meta.set(row.key, {
+        color: TEAM_STATS_PALETTE[index % TEAM_STATS_PALETTE.length]!,
+        rostered: isRosteredPlayer(row, league),
+      });
+    });
+    return meta;
+  }, [league, rows]);
 
   const unavailable = dataQuery.isError;
   const loading = dataQuery.isPending;
@@ -155,51 +169,49 @@ export function TeamStatsPanel({
       ) : rows.length === 0 ? (
         <p className="monitor-empty">No players</p>
       ) : (
-        <div className="team-stats-scroll">
-          <table className="team-stats-table">
-            <thead>
-              <tr>
-                <th scope="col" className="team-stats-player-col">{selectedPosition}</th>
-                {weekColumns.map((weekNumber) => (
-                  <th key={weekNumber} scope="col">{`Wk ${weekNumber}`}</th>
-                ))}
-                <th scope="col" className="team-stats-total-col">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const rostered = isRosteredPlayer(row, league);
-                return (
-                  <tr key={row.key} className={rostered ? "is-my-roster" : undefined}>
-                    <th scope="row" className="team-stats-player-col">
-                      <span className="team-stats-player-name">{row.name}</span>
-                    </th>
-                    {row.weeks.map((cell) => {
-                      const percent = cell.percent;
-                      const showStack = Boolean(statDef.percentOf) && percent !== null;
-                      return (
-                        <td key={cell.week}>
-                          {showStack && percent !== null ? (
-                            <span className="team-stats-stack">
-                              <span className="team-stats-count">{formatTeamStatsValue(statId, cell.value)}</span>
-                              <strong className="team-stats-pct">{formatTeamStatsPercent(percent)}</strong>
-                            </span>
-                          ) : (
-                            <span className="team-stats-value">
-                              {formatTeamStatsValue(statId, cell.value)}
-                            </span>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="team-stats-total-col">
-                      <span className="team-stats-value">{formatTeamStatsValue(statId, row.total)}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="team-stats-chart-wrap">
+          <div className="team-stats-chart">
+            {stacks.map((stack) => (
+              <div key={stack.week} className="team-stats-week">
+                <div className="team-stats-bar">
+                  {stack.segments.map((segment) => {
+                    const meta = playerMeta.get(segment.key);
+                    const rostered = segment.key === "__other__" ? false : meta?.rostered ?? false;
+                    return (
+                      <span
+                        key={segment.key}
+                        className="team-stats-seg"
+                        style={{
+                          height: `${segment.share * 100}%`,
+                          backgroundColor: segment.key === "__other__"
+                            ? TEAM_STATS_OTHER_COLOR
+                            : meta?.color ?? TEAM_STATS_OTHER_COLOR,
+                          boxShadow: rostered ? "inset 0 0 0 2px var(--foreground)" : undefined,
+                        }}
+                        title={`${segment.name} · W${stack.week}: ${formatTeamStatsValue(statId, segment.value)} (${formatTeamStatsPercent(segment.share * 100)})`}
+                      />
+                    );
+                  })}
+                </div>
+                <span className="team-stats-week-label">{`W${stack.week}`}</span>
+                <span className="team-stats-week-total">
+                  {stack.total > 0 ? formatTeamStatsValue(statId, stack.total) : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+          <ul className="team-stats-legend">
+            {rows.map((row) => {
+              const meta = playerMeta.get(row.key);
+              return (
+                <li key={row.key} className={meta?.rostered ? "is-my-roster" : undefined}>
+                  <i style={{ backgroundColor: meta?.color ?? TEAM_STATS_OTHER_COLOR }} />
+                  <span className="team-stats-legend-name">{row.name}</span>
+                  <span className="team-stats-legend-total">{formatTeamStatsValue(statId, row.total)}</span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
     </article>
