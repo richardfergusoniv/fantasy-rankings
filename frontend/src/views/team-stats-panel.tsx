@@ -11,15 +11,12 @@ import {
   defaultTeamStatsTeam,
   formatTeamStatsPercent,
   formatTeamStatsValue,
-  nflversePlayerWeekStatsUrl,
-  nflverseSnapCountsUrl,
   normalizeTeamStatsPlayerName,
-  parsePlayerWeekStatsCsv,
-  parseTeamWeekSnapCountsCsv,
   teamStatsStatDef,
   type TeamStatsPosition,
   type TeamStatsStatId,
 } from "../../../api/_lib/nflverse-team-week-stats";
+import { api } from "../api";
 import type { League } from "../dashboard-types";
 
 function isRosteredPlayer(
@@ -33,12 +30,6 @@ function isRosteredPlayer(
     && canonicalNflTeam(rostered.team) === player.team
     && normalizeTeamStatsPlayerName(rostered.name) === entityName
   ));
-}
-
-async function fetchText(url: string): Promise<string> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`team stats HTTP ${response.status}`);
-  return response.text();
 }
 
 export function TeamStatsPanel({
@@ -79,22 +70,9 @@ export function TeamStatsPanel({
 
   const dataQuery = useQuery({
     queryKey: ["nflverse-team-week-stats", season],
-    queryFn: async () => {
-      const [statsResult, snapsResult] = await Promise.allSettled([
-        fetchText(nflversePlayerWeekStatsUrl(season)),
-        fetchText(nflverseSnapCountsUrl(season)),
-      ]);
-      const stats = statsResult.status === "fulfilled"
-        ? parsePlayerWeekStatsCsv(statsResult.value)
-        : [];
-      const snaps = snapsResult.status === "fulfilled"
-        ? parseTeamWeekSnapCountsCsv(snapsResult.value)
-        : [];
-      if (stats.length === 0 && snaps.length === 0) {
-        throw new Error("team stats parse failed");
-      }
-      return { stats, snaps };
-    },
+    // Parsed server-side via /api/pfn-tables: the nflverse CSVs live on
+    // GitHub release assets, which send no CORS headers for browser fetch.
+    queryFn: () => api.getTeamWeekStats({ season }),
     staleTime: TEAM_WEEK_STATS_STALE_MS,
     gcTime: TEAM_WEEK_STATS_STALE_MS * 2,
     retry: 1,
