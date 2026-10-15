@@ -119,11 +119,14 @@ export function TeamStatsPanel({
 
   const stacks = useMemo(() => buildTeamStatsWeekStacks(rows), [rows]);
 
-  // Weeks the team actually produced in (excludes byes and the in-progress
-  // week) — the denominator for the legend's per-week average.
+  // Completed weeks the team actually produced in (excludes byes and the
+  // in-progress week) — the denominator for the legend's per-week average.
   const playedWeeks = useMemo(
-    () => Math.max(1, stacks.filter((stack) => stack.total > 0).length),
-    [stacks],
+    () => Math.max(
+      1,
+      stacks.filter((stack) => stack.week < week && stack.total > 0).length,
+    ),
+    [stacks, week],
   );
 
   const playerMeta = useMemo(() => {
@@ -229,12 +232,17 @@ export function TeamStatsPanel({
           <ul className="team-stats-legend">
             {rows.map((row) => {
               const meta = playerMeta.get(row.key);
+              // Completed weeks only: a partial in-progress week would
+              // otherwise leak into the average (CodeRabbit, PR #129).
+              const completedTotal = Object.entries(row.weeks)
+                .filter(([weekKey]) => Number(weekKey) < week)
+                .reduce((sum, [, cell]) => sum + (cell?.value ?? 0), 0);
               return (
                 <li key={row.key} className={meta?.rostered ? "is-my-roster" : undefined}>
                   <i style={{ backgroundColor: meta?.color ?? TEAM_STATS_OTHER_COLOR }} />
                   <span className="team-stats-legend-name">{row.name}</span>
                   <span className="team-stats-legend-total">
-                    {formatTeamStatsAverage(row.total / playedWeeks)}
+                    {formatTeamStatsAverage(completedTotal / playedWeeks)}
                   </span>
                 </li>
               );
