@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { TeamWeekStatRow } from "./nflverse-team-week-stats.js";
 import {
+  buildOpponentTopAllowances,
   buildPropEdgeHistory,
   currentWeekPropLines,
   medianOf,
+  opponentAllowanceKey,
   propStatActual,
   summarizePropLineMovement,
   weightedRecentProjection,
@@ -13,6 +15,7 @@ function weekRow(partial: Partial<TeamWeekStatRow> & Pick<TeamWeekStatRow, "week
   return {
     playerId: "00-001",
     team: "KC",
+    opponent: "BUF",
     position: "QB",
     targets: 0,
     receptions: 0,
@@ -200,5 +203,24 @@ describe("weightedRecentProjection / medianOf", () => {
 
   it("medians even-length samples", () => {
     expect(medianOf([1, 2, 3, 10])).toBe(2.5);
+  });
+});
+
+describe("buildOpponentTopAllowances", () => {
+  it("averages the best opposing player's stat per game for a defense", () => {
+    const allowances = buildOpponentTopAllowances([
+      // Week 1 vs KC: two BUF receivers; only the best (110) counts.
+      weekRow({ week: 1, name: "WR One", team: "BUF", opponent: "KC", position: "WR", receivingYards: 110 }),
+      weekRow({ week: 1, name: "WR Two", team: "BUF", opponent: "KC", position: "WR", receivingYards: 40 }),
+      // Week 2 vs KC: best opposing WR has 70. Mean of maxima = 90.
+      weekRow({ week: 2, name: "WR Three", team: "DEN", opponent: "KC", position: "WR", receivingYards: 70 }),
+      // A running back's receiving yards never enter the WR allowance.
+      weekRow({ week: 1, name: "RB One", team: "BUF", opponent: "KC", position: "RB", receivingYards: 55 }),
+      // Rows without an opponent are skipped.
+      weekRow({ week: 1, name: "No Opp", team: "BUF", opponent: "", position: "WR", receivingYards: 200 }),
+    ]);
+    expect(allowances.get(opponentAllowanceKey("KC", "WR", "rec_yards"))).toEqual({ allowed: 90, games: 2 });
+    expect(allowances.get(opponentAllowanceKey("KC", "RB", "rec_yards"))).toEqual({ allowed: 55, games: 1 });
+    expect(allowances.get(opponentAllowanceKey("BUF", "WR", "rec_yards"))).toBeUndefined();
   });
 });
