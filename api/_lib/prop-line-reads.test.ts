@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { TeamWeekStatRow } from "./nflverse-team-week-stats.js";
 import {
   blendedPropEdge,
-  buildOpponentTopAllowances,
+  buildOpponentGroupAllowances,
+  buildPlayerStatShares,
   buildPropEdgeHistory,
   currentWeekPropLines,
   medianOf,
   opponentAllowanceKey,
+  propPlayerMatchKey,
   propStatActual,
   summarizePropLineMovement,
   weightedRecentProjection,
@@ -207,20 +209,20 @@ describe("weightedRecentProjection / medianOf", () => {
   });
 });
 
-describe("buildOpponentTopAllowances", () => {
-  it("averages the best opposing player's stat per game for a defense", () => {
-    const allowances = buildOpponentTopAllowances([
-      // Week 1 vs KC: two BUF receivers; only the best (110) counts.
+describe("buildOpponentGroupAllowances", () => {
+  it("averages the whole position group's stat per game for a defense", () => {
+    const allowances = buildOpponentGroupAllowances([
+      // Week 1 vs KC: both BUF receivers count toward the group total (150).
       weekRow({ week: 1, name: "WR One", team: "BUF", opponent: "KC", position: "WR", receivingYards: 110 }),
       weekRow({ week: 1, name: "WR Two", team: "BUF", opponent: "KC", position: "WR", receivingYards: 40 }),
-      // Week 2 vs KC: best opposing WR has 70. Mean of maxima = 90.
+      // Week 2 vs KC: the WR group totals 70. Mean of group totals = 110.
       weekRow({ week: 2, name: "WR Three", team: "DEN", opponent: "KC", position: "WR", receivingYards: 70 }),
       // A running back's receiving yards never enter the WR allowance.
       weekRow({ week: 1, name: "RB One", team: "BUF", opponent: "KC", position: "RB", receivingYards: 55 }),
       // Rows without an opponent are skipped.
       weekRow({ week: 1, name: "No Opp", team: "BUF", opponent: "", position: "WR", receivingYards: 200 }),
     ]);
-    expect(allowances.get(opponentAllowanceKey("KC", "WR", "rec_yards"))).toEqual({ allowed: 90, games: 2 });
+    expect(allowances.get(opponentAllowanceKey("KC", "WR", "rec_yards"))).toEqual({ allowed: 110, games: 2 });
     // KC played 2 games; no RB recorded receiving yards against them in
     // week 2, so that game counts as 0 in the average.
     expect(allowances.get(opponentAllowanceKey("KC", "RB", "rec_yards"))).toEqual({ allowed: 27.5, games: 2 });
@@ -228,12 +230,45 @@ describe("buildOpponentTopAllowances", () => {
   });
 
   it("counts games where the defense faced no recorded player at the position as allowing 0", () => {
-    const allowances = buildOpponentTopAllowances([
+    const allowances = buildOpponentGroupAllowances([
       weekRow({ week: 1, name: "WR One", team: "BUF", opponent: "KC", position: "WR", receivingYards: 110 }),
       // Week 2 vs KC: only a QB row — KC played, but no WR recorded anything.
       weekRow({ week: 2, name: "QB Two", team: "DEN", opponent: "KC", position: "QB", passingYards: 200 }),
     ]);
     expect(allowances.get(opponentAllowanceKey("KC", "WR", "rec_yards"))).toEqual({ allowed: 55, games: 2 });
+  });
+});
+
+describe("buildPlayerStatShares", () => {
+  it("splits a group's production across its players", () => {
+    const shares = buildPlayerStatShares([
+      weekRow({ week: 1, name: "Alpha", team: "CIN", position: "WR", receivingYards: 60 }),
+      weekRow({ week: 2, name: "Alpha", team: "CIN", position: "WR", receivingYards: 30 }),
+      weekRow({ week: 1, name: "Beta", team: "CIN", position: "WR", receivingYards: 60 }),
+    ]);
+    expect(shares.get(`${propPlayerMatchKey("Alpha", "CIN", "WR")}|rec_yards`)).toBe(0.6);
+    expect(shares.get(`${propPlayerMatchKey("Beta", "CIN", "WR")}|rec_yards`)).toBe(0.4);
+    // A different team/position group is independent.
+    expect(shares.get(`${propPlayerMatchKey("Alpha", "CIN", "WR")}|pass_yards`)).toBeUndefined();
+  });
+
+  it("canonicalizes variant team codes so both share keys agree", () => {
+    // nflverse calls the Rams "LA"; the canonical code is LAR.
+    const shares = buildPlayerStatShares([
+      weekRow({ week: 1, name: "Ram One", team: "LA", position: "WR", receivingYards: 75 }),
+      weekRow({ week: 1, name: "Ram Two", team: "LA", position: "WR", receivingYards: 25 }),
+    ]);
+    expect(shares.get(`${propPlayerMatchKey("Ram One", "LAR", "WR")}|rec_yards`)).toBe(0.75);
+    expect(shares.get(`${propPlayerMatchKey("Ram Two", "LAR", "WR")}|rec_yards`)).toBe(0.25);
+  });
+
+  it("clamps negative player totals to a zero share", () => {
+    const shares = buildPlayerStatShares([
+      weekRow({ week: 1, name: "Neg", team: "CIN", position: "RB", rushingYards: -5 }),
+      weekRow({ week: 1, name: "Pos", team: "CIN", position: "RB", rushingYards: 105 }),
+    ]);
+    expect(shares.get(`${propPlayerMatchKey("Neg", "CIN", "RB")}|rush_yards`)).toBe(0);
+    expect(shares.get(`${propPlayerMatchKey("Pos", "CIN", "RB")}|rush_yards`)).toBe(1);
   });
 });
 
