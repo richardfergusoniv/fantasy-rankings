@@ -85,7 +85,11 @@ export type TeamWeekStats = {
 
 // Parsed once per function instance and reused for the panels' stale
 // window; the upstream nflverse files update a few times a day at most.
-let teamWeekStatsCache: { season: number; fetchedAtMs: number; payload: TeamWeekStats } | null = null;
+// One entry per season. A payload missing one of the two CSVs is only
+// cached briefly, so a transient upstream failure can't pin a partial
+// dataset in place for the full window (CodeRabbit, PR #126).
+const TEAM_WEEK_STATS_DEGRADED_TTL_MS = 5 * 60 * 1000;
+const teamWeekStatsCache = new Map<number, { fetchedAtMs: number; ttlMs: number; payload: TeamWeekStats }>();
 
 async function fetchNflverseCsv(url: string): Promise<string> {
   const response = await fetch(url);
@@ -95,12 +99,9 @@ async function fetchNflverseCsv(url: string): Promise<string> {
 
 async function loadTeamWeekStats(season: number): Promise<TeamWeekStats> {
   const now = Date.now();
-  if (
-    teamWeekStatsCache
-    && teamWeekStatsCache.season === season
-    && now - teamWeekStatsCache.fetchedAtMs < TEAM_WEEK_STATS_STALE_MS
-  ) {
-    return teamWeekStatsCache.payload;
+  const cached = teamWeekStatsCache.get(season);
+  if (cached && now - cached.fetchedAtMs < cached.ttlMs) {
+    return cached.payload;
   }
   const [statsResult, snapsResult] = await Promise.allSettled([
     fetchNflverseCsv(nflversePlayerWeekStatsUrl(season)),
@@ -116,7 +117,12 @@ async function loadTeamWeekStats(season: number): Promise<TeamWeekStats> {
     throw new Error("nflverse team-week stats unavailable");
   }
   const payload: TeamWeekStats = { season, stats, snaps };
-  teamWeekStatsCache = { season, fetchedAtMs: now, payload };
+  const complete = stats.length > 0 && snaps.length > 0;
+  teamWeekStatsCache.set(season, {
+    fetchedAtMs: now,
+    ttlMs: complete ? TEAM_WEEK_STATS_STALE_MS : TEAM_WEEK_STATS_DEGRADED_TTL_MS,
+    payload,
+  });
   return payload;
 }
 
