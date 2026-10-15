@@ -7,6 +7,7 @@
  */
 
 import {
+  canonicalNflTeam,
   normalizeTeamStatsPlayerName,
   type TeamWeekStatRow,
 } from "./nflverse-team-week-stats.js";
@@ -347,6 +348,56 @@ export function buildPropEdgeHistory(
     projection,
     edge,
   };
+}
+
+export type OpponentTopAllowance = {
+  /** Mean of the per-game maxima (see below). */
+  allowed: number;
+  /** Games (weeks) the average is built from. */
+  games: number;
+};
+
+/** Map key for opponent allowances: defense team | position | prop stat. */
+export function opponentAllowanceKey(defenseTeam: string, position: string, stat: string): string {
+  return `${canonicalNflTeam(defenseTeam)}|${position}|${stat}`;
+}
+
+/**
+ * What a defense has allowed to the TOP opposing player at each position,
+ * per game: for every (defense, week) take the best single-player actual
+ * among opponents at the position, then average those maxima across games.
+ * Unlike a position-group total, this is on the same scale as one player's
+ * line/projection, so a projection can be spread against it directly.
+ */
+export function buildOpponentTopAllowances(
+  stats: readonly TeamWeekStatRow[],
+): Map<string, OpponentTopAllowance> {
+  // defense|position|stat|week -> best opposing actual that week
+  const maxima = new Map<string, number>();
+  for (const row of stats) {
+    if (!row.opponent) continue;
+    const defense = canonicalNflTeam(row.opponent);
+    for (const stat of PROP_STAT_IDS) {
+      const actual = propStatActual(stat, row);
+      if (actual === null) continue;
+      const key = `${defense}|${row.position}|${stat}|${row.week}`;
+      const current = maxima.get(key);
+      if (current === undefined || actual > current) maxima.set(key, actual);
+    }
+  }
+  const totals = new Map<string, { sum: number; games: number }>();
+  for (const [key, max] of maxima) {
+    const groupKey = key.slice(0, key.lastIndexOf("|"));
+    const acc = totals.get(groupKey) ?? { sum: 0, games: 0 };
+    acc.sum += max;
+    acc.games += 1;
+    totals.set(groupKey, acc);
+  }
+  const output = new Map<string, OpponentTopAllowance>();
+  for (const [key, acc] of totals) {
+    output.set(key, { allowed: Number((acc.sum / acc.games).toFixed(3)), games: acc.games });
+  }
+  return output;
 }
 
 export function propPlayerMatchKey(name: string, team: string | null | undefined, position: string): string {
