@@ -412,6 +412,22 @@ export function buildOpponentTopAllowances(
   return output;
 }
 
+/**
+ * The Edge shown in the props table: the player's projection and the
+ * opponent allowance are two independent estimates of the same game, so
+ * they get equal weight — edge = mean(projection, allowance) − line.
+ * Without an allowance it falls back to projection − line.
+ */
+export function blendedPropEdge(
+  projection: number | null,
+  opponentAllowed: number | null,
+  line: number,
+): number | null {
+  if (projection === null || !Number.isFinite(line)) return null;
+  if (opponentAllowed === null) return Number((projection - line).toFixed(3));
+  return Number((((projection + opponentAllowed) / 2) - line).toFixed(3));
+}
+
 export function propPlayerMatchKey(name: string, team: string | null | undefined, position: string): string {
   const teamKey = team ? team.trim().toUpperCase() : "";
   return `${position}|${teamKey}|${normalizeTeamStatsPlayerName(name)}`;
