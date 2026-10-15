@@ -2251,6 +2251,8 @@ button.league-partner-change:active { color: var(--link-active); }
 }
 .comparison-data-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
   min-width: 0;
   gap: 10px;
   padding: 13px;
@@ -2261,10 +2263,12 @@ button.league-partner-change:active { color: var(--link-active); }
 .comparison-data-label {
   display: flex;
   min-width: 0;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   color: var(--text);
+  text-align: center;
 }
 .comparison-data-label b {
   overflow: hidden;
@@ -2281,44 +2285,47 @@ button.league-partner-change:active { color: var(--link-active); }
   font-weight: 650;
   line-height: 1.15;
 }
-.player-comparison-bar {
-  display: flex;
-  width: 100%;
-  height: 34px;
-  overflow: hidden;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  background: transparent;
-}
-.player-comparison-segment {
+.comparison-data-side {
   display: flex;
   min-width: 0;
   align-items: center;
-  justify-content: center;
-  padding: 0 8px;
-  background: transparent;
-  color: var(--text);
-  text-align: center;
-  transition: background-color .18s ease, color .18s ease;
+  gap: 8px;
 }
-.player-comparison-segment.left { border-right: 0; }
-.player-comparison-segment strong {
-  overflow: hidden;
+.comparison-data-side.left { flex-direction: row-reverse; }
+.comparison-data-value {
+  flex: none;
   font-size: var(--type-body);
   font-weight: 750;
   font-variant-numeric: tabular-nums lining-nums;
   line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--text);
 }
-.player-comparison-segment.is-winner {
-  background: var(--warning);
-  color: var(--on-accent);
-}
-.player-comparison-segment.is-unavailable {
+.comparison-data-value.is-winner { color: var(--warning); }
+.comparison-data-value.is-loser { color: var(--dim); }
+.comparison-data-value.is-unavailable {
   color: var(--dim);
   font-weight: 600;
 }
+.player-comparison-track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 18px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--chart-2) 14%, transparent);
+}
+.player-comparison-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--chart-2) 55%, transparent);
+  transition: width .18s ease, background-color .18s ease;
+}
+.player-comparison-fill.left { right: 0; }
+.player-comparison-fill.right { left: 0; }
+.player-comparison-fill.is-winner { background: var(--warning); }
 .comparison-picker-backdrop { position: fixed; z-index: 1000; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-top: max(24px, env(safe-area-inset-top)); background: var(--overlay); }
 .comparison-picker-sheet { width: min(100%, 560px); max-height: min(84dvh, 720px); overflow: hidden; padding: 16px 16px max(16px, env(safe-area-inset-bottom)); border: 1px solid var(--hairline); border-radius: var(--radius-xl) var(--radius-xl) 0 0; background: var(--surface); box-shadow: var(--shadow-sheet); }
 .comparison-picker-sheet > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
