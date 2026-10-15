@@ -424,8 +424,12 @@ export function buildPlayerStatShares(
   const playerTotals = new Map<string, number>();
   const groupTotals = new Map<string, number>();
   for (const row of stats) {
-    const playerKey = propPlayerMatchKey(row.name, row.team, row.position);
-    const groupKey = `${canonicalNflTeam(row.team)}|${row.position}`;
+    // Canonicalize once: propPlayerMatchKey uppercases but does not map
+    // variant codes (LA -> LAR), so both keys must start from the same
+    // canonical team or Rams players silently get no share (CodeRabbit).
+    const team = canonicalNflTeam(row.team);
+    const playerKey = propPlayerMatchKey(row.name, team, row.position);
+    const groupKey = `${team}|${row.position}`;
     for (const stat of PROP_STAT_IDS) {
       const actual = propStatActual(stat, row);
       if (actual === null) continue;
