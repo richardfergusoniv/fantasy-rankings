@@ -412,14 +412,75 @@ export function buildOpponentGroupAllowances(
 }
 
 /**
- * Each player's share of his own team's position-group production, per
- * stat, keyed `${playerMatchKey}|${stat}`. The share is his average
- * WEEKLY share across the weeks he actually played: season totals
- * penalize players who missed time (their role when active is bigger
- * than their total suggests), while raw per-game rates crown one-game
- * wonders (a backup's single spot start). A missed week simply does not
- * enter his average. Clamped to [0, 1]; weeks where the group produced
- * nothing are skipped, and pairs with no usable week are omitted.
+ * The opportunity volume behind a prop stat — what the offense gives a
+ * player when he's active. Opportunity share is the role signal: it is
+ * far steadier week to week than yardage share (which swings with one
+ * broken play) and, being counts, it can never go negative the way
+ * receiving production can. Null for stats with no opportunity basis.
+ */
+export function propOpportunityValue(stat: PropStatId, row: TeamWeekStatRow): number | null {
+  switch (stat) {
+    case "pass_yards":
+    case "pass_tds":
+    case "pass_completions":
+    case "pass_attempts":
+    case "pass_interceptions":
+      return row.passAttempts;
+    case "rush_yards":
+    case "rush_attempts":
+      return row.carries;
+    case "rec_yards":
+    case "receptions":
+    case "longest_reception":
+      return row.targets;
+    case "anytime_td":
+    case "first_td":
+      return row.carries + row.targets;
+    case "sacks":
+    case "tackles":
+    case "kicker_points":
+    case "field_goals_made":
+      return null;
+  }
+}
+
+/** Human label for a prop stat's opportunity basis ("targets", "carries", ...). */
+export function propOpportunityLabel(stat: PropStatId): string {
+  switch (stat) {
+    case "pass_yards":
+    case "pass_tds":
+    case "pass_completions":
+    case "pass_attempts":
+    case "pass_interceptions":
+      return "pass attempts";
+    case "rush_yards":
+    case "rush_attempts":
+      return "carries";
+    case "rec_yards":
+    case "receptions":
+    case "longest_reception":
+      return "targets";
+    case "anytime_td":
+    case "first_td":
+      return "touches";
+    case "sacks":
+    case "tackles":
+    case "kicker_points":
+    case "field_goals_made":
+      return "";
+  }
+}
+
+/**
+ * Each player's share of his own team's position-group OPPORTUNITIES,
+ * per prop stat, keyed `${playerMatchKey}|${stat}`: his average weekly
+ * share of the group's targets/carries/attempts across the weeks he was
+ * active. Weeks he missed never enter the average (no injury penalty),
+ * and weeks he dressed but got nothing count as 0. Opp then applies
+ * this share to the production the defense allows the group — i.e. it
+ * assumes production distributes by opportunity. Clamped to [0, 1];
+ * weeks where the group got no opportunities are skipped, and pairs
+ * with no usable week are omitted.
  */
 export function buildPlayerStatShares(
   stats: readonly TeamWeekStatRow[],
@@ -427,9 +488,9 @@ export function buildPlayerStatShares(
   // Canonicalize once: propPlayerMatchKey uppercases but does not map
   // variant codes (LA -> LAR), so every key must start from the same
   // canonical team or Rams players silently get no share (CodeRabbit).
-  // team|position|stat|week -> the group's total that week.
+  // team|position|stat|week -> the group's opportunities that week.
   const groupWeekTotals = new Map<string, number>();
-  // playerMatchKey|stat -> (week -> the player's actual that week).
+  // playerMatchKey|stat -> (week -> the player's opportunities that week).
   const playerWeeks = new Map<string, Map<number, number>>();
   // playerMatchKey|stat -> team|position|stat (for the group lookups).
   const playerGroup = new Map<string, string>();
@@ -437,7 +498,7 @@ export function buildPlayerStatShares(
     const team = canonicalNflTeam(row.team);
     const playerKey = propPlayerMatchKey(row.name, team, row.position);
     for (const stat of PROP_STAT_IDS) {
-      const actual = propStatActual(stat, row);
+      const actual = propOpportunityValue(stat, row);
       if (actual === null) continue;
       const gwKey = `${team}|${row.position}|${stat}|${row.week}`;
       groupWeekTotals.set(gwKey, (groupWeekTotals.get(gwKey) ?? 0) + actual);
