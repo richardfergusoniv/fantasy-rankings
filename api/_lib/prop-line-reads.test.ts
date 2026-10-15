@@ -164,6 +164,7 @@ describe("propStatActual / history", () => {
     expect(history.overs).toBe(1);
     expect(history.unders).toBe(2);
     expect(history.hitRate).toBeCloseTo(1 / 3);
+    expect(history.underRate).toBeCloseTo(2 / 3);
     expect(history.cells.map((cell) => cell.result)).toEqual(["under", "under", "over"]);
     expect(history.cells.map((cell) => cell.actual)).toEqual([220, 260, 310]);
   });
