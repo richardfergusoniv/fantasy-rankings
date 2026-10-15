@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTeamStatsTable,
+  buildTeamStatsWeekStacks,
   canonicalNflTeam,
   defaultTeamStatsPosition,
   defaultTeamStatsTeam,
@@ -47,6 +48,7 @@ function statsRow(fields: {
   position: string;
   week: number;
   team: string;
+  opponent?: string;
   seasonType?: string;
   targets?: number;
   receptions?: number;
@@ -70,6 +72,7 @@ function statsRow(fields: {
   cells[8] = fields.seasonType ?? "REG";
   cells[9] = `2026_${String(fields.week).padStart(2, "0")}_${fields.team}_OPP`;
   cells[10] = fields.team;
+  cells[11] = fields.opponent ?? "";
   cells[15] = String(fields.passingTds ?? 0);
   cells[17] = String(fields.carries ?? 0);
   cells[18] = String(fields.rushingYards ?? 0);
@@ -126,7 +129,7 @@ describe("nflverse-team-week-stats", () => {
     const statsCsv = [
       STATS_HEADER,
       statsRow({
-        id: "wr1", name: "DK Metcalf", position: "WR", week: 1, team: "PIT",
+        id: "wr1", name: "DK Metcalf", position: "WR", week: 1, team: "PIT", opponent: "jac",
         targets: 8, receptions: 5, receivingYards: 90, receivingTds: 1,
         targetShare: 0.25, fantasyPpr: 20.0,
       }),
@@ -150,6 +153,8 @@ describe("nflverse-team-week-stats", () => {
     const stats = parsePlayerWeekStatsCsv(statsCsv);
     const snaps = parseTeamWeekSnapCountsCsv(snapsCsv);
     expect(stats).toHaveLength(2);
+    expect(stats[0]?.opponent).toBe("JAX");
+    expect(stats[1]?.opponent).toBe("");
     expect(stats[0]?.targetShare).toBeCloseTo(25);
     expect(snaps).toHaveLength(2);
     expect(snaps[0]?.offensePct).toBeCloseTo(96);
@@ -181,7 +186,7 @@ describe("nflverse-team-week-stats", () => {
   it("stacks target share as targets over percent", () => {
     const stats: TeamWeekStatRow[] = [
       {
-        playerId: "wr1", name: "Target Hog", team: "KC", position: "WR", week: 1,
+        playerId: "wr1", name: "Target Hog", team: "KC", opponent: "BUF", position: "WR", week: 1,
         targets: 12, receptions: 8, receivingYards: 100, carries: 0, rushingYards: 0,
         receivingTds: 1, rushingTds: 0, passingTds: 0, fantasyPpr: 24, targetShare: 33,
         completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
@@ -218,5 +223,31 @@ describe("nflverse-team-week-stats", () => {
     expect(formatTeamStatsValue("fantasy_ppr", 9.5)).toBe("9.5");
     expect(formatTeamStatsValue("fantasy_ppr", 10)).toBe("10");
     expect(formatTeamStatsPercent(96.4)).toBe("96%");
+  });
+
+  it("builds 100% week stacks with shares and an Other bucket", () => {
+    const row = (name: string, weeks: Array<{ week: number; value: number }>, total: number) => ({
+      key: `WR|KC|${name}`,
+      playerId: null,
+      name,
+      team: "KC",
+      position: "WR" as const,
+      weeks: weeks.map((cell) => ({ ...cell, percent: null })),
+      total,
+    });
+    const stacks = buildTeamStatsWeekStacks([
+      row("Alpha", [{ week: 1, value: 60 }, { week: 2, value: 30 }], 90),
+      row("Beta", [{ week: 1, value: 30 }, { week: 2, value: 60 }], 90),
+      row("Gamma", [{ week: 1, value: 1 }, { week: 2, value: 0 }], 1),
+    ]);
+    expect(stacks).toHaveLength(2);
+    expect(stacks[0]?.total).toBe(91);
+    expect(stacks[0]?.segments.map((s) => s.name)).toEqual(["Alpha", "Beta", "Other"]);
+    expect(stacks[0]?.segments[0]?.share).toBeCloseTo(60 / 91);
+    expect(stacks[0]?.segments[2]?.value).toBe(1);
+    // Week 2: Gamma has no value and drops out entirely (no Other).
+    expect(stacks[1]?.segments.map((s) => s.name)).toEqual(["Beta", "Alpha"]);
+    const shareSum = stacks[1]?.segments.reduce((sum, s) => sum + s.share, 0);
+    expect(shareSum).toBeCloseTo(1);
   });
 });
