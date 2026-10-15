@@ -21,14 +21,15 @@ import {
 import {
   TEAM_WEEK_STATS_STALE_MS,
   canonicalNflTeam,
-  type TeamWeekStatRow,
 } from "../../../api/_lib/nflverse-team-week-stats";
 import {
   PROP_POSITIONS,
   PROP_STAT_OPTIONS,
+  buildOpponentTopAllowances,
   buildPropEdgeHistory,
   indexWeekStatsByPlayer,
   isPropStatId,
+  opponentAllowanceKey,
   propPlayerMatchKey,
   propStatDef,
   type PropGameResult,
@@ -56,6 +57,12 @@ type PropTableRow = {
   cells: Array<{ week: number; actual: number; result: PropGameResult }>;
   projection: number | null;
   edge: number | null;
+  opponent: string | null;
+  /** What the opponent has allowed the top opposing player at this position, per game. */
+  oppAllowed: number | null;
+  oppGames: number;
+  /** projection − oppAllowed; positive favors the player. */
+  vsOpp: number | null;
   absEdge: number;
   rostered: boolean;
 };
@@ -251,13 +258,37 @@ export function GameLinesPanel({
   const rosterIds = useMemo(() => rosterIdSet(league), [league]);
   const rosterKeys = useMemo(() => rosterMatchKeys(league), [league]);
 
-  const weekStatsByPlayer = useMemo(() => {
+  const priorStats = useMemo(() => {
     const stats = historyQuery.data?.stats ?? [];
     // Prior completed weeks only — never include the slate week itself.
     const throughWeek = week - 1;
-    const prior: TeamWeekStatRow[] = stats.filter((row) => row.week >= 1 && row.week <= throughWeek);
-    return indexWeekStatsByPlayer(prior);
+    return stats.filter((row) => row.week >= 1 && row.week <= throughWeek);
   }, [historyQuery.data?.stats, week]);
+
+  const weekStatsByPlayer = useMemo(
+    () => indexWeekStatsByPlayer(priorStats),
+    [priorStats],
+  );
+
+  const opponentAllowances = useMemo(
+    () => buildOpponentTopAllowances(priorStats),
+    [priorStats],
+  );
+
+  // This week's opponent for each team on the slate.
+  const slateOpponents = useMemo(() => {
+    const opponents = new Map<string, string>();
+    for (const game of weekRows) {
+      opponents.set(normalizeGameLineTeam(game.awayTeam), normalizeGameLineTeam(game.homeTeam));
+      opponents.set(normalizeGameLineTeam(game.homeTeam), normalizeGameLineTeam(game.awayTeam));
+    }
+    return opponents;
+  }, [weekRows]);
+
+  const historyWeeks = useMemo(
+    () => Array.from({ length: Math.max(0, week - 1) }, (_, index) => index + 1),
+    [week],
+  );
 
   const gameTeamFilter = useMemo(() => {
     if (!selectedGame) return null;
@@ -291,6 +322,10 @@ export function GameLinesPanel({
         ?? [];
       const history = buildPropEdgeHistory(line.stat, line.line, weekRowsForPlayer);
       const def = propStatDef(line.stat);
+      const opponent = team ? slateOpponents.get(normalizeGameLineTeam(team)) ?? null : null;
+      const allowance = opponent
+        ? opponentAllowances.get(opponentAllowanceKey(opponent, positionCode, line.stat))
+        : undefined;
       built.push({
         key: `${line.playerId}|${line.stat}`,
         playerId: line.playerId,
@@ -307,6 +342,12 @@ export function GameLinesPanel({
         cells: history.cells,
         projection: history.projection,
         edge: history.edge,
+        opponent,
+        oppAllowed: allowance?.allowed ?? null,
+        oppGames: allowance?.games ?? 0,
+        vsOpp: history.projection !== null && allowance
+          ? Number((history.projection - allowance.allowed).toFixed(3))
+          : null,
         absEdge: history.edge === null ? -1 : Math.abs(history.edge),
         rostered,
       });
@@ -320,22 +361,16 @@ export function GameLinesPanel({
     return built;
   }, [
     gameTeamFilter,
+    opponentAllowances,
     position,
     propLinesQuery.data?.propLines.lines,
     rosterIds,
     rosterKeys,
     scope,
+    slateOpponents,
     statId,
     weekStatsByPlayer,
   ]);
-
-  const weekColumns = useMemo(() => {
-    const weeks = new Set<number>();
-    for (const row of propRows) {
-      for (const cell of row.cells) weeks.add(cell.week);
-    }
-    return [...weeks].sort((left, right) => left - right);
-  }, [propRows]);
 
   const gamesUnavailable = gamesQuery.isError;
   const propsLoading = propLinesQuery.isPending || (historyQuery.isPending && !historyQuery.data);
@@ -431,10 +466,9 @@ export function GameLinesPanel({
                     <th scope="col">Line</th>
                     <th scope="col">Move</th>
                     <th scope="col">Hit</th>
-                    {weekColumns.map((weekNumber) => (
-                      <th key={weekNumber} scope="col">{`W${weekNumber}`}</th>
-                    ))}
+                    <th scope="col">History</th>
                     <th scope="col">Proj</th>
+                    <th scope="col">vs Opp</th>
                     <th scope="col">Edge</th>
                   </tr>
                 </thead>
@@ -442,6 +476,7 @@ export function GameLinesPanel({
                   {propRows.map((row) => {
                     const hitTone = hitRateTone(row.overs, row.unders);
                     const byWeek = new Map(row.cells.map((cell) => [cell.week, cell]));
+                    const scaleMax = Math.max(row.line, ...row.cells.map((cell) => cell.actual), 0) || 1;
                     return (
                       <tr key={row.key} className={row.rostered ? "is-my-roster" : undefined}>
                         <th scope="row" className="props-player-col">
@@ -459,20 +494,51 @@ export function GameLinesPanel({
                             {formatHitRate(row.overs, row.unders, row.hitRate)}
                           </span>
                         </td>
-                        {weekColumns.map((weekNumber) => {
-                          const cell = byWeek.get(weekNumber);
-                          if (!cell) {
-                            return <td key={weekNumber}><span className="props-game-cell is-empty">—</span></td>;
-                          }
-                          return (
-                            <td key={weekNumber}>
-                              <span className={`props-game-cell is-${cell.result}`}>
-                                {formatPropNumber(cell.actual, 1)}
-                              </span>
-                            </td>
-                          );
-                        })}
+                        <td>
+                          <div
+                            className="props-history"
+                            role="img"
+                            aria-label={row.cells.length > 0
+                              ? `Weekly results against the line of ${formatPropNumber(row.line, 1)}`
+                              : "No prior games this season"}
+                          >
+                            {historyWeeks.map((weekNumber) => {
+                              const cell = byWeek.get(weekNumber);
+                              if (!cell) {
+                                return <span key={weekNumber} className="props-bar is-empty" title={`W${weekNumber}: no game`} />;
+                              }
+                              const heightPct = Math.max(4, (cell.actual / scaleMax) * 100);
+                              return (
+                                <span
+                                  key={weekNumber}
+                                  className={`props-bar is-${cell.result}`}
+                                  style={{ height: `${heightPct}%` }}
+                                  title={`W${weekNumber}: ${formatPropNumber(cell.actual, 1)} vs line ${formatPropNumber(row.line, 1)}`}
+                                />
+                              );
+                            })}
+                            <span
+                              className="props-history-line"
+                              style={{ bottom: `${(row.line / scaleMax) * 100}%` }}
+                            />
+                          </div>
+                        </td>
                         <td>{formatPropNumber(row.projection, 1)}</td>
+                        <td>
+                          {row.vsOpp === null || row.oppAllowed === null ? (
+                            <span className="props-game-cell is-empty">—</span>
+                          ) : (
+                            <span
+                              className="props-vsopp"
+                              title={`${row.opponent} has allowed the top opposing ${row.position} an average of ${formatPropNumber(row.oppAllowed, 1)} per game (${row.oppGames} games)`}
+                            >
+                              <span className={row.vsOpp > 0 ? "props-hit-over" : row.vsOpp < 0 ? "props-hit-under" : undefined}>
+                                {row.vsOpp === 0 ? "0.0" : formatDecimal(row.vsOpp, 1, { sign: "exceptZero" })}
+                              </span>
+                              <small>{`allows ${formatPropNumber(row.oppAllowed, 1)}`}</small>
+                            </span>
+                          )}
+                        </td>
                         <td className="props-edge">{formatPropNumber(row.edge, 1)}</td>
                       </tr>
                     );
