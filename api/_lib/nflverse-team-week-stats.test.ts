@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  TEAM_STATS_GROUP_POSITIONS,
   buildTeamStatsTable,
   buildTeamStatsWeekStacks,
   canonicalNflTeam,
-  defaultTeamStatsPosition,
+  defaultTeamStatsGroup,
   defaultTeamStatsTeam,
   formatTeamStatsPercent,
   formatTeamStatsValue,
@@ -172,7 +173,7 @@ describe("nflverse-team-week-stats", () => {
       stats,
       snaps,
       team: "SEA",
-      position: "WR",
+      positions: ["WR"],
       statId: "snaps",
       throughWeek: 2,
     });
@@ -183,30 +184,9 @@ describe("nflverse-team-week-stats", () => {
     expect(rows[1]?.weeks[1]).toEqual({ week: 2, value: 10, percent: 15 });
   });
 
-  it("stacks target share as targets over percent", () => {
-    const stats: TeamWeekStatRow[] = [
-      {
-        playerId: "wr1", name: "Target Hog", team: "KC", opponent: "BUF", position: "WR", week: 1,
-        targets: 12, receptions: 8, receivingYards: 100, carries: 0, rushingYards: 0,
-        receivingTds: 1, rushingTds: 0, passingTds: 0, fantasyPpr: 24, targetShare: 33,
-        completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
-      },
-    ];
-    const rows = buildTeamStatsTable({
-      stats,
-      snaps: [],
-      team: "KC",
-      position: "WR",
-      statId: "target_share",
-      throughWeek: 1,
-    });
-    expect(rows[0]?.weeks[0]).toEqual({ week: 1, value: 12, percent: 33 });
-    expect(rows[0]?.total).toBe(12);
-  });
-
-  it("defaults team and position from the user roster", () => {
+  it("defaults team and group from the user roster", () => {
     expect(defaultTeamStatsTeam(["SEA", "SEA", "SF", null])).toBe("SEA");
-    expect(defaultTeamStatsPosition(
+    expect(defaultTeamStatsGroup(
       [
         { team: "SEA", position: "WR" },
         { team: "SEA", position: "WR" },
@@ -214,8 +194,39 @@ describe("nflverse-team-week-stats", () => {
         { team: "SF", position: "QB" },
       ],
       "SEA",
-    )).toBe("WR");
-    expect(defaultTeamStatsPosition([{ team: "DAL", position: "TE" }], "SEA")).toBe("WR");
+    )).toBe("WRTE");
+    // A lone TE on another team does not change the fallback group.
+    expect(defaultTeamStatsGroup([{ team: "DAL", position: "TE" }], "SEA")).toBe("WRTE");
+  });
+
+  it("merges WRs and TEs into one receiving group", () => {
+    const stats: TeamWeekStatRow[] = [
+      {
+        playerId: "wr1", name: "Wide Out", team: "KC", opponent: "BUF", position: "WR", week: 1,
+        targets: 8, receptions: 6, receivingYards: 90, carries: 0, rushingYards: 0,
+        receivingTds: 1, rushingTds: 0, passingTds: 0, fantasyPpr: 21, targetShare: 25,
+        completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
+      },
+      {
+        playerId: "te1", name: "Tight End", team: "KC", opponent: "BUF", position: "TE", week: 1,
+        targets: 4, receptions: 3, receivingYards: 40, carries: 0, rushingYards: 0,
+        receivingTds: 0, rushingTds: 0, passingTds: 0, fantasyPpr: 7, targetShare: 12,
+        completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
+      },
+    ];
+    const rows = buildTeamStatsTable({
+      stats,
+      snaps: [],
+      team: "KC",
+      positions: TEAM_STATS_GROUP_POSITIONS.WRTE,
+      statId: "targets",
+      throughWeek: 1,
+    });
+    expect(rows.map((row) => row.name)).toEqual(["Wide Out", "Tight End"]);
+    const stacks = buildTeamStatsWeekStacks(rows);
+    expect(stacks[0]?.total).toBe(12);
+    expect(stacks[0]?.segments[0]?.share).toBeCloseTo(2 / 3);
+    expect(stacks[0]?.segments[1]?.share).toBeCloseTo(1 / 3);
   });
 
   it("formats values and percents", () => {

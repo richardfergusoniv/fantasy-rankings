@@ -25,14 +25,9 @@ import {
 import {
   PROP_POSITIONS,
   PROP_STAT_OPTIONS,
-  blendedPropEdge,
-  buildOpponentGroupAllowances,
-  buildPlayerStatShares,
-  propOpportunityLabel,
-  buildPropEdgeHistory,
+  buildPropHistory,
   indexWeekStatsByPlayer,
   isPropStatId,
-  opponentAllowanceKey,
   propPlayerMatchKey,
   propStatDef,
   type PropGameResult,
@@ -59,17 +54,6 @@ type PropTableRow = {
   overs: number;
   unders: number;
   cells: Array<{ week: number; actual: number; result: PropGameResult }>;
-  projection: number | null;
-  edge: number | null;
-  opponent: string | null;
-  /** The player's share-adjusted Opp: opponent group allowance × his share. */
-  oppAllowed: number | null;
-  /** What the opponent allows the whole position group per game. */
-  oppTotal: number | null;
-  /** The player's share (0–1) of his own group's production for this stat. */
-  oppShare: number | null;
-  oppGames: number;
-  absEdge: number;
   rostered: boolean;
 };
 
@@ -276,26 +260,6 @@ export function GameLinesPanel({
     [priorStats],
   );
 
-  const opponentAllowances = useMemo(
-    () => buildOpponentGroupAllowances(priorStats),
-    [priorStats],
-  );
-
-  const playerShares = useMemo(
-    () => buildPlayerStatShares(priorStats),
-    [priorStats],
-  );
-
-  // This week's opponent for each team on the slate.
-  const slateOpponents = useMemo(() => {
-    const opponents = new Map<string, string>();
-    for (const game of weekRows) {
-      opponents.set(normalizeGameLineTeam(game.awayTeam), normalizeGameLineTeam(game.homeTeam));
-      opponents.set(normalizeGameLineTeam(game.homeTeam), normalizeGameLineTeam(game.awayTeam));
-    }
-    return opponents;
-  }, [weekRows]);
-
   const historyWeeks = useMemo(
     () => Array.from({ length: Math.max(0, week - 1) }, (_, index) => index + 1),
     [week],
@@ -331,17 +295,8 @@ export function GameLinesPanel({
       const weekRowsForPlayer = weekStatsByPlayer.get(matchKey)
         ?? weekStatsByPlayer.get(propPlayerMatchKey(line.name, line.team, positionCode))
         ?? [];
-      const history = buildPropEdgeHistory(line.stat, line.line, weekRowsForPlayer);
+      const history = buildPropHistory(line.stat, line.line, weekRowsForPlayer);
       const def = propStatDef(line.stat);
-      const opponent = team ? slateOpponents.get(normalizeGameLineTeam(team)) ?? null : null;
-      const allowance = opponent
-        ? opponentAllowances.get(opponentAllowanceKey(opponent, positionCode, line.stat))
-        : undefined;
-      const share = playerShares.get(`${matchKey}|${line.stat}`);
-      const oppAllowed = allowance && share !== undefined
-        ? Number((allowance.allowed * share).toFixed(3))
-        : null;
-      const edge = blendedPropEdge(history.projection, oppAllowed, line.line);
       built.push({
         key: `${line.playerId}|${line.stat}`,
         playerId: line.playerId,
@@ -356,34 +311,22 @@ export function GameLinesPanel({
         overs: history.overs,
         unders: history.unders,
         cells: history.cells,
-        projection: history.projection,
-        edge,
-        opponent,
-        oppAllowed,
-        oppTotal: allowance?.allowed ?? null,
-        oppShare: share ?? null,
-        oppGames: allowance?.games ?? 0,
-        absEdge: edge === null ? -1 : Math.abs(edge),
         rostered,
       });
     }
 
     built.sort((left, right) => {
-      if (right.absEdge !== left.absEdge) return right.absEdge - left.absEdge;
       if (left.rostered !== right.rostered) return left.rostered ? -1 : 1;
       return left.name.localeCompare(right.name) || left.stat.localeCompare(right.stat);
     });
     return built;
   }, [
     gameTeamFilter,
-    opponentAllowances,
-    playerShares,
     position,
     propLinesQuery.data?.propLines.lines,
     rosterIds,
     rosterKeys,
     scope,
-    slateOpponents,
     statId,
     weekStatsByPlayer,
   ]);
@@ -483,9 +426,6 @@ export function GameLinesPanel({
                     <th scope="col">Move</th>
                     <th scope="col">Hit</th>
                     <th scope="col">History</th>
-                    <th scope="col">Proj</th>
-                    <th scope="col">Opp</th>
-                    <th scope="col">Edge</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -543,28 +483,6 @@ export function GameLinesPanel({
                               style={{ bottom: `${(row.line / scaleMax) * 100}%` }}
                             />
                           </div>
-                        </td>
-                        <td>{formatPropNumber(row.projection, 1)}</td>
-                        <td>
-                          {row.oppAllowed === null ? (
-                            <span className="props-game-cell is-empty">—</span>
-                          ) : (
-                            <span
-                              title={row.oppTotal !== null && row.oppShare !== null
-                                ? `${row.opponent} allows ${formatPropNumber(row.oppTotal, 1)} per game to ${row.position}s (${row.oppGames} games); ${row.name} gets ${Math.round(row.oppShare * 100)}% of ${row.team ?? "his team"}'s ${row.position} ${propOpportunityLabel(row.stat)} when active`
-                                : undefined}
-                            >
-                              {formatPropNumber(row.oppAllowed, 1)}
-                            </span>
-                          )}
-                        </td>
-                        <td
-                          className="props-edge"
-                          title={row.oppAllowed === null
-                            ? "Projection minus the line"
-                            : "Average of the projection and the opponent allowance, minus the line"}
-                        >
-                          {formatPropNumber(row.edge, 1)}
                         </td>
                       </tr>
                     );

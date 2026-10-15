@@ -2,18 +2,19 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
   NFL_TEAM_CODES,
-  TEAM_STATS_POSITIONS,
+  TEAM_STATS_GROUP_POSITIONS,
+  TEAM_STATS_GROUPS,
   TEAM_STATS_STAT_OPTIONS,
   TEAM_WEEK_STATS_STALE_MS,
   buildTeamStatsTable,
   buildTeamStatsWeekStacks,
   canonicalNflTeam,
-  defaultTeamStatsPosition,
+  defaultTeamStatsGroup,
   defaultTeamStatsTeam,
   formatTeamStatsPercent,
   formatTeamStatsValue,
   normalizeTeamStatsPlayerName,
-  type TeamStatsPosition,
+  type TeamStatsGroupId,
   type TeamStatsStatId,
 } from "../../../api/_lib/nflverse-team-week-stats";
 import { api } from "../api";
@@ -84,12 +85,12 @@ export function TeamStatsPanel({
     ? userTeam
     : defaultTeam;
 
-  const defaultPosition = useMemo(
-    () => defaultTeamStatsPosition(rosterPlayers, selectedTeam),
+  const defaultGroup = useMemo(
+    () => defaultTeamStatsGroup(rosterPlayers, selectedTeam),
     [rosterPlayers, selectedTeam],
   );
-  const [userPosition, setUserPosition] = useState<TeamStatsPosition | null>(null);
-  const selectedPosition = userPosition ?? defaultPosition;
+  const [userGroup, setUserGroup] = useState<TeamStatsGroupId | null>(null);
+  const selectedGroup = userGroup ?? defaultGroup;
 
   const [statId, setStatId] = useState<TeamStatsStatId>("snaps");
 
@@ -111,11 +112,11 @@ export function TeamStatsPanel({
       stats: dataQuery.data.stats,
       snaps: dataQuery.data.snaps,
       team: selectedTeam,
-      position: selectedPosition,
+      positions: TEAM_STATS_GROUP_POSITIONS[selectedGroup],
       statId,
       throughWeek,
     });
-  }, [dataQuery.data, selectedPosition, selectedTeam, statId, throughWeek]);
+  }, [dataQuery.data, selectedGroup, selectedTeam, statId, throughWeek]);
 
   const stacks = useMemo(() => buildTeamStatsWeekStacks(rows), [rows]);
 
@@ -157,7 +158,7 @@ export function TeamStatsPanel({
             value={selectedTeam}
             onChange={(event) => {
               setUserTeam(event.target.value);
-              setUserPosition(null);
+              setUserGroup(null);
             }}
           >
             {NFL_TEAM_CODES.map((team) => (
@@ -169,11 +170,11 @@ export function TeamStatsPanel({
           <span>Position</span>
           <select
             aria-label="Position"
-            value={selectedPosition}
-            onChange={(event) => setUserPosition(event.target.value as TeamStatsPosition)}
+            value={selectedGroup}
+            onChange={(event) => setUserGroup(event.target.value as TeamStatsGroupId)}
           >
-            {TEAM_STATS_POSITIONS.map((position) => (
-              <option key={position} value={position}>{position}</option>
+            {TEAM_STATS_GROUPS.map((group) => (
+              <option key={group.id} value={group.id}>{group.label}</option>
             ))}
           </select>
         </label>
