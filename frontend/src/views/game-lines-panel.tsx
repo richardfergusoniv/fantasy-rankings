@@ -22,6 +22,7 @@ import {
   PROP_POSITIONS,
   PROP_STAT_OPTIONS,
   buildPropHistory,
+  compareHitRateDesc,
   indexWeekStatsByPlayer,
   isPropStatId,
   propPlayerMatchKey,
@@ -290,10 +291,7 @@ export function GameLinesPanel({
       });
     }
 
-    built.sort((left, right) => {
-      if (left.rostered !== right.rostered) return left.rostered ? -1 : 1;
-      return left.name.localeCompare(right.name) || left.stat.localeCompare(right.stat);
-    });
+    built.sort(compareHitRateDesc);
     return built;
   }, [
     gameTeamFilter,
