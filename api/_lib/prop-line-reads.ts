@@ -1,13 +1,12 @@
 /**
  * Pure helpers for Monitor Props: current-week consensus lines, line movement
- * from our stored weekly pulls, and edge math vs nflverse weekly actuals.
+ * from our stored weekly pulls, and per-week history vs nflverse actuals.
  *
  * Line movement is derived only from `prop_line_snapshots` (opening vs latest
  * within a week, and pull history). Never call a paid odds API here.
  */
 
 import {
-  canonicalNflTeam,
   normalizeTeamStatsPlayerName,
   type TeamWeekStatRow,
 } from "./nflverse-team-week-stats.js";
