@@ -13,7 +13,7 @@ import type { MatchupBoxScore } from "../../api/box-score";
 import type { SavedChartView, SavedChartViewInput } from "../../api/chart-views";
 import type { Dashboard, DashboardSection } from "../../api/_lib/dashboard-schemas";
 import type { DraftCenter } from "../../api/draft-center";
-import type { PfnTables } from "../../api/pfn-tables";
+import type { PfnTables, TeamWeekStats } from "../../api/pfn-tables";
 import type { PlayerNews } from "../../api/player-news";
 import type { HistoricalTrades } from "../../api/_lib/trades";
 import type { ValueHistory } from "../../api/value-history";
@@ -118,6 +118,9 @@ export const api = {
 
   getPfnTables: (args: { season?: number; week?: number } = {}): Promise<PfnTables> =>
     request(`/api/pfn-tables${buildQuery({ season: args.season, week: args.week })}`),
+
+  getTeamWeekStats: (args: { season: number }): Promise<TeamWeekStats> =>
+    request(`/api/pfn-tables${buildQuery({ "team-week-stats": 1, season: args.season })}`),
 
   getMatchupBoxScore: (args: {
     team: string;
