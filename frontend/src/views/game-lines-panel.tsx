@@ -444,7 +444,10 @@ export function GameLinesPanel({
                     return (
                       <tr
                         key={row.key}
-                        className={row.opponent ? "is-opponent-roster" : undefined}
+                        className={[
+                          row.rostered ? "is-my-roster" : "",
+                          row.opponent ? "is-opponent-roster" : "",
+                        ].filter(Boolean).join(" ") || undefined}
                       >
                         <th scope="row" className="props-player-col">
                           <span className="props-player-name">{row.name}</span>
