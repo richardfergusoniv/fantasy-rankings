@@ -880,7 +880,7 @@ main { padding: 12px 16px 0; }
 .props-player-name {
   display: block;
   overflow: hidden;
-  color: var(--link);
+  color: var(--foreground);
   font-weight: 600;
   text-align: left;
   text-overflow: ellipsis;
@@ -894,8 +894,18 @@ main { padding: 12px 16px 0; }
   text-align: left;
   text-overflow: ellipsis;
 }
-/* Only the weekly opponent's players are marked, with the same grey
-   row highlight the League page uses; everyone else stays plain. */
+.props-table tbody tr.is-my-roster th,
+.props-table tbody tr.is-my-roster td {
+  background-color: var(--roster-highlight-bg);
+}
+.props-table tbody tr.is-my-roster .props-player-col {
+  background-color: var(--roster-highlight-bg);
+}
+.props-table tbody tr.is-my-roster .props-player-name {
+  color: var(--roster-highlight);
+}
+/* The weekly opponent's players take the same grey row highlight the
+   League page uses. */
 .props-table tbody tr.is-opponent-roster th,
 .props-table tbody tr.is-opponent-roster td {
   background-color: var(--opponent-row);
