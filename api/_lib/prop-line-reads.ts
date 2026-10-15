@@ -293,6 +293,21 @@ export function buildPropHistory(
   };
 }
 
+/**
+ * Props table order: best over hit rate first. Rows with no decided games
+ * (hitRate null) sink below every rated row, including a 0% rate; ties
+ * fall back to player name, then stat.
+ */
+export function compareHitRateDesc(
+  left: { hitRate: number | null; name: string; stat: string },
+  right: { hitRate: number | null; name: string; stat: string },
+): number {
+  const leftRate = left.hitRate ?? -1;
+  const rightRate = right.hitRate ?? -1;
+  if (rightRate !== leftRate) return rightRate - leftRate;
+  return left.name.localeCompare(right.name) || left.stat.localeCompare(right.stat);
+}
+
 export function propPlayerMatchKey(name: string, team: string | null | undefined, position: string): string {
   const teamKey = team ? team.trim().toUpperCase() : "";
   return `${position}|${teamKey}|${normalizeTeamStatsPlayerName(name)}`;

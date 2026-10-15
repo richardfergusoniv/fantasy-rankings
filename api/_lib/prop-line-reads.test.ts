@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TeamWeekStatRow } from "./nflverse-team-week-stats.js";
 import {
   buildPropHistory,
+  compareHitRateDesc,
   currentWeekPropLines,
   propStatActual,
   summarizePropLineMovement,
@@ -183,6 +184,24 @@ describe("propStatActual / history", () => {
     expect(pushHistory.pushes).toBe(1);
     expect(pushHistory.cells[0]?.result).toBe("push");
     expect(pushHistory.hitRate).toBe(1);
+  });
+
+  it("orders props by hit rate, unrated rows last", () => {
+    const rows = [
+      { hitRate: null, name: "No History", stat: "targets" },
+      { hitRate: 0, name: "Never Over", stat: "targets" },
+      { hitRate: 0.5, name: "Zed Last", stat: "targets" },
+      { hitRate: 1, name: "Always Over", stat: "targets" },
+      { hitRate: 0.5, name: "Aaron First", stat: "targets" },
+    ];
+    rows.sort(compareHitRateDesc);
+    expect(rows.map((row) => row.name)).toEqual([
+      "Always Over",
+      "Aaron First",
+      "Zed Last",
+      "Never Over",
+      "No History",
+    ]);
   });
 });
 
