@@ -20,25 +20,18 @@ import { api } from "../api";
 import type { League } from "../dashboard-types";
 
 /**
- * Player colors for the stacked bars, derived entirely from the app's own
- * chart tokens: the amber brand family (chart-1/accent/accent-2), the blue
- * family (chart-5 and its tints/shades), and the slate family (chart-2).
- * Green and red stay reserved for good/bad semantics, per the app tokens
- * (--stat-strength / --stat-weakness) and the Monitor hit colors.
+ * Player colors for the stacked bars. Anchored on the app's two saturated
+ * chart hues (amber chart-1, blue chart-5) and extended at the same vivid
+ * register — categorical data colors need high chroma to stay legible as
+ * thin segments on the dark surface, which the muted UI tokens can't do.
+ * Consecutive ranks jump hue families so neighbors never blend. Green and
+ * red stay reserved for good/bad semantics (hit colors, stat strength).
  */
 const TEAM_STATS_PALETTE = [
-  "var(--chart-1)",
-  "var(--chart-5)",
-  "var(--chart-2)",
-  "var(--accent)",
-  "color-mix(in srgb, var(--chart-5) 60%, black)",
-  "color-mix(in srgb, var(--chart-2) 45%, white)",
-  "var(--accent-2)",
-  "color-mix(in srgb, var(--chart-5) 55%, white)",
-  "var(--input)",
-  "color-mix(in srgb, var(--chart-5) 40%, var(--chart-2))",
+  "#f0b429", "#60a5fa", "#f472b6", "#22d3ee", "#a78bfa",
+  "#fb923c", "#e879f9", "#f5c16a", "#93c5fd", "#c4b5fd",
 ];
-const TEAM_STATS_OTHER_COLOR = "var(--opponent-row)";
+const TEAM_STATS_OTHER_COLOR = "#64748b";
 
 function isRosteredPlayer(
   player: { name: string; team: string; position: string },
@@ -200,7 +193,8 @@ export function TeamStatsPanel({
                           backgroundColor: segment.key === "__other__"
                             ? TEAM_STATS_OTHER_COLOR
                             : meta?.color ?? TEAM_STATS_OTHER_COLOR,
-                          boxShadow: rostered ? "inset 0 0 0 2px var(--foreground)" : undefined,
+                          outline: rostered ? "2px solid var(--foreground)" : undefined,
+                          outlineOffset: rostered ? "-2px" : undefined,
                         }}
                         title={`${segment.name} · W${stack.week}: ${formatTeamStatsValue(statId, segment.value)} (${formatTeamStatsPercent(segment.share * 100)})`}
                       />
