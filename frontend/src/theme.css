@@ -1061,7 +1061,7 @@ main { padding: 12px 16px 0; }
 }
 .monitor-game-line-market {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr) 48px;
+  grid-template-columns: 52px auto minmax(0, 1fr);
   gap: 6px;
   align-items: baseline;
   font-size: var(--type-body);
@@ -1075,21 +1075,11 @@ main { padding: 12px 16px 0; }
   letter-spacing: .02em;
   text-transform: uppercase;
 }
-.monitor-game-line-market-proj {
-  color: var(--dim);
-  font-weight: 600;
-}
-.monitor-game-line-market-edge {
-  text-align: right;
-  font-weight: 700;
-}
-.monitor-game-line-records {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
+.monitor-game-line-market-records {
   color: var(--dim);
   font-size: var(--type-caption);
   font-weight: 600;
+  text-align: right;
   font-variant-numeric: lining-nums tabular-nums;
 }
 .lineup-mode-toggle { margin: 0 0 8px; }
