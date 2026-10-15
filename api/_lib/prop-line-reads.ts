@@ -372,30 +372,42 @@ export function opponentAllowanceKey(defenseTeam: string, position: string, stat
 export function buildOpponentTopAllowances(
   stats: readonly TeamWeekStatRow[],
 ): Map<string, OpponentTopAllowance> {
-  // defense|position|stat|week -> best opposing actual that week
+  // defense -> weeks it actually played (appeared as an opponent).
+  const defenseWeeks = new Map<string, Set<number>>();
+  // defense|position|stat|week -> best opposing actual that week.
   const maxima = new Map<string, number>();
+  // Position|stat pairs that produced a value for at least one defense.
+  const applicablePairs = new Set<string>();
   for (const row of stats) {
     if (!row.opponent) continue;
     const defense = canonicalNflTeam(row.opponent);
+    const weeks = defenseWeeks.get(defense) ?? new Set<number>();
+    weeks.add(row.week);
+    defenseWeeks.set(defense, weeks);
     for (const stat of PROP_STAT_IDS) {
       const actual = propStatActual(stat, row);
       if (actual === null) continue;
+      applicablePairs.add(`${row.position}|${stat}`);
       const key = `${defense}|${row.position}|${stat}|${row.week}`;
       const current = maxima.get(key);
       if (current === undefined || actual > current) maxima.set(key, actual);
     }
   }
-  const totals = new Map<string, { sum: number; games: number }>();
-  for (const [key, max] of maxima) {
-    const groupKey = key.slice(0, key.lastIndexOf("|"));
-    const acc = totals.get(groupKey) ?? { sum: 0, games: 0 };
-    acc.sum += max;
-    acc.games += 1;
-    totals.set(groupKey, acc);
-  }
   const output = new Map<string, OpponentTopAllowance>();
-  for (const [key, acc] of totals) {
-    output.set(key, { allowed: Number((acc.sum / acc.games).toFixed(3)), games: acc.games });
+  for (const [defense, weeks] of defenseWeeks) {
+    for (const pair of applicablePairs) {
+      // A game the defense played with no recorded opposing player at this
+      // position/stat counts as allowing 0 — it still belongs in the
+      // denominator (CodeRabbit, PR #128).
+      let sum = 0;
+      for (const week of weeks) {
+        sum += maxima.get(`${defense}|${pair}|${week}`) ?? 0;
+      }
+      output.set(`${defense}|${pair}`, {
+        allowed: Number((sum / weeks.size).toFixed(3)),
+        games: weeks.size,
+      });
+    }
   }
   return output;
 }
