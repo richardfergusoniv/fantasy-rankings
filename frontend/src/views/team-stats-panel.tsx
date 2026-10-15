@@ -19,12 +19,26 @@ import {
 import { api } from "../api";
 import type { League } from "../dashboard-types";
 
-/** Categorical player colors for the stacked bars (never the good/bad green/red). */
+/**
+ * Player colors for the stacked bars, derived entirely from the app's own
+ * chart tokens: the amber brand family (chart-1/accent/accent-2), the blue
+ * family (chart-5 and its tints/shades), and the slate family (chart-2).
+ * Green and red stay reserved for good/bad semantics, per the app tokens
+ * (--stat-strength / --stat-weakness) and the Monitor hit colors.
+ */
 const TEAM_STATS_PALETTE = [
-  "#f0b429", "#60a5fa", "#a78bfa", "#fb923c", "#22d3ee",
-  "#f472b6", "#818cf8", "#facc15", "#9aa3b5", "#e879f9",
+  "var(--chart-1)",
+  "var(--chart-5)",
+  "var(--accent)",
+  "color-mix(in srgb, var(--chart-5) 55%, white)",
+  "var(--chart-2)",
+  "var(--accent-2)",
+  "color-mix(in srgb, var(--chart-5) 60%, black)",
+  "var(--input)",
+  "color-mix(in srgb, var(--chart-1) 45%, var(--chart-2))",
+  "color-mix(in srgb, var(--chart-5) 40%, var(--chart-2))",
 ];
-const TEAM_STATS_OTHER_COLOR = "#4b5563";
+const TEAM_STATS_OTHER_COLOR = "var(--opponent-row)";
 
 function isRosteredPlayer(
   player: { name: string; team: string; position: string },
