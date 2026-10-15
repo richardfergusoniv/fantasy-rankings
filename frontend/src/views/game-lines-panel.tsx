@@ -26,7 +26,8 @@ import {
   PROP_POSITIONS,
   PROP_STAT_OPTIONS,
   blendedPropEdge,
-  buildOpponentTopAllowances,
+  buildOpponentGroupAllowances,
+  buildPlayerStatShares,
   buildPropEdgeHistory,
   indexWeekStatsByPlayer,
   isPropStatId,
@@ -59,8 +60,12 @@ type PropTableRow = {
   projection: number | null;
   edge: number | null;
   opponent: string | null;
-  /** What the opponent has allowed the top opposing player at this position, per game. */
+  /** The player's share-adjusted Opp: opponent group allowance × his share. */
   oppAllowed: number | null;
+  /** What the opponent allows the whole position group per game. */
+  oppTotal: number | null;
+  /** The player's share (0–1) of his own group's production for this stat. */
+  oppShare: number | null;
   oppGames: number;
   absEdge: number;
   rostered: boolean;
@@ -270,7 +275,12 @@ export function GameLinesPanel({
   );
 
   const opponentAllowances = useMemo(
-    () => buildOpponentTopAllowances(priorStats),
+    () => buildOpponentGroupAllowances(priorStats),
+    [priorStats],
+  );
+
+  const playerShares = useMemo(
+    () => buildPlayerStatShares(priorStats),
     [priorStats],
   );
 
@@ -325,7 +335,11 @@ export function GameLinesPanel({
       const allowance = opponent
         ? opponentAllowances.get(opponentAllowanceKey(opponent, positionCode, line.stat))
         : undefined;
-      const edge = blendedPropEdge(history.projection, allowance?.allowed ?? null, line.line);
+      const share = playerShares.get(`${matchKey}|${line.stat}`);
+      const oppAllowed = allowance && share !== undefined
+        ? Number((allowance.allowed * share).toFixed(3))
+        : null;
+      const edge = blendedPropEdge(history.projection, oppAllowed, line.line);
       built.push({
         key: `${line.playerId}|${line.stat}`,
         playerId: line.playerId,
@@ -343,7 +357,9 @@ export function GameLinesPanel({
         projection: history.projection,
         edge,
         opponent,
-        oppAllowed: allowance?.allowed ?? null,
+        oppAllowed,
+        oppTotal: allowance?.allowed ?? null,
+        oppShare: share ?? null,
         oppGames: allowance?.games ?? 0,
         absEdge: edge === null ? -1 : Math.abs(edge),
         rostered,
@@ -359,6 +375,7 @@ export function GameLinesPanel({
   }, [
     gameTeamFilter,
     opponentAllowances,
+    playerShares,
     position,
     propLinesQuery.data?.propLines.lines,
     rosterIds,
@@ -531,7 +548,9 @@ export function GameLinesPanel({
                             <span className="props-game-cell is-empty">—</span>
                           ) : (
                             <span
-                              title={`${row.opponent} has allowed the top opposing ${row.position} an average of ${formatPropNumber(row.oppAllowed, 1)} per game (${row.oppGames} games)`}
+                              title={row.oppTotal !== null && row.oppShare !== null
+                                ? `${row.opponent} allows ${formatPropNumber(row.oppTotal, 1)} per game to ${row.position}s (${row.oppGames} games); ${row.name} takes ${Math.round(row.oppShare * 100)}% of ${row.team ?? "his team"}'s ${row.position} production in this stat`
+                                : undefined}
                             >
                               {formatPropNumber(row.oppAllowed, 1)}
                             </span>
