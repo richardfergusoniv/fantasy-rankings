@@ -21,7 +21,9 @@ import {
   parseFantasyCalcHistoryDate,
   pacificDateKey,
   playerValueSnapshotId,
+  isDynastyFormatKey,
   priorSnapshotValueKey,
+  rankedPicksFromFantasyCalcRows,
   rankedPlayersFromFantasyCalcRows,
   resolveFantasyCalcSnapshotFormatKey,
   utcDateKey,
@@ -30,6 +32,7 @@ import {
   VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
   VALUE_HISTORY_BACKFILL_MAX_LIMIT,
   VALUE_HISTORY_BACKFILL_REQUEST_DELAY_MS,
+  VALUE_HISTORY_CHART_MIN_DATE,
   VALUE_HISTORY_FETCH_BACKOFF_MS,
   VALUE_HISTORY_FETCH_MAX_ATTEMPTS,
   VALUE_HISTORY_MIN_SNAPSHOT_DATE,
@@ -377,17 +380,63 @@ describe("compactPlayerValueSnapshot", () => {
     ).toBeNull();
   });
 
-  it("skips picks, missing player ids, and out-of-range snapshot/captured dates", () => {
+  it("stores dynasty picks with stable FP_* ids and skips redraft picks / bad rows", () => {
     const now = new Date("2026-10-13T00:00:00.000Z");
+    const capturedAt = new Date("2026-10-12T18:00:00.000Z");
     expect(
       compactPlayerValueSnapshot({
         snapshotDate: "2026-10-12",
         formatKey: "dynasty-2qb-12t-1ppr",
-        playerId: "pick-1",
-        playerName: "2027 Mid",
+        playerId: "FP_2027_mid_0",
+        playerName: "2027 1st (Mid)",
         position: "PICK",
-        value: 4000,
-        capturedAt: new Date(),
+        value: 3041.4,
+        capturedAt,
+        now,
+      }),
+    ).toEqual({
+      id: "2026-10-12:dynasty-2qb-12t-1ppr:FP_2027_mid_0",
+      snapshotDate: "2026-10-12",
+      formatKey: "dynasty-2qb-12t-1ppr",
+      playerId: "FP_2027_mid_0",
+      playerName: "2027 1st (Mid)",
+      position: "PICK",
+      value: 3041,
+      capturedAt,
+    });
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2026-10-12",
+        formatKey: "redraft-1qb-12t-0.5ppr",
+        playerId: "FP_2027_mid_0",
+        playerName: "2027 1st (Mid)",
+        position: "PICK",
+        value: 3041,
+        capturedAt,
+        now,
+      }),
+    ).toBeNull();
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2026-10-12",
+        formatKey: "dynasty-2qb-12t-1ppr",
+        playerId: "123",
+        playerName: "2027 1st (Mid)",
+        position: "PICK",
+        value: 3041,
+        capturedAt,
+        now,
+      }),
+    ).toBeNull();
+    expect(
+      compactPlayerValueSnapshot({
+        snapshotDate: "2026-10-12",
+        formatKey: "dynasty-2qb-12t-1ppr",
+        playerId: "FP_2027_mid_0",
+        playerName: "2027 1st (Mid)",
+        position: "PICK",
+        value: 0,
+        capturedAt,
         now,
       }),
     ).toBeNull();
@@ -492,7 +541,7 @@ describe("dailySnapshotRowsFromPreset", () => {
         value: 10511,
       },
       {
-        player: { id: 2, sleeperId: "pick", name: "2027 Mid", position: "PICK" },
+        player: { id: 2, sleeperId: "FP_2027_mid_0", name: "2027 1st (Mid)", position: "PICK" },
         value: 3000,
       },
       {
@@ -520,6 +569,48 @@ describe("dailySnapshotRowsFromPreset", () => {
       skipped: 0,
     });
     expect(pacificDateKey(asOf)).toBe("2026-10-12");
+  });
+
+  it("includes dynasty draft picks with FP_* ids and drops non-positive pick values", () => {
+    const asOf = new Date("2026-10-12T18:30:00.000Z");
+    const rows: FantasyCalcRow[] = [
+      {
+        player: { id: 1, sleeperId: "9221", name: "Jahmyr Gibbs", position: "RB" },
+        value: 10511,
+      },
+      {
+        player: { id: 2, sleeperId: "FP_2027_mid_0", name: "2027 1st (Mid)", position: "PICK" },
+        value: 3041,
+      },
+      {
+        player: { id: 3, sleeperId: "FP_2027_late_0", name: "2027 1st (Late)", position: "PICK" },
+        value: 0,
+      },
+    ];
+    const built = dailySnapshotRowsFromPreset("dynasty-1qb-12t-1ppr", rows, asOf);
+    expect(built.rows).toEqual([
+      {
+        id: playerValueSnapshotId("2026-10-12", "dynasty-1qb-12t-1ppr", "9221"),
+        snapshotDate: "2026-10-12",
+        formatKey: "dynasty-1qb-12t-1ppr",
+        playerId: "9221",
+        playerName: "Jahmyr Gibbs",
+        position: "RB",
+        value: 10511,
+        capturedAt: asOf,
+      },
+      {
+        id: playerValueSnapshotId("2026-10-12", "dynasty-1qb-12t-1ppr", "FP_2027_mid_0"),
+        snapshotDate: "2026-10-12",
+        formatKey: "dynasty-1qb-12t-1ppr",
+        playerId: "FP_2027_mid_0",
+        playerName: "2027 1st (Mid)",
+        position: "PICK",
+        value: 3041,
+        capturedAt: asOf,
+      },
+    ]);
+    expect(built.skipped).toBe(0);
   });
 
   it("uses America/Los_Angeles date when UTC has already rolled to tomorrow", () => {
@@ -647,6 +738,82 @@ describe("rankedPlayersFromFantasyCalcRows", () => {
   });
 });
 
+describe("rankedPicksFromFantasyCalcRows", () => {
+  it("keeps only PICK rows with stable FantasyCalc FP_* sleeper ids", () => {
+    const ranked = rankedPicksFromFantasyCalcRows([
+      { player: { id: 1, sleeperId: "9221", name: "Jahmyr Gibbs", position: "RB" } },
+      { player: { id: 15352, sleeperId: "FP_2027_mid_0", name: "2027 1st (Mid)", position: "PICK" } },
+      { player: { id: 15352, sleeperId: "FP_2027_mid_0", name: "dup", position: "PICK" } },
+      { player: { id: 9692, sleeperId: "FP_2027_1", name: "2027 1st", position: "PICK" } },
+      { player: { id: 9, sleeperId: "", name: "No id", position: "PICK" } },
+      { player: { id: 10, sleeperId: "123", name: "Numeric pick", position: "PICK" } },
+    ]);
+    expect(ranked).toEqual([
+      {
+        fantasyCalcId: 15352,
+        playerId: "FP_2027_mid_0",
+        playerName: "2027 1st (Mid)",
+        position: "PICK",
+      },
+      {
+        fantasyCalcId: 9692,
+        playerId: "FP_2027_1",
+        playerName: "2027 1st",
+        position: "PICK",
+      },
+    ]);
+  });
+});
+
+describe("isDynastyFormatKey", () => {
+  it("detects dynasty snapshot and league format keys", () => {
+    expect(isDynastyFormatKey("dynasty-2qb-12t-1ppr")).toBe(true);
+    expect(isDynastyFormatKey("redraft-1qb-12t-0.5ppr")).toBe(false);
+    expect(VALUE_HISTORY_CHART_MIN_DATE).toBe("2026-01-01");
+  });
+});
+
+describe("historySnapshotRowsFromPoints for picks", () => {
+  it("builds dynasty pick series from FantasyCalc history points", () => {
+    const now = new Date("2026-10-13T00:00:00.000Z");
+    const built = historySnapshotRowsFromPoints({
+      formatKey: "dynasty-1qb-12t-1ppr",
+      playerId: "FP_2027_mid_0",
+      playerName: "2027 1st (Mid)",
+      position: "PICK",
+      points: [
+        { date: "01/01/2026", value: 2826 },
+        { date: "10/12/2026", value: 3041 },
+        { date: "10/12/2026", value: 0 },
+      ],
+      minSnapshotDate: VALUE_HISTORY_CHART_MIN_DATE,
+      now,
+    });
+    expect(built.rows).toEqual([
+      {
+        id: "2026-01-01:dynasty-1qb-12t-1ppr:FP_2027_mid_0",
+        snapshotDate: "2026-01-01",
+        formatKey: "dynasty-1qb-12t-1ppr",
+        playerId: "FP_2027_mid_0",
+        playerName: "2027 1st (Mid)",
+        position: "PICK",
+        value: 2826,
+        capturedAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+      {
+        id: "2026-10-12:dynasty-1qb-12t-1ppr:FP_2027_mid_0",
+        snapshotDate: "2026-10-12",
+        formatKey: "dynasty-1qb-12t-1ppr",
+        playerId: "FP_2027_mid_0",
+        playerName: "2027 1st (Mid)",
+        position: "PICK",
+        value: 3041,
+        capturedAt: new Date("2026-10-12T00:00:00.000Z"),
+      },
+    ]);
+  });
+});
+
 describe("fantasyCalcHistoryUrl", () => {
   it("encodes format query params", () => {
     expect(
@@ -756,18 +923,25 @@ describe("isRedraftFormatKey / filterUnchangedRedraftSnapshots", () => {
     expect(isRedraftFormatKey("startup-1qb-12t-1ppr")).toBe(false);
   });
 
-  it("skips unchanged redraft values and keeps dynasty / changed / new players", () => {
+  it("skips unchanged redraft values and keeps dynasty / picks / changed / new players", () => {
     const prior = new Map<string, number>([
       [priorSnapshotValueKey("redraft-1qb-12t-0.5ppr", "a"), 100],
       [priorSnapshotValueKey("redraft-1qb-12t-0.5ppr", "b"), 200],
       [priorSnapshotValueKey("dynasty-2qb-12t-1ppr", "a"), 5000],
+      [priorSnapshotValueKey("dynasty-2qb-12t-1ppr", "FP_2027_mid_0"), 3041],
     ]);
+    const dynastyPick: PlayerValueSnapshotRow = {
+      ...row("dynasty-2qb-12t-1ppr", "FP_2027_mid_0", 3041),
+      playerName: "2027 1st (Mid)",
+      position: "PICK",
+    };
     const filtered = filterUnchangedRedraftSnapshots(
       [
         row("redraft-1qb-12t-0.5ppr", "a", 100), // unchanged → skip
         row("redraft-1qb-12t-0.5ppr", "b", 210), // changed → keep
         row("redraft-1qb-12t-0.5ppr", "c", 50), // no prior → keep
         row("dynasty-2qb-12t-1ppr", "a", 5000), // dynasty unchanged → keep
+        dynastyPick, // dynasty pick unchanged → keep
       ],
       prior,
     );
@@ -776,6 +950,7 @@ describe("isRedraftFormatKey / filterUnchangedRedraftSnapshots", () => {
       "redraft-1qb-12t-0.5ppr:b:210",
       "redraft-1qb-12t-0.5ppr:c:50",
       "dynasty-2qb-12t-1ppr:a:5000",
+      "dynasty-2qb-12t-1ppr:FP_2027_mid_0:3041",
     ]);
   });
 });

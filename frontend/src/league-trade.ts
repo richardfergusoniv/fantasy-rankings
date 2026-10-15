@@ -43,6 +43,43 @@ export function compactAssetName(name: string, position: string): string {
   return compactPlayerName(name);
 }
 
+/** FantasyCalc draft-pick sleeper ids look like `FP_2027_mid_0` / `FP_2028_1`. */
+const FANTASY_CALC_PICK_ID = /FP_[A-Za-z0-9_]+/;
+
+export function isFantasyCalcPickId(playerId: string): boolean {
+  return FANTASY_CALC_PICK_ID.test(playerId) && playerId.startsWith("FP_");
+}
+
+export type ValueHistoryAssetRef = {
+  playerId: string;
+  position: string;
+  value: number;
+  overallRank: number;
+};
+
+/**
+ * Map a trade asset onto the player_value_snapshots / value-history id.
+ * Market picks already use FantasyCalc `FP_*` ids; league-owned picks
+ * (`pick:…`) and historical rewrites (`historical:…:FP_…`) resolve back to
+ * the matching FantasyCalc pick row when possible.
+ */
+export function resolveValueHistoryPlayerId(
+  asset: ValueHistoryAssetRef,
+  marketAssets: ReadonlyArray<ValueHistoryAssetRef> = [],
+): string {
+  if (asset.position !== "PICK") return asset.playerId;
+  if (isFantasyCalcPickId(asset.playerId)) return asset.playerId;
+  const embedded = asset.playerId.match(FANTASY_CALC_PICK_ID)?.[0];
+  if (embedded) return embedded;
+  const match = marketAssets.find((row) => (
+    row.position === "PICK"
+    && isFantasyCalcPickId(row.playerId)
+    && row.overallRank === asset.overallRank
+    && row.value === asset.value
+  ));
+  return match?.playerId ?? asset.playerId;
+}
+
 export function compactPlayerName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length < 2) return name.trim();

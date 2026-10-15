@@ -16,6 +16,7 @@ import {
 import { readOwnerSleeperUserId } from "../_lib/auth.js";
 import { captureServerError } from "../_lib/posthog.js";
 import {
+  backfillPickValueHistoryBatch,
   backfillValueHistoryBatch,
   VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
 } from "../_lib/player-value-history.js";
@@ -25,7 +26,7 @@ import { refreshTeamSituationalSnapshot } from "../_lib/team-situational.js";
 import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
 
 /**
- * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-nfl-players | backfill-value-history
+ * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-nfl-players | backfill-value-history | backfill-pick-value-history
  *
  * One function for the scheduled jobs (Vercel's 12-function budget).
  * Vercel Cron invokes with GET; auth is `Authorization: Bearer <CRON_SECRET>`
@@ -38,7 +39,7 @@ import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
  * - refresh-fantasycalc: refreshes the daily FantasyCalc preset cache that
  *   dashboard builds read instead of hitting the FantasyCalc API 12x each,
  *   and appends today's values into `player_value_snapshots` for every
- *   ranked player in each fetched preset.
+ *   ranked player (and dynasty draft pick) in each fetched preset.
  * - read-dashboard-snapshot: returns the stored snapshot for the props
  *   verifier. It is not a public read; the cron secret is required, and the
  *   body is the same dashboard the rebuild just wrote.
@@ -50,11 +51,17 @@ import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
  * - refresh-nfl-players: pulls Sleeper `/players/nfl`, stores a compact
  *   team/status roster map in `nfl-players-roster-v1` (not the full dump),
  *   and keeps the previous snapshot when the pull is thin or fails.
- * - backfill-value-history: one-time / resumable FantasyCalc history pull
- *   into `player_value_snapshots`. Fetches are sequential with retries and
- *   whole-response date validation; failed player×format ids are listed in
- *   `failedItems`. Query params: `offset` (default 0), `limit` (default 20,
- *   max 40). Repeat with `nextOffset` until `done`.
+ * - backfill-value-history: one-time / resumable FantasyCalc player history
+ *   pull into `player_value_snapshots`. Fetches are sequential with retries
+ *   and whole-response date validation; failed player×format ids are listed
+ *   in `failedItems`. Query params: `offset` (default 0), `limit` (default
+ *   20, max 40). Repeat with `nextOffset` until `done`.
+ * - backfill-pick-value-history: one-time / resumable dynasty draft-pick
+ *   history pull (FantasyCalc `PICK` / `FP_*` ids) from 2026-01-01 forward.
+ *   Same `offset` / `limit` / `nextOffset` contract as player backfill;
+ *   dynasty presets only; batched upserts with no full-table verification
+ *   reads. Invoke manually until `done` — do not schedule against production
+ *   without pacing.
  */
 
 async function handleRebuildDashboard(): Promise<Response> {
@@ -125,6 +132,16 @@ async function handleBackfillValueHistory(url: URL): Promise<Response> {
   return json({ ok: true, ...result });
 }
 
+async function handleBackfillPickValueHistory(url: URL): Promise<Response> {
+  const offset = parseNonNegativeInt(url.searchParams.get("offset"), 0);
+  const limit = parseNonNegativeInt(
+    url.searchParams.get("limit"),
+    VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
+  );
+  const result = await backfillPickValueHistoryBatch({ offset, limit });
+  return json({ ok: true, ...result });
+}
+
 export async function GET(req: Request): Promise<Response> {
   if (!hasCronSecret(req)) return forbidden("Invalid or missing cron secret.");
   const url = new URL(req.url, "https://localhost");
@@ -137,8 +154,9 @@ export async function GET(req: Request): Promise<Response> {
     if (job === "refresh-chart-extras") return await handleRefreshChartExtras();
     if (job === "refresh-nfl-players") return await handleRefreshNflPlayers();
     if (job === "backfill-value-history") return await handleBackfillValueHistory(url);
+    if (job === "backfill-pick-value-history") return await handleBackfillPickValueHistory(url);
     return badRequest(
-      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, refresh-nfl-players, or backfill-value-history.",
+      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, refresh-nfl-players, backfill-value-history, or backfill-pick-value-history.",
     );
   } catch (err) {
     await captureServerError(err, { route: "cron/jobs", job: job ?? "unknown" });

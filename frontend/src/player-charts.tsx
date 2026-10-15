@@ -51,7 +51,6 @@ export function AggregateTradeHistory({
   getColor = "var(--chart-3)",
   giveStrokeWidth = 2.3,
   getStrokeWidth = 2.3,
-  showPickNote = true,
 }: {
   give: TradeAsset[];
   get: TradeAsset[];
@@ -61,12 +60,8 @@ export function AggregateTradeHistory({
   getColor?: string;
   giveStrokeWidth?: number;
   getStrokeWidth?: number;
-  showPickNote?: boolean;
 }) {
-  const playerSide = (assets: TradeAsset[]) => assets.filter((asset) => asset.position !== "PICK");
-  const givePlayers = playerSide(give);
-  const getPlayers = playerSide(get);
-  // Per-player continuous trim, then a shared start across plotted players so
+  // Per-asset continuous trim, then a shared start across plotted assets so
   // one isolated early point cannot pad empty months on the x-axis.
   const trimmedPointsByPlayerId = new Map(
     [...historyByPlayerId.entries()].map(([id, series]) => [
@@ -74,7 +69,7 @@ export function AggregateTradeHistory({
       trimValueHistoryToContinuousStart(series.points),
     ]),
   );
-  const plottedTrimmedSeries = [...givePlayers, ...getPlayers].flatMap((asset) => {
+  const plottedTrimmedSeries = [...give, ...get].flatMap((asset) => {
     const points = trimmedPointsByPlayerId.get(asset.playerId);
     return points?.length ? [points] : [];
   });
@@ -85,8 +80,11 @@ export function AggregateTradeHistory({
       sliceValueHistoryForSharedDomain(points, startDate),
     ]),
   );
+  // Assets with no stored history must not null out a mixed side's aggregate.
+  const chartGive = give.filter((asset) => (chartPointsByPlayerId.get(asset.playerId)?.length ?? 0) > 0);
+  const chartGet = get.filter((asset) => (chartPointsByPlayerId.get(asset.playerId)?.length ?? 0) > 0);
   const dates = [...new Set(
-    [...givePlayers, ...getPlayers].flatMap((asset) => (
+    [...chartGive, ...chartGet].flatMap((asset) => (
       chartPointsByPlayerId.get(asset.playerId)?.map((point) => point.date) ?? []
     )),
   )].sort();
@@ -101,7 +99,7 @@ export function AggregateTradeHistory({
     const values = assets.map((asset) => pointMap.get(asset.playerId)?.get(date));
     return values.every((value): value is number => typeof value === "number") ? values.reduce((sum, value) => sum + value, 0) : null;
   };
-  const data = dates.map((date) => ({ date, give: totalOn(givePlayers, date), get: totalOn(getPlayers, date) }));
+  const data = dates.map((date) => ({ date, give: totalOn(chartGive, date), get: totalOn(chartGet, date) }));
   const hasGive = data.some((point) => point.give !== null);
   const hasGet = data.some((point) => point.get !== null);
   const formatDateTick = (value: string): string => {
@@ -113,7 +111,7 @@ export function AggregateTradeHistory({
 
   return (
     <section className="trade-aggregate" aria-labelledby="trade-aggregate-heading">
-      <div className="section-heading"><h2 id="trade-aggregate-heading">30-day trade value</h2><span>selected players only</span></div>
+      <div className="section-heading"><h2 id="trade-aggregate-heading">30-day trade value</h2><span>selected assets</span></div>
       {data.length > 0 && (hasGive || hasGet) ? (
         <>
           <div className="trade-aggregate-chart" role="img" aria-label="Thirty-day FantasyCalc total value for each side of the trade">
@@ -133,8 +131,7 @@ export function AggregateTradeHistory({
             <span><i className={`get${getIsWinner ? " is-winner" : ""}`} style={{ background: getColor }} />You get</span>
           </div>
         </>
-      ) : <div className="trade-stock-empty">{isLoading ? "Loading FantasyCalc history…" : "Add a player to either side to chart its sourced daily value."}</div>}
-      {showPickNote && (give.some((asset) => asset.position === "PICK") || get.some((asset) => asset.position === "PICK")) ? <p>Draft picks remain in the totals above but are excluded from this player-history chart.</p> : null}
+      ) : <div className="trade-stock-empty">{isLoading ? "Loading FantasyCalc history…" : "Add a player or draft pick to either side to chart its sourced daily value."}</div>}
     </section>
   );
 }

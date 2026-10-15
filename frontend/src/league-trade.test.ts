@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildLeagueRosterRows, compactPlayerName, formatTeamRecord, tradeValueVerdict } from "./league-trade";
+import {
+  buildLeagueRosterRows,
+  compactPlayerName,
+  formatTeamRecord,
+  isFantasyCalcPickId,
+  resolveValueHistoryPlayerId,
+  tradeValueVerdict,
+} from "./league-trade";
 
 describe("compactPlayerName", () => {
   it("abbreviates a first name and keeps suffixes", () => {
@@ -43,5 +50,35 @@ describe("tradeValueVerdict", () => {
     expect(tradeValueVerdict(7200, 9400, "Tyler Warren Squad")).toBe("You win by 2,200.");
     expect(tradeValueVerdict(9400, 7200, "Tyler Warren Squad")).toBe("Tyler Warren Squad wins by 2,200.");
     expect(tradeValueVerdict(1000, 1000, "Tyler Warren Squad")).toBe("This trade is even.");
+  });
+});
+
+describe("resolveValueHistoryPlayerId", () => {
+  const market = [
+    { playerId: "FP_2027_mid_0", position: "PICK", value: 3041, overallRank: 40 },
+    { playerId: "FP_2027_early_0", position: "PICK", value: 4618, overallRank: 25 },
+    { playerId: "9221", position: "RB", value: 11000, overallRank: 1 },
+  ];
+
+  it("passes players and FantasyCalc pick ids through", () => {
+    expect(isFantasyCalcPickId("FP_2027_mid_0")).toBe(true);
+    expect(isFantasyCalcPickId("pick:lg:2027:1:3")).toBe(false);
+    expect(resolveValueHistoryPlayerId({ playerId: "9221", position: "RB", value: 11000, overallRank: 1 }, market)).toBe("9221");
+    expect(resolveValueHistoryPlayerId({ playerId: "FP_2027_mid_0", position: "PICK", value: 3041, overallRank: 40 }, market)).toBe("FP_2027_mid_0");
+  });
+
+  it("maps owned and historical pick ids onto FantasyCalc FP_* rows", () => {
+    expect(resolveValueHistoryPlayerId({
+      playerId: "pick:1306:2027:1:3",
+      position: "PICK",
+      value: 3041,
+      overallRank: 40,
+    }, market)).toBe("FP_2027_mid_0");
+    expect(resolveValueHistoryPlayerId({
+      playerId: "historical:tx:1:FP_2027_early_0",
+      position: "PICK",
+      value: 4618,
+      overallRank: 25,
+    }, market)).toBe("FP_2027_early_0");
   });
 });
