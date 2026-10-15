@@ -61,7 +61,7 @@ type PropTableRow = {
   /** What the opponent has allowed the top opposing player at this position, per game. */
   oppAllowed: number | null;
   oppGames: number;
-  /** projection − oppAllowed; positive favors the player. */
+  /** oppAllowed − projection; positive = the defense gives up more than he's projected (soft matchup). */
   vsOpp: number | null;
   absEdge: number;
   rostered: boolean;
@@ -346,7 +346,7 @@ export function GameLinesPanel({
         oppAllowed: allowance?.allowed ?? null,
         oppGames: allowance?.games ?? 0,
         vsOpp: history.projection !== null && allowance
-          ? Number((history.projection - allowance.allowed).toFixed(3))
+          ? Number((allowance.allowed - history.projection).toFixed(3))
           : null,
         absEdge: history.edge === null ? -1 : Math.abs(history.edge),
         rostered,
