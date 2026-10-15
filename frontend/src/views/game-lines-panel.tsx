@@ -270,7 +270,8 @@ export function GameLinesPanel({
 
   const weekStatsByPlayer = useMemo(() => {
     const stats = historyQuery.data?.stats ?? [];
-    const throughWeek = Math.max(1, week - 1);
+    // Prior completed weeks only — never include the slate week itself.
+    const throughWeek = week - 1;
     const prior: TeamWeekStatRow[] = stats.filter((row) => row.week >= 1 && row.week <= throughWeek);
     return indexWeekStatsByPlayer(prior);
   }, [historyQuery.data?.stats, week]);

@@ -135,7 +135,11 @@ export async function loadPropLineWeek(options?: {
     pulledAt: latestPulledAt?.toISOString() ?? null,
     lines: serializeLines(collapsed, players),
   };
-  setCache(cacheKey, body);
+  // Avoid caching a non-empty week with missing player metadata (empty roster
+  // map) — that degrades names/teams and hides game-filtered props for 15m.
+  if (collapsed.length === 0 || Object.keys(players).length > 0) {
+    setCache(cacheKey, body);
+  }
   return body;
 }
 

@@ -377,7 +377,8 @@ export function completedSeasonGames(
 
 /**
  * Home covers when (homeScore - awayScore) > spreadLine.
- * nflverse: positive spreadLine means the home team is favored.
+ * nflverse / this codebase: positive `spreadLine` means the home team is
+ * favored (e.g. home -8.5 ⇒ spreadLine = +8.5). Do not invert the sign.
  */
 export function homeSpreadResult(
   homeScore: number,

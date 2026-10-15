@@ -298,10 +298,15 @@ describe("defaultGameLineCardId", () => {
 });
 
 describe("game line ATS / projection helpers", () => {
-  it("scores home spread and totals with pushes", () => {
+  it("scores home spread and totals with pushes (positive spread = home favored)", () => {
+    // Home -3 (spreadLine +3): needs margin > 3 to cover.
     expect(homeSpreadResult(24, 20, 3)).toBe("win");
     expect(homeSpreadResult(23, 20, 3)).toBe("push");
     expect(homeSpreadResult(21, 20, 3)).toBe("loss");
+    // Home underdog +3 (spreadLine -3): covers unless losing by more than 3.
+    expect(homeSpreadResult(20, 21, -3)).toBe("win");
+    expect(homeSpreadResult(18, 21, -3)).toBe("push");
+    expect(homeSpreadResult(17, 21, -3)).toBe("loss");
     expect(totalResult(24, 20, 43.5)).toBe("win");
     expect(totalResult(20, 20, 40)).toBe("push");
     expect(totalResult(17, 20, 40)).toBe("loss");

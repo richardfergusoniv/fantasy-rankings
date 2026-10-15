@@ -246,7 +246,8 @@ export function propStatActual(stat: string, week: TeamWeekStatRow): number | nu
     case "receptions":
       return week.receptions;
     case "anytime_td":
-      return week.passingTds + week.rushingTds + week.receivingTds;
+      // Scorer props only — thrown TDs do not count.
+      return week.rushingTds + week.receivingTds;
     case "longest_reception":
     case "first_td":
     case "sacks":

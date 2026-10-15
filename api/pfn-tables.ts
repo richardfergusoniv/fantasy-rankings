@@ -119,10 +119,12 @@ export async function GET(req: Request): Promise<Response> {
       return badRequest("Invalid season/week query params.", parsedQuery.error.issues);
     }
 
+    let propLinesDegraded = false;
     const [tables, teamSituational, propLines] = await Promise.all([
       loadPfnTables(),
       readTeamSituationalSnapshot(),
       loadPropLineWeek(parsedQuery.data).catch((err): PropLineWeekPayload => {
+        propLinesDegraded = true;
         console.error("[pfn-tables] prop lines unavailable", err instanceof Error ? err.message : err);
         return {
           season: parsedQuery.data.season ?? 0,
@@ -136,7 +138,11 @@ export async function GET(req: Request): Promise<Response> {
     return json(
       { tables, teamSituational, propLines },
       200,
-      { "Cache-Control": `private, max-age=${PROP_LINES_HTTP_CACHE_SECONDS}` },
+      {
+        "Cache-Control": propLinesDegraded
+          ? "private, no-store"
+          : `private, max-age=${PROP_LINES_HTTP_CACHE_SECONDS}`,
+      },
     );
   } catch (err) {
     return internalError(err);
