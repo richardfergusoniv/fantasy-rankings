@@ -36,7 +36,6 @@ export type TeamStatsPosition = "QB" | "RB" | "WR" | "TE";
 export type TeamStatsStatId =
   | "snaps"
   | "targets"
-  | "target_share"
   | "receptions"
   | "receiving_yards"
   | "carries"
@@ -54,7 +53,6 @@ export type TeamStatsStatDef = {
 export const TEAM_STATS_STAT_OPTIONS: readonly TeamStatsStatDef[] = [
   { id: "snaps", label: "Snaps", percentOf: "snaps" },
   { id: "targets", label: "Targets" },
-  { id: "target_share", label: "Target share", percentOf: "targets" },
   { id: "receptions", label: "Receptions" },
   { id: "receiving_yards", label: "Rec yards" },
   { id: "carries", label: "Carries" },
@@ -64,6 +62,28 @@ export const TEAM_STATS_STAT_OPTIONS: readonly TeamStatsStatDef[] = [
 ] as const;
 
 export const TEAM_STATS_POSITIONS: readonly TeamStatsPosition[] = ["QB", "RB", "WR", "TE"];
+
+/**
+ * Display groups for the panel. WRs and TEs draw from the same pool of
+ * targets and receiving production, so they are never split apart.
+ */
+export type TeamStatsGroupId = "QB" | "RB" | "WRTE";
+
+export const TEAM_STATS_GROUPS: readonly { id: TeamStatsGroupId; label: string }[] = [
+  { id: "QB", label: "QB" },
+  { id: "RB", label: "RB" },
+  { id: "WRTE", label: "WR/TE" },
+];
+
+export const TEAM_STATS_GROUP_POSITIONS: Record<TeamStatsGroupId, readonly TeamStatsPosition[]> = {
+  QB: ["QB"],
+  RB: ["RB"],
+  WRTE: ["WR", "TE"],
+};
+
+export function teamStatsGroupForPosition(position: TeamStatsPosition): TeamStatsGroupId {
+  return position === "WR" || position === "TE" ? "WRTE" : position;
+}
 
 export type TeamWeekStatRow = {
   playerId: string;
@@ -274,11 +294,6 @@ function weekValueForStat(
       };
     case "targets":
       return { value: weekStats?.targets ?? 0, percent: null };
-    case "target_share":
-      return {
-        value: weekStats?.targets ?? 0,
-        percent: weekStats?.targetShare ?? null,
-      };
     case "receptions":
       return { value: weekStats?.receptions ?? 0, percent: null };
     case "receiving_yards":
@@ -303,14 +318,14 @@ function weekValueForStat(
 }
 
 /**
- * Build week-by-week rows for one team + position + stat.
+ * Build week-by-week rows for one team + position group + stat.
  * Columns span weeks 1..throughWeek; sorted by season total descending.
  */
 export function buildTeamStatsTable(options: {
   stats: TeamWeekStatRow[];
   snaps: TeamWeekSnapRow[];
   team: string;
-  position: TeamStatsPosition;
+  positions: readonly TeamStatsPosition[];
   statId: TeamStatsStatId;
   throughWeek: number;
 }): TeamStatsPlayerRow[] {
@@ -330,7 +345,7 @@ export function buildTeamStatsTable(options: {
   const players = new Map<string, Acc>();
 
   for (const row of options.stats) {
-    if (row.team !== team || row.position !== options.position) continue;
+    if (row.team !== team || !options.positions.includes(row.position)) continue;
     if (row.week < 1 || row.week > throughWeek) continue;
     const key = playerKey(row.name, row.team, row.position);
     const acc = players.get(key) ?? {
@@ -347,7 +362,7 @@ export function buildTeamStatsTable(options: {
   }
 
   for (const row of options.snaps) {
-    if (row.team !== team || row.position !== options.position) continue;
+    if (row.team !== team || !options.positions.includes(row.position)) continue;
     if (row.week < 1 || row.week > throughWeek) continue;
     const key = playerKey(row.name, row.team, row.position);
     const acc = players.get(key) ?? {
@@ -484,25 +499,26 @@ export function defaultTeamStatsTeam(rosterTeams: readonly (string | null | unde
   return best ?? NFL_TEAM_CODES[0]!;
 }
 
-/** Prefer a skill position the user actually rostered on `team`, else WR. */
-export function defaultTeamStatsPosition(
+/** Prefer the display group the user actually rostered most on `team`, else WR/TE. */
+export function defaultTeamStatsGroup(
   rosterPlayers: readonly { team: string | null; position: string }[],
   team: string,
-): TeamStatsPosition {
+): TeamStatsGroupId {
   const target = canonicalNflTeam(team);
-  const counts = new Map<TeamStatsPosition, number>();
+  const counts = new Map<TeamStatsGroupId, number>();
   for (const player of rosterPlayers) {
     if (!player.team || canonicalNflTeam(player.team) !== target) continue;
     const position = asSkillPosition(player.position);
     if (!position) continue;
-    counts.set(position, (counts.get(position) ?? 0) + 1);
+    const group = teamStatsGroupForPosition(position);
+    counts.set(group, (counts.get(group) ?? 0) + 1);
   }
-  let best: TeamStatsPosition = "WR";
+  let best: TeamStatsGroupId = "WRTE";
   let bestCount = 0;
-  for (const position of TEAM_STATS_POSITIONS) {
-    const count = counts.get(position) ?? 0;
+  for (const group of TEAM_STATS_GROUPS) {
+    const count = counts.get(group.id) ?? 0;
     if (count > bestCount) {
-      best = position;
+      best = group.id;
       bestCount = count;
     }
   }
