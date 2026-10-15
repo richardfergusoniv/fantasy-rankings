@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildTeamSeasonRatings,
+  buildTeamSeasonRecords,
   defaultGameLineCardId,
   etWallTimeToUtc,
   formatCoverRecord,
@@ -17,7 +17,6 @@ import {
   impliedTeamTotals,
   normalizeGameLineTeam,
   parseGamesCsv,
-  projectGameLine,
   toGameLineCard,
   totalResult,
 } from "./nflverse-game-lines.js";
@@ -297,7 +296,7 @@ describe("defaultGameLineCardId", () => {
   });
 });
 
-describe("game line ATS / projection helpers", () => {
+describe("game line ATS helpers", () => {
   it("scores home spread and totals with pushes (positive spread = home favored)", () => {
     // Home -3 (spreadLine +3): needs margin > 3 to cover.
     expect(homeSpreadResult(24, 20, 3)).toBe("win");
@@ -312,7 +311,7 @@ describe("game line ATS / projection helpers", () => {
     expect(totalResult(17, 20, 40)).toBe("loss");
   });
 
-  it("builds opponent-adjusted ratings, ATS, and projected edges", () => {
+  it("builds ATS and O/U records from completed games", () => {
     const csv = [
       HEADER,
       gameRow({
@@ -340,23 +339,12 @@ describe("game line ATS / projection helpers", () => {
       }),
     ].join("\n");
     const rows = parseGamesCsv(csv);
-    const ratings = buildTeamSeasonRatings(rows, 2026, 6);
-    expect(ratings.get("SEA")?.games).toBe(2);
-    expect(ratings.get("DEN")?.ats).toEqual({ wins: 1, losses: 1, pushes: 0 });
+    const records = buildTeamSeasonRecords(rows, 2026, 6);
+    // The unscored Week 6 row does not count as a played game.
+    expect(records.get("SEA")?.games).toBe(2);
+    expect(records.get("DEN")?.ats).toEqual({ wins: 1, losses: 1, pushes: 0 });
+    // Both SEA games went under (37 vs 40.5, 35 vs 42.5): "win" means over.
+    expect(records.get("SEA")?.ou).toEqual({ wins: 0, losses: 2, pushes: 0 });
     expect(formatCoverRecord({ wins: 1, losses: 1, pushes: 1 })).toBe("1-1-1");
-
-    const upcoming = rows.find((row) => row.gameId === "2026_06_SEA_DEN")!;
-    const projection = projectGameLine(upcoming, ratings);
-    expect(projection.projectedAway).not.toBeNull();
-    expect(projection.projectedHome).not.toBeNull();
-    expect(projection.projectedTotal).toBe(
-      Number(((projection.projectedAway ?? 0) + (projection.projectedHome ?? 0)).toFixed(3)),
-    );
-    expect(projection.spreadEdge).toBe(
-      Number(((projection.projectedHomeMargin ?? 0) - (upcoming.spreadLine ?? 0)).toFixed(3)),
-    );
-    expect(projection.totalEdge).toBe(
-      Number(((projection.projectedTotal ?? 0) - (upcoming.totalLine ?? 0)).toFixed(3)),
-    );
   });
 });
