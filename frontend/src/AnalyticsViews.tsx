@@ -2402,23 +2402,27 @@ function ComparisonMetricRow({ row, leftName, rightName }: { row: ComparisonRow;
       role="group"
       aria-label={`${metric.label}. ${leftName}: ${leftDisplay}${leftWins ? ", leads" : tied ? ", tied" : ""}. ${rightName}: ${rightDisplay}${rightWins ? ", leads" : tied ? ", tied" : ""}.`}
     >
+      <div className="comparison-data-side left" aria-hidden="true">
+        <strong className={`comparison-data-value${leftWins ? " is-winner" : ""}${!leftValue ? " is-unavailable" : rightWins ? " is-loser" : ""}`}>{leftDisplay}</strong>
+        <div className="player-comparison-track">
+          <span
+            className={`player-comparison-fill left${leftWins ? " is-winner" : ""}`}
+            style={{ width: `${leftValue ? leftShare : 0}%` }}
+          />
+        </div>
+      </div>
       <div className="comparison-data-label">
         <b>{metric.label}</b>
         {metric.lowerIsBetter ? <small>Lower is better</small> : null}
       </div>
-      <div className="player-comparison-bar" aria-hidden="true">
-        <span
-          className={`player-comparison-segment left${leftWins ? " is-winner" : ""}${!leftValue ? " is-unavailable" : ""}`}
-          style={{ width: `${leftShare}%` }}
-        >
-          <strong>{leftDisplay}</strong>
-        </span>
-        <span
-          className={`player-comparison-segment right${rightWins ? " is-winner" : ""}${!rightValue ? " is-unavailable" : ""}`}
-          style={{ width: `${rightShare}%` }}
-        >
-          <strong>{rightDisplay}</strong>
-        </span>
+      <div className="comparison-data-side right" aria-hidden="true">
+        <div className="player-comparison-track">
+          <span
+            className={`player-comparison-fill right${rightWins ? " is-winner" : ""}`}
+            style={{ width: `${rightValue ? rightShare : 0}%` }}
+          />
+        </div>
+        <strong className={`comparison-data-value${rightWins ? " is-winner" : ""}${!rightValue ? " is-unavailable" : leftWins ? " is-loser" : ""}`}>{rightDisplay}</strong>
       </div>
     </div>
   );
