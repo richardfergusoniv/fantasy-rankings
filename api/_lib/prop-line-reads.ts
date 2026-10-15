@@ -117,10 +117,8 @@ export type PropGameCell = {
   result: PropGameResult;
 };
 
-export type PropEdgeHistory = {
+export type PropHistory = {
   games: number;
-  average: number | null;
-  median: number | null;
   overs: number;
   unders: number;
   pushes: number;
@@ -128,10 +126,6 @@ export type PropEdgeHistory = {
   hitRate: number | null;
   /** Per-game results vs the current line, oldest → newest. */
   cells: PropGameCell[];
-  /** Actuals for the last up-to-3 games, oldest → newest. */
-  last3: number[];
-  projection: number | null;
-  edge: number | null;
 };
 
 export function propGameResult(actual: number, line: number): PropGameResult {
@@ -263,45 +257,16 @@ export function propStatActual(stat: string, week: TeamWeekStatRow): number | nu
   }
 }
 
-/** Recent-weighted projection: game i (oldest→newest) gets weight i+1. */
-export function weightedRecentProjection(values: readonly number[]): number | null {
-  if (values.length === 0) return null;
-  let weightedSum = 0;
-  let weightTotal = 0;
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index];
-    if (value === undefined || !Number.isFinite(value)) continue;
-    const weight = index + 1;
-    weightedSum += value * weight;
-    weightTotal += weight;
-  }
-  if (weightTotal <= 0) return null;
-  return Number((weightedSum / weightTotal).toFixed(3));
-}
-
-export function medianOf(values: readonly number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((left, right) => left - right);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[mid]!;
-  return Number((((sorted[mid - 1]! + sorted[mid]!) / 2)).toFixed(3));
-}
-
-export function averageOf(values: readonly number[]): number | null {
-  if (values.length === 0) return null;
-  const sum = values.reduce((total, value) => total + value, 0);
-  return Number((sum / values.length).toFixed(3));
-}
-
 /**
- * Compare a line to the player's 2026 weekly actuals for that market.
- * `weekRows` should already be filtered to one player and sorted by week.
+ * Compare a line to the player's weekly actuals for that market — pure
+ * history, no projection. `weekRows` should already be filtered to one
+ * player and sorted by week.
  */
-export function buildPropEdgeHistory(
+export function buildPropHistory(
   stat: string,
   line: number,
   weekRows: readonly TeamWeekStatRow[],
-): PropEdgeHistory {
+): PropHistory {
   const cells: PropGameCell[] = [];
   for (const row of weekRows) {
     const actual = propStatActual(stat, row);
@@ -312,235 +277,21 @@ export function buildPropEdgeHistory(
       result: propGameResult(actual, line),
     });
   }
-  const actuals = cells.map((cell) => cell.actual);
-  if (actuals.length === 0 || !Number.isFinite(line)) {
-    return {
-      games: 0,
-      average: null,
-      median: null,
-      overs: 0,
-      unders: 0,
-      pushes: 0,
-      hitRate: null,
-      cells: [],
-      last3: [],
-      projection: null,
-      edge: null,
-    };
+  if (cells.length === 0 || !Number.isFinite(line)) {
+    return { games: 0, overs: 0, unders: 0, pushes: 0, hitRate: null, cells: [] };
   }
   const overs = cells.filter((cell) => cell.result === "over").length;
   const unders = cells.filter((cell) => cell.result === "under").length;
   const pushes = cells.filter((cell) => cell.result === "push").length;
   const decided = overs + unders;
-  const last3 = actuals.slice(-3);
-  const projection = weightedRecentProjection(actuals);
-  const edge = projection === null ? null : Number((projection - line).toFixed(3));
   return {
-    games: actuals.length,
-    average: averageOf(actuals),
-    median: medianOf(actuals),
+    games: cells.length,
     overs,
     unders,
     pushes,
     hitRate: decided > 0 ? Number((overs / decided).toFixed(3)) : null,
     cells,
-    last3,
-    projection,
-    edge,
   };
-}
-
-export type OpponentAllowance = {
-  /** Mean of the per-game position-group totals allowed (see below). */
-  allowed: number;
-  /** Games (weeks) the average is built from. */
-  games: number;
-};
-
-/** Map key for opponent allowances: defense team | position | prop stat. */
-export function opponentAllowanceKey(defenseTeam: string, position: string, stat: string): string {
-  return `${canonicalNflTeam(defenseTeam)}|${position}|${stat}`;
-}
-
-/**
- * What a defense allows an entire position group per game: for every
- * (defense, week) sum every opposing player's actual at the position,
- * then average those group totals across the games the defense played
- * (a game where the group recorded nothing counts as 0, per PR #128).
- * A player's personal Opp figure is this total times his share of his
- * own group's production — see buildPlayerStatShares. Per-coverage (CB)
- * matchup data does not exist in nflverse, so the share split is the
- * finest granularity available.
- */
-export function buildOpponentGroupAllowances(
-  stats: readonly TeamWeekStatRow[],
-): Map<string, OpponentAllowance> {
-  // defense -> weeks it actually played (appeared as an opponent).
-  const defenseWeeks = new Map<string, Set<number>>();
-  // defense|position|stat|week -> the whole group's actual that week.
-  const gameTotals = new Map<string, number>();
-  // Position|stat pairs that produced a value for at least one defense.
-  const applicablePairs = new Set<string>();
-  for (const row of stats) {
-    if (!row.opponent) continue;
-    const defense = canonicalNflTeam(row.opponent);
-    const weeks = defenseWeeks.get(defense) ?? new Set<number>();
-    weeks.add(row.week);
-    defenseWeeks.set(defense, weeks);
-    for (const stat of PROP_STAT_IDS) {
-      const actual = propStatActual(stat, row);
-      if (actual === null) continue;
-      applicablePairs.add(`${row.position}|${stat}`);
-      const key = `${defense}|${row.position}|${stat}|${row.week}`;
-      gameTotals.set(key, (gameTotals.get(key) ?? 0) + actual);
-    }
-  }
-  const output = new Map<string, OpponentAllowance>();
-  for (const [defense, weeks] of defenseWeeks) {
-    for (const pair of applicablePairs) {
-      let sum = 0;
-      for (const week of weeks) {
-        sum += gameTotals.get(`${defense}|${pair}|${week}`) ?? 0;
-      }
-      output.set(`${defense}|${pair}`, {
-        allowed: Number((sum / weeks.size).toFixed(3)),
-        games: weeks.size,
-      });
-    }
-  }
-  return output;
-}
-
-/**
- * The opportunity volume behind a prop stat — what the offense gives a
- * player when he's active. Opportunity share is the role signal: it is
- * far steadier week to week than yardage share (which swings with one
- * broken play) and, being counts, it can never go negative the way
- * receiving production can. Null for stats with no opportunity basis.
- */
-export function propOpportunityValue(stat: PropStatId, row: TeamWeekStatRow): number | null {
-  switch (stat) {
-    case "pass_yards":
-    case "pass_tds":
-    case "pass_completions":
-    case "pass_attempts":
-    case "pass_interceptions":
-      return row.passAttempts;
-    case "rush_yards":
-    case "rush_attempts":
-      return row.carries;
-    case "rec_yards":
-    case "receptions":
-    case "longest_reception":
-      return row.targets;
-    case "anytime_td":
-    case "first_td":
-      return row.carries + row.targets;
-    case "sacks":
-    case "tackles":
-    case "kicker_points":
-    case "field_goals_made":
-      return null;
-  }
-}
-
-/** Human label for a prop stat's opportunity basis ("targets", "carries", ...). */
-export function propOpportunityLabel(stat: PropStatId): string {
-  switch (stat) {
-    case "pass_yards":
-    case "pass_tds":
-    case "pass_completions":
-    case "pass_attempts":
-    case "pass_interceptions":
-      return "pass attempts";
-    case "rush_yards":
-    case "rush_attempts":
-      return "carries";
-    case "rec_yards":
-    case "receptions":
-    case "longest_reception":
-      return "targets";
-    case "anytime_td":
-    case "first_td":
-      return "touches";
-    case "sacks":
-    case "tackles":
-    case "kicker_points":
-    case "field_goals_made":
-      return "";
-  }
-}
-
-/**
- * Each player's share of his own team's position-group OPPORTUNITIES,
- * per prop stat, keyed `${playerMatchKey}|${stat}`: his average weekly
- * share of the group's targets/carries/attempts across the weeks he was
- * active. Weeks he missed never enter the average (no injury penalty),
- * and weeks he dressed but got nothing count as 0. Opp then applies
- * this share to the production the defense allows the group — i.e. it
- * assumes production distributes by opportunity. Clamped to [0, 1];
- * weeks where the group got no opportunities are skipped, and pairs
- * with no usable week are omitted.
- */
-export function buildPlayerStatShares(
-  stats: readonly TeamWeekStatRow[],
-): Map<string, number> {
-  // Canonicalize once: propPlayerMatchKey uppercases but does not map
-  // variant codes (LA -> LAR), so every key must start from the same
-  // canonical team or Rams players silently get no share (CodeRabbit).
-  // team|position|stat|week -> the group's opportunities that week.
-  const groupWeekTotals = new Map<string, number>();
-  // playerMatchKey|stat -> (week -> the player's opportunities that week).
-  const playerWeeks = new Map<string, Map<number, number>>();
-  // playerMatchKey|stat -> team|position|stat (for the group lookups).
-  const playerGroup = new Map<string, string>();
-  for (const row of stats) {
-    const team = canonicalNflTeam(row.team);
-    const playerKey = propPlayerMatchKey(row.name, team, row.position);
-    for (const stat of PROP_STAT_IDS) {
-      const actual = propOpportunityValue(stat, row);
-      if (actual === null) continue;
-      const gwKey = `${team}|${row.position}|${stat}|${row.week}`;
-      groupWeekTotals.set(gwKey, (groupWeekTotals.get(gwKey) ?? 0) + actual);
-      const pKey = `${playerKey}|${stat}`;
-      const weeks = playerWeeks.get(pKey) ?? new Map<number, number>();
-      weeks.set(row.week, actual);
-      playerWeeks.set(pKey, weeks);
-      playerGroup.set(pKey, `${team}|${row.position}|${stat}`);
-    }
-  }
-  const shares = new Map<string, number>();
-  for (const [pKey, weeks] of playerWeeks) {
-    const groupKey = playerGroup.get(pKey);
-    if (!groupKey) continue;
-    const weeklyShares: number[] = [];
-    for (const [week, actual] of weeks) {
-      const groupTotal = groupWeekTotals.get(`${groupKey}|${week}`) ?? 0;
-      if (groupTotal <= 0) continue;
-      weeklyShares.push(actual / groupTotal);
-    }
-    if (weeklyShares.length === 0) continue;
-    const mean = weeklyShares.reduce((sum, share) => sum + share, 0) / weeklyShares.length;
-    shares.set(pKey, Number(Math.min(1, Math.max(0, mean)).toFixed(4)));
-  }
-  return shares;
-}
-
-/**
- * The Edge shown in the props table: the player's projection and his
- * share-adjusted opponent allowance are two independent estimates of
- * the same game, so they get equal weight — edge = mean(projection,
- * allowance) − line. Without an allowance it falls back to
- * projection − line.
- */
-export function blendedPropEdge(
-  projection: number | null,
-  opponentAllowed: number | null,
-  line: number,
-): number | null {
-  if (projection === null || !Number.isFinite(line)) return null;
-  if (opponentAllowed === null) return Number((projection - line).toFixed(3));
-  return Number((((projection + opponentAllowed) / 2) - line).toFixed(3));
 }
 
 export function propPlayerMatchKey(name: string, team: string | null | undefined, position: string): string {
