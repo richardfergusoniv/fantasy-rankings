@@ -47,11 +47,16 @@ type PropTableRow = {
   statLabel: string;
   line: number;
   move: number | null;
+  /** The rate for the side played on this row (see direction); rows sort by it. */
   hitRate: number | null;
   overs: number;
   unders: number;
   cells: Array<{ week: number; actual: number; result: PropGameResult }>;
   rostered: boolean;
+  /** Rostered by another team in this league. */
+  opponent: boolean;
+  /** His players are played as unders; everyone else as overs. */
+  direction: "over" | "under";
 };
 
 async function fetchText(url: string): Promise<string> {
@@ -71,10 +76,10 @@ function formatMove(move: number | null): string {
   return formatDecimal(move, 1, { sign: "exceptZero" });
 }
 
-function formatHitRate(overs: number, unders: number, hitRate: number | null): string {
+function formatHitRate(hits: number, misses: number, hitRate: number | null): string {
   if (hitRate === null) return "—";
-  const decided = overs + unders;
-  return `${overs}/${decided}`;
+  const decided = hits + misses;
+  return `${hits}/${decided}`;
 }
 
 function hitRateTone(overs: number, unders: number): "over" | "under" | "push" | undefined {
@@ -224,6 +229,27 @@ export function GameLinesPanel({
 
   const rosterIds = useMemo(() => rosterIdSet(league), [league]);
   const rosterKeys = useMemo(() => rosterMatchKeys(league), [league]);
+  const opponentIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const team of league.tradeTeams) {
+      if (team.isUser) continue;
+      for (const player of team.players) {
+        if (player.playerId) ids.add(player.playerId);
+      }
+    }
+    return ids;
+  }, [league]);
+  const opponentKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const team of league.tradeTeams) {
+      if (team.isUser) continue;
+      for (const player of team.players) {
+        if (!player.name || !player.position) continue;
+        keys.add(propPlayerMatchKey(player.name, player.team, player.position));
+      }
+    }
+    return keys;
+  }, [league]);
 
   const priorStats = useMemo(() => {
     const stats = historyQuery.data?.stats ?? [];
@@ -267,11 +293,18 @@ export function GameLinesPanel({
 
       const matchKey = propPlayerMatchKey(line.name, team, positionCode);
       const rostered = rosterIds.has(line.playerId) || rosterKeys.has(matchKey);
+      const opponent = !rostered && (opponentIds.has(line.playerId) || opponentKeys.has(matchKey));
+      // His players are played as unders, everyone else as overs; the
+      // row's rate, sort, and highlight all follow that direction.
+      const direction = rostered ? "under" : "over";
 
       const weekRowsForPlayer = weekStatsByPlayer.get(matchKey)
         ?? weekStatsByPlayer.get(propPlayerMatchKey(line.name, line.team, positionCode))
         ?? [];
       const history = buildPropHistory(line.stat, line.line, weekRowsForPlayer);
+      const displayRate = direction === "under" ? history.underRate : history.hitRate;
+      // Only lines that hit their side more than half the time are shown.
+      if (displayRate === null || displayRate <= 0.5) continue;
       const def = propStatDef(line.stat);
       built.push({
         key: `${line.playerId}|${line.stat}`,
@@ -283,11 +316,13 @@ export function GameLinesPanel({
         statLabel: def?.short ?? line.stat,
         line: line.line,
         move: line.move,
-        hitRate: history.hitRate,
+        hitRate: displayRate,
         overs: history.overs,
         unders: history.unders,
         cells: history.cells,
         rostered,
+        opponent,
+        direction,
       });
     }
 
@@ -295,6 +330,8 @@ export function GameLinesPanel({
     return built;
   }, [
     gameTeamFilter,
+    opponentIds,
+    opponentKeys,
     position,
     propLinesQuery.data?.propLines.lines,
     rosterIds,
@@ -395,11 +432,20 @@ export function GameLinesPanel({
                 </thead>
                 <tbody>
                   {propRows.map((row) => {
-                    const hitTone = hitRateTone(row.overs, row.unders);
+                    const hits = row.direction === "under" ? row.unders : row.overs;
+                    const misses = row.direction === "under" ? row.overs : row.unders;
+                    const hitTone = hitRateTone(hits, misses);
                     const byWeek = new Map(row.cells.map((cell) => [cell.week, cell]));
                     const scaleMax = Math.max(row.line, ...row.cells.map((cell) => cell.actual), 0) || 1;
                     return (
-                      <tr key={row.key} className={row.rostered ? "is-my-roster" : undefined}>
+                      <tr
+                        key={row.key}
+                        className={[
+                          row.rostered ? "is-my-roster" : "",
+                          row.opponent ? "is-opponent-roster" : "",
+                          row.direction === "under" ? "is-under-direction" : "",
+                        ].filter(Boolean).join(" ") || undefined}
+                      >
                         <th scope="row" className="props-player-col">
                           <span className="props-player-name">{row.name}</span>
                           <span className="props-player-meta">
@@ -412,7 +458,7 @@ export function GameLinesPanel({
                         <td>{formatMove(row.move)}</td>
                         <td>
                           <span className={hitTone ? `props-hit props-hit-${hitTone}` : "props-hit"}>
-                            {formatHitRate(row.overs, row.unders, row.hitRate)}
+                            {formatHitRate(hits, misses, row.hitRate)}
                           </span>
                         </td>
                         <td>
