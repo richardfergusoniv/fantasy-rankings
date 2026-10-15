@@ -962,20 +962,7 @@ main { padding: 12px 16px 0; }
   opacity: .85;
   pointer-events: none;
 }
-.props-vsopp {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  font-weight: 700;
-  font-variant-numeric: lining-nums tabular-nums;
-}
-.props-vsopp small {
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 600;
-  white-space: nowrap;
-}
+
 .props-table thead th:not(.props-player-col) {
   min-width: 44px;
 }
