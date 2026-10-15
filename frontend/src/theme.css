@@ -904,6 +904,12 @@ main { padding: 12px 16px 0; }
 .props-table tbody tr.is-my-roster .props-player-name {
   color: var(--roster-highlight);
 }
+.props-table tbody tr.is-opponent-roster .props-player-name {
+  color: var(--dim);
+}
+/* Under-direction rows (his players): green marks the under weeks. */
+.props-table tbody tr.is-under-direction .props-bar.is-over { background-color: var(--negative); }
+.props-table tbody tr.is-under-direction .props-bar.is-under { background-color: var(--positive); }
 .props-hit {
   font-weight: 700;
 }
