@@ -4,6 +4,7 @@ import {
   buildPropHistory,
   compareHitRateDesc,
   currentWeekPropLines,
+  impliedProbability,
   propStatActual,
   summarizePropLineMovement,
 } from "./prop-line-reads.js";
@@ -185,6 +186,14 @@ describe("propStatActual / history", () => {
     expect(pushHistory.pushes).toBe(1);
     expect(pushHistory.cells[0]?.result).toBe("push");
     expect(pushHistory.hitRate).toBe(1);
+  });
+
+  it("converts American odds to implied probability", () => {
+    expect(impliedProbability(-150)).toBeCloseTo(0.6);
+    expect(impliedProbability(150)).toBeCloseTo(0.4);
+    expect(impliedProbability(-110)).toBeCloseTo(110 / 210);
+    expect(impliedProbability(null)).toBeNull();
+    expect(impliedProbability(0)).toBeNull();
   });
 
   it("orders props by hit rate, unrated rows last", () => {
