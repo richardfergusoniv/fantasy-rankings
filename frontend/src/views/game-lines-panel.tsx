@@ -38,7 +38,7 @@ import { api } from "../api";
 import type { League } from "../dashboard-types";
 import { formatDecimal } from "../lib/format-number";
 
-type ScopeFilter = "mine" | "all";
+
 
 type PropTableRow = {
   key: string;
@@ -164,7 +164,6 @@ export function GameLinesPanel({
 }) {
   const [position, setPosition] = useState<PropPosition | "ALL">("ALL");
   const [statId, setStatId] = useState<string>("ALL");
-  const [scope, setScope] = useState<ScopeFilter>("mine");
   const [userGameId, setUserGameId] = useState<string | null>(null);
 
   const gamesQuery = useQuery({
@@ -290,7 +289,6 @@ export function GameLinesPanel({
 
       const matchKey = propPlayerMatchKey(line.name, team, positionCode);
       const rostered = rosterIds.has(line.playerId) || rosterKeys.has(matchKey);
-      if (scope === "mine" && !rostered) continue;
 
       const weekRowsForPlayer = weekStatsByPlayer.get(matchKey)
         ?? weekStatsByPlayer.get(propPlayerMatchKey(line.name, line.team, positionCode))
@@ -326,7 +324,6 @@ export function GameLinesPanel({
     propLinesQuery.data?.propLines.lines,
     rosterIds,
     rosterKeys,
-    scope,
     statId,
     weekStatsByPlayer,
   ]);
@@ -368,17 +365,6 @@ export function GameLinesPanel({
           ) : null}
 
           <div className="monitor-value-chart-controls monitor-props-controls">
-            <label className="monitor-value-chart-field">
-              <span>Players</span>
-              <select
-                aria-label="Players"
-                value={scope}
-                onChange={(event) => setScope(event.target.value as ScopeFilter)}
-              >
-                <option value="mine">My players</option>
-                <option value="all">All players</option>
-              </select>
-            </label>
             <label className="monitor-value-chart-field">
               <span>Position</span>
               <select
