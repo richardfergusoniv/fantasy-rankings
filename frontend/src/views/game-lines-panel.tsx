@@ -25,6 +25,7 @@ import {
 import {
   PROP_POSITIONS,
   PROP_STAT_OPTIONS,
+  blendedPropEdge,
   buildOpponentTopAllowances,
   buildPropEdgeHistory,
   indexWeekStatsByPlayer,
@@ -61,8 +62,6 @@ type PropTableRow = {
   /** What the opponent has allowed the top opposing player at this position, per game. */
   oppAllowed: number | null;
   oppGames: number;
-  /** oppAllowed − projection; positive = the defense gives up more than he's projected (soft matchup). */
-  vsOpp: number | null;
   absEdge: number;
   rostered: boolean;
 };
@@ -326,6 +325,7 @@ export function GameLinesPanel({
       const allowance = opponent
         ? opponentAllowances.get(opponentAllowanceKey(opponent, positionCode, line.stat))
         : undefined;
+      const edge = blendedPropEdge(history.projection, allowance?.allowed ?? null, line.line);
       built.push({
         key: `${line.playerId}|${line.stat}`,
         playerId: line.playerId,
@@ -341,14 +341,11 @@ export function GameLinesPanel({
         unders: history.unders,
         cells: history.cells,
         projection: history.projection,
-        edge: history.edge,
+        edge,
         opponent,
         oppAllowed: allowance?.allowed ?? null,
         oppGames: allowance?.games ?? 0,
-        vsOpp: history.projection !== null && allowance
-          ? Number((allowance.allowed - history.projection).toFixed(3))
-          : null,
-        absEdge: history.edge === null ? -1 : Math.abs(history.edge),
+        absEdge: edge === null ? -1 : Math.abs(edge),
         rostered,
       });
     }
@@ -468,7 +465,7 @@ export function GameLinesPanel({
                     <th scope="col">Hit</th>
                     <th scope="col">History</th>
                     <th scope="col">Proj</th>
-                    <th scope="col">vs Opp</th>
+                    <th scope="col">Opp</th>
                     <th scope="col">Edge</th>
                   </tr>
                 </thead>
@@ -530,21 +527,24 @@ export function GameLinesPanel({
                         </td>
                         <td>{formatPropNumber(row.projection, 1)}</td>
                         <td>
-                          {row.vsOpp === null || row.oppAllowed === null ? (
+                          {row.oppAllowed === null ? (
                             <span className="props-game-cell is-empty">—</span>
                           ) : (
                             <span
-                              className="props-vsopp"
                               title={`${row.opponent} has allowed the top opposing ${row.position} an average of ${formatPropNumber(row.oppAllowed, 1)} per game (${row.oppGames} games)`}
                             >
-                              <span className={row.vsOpp > 0 ? "props-hit-over" : row.vsOpp < 0 ? "props-hit-under" : undefined}>
-                                {row.vsOpp === 0 ? "0.0" : formatDecimal(row.vsOpp, 1, { sign: "exceptZero" })}
-                              </span>
-                              <small>{`allows ${formatPropNumber(row.oppAllowed, 1)}`}</small>
+                              {formatPropNumber(row.oppAllowed, 1)}
                             </span>
                           )}
                         </td>
-                        <td className="props-edge">{formatPropNumber(row.edge, 1)}</td>
+                        <td
+                          className="props-edge"
+                          title={row.oppAllowed === null
+                            ? "Projection minus the line"
+                            : "Average of the projection and the opponent allowance, minus the line"}
+                        >
+                          {formatPropNumber(row.edge, 1)}
+                        </td>
                       </tr>
                     );
                   })}

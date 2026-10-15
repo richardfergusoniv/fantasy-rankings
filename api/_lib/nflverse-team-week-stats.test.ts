@@ -249,5 +249,28 @@ describe("nflverse-team-week-stats", () => {
     expect(stacks[1]?.segments.map((s) => s.name)).toEqual(["Beta", "Alpha"]);
     const shareSum = stacks[1]?.segments.reduce((sum, s) => sum + s.share, 0);
     expect(shareSum).toBeCloseTo(1);
+    expect(stacks[0]?.hasActivity).toBe(true);
+  });
+
+  it("marks weeks with only negative values as active but keeps them out of the bar", () => {
+    const qbRow = {
+      key: "QB|KC|Solo",
+      playerId: null,
+      name: "Solo",
+      team: "KC",
+      position: "QB" as const,
+      weeks: [
+        { week: 1, value: 20, percent: null },
+        { week: 2, value: -3, percent: null },
+        { week: 3, value: 0, percent: null },
+      ],
+      total: 17,
+    };
+    const stacks = buildTeamStatsWeekStacks([qbRow]);
+    expect(stacks[0]).toMatchObject({ total: 20, hasActivity: true });
+    // A negative-only week: active (it belongs in an average's denominator)
+    // but the bar stays empty and the total stays 0.
+    expect(stacks[1]).toMatchObject({ total: 0, hasActivity: true, segments: [] });
+    expect(stacks[2]).toMatchObject({ total: 0, hasActivity: false, segments: [] });
   });
 });
