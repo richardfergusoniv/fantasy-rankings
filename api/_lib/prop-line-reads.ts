@@ -7,6 +7,7 @@
  */
 
 import {
+  canonicalNflTeam,
   normalizeTeamStatsPlayerName,
   type TeamWeekStatRow,
 } from "./nflverse-team-week-stats.js";
@@ -347,6 +348,68 @@ export function buildPropEdgeHistory(
     projection,
     edge,
   };
+}
+
+export type OpponentTopAllowance = {
+  /** Mean of the per-game maxima (see below). */
+  allowed: number;
+  /** Games (weeks) the average is built from. */
+  games: number;
+};
+
+/** Map key for opponent allowances: defense team | position | prop stat. */
+export function opponentAllowanceKey(defenseTeam: string, position: string, stat: string): string {
+  return `${canonicalNflTeam(defenseTeam)}|${position}|${stat}`;
+}
+
+/**
+ * What a defense has allowed to the TOP opposing player at each position,
+ * per game: for every (defense, week) take the best single-player actual
+ * among opponents at the position, then average those maxima across games.
+ * Unlike a position-group total, this is on the same scale as one player's
+ * line/projection, so a projection can be spread against it directly.
+ */
+export function buildOpponentTopAllowances(
+  stats: readonly TeamWeekStatRow[],
+): Map<string, OpponentTopAllowance> {
+  // defense -> weeks it actually played (appeared as an opponent).
+  const defenseWeeks = new Map<string, Set<number>>();
+  // defense|position|stat|week -> best opposing actual that week.
+  const maxima = new Map<string, number>();
+  // Position|stat pairs that produced a value for at least one defense.
+  const applicablePairs = new Set<string>();
+  for (const row of stats) {
+    if (!row.opponent) continue;
+    const defense = canonicalNflTeam(row.opponent);
+    const weeks = defenseWeeks.get(defense) ?? new Set<number>();
+    weeks.add(row.week);
+    defenseWeeks.set(defense, weeks);
+    for (const stat of PROP_STAT_IDS) {
+      const actual = propStatActual(stat, row);
+      if (actual === null) continue;
+      applicablePairs.add(`${row.position}|${stat}`);
+      const key = `${defense}|${row.position}|${stat}|${row.week}`;
+      const current = maxima.get(key);
+      if (current === undefined || actual > current) maxima.set(key, actual);
+    }
+  }
+  const output = new Map<string, OpponentTopAllowance>();
+  for (const [defense, weeks] of defenseWeeks) {
+    for (const pair of applicablePairs) {
+      // A game the defense played with no recorded opposing player at this
+      // position/stat counts as allowing 0 — it still belongs in the
+      // denominator (CodeRabbit, PR #128).
+      let sum = 0;
+      for (const week of weeks) {
+        sum += maxima.get(`${defense}|${pair}|${week}`) ?? 0;
+      }
+      output.set(`${defense}|${pair}`, {
+        allowed: Number((sum / weeks.size).toFixed(3)),
+        games: weeks.size,
+      });
+    }
+  }
+  return output;
 }
 
 export function propPlayerMatchKey(name: string, team: string | null | undefined, position: string): string {

@@ -69,6 +69,8 @@ export type TeamWeekStatRow = {
   playerId: string;
   name: string;
   team: string;
+  /** Canonical opponent team code for that week; "" when the source row lacks one. */
+  opponent: string;
   position: TeamStatsPosition;
   week: number;
   targets: number;
@@ -188,11 +190,13 @@ export function parsePlayerWeekStatsCsv(csv: string): TeamWeekStatRow[] {
       || cell(cells, index.player_name).trim();
     const team = canonicalNflTeam(cell(cells, index.team).trim());
     if (!playerId || !name || !team || !Number.isFinite(week)) continue;
+    const opponent = canonicalNflTeam(cell(cells, index.opponent_team));
     const targetShareRaw = parseOptionalRatio(cell(cells, index.target_share));
     output.push({
       playerId,
       name,
       team,
+      opponent,
       position,
       week,
       targets: parseNumber(cell(cells, index.targets)),
@@ -388,6 +392,67 @@ export function buildTeamStatsTable(options: {
     if (right.total !== left.total) return right.total - left.total;
     return left.name.localeCompare(right.name);
   });
+}
+
+export type TeamStatsStackSegment = {
+  key: string;
+  name: string;
+  value: number;
+  /** 0–1 share of the week's position-group total. */
+  share: number;
+};
+
+export type TeamStatsWeekStack = {
+  week: number;
+  /** Sum of the week's values across the position group. */
+  total: number;
+  /** Largest first; sub-`minShare` players are merged into a trailing "Other". */
+  segments: TeamStatsStackSegment[];
+};
+
+/**
+ * Reshape table rows into per-week 100%-stack segments: each week's bar is
+ * the position group's total, split by each player's share of it.
+ */
+export function buildTeamStatsWeekStacks(
+  rows: readonly TeamStatsPlayerRow[],
+  minShare = 0.02,
+): TeamStatsWeekStack[] {
+  const weekNumbers = new Set<number>();
+  for (const row of rows) {
+    for (const cell of row.weeks) weekNumbers.add(cell.week);
+  }
+  const stacks: TeamStatsWeekStack[] = [];
+  for (const week of [...weekNumbers].sort((a, b) => a - b)) {
+    const segments: TeamStatsStackSegment[] = [];
+    let total = 0;
+    for (const row of rows) {
+      const cell = row.weeks.find((candidate) => candidate.week === week);
+      if (!cell || cell.value <= 0) continue;
+      total += cell.value;
+      segments.push({ key: row.key, name: row.name, value: cell.value, share: 0 });
+    }
+    if (total <= 0) {
+      stacks.push({ week, total: 0, segments: [] });
+      continue;
+    }
+    segments.sort((left, right) => right.value - left.value);
+    const kept: TeamStatsStackSegment[] = [];
+    let otherValue = 0;
+    for (const segment of segments) {
+      segment.share = segment.value / total;
+      if (segment.share < minShare) {
+        otherValue += segment.value;
+      } else {
+        kept.push(segment);
+      }
+    }
+    if (otherValue > 0) {
+      kept.push({ key: "__other__", name: "Other", value: otherValue, share: otherValue / total });
+    }
+    stacks.push({ week, total: Number(total.toFixed(2)), segments: kept });
+  }
+  return stacks;
 }
 
 /** Prefer the user's most common roster NFL team; fall back to first code. */
