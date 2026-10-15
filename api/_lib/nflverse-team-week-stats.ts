@@ -80,6 +80,11 @@ export type TeamWeekStatRow = {
   fantasyPpr: number;
   /** 0–100 when present. */
   targetShare: number | null;
+  /** Extra fields reused by Monitor Props edge math. */
+  completions: number;
+  passAttempts: number;
+  passingYards: number;
+  interceptions: number;
 };
 
 export type TeamWeekSnapRow = {
@@ -198,6 +203,10 @@ export function parsePlayerWeekStatsCsv(csv: string): TeamWeekStatRow[] {
       passingTds: parseNumber(cell(cells, index.passing_tds)),
       fantasyPpr: parseNumber(cell(cells, index.fantasy_points_ppr)),
       targetShare: targetShareRaw === null ? null : targetShareRaw * 100,
+      completions: parseNumber(cell(cells, index.completions)),
+      passAttempts: parseNumber(cell(cells, index.attempts)),
+      passingYards: parseNumber(cell(cells, index.passing_yards)),
+      interceptions: parseNumber(cell(cells, index.passing_interceptions)),
     });
   }
   return output;

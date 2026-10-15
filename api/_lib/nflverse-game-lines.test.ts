@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildTeamSeasonRatings,
   defaultGameLineCardId,
   etWallTimeToUtc,
+  formatCoverRecord,
   formatKickoffPt,
   formatMatchup,
   formatMoneyline,
@@ -11,10 +13,13 @@ import {
   formatTotalsOrScore,
   gameLineCardsForWeek,
   gamesForSeasonWeek,
+  homeSpreadResult,
   impliedTeamTotals,
   normalizeGameLineTeam,
   parseGamesCsv,
+  projectGameLine,
   toGameLineCard,
+  totalResult,
 } from "./nflverse-game-lines.js";
 
 const HEADER =
@@ -289,5 +294,69 @@ describe("defaultGameLineCardId", () => {
       .toBe("2026_06_SEA_DEN");
     expect(defaultGameLineCardId(cards, ["IND"], [], tenKickoff + 60_000))
       .toBe("2026_06_TEN_IND");
+  });
+});
+
+describe("game line ATS / projection helpers", () => {
+  it("scores home spread and totals with pushes (positive spread = home favored)", () => {
+    // Home -3 (spreadLine +3): needs margin > 3 to cover.
+    expect(homeSpreadResult(24, 20, 3)).toBe("win");
+    expect(homeSpreadResult(23, 20, 3)).toBe("push");
+    expect(homeSpreadResult(21, 20, 3)).toBe("loss");
+    // Home underdog +3 (spreadLine -3): covers unless losing by more than 3.
+    expect(homeSpreadResult(20, 21, -3)).toBe("win");
+    expect(homeSpreadResult(18, 21, -3)).toBe("push");
+    expect(homeSpreadResult(17, 21, -3)).toBe("loss");
+    expect(totalResult(24, 20, 43.5)).toBe("win");
+    expect(totalResult(20, 20, 40)).toBe("push");
+    expect(totalResult(17, 20, 40)).toBe("loss");
+  });
+
+  it("builds opponent-adjusted ratings, ATS, and projected edges", () => {
+    const csv = [
+      HEADER,
+      gameRow({
+        gameId: "2026_01_A_B", season: 2026, week: 1,
+        gameday: "2026-09-10", weekday: "Sunday", gametime: "13:00",
+        away: "SEA", home: "DEN", awayScore: "10", homeScore: "27",
+        spread: "3.5", total: "40.5",
+      }),
+      gameRow({
+        gameId: "2026_02_A_B", season: 2026, week: 2,
+        gameday: "2026-09-17", weekday: "Sunday", gametime: "13:00",
+        away: "DEN", home: "SEA", awayScore: "14", homeScore: "21",
+        spread: "-2.5", total: "42.5",
+      }),
+      gameRow({
+        gameId: "2026_03_C_D", season: 2026, week: 3,
+        gameday: "2026-09-24", weekday: "Sunday", gametime: "13:00",
+        away: "KC", home: "BUF", awayScore: "24", homeScore: "27",
+        spread: "1", total: "48.5",
+      }),
+      gameRow({
+        gameId: "2026_06_SEA_DEN", season: 2026, week: 6,
+        gameday: "2026-10-15", weekday: "Thursday", gametime: "20:15",
+        away: "SEA", home: "DEN", spread: "-2.5", total: "40.5",
+      }),
+    ].join("\n");
+    const rows = parseGamesCsv(csv);
+    const ratings = buildTeamSeasonRatings(rows, 2026, 6);
+    expect(ratings.get("SEA")?.games).toBe(2);
+    expect(ratings.get("DEN")?.ats).toEqual({ wins: 1, losses: 1, pushes: 0 });
+    expect(formatCoverRecord({ wins: 1, losses: 1, pushes: 1 })).toBe("1-1-1");
+
+    const upcoming = rows.find((row) => row.gameId === "2026_06_SEA_DEN")!;
+    const projection = projectGameLine(upcoming, ratings);
+    expect(projection.projectedAway).not.toBeNull();
+    expect(projection.projectedHome).not.toBeNull();
+    expect(projection.projectedTotal).toBe(
+      Number(((projection.projectedAway ?? 0) + (projection.projectedHome ?? 0)).toFixed(3)),
+    );
+    expect(projection.spreadEdge).toBe(
+      Number(((projection.projectedHomeMargin ?? 0) - (upcoming.spreadLine ?? 0)).toFixed(3)),
+    );
+    expect(projection.totalEdge).toBe(
+      Number(((projection.projectedTotal ?? 0) - (upcoming.totalLine ?? 0)).toFixed(3)),
+    );
   });
 });
