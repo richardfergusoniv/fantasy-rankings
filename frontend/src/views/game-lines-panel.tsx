@@ -4,19 +4,15 @@ import {
   ALL_GAMES_PICKER_ID,
   GAME_LINES_STALE_MS,
   NFLVERSE_GAMES_CSV_URL,
-  buildTeamSeasonRatings,
+  buildTeamSeasonRecords,
   defaultGameLineCardId,
   formatCoverRecord,
-  formatSpreadFavorite,
-  formatTotalLine,
   gamesForSeasonWeek,
   normalizeGameLineTeam,
   parseGamesCsv,
-  projectGameLine,
   toGameLineCard,
   type GameLineCard,
-  type GameLineProjection,
-  type NflverseGameRow,
+  type TeamSeasonRecords,
 } from "../../../api/_lib/nflverse-game-lines";
 import {
   TEAM_WEEK_STATS_STALE_MS,
@@ -109,20 +105,17 @@ function rosterMatchKeys(league: League): Set<string> {
   return keys;
 }
 
-function GameProjectionBlock({
+const EMPTY_COVER = { wins: 0, losses: 0, pushes: 0 };
+
+function GameLineCardBlock({
   card,
-  projection,
+  awayRecord,
+  homeRecord,
 }: {
   card: GameLineCard;
-  projection: GameLineProjection | null;
+  awayRecord: TeamSeasonRecords | null;
+  homeRecord: TeamSeasonRecords | null;
 }) {
-  const spreadProj = projection?.projectedHomeMargin == null
-    ? "—"
-    : formatSpreadFavorite(card.awayTeam, card.homeTeam, projection.projectedHomeMargin);
-  const totalProj = projection?.projectedTotal == null
-    ? "—"
-    : formatTotalLine(Number(projection.projectedTotal.toFixed(1)));
-
   return (
     <div className="monitor-game-line-card">
       <strong className="monitor-game-line-matchup">{card.matchup}</strong>
@@ -131,23 +124,17 @@ function GameProjectionBlock({
       <div className="monitor-game-line-market">
         <span className="monitor-game-line-market-label">Spread</span>
         <span>{card.spread}</span>
-        <span className="monitor-game-line-market-proj">{spreadProj}</span>
-        <span className="monitor-game-line-market-edge">{formatPropNumber(projection?.spreadEdge ?? null, 1)}</span>
-      </div>
-      <div className="monitor-game-line-records">
-        <span>{card.awayTeam} ATS {formatCoverRecord(projection?.awayAts ?? { wins: 0, losses: 0, pushes: 0 })}</span>
-        <span>{card.homeTeam} ATS {formatCoverRecord(projection?.homeAts ?? { wins: 0, losses: 0, pushes: 0 })}</span>
+        <span className="monitor-game-line-market-records">
+          {card.awayTeam} ATS {formatCoverRecord(awayRecord?.ats ?? EMPTY_COVER)} · {card.homeTeam} ATS {formatCoverRecord(homeRecord?.ats ?? EMPTY_COVER)}
+        </span>
       </div>
 
       <div className="monitor-game-line-market">
         <span className="monitor-game-line-market-label">Total</span>
         <span>{card.total}</span>
-        <span className="monitor-game-line-market-proj">{totalProj}</span>
-        <span className="monitor-game-line-market-edge">{formatPropNumber(projection?.totalEdge ?? null, 1)}</span>
-      </div>
-      <div className="monitor-game-line-records">
-        <span>{card.awayTeam} O/U {formatCoverRecord(projection?.awayOu ?? { wins: 0, losses: 0, pushes: 0 })}</span>
-        <span>{card.homeTeam} O/U {formatCoverRecord(projection?.homeOu ?? { wins: 0, losses: 0, pushes: 0 })}</span>
+        <span className="monitor-game-line-market-records">
+          {card.awayTeam} O/U {formatCoverRecord(awayRecord?.ou ?? EMPTY_COVER)} · {card.homeTeam} O/U {formatCoverRecord(homeRecord?.ou ?? EMPTY_COVER)}
+        </span>
       </div>
     </div>
   );
@@ -200,7 +187,6 @@ export function GameLinesPanel({
   });
 
   const gameLineCards = gamesQuery.data?.cards ?? [];
-  const weekRows: NflverseGameRow[] = gamesQuery.data?.weekRows ?? [];
 
   const rosterPlayers = useMemo(
     () => [...league.starters, ...league.bench],
@@ -230,19 +216,10 @@ export function GameLinesPanel({
   const selectedGame = selectedGameId === ALL_GAMES_PICKER_ID
     ? null
     : gameLineCards.find((card) => card.gameId === selectedGameId) ?? null;
-  const selectedWeekRow = selectedGame
-    ? weekRows.find((row) => row.gameId === selectedGame.gameId) ?? null
-    : null;
-
-  const ratings = useMemo(() => {
-    if (!gamesQuery.data) return new Map();
-    return buildTeamSeasonRatings(gamesQuery.data.rows, season, week);
+  const teamRecords = useMemo(() => {
+    if (!gamesQuery.data) return new Map<string, TeamSeasonRecords>();
+    return buildTeamSeasonRecords(gamesQuery.data.rows, season, week);
   }, [gamesQuery.data, season, week]);
-
-  const projection = useMemo(() => {
-    if (!selectedWeekRow) return null;
-    return projectGameLine(selectedWeekRow, ratings);
-  }, [ratings, selectedWeekRow]);
 
   const rosterIds = useMemo(() => rosterIdSet(league), [league]);
   const rosterKeys = useMemo(() => rosterMatchKeys(league), [league]);
@@ -361,7 +338,11 @@ export function GameLinesPanel({
           </div>
 
           {selectedGame ? (
-            <GameProjectionBlock card={selectedGame} projection={projection} />
+            <GameLineCardBlock
+              card={selectedGame}
+              awayRecord={teamRecords.get(normalizeGameLineTeam(selectedGame.awayTeam)) ?? null}
+              homeRecord={teamRecords.get(normalizeGameLineTeam(selectedGame.homeTeam)) ?? null}
+            />
           ) : null}
 
           <div className="monitor-value-chart-controls monitor-props-controls">
