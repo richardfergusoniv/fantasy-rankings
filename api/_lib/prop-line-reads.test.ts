@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TeamWeekStatRow } from "./nflverse-team-week-stats.js";
 import {
+  blendedPropEdge,
   buildOpponentTopAllowances,
   buildPropEdgeHistory,
   currentWeekPropLines,
@@ -233,5 +234,23 @@ describe("buildOpponentTopAllowances", () => {
       weekRow({ week: 2, name: "QB Two", team: "DEN", opponent: "KC", position: "QB", passingYards: 200 }),
     ]);
     expect(allowances.get(opponentAllowanceKey("KC", "WR", "rec_yards"))).toEqual({ allowed: 55, games: 2 });
+  });
+});
+
+describe("blendedPropEdge", () => {
+  it("averages projection and opponent allowance against the line", () => {
+    // (63.3 + 104.4) / 2 - 82.5 = 1.35
+    expect(blendedPropEdge(63.3, 104.4, 82.5)).toBeCloseTo(1.35);
+    // A stingy opponent drags the blend below the raw projection edge.
+    expect(blendedPropEdge(258.6, 166.8, 271.5)).toBeCloseTo(-58.8);
+  });
+
+  it("falls back to projection minus line without an allowance", () => {
+    expect(blendedPropEdge(258.6, null, 271.5)).toBeCloseTo(-12.9);
+  });
+
+  it("is null without a projection", () => {
+    expect(blendedPropEdge(null, 100, 82.5)).toBeNull();
+    expect(blendedPropEdge(null, null, 82.5)).toBeNull();
   });
 });
