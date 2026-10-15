@@ -2357,22 +2357,76 @@ type ComparisonRow = {
   rightValue: ComparisonMetricValue | null;
 };
 
-const projectionSupportingMetricKeys: Record<BasePosition, string[]> = {
-  QB: ["leaguePositionRank", "sleeperProjection", "teamTotal", "stat_pass_yd", "stat_pass_td"],
-  RB: ["leaguePositionRank", "sleeperProjection", "stat_rush_yd", "stat_rec"],
-  WR: ["leaguePositionRank", "sleeperProjection", "stat_rec", "stat_rec_yd"],
-  TE: ["leaguePositionRank", "sleeperProjection", "stat_rec", "stat_rec_yd"],
-  K: ["leaguePositionRank", "sleeperProjection", "teamTotal"],
-  DEF: ["opponentTotal"],
-};
-
-const advancedSupportingMetricKeys: Record<BasePosition, string[]> = {
-  QB: ["pass_attempts", "passing_yards", "passing_tds", "passing_epa"],
-  RB: ["touches", "scrimmage_yards", "target_share", "rushing_tds"],
-  WR: ["targets", "receiving_yards", "target_share", "air_yards_share"],
-  TE: ["targets", "receiving_yards", "target_share", "air_yards_share"],
-  K: ["fg_attempts", "fg_made", "fg_40_plus", "fg_50_plus"],
-  DEF: ["qb_hits", "takeaways", "sacks", "defensive_tds"],
+// Display order for the comparison cards, grouped the way the card is
+// read: headline numbers, the stat line behind them, team context, then
+// market/value (projections); production, usage shares, then efficiency
+// (advanced). Metrics not listed keep their catalog order at the end.
+const comparisonRowOrder: Record<"projections" | "advanced", Record<BasePosition, string[]>> = {
+  projections: {
+    QB: [
+      "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
+      "stat_pass_yd", "stat_pass_td", "stat_pass_int", "stat_rush_yd", "stat_rush_td",
+      "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
+      "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
+    ],
+    RB: [
+      "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
+      "stat_rush_yd", "stat_rush_td", "stat_rec", "stat_rec_yd", "stat_rec_td",
+      "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
+      "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
+    ],
+    WR: [
+      "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
+      "stat_rec", "stat_rec_yd", "stat_rec_td", "stat_rush_yd", "stat_rush_td",
+      "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
+      "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
+    ],
+    TE: [
+      "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
+      "stat_rec", "stat_rec_yd", "stat_rec_td", "stat_rush_yd", "stat_rush_td",
+      "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
+      "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
+    ],
+    K: [
+      "league", "sleeperProjection", "leaguePositionRank",
+      "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
+      "fantasyCalcValue", "fantasyCalcPositionRank",
+    ],
+    DEF: ["projection", "opponentTotal"],
+  },
+  advanced: {
+    QB: [
+      "fantasy_league",
+      "pass_attempts", "completions", "passing_yards", "passing_tds", "interceptions", "passing_air_yards",
+      "carries", "rushing_yards", "rushing_tds",
+      "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
+      "completion_pct", "cpoe", "passing_epa", "epa_per_play",
+    ],
+    RB: [
+      "fantasy_league",
+      "touches", "carries", "rushing_yards", "rushing_tds",
+      "targets", "receptions", "receiving_yards", "receiving_tds", "scrimmage_yards",
+      "target_share", "carry_share", "rb_target_share", "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
+      "rushing_epa", "receiving_epa",
+    ],
+    WR: [
+      "fantasy_league",
+      "targets", "receptions", "receiving_yards", "receiving_tds", "receiving_air_yards", "yards_after_catch",
+      "target_share", "air_yards_share", "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
+      "wopr", "racr", "receiving_epa",
+    ],
+    TE: [
+      "fantasy_league",
+      "targets", "receptions", "receiving_yards", "receiving_tds", "receiving_air_yards", "yards_after_catch",
+      "target_share", "air_yards_share", "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
+      "wopr", "racr", "receiving_epa",
+    ],
+    K: ["fg_attempts", "fg_made", "fg_pct", "fg_40_plus", "fg_50_plus", "pat_attempts", "pat_made", "kicks_made"],
+    DEF: [
+      "qb_hits", "takeaways", "sacks", "defensive_tds",
+      "interceptions", "forced_fumbles", "fumble_recoveries", "tackles_for_loss", "passes_defended", "blocked_kicks", "safeties",
+    ],
+  },
 };
 
 function comparisonBarShares(row: ComparisonRow): [number, number] {
@@ -2654,17 +2708,7 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
     const rightValue = comparisonValue(right, metric);
     return leftValue || rightValue ? [{ metric, leftValue, rightValue }] : [];
   });
-  const heroMetricKey = dataset === "projections" ? (position === "DEF" ? "projection" : "league") : "fantasy_league";
-  const heroRow = rows.find((row) => row.metric.key === heroMetricKey) ?? rows[0];
-  const supportingKeys = dataset === "projections" ? projectionSupportingMetricKeys[position] : advancedSupportingMetricKeys[position];
-  const supportingRows = supportingKeys.flatMap((key) => {
-    const row = rows.find((candidate) => candidate.metric.key === key);
-    return row && row.metric.key !== heroRow?.metric.key ? [row] : [];
-  });
-  const projectionOutlookKeys = new Set(["leaguePositionRank", "sleeperProjection", "teamTotal", "opponentTotal"]);
-  const productionRows = supportingRows.filter((row) => !projectionOutlookKeys.has(row.metric.key));
-  const primaryKeys = new Set([heroRow?.metric.key, ...productionRows.map((row) => row.metric.key)]);
-  const secondaryRows = rows.filter((row) => !primaryKeys.has(row.metric.key));
+  const orderIndex = new Map(comparisonRowOrder[dataset][position].map((key, index) => [key, index]));
   const boomBustRows = (() => {
     if (dataset !== "projections" || !leftPlayerId || !rightPlayerId) return [];
     const ranges = new Map((boomBustQuery.data?.rows ?? []).map((range) => [range.playerId, range]));
@@ -2686,7 +2730,14 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
     return rangeRows.filter((row) => row.leftValue || row.rightValue);
   })();
 
-  const comparisonRows = [...(heroRow ? [heroRow] : []), ...boomBustRows, ...productionRows, ...secondaryRows];
+  const comparisonRows = [...rows, ...boomBustRows]
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const aOrder = orderIndex.get(a.row.metric.key) ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = orderIndex.get(b.row.metric.key) ?? Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder || a.index - b.index;
+    })
+    .map(({ row }) => row);
   const selectionStateClass = left && right ? " is-ready" : left || right ? " has-selection" : " is-empty";
 
   return (
