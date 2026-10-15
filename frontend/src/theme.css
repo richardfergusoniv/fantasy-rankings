@@ -913,6 +913,22 @@ main { padding: 12px 16px 0; }
 .props-table tbody tr.is-opponent-roster .props-player-col {
   background-color: var(--opponent-row);
 }
+.props-sort-button {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.props-sort-arrow {
+  min-width: 0.8em;
+  color: var(--dim);
+  font-size: 0.75em;
+}
 .props-hit {
   font-weight: 700;
 }

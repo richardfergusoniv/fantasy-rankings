@@ -23,6 +23,7 @@ import {
   PROP_STAT_OPTIONS,
   buildPropHistory,
   compareHitRateDesc,
+  impliedProbability,
   indexWeekStatsByPlayer,
   isPropStatId,
   propPlayerMatchKey,
@@ -47,6 +48,9 @@ type PropTableRow = {
   statLabel: string;
   line: number;
   move: number | null;
+  /** Median price on the played side (under for his players, over otherwise). */
+  odds: number | null;
+  implied: number | null;
   /** The rate for the side played on this row (see direction); rows sort by it. */
   hitRate: number | null;
   overs: number;
@@ -75,6 +79,14 @@ function formatMove(move: number | null): string {
   if (move === null || !Number.isFinite(move) || move === 0) return "—";
   return formatDecimal(move, 1, { sign: "exceptZero" });
 }
+
+function formatAmericanOdds(odds: number | null): string {
+  if (odds === null || !Number.isFinite(odds) || odds === 0) return "—";
+  const rounded = Math.round(odds);
+  return rounded > 0 ? `+${rounded}` : `${rounded}`;
+}
+
+type PropSortKey = "player" | "stat" | "line" | "move" | "odds" | "hit";
 
 function formatHitRate(hits: number, misses: number, hitRate: number | null): string {
   if (hitRate === null) return "—";
@@ -158,6 +170,8 @@ export function GameLinesPanel({
   const [position, setPosition] = useState<PropPosition | "ALL">("ALL");
   const [statId, setStatId] = useState<string>("ALL");
   const [userGameId, setUserGameId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<PropSortKey>("odds");
+  const [sortAsc, setSortAsc] = useState(false);
 
   const gamesQuery = useQuery({
     queryKey: ["nflverse-game-lines", season, week],
@@ -318,6 +332,8 @@ export function GameLinesPanel({
         statLabel: def?.short ?? line.stat,
         line: line.line,
         move: line.move,
+        odds: direction === "under" ? line.underOdds : line.overOdds,
+        implied: impliedProbability(direction === "under" ? line.underOdds : line.overOdds),
         hitRate: displayRate,
         overs: history.overs,
         unders: history.unders,
@@ -341,6 +357,72 @@ export function GameLinesPanel({
     statId,
     weekStatsByPlayer,
   ]);
+
+  const sortedPropRows = useMemo(() => {
+    const rowsCopy = [...propRows];
+    const dir = sortAsc ? 1 : -1;
+    rowsCopy.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "player":
+          cmp = a.name.localeCompare(b.name);
+          break;
+        case "stat":
+          cmp = a.statLabel.localeCompare(b.statLabel);
+          break;
+        case "line":
+          cmp = a.line - b.line;
+          break;
+        case "move": {
+          // formatMove displays 0 as "—", so a zero move sorts as missing.
+          const aMove = a.move === 0 ? null : a.move;
+          const bMove = b.move === 0 ? null : b.move;
+          if (aMove === null && bMove === null) cmp = 0;
+          else if (aMove === null) return 1;
+          else if (bMove === null) return -1;
+          else cmp = aMove - bMove;
+          break;
+        }
+        case "odds": {
+          if (a.implied === null && b.implied === null) cmp = 0;
+          else if (a.implied === null) return 1;
+          else if (b.implied === null) return -1;
+          else cmp = a.implied - b.implied;
+          break;
+        }
+        case "hit":
+          cmp = (a.hitRate ?? -1) - (b.hitRate ?? -1);
+          break;
+      }
+      if (cmp !== 0) return cmp * dir;
+      return compareHitRateDesc(a, b);
+    });
+    return rowsCopy;
+  }, [propRows, sortKey, sortAsc]);
+
+  const toggleSort = (key: PropSortKey) => {
+    if (key === sortKey) {
+      setSortAsc((value) => !value);
+    } else {
+      setSortKey(key);
+      setSortAsc(key === "player" || key === "stat");
+    }
+  };
+
+  const sortHeader = (key: PropSortKey, label: string, className?: string) => (
+    <th
+      scope="col"
+      className={className}
+      aria-sort={sortKey === key ? (sortAsc ? "ascending" : "descending") : undefined}
+    >
+      <button type="button" className="props-sort-button" onClick={() => toggleSort(key)}>
+        {label}
+        <span aria-hidden="true" className="props-sort-arrow">
+          {sortKey === key ? (sortAsc ? "▲" : "▼") : ""}
+        </span>
+      </button>
+    </th>
+  );
 
   const gamesUnavailable = gamesQuery.isError;
   const propsLoading = propLinesQuery.isPending || (historyQuery.isPending && !historyQuery.data);
@@ -424,16 +506,17 @@ export function GameLinesPanel({
               <table className="props-table">
                 <thead>
                   <tr>
-                    <th scope="col" className="props-player-col">Player</th>
-                    <th scope="col">Stat</th>
-                    <th scope="col">Line</th>
-                    <th scope="col">Move</th>
-                    <th scope="col">Hit</th>
+                    {sortHeader("player", "Player", "props-player-col")}
+                    {sortHeader("stat", "Stat")}
+                    {sortHeader("line", "Line")}
+                    {sortHeader("move", "Move")}
+                    {sortHeader("odds", "Odds")}
+                    {sortHeader("hit", "Hit")}
                     <th scope="col">History</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {propRows.map((row) => {
+                  {sortedPropRows.map((row) => {
                     const hits = row.direction === "under" ? row.unders : row.overs;
                     const misses = row.direction === "under" ? row.overs : row.unders;
                     // Colors stay factual (overs green, unders red) even
@@ -459,6 +542,7 @@ export function GameLinesPanel({
                         <td>{row.statLabel}</td>
                         <td>{formatPropNumber(row.line, 1)}</td>
                         <td>{formatMove(row.move)}</td>
+                        <td>{formatAmericanOdds(row.odds)}</td>
                         <td>
                           <span className={hitTone ? `props-hit props-hit-${hitTone}` : "props-hit"}>
                             {formatHitRate(hits, misses, row.hitRate)}
