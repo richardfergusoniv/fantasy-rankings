@@ -434,7 +434,9 @@ export function GameLinesPanel({
                   {propRows.map((row) => {
                     const hits = row.direction === "under" ? row.unders : row.overs;
                     const misses = row.direction === "under" ? row.overs : row.unders;
-                    const hitTone = hitRateTone(hits, misses);
+                    // Colors stay factual (overs green, unders red) even
+                    // though the fraction counts the played side.
+                    const hitTone = hitRateTone(row.overs, row.unders);
                     const byWeek = new Map(row.cells.map((cell) => [cell.week, cell]));
                     const scaleMax = Math.max(row.line, ...row.cells.map((cell) => cell.actual), 0) || 1;
                     return (
@@ -443,7 +445,6 @@ export function GameLinesPanel({
                         className={[
                           row.rostered ? "is-my-roster" : "",
                           row.opponent ? "is-opponent-roster" : "",
-                          row.direction === "under" ? "is-under-direction" : "",
                         ].filter(Boolean).join(" ") || undefined}
                       >
                         <th scope="row" className="props-player-col">
