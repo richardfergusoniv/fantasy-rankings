@@ -1,6 +1,8 @@
 /**
  * nflverse week-by-week player stats for the Monitor "Team stats" panel.
- * Pure parse/build helpers — callers fetch CSVs (client or server).
+ * Pure parse/build helpers — callers fetch CSVs SERVER-SIDE ONLY: GitHub
+ * release assets send no CORS headers, so a browser fetch of these URLs
+ * always fails (the panels read parsed rows from /api/pfn-tables instead).
  *
  * Sources (CC BY 4.0):
  * - stats_player_week_{season}.csv
