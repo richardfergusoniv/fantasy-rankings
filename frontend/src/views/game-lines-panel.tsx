@@ -499,7 +499,12 @@ export function GameLinesPanel({
                             className="props-history"
                             role="img"
                             aria-label={row.cells.length > 0
-                              ? `Weekly results against the line of ${formatPropNumber(row.line, 1)}`
+                              ? `Weekly results against the line of ${formatPropNumber(row.line, 1)}: ${historyWeeks.map((weekNumber) => {
+                                const cell = byWeek.get(weekNumber);
+                                return cell
+                                  ? `W${weekNumber} ${formatPropNumber(cell.actual, 1)} (${cell.result})`
+                                  : `W${weekNumber} no game`;
+                              }).join(", ")}`
                               : "No prior games this season"}
                           >
                             {historyWeeks.map((weekNumber) => {
