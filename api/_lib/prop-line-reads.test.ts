@@ -33,6 +33,10 @@ function weekRow(partial: Partial<TeamWeekStatRow> & Pick<TeamWeekStatRow, "week
     rushingFirstDowns: 0,
     receivingFirstDowns: 0,
     sacksTaken: 0,
+    fumblesLost: 0,
+    passing2pt: 0,
+    rushing2pt: 0,
+    receiving2pt: 0,
     ...partial,
   };
 }
