@@ -114,8 +114,14 @@ export type TeamWeekStatRow = {
   passingFirstDowns: number;
   rushingFirstDowns: number;
   receivingFirstDowns: number;
-  /** Sacks taken (the `sacks` column for offensive players). */
+  /** Sacks taken (the `sacks_suffered` column for offensive players). */
   sacksTaken: number;
+  /** Total fumbles lost (`fumbles_lost_total`). */
+  fumblesLost: number;
+  /** Two-point conversions by phase. */
+  passing2pt: number;
+  rushing2pt: number;
+  receiving2pt: number;
 };
 
 export type TeamWeekSnapRow = {
@@ -243,7 +249,11 @@ export function parsePlayerWeekStatsCsv(csv: string): TeamWeekStatRow[] {
       passingFirstDowns: parseNumber(cell(cells, index.passing_first_downs)),
       rushingFirstDowns: parseNumber(cell(cells, index.rushing_first_downs)),
       receivingFirstDowns: parseNumber(cell(cells, index.receiving_first_downs)),
-      sacksTaken: parseNumber(cell(cells, index.sacks)),
+      sacksTaken: parseNumber(cell(cells, index.sacks_suffered)),
+      fumblesLost: parseNumber(cell(cells, index.fumbles_lost_total)),
+      passing2pt: parseNumber(cell(cells, index.passing_2pt_conversions)),
+      rushing2pt: parseNumber(cell(cells, index.rushing_2pt_conversions)),
+      receiving2pt: parseNumber(cell(cells, index.receiving_2pt_conversions)),
     });
   }
   return output;
@@ -324,7 +334,10 @@ function weekValueForStat(
       if (!weekStats) return { value: 0, percent: null };
       // Without the league's settings (older payloads), fall back to the
       // nflverse PPR total; with them, score the week in league format.
-      if (!scoringSettings) return { value: weekStats.fantasyPpr, percent: null };
+      // An empty settings object counts as absent (it would zero every week).
+      if (!scoringSettings || Object.keys(scoringSettings).length === 0) {
+        return { value: weekStats.fantasyPpr, percent: null };
+      }
       const stats: Record<string, number> = {
         pass_yd: weekStats.passingYards,
         pass_td: weekStats.passingTds,
@@ -342,6 +355,10 @@ function weekValueForStat(
         rec_yd: weekStats.receivingYards,
         rec_td: weekStats.receivingTds,
         rec_fd: weekStats.receivingFirstDowns,
+        fum_lost: weekStats.fumblesLost,
+        pass_2pt: weekStats.passing2pt,
+        rush_2pt: weekStats.rushing2pt,
+        rec_2pt: weekStats.receiving2pt,
       };
       return { value: scoreProjectedPlayerStats(weekStats.position, stats, scoringSettings), percent: null };
     }
