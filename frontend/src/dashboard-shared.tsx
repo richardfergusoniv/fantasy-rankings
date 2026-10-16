@@ -49,6 +49,8 @@ export function tradeTotal(assets: TradeAsset[]): number {
   return assets.reduce((total, asset) => total + asset.value, 0);
 }
 
+export { waiverAdjustments } from "./lib/trade-adjustment";
+
 export function showUndoToast(message: string, onUndo: () => void) {
   toast(message, {
     duration: UNDO_DURATION_MS,
