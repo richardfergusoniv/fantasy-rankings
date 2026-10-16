@@ -14,6 +14,7 @@ import {
   encodeForRuntime,
   loadCachedDashboardView,
   normalizeRequestedSnapshotVersion,
+  pointDashboardViewAtVersion,
   recallDashboardView,
   remainingDashboardTtlSeconds,
   rememberDashboardView,
@@ -145,6 +146,80 @@ describe("snapshot version cache", () => {
       store,
     });
     expect(staleHint).toBeNull();
+  });
+
+  it("a pointer-only publish moves the view to the new snapshot without a body", async () => {
+    const store = createMemoryDashboardViewStore(() => 1_000);
+    await rememberDashboardView({
+      sleeperUserId: "user-a",
+      view: "league",
+      version: V1,
+      live: false,
+      body: { section: "league", data: { rosters: ["old"] } },
+      ttlSeconds: 600,
+      nowMs: 1_000,
+      store,
+    });
+
+    // A build lands a new snapshot: pointers move, no body is written.
+    await pointDashboardViewAtVersion({
+      sleeperUserId: "user-a",
+      view: "league",
+      version: V2,
+      ttlSeconds: 600,
+      nowMs: 2_000,
+      store,
+    });
+    // The old body is no longer served (its version is not the latest),
+    // and the new version has no body yet, so the read misses cleanly —
+    // the request path then serves the fresh Postgres row.
+    const missed = await recallDashboardView({
+      sleeperUserId: "user-a",
+      view: "league",
+      requestedVersion: null,
+      nowMs: 2_000,
+      store,
+    });
+    expect(missed).toBeNull();
+
+    // The request path remembers the body it served under the new version.
+    await rememberDashboardView({
+      sleeperUserId: "user-a",
+      view: "league",
+      version: V2,
+      live: false,
+      body: { section: "league", data: { rosters: ["new"] } },
+      ttlSeconds: 600,
+      nowMs: 2_000,
+      store,
+    });
+    const hit = await recallDashboardView({
+      sleeperUserId: "user-a",
+      view: "league",
+      requestedVersion: null,
+      nowMs: 2_000,
+      store,
+    });
+    expect(hit?.version).toBe(V2);
+    expect(hit?.body).toEqual({ section: "league", data: { rosters: ["new"] } });
+
+    // A stale build pointing backwards must not regress the view.
+    await pointDashboardViewAtVersion({
+      sleeperUserId: "user-a",
+      view: "league",
+      version: V1,
+      ttlSeconds: 600,
+      nowMs: 3_000,
+      store,
+    });
+    const still = await recallDashboardView({
+      sleeperUserId: "user-a",
+      view: "league",
+      requestedVersion: null,
+      nowMs: 3_000,
+      store,
+    });
+    expect(still?.version).toBe(V2);
   });
 
   it("does not let an older snapshot replace a newer one", async () => {
