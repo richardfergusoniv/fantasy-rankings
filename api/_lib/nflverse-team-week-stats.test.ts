@@ -184,6 +184,26 @@ describe("nflverse-team-week-stats", () => {
     expect(rows[1]?.weeks[1]).toEqual({ week: 2, value: 10, percent: 15 });
   });
 
+  it("carries target share as the percent on targets cells", () => {
+    const stats: TeamWeekStatRow[] = [
+      {
+        playerId: "wr1", name: "DK Metcalf", team: "PIT", opponent: "JAX", position: "WR", week: 1,
+        targets: 8, receptions: 5, receivingYards: 90, carries: 0, rushingYards: 0,
+        receivingTds: 1, rushingTds: 0, passingTds: 0, fantasyPpr: 20, targetShare: 25,
+        completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
+      },
+    ];
+    const rows = buildTeamStatsTable({
+      stats,
+      snaps: [],
+      team: "PIT",
+      positions: ["WR"],
+      statId: "targets",
+      throughWeek: 1,
+    });
+    expect(rows[0]?.weeks[0]).toEqual({ week: 1, value: 8, percent: 25 });
+  });
+
   it("defaults team and group from the user roster", () => {
     expect(defaultTeamStatsTeam(["SEA", "SEA", "SF", null])).toBe("SEA");
     expect(defaultTeamStatsGroup(

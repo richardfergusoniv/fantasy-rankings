@@ -293,7 +293,7 @@ function weekValueForStat(
         percent: weekSnap ? weekSnap.offensePct : null,
       };
     case "targets":
-      return { value: weekStats?.targets ?? 0, percent: null };
+      return { value: weekStats?.targets ?? 0, percent: weekStats?.targetShare ?? null };
     case "receptions":
       return { value: weekStats?.receptions ?? 0, percent: null };
     case "receiving_yards":

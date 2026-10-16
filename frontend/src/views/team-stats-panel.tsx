@@ -246,7 +246,7 @@ export function TeamStatsPanel({
                   <i style={{ backgroundColor: meta?.color ?? TEAM_STATS_OTHER_COLOR }} />
                   <span className="team-stats-legend-name">{row.name}</span>
                   <span className="team-stats-legend-total">
-                    {statId === "snaps"
+                    {statId === "snaps" || statId === "targets"
                       ? formatTeamStatsPercent(completedPercentTotal / playedWeeks)
                       : formatTeamStatsAverage(completedTotal / playedWeeks)}
                   </span>
