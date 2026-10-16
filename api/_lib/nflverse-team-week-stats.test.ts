@@ -44,7 +44,11 @@ const STATS_HEADER = [
   "passing_first_downs",
   "rushing_first_downs",
   "receiving_first_downs",
-  "sacks",
+  "sacks_suffered",
+  "fumbles_lost_total",
+  "passing_2pt_conversions",
+  "rushing_2pt_conversions",
+  "receiving_2pt_conversions",
 ].join(",");
 
 function statsRow(fields: {
@@ -70,7 +74,7 @@ function statsRow(fields: {
   receivingFirstDowns?: number;
   sacks?: number;
 }): string {
-  const cells = Array.from({ length: 30 }, () => "");
+  const cells = Array.from({ length: 34 }, () => "");
   cells[0] = fields.id;
   cells[1] = fields.name;
   cells[2] = fields.name;
@@ -206,6 +210,7 @@ describe("nflverse-team-week-stats", () => {
         receivingTds: 1, rushingTds: 0, passingTds: 0, fantasyPpr: 20, targetShare: 25,
         completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
         passingFirstDowns: 0, rushingFirstDowns: 0, receivingFirstDowns: 0, sacksTaken: 0,
+        fumblesLost: 0, passing2pt: 0, rushing2pt: 0, receiving2pt: 0,
       },
     ];
     const rows = buildTeamStatsTable({
@@ -226,6 +231,7 @@ describe("nflverse-team-week-stats", () => {
       receivingTds: 0, rushingTds: 1, passingTds: 2, fantasyPpr: 27.5, targetShare: null,
       completions: 20, passAttempts: 30, passingYards: 250, interceptions: 1,
       passingFirstDowns: 12, rushingFirstDowns: 2, receivingFirstDowns: 0, sacksTaken: 3,
+      fumblesLost: 1, passing2pt: 0, rushing2pt: 0, receiving2pt: 0,
     };
     const te: TeamWeekStatRow = {
       playerId: "te1", name: "Tight End", team: "KC", opponent: "BUF", position: "TE", week: 1,
@@ -233,6 +239,7 @@ describe("nflverse-team-week-stats", () => {
       receivingTds: 1, rushingTds: 0, passingTds: 0, fantasyPpr: 17, targetShare: 20,
       completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
       passingFirstDowns: 0, rushingFirstDowns: 0, receivingFirstDowns: 3, sacksTaken: 0,
+      fumblesLost: 0, passing2pt: 0, rushing2pt: 0, receiving2pt: 1,
     };
     const base: {
       stats: TeamWeekStatRow[];
@@ -249,15 +256,17 @@ describe("nflverse-team-week-stats", () => {
         pass_yd: 0.04, pass_td: 4, pass_int: -2, pass_fd: 0.5, pass_sack: -1,
         rush_yd: 0.1, rush_td: 6, rush_fd: 0.5,
         rec: 0.5, rec_yd: 0.1, rec_td: 6, rec_fd: 1, bonus_rec_te: 0.5,
+        fum_lost: -2, rec_2pt: 2,
       },
     });
     const qbRow = leagueRows.find((row) => row.name === "Passer");
     const teRow = leagueRows.find((row) => row.name === "Tight End");
     // 10 (pass yd) + 8 (pass TD) - 2 (INT) + 6 (pass FD) - 3 (sacks)
-    // + 3 (rush yd) + 6 (rush TD) + 1 (rush FD) = 29.
-    expect(qbRow?.weeks[0]?.value).toBeCloseTo(29);
-    // 2.5 (half PPR) + 6 (rec yd) + 6 (rec TD) + 3 (rec FD) + 2.5 (TE premium) = 20.
-    expect(teRow?.weeks[0]?.value).toBeCloseTo(20);
+    // + 3 (rush yd) + 6 (rush TD) + 1 (rush FD) - 2 (fumble lost) = 27.
+    expect(qbRow?.weeks[0]?.value).toBeCloseTo(27);
+    // 2.5 (half PPR) + 6 (rec yd) + 6 (rec TD) + 3 (rec FD) + 2.5 (TE premium)
+    // + 2 (receiving 2pt) = 22.
+    expect(teRow?.weeks[0]?.value).toBeCloseTo(22);
 
     // No settings (older payload): the nflverse PPR total is the fallback.
     const fallbackRows = buildTeamStatsTable({ ...base, positions: ["QB"], statId: "fantasy_points" });
@@ -287,6 +296,7 @@ describe("nflverse-team-week-stats", () => {
         receivingTds: 1, rushingTds: 0, passingTds: 0, fantasyPpr: 21, targetShare: 25,
         completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
         passingFirstDowns: 0, rushingFirstDowns: 0, receivingFirstDowns: 0, sacksTaken: 0,
+        fumblesLost: 0, passing2pt: 0, rushing2pt: 0, receiving2pt: 0,
       },
       {
         playerId: "te1", name: "Tight End", team: "KC", opponent: "BUF", position: "TE", week: 1,
@@ -294,6 +304,7 @@ describe("nflverse-team-week-stats", () => {
         receivingTds: 0, rushingTds: 0, passingTds: 0, fantasyPpr: 7, targetShare: 12,
         completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
         passingFirstDowns: 0, rushingFirstDowns: 0, receivingFirstDowns: 0, sacksTaken: 0,
+        fumblesLost: 0, passing2pt: 0, rushing2pt: 0, receiving2pt: 0,
       },
     ];
     const rows = buildTeamStatsTable({
