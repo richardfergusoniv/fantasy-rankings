@@ -41,7 +41,12 @@ import {
   type DashboardTeamApiData,
 } from "./dashboard-section-cache.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
-import { responseCacheFetchedAtMs } from "./dashboard-response-cache.js";
+import {
+  pointDashboardViewAtVersion,
+  remainingDashboardTtlSeconds,
+  responseCacheFetchedAtMs,
+  type DashboardResponseView,
+} from "./dashboard-response-cache.js";
 import { readOwnerSleeperUserId } from "./auth.js";
 import { readNflState, readUserLeagues } from "./user-leagues.js";
 import {
@@ -2429,11 +2434,36 @@ async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): 
     serializeFull: serializeDashboardForCache,
   });
   await Promise.all(writes.map((row) => upsertSourceCacheRow(row.cacheKey, row.payload, row.fetchedAt)));
-  // Response views are NOT published here. A build used to push all eight
-  // views into the Runtime Cache (~40 writes per build); views are now
-  // published by the request path only, for the view actually served, so
-  // Runtime Cache writes stay proportional to reads. A miss on the next
-  // read falls back to the Postgres rows written above.
+  // Response view BODIES are not published here (a build used to push all
+  // eight, ~40 Runtime Cache writes per build). Instead the build points
+  // every view at the new snapshot version — one pointer write per view —
+  // so a refresh moves views to the new snapshot immediately, and each
+  // view's body is written by the request path when it is next served
+  // from the Postgres rows above.
+  const prefix = "dashboard:user:";
+  if (!cacheKey.startsWith(prefix)) return;
+  const sleeperUserId = cacheKey.slice(prefix.length);
+  if (!sleeperUserId || sleeperUserId.includes(":")) return;
+  try {
+    const ttlSeconds = remainingDashboardTtlSeconds({
+      fetchedAtMs: fetchedAt.getTime(),
+      nowMs: Date.now(),
+      live,
+    });
+    if (ttlSeconds > 0) {
+      const views: DashboardResponseView[] = ["full", ...DASHBOARD_CACHE_SECTIONS];
+      await Promise.all(views.map((view) => pointDashboardViewAtVersion({
+        sleeperUserId,
+        view,
+        version: dashboard.asOf,
+        ttlSeconds,
+      })));
+    }
+  } catch (error) {
+    // The Postgres write already succeeded. A runtime-cache miss on the
+    // next read falls back to that row.
+    console.error("[dashboard-cache] response pointer publish failed", error);
+  }
 }
 
 /**
