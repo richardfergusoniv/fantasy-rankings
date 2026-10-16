@@ -43,9 +43,12 @@ import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/sour
  * the props pipeline). URLs are unchanged from the deferred design, so the
  * pipeline contract is untouched.
  *
- * - projections:    upserts `vegas_projection_snapshots` (`{season}:{week}`),
- *                   skips when an existing snapshot has a newer `builtAt`,
- *                   busts the dashboard cache on commit.
+ * - projections:    upserts `vegas_projection_snapshots`
+ *                   (`{season}:{week}:{source}` — one row per source, so a
+ *                   First Down board and a Vegas board for the same week
+ *                   coexist), skips when that source's existing snapshot
+ *                   has a newer `builtAt`, busts the dashboard cache on
+ *                   commit.
  * - matchup-grades: writes `strength-of-schedule-v1:{league_id}` rows to
  *                   `source_cache`, skips leagues with a newer stored
  *                   `computedAt`, busts the dashboard cache on commit.
@@ -74,7 +77,7 @@ async function handleProjections(req: Request): Promise<Response> {
   }
   const payload = parsed.data;
 
-  const snapshotId = `${payload.season}:${payload.week}`;
+  const snapshotId = `${payload.season}:${payload.week}:${payload.source}`;
   const builtAt = new Date(payload.built_at);
   const currentRows = await db
     .select()
