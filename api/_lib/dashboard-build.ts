@@ -1296,7 +1296,12 @@ function mergeVegasPlayerProjections(
       leaguePoints = typeof stagedPoints === "number" && Number.isFinite(stagedPoints) ? stagedPoints : null;
     } else if (useVegasPrimary && feed) {
       const scorerStats = adaptVegasStatsForScorer(base.position, feed.expected_stats, feed.td_probability);
-      leaguePoints = scoreProjectedPlayerStats(base.position, scorerStats, scoringSettings, { recFdProxy: true });
+      // An empty stat line is not a projection: scoring it yields 0 and
+      // would block the First Down gap-fill below. Leave leaguePoints
+      // unset so the fallback can run.
+      if (Object.keys(scorerStats).length > 0) {
+        leaguePoints = scoreProjectedPlayerStats(base.position, scorerStats, scoringSettings, { recFdProxy: true });
+      }
       // League-independent Vegas baseline: same stats through canonical PPR so
       // the comparison tool's "Vegas projection" never duplicates the
       // league-scored number.
