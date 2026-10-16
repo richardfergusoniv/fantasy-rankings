@@ -221,42 +221,56 @@ export function LeagueTradeValueColumn({
   assets,
   height,
   outcome = "tie",
+  adjustment = 0,
 }: {
   side: "mine" | "theirs";
   assets: TradeAsset[];
   height: number;
   outcome?: "winner" | "loser" | "tie";
+  /** FantasyCalc waiver adjustment credited to this side; drawn as its own bar segment. */
+  adjustment?: number;
 }) {
-  const ordered = [...assets].sort((left, right) => left.value - right.value || left.name.localeCompare(right.name));
+  const entries = [...assets]
+    .sort((left, right) => left.value - right.value || left.name.localeCompare(right.name))
+    .map((asset) => ({
+      key: asset.playerId,
+      name: compactAssetName(asset.name, asset.position),
+      sub: asset.position === "PICK" ? "Pick" : `${rosterPositionLabel(asset.position)}${asset.team ? ` ${asset.team}` : ""}`,
+      value: asset.value,
+      isAdjustment: false,
+    }));
+  if (adjustment > 0) {
+    entries.push({
+      key: "waiver-adjustment",
+      name: "Waiver adjustment",
+      sub: "Roster spot value",
+      value: adjustment,
+      isAdjustment: true,
+    });
+    // Stable sort: the adjustment takes its place by value among the players.
+    entries.sort((left, right) => left.value - right.value);
+  }
+  const names = (
+    <div className="league-trade-names">
+      {entries.map((entry) => (
+        <div className="league-trade-name" key={entry.key} style={{ flexGrow: Math.max(entry.value, 1) }}>
+          <strong>{entry.name}</strong>
+          <small>{entry.sub}</small>
+        </div>
+      ))}
+    </div>
+  );
   return (
     <div className={`league-trade-column ${side}${outcome === "winner" ? " is-winner" : outcome === "tie" ? " is-tie" : ""}`} style={{ height, minHeight: height }}>
-      {side === "mine" ? (
-        <div className="league-trade-names">
-          {ordered.map((asset) => (
-            <div className="league-trade-name" key={asset.playerId} style={{ flexGrow: Math.max(asset.value, 1) }}>
-              <strong>{compactAssetName(asset.name, asset.position)}</strong>
-              <small>{asset.position === "PICK" ? "Pick" : `${rosterPositionLabel(asset.position)}${asset.team ? ` ${asset.team}` : ""}`}</small>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <div className={`league-trade-bar${ordered.length === 0 ? " is-empty" : ""}`}>
-        {ordered.length === 0 ? <span>0</span> : ordered.map((asset) => (
-          <div className="league-trade-segment" key={asset.playerId} style={{ flexGrow: Math.max(asset.value, 1) }}>
-            <span>{asset.value.toLocaleString()}</span>
+      {side === "mine" ? names : null}
+      <div className={`league-trade-bar${entries.length === 0 ? " is-empty" : ""}`}>
+        {entries.length === 0 ? <span>0</span> : entries.map((entry) => (
+          <div className={`league-trade-segment${entry.isAdjustment ? " is-adjustment" : ""}`} key={entry.key} style={{ flexGrow: Math.max(entry.value, 1) }}>
+            <span>{entry.value.toLocaleString()}</span>
           </div>
         ))}
       </div>
-      {side === "theirs" ? (
-        <div className="league-trade-names">
-          {ordered.map((asset) => (
-            <div className="league-trade-name" key={asset.playerId} style={{ flexGrow: Math.max(asset.value, 1) }}>
-              <strong>{compactAssetName(asset.name, asset.position)}</strong>
-              <small>{asset.position === "PICK" ? "Pick" : `${rosterPositionLabel(asset.position)}${asset.team ? ` ${asset.team}` : ""}`}</small>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      {side === "theirs" ? names : null}
     </div>
   );
 }
@@ -356,21 +370,21 @@ export function TradeValueDialog({
               <LeagueTradeValueColumn
                 side="mine"
                 assets={give}
-                height={columnHeight(giveAdjustedTotal, give.length)}
+                height={columnHeight(giveAdjustedTotal, give.length + (adjustment.give > 0 ? 1 : 0))}
                 outcome={outcome === "left" ? "winner" : outcome === "tie" ? "tie" : "loser"}
+                adjustment={adjustment.give}
               />
               <div className="league-trade-total"><span>Total trade value</span><strong>{giveAdjustedTotal.toLocaleString()}</strong></div>
-              {adjustment.give > 0 ? <div className="league-trade-adjustment"><span>Waiver adjustment</span><strong>+{adjustment.give.toLocaleString()}</strong></div> : null}
             </div>
             <div className="league-trade-side">
               <LeagueTradeValueColumn
                 side="theirs"
                 assets={get}
-                height={columnHeight(getAdjustedTotal, get.length)}
+                height={columnHeight(getAdjustedTotal, get.length + (adjustment.get > 0 ? 1 : 0))}
                 outcome={outcome === "right" ? "winner" : outcome === "tie" ? "tie" : "loser"}
+                adjustment={adjustment.get}
               />
               <div className="league-trade-total"><span>Total trade value</span><strong>{getAdjustedTotal.toLocaleString()}</strong></div>
-              {adjustment.get > 0 ? <div className="league-trade-adjustment"><span>Waiver adjustment</span><strong>+{adjustment.get.toLocaleString()}</strong></div> : null}
             </div>
           </div>
           <AggregateTradeHistory
