@@ -25,7 +25,6 @@ import {
   CACHE_KEY,
 } from "./dashboard-schemas.js";
 import {
-  apiSectionDataFromDashboard,
   buildDashboardCacheWrites,
   DASHBOARD_CACHE_SECTIONS,
   dashboardFromSectionRows,
@@ -42,7 +41,7 @@ import {
   type DashboardTeamApiData,
 } from "./dashboard-section-cache.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
-import { rememberDashboardView, remainingDashboardTtlSeconds, responseCacheFetchedAtMs } from "./dashboard-response-cache.js";
+import { responseCacheFetchedAtMs } from "./dashboard-response-cache.js";
 import { readOwnerSleeperUserId } from "./auth.js";
 import { readNflState, readUserLeagues } from "./user-leagues.js";
 import {
@@ -2430,44 +2429,11 @@ async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): 
     serializeFull: serializeDashboardForCache,
   });
   await Promise.all(writes.map((row) => upsertSourceCacheRow(row.cacheKey, row.payload, row.fetchedAt)));
-  const prefix = "dashboard:user:";
-  if (!cacheKey.startsWith(prefix)) return;
-  const sleeperUserId = cacheKey.slice(prefix.length);
-  if (!sleeperUserId || sleeperUserId.includes(":")) return;
-  try {
-    await publishUserDashboardResponseCache(sleeperUserId, dashboard, live, fetchedAt.getTime());
-  } catch (error) {
-    // The Postgres write already succeeded. A runtime-cache miss on the
-    // next read falls back to that row.
-    console.error("[dashboard-cache] response cache publish failed", error);
-  }
-}
-
-/** Point every per-user view at this snapshot version so older entries are unused. */
-async function publishUserDashboardResponseCache(
-  sleeperUserId: string,
-  dashboard: Dashboard,
-  live: boolean,
-  fetchedAtMs: number,
-): Promise<void> {
-  const nowMs = Date.now();
-  const ttlSeconds = remainingDashboardTtlSeconds({ fetchedAtMs, nowMs, live });
-  const views: Array<{ view: DashboardCacheSection | "full"; body: unknown }> = [
-    { view: "full", body: { dashboard } },
-    ...DASHBOARD_CACHE_SECTIONS.map((section) => ({
-      view: section,
-      body: { section, data: apiSectionDataFromDashboard(dashboard, section) },
-    })),
-  ];
-  await Promise.all(views.map(({ view, body }) => rememberDashboardView({
-    sleeperUserId,
-    view,
-    version: dashboard.asOf,
-    live,
-    body,
-    ttlSeconds,
-    nowMs,
-  })));
+  // Response views are NOT published here. A build used to push all eight
+  // views into the Runtime Cache (~40 writes per build); views are now
+  // published by the request path only, for the view actually served, so
+  // Runtime Cache writes stay proportional to reads. A miss on the next
+  // read falls back to the Postgres rows written above.
 }
 
 /**
