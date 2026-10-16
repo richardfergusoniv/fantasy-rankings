@@ -10,6 +10,7 @@
  */
 
 import { splitCsvLine } from "./chart-metric-transforms.js";
+import { scoreProjectedPlayerStats } from "./fantasy-scoring.js";
 
 export const TEAM_WEEK_STATS_STALE_MS = 6 * 60 * 60 * 1000;
 
@@ -41,7 +42,7 @@ export type TeamStatsStatId =
   | "carries"
   | "rushing_yards"
   | "tds"
-  | "fantasy_ppr";
+  | "fantasy_points";
 
 export type TeamStatsStatDef = {
   id: TeamStatsStatId;
@@ -58,7 +59,7 @@ export const TEAM_STATS_STAT_OPTIONS: readonly TeamStatsStatDef[] = [
   { id: "carries", label: "Carries" },
   { id: "rushing_yards", label: "Rush yards" },
   { id: "tds", label: "TDs" },
-  { id: "fantasy_ppr", label: "PPR points" },
+  { id: "fantasy_points", label: "Fantasy points" },
 ] as const;
 
 export const TEAM_STATS_POSITIONS: readonly TeamStatsPosition[] = ["QB", "RB", "WR", "TE"];
@@ -109,6 +110,18 @@ export type TeamWeekStatRow = {
   passAttempts: number;
   passingYards: number;
   interceptions: number;
+  /** First downs by phase, for point-per-first-down league scoring. */
+  passingFirstDowns: number;
+  rushingFirstDowns: number;
+  receivingFirstDowns: number;
+  /** Sacks taken (the `sacks_suffered` column for offensive players). */
+  sacksTaken: number;
+  /** Total fumbles lost (`fumbles_lost_total`). */
+  fumblesLost: number;
+  /** Two-point conversions by phase. */
+  passing2pt: number;
+  rushing2pt: number;
+  receiving2pt: number;
 };
 
 export type TeamWeekSnapRow = {
@@ -233,6 +246,14 @@ export function parsePlayerWeekStatsCsv(csv: string): TeamWeekStatRow[] {
       passAttempts: parseNumber(cell(cells, index.attempts)),
       passingYards: parseNumber(cell(cells, index.passing_yards)),
       interceptions: parseNumber(cell(cells, index.passing_interceptions)),
+      passingFirstDowns: parseNumber(cell(cells, index.passing_first_downs)),
+      rushingFirstDowns: parseNumber(cell(cells, index.rushing_first_downs)),
+      receivingFirstDowns: parseNumber(cell(cells, index.receiving_first_downs)),
+      sacksTaken: parseNumber(cell(cells, index.sacks_suffered)),
+      fumblesLost: parseNumber(cell(cells, index.fumbles_lost_total)),
+      passing2pt: parseNumber(cell(cells, index.passing_2pt_conversions)),
+      rushing2pt: parseNumber(cell(cells, index.rushing_2pt_conversions)),
+      receiving2pt: parseNumber(cell(cells, index.receiving_2pt_conversions)),
     });
   }
   return output;
@@ -285,6 +306,7 @@ function weekValueForStat(
   statId: TeamStatsStatId,
   weekStats: TeamWeekStatRow | undefined,
   weekSnap: TeamWeekSnapRow | undefined,
+  scoringSettings?: Record<string, number>,
 ): { value: number; percent: number | null } {
   switch (statId) {
     case "snaps":
@@ -308,8 +330,38 @@ function weekValueForStat(
         + (weekStats?.receivingTds ?? 0);
       return { value: total, percent: null };
     }
-    case "fantasy_ppr":
-      return { value: weekStats?.fantasyPpr ?? 0, percent: null };
+    case "fantasy_points": {
+      if (!weekStats) return { value: 0, percent: null };
+      // Without the league's settings (older payloads), fall back to the
+      // nflverse PPR total; with them, score the week in league format.
+      // An empty settings object counts as absent (it would zero every week).
+      if (!scoringSettings || Object.keys(scoringSettings).length === 0) {
+        return { value: weekStats.fantasyPpr, percent: null };
+      }
+      const stats: Record<string, number> = {
+        pass_yd: weekStats.passingYards,
+        pass_td: weekStats.passingTds,
+        pass_int: weekStats.interceptions,
+        pass_cmp: weekStats.completions,
+        pass_att: weekStats.passAttempts,
+        pass_inc: Math.max(0, weekStats.passAttempts - weekStats.completions),
+        pass_sack: weekStats.sacksTaken,
+        pass_fd: weekStats.passingFirstDowns,
+        rush_att: weekStats.carries,
+        rush_yd: weekStats.rushingYards,
+        rush_td: weekStats.rushingTds,
+        rush_fd: weekStats.rushingFirstDowns,
+        rec: weekStats.receptions,
+        rec_yd: weekStats.receivingYards,
+        rec_td: weekStats.receivingTds,
+        rec_fd: weekStats.receivingFirstDowns,
+        fum_lost: weekStats.fumblesLost,
+        pass_2pt: weekStats.passing2pt,
+        rush_2pt: weekStats.rushing2pt,
+        rec_2pt: weekStats.receiving2pt,
+      };
+      return { value: scoreProjectedPlayerStats(weekStats.position, stats, scoringSettings), percent: null };
+    }
     default: {
       const _exhaustive: never = statId;
       throw new Error(`Unhandled team stats stat: ${_exhaustive}`);
@@ -328,6 +380,8 @@ export function buildTeamStatsTable(options: {
   positions: readonly TeamStatsPosition[];
   statId: TeamStatsStatId;
   throughWeek: number;
+  /** League scoring settings; scores the fantasy_points stat in league format. */
+  scoringSettings?: Record<string, number>;
 }): TeamStatsPlayerRow[] {
   const team = canonicalNflTeam(options.team);
   const throughWeek = Math.max(1, Math.floor(options.throughWeek));
@@ -384,6 +438,7 @@ export function buildTeamStatsTable(options: {
         options.statId,
         acc.byWeekStats.get(week),
         acc.byWeekSnaps.get(week),
+        options.scoringSettings,
       );
       return { week, value, percent };
     });
@@ -532,7 +587,7 @@ export function teamStatsStatDef(statId: TeamStatsStatId): TeamStatsStatDef {
 
 /** Format a primary cell value (counts as ints; PPR keeps one decimal when needed). */
 export function formatTeamStatsValue(statId: TeamStatsStatId, value: number): string {
-  if (statId === "fantasy_ppr") {
+  if (statId === "fantasy_points") {
     const rounded = Math.round(value * 10) / 10;
     return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
   }

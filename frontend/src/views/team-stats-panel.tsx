@@ -115,8 +115,9 @@ export function TeamStatsPanel({
       positions: TEAM_STATS_GROUP_POSITIONS[selectedGroup],
       statId,
       throughWeek,
+      scoringSettings: league.scoringSettings,
     });
-  }, [dataQuery.data, selectedGroup, selectedTeam, statId, throughWeek]);
+  }, [dataQuery.data, league.scoringSettings, selectedGroup, selectedTeam, statId, throughWeek]);
 
   const stacks = useMemo(() => buildTeamStatsWeekStacks(rows), [rows]);
 

@@ -162,6 +162,8 @@ export const leagueSchema = z.object({
   id: z.string(),
   name: z.string(),
   scoringLabel: z.string(),
+  /** Sleeper scoring settings; optional so payloads built before this field existed still validate. */
+  scoringSettings: z.record(z.string(), z.number()).optional(),
   rankingField: z.enum(["ppr", "halfPpr"]),
   record: z.object({ wins: z.number().int(), losses: z.number().int(), ties: z.number().int() }),
   teamActual: z.number().nullable(),
@@ -271,6 +273,7 @@ export const leagueIdentitySchema = leagueSchema.pick({
   id: true,
   name: true,
   scoringLabel: true,
+  scoringSettings: true,
   rankingField: true,
   rosteredPlayerIds: true,
   rosterAssignments: true,

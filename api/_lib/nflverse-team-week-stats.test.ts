@@ -41,6 +41,14 @@ const STATS_HEADER = [
   "receiving_tds",
   "target_share",
   "fantasy_points_ppr",
+  "passing_first_downs",
+  "rushing_first_downs",
+  "receiving_first_downs",
+  "sacks_suffered",
+  "fumbles_lost_total",
+  "passing_2pt_conversions",
+  "rushing_2pt_conversions",
+  "receiving_2pt_conversions",
 ].join(",");
 
 function statsRow(fields: {
@@ -61,8 +69,12 @@ function statsRow(fields: {
   passingTds?: number;
   targetShare?: number;
   fantasyPpr?: number;
+  passingFirstDowns?: number;
+  rushingFirstDowns?: number;
+  receivingFirstDowns?: number;
+  sacks?: number;
 }): string {
-  const cells = Array.from({ length: 26 }, () => "");
+  const cells = Array.from({ length: 34 }, () => "");
   cells[0] = fields.id;
   cells[1] = fields.name;
   cells[2] = fields.name;
@@ -84,6 +96,10 @@ function statsRow(fields: {
   cells[23] = String(fields.receivingTds ?? 0);
   cells[24] = fields.targetShare === undefined ? "" : String(fields.targetShare);
   cells[25] = String(fields.fantasyPpr ?? 0);
+  cells[26] = String(fields.passingFirstDowns ?? 0);
+  cells[27] = String(fields.rushingFirstDowns ?? 0);
+  cells[28] = String(fields.receivingFirstDowns ?? 0);
+  cells[29] = String(fields.sacks ?? 0);
   return cells.join(",");
 }
 
@@ -132,7 +148,7 @@ describe("nflverse-team-week-stats", () => {
       statsRow({
         id: "wr1", name: "DK Metcalf", position: "WR", week: 1, team: "PIT", opponent: "jac",
         targets: 8, receptions: 5, receivingYards: 90, receivingTds: 1,
-        targetShare: 0.25, fantasyPpr: 20.0,
+        targetShare: 0.25, fantasyPpr: 20.0, receivingFirstDowns: 4,
       }),
       statsRow({
         id: "wr1", name: "DK Metcalf", position: "WR", week: 2, team: "PIT",
@@ -157,6 +173,8 @@ describe("nflverse-team-week-stats", () => {
     expect(stats[0]?.opponent).toBe("JAX");
     expect(stats[1]?.opponent).toBe("");
     expect(stats[0]?.targetShare).toBeCloseTo(25);
+    expect(stats[0]?.receivingFirstDowns).toBe(4);
+    expect(stats[0]?.passingFirstDowns).toBe(0);
     expect(snaps).toHaveLength(2);
     expect(snaps[0]?.offensePct).toBeCloseTo(96);
   });
@@ -191,6 +209,8 @@ describe("nflverse-team-week-stats", () => {
         targets: 8, receptions: 5, receivingYards: 90, carries: 0, rushingYards: 0,
         receivingTds: 1, rushingTds: 0, passingTds: 0, fantasyPpr: 20, targetShare: 25,
         completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
+        passingFirstDowns: 0, rushingFirstDowns: 0, receivingFirstDowns: 0, sacksTaken: 0,
+        fumblesLost: 0, passing2pt: 0, rushing2pt: 0, receiving2pt: 0,
       },
     ];
     const rows = buildTeamStatsTable({
@@ -202,6 +222,55 @@ describe("nflverse-team-week-stats", () => {
       throughWeek: 1,
     });
     expect(rows[0]?.weeks[0]).toEqual({ week: 1, value: 8, percent: 25 });
+  });
+
+  it("scores fantasy points in league format, first downs included", () => {
+    const qb: TeamWeekStatRow = {
+      playerId: "qb1", name: "Passer", team: "KC", opponent: "BUF", position: "QB", week: 1,
+      targets: 0, receptions: 0, receivingYards: 0, carries: 5, rushingYards: 30,
+      receivingTds: 0, rushingTds: 1, passingTds: 2, fantasyPpr: 27.5, targetShare: null,
+      completions: 20, passAttempts: 30, passingYards: 250, interceptions: 1,
+      passingFirstDowns: 12, rushingFirstDowns: 2, receivingFirstDowns: 0, sacksTaken: 3,
+      fumblesLost: 1, passing2pt: 0, rushing2pt: 0, receiving2pt: 0,
+    };
+    const te: TeamWeekStatRow = {
+      playerId: "te1", name: "Tight End", team: "KC", opponent: "BUF", position: "TE", week: 1,
+      targets: 7, receptions: 5, receivingYards: 60, carries: 0, rushingYards: 0,
+      receivingTds: 1, rushingTds: 0, passingTds: 0, fantasyPpr: 17, targetShare: 20,
+      completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
+      passingFirstDowns: 0, rushingFirstDowns: 0, receivingFirstDowns: 3, sacksTaken: 0,
+      fumblesLost: 0, passing2pt: 0, rushing2pt: 0, receiving2pt: 1,
+    };
+    const base: {
+      stats: TeamWeekStatRow[];
+      snaps: TeamWeekSnapRow[];
+      team: string;
+      throughWeek: number;
+    } = { stats: [qb, te], snaps: [], team: "KC", throughWeek: 1 };
+
+    const leagueRows = buildTeamStatsTable({
+      ...base,
+      positions: ["QB", "TE"],
+      statId: "fantasy_points",
+      scoringSettings: {
+        pass_yd: 0.04, pass_td: 4, pass_int: -2, pass_fd: 0.5, pass_sack: -1,
+        rush_yd: 0.1, rush_td: 6, rush_fd: 0.5,
+        rec: 0.5, rec_yd: 0.1, rec_td: 6, rec_fd: 1, bonus_rec_te: 0.5,
+        fum_lost: -2, rec_2pt: 2,
+      },
+    });
+    const qbRow = leagueRows.find((row) => row.name === "Passer");
+    const teRow = leagueRows.find((row) => row.name === "Tight End");
+    // 10 (pass yd) + 8 (pass TD) - 2 (INT) + 6 (pass FD) - 3 (sacks)
+    // + 3 (rush yd) + 6 (rush TD) + 1 (rush FD) - 2 (fumble lost) = 27.
+    expect(qbRow?.weeks[0]?.value).toBeCloseTo(27);
+    // 2.5 (half PPR) + 6 (rec yd) + 6 (rec TD) + 3 (rec FD) + 2.5 (TE premium)
+    // + 2 (receiving 2pt) = 22.
+    expect(teRow?.weeks[0]?.value).toBeCloseTo(22);
+
+    // No settings (older payload): the nflverse PPR total is the fallback.
+    const fallbackRows = buildTeamStatsTable({ ...base, positions: ["QB"], statId: "fantasy_points" });
+    expect(fallbackRows[0]?.weeks[0]?.value).toBeCloseTo(27.5);
   });
 
   it("defaults team and group from the user roster", () => {
@@ -226,12 +295,16 @@ describe("nflverse-team-week-stats", () => {
         targets: 8, receptions: 6, receivingYards: 90, carries: 0, rushingYards: 0,
         receivingTds: 1, rushingTds: 0, passingTds: 0, fantasyPpr: 21, targetShare: 25,
         completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
+        passingFirstDowns: 0, rushingFirstDowns: 0, receivingFirstDowns: 0, sacksTaken: 0,
+        fumblesLost: 0, passing2pt: 0, rushing2pt: 0, receiving2pt: 0,
       },
       {
         playerId: "te1", name: "Tight End", team: "KC", opponent: "BUF", position: "TE", week: 1,
         targets: 4, receptions: 3, receivingYards: 40, carries: 0, rushingYards: 0,
         receivingTds: 0, rushingTds: 0, passingTds: 0, fantasyPpr: 7, targetShare: 12,
         completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
+        passingFirstDowns: 0, rushingFirstDowns: 0, receivingFirstDowns: 0, sacksTaken: 0,
+        fumblesLost: 0, passing2pt: 0, rushing2pt: 0, receiving2pt: 0,
       },
     ];
     const rows = buildTeamStatsTable({
@@ -251,8 +324,8 @@ describe("nflverse-team-week-stats", () => {
 
   it("formats values and percents", () => {
     expect(formatTeamStatsValue("snaps", 64.2)).toBe("64");
-    expect(formatTeamStatsValue("fantasy_ppr", 9.5)).toBe("9.5");
-    expect(formatTeamStatsValue("fantasy_ppr", 10)).toBe("10");
+    expect(formatTeamStatsValue("fantasy_points", 9.5)).toBe("9.5");
+    expect(formatTeamStatsValue("fantasy_points", 10)).toBe("10");
     expect(formatTeamStatsPercent(96.4)).toBe("96%");
   });
 

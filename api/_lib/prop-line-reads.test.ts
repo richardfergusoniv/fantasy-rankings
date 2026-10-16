@@ -29,6 +29,14 @@ function weekRow(partial: Partial<TeamWeekStatRow> & Pick<TeamWeekStatRow, "week
     passAttempts: 0,
     passingYards: 0,
     interceptions: 0,
+    passingFirstDowns: 0,
+    rushingFirstDowns: 0,
+    receivingFirstDowns: 0,
+    sacksTaken: 0,
+    fumblesLost: 0,
+    passing2pt: 0,
+    rushing2pt: 0,
+    receiving2pt: 0,
     ...partial,
   };
 }
