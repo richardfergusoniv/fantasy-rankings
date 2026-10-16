@@ -21,6 +21,7 @@ import {
   signOutForPersonalData,
   sleeperInjuryTag,
   tradeTotal,
+  waiverAdjustments,
 } from "../dashboard-shared";
 import {
   buildLeagueRosterRows,
@@ -284,8 +285,11 @@ export function TradeValueDialog({
 }) {
   const giveTotal = tradeTotal(give);
   const getTotal = tradeTotal(get);
-  const outcome = tradeSideOutcome(giveTotal, getTotal);
-  const maxTotal = Math.max(giveTotal, getTotal, 1);
+  const adjustment = waiverAdjustments(give, get);
+  const giveAdjustedTotal = giveTotal + adjustment.give;
+  const getAdjustedTotal = getTotal + adjustment.get;
+  const outcome = tradeSideOutcome(giveAdjustedTotal, getAdjustedTotal);
+  const maxTotal = Math.max(giveAdjustedTotal, getAdjustedTotal, 1);
   const columnHeight = (total: number, count: number): number => {
     if (count === 0) return 48;
     const floor = count * 48 + (count - 1) * 2;
@@ -333,8 +337,8 @@ export function TradeValueDialog({
     node.scrollTop = 0;
   }, []);
   const chartLabel = [
-    `${giveLabel} sends ${give.length ? give.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${giveTotal.toLocaleString()}`,
-    `${getLabel} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getTotal.toLocaleString()}`,
+    `${giveLabel} sends ${give.length ? give.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${giveAdjustedTotal.toLocaleString()}${adjustment.give > 0 ? ` including a waiver adjustment of ${adjustment.give.toLocaleString()}` : ""}`,
+    `${getLabel} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getAdjustedTotal.toLocaleString()}${adjustment.get > 0 ? ` including a waiver adjustment of ${adjustment.get.toLocaleString()}` : ""}`,
   ].join(" ");
   const { giveColor, getColor, giveStrokeWidth, getStrokeWidth } = tradeTrendColors(outcome);
 
@@ -352,19 +356,21 @@ export function TradeValueDialog({
               <LeagueTradeValueColumn
                 side="mine"
                 assets={give}
-                height={columnHeight(giveTotal, give.length)}
+                height={columnHeight(giveAdjustedTotal, give.length)}
                 outcome={outcome === "left" ? "winner" : outcome === "tie" ? "tie" : "loser"}
               />
-              <div className="league-trade-total"><span>Total trade value</span><strong>{giveTotal.toLocaleString()}</strong></div>
+              <div className="league-trade-total"><span>Total trade value</span><strong>{giveAdjustedTotal.toLocaleString()}</strong></div>
+              {adjustment.give > 0 ? <div className="league-trade-adjustment"><span>Waiver adjustment</span><strong>+{adjustment.give.toLocaleString()}</strong></div> : null}
             </div>
             <div className="league-trade-side">
               <LeagueTradeValueColumn
                 side="theirs"
                 assets={get}
-                height={columnHeight(getTotal, get.length)}
+                height={columnHeight(getAdjustedTotal, get.length)}
                 outcome={outcome === "right" ? "winner" : outcome === "tie" ? "tie" : "loser"}
               />
-              <div className="league-trade-total"><span>Total trade value</span><strong>{getTotal.toLocaleString()}</strong></div>
+              <div className="league-trade-total"><span>Total trade value</span><strong>{getAdjustedTotal.toLocaleString()}</strong></div>
+              {adjustment.get > 0 ? <div className="league-trade-adjustment"><span>Waiver adjustment</span><strong>+{adjustment.get.toLocaleString()}</strong></div> : null}
             </div>
           </div>
           <AggregateTradeHistory
