@@ -1185,16 +1185,12 @@ const VEGAS_CANONICAL_PPR_SCORING: Record<string, number> = {
   fum_lost: -2,
 };
 
-function mergeVegasPlayerProjections(
-  leagueId: string,
-  rankingField: "ppr" | "halfPpr",
-  baseRows: Ranking[],
-  snapshot: VegasProjectionPayload | null,
-  useVegasPrimary: boolean,
-  sleeperProjectionsByPlayerId: Map<string, SleeperProjection>,
-  scoringSettings: Record<string, number> | undefined,
-  defenseRankByTeam: Map<string, number>,
-): Ranking[] {
+type ProjectionFeedMaps = {
+  feedByPlayer: Map<string, VegasProjectionPayload["projections"][number]>;
+  feedByNamePosition: Map<string, Array<VegasProjectionPayload["projections"][number]>>;
+};
+
+function buildProjectionFeedMaps(snapshot: VegasProjectionPayload | null): ProjectionFeedMaps {
   const feedByPlayer = new Map<string, VegasProjectionPayload["projections"][number]>();
   const feedByNamePosition = new Map<string, Array<VegasProjectionPayload["projections"][number]>>();
   for (const projection of snapshot?.projections ?? []) {
@@ -1206,6 +1202,22 @@ function mergeVegasPlayerProjections(
     nameMatches.push(projection);
     feedByNamePosition.set(namePositionKey, nameMatches);
   }
+  return { feedByPlayer, feedByNamePosition };
+}
+
+function mergeVegasPlayerProjections(
+  leagueId: string,
+  rankingField: "ppr" | "halfPpr",
+  baseRows: Ranking[],
+  snapshot: VegasProjectionPayload | null,
+  fallbackSnapshot: VegasProjectionPayload | null,
+  useVegasPrimary: boolean,
+  sleeperProjectionsByPlayerId: Map<string, SleeperProjection>,
+  scoringSettings: Record<string, number> | undefined,
+  defenseRankByTeam: Map<string, number>,
+): Ranking[] {
+  const { feedByPlayer, feedByNamePosition } = buildProjectionFeedMaps(snapshot);
+  const fallbackMaps = fallbackSnapshot ? buildProjectionFeedMaps(fallbackSnapshot) : null;
 
   const merged = baseRows.flatMap((base): Ranking[] => {
     // Weekly availability overrides every numeric source. Consensus and Sleeper
@@ -1306,6 +1318,40 @@ function mergeVegasPlayerProjections(
         projectionSource: isFirstDownSnapshot ? "first_down" : "vegas",
         projectionComponents,
       }];
+    }
+
+    // First Down gap-fill (Richard's policy: the backup is used for
+    // whatever the primary board does not cover). The Vegas feed has no
+    // usable row for this player, but the week's First Down snapshot
+    // does: use its staged per-league total verbatim — points-only by
+    // contract — and tag the row with its real source.
+    if (useVegasPrimary && fallbackMaps) {
+      const fdFeed = selectProjectionFeed(
+        fallbackMaps.feedByPlayer.get(exactKey),
+        fallbackMaps.feedByNamePosition.get(`${normalizedPlayerName(base.name)}:${base.position}`) ?? [],
+        canonicalTeam(base.team ?? ""),
+        (row) => row.team ? canonicalTeam(row.team) : "",
+      );
+      if (fdFeed) {
+        const stagedPoints = fdFeed.leagues[leagueId] ?? fdFeed.expected_stats.projected_points;
+        if (typeof stagedPoints === "number" && Number.isFinite(stagedPoints)) {
+          const fdTeam = fdFeed.team ? canonicalTeam(fdFeed.team) : null;
+          const fdTeamCompatible = fdTeam !== null && fdTeam === baseTeam;
+          return [{
+            ...base,
+            leagueId,
+            team: fdTeamCompatible ? fdTeam : base.team,
+            opponent: fdTeamCompatible && fdFeed.opponent ? canonicalTeam(fdFeed.opponent) : base.opponent,
+            ppr: rankingField === "ppr" ? stagedPoints : base.ppr,
+            halfPpr: rankingField === "halfPpr" ? stagedPoints : base.halfPpr,
+            leagueProjection: stagedPoints,
+            vegasProjection: null,
+            sleeperProjection: validSleeperPoints,
+            projectionSource: "first_down",
+            projectionComponents: null,
+          }];
+        }
+      }
     }
 
     // Keep the player visible with schedule context when the saved Vegas feed
@@ -1499,20 +1545,37 @@ function buildVegasTeamTotals(lines: z.infer<typeof vegasLineSchema>[], schedule
 // Database-backed inputs
 // ---------------------------------------------------------------------------
 
-async function loadVegasProjectionSnapshot(season: number, week: number): Promise<VegasProjectionPayload | null> {
+/**
+ * Load the week's staged projection snapshots: the primary board (the
+ * latest Vegas snapshot, or First Down's when no Vegas board exists) and,
+ * alongside a Vegas primary, the latest First Down snapshot for per-player
+ * gap-filling. Snapshots are stored one row per source; legacy rows keyed
+ * without a source suffix classify by their payload's `source` field.
+ */
+async function loadProjectionSnapshots(
+  season: number,
+  week: number,
+): Promise<{ primary: VegasProjectionPayload | null; firstDownFallback: VegasProjectionPayload | null }> {
   const rows = await db
     .select()
     .from(schema.vegasProjectionSnapshots)
     .where(and(eq(schema.vegasProjectionSnapshots.season, season), eq(schema.vegasProjectionSnapshots.week, week)))
-    .orderBy(desc(schema.vegasProjectionSnapshots.builtAt))
-    .limit(1);
-  const row = rows[0];
-  if (!row) return null;
-  try {
-    return vegasProjectionPayloadSchema.parse(JSON.parse(row.payload));
-  } catch {
-    return null;
+    .orderBy(desc(schema.vegasProjectionSnapshots.builtAt));
+  let vegas: VegasProjectionPayload | null = null;
+  let firstDown: VegasProjectionPayload | null = null;
+  for (const row of rows) {
+    let payload: VegasProjectionPayload;
+    try {
+      payload = vegasProjectionPayloadSchema.parse(JSON.parse(row.payload));
+    } catch {
+      continue;
+    }
+    if (payload.source === "first_down") firstDown ??= payload;
+    else vegas ??= payload;
+    if (vegas && firstDown) break;
   }
+  const primary = vegas ?? firstDown;
+  return { primary, firstDownFallback: primary === vegas && vegas ? firstDown : null };
 }
 
 async function loadStrengthOfSchedule(
@@ -1642,7 +1705,11 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     throw new Error("Sleeper leagues are unavailable");
   }
   const attachWeekContext = usesRegularSeasonWeek(seasonType);
-  const vegasProjectionSnapshot = attachWeekContext ? await loadVegasProjectionSnapshot(season, week) : null;
+  const projectionSnapshots = attachWeekContext
+    ? await loadProjectionSnapshots(season, week)
+    : { primary: null, firstDownFallback: null };
+  const vegasProjectionSnapshot = projectionSnapshots.primary;
+  const firstDownProjectionSnapshot = projectionSnapshots.firstDownFallback;
 
   const [leagueResult, playersResult, sleeperProjectionResult, scheduleResult, currentStatsResult, previousStatsResult, kickoffResult] = await Promise.allSettled([
     readUserLeagues(sleeperUserId, fresh),
@@ -1827,6 +1894,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       rankingField,
       vegasBaseRows,
       vegasProjectionSnapshot,
+      firstDownProjectionSnapshot,
       useVegasPrimary,
       sleeperProjectionsByPlayerId,
       league.scoring_settings,
