@@ -1837,10 +1837,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-trade-side:last-child .league-trade-total { text-align: right; }
 .league-trade-total span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .league-trade-total strong { display: block; margin-top: 2px; font-size: var(--type-section); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums lining-nums; }
-.league-trade-adjustment { margin-top: 6px; }
-.league-trade-side:last-child .league-trade-adjustment { text-align: right; }
-.league-trade-adjustment span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.league-trade-adjustment strong { display: block; margin-top: 2px; font-size: var(--type-body); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums lining-nums; }
+.league-trade-segment.is-adjustment { background-image: repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.22) 0 6px, transparent 6px 12px); }
 .league-trade-dialog .trade-aggregate .section-heading { position: static; z-index: auto; min-height: 0; padding: 0 0 6px; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .trade-side { position: relative; min-width: 0; }
 .trade-side:focus-within { z-index: 10; }
