@@ -558,6 +558,41 @@ export async function rememberDashboardView(args: {
   }
 }
 
+/**
+ * Move a view's latest pointers to a snapshot version WITHOUT storing a
+ * body. Builds call this for every view: the snapshot body stays in
+ * Postgres, the next read of the view misses on the new version, serves
+ * the fresh row, and remembers the body itself. One pointer write per
+ * view keeps Runtime Cache writes proportional to builds, not bodies —
+ * while still making a refresh move every view to the new snapshot
+ * immediately (the regression PR #150 introduced by publishing nothing).
+ */
+export async function pointDashboardViewAtVersion(args: {
+  sleeperUserId: string;
+  view: DashboardResponseView;
+  version: string;
+  ttlSeconds: number;
+  nowMs?: number;
+  store?: DashboardViewStore;
+}): Promise<void> {
+  if (args.ttlSeconds <= 0) return;
+  const version = normalizeRequestedSnapshotVersion(args.version);
+  if (!version) return;
+  const nowMs = args.nowMs ?? Date.now();
+  const store = resolveStore(args.store);
+  const pointer = { version, expiresAtMs: nowMs + args.ttlSeconds * 1000 } satisfies LatestPointer;
+
+  const visible = greatestPointer(await readLanePointers(store, args.sleeperUserId, args.view));
+  if (visible && visible.version > version) return;
+
+  for (const lane of lanesForVersion(version)) {
+    const key = dashboardViewLaneKey(args.sleeperUserId, args.view, lane);
+    const current = decodePointer(await store.get(key));
+    if (current && current.version > version) continue;
+    await store.set(key, pointer, args.ttlSeconds);
+  }
+}
+
 export type DashboardOriginResult<T> =
   | { kind: "deny" }
   | { kind: "value"; body: T; version: string; live: boolean; ttlSeconds: number };
