@@ -127,7 +127,12 @@ export function dashboardViewLatestKey(
 
 /** Fixed lanes so a publish does not overwrite every copy of a newer version. */
 const DASHBOARD_VIEW_LANE_COUNT = 16;
-const DASHBOARD_VIEW_LANE_COPIES = 4;
+/**
+ * One pointer copy per publish (was four). Recall takes the greatest
+ * version across all lanes, so a single copy stays correct; the extra
+ * copies only multiplied Runtime Cache writes, which are quota-capped.
+ */
+const DASHBOARD_VIEW_LANE_COPIES = 1;
 
 export function dashboardViewLaneKey(
   sleeperUserId: string,
