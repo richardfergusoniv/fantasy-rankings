@@ -2224,7 +2224,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       id: league.league_id,
       name: league.name,
       scoringLabel,
-      scoringSettings: league.scoring_settings ?? {},
+      scoringSettings: league.scoring_settings,
       rankingField,
       record: { wins: settings.wins ?? 0, losses: settings.losses ?? 0, ties: settings.ties ?? 0 },
       teamActual: typeof matchup?.points === "number" ? matchup.points : null,
