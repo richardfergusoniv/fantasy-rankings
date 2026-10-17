@@ -209,6 +209,7 @@ export async function GET(req: Request): Promise<Response> {
           season: parsedQuery.data.season ?? 0,
           week: parsedQuery.data.week ?? 0,
           pulledAt: null,
+          sleeperPulledAt: null,
           lines: [],
         };
       }),

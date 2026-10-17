@@ -220,6 +220,47 @@ jobs:
           )
           EOF
 
+      - name: Pull and push Sleeper Picks board
+        if: steps.guard.outputs.go == 'true'
+        # Reference data only: a Sleeper outage must never fail the run
+        # and block the strength-of-schedule push or dashboard rebuild.
+        continue-on-error: true
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          python3 - <<'EOF'
+          import json, urllib.request
+          from datetime import datetime, timezone
+          from pathlib import Path
+          # The Picks board is public (no auth). Stage the NFL slice raw;
+          # the ingest endpoint owns stat mapping and normalization.
+          with urllib.request.urlopen("https://api.sleeper.app/lines/available", timeout=60) as resp:
+              board = json.load(resp)
+          nfl = [item for item in board if item.get("sport") == "nfl"]
+          staged_props = json.load(open("pipeline/data/staged_prop_line_snapshots.json"))
+          pulled_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+          staged = {
+              "season": staged_props["season"],
+              "week": staged_props["week"],
+              "pulled_at": pulled_at,
+              "lines": nfl,
+          }
+          out = Path("pipeline/data/staged_sleeper_picks.json")
+          out.write_text(json.dumps(staged))
+          print(f"staged {len(nfl)} NFL Sleeper Picks markets")
+          EOF
+          python3 pipeline/scripts/push_ingest.py sleeper-picks | tee /tmp/push_sleeper_picks.json
+          python3 - <<'EOF'
+          import json
+          result = json.load(open('/tmp/push_sleeper_picks.json'))
+          staged = json.load(open('pipeline/data/staged_sleeper_picks.json'))
+          assert result.get('ok') is True, f"push not ok: {result}"
+          assert result.get('status') == 'committed', f"unexpected push status: {result}"
+          assert result.get('received') == len(staged['lines']), \
+              f"received {result.get('received')} != staged {len(staged['lines'])}"
+          print(f"sleeper-picks push verified: received={result.get('received')} stored={result.get('stored')}")
+          EOF
+
       - name: Build strength of schedule
         if: steps.guard.outputs.go == 'true'
         run: node pipeline/build_matchup_grades.mjs
