@@ -514,11 +514,8 @@ main { padding: 12px 16px 0; }
 .monitor-section .section-heading {
   margin-bottom: 10px;
 }
-.monitor-research {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
+.monitor-view > .segmented-control {
+  flex: none;
 }
 /* Chip stays ~16px; the pseudo-element gives a 44px hit box without taking layout space. */
 .matchup-score-team-open::before {

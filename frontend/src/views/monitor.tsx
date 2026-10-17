@@ -8,7 +8,7 @@ import { ValueChartPanel } from "./value-chart-panel";
 
 const LazyChartsTool = lazy(() => import("../AnalyticsViews").then((module) => ({ default: module.ChartsTool })));
 
-type ResearchTool = "pricing" | "analytics";
+type MonitorTab = "lines" | "team" | "pricing" | "analytics";
 
 function ChartsFallback() {
   return (
@@ -34,52 +34,61 @@ export function Monitor({
   chartDataset: ChartDataset;
   onChartDatasetChange: (dataset: ChartDataset) => void;
 }) {
-  // The week comes first (lines, then usage); the two chart tools are
-  // research — one visible at a time behind the page-tab control, the
-  // same pattern Matchup uses for Current/Optimized. Tools mount on
-  // first visit and then stay mounted (hidden), so switching tabs
-  // never resets a tool's selections.
-  const [researchTool, setResearchTool] = useState<ResearchTool>("pricing");
-  const [analyticsVisited, setAnalyticsVisited] = useState(false);
-  const chooseResearchTool = (tool: ResearchTool) => {
-    if (tool === "analytics") setAnalyticsVisited(true);
-    setResearchTool(tool);
+  // One tool at a time behind the page-tab control, like the other
+  // pages' subviews. Tabs are ordered week-first (lines, then usage,
+  // then research). A tool mounts on first visit and then stays
+  // mounted (hidden), so switching tabs never resets its selections.
+  const [tab, setTab] = useState<MonitorTab>("lines");
+  const [visited, setVisited] = useState<ReadonlySet<MonitorTab>>(() => new Set(["lines"]));
+  const chooseTab = (next: MonitorTab) => {
+    setVisited((current) => (current.has(next) ? current : new Set(current).add(next)));
+    setTab(next);
   };
 
   return (
     <section className="monitor-view" aria-label="Monitor">
-      <GameLinesPanel league={league} season={dashboard.season} week={dashboard.week} />
+      <SegmentedControl
+        className="lineup-mode-toggle page-tab-control"
+        value={tab}
+        onChange={chooseTab}
+        label="Monitor tool"
+        options={[
+          { value: "lines", label: "Game lines" },
+          { value: "team", label: "Team stats" },
+          { value: "pricing", label: "Pricing" },
+          { value: "analytics", label: "Analytics" },
+        ]}
+      />
 
-      <TeamStatsPanel league={league} season={dashboard.season} week={dashboard.week} />
+      <div hidden={tab !== "lines"}>
+        <GameLinesPanel league={league} season={dashboard.season} week={dashboard.week} />
+      </div>
 
-      <div className="monitor-research">
-        <SegmentedControl
-          className="lineup-mode-toggle page-tab-control"
-          value={researchTool}
-          onChange={chooseResearchTool}
-          label="Research tool"
-          options={[
-            { value: "pricing", label: "Pricing" },
-            { value: "analytics", label: "Analytics" },
-          ]}
-        />
-        <div hidden={researchTool !== "pricing"}>
+      {visited.has("team") ? (
+        <div hidden={tab !== "team"}>
+          <TeamStatsPanel league={league} season={dashboard.season} week={dashboard.week} />
+        </div>
+      ) : null}
+
+      {visited.has("pricing") ? (
+        <div hidden={tab !== "pricing"}>
           <ValueChartPanel league={league} dashboard={dashboard} />
         </div>
-        {analyticsVisited ? (
-          <div hidden={researchTool !== "analytics"}>
-            <Suspense fallback={<ChartsFallback />}>
-              <LazyChartsTool
-                dashboard={dashboard}
-                league={league}
-                dataset={chartDataset}
-                onDatasetChange={onChartDatasetChange}
-                layout="monitor"
-              />
-            </Suspense>
-          </div>
-        ) : null}
-      </div>
+      ) : null}
+
+      {visited.has("analytics") ? (
+        <div hidden={tab !== "analytics"}>
+          <Suspense fallback={<ChartsFallback />}>
+            <LazyChartsTool
+              dashboard={dashboard}
+              league={league}
+              dataset={chartDataset}
+              onDatasetChange={onChartDatasetChange}
+              layout="monitor"
+            />
+          </Suspense>
+        </div>
+      ) : null}
     </section>
   );
 }
