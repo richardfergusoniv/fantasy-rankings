@@ -410,8 +410,8 @@ export function ValueChartPanel({
   }
 
   return (
-    <article className="monitor-panel monitor-value-chart-panel">
-      <header className="monitor-panel-header">
+    <section className="monitor-section monitor-value-chart-panel">
+      <header className="section-heading">
         <h2>Pricing</h2>
       </header>
       {pickerPlayers.length === 0 ? (
@@ -490,6 +490,6 @@ export function ValueChartPanel({
           ) : null}
         </>
       )}
-    </article>
+    </section>
   );
 }
