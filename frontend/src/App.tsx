@@ -49,15 +49,23 @@ import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "
 import { InspectorFrame, useInspectorDockViewport } from "./shell/inspector-frame";
 import { ShortcutsDialog } from "./shell/shortcuts-dialog";
 import { Explorer, isExplorerMode } from "./views/explorer";
+import { GameLinesPanel } from "./views/game-lines-panel";
 import { Lineup } from "./views/lineup";
-import { Monitor } from "./views/monitor";
+import { TeamStatsPanel } from "./views/team-stats-panel";
+import { ValueChartPanel } from "./views/value-chart-panel";
 
-const DOCKABLE_INSPECTOR_TABS = new Set<Tab>(["monitor", "team", "rankings", "waivers", "draft", "power"]);
+const DOCKABLE_INSPECTOR_TABS = new Set<Tab>(["team", "rankings", "waivers", "draft", "power", "monitor", "team-stats", "pricing", "analytics"]);
+
+/** The former Monitor page's tools, now subviews under Tools. The
+ * "monitor" tab id predates the move and still names Game lines, so
+ * existing ?tab=monitor links land in the right place. */
+const MARKET_TOOL_TABS = new Set<Tab>(["monitor", "team-stats", "pricing", "analytics"]);
 
 const LazyPowerRankings = lazy(() => import("./PowerRankings").then((module) => ({ default: module.PowerRankings })));
 const LazyConnectedTeamCard = lazy(() => import("./views/player-pool").then((module) => ({ default: module.ConnectedTeamCard })));
 const LazyDraftCenter = lazy(() => import("./views/draft-center").then((module) => ({ default: module.DraftCenter })));
 const LazyTradeCalculator = lazy(() => import("./views/trade-calculator").then((module) => ({ default: module.TradeCalculator })));
+const LazyChartsTool = lazy(() => import("./AnalyticsViews").then((module) => ({ default: module.ChartsTool })));
 
 function SafeAreaTopScrim({ backgroundColor }: { backgroundColor?: string }) {
   return (
@@ -83,7 +91,7 @@ function withSignIn<T>(operation: Promise<T>): Promise<T> {
 
 function NavigationIcon({ page }: { page: PrimaryPage }) {
   const paths: Record<PrimaryPage, ReactNode> = {
-    monitor: <><path d="M4 4h7v7H4zM13 4h7v4H13zM13 10h7v10H13zM4 13h7v7H4z" /></>,
+    draft: <><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" /></>,
     team: <><path d="M4 19V8l8-4 8 4v11" /><path d="M8 19v-5h8v5M8 9h.01M12 9h.01M16 9h.01" /></>,
     players: <><circle cx="9" cy="8" r="3" /><path d="M3.5 19c.5-4 2.3-6 5.5-6s5 2 5.5 6M16 6.5a2.5 2.5 0 0 1 0 5M16 14c2.7.2 4.2 1.9 4.5 5" /></>,
     league: <><path d="M7 4h10v3c0 3-2 5-5 5S7 10 7 7V4Z" /><path d="M7 6H4v1c0 2 1.4 3.5 3.5 3.8M17 6h3v1c0 2-1.4 3.5-3.5 3.8M12 12v4M8 20h8M9 16h6" /></>,
@@ -97,11 +105,11 @@ function NavigationIcon({ page }: { page: PrimaryPage }) {
 }
 
 function primaryPageForTab(tab: Tab): PrimaryPage {
-  if (tab === "monitor") return "monitor";
   if (tab === "team") return "team";
   if (tab === "rankings" || tab === "waivers" || tab === "comparison") return "players";
   if (tab === "power") return "league";
-  if (tab === "trade" || tab === "draft") return "tools";
+  if (tab === "draft") return "draft";
+  if (tab === "trade" || tab === "monitor" || tab === "team-stats" || tab === "pricing" || tab === "analytics") return "tools";
   const unreachable: never = tab;
   return unreachable;
 }
@@ -464,10 +472,10 @@ function SectionLoading({ label }: { label: string }) {
 function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void }) {
   const primaryPage = primaryPageForTab(tab);
   const pageTabs: Array<[PrimaryPage, string, Tab]> = [
-    ["monitor", "Monitor", "monitor"],
     ["team", "Matchup", "team"],
     ["players", "Players", "rankings"],
     ["league", "League", "power"],
+    ["draft", "Draft", "draft"],
     ["tools", "Tools", "trade"],
   ];
   return (
@@ -510,14 +518,17 @@ export function App() {
   const inspectorDockViewport = useInspectorDockViewport();
   useEffect(() => {
     const titles: Record<Tab, string> = {
-      monitor: "Monitor",
       team: "Matchup",
       rankings: "Players",
       waivers: "Players",
       power: "League",
-      draft: "Tools",
-      trade: "Tools",
+      draft: "Draft",
+      trade: "Trade",
       comparison: "Players",
+      monitor: "Game lines",
+      "team-stats": "Team stats",
+      pricing: "Pricing",
+      analytics: "Analytics",
     };
     document.title = `${titles[tab]} · Fantasy Rankings`;
   }, [tab]);
@@ -564,8 +575,8 @@ export function App() {
     refetchInterval: pollTeamSection,
   });
   // Matchup player cards need fantasy SOS for Team context ranks.
-  // Monitor reuses the same players + analytics section queries as the chart builder (no per-panel fetches).
-  const playerSectionActive = tab === "monitor" || tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "comparison";
+  // The Tools market views reuse the same players + analytics section queries as the chart builder (no per-panel fetches).
+  const playerSectionActive = MARKET_TOOL_TABS.has(tab) || tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "comparison";
   const playersQuery = useQuery({
     queryKey: ["dashboard-section", "players"],
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "players" }), 8_000)),
@@ -581,9 +592,9 @@ export function App() {
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
-    // Monitor keeps league section so the shell player inspector can resolve
-    // roster-card teams via leaguePowerTeamForPlayer (no League panel on Monitor).
-    enabled: tab === "monitor" || tab === "power",
+    // The Tools market views keep the league section so the shell player
+    // inspector can resolve roster-card teams via leaguePowerTeamForPlayer.
+    enabled: MARKET_TOOL_TABS.has(tab) || tab === "power",
     refetchInterval: pollWhileSectionBuilding,
   });
   const analyticsQuery = useQuery({
@@ -592,13 +603,13 @@ export function App() {
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
-    enabled: tab === "monitor" || tab === "rankings" || tab === "waivers" || tab === "comparison",
+    enabled: MARKET_TOOL_TABS.has(tab) || tab === "rankings" || tab === "waivers" || tab === "comparison",
     refetchInterval: pollWhileSectionBuilding,
   });
   // tradeTeams (+ starter slots) for Matchup/Power/Trade. Live-polled with
   // the team section so LeagueTeamCard projections/gamePhase stay fresh.
-  // Monitor needs trade when the player inspector opens a league roster card.
-  const tradeSectionActive = tab === "team" || tab === "monitor" || tab === "power" || tab === "trade";
+  // The Tools market views need trade when the player inspector opens a league roster card.
+  const tradeSectionActive = tab === "team" || MARKET_TOOL_TABS.has(tab) || tab === "power" || tab === "trade";
   const tradeMode = effectiveTradeMode(dashboardUrl.state);
   // Waiver pool is only consumed by League-adjusted trade (not Market/History).
   const tradeWaiverActive = tab === "trade" && tradeMode === "league";
@@ -829,10 +840,10 @@ export function App() {
   const primaryPage = primaryPageForTab(tab);
   function choosePrimaryPage(page: PrimaryPage) {
     const defaultTabs: Record<PrimaryPage, Tab> = {
-      monitor: "monitor",
       team: "team",
       players: "rankings",
       league: "power",
+      draft: "draft",
       tools: "trade",
     };
     setTab(defaultTabs[page]);
@@ -981,7 +992,7 @@ export function App() {
     || tradeWaiverWaiting
     || (!hasCompleteDashboard && (
       (tab === "team" && teamQuery.isPending)
-      || (tab === "monitor" && (teamQuery.isPending || leagueQuery.isPending || analyticsQuery.isPending || playersQuery.isPending))
+      || (MARKET_TOOL_TABS.has(tab) && (teamQuery.isPending || leagueQuery.isPending || analyticsQuery.isPending || playersQuery.isPending))
       || ((tab === "rankings" || tab === "waivers" || tab === "draft") && playersQuery.isPending)
       || (tab === "trade" && (playersQuery.isPending || teamQuery.isPending))
       || (tab === "power" && (leagueQuery.isPending || teamQuery.isPending || playersQuery.isPending))
@@ -1118,10 +1129,10 @@ export function App() {
       <header className="control-deck">
         <nav className="primary-tabs" aria-label="Fantasy sections">
           {([
-            ["monitor", "Monitor"],
             ["team", "Matchup"],
             ["players", "Players"],
             ["league", "League"],
+            ["draft", "Draft"],
             ["tools", "Tools"],
           ] as const).map(([page, label]) => (
             <button
@@ -1145,10 +1156,13 @@ export function App() {
           </Tabs>
         ) : null}
         {primaryPage === "tools" ? (
-          <Tabs value={tab === "draft" ? "draft" : "trade"} onValueChange={(value) => setTab(value as Tab)} className="subview-tabs tools-subview-tabs">
+          <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="subview-tabs tools-subview-tabs">
             <TabsList aria-label="Tools views">
               <TabsTrigger value="trade">Trade</TabsTrigger>
-              <TabsTrigger value="draft">Draft</TabsTrigger>
+              <TabsTrigger value="monitor">Game lines</TabsTrigger>
+              <TabsTrigger value="team-stats">Team stats</TabsTrigger>
+              <TabsTrigger value="pricing">Pricing</TabsTrigger>
+              <TabsTrigger value="analytics">Analytics</TabsTrigger>
             </TabsList>
           </Tabs>
         ) : null}
@@ -1157,7 +1171,6 @@ export function App() {
       <div className={`app-workspace${inspectorDocked ? " is-inspector-docked" : ""}`}>
         <main id="main-content" tabIndex={-1}>
           <h1 className="sr-only">{({
-            monitor: "Monitor",
             team: "Fantasy matchup",
             rankings: "Player rankings",
             waivers: "Waiver wire",
@@ -1165,17 +1178,33 @@ export function App() {
             draft: "Draft assistant",
             trade: "Trade",
             comparison: "Player comparison",
+            monitor: "Game lines",
+            "team-stats": "Team stats",
+            pricing: "Pricing",
+            analytics: "Analytics",
           } satisfies Record<Tab, string>)[tab]}</h1>
-          {currentSectionLoading ? <SectionLoading label={`Loading ${({ monitor: "Monitor", team: "Matchup", players: "Players", league: "League", tools: "Tools" } as const)[primaryPage]}…`} />
+          {currentSectionLoading ? <SectionLoading label={`Loading ${({ team: "Matchup", players: "Players", league: "League", draft: "Draft", tools: "Tools" } as const)[primaryPage]}…`} />
             : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
             : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
             : tab === "monitor" ? (
-              <Monitor
-                league={league}
-                dashboard={activeDashboard}
-                chartDataset={dashboardUrl.state.chartDataset ?? "advanced"}
-                onChartDatasetChange={publishChartDataset}
-              />
+              <GameLinesPanel league={league} season={activeDashboard.season} week={activeDashboard.week} />
+            )
+            : tab === "team-stats" ? (
+              <TeamStatsPanel league={league} season={activeDashboard.season} week={activeDashboard.week} />
+            )
+            : tab === "pricing" ? (
+              <ValueChartPanel league={league} dashboard={activeDashboard} />
+            )
+            : tab === "analytics" ? (
+              <Suspense fallback={<SectionLoading label="Loading analytics…" />}>
+                <LazyChartsTool
+                  dashboard={activeDashboard}
+                  league={league}
+                  dataset={dashboardUrl.state.chartDataset ?? "advanced"}
+                  onDatasetChange={publishChartDataset}
+                  layout="monitor"
+                />
+              </Suspense>
             )
             : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={(rosterId) => setRosterCardRosterId(rosterId)} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
             : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} dashboard={activeDashboard} onPlayerIntent={prefetchDashboardPlayer} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} onOpenMatchup={setSelectedMatchup} playerCardOpen={playerHistory.isOpen} selectedPlayerId={selectedPlayerId} /></Suspense>

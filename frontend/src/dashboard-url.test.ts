@@ -32,21 +32,21 @@ describe("dashboard URL state", () => {
     expect(parseDashboardSearch(serializeDashboardSearch(original))).toEqual(original);
   });
 
-  it("omits defaults so the monitor view stays a clean URL", () => {
+  it("omits defaults so the matchup view stays a clean URL", () => {
     expect(serializeDashboardSearch(emptyDashboardUrlState())).toBe("");
     expect(parseDashboardSearch("")).toEqual(emptyDashboardUrlState());
-    expect(emptyDashboardUrlState().tab).toBe("monitor");
+    expect(emptyDashboardUrlState().tab).toBe("team");
     expect(serializeDashboardSearch(state({ tab: "trade", tradeMode: "league" }))).toBe("?tab=trade");
     expect(serializeDashboardSearch(state({ tab: "trade", tradeMode: "market" }))).toBe("?tab=trade&tmode=market");
   });
 
   it("round-trips older tab values including matchup", () => {
-    for (const tab of ["team", "rankings", "waivers", "power", "draft", "trade", "comparison"] as const) {
+    for (const tab of ["team", "rankings", "waivers", "power", "draft", "trade", "comparison", "monitor", "team-stats", "pricing", "analytics"] as const) {
       const original = state({ tab });
       expect(parseDashboardSearch(serializeDashboardSearch(original))).toEqual(original);
     }
     expect(parseDashboardSearch("?tab=team").tab).toBe("team");
-    expect(serializeDashboardSearch(state({ tab: "team" }))).toBe("?tab=team");
+    expect(serializeDashboardSearch(state({ tab: "team" }))).toBe("");
   });
 
   it("redirects legacy analyze and history tab aliases onto trade modes", () => {
@@ -68,13 +68,13 @@ describe("dashboard URL state", () => {
     expect(parseDashboardSearch("?tab=strengthOfSchedule&table=offense")).toEqual(state({ tab: "rankings" }));
     expect(parseDashboardSearch("?table=sos")).toEqual(state({ tab: "rankings" }));
     expect(parseDashboardSearch("?dataset=team-overall")).toEqual(state({ tab: "rankings" }));
-    expect(parseDashboardSearch("?tab=charts&table=defense").tab).toBe("monitor");
+    expect(parseDashboardSearch("?tab=charts&table=defense").tab).toBe("analytics");
   });
 
-  it("redirects removed Players Charts URLs onto Monitor", () => {
-    expect(resolveDashboardTab("charts")).toEqual({ tab: "monitor", legacyTradeMode: null });
-    expect(parseDashboardSearch("?tab=charts")).toEqual(emptyDashboardUrlState());
-    expect(parseDashboardSearch("?tab=charts&chart=projections")).toEqual(state({ chartDataset: "projections" }));
+  it("redirects removed Players Charts URLs onto Analytics in Tools", () => {
+    expect(resolveDashboardTab("charts")).toEqual({ tab: "analytics", legacyTradeMode: null });
+    expect(parseDashboardSearch("?tab=charts")).toEqual(state({ tab: "analytics" }));
+    expect(parseDashboardSearch("?tab=charts&chart=projections")).toEqual(state({ tab: "analytics", chartDataset: "projections" }));
   });
 
   it("exposes effectiveTradeMode defaults for the analyzer", () => {
@@ -111,6 +111,6 @@ describe("dashboard URL state", () => {
     expect(dashboardUrlHistoryMode(rankings, state({ tab: "rankings", position: "QB", query: "A" }))).toBe("replace");
     expect(dashboardUrlHistoryMode(state({ tab: "trade" }), state({ tab: "trade", tradeMode: "history" }))).toBe("replace");
     expect(dashboardUrlHistoryMode(rankings, rankings)).toBe("none");
-    expect(dashboardUrlHistoryMode(emptyDashboardUrlState(), state({ tab: "team" }))).toBe("push");
+    expect(dashboardUrlHistoryMode(emptyDashboardUrlState(), state({ tab: "power" }))).toBe("push");
   });
 });

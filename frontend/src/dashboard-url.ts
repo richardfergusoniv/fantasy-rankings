@@ -1,12 +1,15 @@
 export const DASHBOARD_TABS = [
-  "monitor",
   "team",
   "rankings",
   "waivers",
+  "comparison",
   "power",
   "draft",
   "trade",
-  "comparison",
+  "monitor",
+  "team-stats",
+  "pricing",
+  "analytics",
 ] as const;
 
 /** Former Explorer Tables datasets — ignored when present on legacy URLs. */
@@ -47,7 +50,7 @@ export type DashboardUrlState = {
   playerId: string | null;
 };
 
-export const DEFAULT_DASHBOARD_TAB: DashboardTab = "monitor";
+export const DEFAULT_DASHBOARD_TAB: DashboardTab = "team";
 export const DEFAULT_TRADE_MODE: TradeMode = "league";
 
 export function emptyDashboardUrlState(): DashboardUrlState {
@@ -81,7 +84,7 @@ function textParam(value: string | null): string | null {
  * - tab=analyze → trade (old Analyze segment)
  * - tab=history → trade + history mode (old History segment)
  * - tab=strengthOfSchedule | tab=tables → rankings (Explorer Tables removed)
- * - tab=charts → monitor (Players Charts removed; chart builder lives on Monitor)
+ * - tab=charts → analytics (Players Charts removed; chart builder lives in Tools)
  */
 export function resolveDashboardTab(rawTab: string | null): {
   tab: DashboardTab;
@@ -94,7 +97,7 @@ export function resolveDashboardTab(rawTab: string | null): {
   if (rawTab === "strengthOfSchedule" || rawTab === "tables") {
     return { tab: "rankings", legacyTradeMode: null };
   }
-  if (rawTab === "charts") return { tab: "monitor", legacyTradeMode: null };
+  if (rawTab === "charts") return { tab: "analytics", legacyTradeMode: null };
   return { tab: DEFAULT_DASHBOARD_TAB, legacyTradeMode: null };
 }
 

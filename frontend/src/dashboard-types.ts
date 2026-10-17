@@ -4,21 +4,24 @@ export type Dashboard = ApiResponse<typeof api, "getDashboard">;
 export type League = Dashboard["leagues"][number];
 export type RosterPlayer = League["starters"][number];
 export type Tab =
-  | "monitor"
   | "team"
   | "rankings"
   | "waivers"
   | "power"
   | "draft"
   | "trade"
-  | "comparison";
+  | "comparison"
+  | "monitor"
+  | "team-stats"
+  | "pricing"
+  | "analytics";
 export type PlayerLink = {
   /** URL `playerId` — drives Selected chip and shell inspector open. */
   linkedPlayerId: string | null;
   onOpenLinkedPlayer: (playerId: string) => void;
 };
-/** Primary nav destinations. Draft lives under Tools (?tab=draft), not its own primary item. */
-export type PrimaryPage = "monitor" | "team" | "players" | "league" | "tools";
+/** Primary nav destinations, in bar order: Matchup, Players, League, Draft, Tools. */
+export type PrimaryPage = "team" | "players" | "league" | "draft" | "tools";
 export type PlayerNews = ApiResponse<typeof api, "getPlayerNews">;
 export type DraftCenterData = ApiResponse<typeof api, "getDraftCenter">;
 export type DashboardSection = ApiResponse<typeof api, "getDashboardSection">;
