@@ -2310,14 +2310,14 @@ function ToolDatasetToggle({ value, onChange, label }: { value: ToolDataset; onC
 
 export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout }) {
   return (
-    <article className="monitor-panel monitor-builder-chart-panel">
-      <header className="monitor-panel-header">
+    <section className="monitor-section monitor-builder-chart-panel">
+      <header className="section-heading">
         <h2>Analytics</h2>
       </header>
       {dataset === "advanced"
         ? <AnalyticsChart dashboard={dashboard} league={league} layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} />
         : <WeeklyProjections dashboard={dashboard} league={league} view="charts" layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} />}
-    </article>
+    </section>
   );
 }
 
