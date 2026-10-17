@@ -33,8 +33,10 @@ import {
   type PropStatId,
 } from "../../../api/_lib/prop-line-reads";
 import { api } from "../api";
+import { SectionError } from "../dashboard-shared";
 import type { League } from "../dashboard-types";
 import { formatDecimal } from "../lib/format-number";
+import { SegmentedControl } from "../shared";
 
 
 
@@ -458,13 +460,17 @@ export function GameLinesPanel({
     : undefined;
 
   return (
-    <article className="monitor-panel monitor-game-lines-panel">
-      <header className="monitor-panel-header">
+    <section className="monitor-section monitor-game-lines-panel">
+      <header className="section-heading">
         <h2>Game lines</h2>
       </header>
 
       {gamesUnavailable ? (
-        <p className="monitor-empty">Lines unavailable</p>
+        <SectionError
+          title="Lines unavailable."
+          onRetry={() => void gamesQuery.refetch()}
+          retrying={gamesQuery.isFetching}
+        />
       ) : (
         <>
           <div className="monitor-value-chart-controls monitor-game-lines-controls">
@@ -494,19 +500,16 @@ export function GameLinesPanel({
           ) : null}
 
           <div className="monitor-value-chart-controls monitor-props-controls">
-            <label className="monitor-value-chart-field">
-              <span>Position</span>
-              <select
-                aria-label="Position"
-                value={position}
-                onChange={(event) => setPosition(event.target.value as PropPosition | "ALL")}
-              >
-                <option value="ALL">All</option>
-                {PROP_POSITIONS.map((code) => (
-                  <option key={code} value={code}>{code}</option>
-                ))}
-              </select>
-            </label>
+            <SegmentedControl
+              className="monitor-props-position"
+              value={position}
+              onChange={setPosition}
+              label="Position"
+              options={[
+                { value: "ALL", label: "All" },
+                ...PROP_POSITIONS.map((code) => ({ value: code, label: code })),
+              ]}
+            />
             <label className="monitor-value-chart-field">
               <span>Stat</span>
               <select
@@ -523,7 +526,12 @@ export function GameLinesPanel({
           </div>
 
           {propsUnavailable ? (
-            <p className="monitor-empty">Unavailable</p>
+            <SectionError
+              title="Props unavailable."
+              onRetry={() => void propLinesQuery.refetch()}
+              retrying={propLinesQuery.isFetching}
+              compact
+            />
           ) : propsLoading ? (
             <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading props…">
               <span>Loading…</span>
@@ -636,6 +644,6 @@ export function GameLinesPanel({
           )}
         </>
       )}
-    </article>
+    </section>
   );
 }

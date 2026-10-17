@@ -18,7 +18,9 @@ import {
   type TeamStatsStatId,
 } from "../../../api/_lib/nflverse-team-week-stats";
 import { api } from "../api";
+import { SectionError } from "../dashboard-shared";
 import type { League } from "../dashboard-types";
+import { SegmentedControl } from "../shared";
 
 /**
  * Player colors for the stacked bars, built from the app's three chart
@@ -146,8 +148,8 @@ export function TeamStatsPanel({
   const loading = dataQuery.isPending;
 
   return (
-    <article className="monitor-panel monitor-team-stats-panel">
-      <header className="monitor-panel-header">
+    <section className="monitor-section monitor-team-stats-panel">
+      <header className="section-heading">
         <h2>Team stats</h2>
       </header>
 
@@ -167,18 +169,13 @@ export function TeamStatsPanel({
             ))}
           </select>
         </label>
-        <label className="monitor-value-chart-field">
-          <span>Position</span>
-          <select
-            aria-label="Position"
-            value={selectedGroup}
-            onChange={(event) => setUserGroup(event.target.value as TeamStatsGroupId)}
-          >
-            {TEAM_STATS_GROUPS.map((group) => (
-              <option key={group.id} value={group.id}>{group.label}</option>
-            ))}
-          </select>
-        </label>
+        <SegmentedControl
+          className="monitor-team-stats-group"
+          value={selectedGroup}
+          onChange={(value) => setUserGroup(value)}
+          label="Position"
+          options={TEAM_STATS_GROUPS.map((group) => ({ value: group.id, label: group.label }))}
+        />
         <label className="monitor-value-chart-field">
           <span>Stat</span>
           <select
@@ -194,7 +191,12 @@ export function TeamStatsPanel({
       </div>
 
       {unavailable ? (
-        <p className="monitor-empty">Unavailable</p>
+        <SectionError
+          title="Team stats didn’t load."
+          onRetry={() => void dataQuery.refetch()}
+          retrying={dataQuery.isFetching}
+          compact
+        />
       ) : loading ? (
         <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading Team stats…">
           <span>Loading…</span>
@@ -257,6 +259,6 @@ export function TeamStatsPanel({
           </ul>
         </div>
       )}
-    </article>
+    </section>
   );
 }
