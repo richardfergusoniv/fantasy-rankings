@@ -447,6 +447,15 @@ export function GameLinesPanel({
   const gamesUnavailable = gamesQuery.isError;
   const propsLoading = propLinesQuery.isPending || (historyQuery.isPending && !historyQuery.data);
   const propsUnavailable = propLinesQuery.isError;
+  // A board older than ~a day and a half is stale reference data (a
+  // failed daily pull keeps the previous board): its cells render dim.
+  const sleeperPulledAt = propLinesQuery.data?.propLines.sleeperPulledAt ?? null;
+  const sleeperStale = sleeperPulledAt
+    ? Date.now() - new Date(sleeperPulledAt).getTime() > 36 * 60 * 60 * 1000
+    : false;
+  const sleeperTitle = sleeperPulledAt
+    ? `Sleeper Picks board pulled ${new Date(sleeperPulledAt).toLocaleString()}`
+    : undefined;
 
   return (
     <article className="monitor-panel monitor-game-lines-panel">
@@ -566,7 +575,14 @@ export function GameLinesPanel({
                         <td>{formatAmericanOdds(row.odds)}</td>
                         <td>
                           {row.sleeperLine === null ? "—" : (
-                            <span className={row.sleeperFavorable ? "props-sleeper is-favorable" : "props-sleeper"}>
+                            <span
+                              title={sleeperTitle}
+                              className={[
+                                "props-sleeper",
+                                row.sleeperFavorable ? "is-favorable" : "",
+                                sleeperStale ? "is-stale" : "",
+                              ].filter(Boolean).join(" ")}
+                            >
                               {formatPropNumber(row.sleeperLine, 1)}
                               {row.sleeperMultiplier !== null ? ` · ${formatDecimal(row.sleeperMultiplier, 2)}x` : ""}
                             </span>

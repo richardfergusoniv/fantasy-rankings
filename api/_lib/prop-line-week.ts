@@ -24,6 +24,8 @@ export type PropLineWeekPayload = {
   season: number;
   week: number;
   pulledAt: string | null;
+  /** When the staged Sleeper Picks board was pulled (null = no board). */
+  sleeperPulledAt: string | null;
   lines: Array<{
     playerId: string;
     name: string;
@@ -108,7 +110,10 @@ function serializeLines(
 }
 
 /** The week's staged Sleeper Picks board, joined by player id + stat. */
-async function loadSleeperPickMap(season: number, week: number): Promise<Map<string, SleeperPickLine>> {
+async function loadSleeperPickBoard(
+  season: number,
+  week: number,
+): Promise<{ byKey: Map<string, SleeperPickLine>; pulledAt: string | null }> {
   try {
     const rows = await db
       .select({ payload: schema.sourceCache.payload })
@@ -116,11 +121,12 @@ async function loadSleeperPickMap(season: number, week: number): Promise<Map<str
       .where(eq(schema.sourceCache.cacheKey, sleeperPicksCacheKey(season, week)))
       .limit(1);
     const row = rows[0];
-    if (!row) return new Map();
+    if (!row) return { byKey: new Map(), pulledAt: null };
     const board = parseStoredSleeperPicks(decodeSourceCachePayload(row.payload));
-    return board ? buildSleeperPickMap(board.lines) : new Map();
+    if (!board) return { byKey: new Map(), pulledAt: null };
+    return { byKey: buildSleeperPickMap(board.lines), pulledAt: board.pulledAt };
   } catch {
-    return new Map();
+    return { byKey: new Map(), pulledAt: null };
   }
 }
 
@@ -168,12 +174,13 @@ export async function loadPropLineWeek(options?: {
     }
   }
 
-  const sleeperByKey = await loadSleeperPickMap(season, week);
+  const sleeperBoard = await loadSleeperPickBoard(season, week);
   const body: PropLineWeekPayload = {
     season,
     week,
     pulledAt: latestPulledAt?.toISOString() ?? null,
-    lines: serializeLines(collapsed, players, sleeperByKey),
+    sleeperPulledAt: sleeperBoard.pulledAt,
+    lines: serializeLines(collapsed, players, sleeperBoard.byKey),
   };
   // Avoid caching a non-empty week with missing player metadata (empty roster
   // map) — that degrades names/teams and hides game-filtered props for 15m.

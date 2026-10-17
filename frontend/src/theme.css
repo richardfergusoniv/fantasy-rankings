@@ -949,6 +949,10 @@ main { padding: 12px 16px 0; }
   color: var(--warning);
   font-weight: 700;
 }
+.props-sleeper.is-stale {
+  color: var(--dim);
+  font-weight: 400;
+}
 .props-game-cell {
   display: inline-flex;
   min-width: 2.25rem;

@@ -222,6 +222,9 @@ jobs:
 
       - name: Pull and push Sleeper Picks board
         if: steps.guard.outputs.go == 'true'
+        # Reference data only: a Sleeper outage must never fail the run
+        # and block the strength-of-schedule push or dashboard rebuild.
+        continue-on-error: true
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
