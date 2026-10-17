@@ -55,8 +55,6 @@ type PropTableRow = {
   implied: number | null;
   /** Sleeper Picks line for this player/stat, when Sleeper offers it. */
   sleeperLine: number | null;
-  /** Sleeper's payout multiplier on the played side. */
-  sleeperMultiplier: number | null;
   /** Sleeper's line is softer than consensus for the played direction. */
   sleeperFavorable: boolean;
   /** The rate for the side played on this row (see direction); rows sort by it. */
@@ -343,9 +341,6 @@ export function GameLinesPanel({
         odds: direction === "under" ? line.underOdds : line.overOdds,
         implied: impliedProbability(direction === "under" ? line.underOdds : line.overOdds),
         sleeperLine: line.sleeper?.line ?? null,
-        sleeperMultiplier: line.sleeper
-          ? (direction === "under" ? line.sleeper.underMultiplier : line.sleeper.overMultiplier)
-          : null,
         sleeperFavorable: line.sleeper
           ? (direction === "over" ? line.sleeper.line < line.line : line.sleeper.line > line.line)
           : false,
@@ -546,9 +541,9 @@ export function GameLinesPanel({
                     {sortHeader("player", "Player", "props-player-col")}
                     {sortHeader("stat", "Stat")}
                     {sortHeader("line", "Line")}
+                    {sortHeader("sleeper", "Sleeper")}
                     {sortHeader("move", "Move")}
                     {sortHeader("odds", "Odds")}
-                    {sortHeader("sleeper", "Sleeper")}
                     {sortHeader("hit", "Hit")}
                     <th scope="col">History</th>
                   </tr>
@@ -579,8 +574,6 @@ export function GameLinesPanel({
                         </th>
                         <td>{row.statLabel}</td>
                         <td>{formatPropNumber(row.line, 1)}</td>
-                        <td>{formatMove(row.move)}</td>
-                        <td>{formatAmericanOdds(row.odds)}</td>
                         <td>
                           {row.sleeperLine === null ? "—" : (
                             <span
@@ -592,10 +585,11 @@ export function GameLinesPanel({
                               ].filter(Boolean).join(" ")}
                             >
                               {formatPropNumber(row.sleeperLine, 1)}
-                              {row.sleeperMultiplier !== null ? ` · ${formatDecimal(row.sleeperMultiplier, 2)}x` : ""}
                             </span>
                           )}
                         </td>
+                        <td>{formatMove(row.move)}</td>
+                        <td>{formatAmericanOdds(row.odds)}</td>
                         <td>
                           <span className={hitTone ? `props-hit props-hit-${hitTone}` : "props-hit"}>
                             {formatHitRate(hits, misses, row.hitRate)}
