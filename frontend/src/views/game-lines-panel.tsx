@@ -36,7 +36,6 @@ import { api } from "../api";
 import { SectionError } from "../dashboard-shared";
 import type { League } from "../dashboard-types";
 import { formatDecimal } from "../lib/format-number";
-import { SegmentedControl } from "../shared";
 
 
 
@@ -495,16 +494,19 @@ export function GameLinesPanel({
           ) : null}
 
           <div className="monitor-value-chart-controls monitor-props-controls">
-            <SegmentedControl
-              className="monitor-props-position"
-              value={position}
-              onChange={setPosition}
-              label="Position"
-              options={[
-                { value: "ALL", label: "All" },
-                ...PROP_POSITIONS.map((code) => ({ value: code, label: code })),
-              ]}
-            />
+            <label className="monitor-value-chart-field">
+              <span>Position</span>
+              <select
+                aria-label="Position"
+                value={position}
+                onChange={(event) => setPosition(event.target.value as PropPosition | "ALL")}
+              >
+                <option value="ALL">All</option>
+                {PROP_POSITIONS.map((code) => (
+                  <option key={code} value={code}>{code}</option>
+                ))}
+              </select>
+            </label>
             <label className="monitor-value-chart-field">
               <span>Stat</span>
               <select
