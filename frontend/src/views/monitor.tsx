@@ -36,8 +36,15 @@ export function Monitor({
 }) {
   // The week comes first (lines, then usage); the two chart tools are
   // research — one visible at a time behind the page-tab control, the
-  // same pattern Matchup uses for Current/Optimized.
+  // same pattern Matchup uses for Current/Optimized. Tools mount on
+  // first visit and then stay mounted (hidden), so switching tabs
+  // never resets a tool's selections.
   const [researchTool, setResearchTool] = useState<ResearchTool>("pricing");
+  const [analyticsVisited, setAnalyticsVisited] = useState(false);
+  const chooseResearchTool = (tool: ResearchTool) => {
+    if (tool === "analytics") setAnalyticsVisited(true);
+    setResearchTool(tool);
+  };
 
   return (
     <section className="monitor-view" aria-label="Monitor">
@@ -49,26 +56,29 @@ export function Monitor({
         <SegmentedControl
           className="lineup-mode-toggle page-tab-control"
           value={researchTool}
-          onChange={setResearchTool}
+          onChange={chooseResearchTool}
           label="Research tool"
           options={[
             { value: "pricing", label: "Pricing" },
             { value: "analytics", label: "Analytics" },
           ]}
         />
-        {researchTool === "pricing" ? (
+        <div hidden={researchTool !== "pricing"}>
           <ValueChartPanel league={league} dashboard={dashboard} />
-        ) : (
-          <Suspense fallback={<ChartsFallback />}>
-            <LazyChartsTool
-              dashboard={dashboard}
-              league={league}
-              dataset={chartDataset}
-              onDatasetChange={onChartDatasetChange}
-              layout="monitor"
-            />
-          </Suspense>
-        )}
+        </div>
+        {analyticsVisited ? (
+          <div hidden={researchTool !== "analytics"}>
+            <Suspense fallback={<ChartsFallback />}>
+              <LazyChartsTool
+                dashboard={dashboard}
+                league={league}
+                dataset={chartDataset}
+                onDatasetChange={onChartDatasetChange}
+                layout="monitor"
+              />
+            </Suspense>
+          </div>
+        ) : null}
       </div>
     </section>
   );
