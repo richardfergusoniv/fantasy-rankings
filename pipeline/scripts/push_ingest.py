@@ -11,6 +11,7 @@ Usage:
   push_ingest.py matchup-grades       # data/staged_matchup_grades.json
   push_ingest.py pfn-tables           # ~/workspace/pfn-pipeline/data/staged_pfn_tables.json
   push_ingest.py prop-line-snapshots  # data/staged_prop_line_snapshots.json
+  push_ingest.py sleeper-picks        # data/staged_sleeper_picks.json
 
 Reads CRON_SECRET from the environment. The host is INGEST_BASE_URL if set,
 otherwise APP_BASE_URL, otherwise the production domain. The props-aggregator
@@ -47,6 +48,7 @@ TARGETS = {
     "matchup-grades": PROPS_DATA_DIR / "staged_matchup_grades.json",
     "pfn-tables": PFN_DATA_DIR / "staged_pfn_tables.json",
     "prop-line-snapshots": PROPS_DATA_DIR / "staged_prop_line_snapshots.json",
+    "sleeper-picks": PROPS_DATA_DIR / "staged_sleeper_picks.json",
 }
 
 

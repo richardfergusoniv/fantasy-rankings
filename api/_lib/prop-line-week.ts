@@ -11,6 +11,13 @@ import {
   type CurrentWeekPropLine,
 } from "./prop-line-reads.js";
 import type { SleeperPlayer } from "./sleeper.js";
+import {
+  buildSleeperPickMap,
+  parseStoredSleeperPicks,
+  sleeperPicksCacheKey,
+  type SleeperPickLine,
+} from "./sleeper-picks.js";
+import { decodeSourceCachePayload } from "./source-cache-payload.js";
 import { readNflState } from "./user-leagues.js";
 
 export type PropLineWeekPayload = {
@@ -29,6 +36,12 @@ export type PropLineWeekPayload = {
     bookCount: number;
     openLine: number | null;
     move: number | null;
+    /** Sleeper Picks reference for this player/stat, when Sleeper offers it. */
+    sleeper: {
+      line: number;
+      overMultiplier: number | null;
+      underMultiplier: number | null;
+    } | null;
   }>;
 };
 
@@ -66,9 +79,11 @@ function setCache(cacheKey: string, body: PropLineWeekPayload): void {
 function serializeLines(
   lines: CurrentWeekPropLine[],
   players: Record<string, SleeperPlayer>,
+  sleeperByKey: Map<string, SleeperPickLine>,
 ): PropLineWeekPayload["lines"] {
   return lines.map((line) => {
     const meta = players[line.playerId];
+    const sleeper = sleeperByKey.get(`${line.playerId}|${line.stat}`);
     return {
       playerId: line.playerId,
       name: playerDisplayName(meta) || line.playerId,
@@ -81,8 +96,32 @@ function serializeLines(
       bookCount: line.bookCount,
       openLine: line.openLine,
       move: line.move,
+      sleeper: sleeper
+        ? {
+          line: sleeper.line,
+          overMultiplier: sleeper.overMultiplier,
+          underMultiplier: sleeper.underMultiplier,
+        }
+        : null,
     };
   });
+}
+
+/** The week's staged Sleeper Picks board, joined by player id + stat. */
+async function loadSleeperPickMap(season: number, week: number): Promise<Map<string, SleeperPickLine>> {
+  try {
+    const rows = await db
+      .select({ payload: schema.sourceCache.payload })
+      .from(schema.sourceCache)
+      .where(eq(schema.sourceCache.cacheKey, sleeperPicksCacheKey(season, week)))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return new Map();
+    const board = parseStoredSleeperPicks(decodeSourceCachePayload(row.payload));
+    return board ? buildSleeperPickMap(board.lines) : new Map();
+  } catch {
+    return new Map();
+  }
 }
 
 /** One season/week query → latest line per player/stat (+ open/move). */
@@ -129,11 +168,12 @@ export async function loadPropLineWeek(options?: {
     }
   }
 
+  const sleeperByKey = await loadSleeperPickMap(season, week);
   const body: PropLineWeekPayload = {
     season,
     week,
     pulledAt: latestPulledAt?.toISOString() ?? null,
-    lines: serializeLines(collapsed, players),
+    lines: serializeLines(collapsed, players, sleeperByKey),
   };
   // Avoid caching a non-empty week with missing player metadata (empty roster
   // map) — that degrades names/teams and hides game-filtered props for 15m.

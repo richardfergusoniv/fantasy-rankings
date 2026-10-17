@@ -30,6 +30,12 @@ import {
   propLineSnapshotPayloadSchema,
   toPropLineSnapshotRows,
 } from "../_lib/prop-line-snapshots.js";
+import {
+  normalizeSleeperPicksBoard,
+  sleeperPicksCacheKey,
+  sleeperPicksIngestSchema,
+  type SleeperPicksBoard,
+} from "../_lib/sleeper-picks.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/source-cache-payload.js";
 
 /**
@@ -57,6 +63,9 @@ import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/sour
  * - player-news-x:  inserts shared player-news rows from X (dedupe by post_id).
  * - prop-line-snapshots: inserts dated consensus prop-line rows into
  *                   `prop_line_snapshots` (line-movement history).
+ * - sleeper-picks:  stores the normalized Sleeper Picks NFL board as one
+ *                   `sleeper-picks:{season}:{week}` source_cache row (the
+ *                   Monitor props table's Sleeper reference column).
  */
 
 // ---------------------------------------------------------------------------
@@ -440,6 +449,43 @@ async function handlePropLineSnapshots(req: Request): Promise<Response> {
   });
 }
 
+async function handleSleeperPicks(req: Request): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return badRequest("Request body must be valid JSON.");
+  }
+
+  const parsed = sleeperPicksIngestSchema.safeParse(body);
+  if (!parsed.success) {
+    return badRequest("Invalid sleeper-picks payload.", parsed.error.issues);
+  }
+  const payload = parsed.data;
+
+  const lines = normalizeSleeperPicksBoard(payload.lines);
+  const board: SleeperPicksBoard = { pulledAt: payload.pulled_at, lines };
+  const cacheKey = sleeperPicksCacheKey(payload.season, payload.week);
+  const fetchedAt = new Date(payload.pulled_at);
+  const encoded = encodeSourceCachePayload(board);
+  await db
+    .insert(schema.sourceCache)
+    .values({ cacheKey, payload: encoded, fetchedAt })
+    .onConflictDoUpdate({
+      target: schema.sourceCache.cacheKey,
+      set: { payload: encoded, fetchedAt },
+    });
+
+  return json({
+    ok: true,
+    status: "committed",
+    season: payload.season,
+    week: payload.week,
+    received: payload.lines.length,
+    stored: lines.length,
+  });
+}
+
 export async function POST(req: Request): Promise<Response> {
   if (!hasCronSecret(req)) return forbidden("Invalid or missing webhook secret.");
   const url = new URL(req.url, "https://localhost");
@@ -449,6 +495,7 @@ export async function POST(req: Request): Promise<Response> {
     if (url.pathname.endsWith("/pfn-tables")) return await handlePfnTables(req);
     if (url.pathname.endsWith("/player-news-x")) return await handlePlayerNewsX(req);
     if (url.pathname.endsWith("/prop-line-snapshots")) return await handlePropLineSnapshots(req);
+    if (url.pathname.endsWith("/sleeper-picks")) return await handleSleeperPicks(req);
     return json({ ok: false, error: "Unknown ingest target." }, 404);
   } catch (err) {
     await captureServerError(err, {

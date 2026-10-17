@@ -51,6 +51,12 @@ type PropTableRow = {
   /** Median price on the played side (under for his players, over otherwise). */
   odds: number | null;
   implied: number | null;
+  /** Sleeper Picks line for this player/stat, when Sleeper offers it. */
+  sleeperLine: number | null;
+  /** Sleeper's payout multiplier on the played side. */
+  sleeperMultiplier: number | null;
+  /** Sleeper's line is softer than consensus for the played direction. */
+  sleeperFavorable: boolean;
   /** The rate for the side played on this row (see direction); rows sort by it. */
   hitRate: number | null;
   overs: number;
@@ -86,7 +92,7 @@ function formatAmericanOdds(odds: number | null): string {
   return rounded > 0 ? `+${rounded}` : `${rounded}`;
 }
 
-type PropSortKey = "player" | "stat" | "line" | "move" | "odds" | "hit";
+type PropSortKey = "player" | "stat" | "line" | "move" | "odds" | "sleeper" | "hit";
 
 function formatHitRate(hits: number, misses: number, hitRate: number | null): string {
   if (hitRate === null) return "—";
@@ -334,6 +340,13 @@ export function GameLinesPanel({
         move: line.move,
         odds: direction === "under" ? line.underOdds : line.overOdds,
         implied: impliedProbability(direction === "under" ? line.underOdds : line.overOdds),
+        sleeperLine: line.sleeper?.line ?? null,
+        sleeperMultiplier: line.sleeper
+          ? (direction === "under" ? line.sleeper.underMultiplier : line.sleeper.overMultiplier)
+          : null,
+        sleeperFavorable: line.sleeper
+          ? (direction === "over" ? line.sleeper.line < line.line : line.sleeper.line > line.line)
+          : false,
         hitRate: displayRate,
         overs: history.overs,
         unders: history.unders,
@@ -388,6 +401,13 @@ export function GameLinesPanel({
           else if (a.implied === null) return 1;
           else if (b.implied === null) return -1;
           else cmp = a.implied - b.implied;
+          break;
+        }
+        case "sleeper": {
+          if (a.sleeperLine === null && b.sleeperLine === null) cmp = 0;
+          else if (a.sleeperLine === null) return 1;
+          else if (b.sleeperLine === null) return -1;
+          else cmp = a.sleeperLine - b.sleeperLine;
           break;
         }
         case "hit":
@@ -511,6 +531,7 @@ export function GameLinesPanel({
                     {sortHeader("line", "Line")}
                     {sortHeader("move", "Move")}
                     {sortHeader("odds", "Odds")}
+                    {sortHeader("sleeper", "Sleeper")}
                     {sortHeader("hit", "Hit")}
                     <th scope="col">History</th>
                   </tr>
@@ -543,6 +564,14 @@ export function GameLinesPanel({
                         <td>{formatPropNumber(row.line, 1)}</td>
                         <td>{formatMove(row.move)}</td>
                         <td>{formatAmericanOdds(row.odds)}</td>
+                        <td>
+                          {row.sleeperLine === null ? "—" : (
+                            <span className={row.sleeperFavorable ? "props-sleeper is-favorable" : "props-sleeper"}>
+                              {formatPropNumber(row.sleeperLine, 1)}
+                              {row.sleeperMultiplier !== null ? ` · ${formatDecimal(row.sleeperMultiplier, 2)}x` : ""}
+                            </span>
+                          )}
+                        </td>
                         <td>
                           <span className={hitTone ? `props-hit props-hit-${hitTone}` : "props-hit"}>
                             {formatHitRate(hits, misses, row.hitRate)}
