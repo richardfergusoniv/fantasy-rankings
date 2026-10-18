@@ -109,7 +109,8 @@ function primaryPageForTab(tab: Tab): PrimaryPage {
   if (tab === "rankings" || tab === "waivers" || tab === "comparison") return "players";
   if (tab === "power") return "league";
   if (tab === "draft") return "draft";
-  if (tab === "trade" || tab === "monitor" || tab === "team-stats" || tab === "pricing" || tab === "analytics") return "tools";
+  if (tab === "trade") return "players";
+  if (tab === "monitor" || tab === "team-stats" || tab === "pricing" || tab === "analytics") return "tools";
   const unreachable: never = tab;
   return unreachable;
 }
@@ -476,7 +477,7 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
     ["players", "Players", "rankings"],
     ["league", "League", "power"],
     ["draft", "Draft", "draft"],
-    ["tools", "Tools", "trade"],
+    ["tools", "Tools", "monitor"],
   ];
   return (
     <div className="app-shell progressive-shell">
@@ -844,7 +845,7 @@ export function App() {
       players: "rankings",
       league: "power",
       draft: "draft",
-      tools: "trade",
+      tools: "monitor",
     };
     setTab(defaultTabs[page]);
   }
@@ -1152,13 +1153,13 @@ export function App() {
               <TabsTrigger value="rankings">Rankings</TabsTrigger>
               <TabsTrigger value="waivers">Waivers</TabsTrigger>
               <TabsTrigger value="comparison">Comparison</TabsTrigger>
+              <TabsTrigger value="trade">Trade</TabsTrigger>
             </TabsList>
           </Tabs>
         ) : null}
         {primaryPage === "tools" ? (
           <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="subview-tabs tools-subview-tabs">
             <TabsList aria-label="Tools views">
-              <TabsTrigger value="trade">Trade</TabsTrigger>
               <TabsTrigger value="monitor">Game lines</TabsTrigger>
               <TabsTrigger value="team-stats">Team stats</TabsTrigger>
               <TabsTrigger value="pricing">Pricing</TabsTrigger>
