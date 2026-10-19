@@ -95,7 +95,6 @@ export function TeamStatsPanel({
   const selectedGroup = userGroup ?? defaultGroup;
 
   const [statId, setStatId] = useState<TeamStatsStatId>("snaps");
-  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
 
   const throughWeek = Math.max(1, week);
 
@@ -208,21 +207,7 @@ export function TeamStatsPanel({
         <div className="team-stats-chart-wrap">
           <div className="team-stats-chart">
             {stacks.map((stack) => (
-              <div
-                key={stack.week}
-                className={`team-stats-week${selectedWeek === stack.week ? " is-selected" : ""}`}
-                role="button"
-                tabIndex={0}
-                aria-pressed={selectedWeek === stack.week}
-                aria-label={`Week ${stack.week} player breakdown`}
-                onClick={() => setSelectedWeek((current) => (current === stack.week ? null : stack.week))}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setSelectedWeek((current) => (current === stack.week ? null : stack.week));
-                  }
-                }}
-              >
+              <div key={stack.week} className="team-stats-week">
                 <div className="team-stats-bar">
                   {stack.segments.map((segment) => {
                     const meta = playerMeta.get(segment.key);
@@ -248,29 +233,6 @@ export function TeamStatsPanel({
               </div>
             ))}
           </div>
-          {selectedWeek !== null ? (() => {
-            const selectedStack = stacks.find((stack) => stack.week === selectedWeek);
-            if (!selectedStack) return null;
-            return (
-              <div className="team-stats-week-detail">
-                <span className="team-stats-week-detail-title">{`Week ${selectedStack.week}`}</span>
-                <ul>
-                  {[...selectedStack.segments]
-                    .sort((a, b) => b.value - a.value)
-                    .map((segment) => {
-                      const meta = playerMeta.get(segment.key);
-                      return (
-                        <li key={segment.key}>
-                          <i style={{ backgroundColor: segment.key === "__other__" ? TEAM_STATS_OTHER_COLOR : meta?.color ?? TEAM_STATS_OTHER_COLOR }} />
-                          <span className="team-stats-legend-name">{segment.name}</span>
-                          <span className="team-stats-legend-total">{`${formatTeamStatsValue(statId, segment.value)} (${formatTeamStatsPercent(segment.share * 100)})`}</span>
-                        </li>
-                      );
-                    })}
-                </ul>
-              </div>
-            );
-          })() : null}
           <ul className="team-stats-legend">
             {rows.map((row) => {
               const meta = playerMeta.get(row.key);

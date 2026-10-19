@@ -83,7 +83,6 @@ export function PowerRankings({
   const teamPolygon = radarData.map((row, index) => radarPoint(index, row.strength)).join(" ");
   const averagePolygon = radarData.map((row, index) => radarPoint(index, row.averageStrength)).join(" ");
   const totalAverage = radarData.reduce((total, row) => total + row.average, 0);
-  const totalMine = radarData.reduce((total, row) => total + row.value, 0);
   const scopeToggle = (
     <SegmentedControl
       className="lineup-mode-toggle power-scope-toggle page-tab-control"
@@ -151,12 +150,12 @@ export function PowerRankings({
             })}
           </svg>
         </div>
-        <p className="power-position-table-label">You · league average</p>
-        <div className="power-position-values" role="list" aria-label="Your value and league average by position">
+        <p className="power-position-table-label">League average</p>
+        <div className="power-position-values" role="list" aria-label="League average value by position">
           {radarData.map((row) => (
-            <div key={row.position} role="listitem"><span>{positionLabel(row.position)}</span><strong>{scope === "week" ? points(row.value) : Math.round(row.value).toLocaleString()}</strong><small>avg {scope === "week" ? points(row.average) : Math.round(row.average).toLocaleString()}</small></div>
+            <div key={row.position} role="listitem"><span>{positionLabel(row.position)}</span><strong>{scope === "week" ? points(row.average) : Math.round(row.average).toLocaleString()}</strong></div>
           ))}
-          {scope === "week" ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalMine)}</strong><small>avg {points(totalAverage)}</small></div> : <div className="power-position-total power-position-total-highlight" role="listitem"><span>Total</span><strong>{Math.round(totalMine).toLocaleString()}</strong><small>avg {Math.round(totalAverage).toLocaleString()}</small></div>}
+          {scope === "week" ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className="power-position-total power-position-total-highlight" role="listitem"><span>Total</span><strong>{Math.round(totalAverage).toLocaleString()}</strong></div>}
         </div>
       </section>
 
@@ -176,8 +175,7 @@ export function PowerRankings({
                 >
                   <strong className="power-rank">{team.rank}</strong>
                   <span className="power-team">
-                    <strong>{team.teamName}</strong>
-                    <span className="power-team-record">{formatRecord(team.record)}</span>
+                    <strong>{team.teamName}<span className="power-team-record"> · {formatRecord(team.record)}</span></strong>
                     {isOpponent ? <span className="sr-only">This week's opponent</span> : null}
                   </span>
                   <span className="power-total"><strong>{scope === "week" ? points(team.totalValue) : team.totalValue.toLocaleString()}</strong></span>
