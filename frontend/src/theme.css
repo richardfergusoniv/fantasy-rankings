@@ -360,7 +360,6 @@ p { text-wrap: pretty; }
   padding: 10px 16px 8px;
   border-bottom: 1px solid var(--hairline);
   background: var(--bg);
-  box-shadow: var(--shadow-header);
 }
 .week-line { display: flex; align-items: center; justify-content: space-between; min-height: 44px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .week-line > div { white-space: nowrap; }
@@ -3793,3 +3792,11 @@ a:active { color: var(--link-active); }
 [data-sonner-toast][data-styled="true"] [data-button]:focus-visible {
   box-shadow: 0 0 0 2px var(--link);
 }
+
+/* One line at the top of a framed table, not two: when a section
+   heading sits directly on a framed table, the heading's hairline
+   would fuse with the frame's brighter top border into a stacked
+   double line. Drop the heading's line in exactly that spot; the
+   heading keeps it everywhere else (above charts, controls, cards). */
+.section-heading:has(+ .data-table-frame),
+.section-heading:has(+ .power-table) { border-bottom: 0; }
