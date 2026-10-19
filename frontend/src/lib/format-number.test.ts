@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDecimal, formatPercent, formatPoints, formatWholePercent } from "./format-number";
+import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWholePercent } from "./format-number";
 
 describe("formatDecimal", () => {
   it("keeps the same rounded digits as toFixed and adds grouping", () => {
@@ -49,5 +49,13 @@ describe("formatWholePercent", () => {
     expect(formatWholePercent(42, { locale: "en-US" })).toBe("42%");
     expect(formatWholePercent(58.4, { locale: "en-US" })).toBe("58%");
     expect(`${formatWholePercent(42, { locale: "en-US" })} / ${formatWholePercent(58, { locale: "en-US" })}`).toBe("42% / 58%");
+  });
+});
+
+describe("formatCompactCount", () => {
+  it("compacts trending counts", () => {
+    expect(formatCompactCount(950)).toBe("950");
+    expect(formatCompactCount(234135)).toBe("234K");
+    expect(formatCompactCount(1200000)).toBe("1.2M");
   });
 });

@@ -14,7 +14,7 @@ import {
   rollbackSavedChartViewMutation,
   settleSavedChartViewMutation,
 } from "./chart-view-cache";
-import { formatDecimal } from "./lib/format-number";
+import { formatCompactCount, formatDecimal } from "./lib/format-number";
 import { ChartDialog } from "./chart-dialog";
 import { MatchupTag, SegmentedControl, shortLeagueName, type StrengthOfScheduleEntryLike } from "./shared";
 import { scatterAxisDomain } from "./scatter-zoom";
@@ -2488,17 +2488,27 @@ function comparisonMatchupLabel(player: ComparisonEntity): string {
   return `${player.isAway ? "@" : "vs"} ${player.opponent}`;
 }
 
-function ComparisonHeadToHead({ left, right }: { left: ComparisonEntity; right: ComparisonEntity }) {
+function ComparisonHeadToHead({ left, right, leftPlayerId, rightPlayerId, trending }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"] }) {
   return (
     <div className="comparison-head-to-head" aria-label={`${left.name} versus ${right.name}`}>
-      {[left, right].map((player, index) => (
-        <div className="comparison-head-player" key={player.id}>
-          <strong>{player.name}</strong>
-          <span>{player.team || "Team TBD"} · {comparisonMatchupLabel(player)}</span>
-          <time>{gameTimeLabel(player.gameTime)}</time>
-          {index === 0 ? <i aria-hidden="true">VS</i> : null}
-        </div>
-      ))}
+      {[{ player: left, playerId: leftPlayerId }, { player: right, playerId: rightPlayerId }].map(({ player, playerId }, index) => {
+        const trend = playerId ? trending[playerId] : undefined;
+        return (
+          <div className="comparison-head-player" key={player.id}>
+            <strong>{player.name}</strong>
+            <span>{player.team || "Team TBD"} · {comparisonMatchupLabel(player)}</span>
+            {trend && (trend.adds !== null || trend.drops !== null) ? (
+              <span className="comparison-trending">
+                {trend.adds !== null ? <>Adds <strong>{formatCompactCount(trend.adds)}</strong></> : null}
+                {trend.adds !== null && trend.drops !== null ? " · " : null}
+                {trend.drops !== null ? <>Drops <strong>{formatCompactCount(trend.drops)}</strong></> : null}
+              </span>
+            ) : null}
+            <time>{gameTimeLabel(player.gameTime)}</time>
+            {index === 0 ? <i aria-hidden="true">VS</i> : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -2762,7 +2772,7 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
             closeLabel="Close comparison"
           >
             <div className="comparison-overview" aria-label={`${left.name} and ${right.name} comparison`}>
-              <ComparisonHeadToHead left={left} right={right} />
+              <ComparisonHeadToHead left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} />
 
               {comparisonRows.length > 0 ? (
                 <div className="comparison-metric-list">
