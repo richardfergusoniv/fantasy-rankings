@@ -549,7 +549,7 @@ export function LeagueAdjustedTrade({
       </div>
       <div className="trade-calculate-wrap">
         <button type="button" className="trade-calculate-button" disabled={!canAnalyze} aria-describedby={canAnalyze ? undefined : hintId} onClick={() => setIsResultOpen(true)}>Analyze trade</button>
-        {canAnalyze ? null : <span id={hintId} className="sr-only">Choose a trade partner and at least one asset.</span>}
+        {canAnalyze ? null : <span id={hintId}>Choose a trade partner and at least one asset.</span>}
       </div>
       {isResultOpen && canAnalyze && theirs ? (
         <TradeValueDialog
@@ -874,6 +874,7 @@ export function TradeCalculator({
   const [getIds, setGetIds] = useState<string[]>([]);
   useUnsavedLeaveWarning(giveIds.length + getIds.length > 0);
   const [isResultOpen, setIsResultOpen] = useState(false);
+  const marketHintId = useId();
   const userTeam = league.tradeTeams.find((team) => team.isUser) ?? league.tradeTeams[0];
   const [theirRosterId, setTheirRosterId] = useState<number | null>(null);
   // Market mode in a dynasty league can flip between the league's dynasty
@@ -1041,7 +1042,8 @@ export function TradeCalculator({
           </div>
           {marketAssets.length === 0 ? <div className="empty-inline empty-stack"><strong>No trade values for this format.</strong><span>Choose another league to compare assets.</span></div> : null}
           <div className="trade-calculate-wrap">
-            <button type="button" className="trade-calculate-button" disabled={give.length === 0 || get.length === 0} onClick={() => setIsResultOpen(true)}>Calculate trade</button>
+            <button type="button" className="trade-calculate-button" disabled={give.length === 0 || get.length === 0} aria-describedby={give.length === 0 || get.length === 0 ? marketHintId : undefined} onClick={() => setIsResultOpen(true)}>Calculate trade</button>
+            {give.length === 0 || get.length === 0 ? <span id={marketHintId}>Choose at least one player on each side.</span> : null}
           </div>
           {isResultOpen && give.length > 0 && get.length > 0 ? (
             <TradeValueDialog

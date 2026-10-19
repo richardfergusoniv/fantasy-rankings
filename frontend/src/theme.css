@@ -213,7 +213,7 @@
   --type-body: 15px;
   --type-section: 18px;
   --type-display: 24px;
-  --sticky-offset: 150px;
+  --sticky-offset: calc(150px + env(safe-area-inset-top, 0px));
   --player-box-height: 80px;
   --player-box-half: 40px;
   --player-box-inline: 10px;
@@ -372,7 +372,7 @@ p { text-wrap: pretty; }
 @keyframes refreshPulse { 50% { opacity: .25; } }
 
 .league-picker { position: relative; display: flex; align-items: center; min-height: 44px; }
-.league-picker select { width: 100%; padding: 0 28px 0 0; overflow: hidden; border: 0; background-color: transparent; color: var(--text); font-size: var(--type-display); line-height: 1.1; font-weight: 700; letter-spacing: -.025em; text-overflow: ellipsis; cursor: pointer; }
+.league-picker select { width: 100%; padding: 0 28px 0 0; overflow: hidden; border: 0; background-color: transparent; color: var(--text); font-size: 20px; line-height: 1.1; font-weight: 700; letter-spacing: -.025em; text-overflow: ellipsis; cursor: pointer; }
 
 /* Mobile bottom bar: equal-width columns across the full visual width.
    Use 100vw (not left/right:0 alone) so a classic scrollbar gutter does not
@@ -388,7 +388,7 @@ p { text-wrap: pretty; }
   gap: 0;
   overflow-x: hidden;
   box-sizing: border-box;
-  padding: 4px 0 max(4px, env(safe-area-inset-bottom));
+  padding: 4px env(safe-area-inset-right, 0px) max(4px, env(safe-area-inset-bottom)) env(safe-area-inset-left, 0px);
   border-top: 1px solid var(--hairline);
   background: var(--surface);
 }
@@ -809,9 +809,6 @@ main { padding: 12px 16px 0; }
   font-variant-numeric: tabular-nums lining-nums;
 }
 .props-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 3;
   height: 44px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--hairline);
@@ -1432,6 +1429,7 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-sheet-grabber { width: 38px; height: 4px; margin: -8px auto 12px; border-radius: 999px; background: var(--border); }
 .player-detail-sheet .section-heading { position: static; }
 .player-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.player-detail-sheet .player-detail-header { position: sticky; top: -18px; z-index: 6; margin: 0 -18px; padding: 8px 18px; background: var(--surface); box-shadow: 0 1px 0 var(--hairline); }
 .player-detail-title-line { display: flex; min-width: 0; align-items: center; gap: 7px; }
 .player-detail-title-line h2 { margin: 0; font-size: var(--type-display); line-height: 1.1; letter-spacing: -.02em; }
 .player-detail-header p { margin: 5px 0 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
@@ -2835,7 +2833,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 }
 
 @media (min-width: 760px) {
-  :root { --type-display: 30px; --sticky-offset: 104px; }
+  :root { --type-display: 30px; --sticky-offset: calc(104px + env(safe-area-inset-top, 0px)); }
   .app-shell { max-width: 1080px; margin: 0 auto; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
   .app-shell.is-inspector-docked { max-width: min(1440px, 100%); }
   .app-workspace.is-inspector-docked {
@@ -2982,7 +2980,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .draft-icon-button:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }
 .draft-icon-button:disabled { opacity: .35; cursor: default; }
 .draft-row-actions .draft-taken-button { color: var(--dim); }
-.draft-table-head { min-height: 32px; padding: 5px 10px; background: var(--surface); color: var(--dim); font-size: var(--type-caption); line-height: 1.25; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.draft-table-head { position: sticky; top: var(--sticky-offset); z-index: 5; min-height: 32px; padding: 5px 10px; background: var(--surface); color: var(--dim); font-size: var(--type-caption); line-height: 1.25; font-weight: 700; text-transform: none; letter-spacing: 0; }
 .draft-table-head > span:nth-child(n+2) { font-size: var(--type-caption); font-weight: 700; letter-spacing: 0; text-transform: none; }
 .draft-table-head span:first-child { display: block; }
 .draft-board-view, .live-draft-view { display: grid; gap: 18px; }
@@ -3848,3 +3846,18 @@ a:active { color: var(--link-active); }
 }
 .boom-bust-track:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 .team-stats-week:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }
+
+/* Mobile QoL audit (Oct 19, 2026): chrome, sheets & scroll pass. */
+.week-line .search-open-button { margin-left: auto; }
+.props-scroll { box-shadow: inset -28px 0 28px -28px rgba(0, 0, 0, .6); }
+.props-player-open { display: block; max-width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.draft-row { content-visibility: auto; contain-intrinsic-size: auto 72px; }
+.monitor-section .section-loading { min-height: 320px; }
+[data-slot="dialog-content"].league-trade-dialog { padding-top: max(14px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+@media (max-width: 759px) {
+  .league-roster-card { height: auto; }
+  .league-roster-scroll { height: auto; overflow-y: visible; }
+  .power-radar { height: 216px; }
+  .power-radar svg { height: 208px; }
+  .command-bar-dialog { top: max(12px, env(safe-area-inset-top)); translate: -50% 0; }
+}

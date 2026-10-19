@@ -111,6 +111,7 @@ export function CommandBar({
         <input
           className="command-bar-input"
           type="search"
+          autoFocus
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onInputKeyDown}

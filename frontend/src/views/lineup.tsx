@@ -298,7 +298,6 @@ export function Lineup({
         </div>
         </div>
         {benchRows.length === 0 ? <div className="empty-inline compact">No bench players are listed.</div> : null}
-        {!opponent ? <div className="empty-inline compact">Sleeper hasn’t posted an opponent for this week.</div> : null}
       </section>
     </>
   );

@@ -485,6 +485,7 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
       <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       <div className="league-sticky progressive-sticky">
+        <div className="ticker-strip" aria-hidden="true" />
         <div className="week-line"><div><span className="live-dot" /> Loading latest saved week</div><button className="refresh-button" disabled aria-label="Fantasy data is loading"><RefreshIcon spinning /></button></div>
         <label className="league-picker"><span className="sr-only">League list is loading</span><select disabled><option>Loading leagues…</option></select></label>
       </div>
@@ -1120,6 +1121,7 @@ export function App() {
           />
           <div className="week-line">
             <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
+            <button className="refresh-button search-open-button" onClick={() => setCommandBarOpen(true)} aria-label="Search players, leagues, and pages"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></button>
             <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label={tab === "draft" ? "Refresh draft data" : "Refresh scores and rankings"}><RefreshIcon spinning={isRefreshing} /></button>
           </div>
           <label className="league-picker">
@@ -1190,7 +1192,7 @@ export function App() {
             : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
             : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
             : tab === "monitor" ? (
-              <GameLinesPanel league={league} season={activeDashboard.season} week={activeDashboard.week} />
+              <GameLinesPanel league={league} season={activeDashboard.season} week={activeDashboard.week} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} />
             )
             : tab === "team-stats" ? (
               <TeamStatsPanel league={league} season={activeDashboard.season} week={activeDashboard.week} />
