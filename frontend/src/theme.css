@@ -1837,8 +1837,10 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-power-team { font-weight: 600; }
 .trade-power-table tr.is-user td { background: rgba(245, 199, 106, 0.07); }
 .trade-power-table tr.is-user .trade-power-team { color: var(--warning); }
+.trade-power-table tr.is-partner td { background: var(--opponent-row); }
 .trade-power-up { color: var(--positive); white-space: nowrap; }
 .trade-power-down { color: var(--negative); white-space: nowrap; }
+.trade-power-flat { color: var(--dim); white-space: nowrap; }
 .trade-power-same { color: var(--dim); }
 .trade-side { position: relative; min-width: 0; }
 .trade-side:focus-within { z-index: 10; }
