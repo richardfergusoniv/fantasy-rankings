@@ -410,17 +410,19 @@ export function TradeValueDialog({
                 </thead>
                 <tbody>
                   {powerRankingsAfter.map((row) => (
-                    <tr key={row.rosterId} className={row.isUser ? "is-user" : undefined}>
+                    <tr key={row.rosterId} className={row.isUser ? "is-user" : row.isParty ? "is-partner" : undefined}>
                       <td className="trade-power-rank">{row.rank}</td>
                       <td className="trade-power-team">{row.teamName}</td>
                       <td className="trade-power-num">{row.totalValue.toLocaleString()}</td>
                       <td className="trade-power-num">
-                        {row.previousRank === row.rank ? (
+                        {!row.isParty ? (
                           <span className="trade-power-same">—</span>
                         ) : row.rank < row.previousRank ? (
-                          <span className="trade-power-up">{row.previousRank} → {row.rank} ▲{row.previousRank - row.rank}</span>
+                          <span className="trade-power-up">▲{row.previousRank - row.rank}</span>
+                        ) : row.rank > row.previousRank ? (
+                          <span className="trade-power-down">▼{row.rank - row.previousRank}</span>
                         ) : (
-                          <span className="trade-power-down">{row.previousRank} → {row.rank} ▼{row.rank - row.previousRank}</span>
+                          <span className="trade-power-flat">{row.totalValue >= row.previousTotalValue ? "▲0" : "▼0"}</span>
                         )}
                       </td>
                     </tr>
