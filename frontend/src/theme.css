@@ -1332,7 +1332,7 @@ main { padding: 12px 16px 0; }
 .ranking-row .season-team-pill.oline-weak:not(.matchup-reference-button),
 .ranking-row .season-team-pill.oline-weak .matchup-reference-button-label { border-color: color-mix(in srgb, var(--stat-weakness) 18%, var(--hairline)); background: color-mix(in srgb, var(--stat-weakness-soft) 56%, var(--surface)); color: var(--stat-weakness-readable); }
 .ranking-player-context { flex: none; color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
-.roster-owner-tag { display: block; max-width: 112px; flex: none; overflow: hidden; padding: 1px 5px; border-radius: 4px; background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 700; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.roster-owner-tag { display: block; max-width: 150px; flex: none; overflow: hidden; padding: 1px 5px; border-radius: 4px; background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 700; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .roster-owner-tag.is-user { background: var(--roster-highlight); color: var(--on-accent); letter-spacing: .025em; }
 .ranking-proj { text-align: right; }
 .ranking-proj strong { display: block; color: var(--text); font-size: var(--type-body); font-weight: 700; }
@@ -1773,7 +1773,8 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-roster-list > li:last-child .league-roster-row { border-bottom: 0; }
 .league-roster-row input { grid-row: 1 / span 2; width: 16px; height: 16px; margin: 0; accent-color: var(--action); }
 .league-roster-row input:disabled { cursor: default; }
-.league-roster-list > li:has(input:disabled) { color: var(--dim); }
+.league-roster-list > li:has(input:disabled) { color: var(--dim); opacity: .55; }
+.league-roster-list > li:has(input:disabled) .league-roster-meta b { color: inherit; }
 .league-roster-main { display: flex; grid-column: 2; grid-row: 1; min-width: 0; align-items: center; gap: 4px; }
 .league-roster-name { display: flex; min-width: 0; align-items: center; gap: 3px; }
 .league-roster-name strong { overflow: hidden; font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
@@ -2242,6 +2243,7 @@ button.league-partner-change:active { color: var(--link-active); }
   font-weight: 700;
   line-height: 1.08;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .comparison-head-player span,
 .comparison-head-player time {
@@ -2571,7 +2573,7 @@ button.league-partner-change:active { color: var(--link-active); }
   outline: 2px solid var(--link);
   outline-offset: 2px;
 }
-.adaptive-chart-label { fill: var(--text); stroke: var(--surface); stroke-width: 2.5px; paint-order: stroke fill; font-size: 10px; font-weight: 600; pointer-events: none; }
+.adaptive-chart-label { fill: var(--text); stroke: var(--surface); stroke-width: 2.5px; paint-order: stroke fill; font-size: 11px; font-weight: 600; pointer-events: none; }
 .adaptive-chart-label.leader { fill: var(--text); font-weight: 600; }
 .adaptive-chart-label.selected-team { fill: var(--chart-1); font-weight: 700; }
 .scatter-frame.is-compact .adaptive-chart-label.selected-team {
@@ -3666,7 +3668,7 @@ a:active { color: var(--link-active); }
   justify-content: flex-start;
   box-sizing: border-box;
   width: max-content;
-  max-width: 112px;
+  max-width: 150px;
   min-width: 44px;
   height: auto;
   margin: 0;
@@ -3814,4 +3816,33 @@ a:active { color: var(--link-active); }
   .trade-calculate-button,
   .chart-open-button { min-height: 44px; }
   .draft-refresh-button { width: 44px; height: 44px; }
+}
+
+/* Mobile QoL audit (Oct 19, 2026): data legibility pass. Values that only
+   existed in hover titles get touch readouts; dim text on the grey
+   opponent/partner rows lifts off the contrast floor. */
+.power-position-values small { grid-column: 2; text-align: right; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.power-row.is-opponent .power-team-record { color: #c7cedb; }
+.boom-bust-track { cursor: pointer; }
+.boom-bust-dot.is-selected { width: 10px; height: 10px; background: var(--accent); }
+.boom-bust-readout { margin: 8px 0 0; color: var(--text); font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
+.team-stats-week { cursor: pointer; }
+.team-stats-week.is-selected .team-stats-bar { box-shadow: 0 0 0 2px var(--link); }
+.team-stats-week-detail { flex: 1 1 100%; min-width: 0; }
+.team-stats-week-detail-title { display: block; margin-bottom: 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .02em; }
+.team-stats-week-detail ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.team-stats-week-detail li { display: flex; align-items: center; gap: 7px; font-size: var(--type-body); line-height: 1.25; }
+.team-stats-week-detail li i { flex: none; width: 10px; height: 10px; border-radius: 3px; }
+.fpa-heatmap-legend { display: flex; align-items: center; gap: 8px; padding: 0 8px 8px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.fpa-heatmap-legend i { flex: 1; height: 8px; border-radius: 4px; background: linear-gradient(90deg, rgb(22 53 39), rgb(42 45 53), rgb(58 26 34)); }
+.monitor-pricing-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 2px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.monitor-pricing-stats strong { color: var(--text); font-size: var(--type-body); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
+.comparison-head-player .comparison-trending { white-space: normal; }
+.props-table tbody tr.is-opponent-roster .props-player-meta { color: #c7cedb; }
+.trade-power-table tr.is-partner .trade-power-rank,
+.trade-power-table tr.is-partner .trade-power-flat,
+.trade-power-table tr.is-partner .trade-power-same { color: #c7cedb; }
+@media (max-width: 759px) {
+  .league-trade-name strong { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .trade-power-team { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }

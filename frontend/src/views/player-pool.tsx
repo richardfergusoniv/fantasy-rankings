@@ -41,6 +41,7 @@ import {
   ModalPortal,
   SegmentedControl,
   leagueRank,
+  shortLeagueName,
   rankToneClassName,
   useDialogFocusTrap,
   type StrengthOfScheduleEntryLike,
@@ -106,7 +107,7 @@ export function offensiveLineRanksByTeam(table: PfnTable | null): Map<string, nu
 export function SeasonTeamPill({ team, lineRank, onOpen }: { team: string | null; lineRank: number | null; onOpen?: () => void }) {
   const teamLabel = team ?? "FA";
   const className = `matchup-reference-tag season-team-pill${offensiveLineTone(lineRank)}`;
-  if (!team || !onOpen) return <span className={className}>{teamLabel}</span>;
+  if (!team || !onOpen) return <span className={className}>{teamLabel}{lineRank !== null ? ` · OL #${lineRank}` : ""}</span>;
   return (
     <button
       type="button"
@@ -121,7 +122,7 @@ export function SeasonTeamPill({ team, lineRank, onOpen }: { team: string | null
       aria-haspopup="dialog"
       title={lineRank === null ? `${teamLabel} team data` : `${teamLabel} offensive line rank #${lineRank}`}
     >
-      <span className="matchup-reference-button-label">{teamLabel}</span>
+      <span className="matchup-reference-button-label">{teamLabel}{lineRank !== null ? ` · OL #${lineRank}` : ""}</span>
       <span className="matchup-reference-arrow" aria-hidden="true">›</span>
     </button>
   );
@@ -949,11 +950,11 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                               onOpenLeagueTeam(rosterId);
                             }}
                           >
-                            <span className={`roster-owner-tag${row.rosterIsUser ? " is-user" : ""}`}>{row.rosterTeamName}</span>
+                            <span className={`roster-owner-tag${row.rosterIsUser ? " is-user" : ""}`}>{shortLeagueName(row.rosterTeamName)}</span>
                           </button>
                         ) : (
                           <span className={`roster-owner-tag${row.rosterIsUser ? " is-user" : ""}`} title={row.rosterIsUser ? "Your roster" : `Rostered by ${row.rosterTeamName}`}>
-                            {row.rosterTeamName}
+                            {shortLeagueName(row.rosterTeamName)}
                           </span>
                         )
                       ) : null}
