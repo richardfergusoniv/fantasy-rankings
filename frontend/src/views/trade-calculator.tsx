@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Reac
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogCloseButton, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api } from "../api";
+import { powerRankingsAfterTrade, type PowerRankingRow, type PowerShiftRow } from "../lib/trade-power";
 import type {
   Dashboard,
   HistoricalTrade,
@@ -285,10 +286,13 @@ export function TradeValueDialog({
   getLabel = "You get",
   title = "Trade value",
   subtitle,
+  powerRankingsAfter,
 }: {
   give: TradeAsset[];
   get: TradeAsset[];
   formatKey: string;
+  /** Post-trade power table (League-adjusted card only). */
+  powerRankingsAfter?: PowerShiftRow[];
   /** FantasyCalc market rows for this format (used to map owned picks → `FP_*` ids). */
   marketAssets?: TradeAsset[];
   onClose: () => void;
@@ -397,6 +401,34 @@ export function TradeValueDialog({
             giveStrokeWidth={giveStrokeWidth}
             getStrokeWidth={getStrokeWidth}
           />
+          {powerRankingsAfter && powerRankingsAfter.length > 0 ? (
+            <section className="trade-power" aria-label="Power rankings after this trade">
+              <h3>Power Rankings</h3>
+              <table className="trade-power-table">
+                <thead>
+                  <tr><th scope="col">#</th><th scope="col">Team</th><th scope="col" className="trade-power-num">Power</th><th scope="col" className="trade-power-num">Change</th></tr>
+                </thead>
+                <tbody>
+                  {powerRankingsAfter.map((row) => (
+                    <tr key={row.rosterId} className={row.isUser ? "is-user" : undefined}>
+                      <td className="trade-power-rank">{row.rank}</td>
+                      <td className="trade-power-team">{row.teamName}</td>
+                      <td className="trade-power-num">{row.totalValue.toLocaleString()}</td>
+                      <td className="trade-power-num">
+                        {row.previousRank === row.rank ? (
+                          <span className="trade-power-same">—</span>
+                        ) : row.rank < row.previousRank ? (
+                          <span className="trade-power-up">{row.previousRank} → {row.rank} ▲{row.previousRank - row.rank}</span>
+                        ) : (
+                          <span className="trade-power-down">{row.previousRank} → {row.rank} ▼{row.rank - row.previousRank}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
@@ -434,6 +466,7 @@ export function LeagueAdjustedTrade({
   getIds,
   recordByRosterId,
   formatKey,
+  powerRankings,
   onPartnerChange,
   onToggle,
 }: {
@@ -445,6 +478,7 @@ export function LeagueAdjustedTrade({
   getIds: string[];
   recordByRosterId: ReadonlyMap<number, TeamRecord>;
   formatKey: string;
+  powerRankings: readonly PowerRankingRow[];
   onPartnerChange: (rosterId: number | null) => void;
   onToggle: (side: "give" | "get", id: string) => void;
 }) {
@@ -461,6 +495,12 @@ export function LeagueAdjustedTrade({
   );
   const selectedGive = useMemo(() => new Set(giveIds), [giveIds]);
   const selectedGet = useMemo(() => new Set(getIds), [getIds]);
+  const powerRankingsAfter = useMemo(
+    () => theirs && powerRankings.length > 0
+      ? powerRankingsAfterTrade(powerRankings, { myRosterId: mine.rosterId, partnerRosterId: theirs.rosterId, give, get })
+      : undefined,
+    [theirs, powerRankings, mine.rosterId, give, get],
+  );
 
   return (
     <>
@@ -517,6 +557,7 @@ export function LeagueAdjustedTrade({
           getLabel={theirs.teamName}
           formatKey={formatKey}
           marketAssets={[...assetById.values()]}
+          powerRankingsAfter={powerRankingsAfter}
           onClose={() => setIsResultOpen(false)}
         />
       ) : null}
@@ -985,6 +1026,7 @@ export function TradeCalculator({
             getIds={getIds}
             recordByRosterId={recordByRosterId}
             formatKey={league.seasonLongFormat.key}
+            powerRankings={isDynastyLeague ? league.powerRankingsDynasty : league.powerRankingsSeasonLong}
             onPartnerChange={(rosterId) => { setTheirRosterId(rosterId); setGetIds([]); }}
             onToggle={toggleLeagueAsset}
           />
