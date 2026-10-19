@@ -49,9 +49,13 @@ const TRENDING_LOOKBACK_HOURS = 24;
 
 export async function loadSleeperTrending(): Promise<PlayerTrendingMap> {
   const query = `lookback_hours=${TRENDING_LOOKBACK_HOURS}&limit=${TRENDING_LIMIT}`;
-  const [adds, drops] = await Promise.all([
+  // Settled, not all: one failed list must not discard the other's counts.
+  const [adds, drops] = await Promise.allSettled([
     fetchJson<unknown>(`${SLEEPER_BASE}/players/nfl/trending/add?${query}`),
     fetchJson<unknown>(`${SLEEPER_BASE}/players/nfl/trending/drop?${query}`),
   ]);
-  return mergeTrendingLists(adds, drops);
+  return mergeTrendingLists(
+    adds.status === "fulfilled" ? adds.value : [],
+    drops.status === "fulfilled" ? drops.value : [],
+  );
 }

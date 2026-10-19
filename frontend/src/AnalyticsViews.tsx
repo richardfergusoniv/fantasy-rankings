@@ -2488,11 +2488,11 @@ function comparisonMatchupLabel(player: ComparisonEntity): string {
   return `${player.isAway ? "@" : "vs"} ${player.opponent}`;
 }
 
-function ComparisonHeadToHead({ left, right, trending }: { left: ComparisonEntity; right: ComparisonEntity; trending: Dashboard["playerTrending"] }) {
+function ComparisonHeadToHead({ left, right, leftPlayerId, rightPlayerId, trending }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"] }) {
   return (
     <div className="comparison-head-to-head" aria-label={`${left.name} versus ${right.name}`}>
-      {[left, right].map((player, index) => {
-        const trend = player.playerId ? trending[player.playerId] : undefined;
+      {[{ player: left, playerId: leftPlayerId }, { player: right, playerId: rightPlayerId }].map(({ player, playerId }, index) => {
+        const trend = playerId ? trending[playerId] : undefined;
         return (
           <div className="comparison-head-player" key={player.id}>
             <strong>{player.name}</strong>
@@ -2772,7 +2772,7 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
             closeLabel="Close comparison"
           >
             <div className="comparison-overview" aria-label={`${left.name} and ${right.name} comparison`}>
-              <ComparisonHeadToHead left={left} right={right} trending={dashboard.playerTrending ?? {}} />
+              <ComparisonHeadToHead left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} />
 
               {comparisonRows.length > 0 ? (
                 <div className="comparison-metric-list">
