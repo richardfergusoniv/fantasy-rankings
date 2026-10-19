@@ -294,14 +294,14 @@ export function ValueChartPanel({
                 <XAxis
                   dataKey="date"
                   tickFormatter={formatDateTick}
-                  tick={{ fill: "var(--dim)", fontSize: 11 }}
+                  tick={{ fill: "var(--dim)", fontSize: 10 }}
                   tickLine={false}
                   axisLine={{ stroke: "var(--hairline)" }}
                   minTickGap={28}
                 />
                 <YAxis
                   width={compact ? 32 : 36}
-                  tick={{ fill: "var(--dim)", fontSize: 11 }}
+                  tick={{ fill: "var(--dim)", fontSize: 10 }}
                   tickLine={false}
                   axisLine={false}
                   domain={yDomain}
@@ -459,27 +459,6 @@ export function ValueChartPanel({
             <p className="monitor-empty">Values unavailable</p>
           ) : showChart ? (
             <>
-              {(() => {
-                let latestValue: number | null = null;
-                let latestMa7: number | null = null;
-                let latestMa30: number | null = null;
-                for (let index = chartRows.length - 1; index >= 0; index -= 1) {
-                  const row = chartRows[index];
-                  if (!row) continue;
-                  if (latestValue === null && typeof row.value === "number" && Number.isFinite(row.value)) latestValue = row.value;
-                  if (latestMa7 === null && typeof row.ma7 === "number" && Number.isFinite(row.ma7)) latestMa7 = row.ma7;
-                  if (latestMa30 === null && typeof row.ma30 === "number" && Number.isFinite(row.ma30)) latestMa30 = row.ma30;
-                  if (latestValue !== null && latestMa7 !== null && latestMa30 !== null) break;
-                }
-                if (latestValue === null) return null;
-                return (
-                  <p className="monitor-pricing-stats">
-                    <span>Value <strong>{formatWholeValue(latestValue)}</strong></span>
-                    {latestMa7 !== null ? <span>7D avg <strong>{formatWholeValue(latestMa7)}</strong></span> : null}
-                    {latestMa30 !== null ? <span>30D avg <strong>{formatWholeValue(latestMa30)}</strong></span> : null}
-                  </p>
-                );
-              })()}
               <div
                 className="monitor-chart-expand-target"
                 role="button"

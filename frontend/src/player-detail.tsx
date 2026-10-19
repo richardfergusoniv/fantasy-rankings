@@ -822,7 +822,6 @@ export function BoomBustPanel({
   history: BoomBustHistory | undefined;
   isLoading: boolean;
 }) {
-  const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const weeklyScores = history?.weeklyScores ?? [];
   const floor = history?.floor ?? null;
   const firstQuartile = history?.firstQuartile ?? null;
@@ -836,9 +835,6 @@ export function BoomBustPanel({
   const scoreLabel = (value: number | null): string => value === null ? "—" : formatDecimal(value, 1);
   const gameLabel = (score: { season: number; week: number }): string => view === "last3" ? `${score.season} Week ${score.week}` : `Week ${score.week}`;
   const description = weeklyScores.map((score) => `${gameLabel(score)}: ${formatDecimal(score.points, 1)}`).join(", ");
-  const selectedScore = weeklyScores.find((score) => `${score.season}-${score.week}` === selectedGame) ?? null;
-  const orderedScores = [...weeklyScores].sort((a, b) => a.points - b.points);
-  const selectedIndex = selectedScore ? orderedScores.findIndex((score) => score === selectedScore) : -1;
   const showQuartiles = weeklyScores.length >= 8 && firstQuartile !== null && thirdQuartile !== null;
   const quartileDescription = showQuartiles ? ` Interquartile range ${scoreLabel(firstQuartile)} to ${scoreLabel(thirdQuartile)}.` : "";
   const rangeLabel = view === "last3" ? "2024 through 2026 regular-season weekly scores" : "2026 weekly scores";
@@ -858,43 +854,8 @@ export function BoomBustPanel({
       {isLoading && !history ? (
         <div className="loading-shimmer boom-bust-loading" aria-hidden="true" />
       ) : weeklyScores.length > 0 && floor !== null && medianScore !== null && meanScore !== null && ceiling !== null ? (
-        <div className="boom-bust-visual">
-          <div
-            className="boom-bust-track"
-            role="slider"
-            tabIndex={0}
-            aria-label={`Select a game to see its score, ${weeklyScores.length} games`}
-            aria-valuemin={0}
-            aria-valuemax={weeklyScores.length - 1}
-            aria-valuenow={Math.max(0, selectedIndex)}
-            aria-valuetext={selectedScore ? `${gameLabel(selectedScore)}: ${formatDecimal(selectedScore.points, 1)} points` : "No game selected"}
-            onKeyDown={(event) => {
-              if (orderedScores.length === 0) return;
-              let next: number | null = null;
-              if (event.key === "ArrowRight" || event.key === "ArrowUp") next = Math.min(orderedScores.length - 1, selectedIndex + 1);
-              else if (event.key === "ArrowLeft" || event.key === "ArrowDown") next = Math.max(0, (selectedIndex < 0 ? orderedScores.length : selectedIndex) - 1);
-              else if (event.key === "Home") next = 0;
-              else if (event.key === "End") next = orderedScores.length - 1;
-              if (next !== null) {
-                event.preventDefault();
-                const score = orderedScores[next];
-                if (score) setSelectedGame(`${score.season}-${score.week}`);
-              }
-            }}
-            onClick={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              if (rect.width === 0) return;
-              const pct = ((event.clientX - rect.left) / rect.width) * 100;
-              let best = Infinity;
-              for (const score of weeklyScores) best = Math.min(best, Math.abs(markerPosition(score.points) - pct));
-              const tied = weeklyScores.filter((score) => Math.abs(Math.abs(markerPosition(score.points) - pct) - best) < 0.001);
-              if (tied.length > 0) {
-                const currentIdx = tied.findIndex((score) => `${score.season}-${score.week}` === selectedGame);
-                const pick = tied[(currentIdx + 1) % tied.length] ?? tied[0];
-                if (pick) setSelectedGame(`${pick.season}-${pick.week}`);
-              }
-            }}
-          >
+        <div className="boom-bust-visual" role="img" aria-label={`${name} ${rangeLabel}. ${description}. Bust ${scoreLabel(floor)}; median ${scoreLabel(medianScore)}, mean ${scoreLabel(meanScore)}, boom ${scoreLabel(ceiling)}.${quartileDescription}`}>
+          <div className="boom-bust-track">
             <div className="boom-bust-band" />
             {showQuartiles ? (
               <div
@@ -905,7 +866,7 @@ export function BoomBustPanel({
             ) : null}
             {weeklyScores.map((score, index) => (
               <i
-                className={`boom-bust-dot ${index % 2 === 0 ? "above" : "below"}${selectedGame === `${score.season}-${score.week}` ? " is-selected" : ""}`}
+                className={`boom-bust-dot ${index % 2 === 0 ? "above" : "below"}`}
                 key={`${score.season}-${score.week}`}
                 style={{ left: `${markerPosition(score.points)}%` }}
                 title={`${gameLabel(score)}: ${formatDecimal(score.points, 1)} points`}
@@ -915,15 +876,12 @@ export function BoomBustPanel({
             <i className="boom-bust-median-mark" style={{ left: `${markerPosition(medianScore)}%` }} title={`Median: ${formatDecimal(medianScore, 1)} points`} />
             <i className="boom-bust-mean-mark" style={{ left: `${markerPosition(meanScore)}%` }} title={`Mean: ${formatDecimal(meanScore, 1)} points`} />
           </div>
-          <div className="boom-bust-labels" role="img" aria-label={`${name} ${rangeLabel}. ${description}. Bust ${scoreLabel(floor)}; median ${scoreLabel(medianScore)}, mean ${scoreLabel(meanScore)}, boom ${scoreLabel(ceiling)}.${quartileDescription}`}>
+          <div className="boom-bust-labels">
             <span><small>Bust</small><strong>{scoreLabel(floor)}</strong></span>
             <span><small>Median</small><strong>{scoreLabel(medianScore)}</strong></span>
             <span><small>Mean</small><strong>{scoreLabel(meanScore)}</strong></span>
             <span><small>Boom</small><strong>{scoreLabel(ceiling)}</strong></span>
           </div>
-          {selectedScore ? (
-            <p className="boom-bust-readout" aria-live="polite">{`${gameLabel(selectedScore)} · ${formatDecimal(selectedScore.points, 1)} points`}</p>
-          ) : null}
         </div>
       ) : (
         <div className="boom-bust-empty">{isLoading ? "Loading weekly results…" : history?.status === "unavailable" ? "No scoring history yet. Try again after the next data refresh." : view === "last3" ? "No games in the last 3 seasons" : "No games yet this season"}</div>

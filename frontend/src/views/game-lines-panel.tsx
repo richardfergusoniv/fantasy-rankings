@@ -167,12 +167,10 @@ export function GameLinesPanel({
   league,
   season,
   week,
-  onOpenPlayer,
 }: {
   league: League;
   season: number;
   week: number;
-  onOpenPlayer?: (playerId: string) => void;
 }) {
   const [position, setPosition] = useState<PropPosition | "ALL">("ALL");
   const [statId, setStatId] = useState<string>("ALL");
@@ -570,13 +568,7 @@ export function GameLinesPanel({
                         ].filter(Boolean).join(" ") || undefined}
                       >
                         <th scope="row" className="props-player-col">
-                          {onOpenPlayer ? (
-                            <button type="button" className="props-player-open" onClick={() => onOpenPlayer(row.playerId)} aria-label={`View ${row.name}`}>
-                              <span className="props-player-name">{row.name}</span>
-                            </button>
-                          ) : (
-                            <span className="props-player-name">{row.name}</span>
-                          )}
+                          <span className="props-player-name">{row.name}</span>
                           <span className="props-player-meta">
                             {row.position}
                             {row.team ? ` · ${row.team}` : ""}
