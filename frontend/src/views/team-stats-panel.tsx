@@ -212,9 +212,16 @@ export function TeamStatsPanel({
                 key={stack.week}
                 className={`team-stats-week${selectedWeek === stack.week ? " is-selected" : ""}`}
                 role="button"
+                tabIndex={0}
                 aria-pressed={selectedWeek === stack.week}
                 aria-label={`Week ${stack.week} player breakdown`}
                 onClick={() => setSelectedWeek((current) => (current === stack.week ? null : stack.week))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedWeek((current) => (current === stack.week ? null : stack.week));
+                  }
+                }}
               >
                 <div className="team-stats-bar">
                   {stack.segments.map((segment) => {

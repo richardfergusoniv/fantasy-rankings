@@ -3846,3 +3846,5 @@ a:active { color: var(--link-active); }
   .league-trade-name strong { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .trade-power-team { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+.boom-bust-track:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.team-stats-week:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }

@@ -1095,7 +1095,7 @@ function FpaHeatmap({
   const teams = Object.keys(table).sort((a, b) => a.localeCompare(b));
 
   return (
-    <div className="fpa-heatmap" role="img" aria-label="Fantasy points allowed by defense and position">
+    <div className="fpa-heatmap" role="img" aria-label="Fantasy points allowed by defense and position. Rank 1 is the toughest matchup; rank 32 is the softest.">
       <div className="fpa-heatmap-grid" style={{ gridTemplateColumns: `minmax(2.5rem, 3rem) repeat(${positions.length}, minmax(0, 1fr))` }}>
         <div className="fpa-heatmap-corner" aria-hidden="true" />
         {positions.map((position) => <div className="fpa-heatmap-head" key={position}>{position}</div>)}
