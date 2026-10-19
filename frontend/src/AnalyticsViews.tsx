@@ -965,7 +965,7 @@ function ScatterPlot({
             domain={xDomain}
             allowDataOverflow={zoomed}
             reversed={xAxis.lowerIsBetter}
-            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tick={{ fill: "var(--dim)", fontSize: 11 }}
             tickLine={false}
             axisLine={{ stroke: "var(--hairline)" }}
           />
@@ -977,7 +977,7 @@ function ScatterPlot({
             allowDataOverflow={zoomed}
             reversed={yAxis.lowerIsBetter}
             width={compact ? 30 : 34}
-            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tick={{ fill: "var(--dim)", fontSize: 11 }}
             tickLine={false}
             axisLine={false}
           />
@@ -1049,18 +1049,18 @@ function SnapShareTrendChart({
           <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
           <XAxis
             dataKey="week"
-            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tick={{ fill: "var(--dim)", fontSize: 11 }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
-            label={{ value: "Week", position: "insideBottom", offset: -12, fill: "var(--text)", fontSize: 10, fontWeight: 700 }}
+            label={{ value: "Week", position: "insideBottom", offset: -12, fill: "var(--text)", fontSize: 11, fontWeight: 700 }}
           />
           <YAxis
             domain={[0, 100]}
             width={36}
-            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tick={{ fill: "var(--dim)", fontSize: 11 }}
             tickLine={false}
             axisLine={false}
-            label={{ value: "Snap %", angle: -90, position: "insideLeft", fill: "var(--text)", fontSize: 10, fontWeight: 700 }}
+            label={{ value: "Snap %", angle: -90, position: "insideLeft", fill: "var(--text)", fontSize: 11, fontWeight: 700 }}
           />
           <Tooltip contentStyle={chartTooltipStyle} />
           {series.map((item) => (
@@ -1095,7 +1095,7 @@ function FpaHeatmap({
   const teams = Object.keys(table).sort((a, b) => a.localeCompare(b));
 
   return (
-    <div className="fpa-heatmap" role="img" aria-label="Fantasy points allowed by defense and position">
+    <div className="fpa-heatmap" role="img" aria-label="Fantasy points allowed by defense and position. Rank 1 is the toughest matchup; rank 32 is the softest.">
       <div className="fpa-heatmap-grid" style={{ gridTemplateColumns: `minmax(2.5rem, 3rem) repeat(${positions.length}, minmax(0, 1fr))` }}>
         <div className="fpa-heatmap-corner" aria-hidden="true" />
         {positions.map((position) => <div className="fpa-heatmap-head" key={position}>{position}</div>)}
@@ -1117,6 +1117,11 @@ function FpaHeatmap({
             );
           }),
         ])}
+      </div>
+      <div className="fpa-heatmap-legend" aria-hidden="true">
+        <span>1 · Toughest</span>
+        <i />
+        <span>Softest · 32</span>
       </div>
     </div>
   );
