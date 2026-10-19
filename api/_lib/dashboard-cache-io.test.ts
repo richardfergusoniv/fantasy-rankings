@@ -53,6 +53,7 @@ const sampleDashboard: Dashboard = {
   asOf: "2026-10-12T00:00:00.000Z",
   rankingsAsOf: null,
   fantasyCalcAsOf: null,
+  playerTrending: {},
   leagues: [
     {
       id: "league-1",

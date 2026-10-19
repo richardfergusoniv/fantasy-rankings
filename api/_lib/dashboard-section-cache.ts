@@ -161,6 +161,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
       seasonLongRankings: dashboard.seasonLongRankings,
       defenses: dashboard.defenses,
       strengthOfSchedule: dashboard.strengthOfSchedule ?? [],
+      playerTrending: dashboard.playerTrending ?? {},
     },
     league: {
       leagues: dashboard.leagues.map(
@@ -405,6 +406,7 @@ export function assembleDashboardFromSections(
     weeklyChartRankings,
     seasonLongRankings: players.data.seasonLongRankings,
     defenses: players.data.defenses,
+    playerTrending: players.data.playerTrending ?? {},
     analytics: analytics.data.analytics,
     strengthOfSchedule: players.data.strengthOfSchedule ?? [],
   };

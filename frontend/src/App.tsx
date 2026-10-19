@@ -428,6 +428,7 @@ function assembleStreamedDashboard(
     weeklyChartRankings: players?.weeklyChartRankings ?? [],
     seasonLongRankings: players?.seasonLongRankings ?? [],
     defenses: players?.defenses ?? [],
+    playerTrending: players?.playerTrending ?? {},
     strengthOfSchedule: players?.strengthOfSchedule ?? [],
     analytics: analytics?.analytics ?? { asOf: null, throughWeek: null, sourceUrl: "", entities: [], teamUsage: [], teamRecords: [] },
   };
@@ -1099,6 +1100,7 @@ export function App() {
       waiversHref={showAvailableBadge ? waiversHref : undefined}
       onOpenWaivers={showAvailableBadge ? () => dashboardUrl.commit({ tab: "waivers" }) : undefined}
       suspended={rosterCardOnTop}
+      trending={dashboard.playerTrending?.[playerHistory.current.playerId]}
     />
   ) : null;
 

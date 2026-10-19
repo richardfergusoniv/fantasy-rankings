@@ -248,6 +248,11 @@ export const strengthOfScheduleEntrySchema = z.object({
   table: z.record(z.string(), z.record(z.enum(["QB", "RB", "WR", "TE"]), strengthOfScheduleCellSchema)),
 });
 
+export const playerTrendingEntrySchema = z.object({
+  adds: z.number().int().nullable(),
+  drops: z.number().int().nullable(),
+});
+
 export const dashboardResponse = z.object({
   status: z.enum(["ok", "partial"]),
   season: z.number().int(),
@@ -255,6 +260,7 @@ export const dashboardResponse = z.object({
   asOf: z.string(),
   rankingsAsOf: z.string().nullable(),
   fantasyCalcAsOf: z.string().nullable(),
+  playerTrending: z.record(z.string(), playerTrendingEntrySchema).default({}),
   leagues: z.array(leagueSchema),
   rankings: z.array(rankingSchema),
   weeklyChartRankings: z.array(rankingSchema),
@@ -320,6 +326,7 @@ export const dashboardPlayersSchema = dashboardResponse.pick({
   seasonLongRankings: true,
   defenses: true,
   strengthOfSchedule: true,
+  playerTrending: true,
 });
 
 /** Trade teams + starter slots (Matchup/Monitor/Power/Trade). Waiver pool is separate. */

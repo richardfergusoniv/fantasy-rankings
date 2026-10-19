@@ -29,7 +29,7 @@ import {
   pfnRankForRow,
   projectionComponentsForPlayer,
 } from "./dashboard-shared";
-import { formatDecimal, formatPercent } from "./lib/format-number";
+import { formatCompactCount, formatDecimal, formatPercent } from "./lib/format-number";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { MatchupTag, ModalPortal, SegmentedControl, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
@@ -396,6 +396,7 @@ export function PlayerDetailSheet({
   waiversHref,
   onOpenWaivers,
   suspended = false,
+  trending,
 }: {
   player: PlayerSearchResult;
   week: number;
@@ -424,6 +425,8 @@ export function PlayerDetailSheet({
   onOpenWaivers?: () => void;
   /** Pause this dialog while a team card opened from the badge is on top. */
   suspended?: boolean;
+  /** Sleeper trending adds/drops for this player (null side = not on that list). */
+  trending?: { adds: number | null; drops: number | null };
 }) {
   const isModal = presentation === "modal";
   const sheetRef = useRef<HTMLElement | null>(null);
@@ -651,6 +654,12 @@ export function PlayerDetailSheet({
             <button type="button" onClick={onClose} aria-label="Close player details">×</button>
           </div>
         </header>
+        {trending && (trending.adds !== null || trending.drops !== null) ? (
+          <div className="player-trending" aria-label="Sleeper adds and drops">
+            <div><span>Adds</span><strong>{trending.adds === null ? "—" : formatCompactCount(trending.adds)}</strong></div>
+            <div><span>Drops</span><strong>{trending.drops === null ? "—" : formatCompactCount(trending.drops)}</strong></div>
+          </div>
+        ) : null}
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as PlayerDetailTab)} className="player-detail-tabs">
           <TabsList aria-label={`${player.name} details`}>
             <TabsTrigger id="player-detail-overview-tab" value="overview" aria-controls="player-detail-overview-panel">Overview</TabsTrigger>

@@ -71,6 +71,13 @@ export function formatPercent(value: number, options?: FormatDecimalOptions): st
 }
 
 /** A 0–100 percentage rounded to a whole number, such as 42%. */
+/** Compact count for market-sentiment figures: 950 → "950", 234135 → "234K", 1200000 → "1.2M". */
+export function formatCompactCount(value: number): string {
+  if (value < 1000) return String(Math.round(value));
+  if (value < 1_000_000) return `${Math.floor(value / 1000)}K`;
+  return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+}
+
 export function formatWholePercent(value: number, options?: FormatDecimalOptions): string {
   return `${formatDecimal(value, 0, options)}%`;
 }

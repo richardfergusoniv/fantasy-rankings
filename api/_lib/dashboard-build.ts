@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, like } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "./db.js";
+import { loadSleeperTrending, type PlayerTrendingMap } from "./sleeper-trending.js";
 import {
   analyticsEntitySchema,
   analyticsSchema,
@@ -1716,7 +1717,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const vegasProjectionSnapshot = projectionSnapshots.primary;
   const firstDownProjectionSnapshot = projectionSnapshots.firstDownFallback;
 
-  const [leagueResult, playersResult, sleeperProjectionResult, scheduleResult, currentStatsResult, previousStatsResult, kickoffResult] = await Promise.allSettled([
+  const [leagueResult, playersResult, sleeperProjectionResult, scheduleResult, currentStatsResult, previousStatsResult, kickoffResult, trendingResult] = await Promise.allSettled([
     readUserLeagues(sleeperUserId, fresh),
     // Compact daily cache (cron refresh-nfl-players) — not the full Sleeper dump in Supabase.
     loadNflPlayersMap(fresh),
@@ -1731,7 +1732,13 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     attachWeekContext
       ? fetchJson<EspnScoreboard>(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&dates=${season}`)
       : Promise.resolve({ events: [] } as EspnScoreboard),
+    loadSleeperTrending().catch((err: unknown) => {
+      console.error("[dashboard] trending lookup failed", err instanceof Error ? err.stack : err);
+      return {} as PlayerTrendingMap;
+    }),
   ]);
+
+  const playerTrending: PlayerTrendingMap = trendingResult.status === "fulfilled" ? trendingResult.value : {};
 
   if (leagueResult.status === "rejected") {
     console.error("[dashboard] league lookup failed", leagueResult.reason);
@@ -2347,6 +2354,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     asOf: new Date().toISOString(),
     rankingsAsOf: useVegasPrimary ? (vegasProjectionSnapshot?.built_at ?? null) : null,
     fantasyCalcAsOf,
+    playerTrending,
     leagues: leagues.filter((league): league is NonNullable<typeof league> => league !== null),
     rankings,
     weeklyChartRankings,
