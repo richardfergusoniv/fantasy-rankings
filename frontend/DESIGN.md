@@ -6,6 +6,7 @@
 
 - Dark only (`color-scheme: dark`). There is no light theme and no `prefers-color-scheme` handling.
 - Amber is the interactive color: `--action`, `--link`, `--ring`, primary buttons and tab indicators. Dark ink (`--on-accent`) sits on amber fills.
+- "Mine" (roster rows, the user's team in charts) uses its own teal, `--roster-highlight`, never the action amber.
 - Surfaces step `--background` → `--card` → `--secondary`. Structure comes from flat rows and hairline dividers rather than boxes and shadows.
 - Soft/tough matchup quality uses `--stat-strength-soft` / `--stat-weakness-soft` tints (see `sos-soft` / `sos-tough`).
 
