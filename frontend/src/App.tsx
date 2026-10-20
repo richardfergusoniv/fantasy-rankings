@@ -38,7 +38,8 @@ import { formatDecimal } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
 import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
 import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
-import { playerToolLinks } from "./player-tool-links";
+import { matchupToolLinks, playerToolLinks, teamTradeLinks, type PlayerToolLink } from "./player-tool-links";
+import type { ToolLinkItem } from "./tool-links";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
 import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
@@ -497,6 +498,12 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
       <main id="main-content" tabIndex={-1}><h1 className="sr-only">Fantasy {pageTabs.find(([page]) => page === primaryPage)?.[1] ?? "dashboard"}</h1><SectionLoading label={`Loading ${primaryPage}…`} /></main>
     </div>
   );
+}
+
+/** A trade partner roster id from the URL; anything that is not a whole number is ignored. */
+function parsePartnerRosterId(value: string | null): number | null {
+  if (value === null || !/^\d+$/.test(value)) return null;
+  return Number(value);
 }
 
 export function App() {
@@ -1078,6 +1085,18 @@ export function App() {
       ? "docked"
       : "modal";
   const inspectorDocked = inspectorPresentation === "docked" && Boolean(playerHistory.current);
+  // Links into the tools: real hrefs, plus in-app navigation that first closes whatever card is open.
+  function toolLinkItems(links: (PlayerToolLink & { id?: string })[], beforeOpen?: () => void): ToolLinkItem[] {
+    return links.map((link) => ({
+      key: link.id ?? link.key,
+      label: link.label,
+      href: toolLinkSearch(dashboardUrl.state, link.patch),
+      onOpen: () => {
+        beforeOpen?.();
+        dashboardUrl.commit({ ...CLEARED_TOOL_SELECTIONS, playerId: null, ...link.patch });
+      },
+    }));
+  }
   const playerSheet = playerHistory.current ? (
     <PlayerDetailSheet
       player={playerHistory.current}
@@ -1101,12 +1120,7 @@ export function App() {
       onOpenRosterTeam={rosterTeam ? () => setRosterCardRosterId(rosterTeam.rosterId) : undefined}
       waiversHref={showAvailableBadge ? waiversHref : undefined}
       onOpenWaivers={showAvailableBadge ? () => dashboardUrl.commit({ tab: "waivers" }) : undefined}
-      toolLinks={playerToolLinks(playerHistory.current).map((link) => ({
-        key: link.key,
-        label: link.label,
-        href: toolLinkSearch(dashboardUrl.state, link.patch),
-        onOpen: () => dashboardUrl.commit({ ...CLEARED_TOOL_SELECTIONS, playerId: null, ...link.patch }),
-      }))}
+      toolLinks={toolLinkItems(playerToolLinks(playerHistory.current))}
       suspended={rosterCardOnTop}
       trending={dashboard.playerTrending?.[playerHistory.current.playerId]}
     />
@@ -1245,6 +1259,8 @@ export function App() {
                   tradeMode={effectiveTradeMode(dashboardUrl.state)}
                   onTradeModeChange={publishTradeMode}
                   onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
+                  initialPartnerRosterId={parsePartnerRosterId(dashboardUrl.state.tradePartner)}
+                  onPartnerSelect={(rosterId) => dashboardUrl.commit({ tradePartner: rosterId === null ? null : String(rosterId) })}
                 />
               </Suspense>
             )
@@ -1269,7 +1285,7 @@ export function App() {
       </div>
       {!inspectorDocked ? playerSheet : null}
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
-      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} suspended={teamCardTeam !== null} /> : null}
+      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} toolLinks={toolLinkItems(matchupToolLinks(selectedMatchup), () => { setSelectedMatchup(null); setTeamCardTeam(null); })} suspended={teamCardTeam !== null} /> : null}
       {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
       {rosterCardTeam ? (
         <LeagueTeamCard
@@ -1284,6 +1300,7 @@ export function App() {
           onPlayerIntent={prefetchDashboardPlayer}
           onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
           onOpenMatchup={setSelectedMatchup}
+          toolLinks={toolLinkItems(teamTradeLinks(rosterCardTeam), () => setRosterCardRosterId(null))}
           onClose={() => setRosterCardRosterId(null)}
         />
       ) : null}

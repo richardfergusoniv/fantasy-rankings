@@ -863,19 +863,25 @@ export function TradeCalculator({
   tradeMode,
   onTradeModeChange,
   onOpenPlayer,
+  initialPartnerRosterId = null,
+  onPartnerSelect,
 }: {
   dashboard: Dashboard;
   league: League;
   tradeMode: TradeMode;
   onTradeModeChange: (mode: TradeMode) => void;
   onOpenPlayer: (playerId: string) => void;
+  /** Partner from the URL (a link into this tool); an unknown roster id shows the picker. */
+  initialPartnerRosterId?: number | null;
+  /** Called when the user picks or clears a partner, so the URL can follow. */
+  onPartnerSelect?: (rosterId: number | null) => void;
 }) {
   const [giveIds, setGiveIds] = useState<string[]>([]);
   const [getIds, setGetIds] = useState<string[]>([]);
   useUnsavedLeaveWarning(giveIds.length + getIds.length > 0);
   const [isResultOpen, setIsResultOpen] = useState(false);
   const userTeam = league.tradeTeams.find((team) => team.isUser) ?? league.tradeTeams[0];
-  const [theirRosterId, setTheirRosterId] = useState<number | null>(null);
+  const [theirRosterId, setTheirRosterId] = useState<number | null>(initialPartnerRosterId);
   // Market mode in a dynasty league can flip between the league's dynasty
   // values and its redraft twin (same teams/QBs/scoring, redraft market).
   const [marketBasis, setMarketBasis] = useState<"dynasty" | "redraft">("dynasty");
@@ -914,7 +920,11 @@ export function TradeCalculator({
   const partner = league.tradeTeams.find((team) => team.rosterId === theirRosterId && team.rosterId !== mine?.rosterId) ?? null;
   const unrestrictedAssets = activeAssets.filter((asset) => !selectedIds.has(asset.playerId));
 
+  // Reset when the league changes, not on first render, so a linked partner survives mount.
+  const previousLeagueIdRef = useRef(league.id);
   useEffect(() => {
+    if (previousLeagueIdRef.current === league.id) return;
+    previousLeagueIdRef.current = league.id;
     setTheirRosterId(null);
     setGiveIds([]);
     setGetIds([]);
@@ -922,6 +932,12 @@ export function TradeCalculator({
     setMarketBasis("dynasty");
     clearTradePlayerRemoveUndoToast();
   }, [league.id]);
+
+  // The URL is the source of truth while this tool is open (a new link, or Back).
+  useEffect(() => {
+    setTheirRosterId(initialPartnerRosterId);
+    setGetIds([]);
+  }, [initialPartnerRosterId]);
 
   useEffect(() => {
     setGiveIds((ids) => ids.filter((id) => activeAssetById.has(id)));
@@ -1029,7 +1045,7 @@ export function TradeCalculator({
             recordByRosterId={recordByRosterId}
             formatKey={league.seasonLongFormat.key}
             powerRankings={isDynastyLeague ? league.powerRankingsDynasty : league.powerRankingsSeasonLong}
-            onPartnerChange={(rosterId) => { setTheirRosterId(rosterId); setGetIds([]); }}
+            onPartnerChange={(rosterId) => { setTheirRosterId(rosterId); setGetIds([]); onPartnerSelect?.(rosterId); }}
             onToggle={toggleLeagueAsset}
           />
         ) : <div className="empty-inline empty-stack"><strong>No roster available for this league.</strong></div>

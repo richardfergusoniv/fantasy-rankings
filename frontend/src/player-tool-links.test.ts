@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { emptyDashboardUrlState, toolLinkSearch } from "./dashboard-url";
-import { playerToolLinks } from "./player-tool-links";
+import { matchupToolLinks, playerToolLinks, teamTradeLinks } from "./player-tool-links";
 
 const base = { playerId: "4046", position: "WR", team: "KC", seasonValue: 5200, isBye: false };
 
@@ -43,5 +43,30 @@ describe("toolLinkSearch", () => {
       .toBe("?tab=pricing&league=league-1&pp=4046");
     expect(toolLinkSearch(from, { tab: "monitor", gameLinesTeam: "KC" }))
       .toBe("?tab=monitor&league=league-1&gt=KC");
+  });
+});
+
+describe("matchupToolLinks", () => {
+  it("links a game to its lines and each side's team stats", () => {
+    const links = matchupToolLinks({ team: "KC", opponent: "BUF" });
+    expect(links.map((link) => link.id)).toEqual(["game-lines", "team-stats-KC", "team-stats-BUF"]);
+    expect(links.map((link) => link.label)).toEqual(["Game lines", "KC stats", "BUF stats"]);
+    expect(links[0]?.patch).toEqual({ tab: "monitor", gameLinesTeam: "KC" });
+    expect(links[2]?.patch).toEqual({ tab: "team-stats", teamStatsTeam: "BUF" });
+    expect(new Set(links.map((link) => link.id)).size).toBe(3);
+  });
+});
+
+describe("teamTradeLinks", () => {
+  it("offers a trade with another team but not with the user's own", () => {
+    expect(teamTradeLinks({ rosterId: 7, teamName: "Gridiron Ghosts", isUser: false })).toEqual([
+      { key: "trade", label: "Trade with Gridiron Ghosts", patch: { tab: "trade", tradePartner: "7" } },
+    ]);
+    expect(teamTradeLinks({ rosterId: 1, teamName: "Mine", isUser: true })).toEqual([]);
+  });
+
+  it("builds the trade URL from the patch", () => {
+    const from = { ...emptyDashboardUrlState(), tab: "power" as const, league: "league-1", playerId: "9" };
+    expect(toolLinkSearch(from, { tab: "trade", tradePartner: "7" })).toBe("?tab=trade&league=league-1&tp=7");
   });
 });

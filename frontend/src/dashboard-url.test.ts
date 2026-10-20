@@ -142,4 +142,12 @@ describe("dashboard URL state", () => {
     expect(dashboardUrlHistoryMode(pricing, state({ tab: "pricing", pricingPlayerId: "2" }))).toBe("replace");
     expect(dashboardUrlHistoryMode(state({ tab: "rankings", playerId: "1" }), pricing)).toBe("push");
   });
+
+  it("carries the trade partner only on the trade tab", () => {
+    const trade = state({ tab: "trade", tradePartner: "7" });
+    expect(serializeDashboardSearch(trade)).toBe("?tab=trade&tp=7");
+    expect(parseDashboardSearch("?tab=trade&tp=7")).toEqual(trade);
+    expect(serializeDashboardSearch(state({ tab: "trade", tradeMode: "market", tradePartner: "7" }))).toBe("?tab=trade&tmode=market&tp=7");
+    expect(serializeDashboardSearch(state({ tab: "power", tradePartner: "7" }))).toBe("?tab=power");
+  });
 });
