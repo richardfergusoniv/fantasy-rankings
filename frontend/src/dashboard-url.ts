@@ -48,7 +48,24 @@ export type DashboardUrlState = {
   chartDataset: ChartDataset | null;
   tradeMode: TradeMode | null;
   playerId: string | null;
+  /** Tool selections. Only serialized on their own tab (see serializeDashboardSearch). */
+  pricingPlayerId: string | null;
+  pricingCompareId: string | null;
+  teamStatsTeam: string | null;
+  teamStatsGroup: string | null;
+  teamStatsStat: string | null;
+  gameLinesTeam: string | null;
 };
+
+/** Reset for every tool selection; spread into a commit when leaving a tab. */
+export const CLEARED_TOOL_SELECTIONS = {
+  pricingPlayerId: null,
+  pricingCompareId: null,
+  teamStatsTeam: null,
+  teamStatsGroup: null,
+  teamStatsStat: null,
+  gameLinesTeam: null,
+} as const satisfies Partial<DashboardUrlState>;
 
 export const DEFAULT_DASHBOARD_TAB: DashboardTab = "team";
 export const DEFAULT_TRADE_MODE: TradeMode = "league";
@@ -66,6 +83,7 @@ export function emptyDashboardUrlState(): DashboardUrlState {
     chartDataset: null,
     tradeMode: null,
     playerId: null,
+    ...CLEARED_TOOL_SELECTIONS,
   };
 }
 
@@ -148,6 +166,12 @@ export function parseDashboardSearch(search: string): DashboardUrlState {
     chartDataset: oneOf(params.get("chart"), CHART_DATASETS),
     tradeMode: resolveTradeMode(params, legacyTradeMode),
     playerId: textParam(params.get("player")),
+    pricingPlayerId: textParam(params.get("pp")),
+    pricingCompareId: textParam(params.get("pc")),
+    teamStatsTeam: textParam(params.get("ts")),
+    teamStatsGroup: textParam(params.get("tg")),
+    teamStatsStat: textParam(params.get("tst")),
+    gameLinesTeam: textParam(params.get("gt")),
   };
 }
 
@@ -164,6 +188,18 @@ export function serializeDashboardSearch(state: DashboardUrlState): string {
   if (state.chartDataset) params.set("chart", state.chartDataset);
   if (state.tradeMode && state.tradeMode !== DEFAULT_TRADE_MODE) params.set("tmode", state.tradeMode);
   if (state.playerId) params.set("player", state.playerId);
+  // Tool selections only travel with their own tab, so leaving a tool never
+  // leaks its parameters into other tabs' links.
+  if (state.tab === "pricing") {
+    if (state.pricingPlayerId) params.set("pp", state.pricingPlayerId);
+    if (state.pricingCompareId) params.set("pc", state.pricingCompareId);
+  }
+  if (state.tab === "team-stats") {
+    if (state.teamStatsTeam) params.set("ts", state.teamStatsTeam);
+    if (state.teamStatsGroup) params.set("tg", state.teamStatsGroup);
+    if (state.teamStatsStat) params.set("tst", state.teamStatsStat);
+  }
+  if (state.tab === "monitor" && state.gameLinesTeam) params.set("gt", state.gameLinesTeam);
   const value = params.toString();
   return value ? `?${value}` : "";
 }

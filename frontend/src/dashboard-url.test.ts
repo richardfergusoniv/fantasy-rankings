@@ -113,4 +113,33 @@ describe("dashboard URL state", () => {
     expect(dashboardUrlHistoryMode(rankings, rankings)).toBe("none");
     expect(dashboardUrlHistoryMode(emptyDashboardUrlState(), state({ tab: "power" }))).toBe("push");
   });
+  it("round-trips tool selections on their own tab", () => {
+    const pricing = state({ tab: "pricing", pricingPlayerId: "4046", pricingCompareId: "6794" });
+    expect(serializeDashboardSearch(pricing)).toBe("?tab=pricing&pp=4046&pc=6794");
+    expect(parseDashboardSearch("?tab=pricing&pp=4046&pc=6794")).toEqual(pricing);
+
+    const teamStats = state({ tab: "team-stats", teamStatsTeam: "KC", teamStatsGroup: "wr", teamStatsStat: "targets" });
+    expect(serializeDashboardSearch(teamStats)).toBe("?tab=team-stats&ts=KC&tg=wr&tst=targets");
+    expect(parseDashboardSearch(serializeDashboardSearch(teamStats))).toEqual(teamStats);
+
+    const gameLines = state({ tab: "monitor", gameLinesTeam: "KC" });
+    expect(serializeDashboardSearch(gameLines)).toBe("?tab=monitor&gt=KC");
+    expect(parseDashboardSearch("?tab=monitor&gt=KC")).toEqual(gameLines);
+  });
+
+  it("drops a tool's parameters when the URL is for another tab", () => {
+    expect(serializeDashboardSearch(state({ tab: "rankings", pricingPlayerId: "4046", teamStatsTeam: "KC", gameLinesTeam: "KC" }))).toBe("?tab=rankings");
+    expect(serializeDashboardSearch(state({ tab: "pricing", teamStatsTeam: "KC" }))).toBe("?tab=pricing");
+  });
+
+  it("ignores blank tool parameters and keeps a card link's open player separate", () => {
+    expect(parseDashboardSearch("?tab=pricing&pp=%20&pc=")).toEqual(state({ tab: "pricing" }));
+    expect(serializeDashboardSearch(state({ tab: "pricing", pricingPlayerId: "4046", playerId: "4046" }))).toBe("?tab=pricing&player=4046&pp=4046");
+  });
+
+  it("replaces history for tool selection edits and pushes when entering a tool", () => {
+    const pricing = state({ tab: "pricing", pricingPlayerId: "1" });
+    expect(dashboardUrlHistoryMode(pricing, state({ tab: "pricing", pricingPlayerId: "2" }))).toBe("replace");
+    expect(dashboardUrlHistoryMode(state({ tab: "rankings", playerId: "1" }), pricing)).toBe("push");
+  });
 });
