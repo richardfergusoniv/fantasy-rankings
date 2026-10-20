@@ -155,6 +155,7 @@
   --select-arrow: linear-gradient(45deg, transparent 50%, var(--dim) 50%), linear-gradient(135deg, var(--dim) 50%, transparent 50%);
   --border: #6b7588;
   --hairline: #3a4250;
+  --row-divider: #566073;
   --accent: #f5c16a;
   --accent-2: #e0a820;
   --accent-hover: #e8b456;
@@ -213,6 +214,7 @@
   --type-body: 15px;
   --type-section: 18px;
   --type-display: 24px;
+  --type-tab: 14px;
   --sticky-offset: 150px;
   --player-box-height: 80px;
   --player-box-half: 40px;
@@ -224,17 +226,17 @@
   --player-stack-nudge: 1px;
   --designation-height: 18px;
   --designation-size: 12px;
-  --tab-font-size: var(--type-caption);
+  --tab-font-size: var(--type-tab);
   --tab-font-weight: 600;
   /* In-page page tabs: Matchup Current/Optimized, Players Rankings…, League scope, Tools Trade/Draft. */
   --page-tab-height: 48px;
   --page-tab-button-height: 44px;
-  --page-tab-font-size: var(--type-caption);
+  --page-tab-font-size: var(--type-tab);
   --page-tab-font-weight: 600;
   /* Sub-tabs: Trade League-adjusted/Market/History is the standard (36 track / 32 button). */
   --sub-tab-height: 36px;
   --sub-tab-button-height: var(--compact-control-height);
-  --sub-tab-font-size: var(--type-caption);
+  --sub-tab-font-size: var(--type-tab);
   --sub-tab-font-weight: 600;
   /* Search inputs sit between page tabs (48) and sub-tabs (36). */
   --search-input-height: 40px;
@@ -1155,7 +1157,7 @@ main { padding: 12px 16px 0; }
 /* The frame owns the radius. Clip the list to that curve so the first row
    stays rounded after the column-key header is gone, without a second border. */
 .matchup-section .data-table-frame > .matchup-list { overflow: clip; border: 0; border-radius: inherit; background: transparent; }
-.matchup-row { display: grid; grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); gap: 0; min-height: 80px; align-items: stretch; border-bottom: 1px solid var(--hairline); transition: background-color .18s ease; }
+.matchup-row { display: grid; grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); gap: 0; min-height: 80px; align-items: stretch; border-bottom: 1px solid var(--row-divider); transition: background-color .18s ease; }
 .matchup-row:hover { background: color-mix(in srgb, var(--accent-soft) 54%, var(--surface)); }
 .matchup-row:last-child, .ranking-row:last-child, .trade-result-row:last-child, .quadrant-list > div:last-child, .player-row:last-child, .trade-asset-row:last-child, .power-table > .power-list-item:last-child .power-row, .power-team-card-roster .power-row:last-child { border-bottom: 0; }
 .matchup-slot { display: grid; place-items: center; border-inline: 1px solid var(--hairline); color: var(--link); font-size: var(--type-caption); line-height: 1; font-weight: 600; text-align: center; }
@@ -1188,6 +1190,13 @@ main { padding: 12px 16px 0; }
 .matchup-reference-button.sos-soft, .matchup-reference-button.sos-tough { background: transparent; }
 .matchup-reference-button.sos-soft .matchup-reference-button-label { background: var(--stat-strength-soft); color: var(--stat-strength-readable); }
 .matchup-reference-button.sos-tough .matchup-reference-button-label { background: var(--stat-weakness-soft); color: var(--stat-weakness-readable); }
+/* Redundant, non-color cue for matchup quality: ▲ soft (good for the player), ▼ tough. The empty alt keeps it out of the accessible name, which already says soft/tough. */
+.matchup-reference-tag.sos-soft:not(.matchup-reference-button)::before,
+.matchup-reference-button.sos-soft .matchup-reference-button-label::before,
+.rank-tone.sos-soft::before { content: "▲" / ""; margin-right: 3px; font-size: .7em; }
+.matchup-reference-tag.sos-tough:not(.matchup-reference-button)::before,
+.matchup-reference-button.sos-tough .matchup-reference-button-label::before,
+.rank-tone.sos-tough::before { content: "▼" / ""; margin-right: 3px; font-size: .7em; }
 .matchup-meta-group, .player-search-meta, .draft-player-meta, .player-detail-header p { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 5px; }
 .matchup-number { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .matchup-player-score { display: grid; width: auto; min-width: 3.25rem; min-height: 44px; align-self: center; align-items: center; justify-items: end; grid-column: 2; grid-row: 1 / 3; white-space: nowrap; }
@@ -1199,7 +1208,7 @@ main { padding: 12px 16px 0; }
 .benches { max-width: 840px; }
 .column-key { display: grid; grid-template-columns: minmax(0,1fr) 58px; gap: 8px; padding: 7px 10px 5px; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .column-key span:last-child { text-align: right; }
-.player-row { display: grid; grid-template-columns: minmax(0,1fr) 58px; gap: 8px; min-height: 52px; align-items: center; padding: 0 10px; border-bottom: 1px solid var(--hairline); }
+.player-row { display: grid; grid-template-columns: minmax(0,1fr) 58px; gap: 8px; min-height: 52px; align-items: center; padding: 0 10px; border-bottom: 1px solid var(--row-divider); }
 .player-main { min-width: 0; }
 .player-name-line { display: flex; min-width: 0; align-items: center; gap: 5px; }
 .player-name { overflow: hidden; font-size: var(--type-body); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
@@ -1250,7 +1259,7 @@ main { padding: 12px 16px 0; }
   font-weight: var(--sub-tab-font-weight);
 }
 .rankings-note { display: flex; justify-content: flex-end; gap: 10px; margin: 10px 2px 6px; color: var(--dim); font-size: var(--type-caption); }
-.ranking-row { display: grid; width: 100%; grid-template-columns: minmax(0,1fr) 62px; gap: 8px; min-height: 52px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--hairline); background: var(--surface); color: var(--text); text-align: left; }
+.ranking-row { display: grid; width: 100%; grid-template-columns: minmax(0,1fr) 62px; gap: 8px; min-height: 52px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--row-divider); background: var(--surface); color: var(--text); text-align: left; }
 .ranking-row-button { cursor: pointer; touch-action: pan-y; }
 .ranking-row-button:active { background: var(--surface-2); }
 .ranking-row-button:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: -2px; }
@@ -1261,6 +1270,9 @@ main { padding: 12px 16px 0; }
 .ranking-name-line strong { display: block; min-width: 0; overflow: hidden; font-size: var(--type-body); line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .ranking-meta-line { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-top: 0; color: var(--dim); font-size: var(--type-caption); }
 .ranking-row .matchup-reference-button { min-height: 32px; }
+/* Keep the 32px visual; extend the tappable area to 44px upward only, so it never crosses into the next row. */
+.ranking-row .matchup-reference-button { position: relative; }
+.ranking-row .matchup-reference-button::after { content: ""; position: absolute; inset: auto -4px 0 -4px; height: 44px; }
 /* Rankings reuse the Matchup tab's user-side player identity treatment. */
 .rankings-view .ranking-row {
   min-height: var(--player-row-height);
@@ -1341,7 +1353,7 @@ main { padding: 12px 16px 0; }
 .virtual-window-list { position: relative; width: 100%; }
 .virtual-window-row { position: absolute; top: 0; left: 0; width: 100%; }
 .player-search-list .virtual-window-row[data-last="true"] .player-search-result { border-bottom: 0; }
-.player-search-result { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) 50px 66px; gap: 7px; min-height: 58px; align-items: center; padding: 7px 10px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; text-align: left; cursor: pointer; }
+.player-search-result { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) 50px 66px; gap: 7px; min-height: 58px; align-items: center; padding: 7px 10px; border: 0; border-bottom: 1px solid var(--row-divider); background: transparent; text-align: left; cursor: pointer; }
 .player-search-result:last-child { border-bottom: 0; }
 .player-search-result:active, .player-search-result.is-active { background: var(--surface-2); }
 .player-search-result.is-active .player-search-name > strong { color: var(--link); }
@@ -2204,6 +2216,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .comparison-segment { display: block; min-width: 0; height: 100%; background: transparent; }
 .comparison-segment.left { border-right: 0; }
 .comparison-segment.winner { background: var(--warning); }
+.comparison-segment:not(.winner) { background: color-mix(in srgb, var(--dim) 45%, var(--surface)); }
 
 /* Head-to-head comparison: every metric uses the same labeled split-bar language. */
 .comparison-overview {
@@ -2947,7 +2960,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .drafted-elsewhere button small { color: var(--dim); font-size: var(--type-caption); }
 .draft-board { border: 0; background: transparent; font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
 .draft-list-pagination { border-bottom: 0; }
-.draft-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px 62px 88px; align-items: center; gap: 4px; min-height: var(--player-row-height); padding: 0 var(--player-box-inline); border-bottom: 1px solid var(--hairline); background: var(--surface); font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
+.draft-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px 62px 88px; align-items: center; gap: 4px; min-height: var(--player-row-height); padding: 0 var(--player-box-inline); border-bottom: 1px solid var(--row-divider); background: var(--surface); font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
 .draft-row.draft-my-team-row { grid-template-columns: minmax(0, 1fr) 72px; }
 .draft-board > .draft-row:last-child { border-bottom: 0; }
 .draft-row > span:nth-child(n+2) { display: flex; align-items: center; justify-content: flex-end; text-align: right; font-size: var(--player-name-size); font-weight: 600; }

@@ -1,3 +1,5 @@
+> **Legacy.** This file documents the original Hatch app in `app/`. The shipped frontend is documented in `frontend/DESIGN.md`; its theme, type scale and radius differ from what is described below.
+
 # Fantasy Rankings design
 
 ## Player cards (2026-09-24 cleanup)

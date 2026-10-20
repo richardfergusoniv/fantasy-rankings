@@ -150,3 +150,13 @@ describe("Token hygiene", () => {
     expect(raw).toEqual(["#c5ccd8"]);
   });
 });
+
+describe("Row divider contrast", () => {
+  const vars = parseCssVars(extractRootBlock(readFileSync(themePath, "utf8")));
+  const divider = resolveVar(vars, "--row-divider");
+
+  it("keeps list-row dividers near 3:1 on canvas and panel", () => {
+    expect(contrastRatio(divider, resolveVar(vars, "--background"))).toBeGreaterThanOrEqual(2.9);
+    expect(contrastRatio(divider, resolveVar(vars, "--card"))).toBeGreaterThanOrEqual(2.6);
+  });
+});
