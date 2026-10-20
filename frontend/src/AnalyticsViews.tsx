@@ -955,7 +955,7 @@ function ScatterPlot({
         toggleZoom();
       }}
     >
-      <ChartContainer config={{ field: { label: "Field", color: "var(--chart-2)" }, team: { label: "My team", color: "var(--chart-1)" } }} className="aspect-auto h-full">
+      <ChartContainer config={{ field: { label: "Field", color: "var(--chart-2)" }, team: { label: "My team", color: "var(--chart-team)" } }} className="aspect-auto h-full">
         <ScatterChart margin={margin}>
           <CartesianGrid stroke="var(--hairline)" strokeDasharray="1 6" vertical={false} />
           <XAxis
@@ -986,7 +986,7 @@ function ScatterPlot({
           {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--hairline)" strokeWidth={1} strokeDasharray="4 8" /> : null}
           <Scatter name="Field" data={others} fill="var(--chart-2)" fillOpacity={0.7} />
           <Scatter name="Smash spots" data={leadersWithoutSelectedTeam} fill="var(--chart-2)" fillOpacity={0.7} />
-          <Scatter name="My team" data={selectedTeamPlayers} fill="var(--chart-1)" stroke="var(--chart-1)" strokeWidth={1} />
+          <Scatter name="My team" data={selectedTeamPlayers} fill="var(--chart-team)" stroke="var(--chart-team)" strokeWidth={1} />
           {!compact && plottedData.length > 1 ? <Customized component={<ScatterTrendLine data={plottedData} />} /> : null}
           {labelData.length ? <Customized component={<AdaptiveChartLabels data={labelData} leaderIds={leaderIds} selectedTeamIds={selectedTeamIds} highlightedId={highlightedId} />} /> : null}
         </ScatterChart>
@@ -1508,7 +1508,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
       id: row.id,
       name: row.name,
       label: row.label,
-      color: row.isSelectedTeam ? "var(--chart-1)" : SNAP_TREND_COLORS[index % SNAP_TREND_COLORS.length] ?? "var(--chart-2)",
+      color: row.isSelectedTeam ? "var(--chart-team)" : SNAP_TREND_COLORS[index % SNAP_TREND_COLORS.length] ?? "var(--chart-2)",
       points: row.points,
     }));
   }, [chartKind, dashboard.analytics.entities, league, plotLimit, position]);
