@@ -38,7 +38,8 @@ import { formatDecimal } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
 import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
 import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
-import { playerToolLinks } from "./player-tool-links";
+import { matchupToolLinks, playerToolLinks, teamTradeLinks, type PlayerToolLink } from "./player-tool-links";
+import type { ToolLinkItem } from "./tool-links";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
 import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
@@ -499,6 +500,12 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
   );
 }
 
+/** A trade partner roster id from the URL; anything that is not a whole number is ignored. */
+function parsePartnerRosterId(value: string | null): number | null {
+  if (value === null || !/^\d+$/.test(value)) return null;
+  return Number(value);
+}
+
 export function App() {
   const queryClient = useQueryClient();
   const dashboardUrl = useDashboardUrl();
@@ -819,7 +826,7 @@ export function App() {
   function chooseLeague(id: string) {
     setSelectedLeagueId(id);
     localStorage.setItem("fantasy-rankings-league", id);
-    dashboardUrl.commit({ league: id, playerId: null });
+    dashboardUrl.commit({ league: id, playerId: null, ...CLEARED_TOOL_SELECTIONS });
   }
 
   const openLinkedPlayer = useCallback((playerId: string) => {
@@ -1078,6 +1085,21 @@ export function App() {
       ? "docked"
       : "modal";
   const inspectorDocked = inspectorPresentation === "docked" && Boolean(playerHistory.current);
+  // Links into the tools: real hrefs, plus in-app navigation that first closes every card and dialog.
+  function toolLinkItems(links: (PlayerToolLink & { id?: string })[]): ToolLinkItem[] {
+    return links.map((link) => ({
+      key: link.id ?? link.key,
+      label: link.label,
+      href: toolLinkSearch(dashboardUrl.state, link.patch),
+      onOpen: () => {
+        // Cards stack (a roster card or team card under the sheet or dialog opened from it); leaving for a tool must not uncover one.
+        setRosterCardRosterId(null);
+        setSelectedMatchup(null);
+        setTeamCardTeam(null);
+        dashboardUrl.commit({ ...CLEARED_TOOL_SELECTIONS, playerId: null, ...link.patch });
+      },
+    }));
+  }
   const playerSheet = playerHistory.current ? (
     <PlayerDetailSheet
       player={playerHistory.current}
@@ -1101,12 +1123,7 @@ export function App() {
       onOpenRosterTeam={rosterTeam ? () => setRosterCardRosterId(rosterTeam.rosterId) : undefined}
       waiversHref={showAvailableBadge ? waiversHref : undefined}
       onOpenWaivers={showAvailableBadge ? () => dashboardUrl.commit({ tab: "waivers" }) : undefined}
-      toolLinks={playerToolLinks(playerHistory.current).map((link) => ({
-        key: link.key,
-        label: link.label,
-        href: toolLinkSearch(dashboardUrl.state, link.patch),
-        onOpen: () => dashboardUrl.commit({ ...CLEARED_TOOL_SELECTIONS, playerId: null, ...link.patch }),
-      }))}
+      toolLinks={toolLinkItems(playerToolLinks(playerHistory.current))}
       suspended={rosterCardOnTop}
       trending={dashboard.playerTrending?.[playerHistory.current.playerId]}
     />
@@ -1245,6 +1262,8 @@ export function App() {
                   tradeMode={effectiveTradeMode(dashboardUrl.state)}
                   onTradeModeChange={publishTradeMode}
                   onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
+                  initialPartnerRosterId={parsePartnerRosterId(dashboardUrl.state.tradePartner)}
+                  onPartnerSelect={(rosterId) => dashboardUrl.commit({ tradePartner: rosterId === null ? null : String(rosterId) })}
                 />
               </Suspense>
             )
@@ -1269,7 +1288,7 @@ export function App() {
       </div>
       {!inspectorDocked ? playerSheet : null}
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
-      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} suspended={teamCardTeam !== null} /> : null}
+      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} toolLinks={toolLinkItems(matchupToolLinks(selectedMatchup))} suspended={teamCardTeam !== null} /> : null}
       {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
       {rosterCardTeam ? (
         <LeagueTeamCard
@@ -1284,6 +1303,7 @@ export function App() {
           onPlayerIntent={prefetchDashboardPlayer}
           onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
           onOpenMatchup={setSelectedMatchup}
+          toolLinks={toolLinkItems(teamTradeLinks(rosterCardTeam))}
           onClose={() => setRosterCardRosterId(null)}
         />
       ) : null}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, type MouseEvent } from "react";
+import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import type { Dashboard, League, MatchupSelection } from "./dashboard-types";
 import { compareByFantasyPosition } from "./fantasy-position-order";
 import { MatchupTag, ModalPortal, points, useDialogFocusTrap } from "./shared";
@@ -41,6 +42,7 @@ export function LeagueTeamCard({
   onPlayerIntent,
   onOpenPlayer,
   onOpenMatchup,
+  toolLinks,
   onClose,
 }: {
   team: PowerTeam;
@@ -55,6 +57,7 @@ export function LeagueTeamCard({
   onPlayerIntent: (playerId: string) => void;
   onOpenPlayer: (playerId: string) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
+  toolLinks?: ToolLinkItem[];
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLElement | null>(null);
@@ -204,6 +207,7 @@ export function LeagueTeamCard({
               <div key={position} role="listitem"><span>{positionLabel(position)}</span><strong>{scope === "week" ? points(team.positionValues[position]) : team.positionValues[position].toLocaleString()}</strong></div>
             ))}
           </div>
+          {toolLinks ? <ToolLinks ariaLabel={`Open ${team.teamName} in a tool`} links={toolLinks} /> : null}
           <div className="power-team-card-roster" role="region" aria-label={`${team.teamName} roster`}>
             {rows.length > 0 ? (
               <>

@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -448,7 +449,7 @@ export function matchupGrade(table: PfnTable | null, row: PfnRow | undefined, ke
   };
 }
 
-export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, suspended = false }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; suspended?: boolean }) {
+export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, toolLinks, suspended = false }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; toolLinks?: ToolLinkItem[]; suspended?: boolean }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   useDialogFocusTrap(dialogRef, onClose, !suspended);
   const tablesQuery = useQuery({
@@ -540,6 +541,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, s
             </div>
             <button type="button" onClick={onClose} aria-label="Close matchup data">×</button>
           </header>
+          {toolLinks ? <ToolLinks ariaLabel={`Open ${matchup.team} and ${matchup.opponent} in a tool`} links={toolLinks} /> : null}
 
           {matchup.gamePhase === "final" ? (
             scoreQuery.isPending ? <div className="matchup-card-status" role="status"><RefreshIcon spinning /> Loading box score…</div>

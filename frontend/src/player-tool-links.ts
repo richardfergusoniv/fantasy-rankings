@@ -1,6 +1,6 @@
 import type { DashboardUrlState } from "./dashboard-url";
 
-export type PlayerToolLinkKey = "pricing" | "team-stats" | "game-lines";
+export type PlayerToolLinkKey = "pricing" | "team-stats" | "game-lines" | "trade";
 
 export type PlayerToolLink = {
   key: PlayerToolLinkKey;
@@ -47,4 +47,22 @@ export function playerToolLinks(player: ToolLinkPlayer): PlayerToolLink[] {
     links.push({ key: "game-lines", label: "Game lines", patch: { tab: "monitor", gameLinesTeam: player.team } });
   }
   return links;
+}
+
+/**
+ * Tools a matchup (one NFL game) opens in: that game's lines, and each side's
+ * team stats. Keys are unique per side so both teams can be listed.
+ */
+export function matchupToolLinks(matchup: { team: string; opponent: string }): (PlayerToolLink & { id: string })[] {
+  return [
+    { id: "game-lines", key: "game-lines", label: "Game lines", patch: { tab: "monitor", gameLinesTeam: matchup.team } },
+    { id: `team-stats-${matchup.team}`, key: "team-stats", label: `${matchup.team} stats`, patch: { tab: "team-stats", teamStatsTeam: matchup.team } },
+    { id: `team-stats-${matchup.opponent}`, key: "team-stats", label: `${matchup.opponent} stats`, patch: { tab: "team-stats", teamStatsTeam: matchup.opponent } },
+  ];
+}
+
+/** Trade link from another fantasy team's card; always opens league-adjusted trade. The user's own team has none. */
+export function teamTradeLinks(team: { rosterId: number; teamName: string; isUser: boolean }): PlayerToolLink[] {
+  if (team.isUser) return [];
+  return [{ key: "trade", label: `Trade with ${team.teamName}`, patch: { tab: "trade", tradeMode: null, tradePartner: String(team.rosterId) } }];
 }
