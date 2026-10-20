@@ -1504,6 +1504,10 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-meta .player-roster-badge { min-width: 44px; max-width: 100%; flex: none; justify-content: center; color: var(--text); text-decoration: none; }
 .player-detail-meta .player-roster-badge:hover,
 .player-detail-meta .player-roster-badge:active { color: var(--text); }
+.player-detail-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 2px 0; }
+.player-detail-tools-label { color: var(--dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.player-detail-tools a.player-detail-tool-link[href] { display: inline-flex; min-height: 44px; align-items: center; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--link); font-size: var(--type-tab); font-weight: 600; text-decoration: none; }
+.player-detail-tools a.player-detail-tool-link[href]:hover { color: var(--link-hover); }
 .player-detail-meta .player-roster-badge .matchup-reference-button-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .player-detail-injury { padding: 2px 6px; border-radius: 4px; background: var(--stat-weakness-soft); color: var(--negative); font-weight: 700; }
 .player-detail-movement { display: inline-flex; align-items: center; gap: 5px; }

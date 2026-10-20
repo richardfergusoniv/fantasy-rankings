@@ -395,6 +395,7 @@ export function PlayerDetailSheet({
   onOpenRosterTeam,
   waiversHref,
   onOpenWaivers,
+  toolLinks,
   suspended = false,
   trending,
 }: {
@@ -423,6 +424,8 @@ export function PlayerDetailSheet({
   /** Waivers URL for an available player. Keeps the current position filter and player. */
   waiversHref?: string;
   onOpenWaivers?: () => void;
+  /** Tools this player can be opened in. Each is a real link; `onOpen` navigates in-app. */
+  toolLinks?: { key: string; label: string; href: string; onOpen: () => void }[];
   /** Pause this dialog while a team card opened from the badge is on top. */
   suspended?: boolean;
   /** Sleeper trending adds/drops for this player (null side = not on that list). */
@@ -712,6 +715,25 @@ export function PlayerDetailSheet({
           {player.injuryStatus ? <span className="player-detail-injury">Injury status: {player.injuryStatus}</span> : null}
           {player.seasonValue !== null ? <span className="player-detail-movement">{movementLabel(player.movement30Day)}</span> : null}
         </div>
+        {toolLinks && toolLinks.length > 0 ? (
+          <nav className="player-detail-tools" aria-label={`Open ${player.name} in a tool`}>
+            <span className="player-detail-tools-label">Open in</span>
+            {toolLinks.map((link) => (
+              <a
+                key={link.key}
+                href={link.href}
+                className="player-detail-tool-link"
+                onClick={(event: ReactMouseEvent<HTMLAnchorElement>) => {
+                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  event.preventDefault();
+                  link.onOpen();
+                }}
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+        ) : null}
         {player.waiverTrends && (player.waiverTrends.adds || player.waiverTrends.drops) ? (
           <section className="player-detail-waiver-trends" aria-label={`${player.name} waiver activity`}>
             <div className="section-heading"><h3>Waiver activity</h3><span>Last 24 hours</span></div>
