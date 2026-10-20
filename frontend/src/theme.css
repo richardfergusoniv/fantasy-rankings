@@ -1261,6 +1261,9 @@ main { padding: 12px 16px 0; }
 .ranking-name-line strong { display: block; min-width: 0; overflow: hidden; font-size: var(--type-body); line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .ranking-meta-line { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 4px 6px; margin-top: 0; color: var(--dim); font-size: var(--type-caption); }
 .ranking-row .matchup-reference-button { min-height: 32px; }
+/* Keep the 32px visual; extend the tappable area to 44px. */
+.ranking-row .matchup-reference-button { position: relative; }
+.ranking-row .matchup-reference-button::after { content: ""; position: absolute; inset: -6px -4px; }
 /* Rankings reuse the Matchup tab's user-side player identity treatment. */
 .rankings-view .ranking-row {
   min-height: var(--player-row-height);
