@@ -140,3 +140,19 @@ describe("Look D theme contrast", () => {
     expect(contrastRatio(weaknessReadable, weaknessSoft)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe("Roster highlight", () => {
+  const vars = parseCssVars(extractRootBlock(readFileSync(themePath, "utf8")));
+  const highlight = resolveVar(vars, "--roster-highlight");
+  const bg = resolveVar(vars, "--roster-highlight-bg");
+
+  it("is not the action/link amber", () => {
+    expect(highlight.toLowerCase()).not.toBe(resolveVar(vars, "--action").toLowerCase());
+    expect(highlight.toLowerCase()).not.toBe(resolveVar(vars, "--link").toLowerCase());
+  });
+
+  it("stays readable on its tint and with dark ink as a fill", () => {
+    expect(contrastRatio(highlight, bg)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(resolveVar(vars, "--on-roster-highlight"), highlight)).toBeGreaterThanOrEqual(4.5);
+  });
+});
