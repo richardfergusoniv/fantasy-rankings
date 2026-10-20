@@ -61,8 +61,8 @@ export function matchupToolLinks(matchup: { team: string; opponent: string }): (
   ];
 }
 
-/** Trade link from another fantasy team's card. The user's own team has none. */
+/** Trade link from another fantasy team's card; always opens league-adjusted trade. The user's own team has none. */
 export function teamTradeLinks(team: { rosterId: number; teamName: string; isUser: boolean }): PlayerToolLink[] {
   if (team.isUser) return [];
-  return [{ key: "trade", label: `Trade with ${team.teamName}`, patch: { tab: "trade", tradePartner: String(team.rosterId) } }];
+  return [{ key: "trade", label: `Trade with ${team.teamName}`, patch: { tab: "trade", tradeMode: null, tradePartner: String(team.rosterId) } }];
 }

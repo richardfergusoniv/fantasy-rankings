@@ -60,7 +60,7 @@ describe("matchupToolLinks", () => {
 describe("teamTradeLinks", () => {
   it("offers a trade with another team but not with the user's own", () => {
     expect(teamTradeLinks({ rosterId: 7, teamName: "Gridiron Ghosts", isUser: false })).toEqual([
-      { key: "trade", label: "Trade with Gridiron Ghosts", patch: { tab: "trade", tradePartner: "7" } },
+      { key: "trade", label: "Trade with Gridiron Ghosts", patch: { tab: "trade", tradeMode: null, tradePartner: "7" } },
     ]);
     expect(teamTradeLinks({ rosterId: 1, teamName: "Mine", isUser: true })).toEqual([]);
   });
@@ -68,5 +68,11 @@ describe("teamTradeLinks", () => {
   it("builds the trade URL from the patch", () => {
     const from = { ...emptyDashboardUrlState(), tab: "power" as const, league: "league-1", playerId: "9" };
     expect(toolLinkSearch(from, { tab: "trade", tradePartner: "7" })).toBe("?tab=trade&league=league-1&tp=7");
+  });
+
+  it("opens league-adjusted trade even after Market or History was chosen", () => {
+    const from = { ...emptyDashboardUrlState(), tab: "power" as const, tradeMode: "market" as const };
+    const [link] = teamTradeLinks({ rosterId: 7, teamName: "Gridiron Ghosts", isUser: false });
+    expect(toolLinkSearch(from, link!.patch)).toBe("?tab=trade&tp=7");
   });
 });

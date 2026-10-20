@@ -826,7 +826,7 @@ export function App() {
   function chooseLeague(id: string) {
     setSelectedLeagueId(id);
     localStorage.setItem("fantasy-rankings-league", id);
-    dashboardUrl.commit({ league: id, playerId: null });
+    dashboardUrl.commit({ league: id, playerId: null, ...CLEARED_TOOL_SELECTIONS });
   }
 
   const openLinkedPlayer = useCallback((playerId: string) => {
@@ -1092,6 +1092,8 @@ export function App() {
       label: link.label,
       href: toolLinkSearch(dashboardUrl.state, link.patch),
       onOpen: () => {
+        // A roster card sits under the player sheet and matchup dialog it was opened from; leaving for a tool must not uncover it.
+        setRosterCardRosterId(null);
         beforeOpen?.();
         dashboardUrl.commit({ ...CLEARED_TOOL_SELECTIONS, playerId: null, ...link.patch });
       },
