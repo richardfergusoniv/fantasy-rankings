@@ -143,6 +143,13 @@ describe("dashboard URL state", () => {
     expect(dashboardUrlHistoryMode(state({ tab: "rankings", playerId: "1" }), pricing)).toBe("push");
   });
 
+  it("carries the comparison player only on the comparison tab", () => {
+    const comparison = state({ tab: "comparison", comparePlayerId: "4046" });
+    expect(serializeDashboardSearch(comparison)).toBe("?tab=comparison&c1=4046");
+    expect(parseDashboardSearch("?tab=comparison&c1=4046")).toEqual(comparison);
+    expect(serializeDashboardSearch(state({ tab: "waivers", comparePlayerId: "4046" }))).toBe("?tab=waivers");
+  });
+
   it("carries the trade partner only on the trade tab", () => {
     const trade = state({ tab: "trade", tradePartner: "7" });
     expect(serializeDashboardSearch(trade)).toBe("?tab=trade&tp=7");
