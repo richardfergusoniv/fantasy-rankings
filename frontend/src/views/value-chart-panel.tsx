@@ -130,12 +130,23 @@ function buildChartRows(
   });
 }
 
+export type PricingSelection = {
+  pricingPlayerId?: string | null;
+  pricingCompareId?: string | null;
+};
+
 export function ValueChartPanel({
   league,
   dashboard,
+  initial,
+  onSelectionChange,
 }: {
   league: League;
   dashboard: Dashboard;
+  /** Selection from the URL (a link into this tool); unknown ids are ignored. */
+  initial?: { playerId: string | null; compareId: string | null };
+  /** Called when the user changes a picker, so the URL can follow. */
+  onSelectionChange?: (patch: PricingSelection) => void;
 }) {
   // Server maps this league key onto the nearest FantasyCalc snapshot preset.
   const formatKey = league.seasonLongFormat.key;
@@ -145,8 +156,13 @@ export function ValueChartPanel({
     [dashboard, formatKey, roster],
   );
   const defaultPlayerId = roster[0]?.playerId ?? pickerPlayers[0]?.playerId ?? "";
-  const [playerId, setPlayerId] = useState(defaultPlayerId);
-  const [comparePlayerId, setComparePlayerId] = useState("");
+  const knownIds = useMemo(() => new Set(pickerPlayers.map((player) => player.playerId)), [pickerPlayers]);
+  const initialPlayerId = initial?.playerId && knownIds.has(initial.playerId) ? initial.playerId : null;
+  const initialCompareId = initial?.compareId && knownIds.has(initial.compareId) && initial.compareId !== initialPlayerId
+    ? initial.compareId
+    : null;
+  const [playerId, setPlayerId] = useState(initialPlayerId ?? defaultPlayerId);
+  const [comparePlayerId, setComparePlayerId] = useState(initialCompareId ?? "");
   const [isExpanded, setIsExpanded] = useState(false);
   const [zoomed, setZoomed] = useState(false);
   const previousLeagueIdRef = useRef(league.id);
@@ -167,6 +183,10 @@ export function ValueChartPanel({
     setPlayerId((current) => (current && ids.has(current) ? current : fallbackId));
     setComparePlayerId((current) => (current && ids.has(current) ? current : ""));
   }, [league.id, pickerPlayers, roster]);
+
+  // A link into this tool while it is already open.
+  useEffect(() => { if (initialPlayerId) setPlayerId(initialPlayerId); }, [initialPlayerId]);
+  useEffect(() => { if (initialCompareId) setComparePlayerId(initialCompareId); }, [initialCompareId]);
 
   useEffect(() => {
     if (!isExpanded) setZoomed(false);
@@ -428,6 +448,10 @@ export function ValueChartPanel({
                   const next = event.target.value;
                   setPlayerId(next);
                   if (next && next === comparePlayerId) setComparePlayerId("");
+                  onSelectionChange?.({
+                    pricingPlayerId: next,
+                    ...(next && next === comparePlayerId ? { pricingCompareId: null } : {}),
+                  });
                 }}
               >
                 {pickerPlayers.map((player) => (
@@ -442,7 +466,10 @@ export function ValueChartPanel({
               <select
                 aria-label="Pricing compare player"
                 value={comparePlayerId}
-                onChange={(event) => setComparePlayerId(event.target.value)}
+                onChange={(event) => {
+                  setComparePlayerId(event.target.value);
+                  onSelectionChange?.({ pricingCompareId: event.target.value || null });
+                }}
               >
                 <option value="">None</option>
                 {pickerPlayers

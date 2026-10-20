@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   NFL_TEAM_CODES,
   TEAM_STATS_GROUP_POSITIONS,
@@ -63,14 +63,26 @@ function isRosteredPlayer(
   ));
 }
 
+export type TeamStatsSelection = {
+  teamStatsTeam?: string | null;
+  teamStatsGroup?: string | null;
+  teamStatsStat?: string | null;
+};
+
 export function TeamStatsPanel({
   league,
   season,
   week,
+  initial,
+  onSelectionChange,
 }: {
   league: League;
   season: number;
   week: number;
+  /** Selection from the URL (a link into this tool); invalid values are ignored. */
+  initial?: { team: string | null; group: string | null; stat: string | null };
+  /** Called when the user changes a control, so the URL can follow. */
+  onSelectionChange?: (patch: TeamStatsSelection) => void;
 }) {
   const rosterPlayers = useMemo(
     () => [...league.starters, ...league.bench],
@@ -82,7 +94,12 @@ export function TeamStatsPanel({
   );
 
   const defaultTeam = useMemo(() => defaultTeamStatsTeam(rosterTeams), [rosterTeams]);
-  const [userTeam, setUserTeam] = useState<string | null>(null);
+  const initialTeam = initial?.team && NFL_TEAM_CODES.includes(initial.team as typeof NFL_TEAM_CODES[number])
+    ? initial.team
+    : null;
+  const initialGroup = TEAM_STATS_GROUPS.find((group) => group.id === initial?.group)?.id ?? null;
+  const initialStat = TEAM_STATS_STAT_OPTIONS.find((option) => option.id === initial?.stat)?.id ?? null;
+  const [userTeam, setUserTeam] = useState<string | null>(initialTeam);
   const selectedTeam = userTeam && NFL_TEAM_CODES.includes(userTeam as typeof NFL_TEAM_CODES[number])
     ? userTeam
     : defaultTeam;
@@ -91,10 +108,15 @@ export function TeamStatsPanel({
     () => defaultTeamStatsGroup(rosterPlayers, selectedTeam),
     [rosterPlayers, selectedTeam],
   );
-  const [userGroup, setUserGroup] = useState<TeamStatsGroupId | null>(null);
+  const [userGroup, setUserGroup] = useState<TeamStatsGroupId | null>(initialGroup);
   const selectedGroup = userGroup ?? defaultGroup;
 
-  const [statId, setStatId] = useState<TeamStatsStatId>("snaps");
+  const [statId, setStatId] = useState<TeamStatsStatId>(initialStat ?? "snaps");
+
+  // A link into this tool while it is already open.
+  useEffect(() => { if (initialTeam) setUserTeam(initialTeam); }, [initialTeam]);
+  useEffect(() => { if (initialGroup) setUserGroup(initialGroup); }, [initialGroup]);
+  useEffect(() => { if (initialStat) setStatId(initialStat); }, [initialStat]);
 
   const throughWeek = Math.max(1, week);
 
@@ -162,6 +184,7 @@ export function TeamStatsPanel({
             onChange={(event) => {
               setUserTeam(event.target.value);
               setUserGroup(null);
+              onSelectionChange?.({ teamStatsTeam: event.target.value, teamStatsGroup: null });
             }}
           >
             {NFL_TEAM_CODES.map((team) => (
@@ -172,7 +195,10 @@ export function TeamStatsPanel({
         <SegmentedControl
           className="monitor-team-stats-group"
           value={selectedGroup}
-          onChange={(value) => setUserGroup(value)}
+          onChange={(value) => {
+            setUserGroup(value);
+            onSelectionChange?.({ teamStatsGroup: value });
+          }}
           label="Position"
           options={TEAM_STATS_GROUPS.map((group) => ({ value: group.id, label: group.label }))}
         />
@@ -181,7 +207,10 @@ export function TeamStatsPanel({
           <select
             aria-label="Stat"
             value={statId}
-            onChange={(event) => setStatId(event.target.value as TeamStatsStatId)}
+            onChange={(event) => {
+              setStatId(event.target.value as TeamStatsStatId);
+              onSelectionChange?.({ teamStatsStat: event.target.value });
+            }}
           >
             {TEAM_STATS_STAT_OPTIONS.map((option) => (
               <option key={option.id} value={option.id}>{option.label}</option>

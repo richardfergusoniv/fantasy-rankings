@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ALL_GAMES_PICKER_ID,
   GAME_LINES_STALE_MS,
@@ -163,14 +163,22 @@ function GameLineCardBlock({
   );
 }
 
+export type GameLinesSelection = { gameLinesTeam?: string | null };
+
 export function GameLinesPanel({
   league,
   season,
   week,
+  initialTeam = null,
+  onSelectionChange,
 }: {
   league: League;
   season: number;
   week: number;
+  /** NFL team from a link into this tool: opens that team's game this week. */
+  initialTeam?: string | null;
+  /** Called when the user picks a game, so the URL can drop the team link. */
+  onSelectionChange?: (patch: GameLinesSelection) => void;
 }) {
   const [position, setPosition] = useState<PropPosition | "ALL">("ALL");
   const [statId, setStatId] = useState<string>("ALL");
@@ -233,11 +241,23 @@ export function GameLinesPanel({
     [gameLineCards, liveTeams, rosterTeams],
   );
 
+  // A team with no game this week (bye) falls through to the usual default.
+  const linkedGameId = useMemo(() => {
+    if (!initialTeam) return null;
+    const wanted = normalizeGameLineTeam(initialTeam);
+    return gameLineCards.find((card) => (
+      normalizeGameLineTeam(card.awayTeam) === wanted || normalizeGameLineTeam(card.homeTeam) === wanted
+    ))?.gameId ?? null;
+  }, [gameLineCards, initialTeam]);
+
+  // A link into this tool while it is already open.
+  useEffect(() => { if (initialTeam) setUserGameId(null); }, [initialTeam]);
+
   const selectedGameId = userGameId === ALL_GAMES_PICKER_ID
     ? ALL_GAMES_PICKER_ID
     : userGameId && gameLineCards.some((card) => card.gameId === userGameId)
       ? userGameId
-      : defaultGameId ?? ALL_GAMES_PICKER_ID;
+      : linkedGameId ?? defaultGameId ?? ALL_GAMES_PICKER_ID;
   const selectedGame = selectedGameId === ALL_GAMES_PICKER_ID
     ? null
     : gameLineCards.find((card) => card.gameId === selectedGameId) ?? null;
@@ -473,7 +493,10 @@ export function GameLinesPanel({
               <select
                 aria-label="Game"
                 value={selectedGameId}
-                onChange={(event) => setUserGameId(event.target.value)}
+                onChange={(event) => {
+                  setUserGameId(event.target.value);
+                  if (initialTeam) onSelectionChange?.({ gameLinesTeam: null });
+                }}
               >
                 <option value={ALL_GAMES_PICKER_ID}>All games</option>
                 {gameLineCards.map((game) => (
