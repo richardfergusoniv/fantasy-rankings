@@ -113,10 +113,12 @@ export function TeamStatsPanel({
 
   const [statId, setStatId] = useState<TeamStatsStatId>(initialStat ?? "snaps");
 
-  // A link into this tool while it is already open.
-  useEffect(() => { if (initialTeam) setUserTeam(initialTeam); }, [initialTeam]);
-  useEffect(() => { if (initialGroup) setUserGroup(initialGroup); }, [initialGroup]);
-  useEffect(() => { if (initialStat) setStatId(initialStat); }, [initialStat]);
+  // The URL is the source of truth while this tool is open: a link that drops
+  // a parameter returns that control to its default instead of keeping the
+  // previous link's value.
+  useEffect(() => { setUserTeam(initialTeam); }, [initialTeam]);
+  useEffect(() => { setUserGroup(initialGroup); }, [initialGroup]);
+  useEffect(() => { setStatId(initialStat ?? "snaps"); }, [initialStat]);
 
   const throughWeek = Math.max(1, week);
 

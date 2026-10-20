@@ -158,7 +158,9 @@ export function ValueChartPanel({
   const defaultPlayerId = roster[0]?.playerId ?? pickerPlayers[0]?.playerId ?? "";
   const knownIds = useMemo(() => new Set(pickerPlayers.map((player) => player.playerId)), [pickerPlayers]);
   const initialPlayerId = initial?.playerId && knownIds.has(initial.playerId) ? initial.playerId : null;
-  const initialCompareId = initial?.compareId && knownIds.has(initial.compareId) && initial.compareId !== initialPlayerId
+  const initialCompareId = initial?.compareId
+    && knownIds.has(initial.compareId)
+    && initial.compareId !== (initialPlayerId ?? defaultPlayerId)
     ? initial.compareId
     : null;
   const [playerId, setPlayerId] = useState(initialPlayerId ?? defaultPlayerId);
@@ -184,9 +186,10 @@ export function ValueChartPanel({
     setComparePlayerId((current) => (current && ids.has(current) ? current : ""));
   }, [league.id, pickerPlayers, roster]);
 
-  // A link into this tool while it is already open.
+  // The URL is the source of truth while this tool is open: a link that drops
+  // a parameter clears that picker instead of keeping the previous link's value.
   useEffect(() => { if (initialPlayerId) setPlayerId(initialPlayerId); }, [initialPlayerId]);
-  useEffect(() => { if (initialCompareId) setComparePlayerId(initialCompareId); }, [initialCompareId]);
+  useEffect(() => { setComparePlayerId(initialCompareId ?? ""); }, [initialCompareId]);
 
   useEffect(() => {
     if (!isExpanded) setZoomed(false);
