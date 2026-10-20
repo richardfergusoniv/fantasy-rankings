@@ -37,7 +37,8 @@ import {
 import { formatDecimal } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
 import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
-import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
+import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
+import { createPlayerResolver, type DashboardPlayerRow, type PlayerLinkResolver } from "./tool-player-link";
 import { matchupToolLinks, playerToolLinks, teamTradeLinks, type PlayerToolLink } from "./player-tool-links";
 import type { ToolLinkItem } from "./tool-links";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
@@ -1085,6 +1086,29 @@ export function App() {
       ? "docked"
       : "modal";
   const inspectorDocked = inspectorPresentation === "docked" && Boolean(playerHistory.current);
+  // Player names inside tool rows link to the player card. The tools' data does not always share
+  // the dashboard's player ids, so a row resolves by id first, then by an unambiguous name match.
+  let playerResolver: ReturnType<typeof createPlayerResolver> | null = null;
+  const toolPlayerLink: PlayerLinkResolver = (ref) => {
+    if (!playerResolver) {
+      // Index the players dashboardPlayerDetail can open: weekly rankings, the league's season-long format, and rosters.
+      const rows = new Map<string, DashboardPlayerRow>();
+      const add = (row: DashboardPlayerRow) => { if (!rows.has(row.playerId)) rows.set(row.playerId, row); };
+      activeDashboard.rankings.forEach(add);
+      activeDashboard.seasonLongRankings.filter((row) => row.formatKey === league?.seasonLongFormat.key).forEach(add);
+      if (league) {
+        [...league.starters, ...league.bench, ...(league.opponentTeam?.starters ?? []), ...(league.opponentTeam?.bench ?? []), ...league.tradeTeams.flatMap((team) => team.players)].forEach(add);
+      }
+      playerResolver = createPlayerResolver([...rows.values()]);
+    }
+    const playerId = playerResolver(ref);
+    if (!playerId) return null;
+    return {
+      href: serializeDashboardSearch({ ...dashboardUrl.state, playerId }),
+      onOpen: () => { openDashboardPlayer(playerId); },
+    };
+  };
+
   // Links into the tools: real hrefs, plus in-app navigation that first closes every card and dialog.
   function toolLinkItems(links: (PlayerToolLink & { id?: string })[]): ToolLinkItem[] {
     return links.map((link) => ({
@@ -1221,6 +1245,7 @@ export function App() {
                 week={activeDashboard.week}
                 initialTeam={dashboardUrl.state.gameLinesTeam}
                 onSelectionChange={dashboardUrl.commit}
+                playerLink={toolPlayerLink}
               />
             )
             : tab === "team-stats" ? (
@@ -1230,6 +1255,7 @@ export function App() {
                 week={activeDashboard.week}
                 initial={{ team: dashboardUrl.state.teamStatsTeam, group: dashboardUrl.state.teamStatsGroup, stat: dashboardUrl.state.teamStatsStat }}
                 onSelectionChange={dashboardUrl.commit}
+                playerLink={toolPlayerLink}
               />
             )
             : tab === "pricing" ? (
@@ -1238,6 +1264,7 @@ export function App() {
                 dashboard={activeDashboard}
                 initial={{ playerId: dashboardUrl.state.pricingPlayerId, compareId: dashboardUrl.state.pricingCompareId }}
                 onSelectionChange={dashboardUrl.commit}
+                playerLink={toolPlayerLink}
               />
             )
             : tab === "analytics" ? (

@@ -1504,6 +1504,10 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-meta .player-roster-badge { min-width: 44px; max-width: 100%; flex: none; justify-content: center; color: var(--text); text-decoration: none; }
 .player-detail-meta .player-roster-badge:hover,
 .player-detail-meta .player-roster-badge:active { color: var(--text); }
+.tool-player-link-row { margin: 0; padding: 6px 2px 0; font-size: var(--type-caption); font-weight: 600; }
+a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); }
+.tool-player-link-row a.tool-player-link[href] { display: inline-flex; min-height: 44px; align-items: center; color: var(--link); }
+.props-player-col a.tool-player-link[href] { display: block; min-height: 44px; }
 .tool-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 2px 0; }
 .tool-links-label { color: var(--dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .tool-links a.tool-link[href] { display: inline-flex; min-height: 44px; align-items: center; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--link); font-size: var(--type-tab); font-weight: 600; text-decoration: none; }

@@ -21,6 +21,8 @@ import { api } from "../api";
 import { SectionError } from "../dashboard-shared";
 import type { League } from "../dashboard-types";
 import { SegmentedControl } from "../shared";
+import { PlayerNameLink } from "../tool-links";
+import type { PlayerLinkResolver } from "../tool-player-link";
 
 /**
  * Player colors for the stacked bars, built from the app's three chart
@@ -75,6 +77,7 @@ export function TeamStatsPanel({
   week,
   initial,
   onSelectionChange,
+  playerLink,
 }: {
   league: League;
   season: number;
@@ -83,6 +86,8 @@ export function TeamStatsPanel({
   initial?: { team: string | null; group: string | null; stat: string | null };
   /** Called when the user changes a control, so the URL can follow. */
   onSelectionChange?: (patch: TeamStatsSelection) => void;
+  /** Resolves a legend player to their card; players that don't resolve stay plain text. */
+  playerLink?: PlayerLinkResolver;
 }) {
   const rosterPlayers = useMemo(
     () => [...league.starters, ...league.bench],
@@ -278,7 +283,14 @@ export function TeamStatsPanel({
               return (
                 <li key={row.key} className={meta?.rostered ? "is-my-roster" : undefined}>
                   <i style={{ backgroundColor: meta?.color ?? TEAM_STATS_OTHER_COLOR }} />
-                  <span className="team-stats-legend-name">{row.name}</span>
+                  <span className="team-stats-legend-name">
+                    <PlayerNameLink
+                      link={playerLink?.({ playerId: row.playerId, name: row.name, team: row.team, position: row.position }) ?? null}
+                      label={`Open ${row.name}`}
+                    >
+                      {row.name}
+                    </PlayerNameLink>
+                  </span>
                   <span className="team-stats-legend-total">
                     {statId === "snaps" || statId === "targets"
                       ? formatTeamStatsPercent(completedPercentTotal / playedWeeks)
