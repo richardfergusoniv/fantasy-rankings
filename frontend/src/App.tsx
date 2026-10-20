@@ -37,7 +37,7 @@ import {
 import { formatDecimal } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
 import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
-import { effectiveTradeMode, waiversSearchPreservingContext } from "./dashboard-url";
+import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, waiversSearchPreservingContext } from "./dashboard-url";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
 import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
@@ -503,7 +503,7 @@ export function App() {
   const dashboardUrl = useDashboardUrl();
   const tab = dashboardUrl.state.tab;
   const setTab = useCallback((next: Tab) => {
-    dashboardUrl.commit({ tab: next, playerId: null });
+    dashboardUrl.commit({ tab: next, playerId: null, ...CLEARED_TOOL_SELECTIONS });
   }, [dashboardUrl.commit]);
   const openCommandPage = useCallback((next: Tab, options?: { tradeMode?: TradeMode }) => {
     if (next === "trade") {
@@ -511,10 +511,11 @@ export function App() {
         tab: "trade",
         playerId: null,
         tradeMode: options?.tradeMode && options.tradeMode !== "league" ? options.tradeMode : null,
+        ...CLEARED_TOOL_SELECTIONS,
       });
       return;
     }
-    dashboardUrl.commit({ tab: next, playerId: null });
+    dashboardUrl.commit({ tab: next, playerId: null, ...CLEARED_TOOL_SELECTIONS });
   }, [dashboardUrl.commit]);
   const appliedAppPlayerId = useRef<string | null>(null);
   const inspectorDockViewport = useInspectorDockViewport();
@@ -1190,13 +1191,30 @@ export function App() {
             : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
             : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
             : tab === "monitor" ? (
-              <GameLinesPanel league={league} season={activeDashboard.season} week={activeDashboard.week} />
+              <GameLinesPanel
+                league={league}
+                season={activeDashboard.season}
+                week={activeDashboard.week}
+                initialTeam={dashboardUrl.state.gameLinesTeam}
+                onSelectionChange={dashboardUrl.commit}
+              />
             )
             : tab === "team-stats" ? (
-              <TeamStatsPanel league={league} season={activeDashboard.season} week={activeDashboard.week} />
+              <TeamStatsPanel
+                league={league}
+                season={activeDashboard.season}
+                week={activeDashboard.week}
+                initial={{ team: dashboardUrl.state.teamStatsTeam, group: dashboardUrl.state.teamStatsGroup, stat: dashboardUrl.state.teamStatsStat }}
+                onSelectionChange={dashboardUrl.commit}
+              />
             )
             : tab === "pricing" ? (
-              <ValueChartPanel league={league} dashboard={activeDashboard} />
+              <ValueChartPanel
+                league={league}
+                dashboard={activeDashboard}
+                initial={{ playerId: dashboardUrl.state.pricingPlayerId, compareId: dashboardUrl.state.pricingCompareId }}
+                onSelectionChange={dashboardUrl.commit}
+              />
             )
             : tab === "analytics" ? (
               <Suspense fallback={<SectionLoading label="Loading analytics…" />}>
