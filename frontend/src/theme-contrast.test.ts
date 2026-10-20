@@ -141,6 +141,16 @@ describe("Look D theme contrast", () => {
   });
 });
 
+describe("Token hygiene", () => {
+  it("has no raw hex colors in theme.css outside :root", () => {
+    const css = readFileSync(themePath, "utf8");
+    const root = extractRootBlock(css);
+    const rest = css.replace(root, "").replace(/\/\*[\s\S]*?\*\//g, "");
+    const raw = [...rest.matchAll(/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b/g)].map((m) => m[0]);
+    expect(raw).toEqual(["#c5ccd8"]);
+  });
+});
+
 describe("Row divider contrast", () => {
   const vars = parseCssVars(extractRootBlock(readFileSync(themePath, "utf8")));
   const divider = resolveVar(vars, "--row-divider");

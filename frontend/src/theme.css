@@ -446,9 +446,9 @@ p { text-wrap: pretty; }
   bottom: 2px;
   left: 2px;
   width: calc((100% - 4px) / var(--segment-count));
-  border: 1px solid #6b7588;
+  border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 2px);
-  background: #3a4250;
+  background: var(--hairline);
   box-shadow: var(--shadow-control);
   transform: translateX(calc(var(--segment-index) * 100%));
   transition: transform .16s cubic-bezier(.2, .7, .2, 1), opacity .12s ease-out;
@@ -988,7 +988,7 @@ main { padding: 12px 16px 0; }
 }
 .monitor-pricing-key i.is-value { background: var(--chart-1); height: 3px; }
 .monitor-pricing-key i.is-ma7 { background: #c5ccd8; }
-.monitor-pricing-key i.is-ma30 { background: #6b7588; }
+.monitor-pricing-key i.is-ma30 { background: var(--border); }
 .monitor-pricing-key i.is-trend {
   width: 8px;
   height: 8px;
