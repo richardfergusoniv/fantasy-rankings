@@ -38,7 +38,7 @@ import { formatDecimal } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
 import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
 import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
-import { createPlayerResolver, type PlayerLinkResolver } from "./tool-player-link";
+import { createPlayerResolver, type DashboardPlayerRow, type PlayerLinkResolver } from "./tool-player-link";
 import { matchupToolLinks, playerToolLinks, teamTradeLinks, type PlayerToolLink } from "./player-tool-links";
 import type { ToolLinkItem } from "./tool-links";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
@@ -1090,7 +1090,17 @@ export function App() {
   // the dashboard's player ids, so a row resolves by id first, then by an unambiguous name match.
   let playerResolver: ReturnType<typeof createPlayerResolver> | null = null;
   const toolPlayerLink: PlayerLinkResolver = (ref) => {
-    playerResolver ??= createPlayerResolver([...activeDashboard.rankings, ...activeDashboard.seasonLongRankings]);
+    if (!playerResolver) {
+      // Index the players dashboardPlayerDetail can open: weekly rankings, the league's season-long format, and rosters.
+      const rows = new Map<string, DashboardPlayerRow>();
+      const add = (row: DashboardPlayerRow) => { if (!rows.has(row.playerId)) rows.set(row.playerId, row); };
+      activeDashboard.rankings.forEach(add);
+      activeDashboard.seasonLongRankings.filter((row) => row.formatKey === league?.seasonLongFormat.key).forEach(add);
+      if (league) {
+        [...league.starters, ...league.bench, ...(league.opponentTeam?.starters ?? []), ...(league.opponentTeam?.bench ?? []), ...league.tradeTeams.flatMap((team) => team.players)].forEach(add);
+      }
+      playerResolver = createPlayerResolver([...rows.values()]);
+    }
     const playerId = playerResolver(ref);
     if (!playerId) return null;
     return {
