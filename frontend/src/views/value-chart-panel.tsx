@@ -24,6 +24,8 @@ import {
   sliceValueHistoryForSharedDomain,
   trimValueHistoryToContinuousStart,
 } from "../value-history-domain";
+import { PlayerNameLink } from "../tool-links";
+import type { PlayerLinkResolver } from "../tool-player-link";
 import { valueChartYDomain, valueChartZoomStartIndex } from "../value-chart-zoom";
 
 type PickerPlayer = {
@@ -140,6 +142,7 @@ export function ValueChartPanel({
   dashboard,
   initial,
   onSelectionChange,
+  playerLink,
 }: {
   league: League;
   dashboard: Dashboard;
@@ -147,6 +150,8 @@ export function ValueChartPanel({
   initial?: { playerId: string | null; compareId: string | null };
   /** Called when the user changes a picker, so the URL can follow. */
   onSelectionChange?: (patch: PricingSelection) => void;
+  /** Resolves the chosen player to their card; without it the link is omitted. */
+  playerLink?: PlayerLinkResolver;
 }) {
   // Server maps this league key onto the nearest FantasyCalc snapshot preset.
   const formatKey = league.seasonLongFormat.key;
@@ -213,6 +218,10 @@ export function ValueChartPanel({
   const compareSeries = comparePlayerId
     ? historyQuery.data?.series.find((series) => series.playerId === comparePlayerId)
     : undefined;
+  const selectedPlayerName = pickerPlayers.find((player) => player.playerId === playerId)?.name ?? "";
+  const selectedPlayerLink = selectedPlayerName
+    ? playerLink?.({ playerId, name: selectedPlayerName, team: null, position: null }) ?? null
+    : null;
   const compareName = compareSeries?.name
     ?? pickerPlayers.find((player) => player.playerId === comparePlayerId)?.name
     ?? "Compare";
@@ -485,6 +494,11 @@ export function ValueChartPanel({
               </select>
             </label>
           </div>
+          {selectedPlayerLink ? (
+            <p className="tool-player-link-row">
+              <PlayerNameLink link={selectedPlayerLink}>View {selectedPlayerName}’s card</PlayerNameLink>
+            </p>
+          ) : null}
           {unavailable ? (
             <p className="monitor-empty">Values unavailable</p>
           ) : showChart ? (

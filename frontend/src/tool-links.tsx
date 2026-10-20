@@ -1,4 +1,5 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import type { ToolPlayerLink } from "./tool-player-link";
 
 export type ToolLinkItem = {
   key: string;
@@ -33,5 +34,27 @@ export function ToolLinks({ label = "Open in", ariaLabel, links }: { label?: str
         </a>
       ))}
     </nav>
+  );
+}
+
+/**
+ * A player's name inside a tool row, linking to their card. Without a link (the
+ * player did not resolve to a dashboard player) the children render unchanged.
+ */
+export function PlayerNameLink({ link, className, label, children }: { link: ToolPlayerLink | null; className?: string; label?: string; children: ReactNode }) {
+  if (!link) return <>{children}</>;
+  return (
+    <a
+      href={link.href}
+      className={className ? `tool-player-link ${className}` : "tool-player-link"}
+      aria-label={label}
+      onClick={(event: ReactMouseEvent<HTMLAnchorElement>) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        link.onOpen();
+      }}
+    >
+      {children}
+    </a>
   );
 }

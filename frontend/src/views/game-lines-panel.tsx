@@ -36,6 +36,8 @@ import { api } from "../api";
 import { SectionError } from "../dashboard-shared";
 import type { League } from "../dashboard-types";
 import { formatDecimal } from "../lib/format-number";
+import { PlayerNameLink } from "../tool-links";
+import type { PlayerLinkResolver } from "../tool-player-link";
 
 
 
@@ -171,6 +173,7 @@ export function GameLinesPanel({
   week,
   initialTeam = null,
   onSelectionChange,
+  playerLink,
 }: {
   league: League;
   season: number;
@@ -179,6 +182,8 @@ export function GameLinesPanel({
   initialTeam?: string | null;
   /** Called when the user picks a game, so the URL can drop the team link. */
   onSelectionChange?: (patch: GameLinesSelection) => void;
+  /** Resolves a prop row's player to their card; rows that don't resolve stay plain text. */
+  playerLink?: PlayerLinkResolver;
 }) {
   const [position, setPosition] = useState<PropPosition | "ALL">("ALL");
   const [statId, setStatId] = useState<string>("ALL");
@@ -591,11 +596,16 @@ export function GameLinesPanel({
                         ].filter(Boolean).join(" ") || undefined}
                       >
                         <th scope="row" className="props-player-col">
-                          <span className="props-player-name">{row.name}</span>
-                          <span className="props-player-meta">
-                            {row.position}
-                            {row.team ? ` · ${row.team}` : ""}
-                          </span>
+                          <PlayerNameLink
+                            link={playerLink?.({ playerId: row.playerId, name: row.name, team: row.team, position: row.position }) ?? null}
+                            label={`Open ${row.name}`}
+                          >
+                            <span className="props-player-name">{row.name}</span>
+                            <span className="props-player-meta">
+                              {row.position}
+                              {row.team ? ` · ${row.team}` : ""}
+                            </span>
+                          </PlayerNameLink>
                         </th>
                         <td>{row.statLabel}</td>
                         <td>{formatPropNumber(row.line, 1)}</td>
