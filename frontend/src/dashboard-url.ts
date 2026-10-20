@@ -204,6 +204,15 @@ export function serializeDashboardSearch(state: DashboardUrlState): string {
   return value ? `?${value}` : "";
 }
 
+/**
+ * Search string for a link that opens a tool: the current league and filters
+ * stay, every other tool's selection and the open player sheet are dropped, and
+ * `patch` names the destination tab and its selection.
+ */
+export function toolLinkSearch(state: DashboardUrlState, patch: Partial<DashboardUrlState>): string {
+  return serializeDashboardSearch({ ...state, ...CLEARED_TOOL_SELECTIONS, playerId: null, ...patch });
+}
+
 /** Waivers tab URL that keeps the current league, position filter, and open player. */
 export function waiversSearchPreservingContext(state: DashboardUrlState): string {
   return serializeDashboardSearch({ ...state, tab: "waivers" });

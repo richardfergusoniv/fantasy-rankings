@@ -37,7 +37,8 @@ import {
 import { formatDecimal } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
 import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
-import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, waiversSearchPreservingContext } from "./dashboard-url";
+import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
+import { playerToolLinks } from "./player-tool-links";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
 import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
@@ -1100,6 +1101,12 @@ export function App() {
       onOpenRosterTeam={rosterTeam ? () => setRosterCardRosterId(rosterTeam.rosterId) : undefined}
       waiversHref={showAvailableBadge ? waiversHref : undefined}
       onOpenWaivers={showAvailableBadge ? () => dashboardUrl.commit({ tab: "waivers" }) : undefined}
+      toolLinks={playerToolLinks(playerHistory.current).map((link) => ({
+        key: link.key,
+        label: link.label,
+        href: toolLinkSearch(dashboardUrl.state, link.patch),
+        onOpen: () => dashboardUrl.commit({ ...CLEARED_TOOL_SELECTIONS, playerId: null, ...link.patch }),
+      }))}
       suspended={rosterCardOnTop}
       trending={dashboard.playerTrending?.[playerHistory.current.playerId]}
     />
