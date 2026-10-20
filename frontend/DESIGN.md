@@ -11,13 +11,13 @@
 
 ## Type
 
-Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-body` 15px, `--type-section` 18px, `--type-display` 24px. Numerals are tabular everywhere.
+Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-body` 15px, `--type-section` 18px, `--type-display` 24px (30px at min-width: 760px). Numerals are tabular everywhere.
 
 ## Shape and spacing
 
 - `--radius` is 12px; `sm`/`md`/`xl` derive from it. Small tags use 4px.
 - 4px spacing steps. Touch targets default to 44px.
-- One layout breakpoint at 760px.
+- One primary layout breakpoint at 760px, with additional responsive rules at max-width 420px and max-width 759px.
 
 ## Rules
 
@@ -26,4 +26,4 @@ Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-bod
 
 ## History
 
-`app/DESIGN.md` documents the legacy Hatch app (light slate theme, blue accent, 11/14/22 type scale). It does not describe this frontend.
+`app/DESIGN.md` documents the legacy Hatch app. It does not describe this frontend.
