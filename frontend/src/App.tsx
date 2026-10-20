@@ -1085,16 +1085,17 @@ export function App() {
       ? "docked"
       : "modal";
   const inspectorDocked = inspectorPresentation === "docked" && Boolean(playerHistory.current);
-  // Links into the tools: real hrefs, plus in-app navigation that first closes whatever card is open.
-  function toolLinkItems(links: (PlayerToolLink & { id?: string })[], beforeOpen?: () => void): ToolLinkItem[] {
+  // Links into the tools: real hrefs, plus in-app navigation that first closes every card and dialog.
+  function toolLinkItems(links: (PlayerToolLink & { id?: string })[]): ToolLinkItem[] {
     return links.map((link) => ({
       key: link.id ?? link.key,
       label: link.label,
       href: toolLinkSearch(dashboardUrl.state, link.patch),
       onOpen: () => {
-        // A roster card sits under the player sheet and matchup dialog it was opened from; leaving for a tool must not uncover it.
+        // Cards stack (a roster card or team card under the sheet or dialog opened from it); leaving for a tool must not uncover one.
         setRosterCardRosterId(null);
-        beforeOpen?.();
+        setSelectedMatchup(null);
+        setTeamCardTeam(null);
         dashboardUrl.commit({ ...CLEARED_TOOL_SELECTIONS, playerId: null, ...link.patch });
       },
     }));
@@ -1287,7 +1288,7 @@ export function App() {
       </div>
       {!inspectorDocked ? playerSheet : null}
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
-      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} toolLinks={toolLinkItems(matchupToolLinks(selectedMatchup), () => { setSelectedMatchup(null); setTeamCardTeam(null); })} suspended={teamCardTeam !== null} /> : null}
+      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} toolLinks={toolLinkItems(matchupToolLinks(selectedMatchup))} suspended={teamCardTeam !== null} /> : null}
       {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
       {rosterCardTeam ? (
         <LeagueTeamCard
@@ -1302,7 +1303,7 @@ export function App() {
           onPlayerIntent={prefetchDashboardPlayer}
           onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
           onOpenMatchup={setSelectedMatchup}
-          toolLinks={toolLinkItems(teamTradeLinks(rosterCardTeam), () => setRosterCardRosterId(null))}
+          toolLinks={toolLinkItems(teamTradeLinks(rosterCardTeam))}
           onClose={() => setRosterCardRosterId(null)}
         />
       ) : null}
