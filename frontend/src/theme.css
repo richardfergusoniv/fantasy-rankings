@@ -213,6 +213,7 @@
   --type-body: 15px;
   --type-section: 18px;
   --type-display: 24px;
+  --type-tab: 14px;
   --sticky-offset: 150px;
   --player-box-height: 80px;
   --player-box-half: 40px;
@@ -224,17 +225,17 @@
   --player-stack-nudge: 1px;
   --designation-height: 18px;
   --designation-size: 12px;
-  --tab-font-size: var(--type-caption);
+  --tab-font-size: var(--type-tab);
   --tab-font-weight: 600;
   /* In-page page tabs: Matchup Current/Optimized, Players Rankings…, League scope, Tools Trade/Draft. */
   --page-tab-height: 48px;
   --page-tab-button-height: 44px;
-  --page-tab-font-size: var(--type-caption);
+  --page-tab-font-size: var(--type-tab);
   --page-tab-font-weight: 600;
   /* Sub-tabs: Trade League-adjusted/Market/History is the standard (36 track / 32 button). */
   --sub-tab-height: 36px;
   --sub-tab-button-height: var(--compact-control-height);
-  --sub-tab-font-size: var(--type-caption);
+  --sub-tab-font-size: var(--type-tab);
   --sub-tab-font-weight: 600;
   /* Search inputs sit between page tabs (48) and sub-tabs (36). */
   --search-input-height: 40px;
