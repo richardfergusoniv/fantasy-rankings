@@ -20,6 +20,7 @@ export function useDashboardUrl() {
   const [state, setState] = useState<DashboardUrlState>(() => parseDashboardSearch(window.location.search));
   const stateRef = useRef(state);
   const sheetFromPush = useRef(false);
+  const matchupFromPush = useRef(false);
 
   useEffect(() => {
     const parsed = parseDashboardSearch(window.location.search);
@@ -32,6 +33,7 @@ export function useDashboardUrl() {
     const onPop = () => {
       const next = parseDashboardSearch(window.location.search);
       sheetFromPush.current = next.playerId !== null;
+      matchupFromPush.current = next.matchup !== null;
       stateRef.current = next;
       setState(next);
     };
@@ -46,6 +48,7 @@ export function useDashboardUrl() {
     if (action === "none") return;
     writeHistory(next, action);
     if (current.playerId !== next.playerId) sheetFromPush.current = next.playerId !== null && action === "push";
+    if ((current.matchup === null) !== (next.matchup === null)) matchupFromPush.current = next.matchup !== null && action === "push";
     stateRef.current = next;
     setState(next);
   }, []);
@@ -64,5 +67,20 @@ export function useDashboardUrl() {
     setState(next);
   }, []);
 
-  return { state, commit, closePlayer };
+  /** Close the matchup dialog: step back if opening it added a history entry, else clear it in place. */
+  const closeMatchup = useCallback(() => {
+    if (matchupFromPush.current) {
+      matchupFromPush.current = false;
+      window.history.back();
+      return;
+    }
+    const current = stateRef.current;
+    if (!current.matchup) return;
+    const next = { ...current, matchup: null };
+    writeHistory(next, "replace");
+    stateRef.current = next;
+    setState(next);
+  }, []);
+
+  return { state, commit, closePlayer, closeMatchup };
 }

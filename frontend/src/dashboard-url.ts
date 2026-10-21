@@ -1,3 +1,5 @@
+import type { MatchupSelection } from "./dashboard-types";
+
 export const DASHBOARD_TABS = [
   "team",
   "rankings",
@@ -48,6 +50,8 @@ export type DashboardUrlState = {
   chartDataset: ChartDataset | null;
   tradeMode: TradeMode | null;
   playerId: string | null;
+  /** Open matchup dialog; travels in `mu` so Back from a tool brings it back. */
+  matchup: MatchupSelection | null;
   /** Tool selections. Only serialized on their own tab (see serializeDashboardSearch). */
   pricingPlayerId: string | null;
   pricingCompareId: string | null;
@@ -63,8 +67,9 @@ export type DashboardUrlState = {
   analyticsPlayerId: string | null;
 };
 
-/** Reset for every tool selection; spread into a commit when leaving a tab. */
+/** Reset for every tool selection and the matchup dialog; spread into a commit when leaving a tab. */
 export const CLEARED_TOOL_SELECTIONS = {
+  matchup: null,
   pricingPlayerId: null,
   pricingCompareId: null,
   teamStatsTeam: null,
@@ -99,6 +104,31 @@ export function emptyDashboardUrlState(): DashboardUrlState {
 function oneOf<T extends string>(value: string | null, allowed: readonly T[]): T | null {
   if (!value) return null;
   return (allowed as readonly string[]).includes(value) ? (value as T) : null;
+}
+
+const MATCHUP_TEAM = /^[A-Z]{2,4}$/;
+const MATCHUP_SIDES = { vs: false, at: true } as const;
+const MATCHUP_PHASES = ["pregame", "live", "final"] as const;
+
+/** `TEAM.OPP.side.phase`, e.g. `CAR.TB.vs.final`; `-` stands for unknown. */
+function serializeMatchupParam(matchup: MatchupSelection): string {
+  const side = matchup.isAway === null ? "-" : matchup.isAway ? "at" : "vs";
+  return `${matchup.team}.${matchup.opponent}.${side}.${matchup.gamePhase ?? "-"}`;
+}
+
+function parseMatchupParam(value: string | null): MatchupSelection | null {
+  const parts = value?.trim().split(".") ?? [];
+  if (parts.length !== 4) return null;
+  const [team, opponent, side, phase] = parts as [string, string, string, string];
+  if (!MATCHUP_TEAM.test(team) || !MATCHUP_TEAM.test(opponent) || team === opponent) return null;
+  if (side !== "-" && !(side in MATCHUP_SIDES)) return null;
+  if (phase !== "-" && !(MATCHUP_PHASES as readonly string[]).includes(phase)) return null;
+  return {
+    team,
+    opponent,
+    isAway: side === "-" ? null : MATCHUP_SIDES[side as keyof typeof MATCHUP_SIDES],
+    gamePhase: phase === "-" ? null : (phase as (typeof MATCHUP_PHASES)[number]),
+  };
 }
 
 function textParam(value: string | null): string | null {
@@ -175,6 +205,7 @@ export function parseDashboardSearch(search: string): DashboardUrlState {
     chartDataset: oneOf(params.get("chart"), CHART_DATASETS),
     tradeMode: resolveTradeMode(params, legacyTradeMode),
     playerId: textParam(params.get("player")),
+    matchup: parseMatchupParam(params.get("mu")),
     pricingPlayerId: textParam(params.get("pp")),
     pricingCompareId: textParam(params.get("pc")),
     teamStatsTeam: textParam(params.get("ts")),
@@ -200,6 +231,7 @@ export function serializeDashboardSearch(state: DashboardUrlState): string {
   if (state.chartDataset) params.set("chart", state.chartDataset);
   if (state.tradeMode && state.tradeMode !== DEFAULT_TRADE_MODE) params.set("tmode", state.tradeMode);
   if (state.playerId) params.set("player", state.playerId);
+  if (state.matchup) params.set("mu", serializeMatchupParam(state.matchup));
   // Tool selections only travel with their own tab, so leaving a tool never
   // leaks its parameters into other tabs' links.
   if (state.tab === "pricing") {
@@ -236,6 +268,8 @@ export function waiversSearchPreservingContext(state: DashboardUrlState): string
 export function dashboardUrlHistoryMode(previous: DashboardUrlState, next: DashboardUrlState): "push" | "replace" | "none" {
   if (serializeDashboardSearch(previous) === serializeDashboardSearch(next)) return "none";
   if (previous.tab !== next.tab || previous.playerId !== next.playerId) return "push";
+  // Opening the dialog is a history step, so Back closes it; swapping or clearing it edits in place.
+  if (previous.matchup === null && next.matchup !== null) return "push";
   return "replace";
 }
 
