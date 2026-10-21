@@ -280,7 +280,9 @@ export function parseTeamWeekSnapCountsCsv(csv: string): TeamWeekSnapRow[] {
     if (index.game_type !== undefined && cell(cells, index.game_type) && cell(cells, index.game_type) !== "REG") {
       continue;
     }
-    const position = asSkillPosition(cell(cells, index.position).trim());
+    // Snap counts label some teams' running backs "HB" (Cincinnati in 2026).
+    const rawPosition = cell(cells, index.position).trim();
+    const position = asSkillPosition(rawPosition === "HB" ? "RB" : rawPosition);
     if (!position || !SKILL.has(position)) continue;
     const week = Number(cell(cells, index.week));
     const name = cell(cells, index.player).trim();
