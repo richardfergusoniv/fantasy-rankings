@@ -705,10 +705,17 @@ main { padding: 12px 16px 0; }
   gap: 16px 24px;
   align-items: flex-start;
 }
+.team-stats-main {
+  display: flex;
+  flex: 1 1 280px;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
 .team-stats-chart {
   display: flex;
   flex: 1 1 auto;
-  gap: 10px;
+  gap: 6px;
   align-items: flex-end;
   min-width: 0;
   overflow-x: auto;
@@ -716,11 +723,26 @@ main { padding: 12px 16px 0; }
 }
 .team-stats-week {
   display: flex;
-  flex: 1 0 34px;
+  flex: 1 0 44px;
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  max-width: 52px;
+  max-width: 56px;
+  min-height: 44px;
+  padding: 4px 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.team-stats-week:disabled {
+  cursor: default;
+}
+.team-stats-week.is-inspected {
+  border-color: var(--border);
+  background-color: var(--surface-2);
 }
 .team-stats-bar {
   display: flex;
@@ -748,6 +770,58 @@ main { padding: 12px 16px 0; }
   color: var(--text);
   font-size: var(--type-caption);
   font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.team-stats-inspector {
+  min-height: 44px;
+  font-size: var(--type-body);
+}
+.team-stats-inspector ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.team-stats-inspector li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.team-stats-inspector li i {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.team-stats-inspector-title {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+}
+.team-stats-inspector-title span,
+.team-stats-inspector-hint,
+.team-stats-inspector-share {
+  color: var(--dim);
+}
+.team-stats-inspector-hint {
+  margin: 0;
+}
+.team-stats-inspector-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-stats-inspector-value {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.team-stats-inspector-share {
+  min-width: 48px;
+  text-align: right;
   font-variant-numeric: tabular-nums lining-nums;
 }
 .team-stats-legend {

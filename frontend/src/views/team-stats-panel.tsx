@@ -152,6 +152,12 @@ export function TeamStatsPanel({
 
   const stacks = useMemo(() => buildTeamStatsWeekStacks(rows), [rows]);
 
+  // Tap a week to read every player's value and share (the bars carry values only as hover text).
+  const [inspectedWeek, setInspectedWeek] = useState<number | null>(null);
+  useEffect(() => { setInspectedWeek(null); }, [selectedTeam, selectedGroup, statId]);
+  const inspected = stacks.find((stack) => stack.week === inspectedWeek && stack.total > 0) ?? null;
+  const statLabel = TEAM_STATS_STAT_OPTIONS.find((option) => option.id === statId)?.label ?? "";
+
   // Completed weeks the team actually produced in (excludes byes and the
   // in-progress week) — the denominator for the legend's per-week average.
   const playedWeeks = useMemo(
@@ -241,33 +247,66 @@ export function TeamStatsPanel({
         <p className="monitor-empty">No players</p>
       ) : (
         <div className="team-stats-chart-wrap">
-          <div className="team-stats-chart">
-            {stacks.map((stack) => (
-              <div key={stack.week} className="team-stats-week">
-                <div className="team-stats-bar">
-                  {stack.segments.map((segment) => {
-                    const meta = playerMeta.get(segment.key);
-                    return (
-                      <span
-                        key={segment.key}
-                        className="team-stats-seg"
-                        style={{
-                          height: `${segment.share * 100}%`,
-                          backgroundColor: segment.key === "__other__"
-                            ? TEAM_STATS_OTHER_COLOR
-                            : meta?.color ?? TEAM_STATS_OTHER_COLOR,
-                        }}
-                        title={`${segment.name} · W${stack.week}: ${formatTeamStatsValue(statId, segment.value)} (${formatTeamStatsPercent(segment.share * 100)})`}
-                      />
-                    );
-                  })}
-                </div>
-                <span className="team-stats-week-label">{`W${stack.week}`}</span>
-                <span className="team-stats-week-total">
-                  {stack.total > 0 ? formatTeamStatsValue(statId, stack.total) : "—"}
-                </span>
-              </div>
-            ))}
+          <div className="team-stats-main">
+            <div className="team-stats-chart">
+              {stacks.map((stack) => {
+                const total = stack.total > 0 ? formatTeamStatsValue(statId, stack.total) : "—";
+                return (
+                  <button
+                    key={stack.week}
+                    type="button"
+                    className={`team-stats-week${inspected?.week === stack.week ? " is-inspected" : ""}`}
+                    disabled={stack.total <= 0}
+                    aria-pressed={inspected?.week === stack.week}
+                    aria-label={stack.total > 0 ? `Week ${stack.week}, ${total} ${statLabel}` : `Week ${stack.week}, no activity`}
+                    onClick={() => setInspectedWeek((current) => (current === stack.week ? null : stack.week))}
+                  >
+                    <span className="team-stats-bar">
+                      {stack.segments.map((segment) => {
+                        const meta = playerMeta.get(segment.key);
+                        return (
+                          <span
+                            key={segment.key}
+                            className="team-stats-seg"
+                            style={{
+                              height: `${segment.share * 100}%`,
+                              backgroundColor: segment.key === "__other__"
+                                ? TEAM_STATS_OTHER_COLOR
+                                : meta?.color ?? TEAM_STATS_OTHER_COLOR,
+                            }}
+                            title={`${segment.name} · W${stack.week}: ${formatTeamStatsValue(statId, segment.value)} (${formatTeamStatsPercent(segment.share * 100)})`}
+                          />
+                        );
+                      })}
+                    </span>
+                    <span className="team-stats-week-label">{`W${stack.week}`}</span>
+                    <span className="team-stats-week-total">{total}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="team-stats-inspector" aria-live="polite">
+              {inspected ? (
+                <>
+                  <p className="team-stats-inspector-title">
+                    <strong>{`Week ${inspected.week}`}</strong>
+                    <span>{`${formatTeamStatsValue(statId, inspected.total)} ${statLabel}`}</span>
+                  </p>
+                  <ul>
+                    {inspected.segments.map((segment) => (
+                      <li key={segment.key}>
+                        <i style={{ backgroundColor: segment.key === "__other__" ? TEAM_STATS_OTHER_COLOR : playerMeta.get(segment.key)?.color ?? TEAM_STATS_OTHER_COLOR }} />
+                        <span className="team-stats-inspector-name">{segment.name}</span>
+                        <span className="team-stats-inspector-value">{formatTeamStatsValue(statId, segment.value)}</span>
+                        <span className="team-stats-inspector-share">{formatTeamStatsPercent(segment.share * 100)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="team-stats-inspector-hint">Tap a week to see each player’s share.</p>
+              )}
+            </div>
           </div>
           <ul className="team-stats-legend">
             {rows.map((row) => {
