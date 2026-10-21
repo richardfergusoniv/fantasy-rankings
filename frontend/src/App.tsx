@@ -1088,6 +1088,13 @@ export function App() {
   const inspectorDocked = inspectorPresentation === "docked" && Boolean(playerHistory.current);
   // Player names inside tool rows link to the player card. The tools' data does not always share
   // the dashboard's player ids, so a row resolves by id first, then by an unambiguous name match.
+  // A link into Analytics names a dashboard player; the chart finds them by name and position.
+  const analyticsFocusDetail = tab === "analytics" && dashboardUrl.state.analyticsPlayerId
+    ? dashboardPlayerDetail(dashboardUrl.state.analyticsPlayerId)
+    : null;
+  const analyticsFocusPlayer = analyticsFocusDetail
+    ? { id: analyticsFocusDetail.playerId, name: analyticsFocusDetail.name, team: analyticsFocusDetail.team, position: analyticsFocusDetail.position }
+    : null;
   let playerResolver: ReturnType<typeof createPlayerResolver> | null = null;
   const toolPlayerLink: PlayerLinkResolver = (ref) => {
     if (!playerResolver) {
@@ -1276,6 +1283,7 @@ export function App() {
                   onDatasetChange={publishChartDataset}
                   layout="monitor"
                   playerLink={toolPlayerLink}
+                  focusPlayer={analyticsFocusPlayer}
                 />
               </Suspense>
             )

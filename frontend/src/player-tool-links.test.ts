@@ -5,28 +5,31 @@ import { matchupToolLinks, playerToolLinks, teamTradeLinks } from "./player-tool
 const base = { playerId: "4046", position: "WR", team: "KC", seasonValue: 5200, isBye: false };
 
 describe("playerToolLinks", () => {
-  it("offers Pricing, Team stats and Game lines for a rostered WR", () => {
+  it("offers Pricing, Compare, Advanced stats, Team stats and Game lines for a rostered WR", () => {
     const links = playerToolLinks(base);
-    expect(links.map((link) => link.key)).toEqual(["pricing", "comparison", "team-stats", "game-lines"]);
+    expect(links.map((link) => link.key)).toEqual(["pricing", "comparison", "advanced-stats", "team-stats", "game-lines"]);
     expect(links[0]?.patch).toEqual({ tab: "pricing", pricingPlayerId: "4046" });
     expect(links[1]?.patch).toEqual({ tab: "comparison", comparePlayerId: "4046" });
-    expect(links[2]?.patch).toEqual({ tab: "team-stats", teamStatsTeam: "KC", teamStatsGroup: "WRTE" });
-    expect(links[3]?.patch).toEqual({ tab: "monitor", gameLinesTeam: "KC" });
+    expect(links[2]?.patch).toEqual({ tab: "analytics", chartDataset: "advanced", analyticsPlayerId: "4046" });
+    expect(links[3]?.patch).toEqual({ tab: "team-stats", teamStatsTeam: "KC", teamStatsGroup: "WRTE" });
+    expect(links[4]?.patch).toEqual({ tab: "monitor", gameLinesTeam: "KC" });
   });
 
   it("maps positions onto Team stats groups and skips kickers and defenses", () => {
-    expect(playerToolLinks({ ...base, position: "TE" })[2]?.patch.teamStatsGroup).toBe("WRTE");
-    expect(playerToolLinks({ ...base, position: "QB" })[2]?.patch.teamStatsGroup).toBe("QB");
-    expect(playerToolLinks({ ...base, position: "RB" })[2]?.patch.teamStatsGroup).toBe("RB");
+    expect(playerToolLinks({ ...base, position: "TE" })[3]?.patch.teamStatsGroup).toBe("WRTE");
+    expect(playerToolLinks({ ...base, position: "QB" })[3]?.patch.teamStatsGroup).toBe("QB");
+    expect(playerToolLinks({ ...base, position: "RB" })[3]?.patch.teamStatsGroup).toBe("RB");
     for (const position of ["K", "DEF"]) {
-      expect(playerToolLinks({ ...base, position }).map((link) => link.key)).not.toContain("team-stats");
+      const keys = playerToolLinks({ ...base, position }).map((link) => link.key);
+      expect(keys).not.toContain("team-stats");
+      expect(keys).not.toContain("advanced-stats");
     }
   });
 
   it("omits destinations that would have nothing to show", () => {
-    expect(playerToolLinks({ ...base, seasonValue: null }).map((link) => link.key)).toEqual(["comparison", "team-stats", "game-lines"]);
-    expect(playerToolLinks({ ...base, isBye: true }).map((link) => link.key)).toEqual(["pricing", "comparison", "team-stats"]);
-    expect(playerToolLinks({ ...base, team: null }).map((link) => link.key)).toEqual(["pricing", "comparison"]);
+    expect(playerToolLinks({ ...base, seasonValue: null }).map((link) => link.key)).toEqual(["comparison", "advanced-stats", "team-stats", "game-lines"]);
+    expect(playerToolLinks({ ...base, isBye: true }).map((link) => link.key)).toEqual(["pricing", "comparison", "advanced-stats", "team-stats"]);
+    expect(playerToolLinks({ ...base, team: null }).map((link) => link.key)).toEqual(["pricing", "comparison", "advanced-stats"]);
     expect(playerToolLinks({ playerId: "pick-1", position: "PICK", team: null, seasonValue: 900, isBye: false })).toEqual([]);
   });
 });

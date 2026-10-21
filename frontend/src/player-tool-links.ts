@@ -1,6 +1,6 @@
 import type { DashboardUrlState } from "./dashboard-url";
 
-export type PlayerToolLinkKey = "pricing" | "comparison" | "team-stats" | "game-lines" | "trade";
+export type PlayerToolLinkKey = "pricing" | "comparison" | "advanced-stats" | "team-stats" | "game-lines" | "trade";
 
 export type PlayerToolLink = {
   key: PlayerToolLinkKey;
@@ -17,6 +17,9 @@ const TEAM_STATS_GROUP_BY_POSITION: Readonly<Record<string, string>> = {
   TE: "WRTE",
 };
 
+/** Advanced stats (nflverse usage and efficiency) exist for these positions only. */
+const ADVANCED_STATS_POSITIONS: ReadonlySet<string> = new Set(["QB", "RB", "WR", "TE"]);
+
 /** Comparison pairs players within one of these positions. */
 const COMPARISON_POSITIONS: ReadonlySet<string> = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
 
@@ -30,7 +33,7 @@ type ToolLinkPlayer = {
 
 /**
  * Tools a player can be opened in. A destination is listed only when it can show
- * something for this player: Pricing needs a market value, Compare a position it can pair within, Team stats a team and
+ * something for this player: Pricing needs a market value, Compare a position it can pair within, Advanced stats a QB/RB/WR/TE, Team stats a team and
  * a QB/RB/WR/TE position, Game lines a team that plays this week.
  */
 export function playerToolLinks(player: ToolLinkPlayer): PlayerToolLink[] {
@@ -40,6 +43,13 @@ export function playerToolLinks(player: ToolLinkPlayer): PlayerToolLink[] {
   }
   if (COMPARISON_POSITIONS.has(player.position)) {
     links.push({ key: "comparison", label: "Compare", patch: { tab: "comparison", comparePlayerId: player.playerId } });
+  }
+  if (ADVANCED_STATS_POSITIONS.has(player.position)) {
+    links.push({
+      key: "advanced-stats",
+      label: "Advanced stats",
+      patch: { tab: "analytics", chartDataset: "advanced", analyticsPlayerId: player.playerId },
+    });
   }
   const group = TEAM_STATS_GROUP_BY_POSITION[player.position];
   if (player.team && group) {
