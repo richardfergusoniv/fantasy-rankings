@@ -217,7 +217,6 @@ export function ValueChartPanel({
   useEffect(() => {
     if (!isExpanded) {
       setZoomed(false);
-      setRange("all");
       setScrubIndex(null);
     }
   }, [isExpanded]);
@@ -275,6 +274,22 @@ export function ValueChartPanel({
     return buildChartRows(primary, compare?.length ? compare : null);
   }, [compareSeries?.points, primarySeries?.points]);
 
+  // Headline: the latest value and its change over the last 30 days.
+  const summary = useMemo(() => {
+    const latestIndex = chartRows.reduce((last, row, index) => (row.value !== null ? index : last), -1);
+    const latest = latestIndex >= 0 ? chartRows[latestIndex] : undefined;
+    if (!latest || latest.value === null) return null;
+    const monthAgo = new Date(`${latest.date}T00:00:00Z`);
+    monthAgo.setUTCDate(monthAgo.getUTCDate() - 30);
+    const cutoff = monthAgo.toISOString().slice(0, 10);
+    const earlier = chartRows.slice(0, latestIndex).reverse().find((row) => row.value !== null && row.date <= cutoff);
+    return {
+      value: latest.value,
+      change: earlier?.value != null ? latest.value - earlier.value : null,
+      compare: latest.compare,
+    };
+  }, [chartRows]);
+
   // A refetch can shift the visible window under a stored scrub index, so drop it when the rows change.
   useEffect(() => { setScrubIndex(null); }, [chartRows]);
 
@@ -289,9 +304,7 @@ export function ValueChartPanel({
     const effectiveZoomed = options.interactiveZoom && zoomed;
     // Projection rows follow the last historical date; ranges and the scrubber start from the history.
     const lastHistoricalDate = [...chartRows].reverse().find((row) => row.value !== null)?.date;
-    const rangedRows = options.interactiveZoom
-      ? chartRows.slice(valueChartRangeStartIndex(chartRows.map((row) => row.date), range, lastHistoricalDate))
-      : chartRows;
+    const rangedRows = chartRows.slice(valueChartRangeStartIndex(chartRows.map((row) => row.date), range, lastHistoricalDate));
     // Zoom never starts past the last historical row, so a short history keeps its only point.
     const lastRangedHistoricalIndex = rangedRows.reduce((last, row, index) => (row.value !== null ? index : last), 0);
     const zoomStart = Math.min(valueChartZoomStartIndex(rangedRows.length, effectiveZoomed), lastRangedHistoricalIndex);
@@ -526,7 +539,7 @@ export function ValueChartPanel({
 
   return (
     <section className="monitor-section monitor-value-chart-panel">
-      <header className="section-heading">
+      <header className="sr-only">
         <h2>Pricing</h2>
       </header>
       {pickerPlayers.length === 0 ? (
@@ -577,20 +590,67 @@ export function ValueChartPanel({
               </select>
             </label>
           </div>
-          {selectedPlayerLink ? (
-            <p className="tool-player-link-row">
-              <PlayerNameLink link={selectedPlayerLink}>View {selectedPlayerName}’s card</PlayerNameLink>
-            </p>
-          ) : null}
           {unavailable ? (
             <p className="monitor-empty">Values unavailable</p>
           ) : showChart ? (
             <>
+              <div className="pricing-summary">
+                {summary ? (
+                  <div className="pricing-figures">
+                    <p className="pricing-figure">
+                      <span className="pricing-value">{formatWholeValue(summary.value)}</span>
+                      {summary.change !== null ? (
+                        <span className={`pricing-change${summary.change > 0 ? " is-up" : summary.change < 0 ? " is-down" : ""}`}>
+                          {summary.change !== 0 ? <span aria-hidden="true">{summary.change > 0 ? "▲" : "▼"}</span> : null}
+                          {summary.change !== 0 ? <span className="sr-only">{summary.change > 0 ? "Up" : "Down"}</span> : null}
+                          {formatWholeValue(Math.abs(summary.change))}
+                          <span className="pricing-change-span">30D</span>
+                        </span>
+                      ) : null}
+                    </p>
+                    {comparePlayerId && summary.compare !== null ? (
+                      <p className="pricing-figure is-compare">
+                        <i aria-hidden="true" />
+                        <span>{compareName}</span>
+                        <span className="pricing-compare-value">{formatWholeValue(summary.compare)}</span>
+                      </p>
+                    ) : null}
+                    {selectedPlayerLink ? (
+                      <p className="tool-player-link-row">
+                        <PlayerNameLink link={selectedPlayerLink}>View {selectedPlayerName}’s card</PlayerNameLink>
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="value-chart-ranges" role="group" aria-label="Date range">
+                  {VALUE_CHART_RANGES.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className="scatter-zoom-toggle"
+                      aria-pressed={range === option.id}
+                      onClick={() => setRange(option.id)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className="scatter-zoom-toggle pricing-expand"
+                    aria-label="Open Pricing. The expanded view has a zoom and a date scrubber."
+                    onClick={() => setIsExpanded(true)}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
               <div
                 className="monitor-chart-expand-target"
                 role="button"
                 tabIndex={0}
-                aria-label="Open Pricing. The expanded view has range choices and a date scrubber."
+                aria-label="Open Pricing. The expanded view has a zoom and a date scrubber."
                 onClick={() => setIsExpanded(true)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -600,7 +660,6 @@ export function ValueChartPanel({
                 }}
               >
                 {renderChart({ interactiveZoom: false })}
-                <span className="monitor-chart-expand-hint" aria-hidden="true">Expand for ranges and scrubber</span>
               </div>
               <ChartDialog
                 isOpen={isExpanded}

@@ -185,12 +185,30 @@ export function TeamStatsPanel({
     return meta;
   }, [league, rows]);
 
+  // Legend: each player's per-game average over completed weeks. A partial
+  // in-progress week would otherwise leak into the average (CodeRabbit, PR #129).
+  const legendIsPercent = statId === "snaps" || statId === "targets";
+  const legendRows = useMemo(() => rows.map((row) => {
+    const completedCells = row.weeks.filter((cell) => cell.week < week);
+    const completedTotal = completedCells
+      .reduce((sum, cell) => sum + cell.value, 0);
+    const completedPercentTotal = completedCells
+      .reduce((sum, cell) => sum + (cell.percent ?? 0), 0);
+    const value = legendIsPercent ? completedPercentTotal / playedWeeks : completedTotal / playedWeeks;
+    return {
+      row,
+      value,
+      label: legendIsPercent ? formatTeamStatsPercent(value) : formatTeamStatsAverage(value),
+    };
+  }), [legendIsPercent, playedWeeks, rows, week]);
+  const legendMax = Math.max(0, ...legendRows.map((entry) => entry.value));
+
   const unavailable = dataQuery.isError;
   const loading = dataQuery.isPending;
 
   return (
     <section className="monitor-section monitor-team-stats-panel">
-      <header className="section-heading">
+      <header className="sr-only">
         <h2>Team stats</h2>
       </header>
 
@@ -236,6 +254,16 @@ export function TeamStatsPanel({
             ))}
           </select>
         </label>
+        {!unavailable && !loading && rows.length > 0 ? (
+          <button
+            type="button"
+            className="scatter-zoom-toggle team-stats-view-toggle"
+            aria-pressed={showTable}
+            onClick={() => setShowTable((value) => !value)}
+          >
+            Table view
+          </button>
+        ) : null}
       </div>
 
       {unavailable ? (
@@ -254,14 +282,6 @@ export function TeamStatsPanel({
       ) : (
         <div className="team-stats-chart-wrap">
           <div className="team-stats-main">
-            <button
-              type="button"
-              className="scatter-zoom-toggle team-stats-view-toggle"
-              aria-pressed={showTable}
-              onClick={() => setShowTable((value) => !value)}
-            >
-              Table view
-            </button>
             {showTable ? (
               <div className="team-stats-table-wrap">
                 <table className="team-stats-table">
@@ -360,19 +380,13 @@ export function TeamStatsPanel({
           <div className="team-stats-legend-group">
           <p id={legendCaptionId} className="team-stats-legend-caption">{teamStatsLegendCaption(statId)}</p>
           <ul className="team-stats-legend" aria-labelledby={legendCaptionId}>
-            {rows.map((row) => {
+            {legendRows.map(({ row, value, label }) => {
               const meta = playerMeta.get(row.key);
-              // Completed weeks only: a partial in-progress week would
-              // otherwise leak into the average (CodeRabbit, PR #129).
-              const completedEntries = Object.entries(row.weeks)
-                .filter(([weekKey]) => Number(weekKey) < week);
-              const completedTotal = completedEntries
-                .reduce((sum, [, cell]) => sum + (cell?.value ?? 0), 0);
-              const completedPercentTotal = completedEntries
-                .reduce((sum, [, cell]) => sum + (cell?.percent ?? 0), 0);
+              const color = meta?.color ?? TEAM_STATS_OTHER_COLOR;
+              const width = legendIsPercent ? Math.min(100, value) : (legendMax > 0 ? (value / legendMax) * 100 : 0);
               return (
                 <li key={row.key} className={meta?.rostered ? "is-my-roster" : undefined}>
-                  <i style={{ backgroundColor: meta?.color ?? TEAM_STATS_OTHER_COLOR }} />
+                  <i style={{ backgroundColor: color }} />
                   <span className="team-stats-legend-name">
                     <PlayerNameLink
                       link={playerLink?.({ playerId: row.playerId, name: row.name, team: row.team, position: row.position }) ?? null}
@@ -381,10 +395,9 @@ export function TeamStatsPanel({
                       {row.name}
                     </PlayerNameLink>
                   </span>
-                  <span className="team-stats-legend-total">
-                    {statId === "snaps" || statId === "targets"
-                      ? formatTeamStatsPercent(completedPercentTotal / playedWeeks)
-                      : formatTeamStatsAverage(completedTotal / playedWeeks)}
+                  <span className="team-stats-legend-total">{label}</span>
+                  <span className="team-stats-legend-meter" aria-hidden="true">
+                    <span style={{ width: `${Math.max(0, width)}%`, backgroundColor: color }} />
                   </span>
                 </li>
               );
