@@ -976,6 +976,97 @@ main { padding: 12px 16px 0; }
 .props-table thead th:not(.props-player-col) {
   min-width: 44px;
 }
+/* Phone: one card per prop instead of a table that scrolls sideways. Table
+   roles are set explicitly in the markup so the grid layout keeps them. */
+@media (max-width: 759px) {
+  .props-scroll {
+    overflow-x: visible;
+  }
+  .props-table,
+  .props-table tbody {
+    display: block;
+    min-width: 0;
+  }
+  .props-table thead,
+  .props-table thead tr {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+  }
+  .props-table thead {
+    margin-bottom: 8px;
+  }
+  .props-table thead .props-history-head {
+    display: none;
+  }
+  .props-table thead th,
+  .props-table thead .props-player-col {
+    position: static;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: auto;
+    padding: 0;
+    border-bottom: 0;
+    background: none;
+    box-shadow: none;
+  }
+  .props-table thead .props-sort-button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 8px;
+    justify-content: center;
+  }
+  .props-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 8px;
+    margin-bottom: 8px;
+    padding: 12px;
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    background-color: var(--surface);
+  }
+  .props-table tbody th,
+  .props-table tbody td {
+    height: auto;
+    padding: 0;
+    border-bottom: 0 !important;
+    text-align: left;
+    background: none !important;
+    white-space: normal;
+  }
+  .props-table tbody .props-player-col {
+    position: static;
+    grid-column: 1 / -1;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    box-shadow: none;
+  }
+  .props-table tbody td[data-label]::before {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--dim);
+    content: attr(data-label);
+    font-size: var(--type-caption);
+    font-weight: 700;
+    letter-spacing: .02em;
+  }
+  .props-table tbody td.props-history-cell {
+    grid-column: 1 / -1;
+  }
+  .props-table tbody td .props-history {
+    width: 100%;
+    height: 44px;
+  }
+  .props-table tbody tr.is-my-roster {
+    background-color: var(--roster-highlight-bg);
+  }
+  .props-table tbody tr.is-opponent-roster {
+    background-color: var(--opponent-row);
+  }
+}
 .monitor-pricing-key li {
   display: inline-flex;
   align-items: center;

@@ -565,7 +565,7 @@ export function GameLinesPanel({
             <p className="monitor-empty">No props</p>
           ) : (
             <div className="props-scroll">
-              <table className="props-table">
+              <table className="props-table" role="table">
                 <thead>
                   <tr>
                     {sortHeader("player", "Player", "props-player-col")}
@@ -575,7 +575,7 @@ export function GameLinesPanel({
                     {sortHeader("move", "Move")}
                     {sortHeader("odds", "Odds")}
                     {sortHeader("hit", "Hit")}
-                    <th scope="col">History</th>
+                    <th scope="col" className="props-history-head">History</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -607,9 +607,9 @@ export function GameLinesPanel({
                             </span>
                           </PlayerNameLink>
                         </th>
-                        <td>{row.statLabel}</td>
-                        <td>{formatPropNumber(row.line, 1)}</td>
-                        <td>
+                        <td data-label="Stat">{row.statLabel}</td>
+                        <td data-label="Line">{formatPropNumber(row.line, 1)}</td>
+                        <td data-label="Sleeper">
                           {row.sleeperLine === null ? "—" : (
                             <span
                               title={sleeperTitle}
@@ -623,14 +623,14 @@ export function GameLinesPanel({
                             </span>
                           )}
                         </td>
-                        <td>{formatMove(row.move)}</td>
-                        <td>{formatAmericanOdds(row.odds)}</td>
-                        <td>
+                        <td data-label="Move">{formatMove(row.move)}</td>
+                        <td data-label="Odds">{formatAmericanOdds(row.odds)}</td>
+                        <td data-label="Hit">
                           <span className={hitTone ? `props-hit props-hit-${hitTone}` : "props-hit"}>
                             {formatHitRate(hits, misses, row.hitRate)}
                           </span>
                         </td>
-                        <td>
+                        <td data-label="Last games" className="props-history-cell">
                           <div
                             className="props-history"
                             role="img"
