@@ -379,7 +379,7 @@ export function DraftCenter({
       <div className="section-heading"><h2>My Team</h2><span>{myTeamPlayers.length} players</span></div>
       {myTeamPlayers.length > 0 ? (
         <div className="draft-board data-table-frame" role="list" aria-label="My team players">
-          <div className="draft-row draft-table-head draft-my-team-row">
+          <div className="draft-row draft-table-head draft-my-team-row" aria-hidden="true">
             <span aria-hidden="true">Player</span>
             <span className="sr-only">Actions</span>
           </div>
@@ -427,7 +427,7 @@ export function DraftCenter({
 
   const draftBoard = loading ? <div className="empty-inline">Loading draft values…</div> : filteredRows.length > 0 ? (
     <div className="draft-board data-table-frame" role="list" aria-label="Draft player board">
-      <div className="draft-row draft-table-head">
+      <div className="draft-row draft-table-head" aria-hidden="true">
         <span aria-hidden="true">Player</span>
         <span aria-hidden="true">Pos</span>
         <span aria-hidden="true">Val</span>
@@ -456,7 +456,7 @@ export function DraftCenter({
           </div>
         );
       })}
-      <div className="list-pagination-row draft-list-pagination">
+      <div className="list-pagination-row draft-list-pagination" role="listitem">
         <span aria-live="polite">showing {Math.min(visibleDraftCount, filteredRows.length)} of {filteredRows.length}</span>
         {visibleDraftCount < filteredRows.length ? <button type="button" onClick={() => setVisibleDraftCount((count) => count + 160)}>Show more</button> : null}
       </div>

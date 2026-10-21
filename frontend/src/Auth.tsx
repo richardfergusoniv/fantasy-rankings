@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SkipLink } from "./shared";
+import { ThemeToggle } from "./shell/theme-toggle";
 import { getAccessToken, isSupabaseConfigured, supabase, type Session } from "./supabase";
 import { identifyPostHogUser, resetPostHog } from "./posthog";
 
@@ -205,7 +206,8 @@ function AuthScreen() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
+    <div role="main" className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <div className="absolute right-2 top-[max(0.5rem,env(safe-area-inset-top))]"><ThemeToggle /></div>
       <SkipLink href="#auth-form">Skip to form</SkipLink>
       <Card className="w-full max-w-sm py-6">
         <CardHeader>
@@ -341,7 +343,8 @@ function ConnectSleeper({
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
+    <div role="main" className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <div className="absolute right-2 top-[max(0.5rem,env(safe-area-inset-top))]"><ThemeToggle /></div>
       <SkipLink href="#connect-form">Skip to form</SkipLink>
       <Card className="w-full max-w-sm py-6">
         <CardHeader>
