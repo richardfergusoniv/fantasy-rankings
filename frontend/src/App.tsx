@@ -546,7 +546,13 @@ export function App() {
   }, [tab]);
   const playerHistory = usePlayerCardHistory();
   const [tickerNews, setTickerNews] = useState<PlayerNewsItem | null>(null);
-  const [selectedMatchup, setSelectedMatchup] = useState<MatchupSelection | null>(null);
+  // The matchup dialog lives in the URL (`mu`), so opening it is a history step and Back from a tool brings it back.
+  const selectedMatchup = dashboardUrl.state.matchup;
+  const { commit: commitDashboardUrl, closeMatchup } = dashboardUrl;
+  const setSelectedMatchup = useCallback((matchup: MatchupSelection | null) => {
+    if (matchup) commitDashboardUrl({ matchup });
+    else closeMatchup();
+  }, [commitDashboardUrl, closeMatchup]);
   const [teamCardTeam, setTeamCardTeam] = useState<string | null>(null);
   const [rosterCardRosterId, setRosterCardRosterId] = useState<number | null>(null);
   const [commandBarOpen, setCommandBarOpen] = useState(false);
@@ -1124,8 +1130,8 @@ export function App() {
       href: toolLinkSearch(dashboardUrl.state, link.patch),
       onOpen: () => {
         // Cards stack (a roster card or team card under the sheet or dialog opened from it); leaving for a tool must not uncover one.
+        // The dialog closes with the navigation itself (CLEARED_TOOL_SELECTIONS drops `mu`), so Back reopens it.
         setRosterCardRosterId(null);
-        setSelectedMatchup(null);
         setTeamCardTeam(null);
         dashboardUrl.commit({ ...CLEARED_TOOL_SELECTIONS, playerId: null, ...link.patch });
       },

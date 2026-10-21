@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLEARED_TOOL_SELECTIONS,
   dashboardUrlHistoryMode,
   effectiveTradeMode,
   emptyDashboardUrlState,
   parseDashboardSearch,
   resolveDashboardTab,
   serializeDashboardSearch,
+  toolLinkSearch,
   waiversSearchPreservingContext,
   type DashboardUrlState,
 } from "./dashboard-url";
@@ -163,5 +165,43 @@ describe("dashboard URL state", () => {
     expect(parseDashboardSearch("?tab=trade&tp=7")).toEqual(trade);
     expect(serializeDashboardSearch(state({ tab: "trade", tradeMode: "market", tradePartner: "7" }))).toBe("?tab=trade&tmode=market&tp=7");
     expect(serializeDashboardSearch(state({ tab: "power", tradePartner: "7" }))).toBe("?tab=power");
+  });
+
+  describe("matchup dialog", () => {
+    const final = { team: "CAR", opponent: "TB", isAway: false, gamePhase: "final" } as const;
+
+    it("round-trips through mu, with - for an unknown side or phase", () => {
+      expect(serializeDashboardSearch(state({ matchup: final }))).toBe("?mu=CAR.TB.vs.final");
+      expect(parseDashboardSearch("?mu=CAR.TB.vs.final").matchup).toEqual(final);
+      const unknown = { team: "NE", opponent: "CHI", isAway: null, gamePhase: null } as const;
+      expect(serializeDashboardSearch(state({ matchup: unknown }))).toBe("?mu=NE.CHI.-.-");
+      expect(parseDashboardSearch("?mu=NE.CHI.-.-").matchup).toEqual(unknown);
+      const away = { team: "NE", opponent: "CHI", isAway: true, gamePhase: "live" } as const;
+      expect(parseDashboardSearch(serializeDashboardSearch(state({ matchup: away }))).matchup).toEqual(away);
+    });
+
+    it("stays on any tab and beside an open player", () => {
+      expect(serializeDashboardSearch(state({ tab: "rankings", playerId: "p1", matchup: final }))).toBe("?tab=rankings&player=p1&mu=CAR.TB.vs.final");
+      expect(parseDashboardSearch("?tab=draft&mu=CAR.TB.at.pregame").matchup).toMatchObject({ team: "CAR", isAway: true, gamePhase: "pregame" });
+    });
+
+    it("ignores malformed values instead of opening a half-formed dialog", () => {
+      for (const bad of ["CAR", "CAR.TB", "CAR.TB.vs", "car.tb.vs.final", "CAR.CAR.vs.final", "CAR.TB.home.final", "CAR.TB.toString.final", "CAR.TB.constructor.final", "CAR.TB.__proto__.final", "CAR.TB.vs.done", "CAR.TB.vs.final.x", ""]) {
+        expect(parseDashboardSearch(`?mu=${bad}`).matchup, bad).toBeNull();
+      }
+    });
+
+    it("pushes history when it opens and edits in place otherwise, so Back closes it", () => {
+      const team = state({ tab: "team" });
+      expect(dashboardUrlHistoryMode(team, state({ tab: "team", matchup: final }))).toBe("push");
+      expect(dashboardUrlHistoryMode(state({ tab: "team", matchup: final }), state({ tab: "team", matchup: { ...final, opponent: "GB" } }))).toBe("replace");
+      expect(dashboardUrlHistoryMode(state({ tab: "team", matchup: final }), team)).toBe("replace");
+      expect(dashboardUrlHistoryMode(state({ tab: "team", matchup: final }), state({ tab: "monitor", gameLinesTeam: "CAR" }))).toBe("push");
+    });
+
+    it("is dropped by a link into a tool, so the dialog closes and Back restores it", () => {
+      expect(toolLinkSearch(state({ matchup: final }), { tab: "monitor", gameLinesTeam: "CAR" })).toBe("?tab=monitor&gt=CAR");
+      expect(CLEARED_TOOL_SELECTIONS.matchup).toBeNull();
+    });
   });
 });
