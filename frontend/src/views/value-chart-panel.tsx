@@ -599,9 +599,10 @@ export function ValueChartPanel({
                   <div className="pricing-figures">
                     <p className="pricing-figure">
                       <span className="pricing-value">{formatWholeValue(summary.value)}</span>
-                      {summary.change !== null && summary.change !== 0 ? (
-                        <span className={`pricing-change ${summary.change > 0 ? "is-up" : "is-down"}`}>
-                          <span aria-hidden="true">{summary.change > 0 ? "▲" : "▼"}</span>
+                      {summary.change !== null ? (
+                        <span className={`pricing-change${summary.change > 0 ? " is-up" : summary.change < 0 ? " is-down" : ""}`}>
+                          {summary.change !== 0 ? <span aria-hidden="true">{summary.change > 0 ? "▲" : "▼"}</span> : null}
+                          {summary.change !== 0 ? <span className="sr-only">{summary.change > 0 ? "Up" : "Down"}</span> : null}
                           {formatWholeValue(Math.abs(summary.change))}
                           <span className="pricing-change-span">30D</span>
                         </span>
