@@ -289,7 +289,9 @@ export function ValueChartPanel({
     const rangedRows = options.interactiveZoom
       ? chartRows.slice(valueChartRangeStartIndex(chartRows.map((row) => row.date), range, lastHistoricalDate))
       : chartRows;
-    const zoomStart = valueChartZoomStartIndex(rangedRows.length, effectiveZoomed);
+    // Zoom never starts past the last historical row, so a short history keeps its only point.
+    const lastRangedHistoricalIndex = rangedRows.reduce((last, row, index) => (row.value !== null ? index : last), 0);
+    const zoomStart = Math.min(valueChartZoomStartIndex(rangedRows.length, effectiveZoomed), lastRangedHistoricalIndex);
     const visibleRows = effectiveZoomed ? rangedRows.slice(zoomStart) : rangedRows;
     const defaultScrubIndex = visibleRows.reduce((last, row, index) => (row.value !== null ? index : last), 0);
     const scrubPosition = Math.min(scrubIndex ?? defaultScrubIndex, visibleRows.length - 1);
