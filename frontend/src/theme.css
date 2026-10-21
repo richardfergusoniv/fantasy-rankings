@@ -1467,8 +1467,8 @@ main { padding: 12px 16px 0; }
 .matchup-player.theirs .matchup-meta { grid-column: 2; justify-content: flex-end; }
 .matchup-reference-tag { display: inline-flex; min-height: 18px; align-items: center; padding: 1px 5px 0; border: 1px solid var(--hairline); border-radius: 4px; background: transparent; color: var(--text); font-size: var(--type-caption); line-height: 1; font-weight: 700; white-space: nowrap; }
 .matchup-reference-button.matchup-reference-tag { min-height: 44px; gap: 2px; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; }
-.matchup-reference-button-label { display: inline-flex; min-height: 18px; align-items: center; padding: 1px 4px 0; border: 1px solid var(--hairline); border-radius: 4px; background: transparent; color: var(--text); }
-.matchup-reference-arrow { color: var(--dim); font-size: var(--type-caption); line-height: 1; }
+.matchup-reference-button-label { display: inline-flex; min-height: 18px; align-items: center; padding: 1px 4px 0; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: var(--text); }
+.matchup-reference-arrow { color: var(--link); font-size: var(--type-body, 1rem); font-weight: 700; line-height: 1; }
 .matchup-reference-tag.sos-soft { background: var(--stat-strength-soft); color: var(--stat-strength-readable); font-weight: 700; }
 .matchup-reference-tag.sos-tough { background: var(--stat-weakness-soft); color: var(--stat-weakness-readable); font-weight: 700; }
 .matchup-reference-button.sos-soft, .matchup-reference-button.sos-tough { background: transparent; }
@@ -1792,6 +1792,9 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .tool-player-link-row a.tool-player-link[href] { display: inline-flex; min-height: 44px; align-items: center; color: var(--link); }
 .props-player-col a.tool-player-link[href] { display: block; min-height: 44px; }
 .tool-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 2px 0; }
+.matchup-data-card .tool-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+.matchup-data-card .tool-links-label { grid-column: 1 / -1; }
+.matchup-data-card .tool-links a.tool-link[href] { justify-content: center; }
 .tool-links-label { color: var(--dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .tool-links a.tool-link[href] { display: inline-flex; min-height: 44px; align-items: center; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--link); font-size: var(--type-tab); font-weight: 600; text-decoration: none; }
 .tool-links a.tool-link[href]:hover { color: var(--link-hover); }
@@ -3625,7 +3628,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .matchup-data-header { gap: 12px; padding-bottom: 0; }
 .matchup-data-header h2 { color: var(--text); font-size: var(--type-section); font-weight: 700; letter-spacing: -.02em; }
 .matchup-data-header span { margin-top: 3px; font-size: var(--type-caption); font-weight: 400; }
-.matchup-data-header button { border-radius: var(--radius-md); background: var(--accent-soft); color: var(--link); font-size: var(--type-section); font-weight: 400; }
+.matchup-data-header button { border-radius: var(--radius-md); background: var(--surface-2); color: var(--dim); font-size: var(--type-section); font-weight: 400; }
 .matchup-box-score { gap: 3px 10px; margin-top: 14px; padding: 9px 0; }
 .matchup-box-score > span { font-size: var(--type-caption); font-weight: 700; text-transform: none; }
 .matchup-box-score > strong {
