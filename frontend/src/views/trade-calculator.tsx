@@ -1009,7 +1009,7 @@ export function TradeCalculator({
         <SegmentedControl
           value={tradeMode}
           options={[
-            { value: "league", label: "League-adjusted" },
+            { value: "league", label: "League" },
             { value: "market", label: "Market" },
             { value: "history", label: "History" },
           ]}
