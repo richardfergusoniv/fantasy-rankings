@@ -1,6 +1,7 @@
 // Browser smoke tests, run against a deployed URL: E2E_BASE_URL=https://… npm run test:e2e
 // The theme tests need no account. The history tests sign in with LOGIN / PASSWORD and need
 // E2E_LEAGUE_ID and E2E_PLAYER (a player name on that league's matchup page); they skip without them.
+// Set E2E_NO_SANDBOX=1 only where Chromium can't start with its sandbox (some containers).
 // Needs a browser: run `npx playwright-core install chromium` once, or set CHROMIUM_PATH to an existing binary.
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
@@ -13,7 +14,7 @@ const phone = { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isM
 let browser;
 before(async () => {
   if (!BASE) return;
-  browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args: ["--no-sandbox"] });
+  browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args: process.env.E2E_NO_SANDBOX ? ["--no-sandbox"] : [] });
 });
 after(async () => { await browser?.close(); });
 
