@@ -107,7 +107,6 @@ function oneOf<T extends string>(value: string | null, allowed: readonly T[]): T
 }
 
 const MATCHUP_TEAM = /^[A-Z]{2,4}$/;
-const MATCHUP_SIDES = { vs: false, at: true } as const;
 const MATCHUP_PHASES = ["pregame", "live", "final"] as const;
 
 /** `TEAM.OPP.side.phase`, e.g. `CAR.TB.vs.final`; `-` stands for unknown. */
@@ -121,12 +120,12 @@ function parseMatchupParam(value: string | null): MatchupSelection | null {
   if (parts.length !== 4) return null;
   const [team, opponent, side, phase] = parts as [string, string, string, string];
   if (!MATCHUP_TEAM.test(team) || !MATCHUP_TEAM.test(opponent) || team === opponent) return null;
-  if (side !== "-" && !(side in MATCHUP_SIDES)) return null;
+  if (side !== "-" && side !== "vs" && side !== "at") return null;
   if (phase !== "-" && !(MATCHUP_PHASES as readonly string[]).includes(phase)) return null;
   return {
     team,
     opponent,
-    isAway: side === "-" ? null : MATCHUP_SIDES[side as keyof typeof MATCHUP_SIDES],
+    isAway: side === "-" ? null : side === "at",
     gamePhase: phase === "-" ? null : (phase as (typeof MATCHUP_PHASES)[number]),
   };
 }

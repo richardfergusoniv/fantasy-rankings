@@ -186,7 +186,7 @@ describe("dashboard URL state", () => {
     });
 
     it("ignores malformed values instead of opening a half-formed dialog", () => {
-      for (const bad of ["CAR", "CAR.TB", "CAR.TB.vs", "car.tb.vs.final", "CAR.CAR.vs.final", "CAR.TB.home.final", "CAR.TB.vs.done", "CAR.TB.vs.final.x", ""]) {
+      for (const bad of ["CAR", "CAR.TB", "CAR.TB.vs", "car.tb.vs.final", "CAR.CAR.vs.final", "CAR.TB.home.final", "CAR.TB.toString.final", "CAR.TB.constructor.final", "CAR.TB.__proto__.final", "CAR.TB.vs.done", "CAR.TB.vs.final.x", ""]) {
         expect(parseDashboardSearch(`?mu=${bad}`).matchup, bad).toBeNull();
       }
     });
