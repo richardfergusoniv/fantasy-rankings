@@ -16,6 +16,7 @@ Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-bod
 
 ## Shape and spacing
 
+- Text on tappable controls (buttons, selects, links, chip lists) uses `--type-control` (14px, same as tabs). The 12px `--type-caption` is for metadata, column heads and field labels, not for something you tap.
 - `--radius` is 12px; `sm`/`md`/`xl` derive from it. Small tags use 4px.
 - 4px spacing steps. Touch targets default to 44px.
 - One primary layout breakpoint at 760px, with additional responsive rules at max-width 420px and max-width 759px.
