@@ -176,3 +176,10 @@ describe("Roster highlight", () => {
     expect(contrastRatio(resolveVar(vars, "--on-roster-highlight"), highlight)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+describe("Radius tokens", () => {
+  it("keeps small-tag radii on --radius-xs instead of a bare 4px", () => {
+    const css = readFileSync(themePath, "utf8");
+    expect(css.match(/border-radius: 4px(?=\s*[;}])/g) ?? []).toEqual([]);
+  });
+});
