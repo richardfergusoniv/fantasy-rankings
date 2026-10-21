@@ -1,0 +1,61 @@
+name: E2E on preview
+
+# Runs the browser smoke tests against each Vercel preview once it is deployed, and reports the
+# result as an "e2e / preview" commit status on the deployed commit (a deployment_status run belongs
+# to the default branch, so it would not show up on the pull request by itself).
+#
+# The theme tests need no account. The sheet-history tests run only when these are set in the repo:
+#   secrets   E2E_LOGIN, E2E_PASSWORD   a dedicated test account
+#   variables E2E_LEAGUE_ID, E2E_PLAYER a league for that account and a player on its matchup page
+
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  smoke:
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      startsWith(github.event.deployment.environment, 'Preview')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PREVIEW_URL: ${{ github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
+      DEPLOYED_SHA: ${{ github.event.deployment.sha }}
+    steps:
+      # The tests only need a URL, so run the default branch's copy rather than the deployed commit's:
+      # the secrets below must never be exposed to code from a pull request.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright-core install --with-deps chromium
+      - name: Smoke tests
+        id: smoke
+        env:
+          E2E_BASE_URL: ${{ env.PREVIEW_URL }}
+          E2E_NO_SANDBOX: "1"
+          LOGIN: ${{ secrets.E2E_LOGIN }}
+          PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_LEAGUE_ID: ${{ vars.E2E_LEAGUE_ID }}
+          E2E_PLAYER: ${{ vars.E2E_PLAYER }}
+        run: npm run test:e2e
+      - name: Report on the deployed commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          state=failure
+          if [ "${{ steps.smoke.outcome }}" = "success" ]; then state=success; fi
+          gh api "repos/${{ github.repository }}/statuses/$DEPLOYED_SHA" \
+            -f state="$state" -f context="e2e / preview" \
+            -f description="Browser smoke tests against the preview" \
+            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
