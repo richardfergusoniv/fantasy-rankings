@@ -153,8 +153,10 @@ export function TeamStatsPanel({
   const stacks = useMemo(() => buildTeamStatsWeekStacks(rows), [rows]);
 
   // Tap a week to read every player's value and share (the bars carry values only as hover text).
-  const [inspectedWeek, setInspectedWeek] = useState<number | null>(null);
-  useEffect(() => { setInspectedWeek(null); }, [selectedTeam, selectedGroup, statId]);
+  // The pick carries the context it was made in, so changing team, group or stat drops it in the same render.
+  const inspectionKey = `${selectedTeam}|${selectedGroup}|${statId}`;
+  const [inspection, setInspection] = useState<{ key: string; week: number } | null>(null);
+  const inspectedWeek = inspection?.key === inspectionKey ? inspection.week : null;
   const inspected = stacks.find((stack) => stack.week === inspectedWeek && stack.total > 0) ?? null;
   const statLabel = TEAM_STATS_STAT_OPTIONS.find((option) => option.id === statId)?.label ?? "";
 
@@ -259,7 +261,7 @@ export function TeamStatsPanel({
                     disabled={stack.total <= 0}
                     aria-pressed={inspected?.week === stack.week}
                     aria-label={stack.total > 0 ? `Week ${stack.week}, ${total} ${statLabel}` : `Week ${stack.week}, no activity`}
-                    onClick={() => setInspectedWeek((current) => (current === stack.week ? null : stack.week))}
+                    onClick={() => setInspection(inspectedWeek === stack.week ? null : { key: inspectionKey, week: stack.week })}
                   >
                     <span className="team-stats-bar">
                       {stack.segments.map((segment) => {
@@ -285,10 +287,10 @@ export function TeamStatsPanel({
                 );
               })}
             </div>
-            <div className="team-stats-inspector" aria-live="polite">
+            <div className="team-stats-inspector">
               {inspected ? (
                 <>
-                  <p className="team-stats-inspector-title">
+                  <p className="team-stats-inspector-title" aria-live="polite">
                     <strong>{`Week ${inspected.week}`}</strong>
                     <span>{`${formatTeamStatsValue(statId, inspected.total)} ${statLabel}`}</span>
                   </p>
@@ -304,7 +306,7 @@ export function TeamStatsPanel({
                   </ul>
                 </>
               ) : (
-                <p className="team-stats-inspector-hint">Tap a week to see each player’s share.</p>
+                <p className="team-stats-inspector-hint" aria-live="polite">Tap a week to see each player’s share.</p>
               )}
             </div>
           </div>
