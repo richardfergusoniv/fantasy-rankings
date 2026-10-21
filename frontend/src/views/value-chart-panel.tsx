@@ -589,7 +589,7 @@ export function ValueChartPanel({
                 className="monitor-chart-expand-target"
                 role="button"
                 tabIndex={0}
-                aria-label="Open Pricing"
+                aria-label="Open Pricing. The expanded view has range choices and a date scrubber."
                 onClick={() => setIsExpanded(true)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {

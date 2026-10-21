@@ -1272,7 +1272,12 @@ main { padding: 12px 16px 0; }
   height: auto;
 }
 .monitor-value-chart-panel .monitor-value-chart .scatter-plot-body {
-  height: clamp(168px, 34dvh, 300px);
+  height: 168px;
+}
+@media (max-width: 759px) {
+  .monitor-value-chart-panel .monitor-value-chart .scatter-plot-body {
+    height: clamp(168px, 34dvh, 300px);
+  }
 }
 .monitor-chart-expand-hint {
   display: block;
