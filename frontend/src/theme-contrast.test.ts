@@ -298,9 +298,10 @@ describe("Data marks on light surfaces", () => {
   const vars = parseCssVars(extractRootBlock(readTheme()));
   const light = (name: string) => resolveVar(vars, name, "light");
 
-  it("keeps amber bars and markers visible on white and on their pale track", () => {
+  it("keeps amber bars and markers visible on white, their pale track and the grey bar track", () => {
     expect(contrastRatio(light("--data-mark"), light("--card"))).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(light("--data-mark"), light("--accent-soft"))).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(light("--data-mark"), light("--surface-2"))).toBeGreaterThanOrEqual(3);
   });
 
   it("leaves the dark value where it was", () => {
