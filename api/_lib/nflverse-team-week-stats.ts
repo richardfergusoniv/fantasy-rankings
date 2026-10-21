@@ -594,6 +594,16 @@ export function formatTeamStatsValue(statId: TeamStatsStatId, value: number): st
   return String(Math.round(value));
 }
 
+/**
+ * What the legend's per-player figure means. Snap % is each player's own rate,
+ * not a split of one total, so a position group's rows can add to more than 100%.
+ */
+export function teamStatsLegendCaption(statId: TeamStatsStatId): string {
+  if (statId === "snaps") return "Average snap % per game. Players share the field, so rows can add to more than 100%.";
+  if (statId === "targets") return "Average target share per game.";
+  return `${teamStatsStatDef(statId).label}, average per game.`;
+}
+
 export function formatTeamStatsPercent(percent: number): string {
   return `${Math.round(percent)}%`;
 }
