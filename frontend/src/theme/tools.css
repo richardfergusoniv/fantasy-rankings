@@ -363,12 +363,25 @@
   text-align: right;
   font-variant-numeric: tabular-nums lining-nums;
 }
-.team-stats-legend {
+.team-stats-legend-group {
   display: flex;
   flex: 0 1 220px;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 160px;
+}
+.team-stats-legend-caption {
+  margin: 0;
+  color: var(--dim);
+  font-size: var(--type-caption);
+  line-height: 1.35;
+}
+.team-stats-legend {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;

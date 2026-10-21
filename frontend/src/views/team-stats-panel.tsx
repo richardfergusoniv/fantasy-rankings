@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   NFL_TEAM_CODES,
   TEAM_STATS_GROUP_POSITIONS,
@@ -14,6 +14,7 @@ import {
   formatTeamStatsPercent,
   formatTeamStatsValue,
   normalizeTeamStatsPlayerName,
+  teamStatsLegendCaption,
   type TeamStatsGroupId,
   type TeamStatsStatId,
 } from "../../../api/_lib/nflverse-team-week-stats";
@@ -159,6 +160,7 @@ export function TeamStatsPanel({
   const inspectedWeek = inspection?.key === inspectionKey ? inspection.week : null;
   const inspected = stacks.find((stack) => stack.week === inspectedWeek && stack.total > 0) ?? null;
   const statLabel = TEAM_STATS_STAT_OPTIONS.find((option) => option.id === statId)?.label ?? "";
+  const legendCaptionId = useId();
   // The same numbers as a table, for reading exact values or navigating without the chart.
   const [showTable, setShowTable] = useState(false);
 
@@ -337,10 +339,10 @@ export function TeamStatsPanel({
                     <strong>{`Week ${inspected.week}`}</strong>{" "}
                     <span>{`${formatTeamStatsValue(statId, inspected.total)} ${statLabel}`}</span>
                   </>
-                ) : "Tap a week to see each player’s share."}
+                ) : "Tap a week to see each player’s share of that week."}
               </p>
               {inspected ? (
-                <ul>
+                <ul aria-label={`Share of week ${inspected.week} ${statLabel}`}>
                   {inspected.segments.map((segment) => (
                     <li key={segment.key}>
                       <i style={{ backgroundColor: segment.key === "__other__" ? TEAM_STATS_OTHER_COLOR : playerMeta.get(segment.key)?.color ?? TEAM_STATS_OTHER_COLOR }} />
@@ -355,7 +357,9 @@ export function TeamStatsPanel({
               </>
             )}
           </div>
-          <ul className="team-stats-legend">
+          <div className="team-stats-legend-group">
+          <p id={legendCaptionId} className="team-stats-legend-caption">{teamStatsLegendCaption(statId)}</p>
+          <ul className="team-stats-legend" aria-labelledby={legendCaptionId}>
             {rows.map((row) => {
               const meta = playerMeta.get(row.key);
               // Completed weeks only: a partial in-progress week would
@@ -386,6 +390,7 @@ export function TeamStatsPanel({
               );
             })}
           </ul>
+          </div>
         </div>
       )}
     </section>

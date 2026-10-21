@@ -10,6 +10,7 @@ import {
   formatTeamStatsValue,
   parsePlayerWeekStatsCsv,
   parseTeamWeekSnapCountsCsv,
+  teamStatsLegendCaption,
   type TeamWeekSnapRow,
   type TeamWeekStatRow,
 } from "./nflverse-team-week-stats.js";
@@ -390,5 +391,20 @@ describe("nflverse-team-week-stats", () => {
     // but the bar stays empty and the total stays 0.
     expect(stacks[1]).toMatchObject({ total: 0, hasActivity: true, segments: [] });
     expect(stacks[2]).toMatchObject({ total: 0, hasActivity: false, segments: [] });
+  });
+});
+
+describe("teamStatsLegendCaption", () => {
+  it("says snap % is a per-player rate that can pass 100% across a group", () => {
+    expect(teamStatsLegendCaption("snaps")).toMatch(/more than 100%/);
+  });
+
+  it("names target share without the overlap note", () => {
+    expect(teamStatsLegendCaption("targets")).toBe("Average target share per game.");
+  });
+
+  it("labels count stats as per-game averages", () => {
+    expect(teamStatsLegendCaption("rushing_yards")).toBe("Rush yards, average per game.");
+    expect(teamStatsLegendCaption("fantasy_points")).toBe("Fantasy points, average per game.");
   });
 });
