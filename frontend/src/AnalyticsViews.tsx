@@ -1057,9 +1057,9 @@ function ScatterPlot({
             <p className={focused ? "scatter-readout" : "scatter-readout scatter-readout-hint"} role="status">
               {focused ? (
                 <>
-                  <strong>{focused.name}</strong>
-                  <span>{focused.team}{selectedTeamIds.has(focused.id) ? " · My team" : ""}</span>
-                  <span>{`${xAxis.short} ${focused.x}`}</span>
+                  <strong>{focused.name}</strong>{" "}
+                  <span>{focused.team}{selectedTeamIds.has(focused.id) ? " · My team" : ""}</span>{" "}
+                  <span>{`${xAxis.short} ${focused.x}`}</span>{" "}
                   <span>{`${yAxis.short} ${focused.y}`}</span>
                 </>
               ) : "Tap a point or choose a player to read its values."}

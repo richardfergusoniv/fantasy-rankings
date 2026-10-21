@@ -334,7 +334,7 @@ export function TeamStatsPanel({
               <p className={inspected ? "team-stats-inspector-title" : "team-stats-inspector-hint"} role="status">
                 {inspected ? (
                   <>
-                    <strong>{`Week ${inspected.week}`}</strong>
+                    <strong>{`Week ${inspected.week}`}</strong>{" "}
                     <span>{`${formatTeamStatsValue(statId, inspected.total)} ${statLabel}`}</span>
                   </>
                 ) : "Tap a week to see each player’s share."}
