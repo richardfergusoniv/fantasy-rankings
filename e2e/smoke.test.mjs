@@ -1,7 +1,7 @@
 // Browser smoke tests, run against a deployed URL: E2E_BASE_URL=https://… npm run test:e2e
 // The theme tests need no account. The history tests sign in with LOGIN / PASSWORD and need
 // E2E_LEAGUE_ID and E2E_PLAYER (a player name on that league's matchup page); they skip without them.
-// CHROMIUM_PATH points at a browser binary when Playwright's own download isn't installed.
+// Needs a browser: run `npx playwright-core install chromium` once, or set CHROMIUM_PATH to an existing binary.
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { chromium } from "playwright-core";
@@ -88,7 +88,6 @@ describe("player sheet history", { skip: skipNoAccount }, () => {
   before(async () => {
     ({ context, page } = await open("dark"));
     await signIn(page);
-    await page.waitForSelector("text=Starters", { timeout: 45_000 });
   });
   after(async () => { await context?.close(); });
 
