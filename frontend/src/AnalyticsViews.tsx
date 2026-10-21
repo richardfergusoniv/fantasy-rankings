@@ -1037,16 +1037,17 @@ function ScatterPlot({
             <span className="scatter-axis-x" aria-hidden="true">{axisTitle}</span>
           </div>
           <div className="scatter-inspector">
-            {focused ? (
-              <p className="scatter-readout" role="status">
-                <strong>{focused.name}</strong>
-                <span>{focused.team}{selectedTeamIds.has(focused.id) ? " · My team" : ""}</span>
-                <span>{`${xAxis.short} ${focused.x}`}</span>
-                <span>{`${yAxis.short} ${focused.y}`}</span>
-              </p>
-            ) : (
-              <p className="scatter-readout scatter-readout-hint" role="status">Tap a point or choose a player to read its values.</p>
-            )}
+            {/* One status line stays mounted so changes are announced. */}
+            <p className={focused ? "scatter-readout" : "scatter-readout scatter-readout-hint"} role="status">
+              {focused ? (
+                <>
+                  <strong>{focused.name}</strong>
+                  <span>{focused.team}{selectedTeamIds.has(focused.id) ? " · My team" : ""}</span>
+                  <span>{`${xAxis.short} ${focused.x}`}</span>
+                  <span>{`${yAxis.short} ${focused.y}`}</span>
+                </>
+              ) : "Tap a point or choose a player to read its values."}
+            </p>
             <ul className="scatter-point-list" aria-label="Players on the chart">
               {focusableData.map((point) => (
                 <li key={point.id}>
