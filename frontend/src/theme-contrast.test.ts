@@ -3,7 +3,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const themePath = join(dirname(fileURLToPath(import.meta.url)), "theme.css");
+const srcDir = dirname(fileURLToPath(import.meta.url));
+const themeEntryPath = join(srcDir, "theme.css");
+
+/** theme.css only @imports ./theme/*.css; tests read the whole cascade in import order. */
+function readTheme(): string {
+  const entry = readFileSync(themeEntryPath, "utf8");
+  const parts = [...entry.matchAll(/@import\s+"\.\/(theme\/[\w-]+\.css)";/g)].map((m) => readFileSync(join(srcDir, m[1]), "utf8"));
+  if (parts.length === 0) throw new Error("theme.css imports no ./theme/*.css files");
+  return parts.join("\n");
+}
 
 function extractRootBlock(css: string): string {
   const start = css.indexOf(":root {");
@@ -94,7 +103,7 @@ function contrastRatio(foreground: string, background: string): number {
 }
 
 describe("Look D theme contrast", () => {
-  const css = readFileSync(themePath, "utf8");
+  const css = readTheme();
   const vars = parseCssVars(extractRootBlock(css));
 
   const canvas = resolveVar(vars, "--background");
@@ -170,7 +179,7 @@ describe("Look D theme contrast", () => {
 
 describe("Token hygiene", () => {
   it("has no raw hex colors in theme.css outside :root", () => {
-    const css = readFileSync(themePath, "utf8");
+    const css = readTheme();
     const root = extractRootBlock(css);
     const rest = css.replace(root, "").replace(/\/\*[\s\S]*?\*\//g, "");
     const raw = [...rest.matchAll(/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b/g)].map((m) => m[0]);
@@ -179,7 +188,7 @@ describe("Token hygiene", () => {
 });
 
 describe("Row divider contrast", () => {
-  const vars = parseCssVars(extractRootBlock(readFileSync(themePath, "utf8")));
+  const vars = parseCssVars(extractRootBlock(readTheme()));
   const divider = resolveVar(vars, "--row-divider");
 
   it("keeps list-row dividers near 3:1 on canvas and panel", () => {
@@ -189,7 +198,7 @@ describe("Row divider contrast", () => {
 });
 
 describe("Roster highlight", () => {
-  const vars = parseCssVars(extractRootBlock(readFileSync(themePath, "utf8")));
+  const vars = parseCssVars(extractRootBlock(readTheme()));
   const highlight = resolveVar(vars, "--roster-highlight");
   const bg = resolveVar(vars, "--roster-highlight-bg");
 
@@ -206,19 +215,19 @@ describe("Roster highlight", () => {
 
 describe("Radius tokens", () => {
   it("keeps small-tag radii on --radius-xs instead of a bare 4px", () => {
-    const css = readFileSync(themePath, "utf8");
+    const css = readTheme();
     expect(css.match(/border-radius\s*:\s*4px\s*(?:!important\s*)?(?=[;}])/g) ?? []).toEqual([]);
   });
 });
 
 describe("Light theme contrast", () => {
-  const vars = parseCssVars(extractRootBlock(readFileSync(themePath, "utf8")));
+  const vars = parseCssVars(extractRootBlock(readTheme()));
   const light = (name: string) => resolveVar(vars, name, "light");
   const canvas = light("--background");
   const panel = light("--card");
 
   it("declares both schemes", () => {
-    expect(extractRootBlock(readFileSync(themePath, "utf8"))).toContain("color-scheme: light dark;");
+    expect(extractRootBlock(readTheme())).toContain("color-scheme: light dark;");
   });
 
   it("keeps text, dim text and links readable on canvas and panel", () => {
@@ -267,7 +276,20 @@ describe("Light theme contrast", () => {
 
 describe("Focus outlines", () => {
   it("use --ring, not the fixed amber --accent that disappears on light surfaces", () => {
-    const css = readFileSync(themePath, "utf8");
+    const css = readTheme();
     expect(css.match(/outline\s*:[^;]*var\(--accent\)[^;]*;/g) ?? []).toEqual([]);
+  });
+});
+
+describe("Theme file layout", () => {
+  it("keeps theme.css as imports only, so rule order lives in one visible list", () => {
+    const entry = readFileSync(themeEntryPath, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rest = entry.split("\n").map((line) => line.trim()).filter((line) => line && !line.startsWith("@import"));
+    expect(rest).toEqual([]);
+  });
+
+  it("imports overrides.css last", () => {
+    const imports = [...readFileSync(themeEntryPath, "utf8").matchAll(/@import\s+"\.\/theme\/([\w-]+)\.css";/g)].map((m) => m[1]);
+    expect(imports.at(-1)).toBe("overrides");
   });
 });

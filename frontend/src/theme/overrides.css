@@ -1,0 +1,450 @@
+/* Late component-system overrides: type ramp, surfaces, actions, links, auth and toasts. These must stay last. */
+/* Component-system type. One sans family, one size ramp, no display serif. */
+body { font-family: var(--font-ui); }
+
+h1,
+h2,
+h3,
+.news-card-headline,
+.league-picker select,
+.section-heading h2,
+.section-heading h3,
+.bench-section summary > span:first-child,
+.news-run-heading h2,
+.power-hero > div > strong {
+  letter-spacing: -0.02em;
+}
+h1, h2, h3 { margin: 0; }
+h1, h2 { font-size: var(--type-display); font-weight: 600; }
+h3 { font-size: var(--type-section); font-weight: 600; }
+
+.section-heading > span,
+.bench-section summary > span:nth-child(2),
+.weekly-page-intro span,
+.tool-section-heading span,
+.news-intro p,
+.power-hero > div > span {
+  color: var(--muted-foreground);
+  font-size: var(--type-eyebrow);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+.power-position-table-label {
+  color: var(--text);
+  font-size: var(--type-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+/* Paper surfaces: warm borders and only quiet, warm-tinted depth. */
+.player-detail-values,
+.trade-balance,
+.comparison-chart-card,
+.comparison-selector-card,
+.scatter-frame,
+.power-radar,
+.news-status {
+  border-color: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-control);
+}
+.news-card-modal,
+.matchup-data-card,
+.player-detail-sheet,
+.trade-result-card,
+.chart-result-card,
+.trade-picker,
+.comparison-picker-sheet,
+.power-team-card {
+  border-color: var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-modal);
+}
+
+/* Primary actions use the amber pill; secondary actions use the panel surface and border.
+   `button:not([data-slot])` sets `color: inherit`, so these selectors include the
+   element and beat it. Dark ink on --action (--on-accent #14120a on #f0b429) meets AA. */
+button.trade-calculate-button,
+button.chart-open-button:not(:disabled),
+.empty-state button,
+.integration-row form button {
+  border: 1px solid var(--action);
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+button.chart-open-button:disabled {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--dim);
+  font-weight: 600;
+  cursor: default;
+}
+button.trade-calculate-button svg,
+button.chart-open-button svg,
+.empty-state button svg,
+.integration-row form button svg {
+  color: var(--on-accent);
+}
+.trade-calculate-button:hover:not(:disabled),
+.chart-open-button:hover:not(:disabled),
+.empty-state button:hover:not(:disabled),
+.integration-row form button:hover:not(:disabled) {
+  border-color: var(--action-hover);
+  background: var(--action-hover);
+}
+.trade-calculate-button:active:not(:disabled),
+.chart-open-button:active:not(:disabled),
+.empty-state button:active:not(:disabled),
+.integration-row form button:active:not(:disabled) {
+  border-color: var(--action-pressed);
+  background: var(--action-pressed);
+}
+.section-error button,
+.trade-picker-header button,
+.trade-pagination button,
+button.trade-add-player,
+.saved-view-actions button,
+.saved-view-form button {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+}
+button.trade-add-player:hover:not(:disabled),
+.saved-view-actions button:hover:not(:disabled),
+.saved-view-form button:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--link);
+}
+button.trade-add-player:active:not(:disabled),
+.saved-view-actions button:active:not(:disabled),
+.saved-view-form button:active:not(:disabled) {
+  background: var(--accent-medium);
+  color: var(--link-active);
+}
+
+/* Selected controls, tappable badges, links, chevrons and focus all share orange. */
+a { color: var(--link); }
+a:hover { color: var(--link-hover); }
+a:active { color: var(--link-active); }
+.refresh-button:hover:not(:disabled),
+.row-toggle-state:hover:not(:disabled),
+.remove-asset:hover:not(:disabled) { color: var(--link-hover); background: var(--accent-soft); }
+.refresh-button:active:not(:disabled),
+.row-toggle-state:active:not(:disabled),
+.remove-asset:active:not(:disabled) { color: var(--link-active); background: var(--accent-medium); }
+
+/* Numbers stay in the UI family with tabular lining figures and consistent alignment. */
+.score-line strong,
+.score-line small,
+.matchup-number,
+.matchup-slot,
+.matchup-box-score > strong,
+.matchup-grade-value,
+.number-cell,
+.ranking-proj,
+.player-search-value,
+.player-detail-values strong,
+.player-team-context-grid strong,
+.dst-breakdown-grid strong,
+.trade-balance-labels b,
+.trade-grade-grid strong,
+.power-score,
+.draft-row > span:nth-child(n + 2),
+.tier-cliff-rank,
+.tier-cliff-drop,
+.boom-bust-values {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+.number-cell,
+.ranking-proj,
+.player-search-value,
+.player-detail-values strong,
+.player-team-context-grid strong,
+.dst-breakdown-grid strong,
+.trade-balance-labels b,
+.trade-grade-grid strong,
+.power-score,
+.sos-cell,
+.draft-row > span:nth-child(n + 2),
+.tier-cliff-drop,
+.boom-bust-values { text-align: right; font-weight: 600; }
+
+/* Semantic deltas and progress indicators reserve green/red for real meaning. */
+.positive { color: var(--positive); }
+.negative { color: var(--negative); }
+.trade-grade-grid strong.positive { background: var(--stat-strength-soft); color: var(--stat-strength-readable); }
+.trade-grade-grid strong.negative { background: var(--stat-weakness-soft); color: var(--stat-weakness-readable); }
+.trade-balance-track { height: 4px; background: transparent; }
+.percentile-row.strength .percentile-bar > i,
+.comparison-bar.winner > i { background: var(--stat-strength-soft); box-shadow: inset 3px 0 0 var(--stat-strength); }
+.percentile-row.weakness .percentile-bar > i { background: var(--stat-weakness-soft); box-shadow: inset 3px 0 0 var(--stat-weakness); }
+
+/* Matchup's deliberately flat row hierarchy is retained; only its tokens change. */
+.matchup-page .score-team.mine .score-line strong { color: var(--text); }
+.matchup-data-card { box-shadow: var(--shadow-modal); }
+
+/* Player names stay semibold in every section; numeric values keep their existing emphasis. */
+.matchup-page .matchup-name-line strong,
+.player-name,
+.ranking-name-line > strong,
+.player-search-name > strong,
+.player-detail-title-line h2,
+.trade-side-search-results > button > span > strong,
+.trade-picker-player > strong,
+.advanced-player-results > button > span > strong,
+.advanced-player-name h2,
+.comparison-picker-results > button span > strong,
+.comparison-heading > div > strong,
+.tier-cliff-player > strong,
+.boom-bust-player > strong,
+.drafted-elsewhere button > span > strong,
+.draft-player-name-line > strong {
+  font-weight: 600;
+}
+
+
+/*
+ * Boxed-player rhythm
+ * Matchup starters are the reference: an 80px row split into two 40px touch
+ * bands, with the name settling at the bottom of the first band and matchup
+ * metadata starting at the top of the second. Reuse that rhythm for the
+ * full-size player rows; compact comparison slots own a separate 4px scale.
+ */
+.matchup-row,
+.player-row,
+.ranking-row,
+.player-search-result,
+.trade-result-row,
+.comparison-picker-results > button {
+  min-height: var(--player-box-height);
+}
+
+/*
+ * Explorer rankings / waivers and the draft board share one compact row height.
+ * Scoped so Matchup, trade, and power keep the root token.
+ */
+.rankings-view,
+.draft-board {
+  --player-row-height: 56px;
+}
+
+.rankings-view {
+  --player-box-height: var(--player-row-height);
+  --player-box-half: calc(var(--player-row-height) / 2);
+}
+
+.rankings-view .ranking-row,
+.rankings-view .player-search-result {
+  min-height: var(--player-row-height);
+}
+
+.rankings-view .ranking-row .ranking-player {
+  grid-template-rows: var(--player-box-half) var(--player-box-half);
+}
+
+.rankings-view .ranking-row .ranking-name-line,
+.rankings-view .ranking-row .ranking-meta-line {
+  min-height: var(--player-box-half);
+}
+
+.rankings-view .ranking-row .matchup-reference-button.matchup-reference-tag {
+  min-height: 28px;
+}
+
+/* Player opener sits behind the row. The roster chip is a sibling control. */
+.rankings-view .ranking-row {
+  position: relative;
+}
+.rankings-view .ranking-row-open {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.rankings-view .ranking-row-open:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
+}
+.rankings-view .ranking-row > .ranking-player,
+.rankings-view .ranking-row > .ranking-proj {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.rankings-view .ranking-row .matchup-reference-button,
+.rankings-view .ranking-row .roster-owner-button {
+  pointer-events: auto;
+}
+.rankings-view .ranking-row-button:has(.roster-owner-button:active) {
+  background: var(--surface);
+}
+.rankings-view .ranking-row-button.is-my-roster:has(.roster-owner-button:active) {
+  background: var(--roster-highlight-bg);
+}
+/* Chip stays ~16px. Padding and a negative margin make a 44px hit box inside the 56px row. */
+.rankings-view .ranking-row .roster-owner-button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 112px;
+  min-width: 44px;
+  height: auto;
+  margin: 0;
+  margin-block: -20px -8px;
+  padding-block: 20px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: visible;
+}
+.rankings-view .ranking-row .roster-owner-button::before {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: 44px;
+  transform: translate(-50%, -50%);
+  content: "";
+}
+.rankings-view .ranking-row .roster-owner-button .roster-owner-tag {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.matchup-player {
+  grid-template-rows: var(--player-box-half) var(--player-box-half);
+}
+.matchup-name-line strong,
+.player-name,
+.ranking-name-line strong,
+.player-search-name strong,
+.comparison-picker-results strong {
+  line-height: var(--player-name-leading);
+}
+
+.player-main,
+.ranking-player,
+.player-search-main,
+.comparison-picker-results > button > span {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: var(--player-box-half) var(--player-box-half);
+  align-content: center;
+  gap: 0;
+}
+
+.player-name-line,
+.ranking-name-line,
+.player-search-name,
+.comparison-picker-results > button > span > strong {
+  min-height: var(--player-box-half);
+  align-items: flex-end;
+  margin-top: 0;
+  padding-bottom: var(--player-stack-nudge);
+}
+.ranking-name-line {
+  padding-bottom: 0;
+}
+
+.player-meta,
+.ranking-meta-line,
+.player-search-meta,
+.comparison-picker-results > button > span > small {
+  min-height: var(--player-box-half);
+  align-items: flex-start;
+  margin-top: 0;
+  padding-top: var(--player-stack-nudge);
+  line-height: 1;
+}
+
+.player-row,
+.ranking-row,
+.player-search-result,
+.trade-result-row {
+  padding-block: 0;
+}
+.ranking-row,
+.player-search-result {
+  padding-inline: var(--player-box-inline);
+}
+
+.comparison-selector-card .comparison-cards {
+  align-items: start;
+  grid-auto-rows: max-content;
+}
+.comparison-picker-results > button {
+  align-items: stretch;
+  padding-block: 0;
+}
+.comparison-picker-results > button > span > strong {
+  display: flex;
+}
+.comparison-picker-results > button > span > small {
+  display: flex;
+  color: var(--dim);
+  font-size: var(--type-caption);
+  font-weight: 600;
+}
+
+.draft-row button.draft-player-open,
+.draft-row button.draft-player-open.is-single-line {
+  min-height: 0;
+  grid-template-rows: auto;
+  align-content: center;
+  align-items: center;
+  gap: 2px;
+}
+.draft-row:has(> .draft-player-open.is-single-line) {
+  min-height: var(--player-row-height);
+}
+/* Auth screens use the shared card, input, and button components. */
+
+[data-sonner-toaster] {
+  font-family: var(--font-ui);
+}
+[data-sonner-toast][data-styled="true"] {
+  font-family: var(--font-ui);
+}
+[data-sonner-toast][data-styled="true"] [data-button] {
+  height: auto;
+  min-height: 44px;
+  padding-inline: 12px;
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--primary-foreground);
+  font-family: var(--font-ui);
+  font-size: var(--type-caption);
+}
+[data-sonner-toast][data-styled="true"] [data-button]:focus-visible {
+  box-shadow: 0 0 0 2px var(--link);
+}
+
+/* One line at the top of a framed table, not two: when a section
+   heading sits directly on a framed table, the heading's hairline
+   would fuse with the frame's brighter top border into a stacked
+   double line. Drop the heading's line in exactly that spot; the
+   heading keeps it everywhere else (above charts, controls, cards). */
+.section-heading:has(+ .data-table-frame),
+.section-heading:has(+ .power-table) { border-bottom: 0; }

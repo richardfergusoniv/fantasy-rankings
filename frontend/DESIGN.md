@@ -1,6 +1,6 @@
 # Fantasy Rankings design (frontend)
 
-`frontend/src/theme.css` is the source of truth. Token values live in its `:root` block and are guarded by `frontend/src/theme-contrast.test.ts`; this file records intent and does not repeat values that change.
+`frontend/src/theme.css` is the entry point and `frontend/src/theme/*.css` is the source of truth. `theme.css` holds only `@import`s; the files are one cascade in a fixed order (`base`, `shell`, `tools`, `matchup`, `players`, `command-bar`, `trade`, `comparison`, `analytics`, `power`, `feed`, `draft`, `responsive`, `overrides`), so add a rule to the file for its view and put it in `overrides.css` only if it must win. Token values live in the `:root` block of `theme/base.css` and are guarded by `frontend/src/theme-contrast.test.ts`; this file records intent and does not repeat values that change.
 
 ## Theme
 
@@ -24,7 +24,7 @@ Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-bod
 
 ## Rules
 
-- No raw hex colors in `theme.css` outside `:root` (enforced by the token-hygiene test).
+- No raw hex colors in `theme/*.css` outside `:root` (enforced by the token-hygiene test).
 - Don't encode meaning in hue alone; pair color with a glyph or label.
 
 ## History

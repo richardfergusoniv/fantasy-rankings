@@ -1,0 +1,156 @@
+/* Power rankings and team cards. */
+.power-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 2px 12px; padding: 12px; }
+.power-hero > div { display: flex; align-items: baseline; gap: 8px; }
+.power-hero > div > span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.power-hero > div > strong { color: var(--text); font-size: var(--type-display); line-height: 1; font-weight: 700; }
+.power-hero p { margin: 0; color: var(--text); font-size: var(--type-body); font-weight: 600; }
+.power-hero small { grid-column: 1 / -1; margin-top: 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.power-chart-section, .power-table-section { margin-top: 18px; }
+.power-section-heading { align-items: flex-end; }
+.power-section-heading > span { margin-left: auto; text-align: right; }
+.power-radar { height: 286px; display: grid; place-items: center; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); }
+.power-radar svg { display: block; width: min(100%, 390px); height: 278px; overflow: visible; }
+.power-radar text { fill: var(--text); font-size: var(--type-caption); font-weight: 700; }
+.radar-grid, .radar-axis { fill: none; stroke: var(--border); stroke-width: 1; }
+.radar-average { fill: var(--dim); fill-opacity: .06; stroke: var(--dim); stroke-width: 1.5; }
+.radar-team { fill: var(--chart-team); fill-opacity: .16; stroke: var(--chart-team); stroke-width: 2.2; }
+.radar-dot { fill: var(--chart-team); stroke: var(--surface); stroke-width: 1.5; }
+.power-position-table-label { margin: 10px 1px 0; color: var(--accent-hover); font-size: var(--type-eyebrow); font-weight: 600; letter-spacing: .045em; text-transform: uppercase; }
+.power-future-picks-average { margin: 10px 1px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.power-future-picks-average strong { color: var(--ink); font-weight: 700; }
+.power-position-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 8px; overflow: clip; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--hairline); }
+.power-position-values > div { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 7px; min-width: 0; padding: 8px 9px; background: var(--surface); }
+.power-position-values > .power-position-total { grid-column: 1 / -1; }
+.power-position-values > .power-position-total-highlight { background: var(--roster-highlight-bg); }
+.power-position-values > .power-position-total-highlight span, .power-position-values > .power-position-total-highlight strong { color: var(--roster-highlight); }
+.power-position-values span { align-self: center; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.power-position-values strong { text-align: right; font-size: var(--type-body); font-weight: 700; }
+.power-list-item { display: block; }
+.power-row { display: grid; width: 100%; grid-template-columns: 26px minmax(0, 1fr) 82px; gap: 8px; min-height: 58px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); text-align: left; }
+.power-row.is-user { background: var(--roster-highlight-bg); }
+.power-row.is-opponent { background: var(--opponent-row); }
+.power-row-toggle { cursor: pointer; touch-action: pan-y; }
+.power-row-toggle:active { background: var(--surface-2); }
+.power-rank { color: var(--dim); font-size: var(--type-body); font-weight: 700; }
+.power-row.is-user .power-rank, .power-row.is-user .power-team > strong, .power-row.is-user .power-total strong { color: var(--link); }
+.power-row.is-opponent .power-rank, .power-row.is-opponent .power-team > strong, .power-row.is-opponent .power-total strong { color: var(--foreground); }
+.power-team { min-width: 0; }
+.power-team > strong { display: block; overflow: hidden; font-size: var(--type-body); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.power-team-record { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.power-team > span { display: block; margin-top: 2px; overflow: hidden; color: var(--dim); font-size: var(--type-caption); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.power-total { min-width: 0; text-align: right; }
+.power-total strong { display: block; font-size: var(--type-body); font-weight: 700; }
+.power-total span { display: block; margin-top: 2px; overflow: hidden; color: var(--dim); font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.power-team-card-backdrop { position: fixed; z-index: 990; inset: 0; display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--overlay); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: backdropIn .12s ease-out both; }
+.power-team-card-backdrop.is-above-player { z-index: 1040; }
+.power-team-card-backdrop.is-above-player.is-obscured { z-index: 990; }
+.power-team-card-backdrop.is-obscured { pointer-events: none; }
+.power-team-card { width: min(100%, 560px); max-height: min(88dvh, 760px); overflow-y: auto; overscroll-behavior-y: contain; border: 1px solid var(--hairline); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-modal); animation: newsCardIn .14s cubic-bezier(.2,.7,.2,1) both; -webkit-overflow-scrolling: touch; }
+.power-team-card-header { position: sticky; z-index: 2; top: 0; display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 9px 16px; border-bottom: 1px solid var(--hairline); background: var(--surface); }
+.power-team-card-header h2 { min-width: 0; margin: 0; overflow: hidden; font-size: var(--type-display); line-height: 1.12; font-weight: 700; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+.power-team-card-header h2.is-user { color: var(--roster-highlight); }
+.power-team-card-header button { flex: none; display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface-2); color: var(--dim); font-size: var(--type-section); line-height: 1; cursor: pointer; }
+.power-team-card-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--hairline); }
+.power-team-card-summary.has-picks { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.power-team-card-summary > div { min-width: 0; padding: 11px 16px 10px; }
+.power-team-card-summary > div + div { border-left: 1px solid var(--hairline); text-align: right; }
+.power-team-card-summary.has-picks > div { padding-inline: 10px; }
+.power-team-card-summary span, .power-team-card-summary strong { display: block; }
+.power-team-card-summary span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.power-team-card-summary strong { margin-top: 3px; font-size: var(--type-display); line-height: 1; font-weight: 700; }
+.power-team-card-positions { display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr)); border-bottom: 1px solid var(--hairline); }
+.power-team-card-positions > div { min-width: 0; padding: 8px 7px; border-right: 1px solid var(--hairline); text-align: center; }
+.power-team-card-positions > div:last-child { border-right: 0; }
+.power-team-card-positions span, .power-team-card-positions strong { display: block; }
+.power-team-card-positions span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.power-team-card-positions strong { margin-top: 2px; overflow: hidden; font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; }
+.power-team-card-roster .ranking-row:last-child { border-bottom: 0; }
+.power-team-card-roster .matchup-reference-tag.sos-soft:not(.matchup-reference-button),
+.power-team-card-roster .matchup-reference-button.sos-soft .matchup-reference-button-label {
+  border-color: color-mix(in srgb, var(--stat-strength) 18%, var(--hairline));
+  background: var(--stat-strength-soft);
+  color: var(--stat-strength-readable);
+  font-weight: 700;
+}
+.power-team-card-roster .matchup-reference-tag.sos-tough:not(.matchup-reference-button),
+.power-team-card-roster .matchup-reference-button.sos-tough .matchup-reference-button-label {
+  border-color: color-mix(in srgb, var(--stat-weakness) 18%, var(--hairline));
+  background: var(--stat-weakness-soft);
+  color: var(--stat-weakness-readable);
+  font-weight: 700;
+}
+.power-team-card-roster .ranking-meta-line,
+.power-team-card-roster .matchup-meta-group {
+  align-items: center;
+  line-height: 1;
+}
+.power-team-card-roster .ranking-meta-line { padding-top: 0; }
+.power-team-card-roster .matchup-meta-group { flex-wrap: nowrap; gap: 5px; }
+.power-team-card-roster .ranking-meta-position,
+.power-team-card-roster .matchup-reference-tag:not(.matchup-reference-button),
+.power-team-card-roster .matchup-reference-button-label {
+  display: inline-flex;
+  box-sizing: border-box;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 5px;
+  line-height: 1;
+  font-size: var(--type-caption);
+}
+.power-team-card-roster .ranking-meta-position {
+  padding-inline: 0;
+  border: 1px solid transparent;
+  color: var(--dim);
+  font-weight: 600;
+}
+.power-team-card-roster .ranking-row .matchup-reference-button.matchup-reference-tag {
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  line-height: 1;
+}
+.power-team-card-roster .ranking-row { align-items: center; }
+.power-team-card-roster .ranking-player {
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 0;
+}
+.power-team-card-roster .ranking-name-line,
+.power-team-card-roster .ranking-meta-line {
+  align-items: center;
+  margin-top: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.power-team-card-roster .ranking-name-line { min-height: 22px; }
+.power-team-card-roster .ranking-meta-line { min-height: 18px; }
+.power-team-card-roster .power-roster-player { position: relative; }
+.power-team-card-roster .power-roster-open {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.power-team-card-roster .power-roster-open:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
+}
+.power-team-card-roster .power-roster-player > .ranking-player,
+.power-team-card-roster .power-roster-player > .ranking-proj {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.power-team-card-roster .power-roster-player .matchup-reference-button {
+  pointer-events: auto;
+}
+.power-roster-player { font-variant-numeric: tabular-nums; }
+.power-slot-chip { flex: none; max-width: 74px; overflow: hidden; padding: 2px 4px 1px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); line-height: 1.2; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.power-bench-heading { min-height: 27px; display: flex; align-items: center; padding: 0 10px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.power-roster-empty { padding: 22px 12px; color: var(--dim); text-align: center; font-size: var(--type-caption); line-height: 1.4; }
+.power-note { margin: 12px 2px 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.45; }
