@@ -166,6 +166,7 @@ describe("nflverse-team-week-stats", () => {
       snapRow({ week: 1, player: "DK Metcalf", position: "WR", team: "PIT", snaps: 64, pct: 0.96 }),
       snapRow({ week: 2, player: "DK Metcalf", position: "WR", team: "PIT", snaps: 50, pct: 0.8 }),
       snapRow({ week: 1, player: "Practice Squad", position: "WR", team: "PIT", snaps: 0, pct: 0, gameType: "PRE" }),
+      snapRow({ week: 1, player: "Chase Brown", position: "HB", team: "CIN", snaps: 46, pct: 0.72 }),
     ].join("\n");
 
     const stats = parsePlayerWeekStatsCsv(statsCsv);
@@ -176,8 +177,9 @@ describe("nflverse-team-week-stats", () => {
     expect(stats[0]?.targetShare).toBeCloseTo(25);
     expect(stats[0]?.receivingFirstDowns).toBe(4);
     expect(stats[0]?.passingFirstDowns).toBe(0);
-    expect(snaps).toHaveLength(2);
+    expect(snaps).toHaveLength(3);
     expect(snaps[0]?.offensePct).toBeCloseTo(96);
+    expect(snaps[2]?.position).toBe("RB");
   });
 
   it("builds stacked snap rows sorted by season total", () => {
