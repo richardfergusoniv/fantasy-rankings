@@ -206,7 +206,7 @@ function AuthScreen() {
   }
 
   return (
-    <main className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
+    <div role="main" className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
       <div className="absolute right-2 top-[max(0.5rem,env(safe-area-inset-top))]"><ThemeToggle /></div>
       <SkipLink href="#auth-form">Skip to form</SkipLink>
       <Card className="w-full max-w-sm py-6">
@@ -278,7 +278,7 @@ function AuthScreen() {
           </form>
         </CardContent>
       </Card>
-    </main>
+    </div>
   );
 }
 
@@ -343,7 +343,7 @@ function ConnectSleeper({
   }
 
   return (
-    <main className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
+    <div role="main" className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
       <div className="absolute right-2 top-[max(0.5rem,env(safe-area-inset-top))]"><ThemeToggle /></div>
       <SkipLink href="#connect-form">Skip to form</SkipLink>
       <Card className="w-full max-w-sm py-6">
@@ -389,6 +389,6 @@ function ConnectSleeper({
           </form>
         </CardContent>
       </Card>
-    </main>
+    </div>
   );
 }
