@@ -265,9 +265,9 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .tool-player-link-row a.tool-player-link[href] { display: inline-flex; min-height: 44px; align-items: center; color: var(--link); }
 .props-player-col a.tool-player-link[href] { display: block; min-height: 44px; }
 .tool-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 2px 0; }
-.matchup-data-card .tool-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+.matchup-data-card .tool-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
 .matchup-data-card .tool-links-label { grid-column: 1 / -1; }
-.matchup-data-card .tool-links a.tool-link[href] { justify-content: center; }
+.matchup-data-card .tool-links a.tool-link[href] { justify-content: center; padding: 0 8px; text-align: center; white-space: nowrap; }
 .tool-links-label { color: var(--dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .tool-links a.tool-link[href] { display: inline-flex; min-height: 44px; align-items: center; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--link); font-size: var(--type-tab); font-weight: 600; text-decoration: none; }
 .tool-links a.tool-link[href]:hover { color: var(--link-hover); }
@@ -312,7 +312,7 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .player-chart-peek span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .player-chart-peek strong { grid-column: 2; grid-row: 1 / 3; text-align: right; font-size: var(--type-body); font-weight: 700; }
 .player-chart-peek i { display: block; height: 4px; overflow: hidden; border-radius: 99px; background: var(--surface-2); }
-.player-chart-peek i b { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.player-chart-peek i b { display: block; height: 100%; border-radius: inherit; background: var(--data-mark); }
 .empty-inline { padding: 28px 10px; text-align: center; color: var(--dim); font-size: var(--type-body); }
 .empty-stack { display: grid; justify-items: center; gap: 5px; }
 .empty-stack strong { font-weight: 700; }
