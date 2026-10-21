@@ -2514,6 +2514,60 @@ button.league-partner-change:active { color: var(--link-active); }
   letter-spacing: .02em;
   text-align: center;
 }
+.scatter-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+.scatter-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  margin: 0;
+  min-height: 44px;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.scatter-readout span {
+  color: var(--dim);
+  font-weight: 600;
+}
+.scatter-readout-hint {
+  color: var(--dim);
+}
+.scatter-point-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 176px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.scatter-point-list button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--type-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+.scatter-point-list button[aria-pressed="true"] {
+  border-color: var(--link);
+  color: var(--link);
+}
+.scatter-point-meta {
+  color: var(--dim);
+}
 .scatter-frame {
   display: flex;
   flex-direction: column;
@@ -2594,7 +2648,8 @@ button.league-partner-change:active { color: var(--link-active); }
 .chart-key { display: flex; flex-wrap: wrap; gap: 6px 12px; padding: 8px 2px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .chart-key span { display: inline-flex; align-items: center; gap: 5px; }
 .chart-key i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
-.chart-key i.selected-team-dot { background: var(--roster-highlight); }
+/* Diamond to match the plotted My team points. */
+.chart-key i.selected-team-dot { width: 8px; height: 8px; border-radius: 1px; background: var(--roster-highlight); transform: rotate(45deg); }
 .omitted-chart-labels { margin-top: 10px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
 .omitted-chart-labels summary { padding: 10px 1px; color: var(--link); font-size: var(--type-caption); font-weight: 700; cursor: pointer; }
 .omitted-chart-labels p { margin: 0; padding: 0 1px 11px; color: var(--dim); font-size: var(--type-caption); line-height: 1.5; }
