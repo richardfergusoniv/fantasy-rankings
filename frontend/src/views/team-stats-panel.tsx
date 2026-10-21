@@ -258,7 +258,7 @@ export function TeamStatsPanel({
               aria-pressed={showTable}
               onClick={() => setShowTable((value) => !value)}
             >
-              {showTable ? "View as chart" : "View as table"}
+              Table view
             </button>
             {showTable ? (
               <div className="team-stats-table-wrap">
