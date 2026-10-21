@@ -24,25 +24,40 @@ export function valueChartYDomain(
 
 export type ValueChartRange = "all" | "1y" | "6m" | "3m";
 
-export const VALUE_CHART_RANGES: readonly { id: ValueChartRange; label: string; days: number | null }[] = [
-  { id: "3m", label: "3M", days: 92 },
-  { id: "6m", label: "6M", days: 183 },
-  { id: "1y", label: "1Y", days: 366 },
-  { id: "all", label: "All", days: null },
+export const VALUE_CHART_RANGES: readonly { id: ValueChartRange; label: string; months: number | null }[] = [
+  { id: "3m", label: "3M", months: 3 },
+  { id: "6m", label: "6M", months: 6 },
+  { id: "1y", label: "1Y", months: 12 },
+  { id: "all", label: "All", months: null },
 ];
 
+/** ISO date `months` calendar months before `isoDate` (UTC), clamping the day to the target month's length. */
+function subtractUtcMonths(isoDate: string, months: number): string | null {
+  const time = Date.parse(`${isoDate}T00:00:00Z`);
+  if (Number.isNaN(time)) return null;
+  const date = new Date(time);
+  const monthIndex = date.getUTCFullYear() * 12 + date.getUTCMonth() - months;
+  const year = Math.floor(monthIndex / 12);
+  const month = monthIndex - year * 12;
+  const day = Math.min(date.getUTCDate(), new Date(Date.UTC(year, month + 1, 0)).getUTCDate());
+  return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
+}
+
 /**
- * Index of the first ISO date (ascending) within `range` of the newest date.
- * A range that would leave fewer than two points keeps everything.
+ * Index of the first ISO date (ascending) within `range` of `anchor`, which
+ * defaults to the newest date; pass the last historical date when `dates` also
+ * holds projection rows. A range that would leave fewer than two points keeps everything.
  */
-export function valueChartRangeStartIndex(dates: readonly string[], range: ValueChartRange): number {
-  const days = VALUE_CHART_RANGES.find((option) => option.id === range)?.days ?? null;
-  const last = dates[dates.length - 1];
-  if (days === null || last === undefined) return 0;
-  const lastTime = Date.parse(`${last}T00:00:00Z`);
-  if (Number.isNaN(lastTime)) return 0;
-  const cutoff = lastTime - days * 86_400_000;
-  const index = dates.findIndex((date) => Date.parse(`${date}T00:00:00Z`) >= cutoff);
+export function valueChartRangeStartIndex(
+  dates: readonly string[],
+  range: ValueChartRange,
+  anchor: string | undefined = dates[dates.length - 1],
+): number {
+  const months = VALUE_CHART_RANGES.find((option) => option.id === range)?.months ?? null;
+  if (months === null || anchor === undefined) return 0;
+  const cutoff = subtractUtcMonths(anchor, months);
+  if (cutoff === null) return 0;
+  const index = dates.findIndex((date) => date >= cutoff);
   if (index < 0 || dates.length - index < 2) return 0;
   return index;
 }

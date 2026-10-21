@@ -58,6 +58,14 @@ function formatDateTick(value: string): string {
     : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
 }
 
+/** Date with the year, for the scrubber (axis ticks omit it). */
+function formatFullDate(value: string): string {
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric" }).format(date);
+}
+
 /** Whole-number FantasyCalc values with thousands separators for tooltips. */
 function formatWholeValue(value: number): string {
   return Math.round(value).toLocaleString();
@@ -276,14 +284,16 @@ export function ValueChartPanel({
 
   function renderChart(options: { interactiveZoom: boolean }) {
     const effectiveZoomed = options.interactiveZoom && zoomed;
+    // Projection rows follow the last historical date; ranges and the scrubber start from the history.
+    const lastHistoricalDate = [...chartRows].reverse().find((row) => row.value !== null)?.date;
     const rangedRows = options.interactiveZoom
-      ? chartRows.slice(valueChartRangeStartIndex(chartRows.map((row) => row.date), range))
+      ? chartRows.slice(valueChartRangeStartIndex(chartRows.map((row) => row.date), range, lastHistoricalDate))
       : chartRows;
     const zoomStart = valueChartZoomStartIndex(rangedRows.length, effectiveZoomed);
     const visibleRows = effectiveZoomed ? rangedRows.slice(zoomStart) : rangedRows;
-    const scrubbed = visibleRows.length > 0
-      ? visibleRows[Math.min(scrubIndex ?? visibleRows.length - 1, visibleRows.length - 1)]
-      : undefined;
+    const defaultScrubIndex = visibleRows.reduce((last, row, index) => (row.value !== null ? index : last), 0);
+    const scrubPosition = Math.min(scrubIndex ?? defaultScrubIndex, visibleRows.length - 1);
+    const scrubbed = visibleRows.length > 0 ? visibleRows[scrubPosition] : undefined;
     const yDomain = valueChartYDomain(
       visibleRows.flatMap((row) => [
         row.value,
@@ -474,15 +484,15 @@ export function ValueChartPanel({
             <input
               type="range"
               aria-label="Scrub chart date"
-              aria-valuetext={formatDateTick(scrubbed.date)}
+              aria-valuetext={formatFullDate(scrubbed.date)}
               min={0}
               max={visibleRows.length - 1}
               step={1}
-              value={Math.min(scrubIndex ?? visibleRows.length - 1, visibleRows.length - 1)}
+              value={scrubPosition}
               onChange={(event) => setScrubIndex(Number(event.target.value))}
             />
             <dl className="value-chart-readout" aria-live="polite">
-              <div><dt>Date</dt><dd>{formatDateTick(scrubbed.date)}</dd></div>
+              <div><dt>Date</dt><dd>{formatFullDate(scrubbed.date)}</dd></div>
               <div><dt>Value</dt><dd>{scrubbed.value === null ? "—" : formatWholeValue(scrubbed.value)}</dd></div>
               <div><dt>7D avg</dt><dd>{scrubbed.ma7 === null ? "—" : formatWholeValue(scrubbed.ma7)}</dd></div>
               <div><dt>30D avg</dt><dd>{scrubbed.ma30 === null ? "—" : formatWholeValue(scrubbed.ma30)}</dd></div>

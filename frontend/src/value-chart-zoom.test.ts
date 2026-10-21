@@ -40,6 +40,18 @@ describe("valueChartRangeStartIndex", () => {
     expect(valueChartRangeStartIndex(dates, "1y")).toBe(1);
   });
 
+  it("counts calendar months, not fixed day counts", () => {
+    const february = ["2026-01-29", "2026-01-31", "2026-02-15", "2026-05-01"];
+    expect(valueChartRangeStartIndex(february, "3m")).toBe(2);
+    expect(valueChartRangeStartIndex(["2026-02-27", "2026-02-28", "2026-05-31"], "3m")).toBe(1);
+  });
+
+  it("anchors to the given date when projection rows follow the history", () => {
+    const withProjection = [...dates, "2026-10-30", "2026-11-15"];
+    expect(valueChartRangeStartIndex(withProjection, "3m", "2026-10-15")).toBe(3);
+    expect(valueChartRangeStartIndex(withProjection, "3m")).toBe(4);
+  });
+
   it("keeps everything when the window would leave fewer than two points", () => {
     expect(valueChartRangeStartIndex(["2026-01-01", "2026-10-15"], "3m")).toBe(0);
     expect(valueChartRangeStartIndex([], "3m")).toBe(0);
