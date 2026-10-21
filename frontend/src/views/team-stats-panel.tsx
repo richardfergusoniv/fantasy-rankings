@@ -288,26 +288,27 @@ export function TeamStatsPanel({
               })}
             </div>
             <div className="team-stats-inspector">
-              {inspected ? (
-                <>
-                  <p className="team-stats-inspector-title" aria-live="polite">
+              {/* One status line stays mounted so changes are announced; the player list sits outside it. */}
+              <p className={inspected ? "team-stats-inspector-title" : "team-stats-inspector-hint"} role="status">
+                {inspected ? (
+                  <>
                     <strong>{`Week ${inspected.week}`}</strong>
                     <span>{`${formatTeamStatsValue(statId, inspected.total)} ${statLabel}`}</span>
-                  </p>
-                  <ul>
-                    {inspected.segments.map((segment) => (
-                      <li key={segment.key}>
-                        <i style={{ backgroundColor: segment.key === "__other__" ? TEAM_STATS_OTHER_COLOR : playerMeta.get(segment.key)?.color ?? TEAM_STATS_OTHER_COLOR }} />
-                        <span className="team-stats-inspector-name">{segment.name}</span>
-                        <span className="team-stats-inspector-value">{formatTeamStatsValue(statId, segment.value)}</span>
-                        <span className="team-stats-inspector-share">{formatTeamStatsPercent(segment.share * 100)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ) : (
-                <p className="team-stats-inspector-hint" aria-live="polite">Tap a week to see each player’s share.</p>
-              )}
+                  </>
+                ) : "Tap a week to see each player’s share."}
+              </p>
+              {inspected ? (
+                <ul>
+                  {inspected.segments.map((segment) => (
+                    <li key={segment.key}>
+                      <i style={{ backgroundColor: segment.key === "__other__" ? TEAM_STATS_OTHER_COLOR : playerMeta.get(segment.key)?.color ?? TEAM_STATS_OTHER_COLOR }} />
+                      <span className="team-stats-inspector-name">{segment.name}</span>
+                      <span className="team-stats-inspector-value">{formatTeamStatsValue(statId, segment.value)}</span>
+                      <span className="team-stats-inspector-share">{formatTeamStatsPercent(segment.share * 100)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </div>
           <ul className="team-stats-legend">
