@@ -1,0 +1,177 @@
+/* Draft center, integrations, tiers and projection charts. */
+/* Draft center, market signals, and embedded player news */
+.draft-center { display: grid; gap: 16px; }
+.draft-source-caption { margin: 0; color: var(--dim); font-size: var(--type-caption); }
+.draft-source-warning { display: grid; gap: 5px; color: var(--text); font-size: var(--type-caption); }
+.draft-source-warning strong { color: var(--warning); }
+.draft-source-warning strong::before { content: "⚠ "; }
+.draft-source-warning ul { margin: 0; padding-left: 18px; }
+.draft-source-warning li + li { margin-top: 3px; }
+.draft-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.draft-controls > label { grid-column: 1 / -1; min-width: 0; }
+.draft-controls .position-tabs { min-width: 0; }
+.draft-controls input {
+  width: 100%;
+  box-sizing: border-box;
+  height: var(--search-input-height);
+  min-height: var(--search-input-height);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 12px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+}
+.draft-refresh-button { display: grid; width: var(--compact-control-height); height: var(--compact-control-height); justify-self: end; place-items: center; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); color: var(--link); font: inherit; line-height: 1; cursor: pointer; }
+.draft-refresh-button svg { width: 16px; height: 16px; }
+.draft-refresh-button:hover:not(:disabled) { background: var(--accent-soft); color: var(--link-hover); }
+.draft-refresh-button:active:not(:disabled) { background: var(--accent-medium); color: var(--link-active); }
+.draft-refresh-button:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.draft-refresh-button:disabled { opacity: .45; cursor: default; }
+.draft-my-team { display: grid; gap: 12px; }
+.draft-my-team .section-heading { margin-top: 0; }
+.draft-remove-link,
+.drafted-elsewhere button b { min-height: 44px; flex: none; border: 0; background: transparent; color: var(--link); font-size: var(--type-caption); font-weight: 700; }
+.draft-row .draft-remove-link { display: inline-flex; align-items: center; justify-content: flex-end; min-width: 44px; padding: 0 4px; color: var(--link); white-space: nowrap; cursor: pointer; }
+.draft-remove-link:hover { color: var(--link-hover); }
+.draft-remove-link:active { color: var(--link-active); }
+.drafted-elsewhere { border-top: 1px solid var(--hairline); }
+.drafted-elsewhere summary { padding: 9px 1px; color: var(--dim); font-size: var(--type-control); font-weight: 700; cursor: pointer; }
+.drafted-elsewhere button { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 2px; border: 0; border-top: 1px solid var(--hairline); background: transparent; color: var(--text); text-align: left; }
+.drafted-elsewhere button > span { display: grid; min-width: 0; }
+.drafted-elsewhere button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-body); }
+.drafted-elsewhere button small { color: var(--dim); font-size: var(--type-caption); }
+.draft-board { border: 0; background: transparent; font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
+.draft-list-pagination { border-bottom: 0; }
+.draft-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px 62px 88px; align-items: center; gap: 4px; min-height: var(--player-row-height); padding: 0 var(--player-box-inline); border-bottom: 1px solid var(--row-divider); background: var(--surface); font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
+.draft-row.draft-my-team-row { grid-template-columns: minmax(0, 1fr) 72px; }
+.draft-board > .draft-row:last-child { border-bottom: 0; }
+.draft-row > span:nth-child(n+2) { display: flex; align-items: center; justify-content: flex-end; text-align: right; font-size: var(--player-name-size); font-weight: 600; }
+.draft-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--player-name-size); font-weight: 600; line-height: var(--player-name-leading); }
+.draft-row > span strong { font-size: var(--player-name-size); font-weight: 700; line-height: 1; }
+.draft-row small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.draft-row button.draft-player-open { display: grid; min-width: 0; width: 100%; height: auto; align-self: stretch; grid-template-rows: auto; align-content: center; align-items: center; justify-items: stretch; gap: 2px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text); text-align: left; }
+.draft-row .draft-player-name-line { display: flex; width: 100%; min-width: 0; max-width: 100%; min-height: 0; align-items: center; gap: 5px; margin: 0; padding: 0; overflow: hidden; }
+.draft-row .draft-player-name-line strong { flex: 0 1 auto; min-width: 0; margin: 0; overflow: hidden; color: var(--text); font-size: var(--player-name-size); font-weight: 600; line-height: var(--player-name-leading); text-overflow: ellipsis; }
+.draft-row .draft-player-name-line .injury { flex: none; }
+.draft-row .draft-player-meta { display: flex; min-width: 0; min-height: 0; margin: 0; padding-top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; align-items: center; font-size: var(--type-caption); line-height: 1; }
+.draft-row-actions { display: flex; align-items: center; justify-content: flex-end; }
+.draft-row-actions .draft-icon-button { position: relative; display: grid; width: 44px; height: 44px; flex: none; place-items: center; padding: 0; border: 0; background: transparent; color: var(--link); cursor: pointer; }
+.draft-icon-button::before { content: ""; width: 32px; height: 32px; border-radius: var(--radius); background: var(--surface-2); }
+.draft-icon-button svg { position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; transform: translate(-50%, -50%); }
+.draft-icon-button:hover:not(:disabled) { color: var(--link-hover); }
+.draft-icon-button:hover:not(:disabled)::before { background: var(--accent-soft); }
+.draft-icon-button:active:not(:disabled) { color: var(--link-active); }
+.draft-icon-button:active:not(:disabled)::before { background: var(--accent-medium); }
+.draft-icon-button:focus-visible { outline: 2px solid var(--link); outline-offset: -2px; }
+.draft-icon-button:disabled { opacity: .35; cursor: default; }
+.draft-row-actions .draft-taken-button { color: var(--dim); }
+.draft-table-head { min-height: 32px; padding: 5px 10px; background: var(--surface); color: var(--dim); font-size: var(--type-caption); line-height: 1.25; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.draft-table-head > span:nth-child(n+2) { font-size: var(--type-caption); font-weight: 700; letter-spacing: 0; text-transform: none; }
+.draft-table-head span:first-child { display: block; }
+.draft-board-view, .live-draft-view { display: grid; gap: 18px; }
+.draft-live-empty { display: grid; gap: 6px; padding: 34px 0; text-align: center; }
+.draft-live-empty span { color: var(--dim); font-size: var(--type-body); }
+.market-pulse { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--hairline); }
+.market-list { display: grid; gap: 0; }
+.market-list article { display: grid; grid-template-columns: 78px minmax(0,1fr); gap: 3px 8px; padding: 9px 0; border-top: 1px solid var(--hairline); }
+.market-list article > span { grid-row: 1 / span 2; color: var(--dim); font-size: var(--type-caption); font-weight: 700; text-transform: uppercase; }
+.market-list strong { font-size: var(--type-body); }
+.market-list small { color: var(--dim); font-size: var(--type-caption); }
+.player-news-section { margin-top: 16px; padding-top: 4px; border-top: 1px solid var(--hairline); }
+.player-news-item { display: grid; gap: 5px; padding: 11px 0; border-bottom: 1px solid var(--hairline); }
+.player-news-item > div { display: flex; justify-content: space-between; color: var(--dim); font-size: var(--type-caption); }
+.news-severity { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.player-news-item strong { font-size: var(--type-body); }
+.player-news-item p { margin: 0; color: var(--dim); font-size: var(--type-body); line-height: 1.45; }
+.player-news-item a { color: var(--link); font-size: var(--type-control); text-decoration: underline; text-underline-offset: 2px; }
+.trending-add, .trending-drop { font-size: var(--type-caption); font-weight: 700; letter-spacing: .03em; }
+.trending-add { color: var(--dim); }
+.trending-drop { color: var(--negative); }
+
+@media (min-width: 760px) {
+  .draft-center { max-width: 860px; margin-inline: auto; }
+  .draft-controls { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr) auto; }
+  .draft-controls > label { grid-column: auto; }
+  .draft-row { grid-template-columns: minmax(0, 1fr) 48px 80px 96px; }
+  .draft-row.draft-my-team-row { grid-template-columns: minmax(0, 1fr) 72px; }
+  .market-list { grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 24px; }
+}
+
+.integration-row { display: grid; gap: 14px; padding: 14px 0 18px; border-block: 1px solid var(--border); }
+.integration-row > div:first-child { display: grid; grid-template-columns: max-content max-content; align-items: center; gap: 8px; }
+.integration-row p { grid-column: 1 / -1; margin: 0; color: var(--dim); font-size: var(--type-caption); }
+.integration-status { border-radius: var(--radius); padding: 2px 8px; color: var(--dim); background: var(--secondary); font-size: var(--type-caption); font-weight: 500; text-transform: none; }
+.integration-status.connected { color: var(--positive); }
+.integration-status.invalid { color: var(--negative); }
+.integration-row form { display: grid; gap: 6px; }
+.integration-row form > label { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.integration-row form > div { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.integration-row input { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); padding: 10px 11px; font: inherit; }
+.integration-row form button { border: 0; border-radius: var(--radius); background: var(--accent); color: var(--on-accent); padding: 0 13px; font-weight: 700; }
+.integration-actions { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.integration-actions a { color: var(--link); font-size: var(--type-control); text-decoration: underline; text-underline-offset: 2px; }
+.integration-actions button { border: 0; background: transparent; color: var(--negative); font-size: var(--type-control); }
+
+/* Shared card frame for data tables. overflow: clip rounds cell backgrounds
+   without becoming a scrollport, so page-sticky headers keep working.
+   Wide tables opt the inner container into overflow: auto. */
+.data-table-frame,
+.ranking-list,
+.power-table {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  overflow: clip;
+}
+
+/* Boom/bust uses sub-tab tokens (same family as other in-card segmented controls). */
+.boom-bust-toggle {
+  min-height: var(--sub-tab-height);
+  height: var(--sub-tab-height);
+}
+.boom-bust-toggle button {
+  min-height: var(--sub-tab-button-height);
+  height: var(--sub-tab-button-height);
+  font-size: var(--sub-tab-font-size);
+  font-weight: var(--sub-tab-font-weight);
+}
+.bench-section summary,
+.omitted-chart-labels summary,
+.drafted-elsewhere summary { min-height: 44px; }
+.comparison-slot-actions button,
+.trade-side-heading button,
+.draft-remove-link,
+.integration-actions button { min-width: 44px; min-height: 44px; }
+.draft-row button.draft-player-open { min-height: 0; }
+.integration-row input,
+.integration-row form button { min-height: 44px; }
+.integration-actions a,
+.chart-research-note a,
+.player-news-item a { display: inline-flex; min-height: 44px; align-items: center; }
+
+
+/* Projection chart treatments */
+.tier-cliff-list { display: grid; margin: 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+.tier-cliff-list li { display: grid; grid-template-columns: 28px minmax(110px, .85fr) minmax(72px, 1fr) 50px; min-height: 48px; align-items: center; gap: 8px; border-bottom: 1px solid var(--hairline); }
+.tier-cliff-rank { color: var(--dim); font-size: var(--type-caption); font-weight: 700; text-align: center; }
+.tier-cliff-player { display: grid; min-width: 0; }
+.tier-cliff-player strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-body); }
+.tier-cliff-player small { color: var(--dim); font-size: var(--type-caption); }
+.tier-cliff-bar { display: block; height: 8px; overflow: hidden; border-radius: var(--radius-sm); background: var(--surface-2); }
+.tier-cliff-bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.tier-cliff-drop { color: var(--text); font-size: var(--type-caption); text-align: right; }
+.boom-bust-range-list { display: grid; margin: 0; padding: 0; font-variant-numeric: tabular-nums; list-style: none; }
+.boom-bust-range-row { display: grid; grid-template-columns: minmax(92px, .7fr) minmax(100px, 1.3fr) 66px; min-height: 48px; align-items: center; gap: 9px; border-bottom: 1px solid var(--hairline); }
+.boom-bust-player { display: grid; min-width: 0; }
+.boom-bust-player strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-body); }
+.boom-bust-player small, .boom-bust-values small { color: var(--dim); font-size: var(--type-caption); }
+.boom-bust-track { position: relative; display: block; height: 18px; }
+.boom-bust-track::before { position: absolute; inset: 8px 0 auto; height: 2px; background: var(--hairline); content: ""; }
+.boom-bust-band { position: absolute; top: 5px; height: 8px; border-radius: var(--radius-sm); background: var(--accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent); }
+.boom-bust-projection { position: absolute; top: 2px; width: 3px; height: 14px; border-radius: 2px; background: var(--accent); transform: translateX(-1px); }
+.boom-bust-values { display: grid; text-align: right; }
+.boom-bust-values strong { font-size: var(--type-body); }
