@@ -297,6 +297,11 @@ export function ValueChartPanel({
     const zoomStart = Math.min(valueChartZoomStartIndex(rangedRows.length, effectiveZoomed), lastRangedHistoricalIndex);
     const visibleRows = effectiveZoomed ? rangedRows.slice(zoomStart) : rangedRows;
     const defaultScrubIndex = visibleRows.reduce((last, row, index) => (row.value !== null ? index : last), 0);
+    // Tapping or hovering the plot moves the scrubber, so the tooltip and the readout never disagree.
+    const syncScrubToPointer = (state: { activeTooltipIndex?: number | string | null }) => {
+      const index = Number(state?.activeTooltipIndex);
+      if (Number.isInteger(index) && index >= 0 && index < visibleRows.length) setScrubIndex(index);
+    };
     const scrubPosition = Math.min(scrubIndex ?? defaultScrubIndex, visibleRows.length - 1);
     const scrubbed = visibleRows.length > 0 ? visibleRows[scrubPosition] : undefined;
     const yDomain = valueChartYDomain(
@@ -369,6 +374,8 @@ export function ValueChartPanel({
             >
               <ComposedChart
                 data={visibleRows}
+                onClick={options.interactiveZoom ? syncScrubToPointer : undefined}
+                onMouseMove={options.interactiveZoom ? syncScrubToPointer : undefined}
                 margin={compact
                   ? { top: 6, right: 6, bottom: 2, left: 0 }
                   : { top: 8, right: 8, bottom: 8, left: 0 }}
@@ -383,7 +390,7 @@ export function ValueChartPanel({
                   minTickGap={28}
                 />
                 <YAxis
-                  width={compact ? 32 : 40}
+                  width={40}
                   tick={{ fill: "var(--dim)", fontSize: compact ? 10 : 12 }}
                   tickLine={false}
                   axisLine={false}
@@ -592,6 +599,7 @@ export function ValueChartPanel({
                 }}
               >
                 {renderChart({ interactiveZoom: false })}
+                <span className="monitor-chart-expand-hint" aria-hidden="true">Expand for ranges and scrubber</span>
               </div>
               <ChartDialog
                 isOpen={isExpanded}
