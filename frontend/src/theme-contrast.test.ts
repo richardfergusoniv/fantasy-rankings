@@ -30,13 +30,33 @@ function parseCssVars(rootBlock: string): Record<string, string> {
   return vars;
 }
 
-function resolveVar(vars: Record<string, string>, name: string, depth = 0): string {
+type ThemeMode = "dark" | "light";
+
+/** Splits `light-dark(a, b)` on its top-level comma and returns the side for the mode. */
+function pickMode(raw: string, mode: ThemeMode): string {
+  const match = /^light-dark\((.*)\)$/.exec(raw);
+  if (!match) return raw;
+  const inner = match[1];
+  let depth = 0;
+  for (let i = 0; i < inner.length; i += 1) {
+    if (inner[i] === "(") depth += 1;
+    else if (inner[i] === ")") depth -= 1;
+    else if (inner[i] === "," && depth === 0) {
+      const [light, dark] = [inner.slice(0, i).trim(), inner.slice(i + 1).trim()];
+      return mode === "light" ? light : dark;
+    }
+  }
+  throw new Error(`Malformed light-dark() value: ${raw}`);
+}
+
+function resolveVar(vars: Record<string, string>, name: string, mode: ThemeMode = "dark", depth = 0): string {
   if (depth > 20) throw new Error(`Circular CSS variable reference near ${name}`);
   const raw = vars[name];
   if (raw == null) throw new Error(`Missing CSS variable ${name}`);
-  const ref = raw.match(/^var\((--[\w-]+)\)$/);
-  if (ref) return resolveVar(vars, ref[1], depth + 1);
-  return raw;
+  const value = pickMode(raw, mode);
+  const ref = value.match(/^var\((--[\w-]+)\)$/);
+  if (ref) return resolveVar(vars, ref[1], mode, depth + 1);
+  return value;
 }
 
 function parseHex(color: string): { r: number; g: number; b: number } {
@@ -154,7 +174,7 @@ describe("Token hygiene", () => {
     const root = extractRootBlock(css);
     const rest = css.replace(root, "").replace(/\/\*[\s\S]*?\*\//g, "");
     const raw = [...rest.matchAll(/#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b/g)].map((m) => m[0]);
-    expect(raw).toEqual(["#c5ccd8"]);
+    expect(raw).toEqual([]);
   });
 });
 
@@ -187,6 +207,67 @@ describe("Roster highlight", () => {
 describe("Radius tokens", () => {
   it("keeps small-tag radii on --radius-xs instead of a bare 4px", () => {
     const css = readFileSync(themePath, "utf8");
-    expect(css.match(/border-radius: 4px(?=\s*[;}])/g) ?? []).toEqual([]);
+    expect(css.match(/border-radius\s*:\s*4px\s*(?:!important\s*)?(?=[;}])/g) ?? []).toEqual([]);
+  });
+});
+
+describe("Light theme contrast", () => {
+  const vars = parseCssVars(extractRootBlock(readFileSync(themePath, "utf8")));
+  const light = (name: string) => resolveVar(vars, name, "light");
+  const canvas = light("--background");
+  const panel = light("--card");
+
+  it("declares both schemes", () => {
+    expect(extractRootBlock(readFileSync(themePath, "utf8"))).toContain("color-scheme: light dark;");
+  });
+
+  it("keeps text, dim text and links readable on canvas and panel", () => {
+    for (const name of ["--foreground", "--dim", "--link", "--link-hover", "--ui-accent-foreground"]) {
+      expect(contrastRatio(light(name), canvas), `${name} on canvas`).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(light(name), panel), `${name} on panel`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keeps semantic text readable on its tint and on the panel", () => {
+    for (const [fg, bg] of [
+      ["--stat-strength-readable", "--stat-strength-soft"],
+      ["--stat-weakness-readable", "--stat-weakness-soft"],
+      ["--roster-highlight", "--roster-highlight-bg"],
+      ["--ticker-text", "--ticker-bg"],
+      ["--ticker-dim", "--ticker-bg"],
+      ["--ticker-up", "--ticker-bg"],
+      ["--ticker-down", "--ticker-bg"],
+    ] as const) {
+      expect(contrastRatio(light(fg), light(bg)), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const name of ["--positive", "--negative", "--winner", "--warning", "--roster-highlight", "--danger-text"]) {
+      expect(contrastRatio(light(name), panel), `${name} on panel`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keeps ink readable on filled chips", () => {
+    expect(contrastRatio(light("--on-roster-highlight"), light("--roster-highlight"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(light("--on-accent"), light("--winner-fill"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(light("--on-accent"), light("--action"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("keeps borders and chart series visible against the panel", () => {
+    expect(contrastRatio(light("--border"), panel)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(light("--row-divider"), panel)).toBeGreaterThanOrEqual(2.6);
+    for (const name of ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5", "--chart-ma7", "--chart-ma30"]) {
+      expect(contrastRatio(light(name), panel), `${name} on panel`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("keeps the amber action, roster teal and warning distinct", () => {
+    const hues = [light("--link"), light("--roster-highlight"), light("--warning")].map((c) => c.toLowerCase());
+    expect(new Set(hues).size).toBe(3);
+  });
+});
+
+describe("Focus outlines", () => {
+  it("use --ring, not the fixed amber --accent that disappears on light surfaces", () => {
+    const css = readFileSync(themePath, "utf8");
+    expect(css.match(/outline\s*:[^;]*var\(--accent\)[^;]*;/g) ?? []).toEqual([]);
   });
 });

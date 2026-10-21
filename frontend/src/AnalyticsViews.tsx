@@ -1139,17 +1139,10 @@ function SnapShareTrendChart({
 }
 
 function fpaHeatColor(rank: number): string {
+  // Blend the theme's strength/average/weakness tints so the heatmap follows light and dark.
   const t = Math.min(1, Math.max(0, (rank - 1) / 31));
-  const strength = { r: 22, g: 53, b: 39 };
-  const mid = { r: 42, g: 45, b: 53 };
-  const weakness = { r: 58, g: 26, b: 34 };
-  const mix = (from: typeof strength, to: typeof strength, amount: number) => ({
-    r: Math.round(from.r + (to.r - from.r) * amount),
-    g: Math.round(from.g + (to.g - from.g) * amount),
-    b: Math.round(from.b + (to.b - from.b) * amount),
-  });
-  const color = t < 0.5 ? mix(strength, mid, t * 2) : mix(mid, weakness, (t - 0.5) * 2);
-  return `rgb(${color.r} ${color.g} ${color.b})`;
+  if (t < 0.5) return `color-mix(in srgb, var(--stat-strength-soft) ${Math.round(100 - t * 200)}%, var(--stat-average-soft))`;
+  return `color-mix(in srgb, var(--stat-weakness-soft) ${Math.round((t - 0.5) * 200)}%, var(--stat-average-soft))`;
 }
 
 function FpaHeatmap({

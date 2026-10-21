@@ -4,7 +4,7 @@
 
 ## Theme
 
-- Dark only (`color-scheme: dark`). There is no light theme and no `prefers-color-scheme` handling.
+- Light and dark follow the system setting (`color-scheme: light dark`). Every color token in `:root` is written `light-dark(<light>, <dark>)`, so there is one token block and components never branch on theme. There is no manual toggle. Amber fills (`--action`, `--accent`, `--winner-fill`) and `--on-accent` ink are the same in both themes; amber *text* (`--link`, `--winner`) and teal/warning text switch to darker values in light so they stay at 4.5:1 on white. The contrast test checks the light palette too. Colors that live outside CSS (chart strokes) use tokens such as `--chart-ma7`, never raw hex.
 - Amber is the interactive color: `--action`, `--link`, `--ring`, primary buttons and tab indicators. Dark ink (`--on-accent`) sits on amber fills.
 - `--winner` is the amber highlight for the better side of a comparison or trade; `--warning` is a separate orange-red used only for cautions and always paired with a ⚠ glyph, so a caution never reads as an action.
 - "Mine" (roster rows, the user's team in charts) uses its own teal, `--roster-highlight`, never the action amber.

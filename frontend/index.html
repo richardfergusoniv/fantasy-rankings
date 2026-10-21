@@ -3,12 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#0e1014" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1014" media="(prefers-color-scheme: dark)" />
     <style>
       html,
       body {
         background: #0e1014;
+      }
+      @media (prefers-color-scheme: light) {
+        html,
+        body {
+          background: #f4f5f7;
+        }
       }
     </style>
     <link rel="icon" href="data:," />
