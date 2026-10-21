@@ -12,28 +12,51 @@
   font-weight: 600;
 }
 .monitor-builder-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   min-width: 0;
+}
+/* Each tool opens with one toolbar: compact pills that carry their own label and wrap. */
+.monitor-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 .monitor-value-chart-controls {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  margin: 0 0 10px;
-  align-items: end;
+  margin: 0;
+  align-items: center;
 }
 .monitor-value-chart-field {
-  display: grid;
-  gap: 4px;
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
   min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0 0 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-control);
+}
+.monitor-value-chart-field:hover {
+  border-color: var(--border);
+}
+.monitor-value-chart-field:focus-within {
+  border-color: var(--link);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .monitor-value-chart-field > span {
+  flex: none;
   color: var(--dim);
   font-size: var(--type-caption);
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .monitor-chart-expand-target {
   display: block;
@@ -110,60 +133,68 @@
   min-height: 0;
 }
 .monitor-value-chart-field select {
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
-  min-height: var(--compact-control-height);
-  padding: 0 26px 0 8px;
-  border: 1px solid var(--border);
+  max-width: 100%;
+  min-height: 42px;
+  padding: 0 30px 0 6px;
+  border: 0;
   border-radius: var(--radius);
-  background-color: var(--surface);
+  background-color: transparent;
   background-image: var(--select-arrow);
-  background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%;
+  background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%;
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
   color: var(--text);
   font: inherit;
   font-size: var(--type-control);
   font-weight: 600;
+  text-overflow: ellipsis;
   cursor: pointer;
+  appearance: none;
 }
-.monitor-builder-chart .monitor-value-chart-controls > .monitor-value-chart-field:nth-child(3) {
-  grid-column: 1 / -1;
+.monitor-value-chart-field select:focus {
+  outline: none;
 }
 .monitor-chart-advanced-trigger {
-  grid-column: 1 / -1;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
-  width: auto;
-  min-height: auto;
-  margin: 2px 0 0;
-  padding: 2px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  gap: 6px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
   color: var(--link);
   font: inherit;
-  font-size: var(--type-caption);
+  font-size: var(--type-control);
   font-weight: 600;
   line-height: 1.2;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
   cursor: pointer;
 }
 .monitor-chart-advanced-trigger:hover {
-  color: var(--text);
-}
-.monitor-value-chart-field select:focus {
-  border-color: var(--link);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
-  outline: none;
+  border-color: var(--border);
+  color: var(--link-hover);
 }
 .monitor-chart-advanced-trigger:focus-visible {
   outline: 2px solid var(--link);
   outline-offset: 2px;
-  border-radius: var(--radius-sm);
+}
+/* Phone: pills fill their row; short ones pair up where both fit. */
+@media (max-width: 759px) {
+  .monitor-value-chart-field {
+    flex: 1 1 200px;
+  }
+  .monitor-value-chart-field select {
+    width: 0;
+  }
+  .monitor-chart-advanced-trigger {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
 .monitor-value-chart {
   display: flex;
@@ -184,25 +215,27 @@
   font-size: var(--type-caption);
   font-weight: 600;
 }
-.monitor-team-stats-controls > .monitor-value-chart-field:nth-child(3) {
-  grid-column: 1 / -1;
-}
 .team-stats-chart-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px 24px;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 16px;
+  align-items: start;
+}
+.team-stats-main,
+.team-stats-legend-group {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 .team-stats-main {
   display: flex;
-  flex: 1 1 280px;
   flex-direction: column;
   gap: 12px;
-  min-width: 0;
 }
 .team-stats-chart {
   display: flex;
-  flex: 1 1 auto;
   gap: 6px;
   align-items: flex-end;
   min-width: 0;
@@ -211,15 +244,14 @@
 }
 .team-stats-week {
   display: flex;
-  flex: 1 0 44px;
+  flex: 1 0 40px;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  max-width: 56px;
+  gap: 4px;
   min-height: 44px;
   padding: 4px 2px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: none;
   color: inherit;
   font: inherit;
@@ -233,6 +265,9 @@
 .team-stats-week:disabled {
   cursor: default;
 }
+.team-stats-week:not(:disabled):hover .team-stats-bar {
+  box-shadow: 0 0 0 1px var(--border);
+}
 .team-stats-week.is-inspected {
   border-color: var(--border);
   background-color: var(--surface-2);
@@ -241,11 +276,16 @@
   display: flex;
   flex-direction: column-reverse;
   width: 100%;
-  max-width: 40px;
-  height: 150px;
+  max-width: 64px;
+  height: 180px;
   overflow: hidden;
   border-radius: var(--radius-xs);
   background-color: var(--surface-2);
+}
+.team-stats-week:disabled .team-stats-bar {
+  background-color: transparent;
+  border-bottom: 2px solid var(--hairline);
+  border-radius: 0;
 }
 .team-stats-seg {
   display: block;
@@ -266,8 +306,12 @@
   font-variant-numeric: tabular-nums lining-nums;
 }
 .team-stats-view-toggle {
-  align-self: flex-start;
   min-height: 44px;
+  margin-left: auto;
+  box-shadow: var(--shadow-control);
+}
+.monitor-team-stats-group {
+  flex: 0 1 240px;
 }
 .team-stats-table-wrap {
   max-width: 100%;
@@ -365,10 +409,8 @@
 }
 .team-stats-legend-group {
   display: flex;
-  flex: 0 1 220px;
   flex-direction: column;
-  gap: 6px;
-  min-width: 160px;
+  gap: 12px;
 }
 .team-stats-legend-caption {
   margin: 0;
@@ -378,28 +420,32 @@
 }
 .team-stats-legend {
   display: flex;
-  flex: none;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
   min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .team-stats-legend li {
-  display: flex;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "swatch name total"
+    ". meter meter";
   align-items: center;
-  gap: 7px;
+  gap: 4px 8px;
   font-size: var(--type-body);
   line-height: 1.25;
 }
 .team-stats-legend li i {
-  flex: none;
+  grid-area: swatch;
   width: 10px;
   height: 10px;
   border-radius: 3px;
 }
 .team-stats-legend-name {
+  grid-area: name;
   overflow: hidden;
   color: var(--text);
   font-weight: 600;
@@ -410,26 +456,64 @@
   color: var(--roster-highlight);
 }
 .team-stats-legend-total {
-  margin-left: auto;
-  color: var(--dim);
-  font-weight: 600;
+  grid-area: total;
+  color: var(--text);
+  font-weight: 700;
   font-variant-numeric: tabular-nums lining-nums;
 }
-.monitor-props-controls {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+.team-stats-legend-meter {
+  grid-area: meter;
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--surface-2);
 }
-.monitor-props-controls > .monitor-value-chart-field:nth-child(3) {
-  grid-column: 1 / -1;
+.team-stats-legend-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
 }
+@media (max-width: 759px) {
+  .team-stats-chart-wrap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .team-stats-main,
+  .team-stats-legend-group {
+    padding: 12px;
+  }
+  .team-stats-bar {
+    height: 150px;
+  }
+  .team-stats-chart {
+    gap: 4px;
+  }
+  .team-stats-week {
+    flex-basis: 32px;
+  }
+  .monitor-team-stats-group {
+    flex: 1 1 100%;
+  }
+  .team-stats-view-toggle {
+    margin-left: 0;
+  }
+}
+.props-sort-field {
+  display: none;
+}
+/* Props sit on one surface panel so the sticky player column matches the rows. */
 .props-scroll {
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-inline: contain;
   -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background-color: var(--surface);
 }
 .props-table {
-  --props-player-col: 132px;
+  --props-player-col: 176px;
   width: 100%;
   min-width: max-content;
   border-collapse: separate;
@@ -440,31 +524,46 @@
   position: sticky;
   top: 0;
   z-index: 3;
-  height: 32px;
-  padding: 6px 8px;
+  height: 40px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--hairline);
-  background-color: var(--surface-2);
+  background-color: var(--surface);
   color: var(--dim);
   font-size: var(--type-caption);
   font-weight: 700;
   letter-spacing: .02em;
-  text-align: center;
+  text-align: right;
   white-space: nowrap;
 }
 .props-table th,
 .props-table td {
-  height: 48px;
-  padding: 6px 8px;
+  height: 52px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--hairline);
   font-size: var(--type-body);
   line-height: 1.2;
-  text-align: center;
+  text-align: right;
   white-space: nowrap;
   vertical-align: middle;
+}
+.props-table td.props-cell-stat,
+.props-table thead th:nth-child(2) {
+  text-align: left;
+}
+.props-table td.props-cell-stat {
+  color: var(--dim);
+  font-weight: 600;
+}
+.props-table td.props-cell-line {
+  font-weight: 700;
 }
 .props-table tbody tr:last-child th,
 .props-table tbody tr:last-child td {
   border-bottom: 0;
+}
+.props-table tbody tr:hover th,
+.props-table tbody tr:hover td {
+  background-color: color-mix(in srgb, var(--surface-2) 55%, var(--surface));
 }
 .props-player-col {
   position: sticky;
@@ -480,7 +579,7 @@
 }
 .props-table thead .props-player-col {
   z-index: 5;
-  background-color: var(--surface-2);
+  background-color: var(--surface);
   box-shadow: 1px 0 0 var(--hairline), 0 1px 0 var(--hairline);
 }
 .props-player-name {
@@ -530,9 +629,12 @@
   font: inherit;
   cursor: pointer;
 }
+.props-table thead th[aria-sort] {
+  color: var(--text);
+}
 .props-sort-arrow {
   min-width: 0.8em;
-  color: var(--dim);
+  color: var(--link);
   font-size: 0.75em;
 }
 .props-hit {
@@ -566,13 +668,16 @@
   font-weight: 700;
   font-variant-numeric: lining-nums tabular-nums;
 }
+.props-table .props-history-head {
+  text-align: left;
+}
 .props-history {
   position: relative;
   display: flex;
   align-items: flex-end;
   gap: 3px;
-  width: 118px;
-  height: 36px;
+  width: 148px;
+  height: 32px;
   padding: 0 1px;
 }
 .props-bar {
@@ -602,59 +707,47 @@
 .props-table thead th:not(.props-player-col) {
   min-width: 44px;
 }
-/* Phone: one card per prop instead of a table that scrolls sideways. Table
-   roles are set explicitly in the markup so the grid layout keeps them. */
+/* Phone: each prop is a compact three-line row (player and hit rate, the
+   numbers, the weekly history) instead of a table that scrolls sideways.
+   Table roles are set explicitly in the markup so the grid layout keeps them. */
 @media (max-width: 759px) {
+  .props-sort-field {
+    display: inline-flex;
+  }
   .props-scroll {
     overflow-x: visible;
+    border: 0;
+    border-radius: 0;
+    background: none;
   }
   .props-table,
   .props-table tbody {
     display: block;
     min-width: 0;
   }
-  .props-table thead,
-  .props-table thead tr {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 6px;
-  }
   .props-table thead {
-    margin-bottom: 8px;
-  }
-  .props-table thead .props-history-head {
     display: none;
-  }
-  .props-table thead th,
-  .props-table thead .props-player-col {
-    position: static;
-    width: auto;
-    min-width: 0;
-    max-width: none;
-    height: auto;
-    padding: 0;
-    border-bottom: 0;
-    background: none;
-    box-shadow: none;
-  }
-  .props-table thead .props-sort-button {
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0 8px;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
   }
   .props-table tbody tr {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px 8px;
-    margin-bottom: 8px;
-    padding: 12px;
-    border: 1px solid var(--hairline);
-    border-radius: 12px;
-    background-color: var(--surface);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-areas:
+      "player player player player hit"
+      "stat line sleeper odds move"
+      "history history history history history";
+    gap: 8px 6px;
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .props-table tbody tr.is-my-roster,
+  .props-table tbody tr.is-opponent-roster {
+    padding-inline: 10px;
+    border-bottom-color: transparent;
+    border-radius: var(--radius-sm);
+  }
+  .props-table tbody tr + tr.is-my-roster,
+  .props-table tbody tr + tr.is-opponent-roster {
+    margin-top: 2px;
   }
   .props-table tbody th,
   .props-table tbody td {
@@ -667,11 +760,28 @@
   }
   .props-table tbody .props-player-col {
     position: static;
-    grid-column: 1 / -1;
+    grid-area: player;
     width: auto;
     min-width: 0;
     max-width: none;
     box-shadow: none;
+  }
+  .props-table tbody .props-player-col a.tool-player-link[href] {
+    min-height: 0;
+  }
+  .props-table tbody td.props-cell-stat { grid-area: stat; }
+  .props-table tbody td.props-cell-line { grid-area: line; }
+  .props-table tbody td.props-cell-sleeper { grid-area: sleeper; }
+  .props-table tbody td.props-cell-odds { grid-area: odds; }
+  .props-table tbody td.props-cell-move { grid-area: move; }
+  .props-table tbody td.props-cell-hit {
+    grid-area: hit;
+    align-self: center;
+    font-size: var(--type-section);
+    text-align: right;
+  }
+  .props-table tbody td.props-cell-hit::before {
+    display: none !important;
   }
   .props-table tbody td[data-label]::before {
     display: block;
@@ -679,15 +789,23 @@
     color: var(--dim);
     content: attr(data-label);
     font-size: var(--type-caption);
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: .02em;
   }
+  .props-table tbody td.props-cell-stat {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .props-table tbody td.props-history-cell {
-    grid-column: 1 / -1;
+    grid-area: history;
+  }
+  .props-table tbody td.props-history-cell::before {
+    display: none !important;
   }
   .props-table tbody td .props-history {
     width: 100%;
-    height: 44px;
+    height: 28px;
   }
   .props-table tbody tr.is-my-roster {
     background-color: var(--roster-highlight-bg);
@@ -773,19 +891,102 @@
   height: auto;
 }
 .monitor-value-chart-panel .monitor-value-chart .scatter-plot-body {
-  height: 168px;
+  height: 280px;
 }
 @media (max-width: 759px) {
   .monitor-value-chart-panel .monitor-value-chart .scatter-plot-body {
-    height: clamp(168px, 34dvh, 300px);
+    height: clamp(200px, 34dvh, 300px);
   }
 }
-.monitor-chart-expand-hint {
-  display: block;
-  margin-top: 6px;
-  color: var(--link);
+/* Inline tool charts sit on one surface panel; the whole panel opens the expanded view. */
+.monitor-value-chart-panel > .monitor-chart-expand-target,
+.monitor-builder-chart-panel .monitor-chart-expand-target {
+  padding: 16px 12px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.monitor-value-chart-panel > .monitor-chart-expand-target:hover,
+.monitor-builder-chart-panel .monitor-chart-expand-target:hover {
+  border-color: var(--border);
+}
+/* Pricing opens with the number: latest value, its 30-day move, then ranges. */
+.pricing-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.pricing-figures {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.pricing-figure {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  margin: 0;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.pricing-value {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1;
+}
+.pricing-change {
+  display: inline-flex;
+  gap: 4px;
+  align-items: baseline;
+  font-size: var(--type-control);
+  font-weight: 700;
+}
+.pricing-change.is-up { color: var(--positive); }
+.pricing-change.is-down { color: var(--negative); }
+.pricing-change-span {
+  color: var(--dim);
   font-size: var(--type-caption);
   font-weight: 600;
+}
+.pricing-figure.is-compare {
+  align-items: center;
+  gap: 8px;
+  color: var(--dim);
+  font-size: var(--type-control);
+  font-weight: 600;
+}
+.pricing-figure.is-compare i {
+  width: 10px;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--chart-5);
+}
+.pricing-compare-value {
+  color: var(--text);
+  font-weight: 700;
+}
+.pricing-figures .tool-player-link-row {
+  padding: 0;
+}
+.pricing-figures .tool-player-link-row a.tool-player-link[href] {
+  min-height: 32px;
+}
+.pricing-summary .value-chart-ranges {
+  margin-left: 0;
+}
+.pricing-summary .scatter-zoom-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  background: var(--surface);
+  box-shadow: var(--shadow-control);
+}
+.pricing-expand {
+  display: inline-grid;
+  place-items: center;
+  color: var(--text);
 }
 /* Inline builder charts reuse Pricing chart height; keep plot and key stacked. */
 .monitor-builder-chart-panel .monitor-value-chart {
@@ -798,7 +999,7 @@
 .monitor-builder-chart-panel .monitor-value-chart .tier-cliff-list,
 .monitor-builder-chart-panel .monitor-value-chart .boom-bust-range-list {
   flex: none;
-  height: 196px;
+  height: 340px;
   max-height: none;
   margin: 0;
   overflow: hidden;
@@ -824,58 +1025,196 @@
 .monitor-builder-chart-empty .analytics-empty {
   margin: 0;
 }
-.monitor-game-lines-controls {
-  grid-template-columns: minmax(0, 1fr);
+@media (max-width: 759px) {
+  .monitor-builder-chart-panel .monitor-value-chart .scatter-chart-shell,
+  .monitor-builder-chart-panel .monitor-value-chart .scatter-frame,
+  .monitor-builder-chart-panel .monitor-value-chart .fpa-heatmap,
+  .monitor-builder-chart-panel .monitor-value-chart .tier-cliff-list,
+  .monitor-builder-chart-panel .monitor-value-chart .boom-bust-range-list {
+    height: 300px;
+  }
 }
-.monitor-game-line-card {
+/* Game lines: the week's slate as a rail of tiles, then the picked game's board. */
+.game-slate {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  padding: 2px 2px 6px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scroll-padding-inline: 16px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+.game-slate-tile {
   display: grid;
-  gap: 6px;
-  min-width: 0;
-  margin: 0 0 10px;
-  padding: 8px;
+  flex: 0 0 auto;
+  align-content: center;
+  gap: 2px;
+  min-width: 128px;
+  min-height: 68px;
+  padding: 8px 12px;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface);
   color: var(--text);
+  font: inherit;
+  text-align: left;
+  scroll-snap-align: start;
+  cursor: pointer;
 }
-.monitor-game-line-matchup {
-  overflow: hidden;
-  font-size: var(--type-body);
+.game-slate-tile.is-all {
+  min-width: 96px;
+}
+.game-slate-tile:hover {
+  border-color: var(--border);
+}
+.game-slate-tile:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+.game-slate-tile[aria-pressed="true"] {
+  border-color: var(--action);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--action);
+}
+.game-slate-tile strong {
+  font-size: var(--type-control);
   font-weight: 700;
   line-height: 1.2;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.monitor-game-line-kickoff {
-  overflow: hidden;
+.game-slate-kickoff,
+.game-slate-lines {
   color: var(--dim);
   font-size: var(--type-caption);
   font-weight: 600;
   line-height: 1.25;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-variant-numeric: lining-nums tabular-nums;
 }
-.monitor-game-line-market {
+.game-slate-tile[aria-pressed="true"] .game-slate-lines {
+  color: var(--text);
+}
+.game-board {
   display: grid;
-  grid-template-columns: 52px auto minmax(0, 1fr);
-  gap: 6px;
-  align-items: baseline;
-  font-size: var(--type-body);
-  font-weight: 600;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
   font-variant-numeric: lining-nums tabular-nums;
 }
-.monitor-game-line-market-label {
+.game-board dl {
+  margin: 0;
+}
+.game-board dd {
+  margin: 0;
+}
+.game-board-team {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.game-board-team.is-home {
+  justify-items: end;
+  text-align: right;
+}
+.game-board-team strong {
+  font-size: var(--type-display);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1;
+}
+.game-board-team dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+.game-board-team.is-home dl {
+  justify-content: flex-end;
+}
+.game-board-team dl div,
+.game-board-market dl div {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+}
+.game-board dt {
   color: var(--dim);
   font-size: var(--type-caption);
   font-weight: 700;
   letter-spacing: .02em;
-  text-transform: uppercase;
 }
-.monitor-game-line-market-records {
+.game-board-team dd {
+  font-size: var(--type-control);
+  font-weight: 600;
+}
+.game-board-market {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.game-board-kickoff {
   color: var(--dim);
   font-size: var(--type-caption);
   font-weight: 600;
-  text-align: right;
-  font-variant-numeric: lining-nums tabular-nums;
+}
+.game-board-market dl {
+  display: flex;
+  gap: 20px;
+}
+.game-board-market dl div {
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.game-board-market dt {
+  text-transform: uppercase;
+}
+.game-board-market dd {
+  font-size: var(--type-section);
+  font-weight: 700;
+  white-space: nowrap;
+}
+@media (max-width: 759px) {
+  /* The rail runs edge to edge on a phone so a cut-off tile signals more. */
+  .game-slate {
+    margin: 0 -16px;
+    padding-inline: 16px;
+  }
+  .monitor-props-controls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .monitor-props-controls .monitor-value-chart-field {
+    padding-left: 10px;
+  }
+  .monitor-props-controls .monitor-value-chart-field select {
+    width: 100%;
+    padding-right: 24px;
+    background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%;
+  }
+  .game-board {
+    gap: 8px;
+    padding: 14px 12px;
+  }
+  .game-board-team strong {
+    font-size: 20px;
+  }
+  .game-board-team dl {
+    flex-direction: column;
+  }
+  .game-board-team.is-home dl div {
+    justify-content: flex-end;
+  }
+  .game-board-market dl {
+    gap: 12px;
+  }
+  .game-board-market dd {
+    font-size: var(--type-body);
+  }
 }
