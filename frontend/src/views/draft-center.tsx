@@ -456,7 +456,7 @@ export function DraftCenter({
           </div>
         );
       })}
-      <div className="list-pagination-row draft-list-pagination">
+      <div className="list-pagination-row draft-list-pagination" role="listitem">
         <span aria-live="polite">showing {Math.min(visibleDraftCount, filteredRows.length)} of {filteredRows.length}</span>
         {visibleDraftCount < filteredRows.length ? <button type="button" onClick={() => setVisibleDraftCount((count) => count + 160)}>Show more</button> : null}
       </div>
