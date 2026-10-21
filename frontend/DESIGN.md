@@ -22,6 +22,11 @@ Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-bod
 - 4px spacing steps. Touch targets default to 44px.
 - One primary layout breakpoint at 760px, with additional responsive rules at max-width 420px and max-width 759px.
 
+## Tools
+
+- Each Tools view (Game lines, Team stats, Pricing, Analytics) opens with one toolbar of pill controls (`.monitor-value-chart-field`: caption and value inside one 44px control) that wraps on a phone. The sub-tab names the view, so the view's own heading is screen-reader only.
+- Summary before detail: Game lines opens with the week's slate and the picked game's board, Pricing with the latest value and its 30-day move. Charts and tables sit on one `--card` surface panel each.
+
 ## Rules
 
 - No raw hex colors in `theme/*.css` outside `:root` (enforced by the token-hygiene test).

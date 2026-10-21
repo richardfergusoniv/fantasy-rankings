@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ALL_GAMES_PICKER_ID,
   GAME_LINES_STALE_MS,
@@ -95,6 +95,16 @@ function formatAmericanOdds(odds: number | null): string {
 
 type PropSortKey = "player" | "stat" | "line" | "move" | "odds" | "sleeper" | "hit";
 
+const PROP_SORT_OPTIONS: ReadonlyArray<[PropSortKey, string]> = [
+  ["odds", "Odds"],
+  ["hit", "Hit"],
+  ["move", "Move"],
+  ["line", "Line"],
+  ["sleeper", "Sleeper"],
+  ["player", "Player"],
+  ["stat", "Stat"],
+];
+
 function formatHitRate(hits: number, misses: number, hitRate: number | null): string {
   if (hitRate === null) return "—";
   const decided = hits + misses;
@@ -141,26 +151,74 @@ function GameLineCardBlock({
   awayRecord: TeamSeasonRecords | null;
   homeRecord: TeamSeasonRecords | null;
 }) {
+  const side = (team: string, record: TeamSeasonRecords | null, align: "away" | "home") => (
+    <div className={`game-board-team is-${align}`}>
+      <strong>{team}</strong>
+      <dl>
+        <div><dt>ATS</dt><dd>{formatCoverRecord(record?.ats ?? EMPTY_COVER)}</dd></div>
+        <div><dt>O/U</dt><dd>{formatCoverRecord(record?.ou ?? EMPTY_COVER)}</dd></div>
+      </dl>
+    </div>
+  );
   return (
-    <div className="monitor-game-line-card">
-      <strong className="monitor-game-line-matchup">{card.matchup}</strong>
-      <span className="monitor-game-line-kickoff">{card.kickoffPt}</span>
-
-      <div className="monitor-game-line-market">
-        <span className="monitor-game-line-market-label">Spread</span>
-        <span>{card.spread}</span>
-        <span className="monitor-game-line-market-records">
-          {card.awayTeam} ATS {formatCoverRecord(awayRecord?.ats ?? EMPTY_COVER)} · {card.homeTeam} ATS {formatCoverRecord(homeRecord?.ats ?? EMPTY_COVER)}
-        </span>
+    <section className="game-board" aria-label={`${card.matchup}, ${card.kickoffPt}`}>
+      {side(card.awayTeam, awayRecord, "away")}
+      <div className="game-board-market">
+        <span className="game-board-kickoff">{card.kickoffPt}</span>
+        <dl>
+          <div><dt>Spread</dt><dd>{card.spread}</dd></div>
+          <div><dt>Total</dt><dd>{card.total}</dd></div>
+        </dl>
       </div>
+      {side(card.homeTeam, homeRecord, "home")}
+    </section>
+  );
+}
 
-      <div className="monitor-game-line-market">
-        <span className="monitor-game-line-market-label">Total</span>
-        <span>{card.total}</span>
-        <span className="monitor-game-line-market-records">
-          {card.awayTeam} O/U {formatCoverRecord(awayRecord?.ou ?? EMPTY_COVER)} · {card.homeTeam} O/U {formatCoverRecord(homeRecord?.ou ?? EMPTY_COVER)}
-        </span>
-      </div>
+/** The week's slate as tiles; picking one filters the props below. */
+function GameSlate({
+  cards,
+  selectedId,
+  onSelect,
+}: {
+  cards: GameLineCard[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const railRef = useRef<HTMLDivElement>(null);
+  // Bring the chosen game into view when a link or the default picks one off-screen.
+  useEffect(() => {
+    const rail = railRef.current;
+    const tile = rail?.querySelector<HTMLElement>("[aria-pressed='true']");
+    if (!rail || !tile) return;
+    const start = tile.offsetLeft;
+    const end = start + tile.offsetWidth;
+    if (start >= rail.scrollLeft && end <= rail.scrollLeft + rail.clientWidth) return;
+    rail.scrollTo({ left: Math.max(0, start - 16) });
+  }, [selectedId, cards.length]);
+  return (
+    <div className="game-slate" role="group" aria-label="Game" ref={railRef}>
+      <button
+        type="button"
+        className="game-slate-tile is-all"
+        aria-pressed={selectedId === ALL_GAMES_PICKER_ID}
+        onClick={() => onSelect(ALL_GAMES_PICKER_ID)}
+      >
+        <strong>All games</strong>
+      </button>
+      {cards.map((card) => (
+        <button
+          key={card.gameId}
+          type="button"
+          className="game-slate-tile"
+          aria-pressed={selectedId === card.gameId}
+          onClick={() => onSelect(card.gameId)}
+        >
+          <strong>{card.matchup}</strong>
+          <span className="game-slate-kickoff">{card.kickoffPt}</span>
+          <span className="game-slate-lines">{card.spread} · {card.total}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -480,7 +538,7 @@ export function GameLinesPanel({
 
   return (
     <section className="monitor-section monitor-game-lines-panel">
-      <header className="section-heading">
+      <header className="sr-only">
         <h2>Game lines</h2>
       </header>
 
@@ -492,26 +550,14 @@ export function GameLinesPanel({
         />
       ) : (
         <>
-          <div className="monitor-value-chart-controls monitor-game-lines-controls">
-            <label className="monitor-value-chart-field">
-              <span>Game</span>
-              <select
-                aria-label="Game"
-                value={selectedGameId}
-                onChange={(event) => {
-                  setUserGameId(event.target.value);
-                  if (initialTeam) onSelectionChange?.({ gameLinesTeam: null });
-                }}
-              >
-                <option value={ALL_GAMES_PICKER_ID}>All games</option>
-                {gameLineCards.map((game) => (
-                  <option key={game.gameId} value={game.gameId}>
-                    {game.matchup}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <GameSlate
+            cards={gameLineCards}
+            selectedId={selectedGameId}
+            onSelect={(id) => {
+              setUserGameId(id);
+              if (initialTeam) onSelectionChange?.({ gameLinesTeam: null });
+            }}
+          />
 
           {selectedGame ? (
             <GameLineCardBlock
@@ -545,6 +591,23 @@ export function GameLinesPanel({
                 <option value="ALL">All</option>
                 {PROP_STAT_OPTIONS.map((option) => (
                   <option key={option.id} value={option.id}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            {/* Phone only: the table's sortable headers are hidden there. */}
+            <label className="monitor-value-chart-field props-sort-field">
+              <span>Sort</span>
+              <select
+                aria-label="Sort props"
+                value={sortKey}
+                onChange={(event) => {
+                  const key = event.target.value as PropSortKey;
+                  setSortKey(key);
+                  setSortAsc(key === "player" || key === "stat");
+                }}
+              >
+                {PROP_SORT_OPTIONS.map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
                 ))}
               </select>
             </label>
@@ -607,9 +670,9 @@ export function GameLinesPanel({
                             </span>
                           </PlayerNameLink>
                         </th>
-                        <td data-label="Stat">{row.statLabel}</td>
-                        <td data-label="Line">{formatPropNumber(row.line, 1)}</td>
-                        <td data-label="Sleeper">
+                        <td data-label="Stat" className="props-cell-stat">{row.statLabel}</td>
+                        <td data-label="Line" className="props-cell-line">{formatPropNumber(row.line, 1)}</td>
+                        <td data-label="Sleeper" className="props-cell-sleeper">
                           {row.sleeperLine === null ? "—" : (
                             <span
                               title={sleeperTitle}
@@ -623,9 +686,9 @@ export function GameLinesPanel({
                             </span>
                           )}
                         </td>
-                        <td data-label="Move">{formatMove(row.move)}</td>
-                        <td data-label="Odds">{formatAmericanOdds(row.odds)}</td>
-                        <td data-label="Hit">
+                        <td data-label="Move" className="props-cell-move">{formatMove(row.move)}</td>
+                        <td data-label="Odds" className="props-cell-odds">{formatAmericanOdds(row.odds)}</td>
+                        <td data-label="Hit" className="props-cell-hit">
                           <span className={hitTone ? `props-hit props-hit-${hitTone}` : "props-hit"}>
                             {formatHitRate(hits, misses, row.hitRate)}
                           </span>

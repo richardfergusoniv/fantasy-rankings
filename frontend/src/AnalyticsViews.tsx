@@ -2407,7 +2407,7 @@ function ToolDatasetToggle({ value, onChange, label }: { value: ToolDataset; onC
 export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange, playerLink, focusPlayer }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout; playerLink?: PlayerLinkResolver; focusPlayer?: AnalyticsFocusPlayer | null }) {
   return (
     <section className="monitor-section monitor-builder-chart-panel">
-      <header className="section-heading">
+      <header className="sr-only">
         <h2>Analytics</h2>
       </header>
       {dataset === "advanced"
