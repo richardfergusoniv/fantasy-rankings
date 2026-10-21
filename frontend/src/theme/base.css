@@ -250,6 +250,10 @@
   --league-roster-row-height: 56px;
 }
 
+/* A saved choice pins the scheme; every light-dark() token follows it. */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; margin: 0; background: var(--bg); }
 body {
