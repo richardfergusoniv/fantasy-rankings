@@ -1165,7 +1165,8 @@ export function App() {
       <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       <div className="league-sticky">
-          <TickerStrip
+          {/* Tool pages need the vertical room on a phone; the ticker stays on the other pages. */}
+          {primaryPage === "tools" ? null : <TickerStrip
             data={draftQuery.data}
             news={newsQuery.data}
             rosterPlayerIds={selectedLeagueRosterIds}
@@ -1173,7 +1174,7 @@ export function App() {
             prominentPlayerIds={selectedLeagueProminentIds}
             onPlayer={openTickerPlayer}
             onNews={setTickerNews}
-          />
+          />}
           <div className="week-line">
             <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
             <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label={tab === "draft" ? "Refresh draft data" : "Refresh scores and rankings"}><RefreshIcon spinning={isRefreshing} /></button>
