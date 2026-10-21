@@ -37,6 +37,8 @@ type WeeklyEntity = {
   id: string; playerId: string; name: string; team: string; position: BasePosition; opponent: string | null; isAway: boolean | null; isBye: boolean; gameTime: string | null; gamePhase: MatchupSelection["gamePhase"]; values: Record<string, number>;
 };
 type PlayerSelection = { playerId?: string; name: string; team: string; position: BasePosition };
+/** A player the Analytics tool was asked to focus (from a link): the scatter opens on their position with them selected. */
+export type AnalyticsFocusPlayer = { id: string; name: string; team: string | null; position: string };
 type ChartDatum = {
   id: string; name: string; label: string; team: string; games: number; x: number; y: number; isSelectedTeam: boolean;
   /** Set where the data source knows them; lets the focused-player link find the player card. */
@@ -922,6 +924,8 @@ type ScatterPlotProps = {
   compact?: boolean;
   /** Resolves a focused player to their card; without it no link is shown. */
   playerLink?: PlayerLinkResolver;
+  /** Chart point id to focus when it changes (a link into the tool); the user can still change or clear it. */
+  focusRequestId?: string | null;
 };
 
 function ScatterPlot({
@@ -940,9 +944,11 @@ function ScatterPlot({
   ariaLabel,
   compact = false,
   playerLink,
+  focusRequestId = null,
 }: ScatterPlotProps) {
   const [zoomed, setZoomed] = useState(false);
-  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(focusRequestId);
+  useEffect(() => { if (focusRequestId) setFocusedId(focusRequestId); }, [focusRequestId]);
   const plottedData = Array.from(new Map(
     [...others, ...leadersWithoutSelectedTeam, ...selectedTeamPlayers].map((point) => [point.id, point]),
   ).values());
@@ -1413,7 +1419,7 @@ export function AdvancedStats({ dashboard, league, selectedPlayer, onSelectedPla
   );
 }
 
-function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advanced", onDatasetChange, playerLink }: { dashboard: Dashboard; league: League; layout?: ChartLayout; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; playerLink?: PlayerLinkResolver }) {
+function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advanced", onDatasetChange, playerLink, focusPlayer }: { dashboard: Dashboard; league: League; layout?: ChartLayout; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; playerLink?: PlayerLinkResolver; focusPlayer?: AnalyticsFocusPlayer | null }) {
   const monitorDefaultPreset = sharedSkillPresets.find((preset) => preset.label === "Usage vs Production") ?? sharedSkillPresets[0]!;
   const [position, setPosition] = useState<BasePosition>("RB");
   const [window, setWindow] = useState<AnalyticsWindow>("season");
@@ -1633,6 +1639,23 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
     }
   })();
 
+  // A link into the tool (a player's "Advanced stats"): open on their position with them selected in the expanded chart.
+  const focusEntityId = focusPlayer
+    ? dashboard.analytics.entities.find((entity) => entity.position === focusPlayer.position
+      && isSamePlayer(entity, { name: focusPlayer.name, team: focusPlayer.team ?? "", position: entity.position }))?.id ?? null
+    : null;
+  const handledFocusId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusPlayer || layout !== "monitor" || handledFocusId.current === focusPlayer.id) return;
+    const nextPosition = validPositions.find((item) => item === focusPlayer.position);
+    if (!nextPosition) return;
+    handledFocusId.current = focusPlayer.id;
+    choosePosition(nextPosition);
+    setChartKind("scatter");
+    setPlotLimit("all");
+    setIsChartOpen(true);
+  }, [focusPlayer, layout, validPositions]);
+
   if (!dashboard.analytics.entities.length || !selectedX || !selectedY) {
     return (
       <section className={layout === "monitor" ? "monitor-builder-chart-empty" : "analytics-view"}>
@@ -1679,6 +1702,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
             ariaLabel={`${position === "DEF" ? "DST" : position} scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
             compact={!showLabels && layout === "monitor"}
             playerLink={chartPlayerLink}
+            focusRequestId={showLabels ? focusEntityId : null}
           />
           <ChartKey teamName={fantasyTeamName(league)} />
           {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
@@ -2387,14 +2411,14 @@ function ToolDatasetToggle({ value, onChange, label }: { value: ToolDataset; onC
   );
 }
 
-export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange, playerLink }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout; playerLink?: PlayerLinkResolver }) {
+export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange, playerLink, focusPlayer }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout; playerLink?: PlayerLinkResolver; focusPlayer?: AnalyticsFocusPlayer | null }) {
   return (
     <section className="monitor-section monitor-builder-chart-panel">
       <header className="section-heading">
         <h2>Analytics</h2>
       </header>
       {dataset === "advanced"
-        ? <AnalyticsChart dashboard={dashboard} league={league} layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} playerLink={playerLink} />
+        ? <AnalyticsChart dashboard={dashboard} league={league} layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} playerLink={playerLink} focusPlayer={focusPlayer} />
         : <WeeklyProjections dashboard={dashboard} league={league} view="charts" layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} playerLink={playerLink} />}
     </section>
   );

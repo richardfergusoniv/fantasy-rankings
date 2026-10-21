@@ -150,6 +150,13 @@ describe("dashboard URL state", () => {
     expect(serializeDashboardSearch(state({ tab: "waivers", comparePlayerId: "4046" }))).toBe("?tab=waivers");
   });
 
+  it("carries the analytics player only on the analytics tab", () => {
+    const analytics = state({ tab: "analytics", chartDataset: "advanced", analyticsPlayerId: "4046" });
+    expect(serializeDashboardSearch(analytics)).toBe("?tab=analytics&chart=advanced&ap=4046");
+    expect(parseDashboardSearch("?tab=analytics&chart=advanced&ap=4046")).toEqual(analytics);
+    expect(serializeDashboardSearch(state({ tab: "pricing", analyticsPlayerId: "4046" }))).toBe("?tab=pricing");
+  });
+
   it("carries the trade partner only on the trade tab", () => {
     const trade = state({ tab: "trade", tradePartner: "7" });
     expect(serializeDashboardSearch(trade)).toBe("?tab=trade&tp=7");
