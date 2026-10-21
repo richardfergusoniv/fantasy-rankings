@@ -9,12 +9,12 @@ export type PlayerToolLink = {
   patch: Partial<DashboardUrlState>;
 };
 
-/** Team stats groups players as QB / RB / WR+TE; kickers and defenses have none. */
+/** Team stats opens on the player's own position group; kickers and defenses have none. */
 const TEAM_STATS_GROUP_BY_POSITION: Readonly<Record<string, string>> = {
   QB: "QB",
   RB: "RB",
-  WR: "WRTE",
-  TE: "WRTE",
+  WR: "WR",
+  TE: "TE",
 };
 
 /** Advanced stats (nflverse usage and efficiency) exist for these positions only. */

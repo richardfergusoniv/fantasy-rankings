@@ -11,12 +11,12 @@ describe("playerToolLinks", () => {
     expect(links[0]?.patch).toEqual({ tab: "pricing", pricingPlayerId: "4046" });
     expect(links[1]?.patch).toEqual({ tab: "comparison", comparePlayerId: "4046" });
     expect(links[2]?.patch).toEqual({ tab: "analytics", chartDataset: "advanced", analyticsPlayerId: "4046" });
-    expect(links[3]?.patch).toEqual({ tab: "team-stats", teamStatsTeam: "KC", teamStatsGroup: "WRTE" });
+    expect(links[3]?.patch).toEqual({ tab: "team-stats", teamStatsTeam: "KC", teamStatsGroup: "WR" });
     expect(links[4]?.patch).toEqual({ tab: "monitor", gameLinesTeam: "KC" });
   });
 
   it("maps positions onto Team stats groups and skips kickers and defenses", () => {
-    expect(playerToolLinks({ ...base, position: "TE" })[3]?.patch.teamStatsGroup).toBe("WRTE");
+    expect(playerToolLinks({ ...base, position: "TE" })[3]?.patch.teamStatsGroup).toBe("TE");
     expect(playerToolLinks({ ...base, position: "QB" })[3]?.patch.teamStatsGroup).toBe("QB");
     expect(playerToolLinks({ ...base, position: "RB" })[3]?.patch.teamStatsGroup).toBe("RB");
     for (const position of ["K", "DEF"]) {

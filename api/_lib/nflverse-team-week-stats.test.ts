@@ -10,6 +10,7 @@ import {
   formatTeamStatsValue,
   parsePlayerWeekStatsCsv,
   parseTeamWeekSnapCountsCsv,
+  parseTeamStatsGroup,
   teamStatsLegendCaption,
   type TeamWeekSnapRow,
   type TeamWeekStatRow,
@@ -300,12 +301,21 @@ describe("nflverse-team-week-stats", () => {
         { team: "SF", position: "QB" },
       ],
       "SEA",
-    )).toBe("WRTE");
+    )).toBe("WR");
     // A lone TE on another team does not change the fallback group.
-    expect(defaultTeamStatsGroup([{ team: "DAL", position: "TE" }], "SEA")).toBe("WRTE");
+    expect(defaultTeamStatsGroup([{ team: "DAL", position: "TE" }], "SEA")).toBe("WR");
+    expect(defaultTeamStatsGroup([{ team: "SEA", position: "TE" }], "SEA")).toBe("TE");
   });
 
-  it("merges WRs and TEs into one receiving group", () => {
+  it("reads saved groups, mapping the old combined WR/TE group to WR", () => {
+    expect(parseTeamStatsGroup("WRTE")).toBe("WR");
+    expect(parseTeamStatsGroup("TE")).toBe("TE");
+    expect(parseTeamStatsGroup("ALL")).toBe("ALL");
+    expect(parseTeamStatsGroup("K")).toBeNull();
+    expect(parseTeamStatsGroup(null)).toBeNull();
+  });
+
+  it("stacks every skill position together in the ALL group", () => {
     const stats: TeamWeekStatRow[] = [
       {
         playerId: "wr1", name: "Wide Out", team: "KC", opponent: "BUF", position: "WR", week: 1,
@@ -328,7 +338,7 @@ describe("nflverse-team-week-stats", () => {
       stats,
       snaps: [],
       team: "KC",
-      positions: TEAM_STATS_GROUP_POSITIONS.WRTE,
+      positions: TEAM_STATS_GROUP_POSITIONS.ALL,
       statId: "targets",
       throughWeek: 1,
     });

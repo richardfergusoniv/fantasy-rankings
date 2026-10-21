@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   NFL_TEAM_CODES,
   TEAM_STATS_GROUP_POSITIONS,
@@ -14,6 +14,7 @@ import {
   formatTeamStatsPercent,
   formatTeamStatsValue,
   normalizeTeamStatsPlayerName,
+  parseTeamStatsGroup,
   teamStatsLegendCaption,
   type TeamStatsGroupId,
   type TeamStatsStatId,
@@ -103,7 +104,7 @@ export function TeamStatsPanel({
   const initialTeam = initial?.team && NFL_TEAM_CODES.includes(initial.team as typeof NFL_TEAM_CODES[number])
     ? initial.team
     : null;
-  const initialGroup = TEAM_STATS_GROUPS.find((group) => group.id === initial?.group)?.id ?? null;
+  const initialGroup = parseTeamStatsGroup(initial?.group);
   const initialStat = TEAM_STATS_STAT_OPTIONS.find((option) => option.id === initial?.stat)?.id ?? null;
   const [userTeam, setUserTeam] = useState<string | null>(initialTeam);
   const selectedTeam = userTeam && NFL_TEAM_CODES.includes(userTeam as typeof NFL_TEAM_CODES[number])
@@ -160,7 +161,6 @@ export function TeamStatsPanel({
   const inspectedWeek = inspection?.key === inspectionKey ? inspection.week : null;
   const inspected = stacks.find((stack) => stack.week === inspectedWeek && stack.total > 0) ?? null;
   const statLabel = TEAM_STATS_STAT_OPTIONS.find((option) => option.id === statId)?.label ?? "";
-  const legendCaptionId = useId();
   // The same numbers as a table, for reading exact values or navigating without the chart.
   const [showTable, setShowTable] = useState(false);
 
@@ -178,7 +178,9 @@ export function TeamStatsPanel({
     const meta = new Map<string, { color: string; rostered: boolean }>();
     rows.forEach((row, index) => {
       meta.set(row.key, {
-        color: TEAM_STATS_PALETTE[index % TEAM_STATS_PALETTE.length]!,
+        // Past the palette (ALL can list 20+ players) the rest share the grey
+        // "Other" color rather than repeating a hue that would read as two players.
+        color: TEAM_STATS_PALETTE[index] ?? TEAM_STATS_OTHER_COLOR,
         rostered: isRosteredPlayer(row, league),
       });
     });
@@ -378,8 +380,7 @@ export function TeamStatsPanel({
             )}
           </div>
           <div className="team-stats-legend-group">
-          <p id={legendCaptionId} className="team-stats-legend-caption">{teamStatsLegendCaption(statId)}</p>
-          <ul className="team-stats-legend" aria-labelledby={legendCaptionId}>
+          <ul className="team-stats-legend" aria-label={teamStatsLegendCaption(statId)}>
             {legendRows.map(({ row, value, label }) => {
               const meta = playerMeta.get(row.key);
               const color = meta?.color ?? TEAM_STATS_OTHER_COLOR;

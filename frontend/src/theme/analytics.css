@@ -153,43 +153,14 @@
 .scatter-readout-hint {
   color: var(--dim);
 }
-.scatter-point-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  max-height: 176px;
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
-  /* Edge shadows appear only while more rows are scrolled out of view. */
-  background:
-    linear-gradient(var(--surface) 30%, transparent) top / 100% 24px no-repeat local,
-    linear-gradient(transparent, var(--surface) 70%) bottom / 100% 24px no-repeat local,
-    linear-gradient(rgb(0 0 0 / 0.35), transparent) top / 100% 10px no-repeat scroll,
-    linear-gradient(transparent, rgb(0 0 0 / 0.35)) bottom / 100% 10px no-repeat scroll;
+/* One dropdown picks a plotted player (the chart can hold 50+), instead of a button per name. */
+.scatter-point-select {
+  flex: none;
+  align-self: flex-start;
+  width: min(100%, 360px);
 }
-.scatter-point-list button {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--type-control);
-  font-weight: 600;
-  cursor: pointer;
-}
-.scatter-point-list button[aria-pressed="true"] {
-  border-color: var(--link);
-  color: var(--link);
-}
-.scatter-point-meta {
-  color: var(--dim);
+.scatter-point-select select {
+  width: 0;
 }
 .scatter-frame {
   display: flex;
