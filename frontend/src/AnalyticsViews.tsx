@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CartesianGrid, Customized, Line, LineChart, ReferenceLine, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Customized, Line, LineChart, ReferenceLine, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -935,9 +935,15 @@ function ScatterPlot({
   compact = false,
 }: ScatterPlotProps) {
   const [zoomed, setZoomed] = useState(false);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const plottedData = Array.from(new Map(
     [...others, ...leadersWithoutSelectedTeam, ...selectedTeamPlayers].map((point) => [point.id, point]),
   ).values());
+  const focused = plottedData.find((point) => point.id === focusedId) ?? null;
+  const focusableData = [...plottedData].sort((a, b) => a.name.localeCompare(b.name));
+  // Tapping a point or choosing it from the list focuses it; tapping it again clears.
+  const toggleFocus = (id: string) => setFocusedId((current) => (current === id ? null : id));
+  const focusedLabelData = focused && !labelData.some((point) => point.id === focused.id) ? [...labelData, focused] : labelData;
   const xDomain = scatterAxisDomain(plottedData.map((point) => point.x), zoomed);
   const yDomain = scatterAxisDomain(plottedData.map((point) => point.y), zoomed);
   const toggleZoom = () => setZoomed((value) => !value);
@@ -946,6 +952,7 @@ function ScatterPlot({
     : { top: 10, right: 12, bottom: 18, left: 4 };
   const axisTitle = `${xAxis.short}${xAxis.titleSuffix}`;
   const yAxisTitle = `${yAxis.short}${yAxis.titleSuffix}`;
+  const dotSize = compact ? 64 : 96;
   const plot = (
     <div
       aria-hidden="true"
@@ -965,7 +972,7 @@ function ScatterPlot({
             domain={xDomain}
             allowDataOverflow={zoomed}
             reversed={xAxis.lowerIsBetter}
-            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tick={{ fill: "var(--dim)", fontSize: compact ? 10 : 12 }}
             tickLine={false}
             axisLine={{ stroke: "var(--hairline)" }}
           />
@@ -976,19 +983,32 @@ function ScatterPlot({
             domain={yDomain}
             allowDataOverflow={zoomed}
             reversed={yAxis.lowerIsBetter}
-            width={compact ? 30 : 34}
-            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            width={compact ? 30 : 38}
+            tick={{ fill: "var(--dim)", fontSize: compact ? 10 : 12 }}
             tickLine={false}
             axisLine={false}
           />
           <Tooltip cursor={{ stroke: "var(--dim)", strokeDasharray: "3 3", strokeOpacity: 0.45 }} contentStyle={chartTooltipStyle} />
           {showQuadrants ? <ReferenceLine x={xCutoff} stroke="var(--hairline)" strokeWidth={1} strokeDasharray="4 8" /> : null}
           {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--hairline)" strokeWidth={1} strokeDasharray="4 8" /> : null}
-          <Scatter name="Field" data={others} fill="var(--chart-2)" fillOpacity={0.7} />
-          <Scatter name="Smash spots" data={leadersWithoutSelectedTeam} fill="var(--chart-2)" fillOpacity={0.7} />
-          <Scatter name="My team" data={selectedTeamPlayers} fill="var(--chart-team)" stroke="var(--chart-team)" strokeWidth={1} />
+          <ZAxis range={[dotSize, dotSize]} />
+          <Scatter name="Field" data={others} fill="var(--chart-2)" fillOpacity={0.7} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
+          <Scatter name="Smash spots" data={leadersWithoutSelectedTeam} fill="var(--chart-2)" fillOpacity={0.7} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
+          {/* My team is a diamond as well as teal, so it reads without colour. */}
+          <Scatter name="My team" data={selectedTeamPlayers} shape="diamond" fill="var(--chart-team)" stroke="var(--chart-team)" strokeWidth={1} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
+          {!compact && focused ? (
+            <Scatter
+              name="Selected"
+              data={[focused]}
+              legendType="none"
+              isAnimationActive={false}
+              shape={(props: { cx?: number; cy?: number }) => (
+                <circle cx={props.cx} cy={props.cy} r={10} fill="none" stroke="var(--foreground)" strokeWidth={2} pointerEvents="none" />
+              )}
+            />
+          ) : null}
           {!compact && plottedData.length > 1 ? <Customized component={<ScatterTrendLine data={plottedData} />} /> : null}
-          {labelData.length ? <Customized component={<AdaptiveChartLabels data={labelData} leaderIds={leaderIds} selectedTeamIds={selectedTeamIds} highlightedId={highlightedId} />} /> : null}
+          {focusedLabelData.length ? <Customized component={<AdaptiveChartLabels data={focusedLabelData} leaderIds={leaderIds} selectedTeamIds={selectedTeamIds} highlightedId={focusedId ?? highlightedId} />} /> : null}
         </ScatterChart>
       </ChartContainer>
     </div>
@@ -1010,11 +1030,36 @@ function ScatterPlot({
       {compact ? (
         <div className="scatter-frame is-compact">{plot}</div>
       ) : (
-        <div className="scatter-axis-rail">
-          <span className="scatter-axis-y" aria-hidden="true">{yAxisTitle}</span>
-          <div className="scatter-frame">{plot}</div>
-          <span className="scatter-axis-x" aria-hidden="true">{axisTitle}</span>
-        </div>
+        <>
+          <div className="scatter-axis-rail">
+            <span className="scatter-axis-y" aria-hidden="true">{yAxisTitle}</span>
+            <div className="scatter-frame">{plot}</div>
+            <span className="scatter-axis-x" aria-hidden="true">{axisTitle}</span>
+          </div>
+          <div className="scatter-inspector">
+            {/* One status line stays mounted so changes are announced. */}
+            <p className={focused ? "scatter-readout" : "scatter-readout scatter-readout-hint"} role="status">
+              {focused ? (
+                <>
+                  <strong>{focused.name}</strong>
+                  <span>{focused.team}{selectedTeamIds.has(focused.id) ? " · My team" : ""}</span>
+                  <span>{`${xAxis.short} ${focused.x}`}</span>
+                  <span>{`${yAxis.short} ${focused.y}`}</span>
+                </>
+              ) : "Tap a point or choose a player to read its values."}
+            </p>
+            <ul className="scatter-point-list" aria-label="Players on the chart">
+              {focusableData.map((point) => (
+                <li key={point.id}>
+                  <button type="button" aria-pressed={point.id === focusedId} onClick={() => toggleFocus(point.id)}>
+                    <span className="scatter-point-name">{point.name}</span>
+                    <span className="scatter-point-meta">{point.team}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
       )}
     </div>
   );
