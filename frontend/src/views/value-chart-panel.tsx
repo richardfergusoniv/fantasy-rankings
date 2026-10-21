@@ -72,8 +72,8 @@ function formatWholeValue(value: number): string {
 }
 
 /** Light gray (7D solid) vs darker gray (30D dotted) — both neutral. */
-const MA7_STROKE = "#c5ccd8";
-const MA30_STROKE = "#6b7588";
+const MA7_STROKE = "var(--chart-ma7)";
+const MA30_STROKE = "var(--chart-ma30)";
 
 function rosterPlayers(league: League): PickerPlayer[] {
   const seen = new Set<string>();

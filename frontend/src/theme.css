@@ -122,30 +122,30 @@
 }
 
 :root {
-  color-scheme: dark;
-  --background: #0e1014;
-  --foreground: #e8eaed;
-  --card: #171b22;
-  --card-foreground: #e8eaed;
-  --popover: #171b22;
-  --popover-foreground: #e8eaed;
+  color-scheme: light dark;
+  --background: light-dark(#f4f5f7, #0e1014);
+  --foreground: light-dark(#14171c, #e8eaed);
+  --card: light-dark(#ffffff, #171b22);
+  --card-foreground: light-dark(#14171c, #e8eaed);
+  --popover: light-dark(#ffffff, #171b22);
+  --popover-foreground: light-dark(#14171c, #e8eaed);
   --primary: #f0b429;
   --primary-foreground: #14120a;
-  --secondary: #242a33;
-  --secondary-foreground: #e8eaed;
-  --muted: #242a33;
-  --muted-foreground: #9aa3b5;
-  --ui-accent: #2a2418;
-  --ui-accent-foreground: #f5c16a;
+  --secondary: light-dark(#e6e9ee, #242a33);
+  --secondary-foreground: light-dark(#14171c, #e8eaed);
+  --muted: light-dark(#e6e9ee, #242a33);
+  --muted-foreground: light-dark(#4a5362, #9aa3b5);
+  --ui-accent: light-dark(#fbeecb, #2a2418);
+  --ui-accent-foreground: light-dark(#7a4e00, #f5c16a);
   --destructive: #b91c1c;
-  --danger-text: #fca5a5;
-  --input: #6b7588;
-  --ring: #f5c16a;
-  --chart-1: #f0b429;
-  --chart-2: #9aa3b5;
-  --chart-3: #4ade80;
-  --chart-4: #fca5a5;
-  --chart-5: #60a5fa;
+  --danger-text: light-dark(#b42318, #fca5a5);
+  --input: light-dark(#727b8c, #6b7588);
+  --ring: light-dark(#8a5a00, #f5c16a);
+  --chart-1: light-dark(#b97a00, #f0b429);
+  --chart-2: light-dark(#5b6577, #9aa3b5);
+  --chart-3: light-dark(#15803d, #4ade80);
+  --chart-4: light-dark(#b91c1c, #fca5a5);
+  --chart-5: light-dark(#1d4ed8, #60a5fa);
   --radius: 12px;
 
   --bg: var(--background);
@@ -154,62 +154,66 @@
   --text: var(--foreground);
   --dim: var(--muted-foreground);
   --select-arrow: linear-gradient(45deg, transparent 50%, var(--dim) 50%), linear-gradient(135deg, var(--dim) 50%, transparent 50%);
-  --border: #6b7588;
-  --hairline: #3a4250;
-  --row-divider: #566073;
+  --border: light-dark(#727b8c, #6b7588);
+  --hairline: light-dark(#d3d8e0, #3a4250);
+  --row-divider: light-dark(#8e97a6, #566073);
   --accent: #f5c16a;
   --accent-2: #e0a820;
-  --accent-hover: #e8b456;
+  --accent-hover: light-dark(#6f4700, #e8b456);
   --accent-pressed: #d4a017;
   --action: #f0b429;
   --action-hover: #e0a820;
   --action-pressed: #d4a017;
-  --link: #f5c16a;
-  --link-hover: #e8b456;
-  --link-active: #d4a017;
+  --link: light-dark(#8a5a00, #f5c16a);
+  --link-hover: light-dark(#6f4700, #e8b456);
+  --link-active: light-dark(#5a3a00, #d4a017);
   --accent-soft: var(--ui-accent);
-  --accent-medium: #3d2e14;
+  --accent-medium: light-dark(#f4dc9b, #3d2e14);
   --on-accent: #14120a;
   --signal: var(--muted-foreground);
   --signal-soft: var(--secondary);
-  --winner: #f5c16a;
-  --warning: #ff8a65;
-  --roster-highlight: #5eead4;
-  --roster-highlight-bg: #12302d;
-  --roster-highlight-soft: #1a4540;
-  --on-roster-highlight: #04201d;
+  --chart-ma7: light-dark(#4b5565, #c5ccd8);
+  --chart-ma30: light-dark(#8a93a3, #6b7588);
+  --inset-edge: light-dark(rgb(0 0 0 / .12), rgb(10 12 16 / .55));
+  --winner-fill: #f0b429;
+  --winner: light-dark(#9a6400, #f5c16a);
+  --warning: light-dark(#b93815, #ff8a65);
+  --roster-highlight: light-dark(#0f766e, #5eead4);
+  --roster-highlight-bg: light-dark(#d5f3ef, #12302d);
+  --roster-highlight-soft: light-dark(#b5e8e1, #1a4540);
+  --on-roster-highlight: light-dark(#ffffff, #04201d);
   --chart-team: var(--roster-highlight);
   --ink: var(--foreground);
-  --segment-track: #242a33;
-  --opponent-row: #323a46;
-  --give: #4ade80;
-  --get: #9aa3b5;
+  --segment-track: light-dark(#e1e5ec, #242a33);
+  --opponent-row: light-dark(#dde3ec, #323a46);
+  --give: light-dark(#15803d, #4ade80);
+  --get: light-dark(#5b6577, #9aa3b5);
   --stat-strength: var(--chart-3);
-  --stat-strength-readable: #86efac;
-  --stat-strength-soft: #163527;
+  --stat-strength-readable: light-dark(#166534, #86efac);
+  --stat-strength-soft: light-dark(#d6f2de, #163527);
   --stat-average: var(--chart-2);
   --stat-average-soft: var(--secondary);
   --stat-weakness: var(--chart-4);
-  --stat-weakness-readable: #fca5a5;
-  --stat-weakness-soft: #3a1a22;
-  --ticker-bg: #0a0c10;
-  --ticker-text: #e8eaed;
-  --ticker-dim: #9aa3b5;
-  --ticker-up: #4ade80;
-  --ticker-down: #fca5a5;
-  --ticker-divider: rgb(255 255 255 / .16);
-  --ticker-pressed: rgb(255 255 255 / .10);
-  --breaking: #f87171;
-  --breaking-bright: #fecaca;
+  --stat-weakness-readable: light-dark(#b42318, #fca5a5);
+  --stat-weakness-soft: light-dark(#fbdcdc, #3a1a22);
+  --ticker-bg: light-dark(#e9ecf1, #0a0c10);
+  --ticker-text: light-dark(#14171c, #e8eaed);
+  --ticker-dim: light-dark(#4a5362, #9aa3b5);
+  --ticker-up: light-dark(#166534, #4ade80);
+  --ticker-down: light-dark(#b42318, #fca5a5);
+  --ticker-divider: light-dark(rgb(0 0 0 / .14), rgb(255 255 255 / .16));
+  --ticker-pressed: light-dark(rgb(0 0 0 / .07), rgb(255 255 255 / .10));
+  --breaking: light-dark(#b91c1c, #f87171);
+  --breaking-bright: light-dark(#991b1b, #fecaca);
   --breaking-soft: var(--stat-weakness-soft);
   --positive: var(--stat-strength-readable);
   --negative: var(--stat-weakness-readable);
-  --overlay: rgb(8 10 14 / .72);
-  --shadow-header: 0 1px 0 rgb(0 0 0 / .35);
-  --shadow-control: 0 1px 1px rgb(0 0 0 / .28), 0 1px 2px rgb(0 0 0 / .22);
-  --shadow-popover: 0 1px 2px rgb(0 0 0 / .32), 0 8px 24px rgb(0 0 0 / .45);
-  --shadow-modal: 0 1px 2px rgb(0 0 0 / .32), 0 16px 40px rgb(0 0 0 / .55);
-  --shadow-sheet: 0 -1px 2px rgb(0 0 0 / .28), 0 -12px 32px rgb(0 0 0 / .5);
+  --overlay: light-dark(rgb(20 23 28 / .45), rgb(8 10 14 / .72));
+  --shadow-header: 0 1px 0 light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .35));
+  --shadow-control: 0 1px 1px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .28)), 0 1px 2px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .22));
+  --shadow-popover: 0 1px 2px light-dark(rgb(0 0 0 / .1), rgb(0 0 0 / .32)), 0 8px 24px light-dark(rgb(0 0 0 / .14), rgb(0 0 0 / .45));
+  --shadow-modal: 0 1px 2px light-dark(rgb(0 0 0 / .1), rgb(0 0 0 / .32)), 0 16px 40px light-dark(rgb(0 0 0 / .18), rgb(0 0 0 / .55));
+  --shadow-sheet: 0 -1px 2px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .28)), 0 -12px 32px light-dark(rgb(0 0 0 / .16), rgb(0 0 0 / .5));
   --font-ui: var(--font-sans);
   --font-display: var(--font-sans);
   --type-caption: 12px;
@@ -766,7 +770,7 @@ main { padding: 12px 16px 0; }
   display: block;
   width: 100%;
   min-height: 2px;
-  box-shadow: inset 0 -1px 0 rgba(10, 12, 16, .55);
+  box-shadow: inset 0 -1px 0 var(--inset-edge);
 }
 .team-stats-week-label {
   color: var(--dim);
@@ -1210,12 +1214,12 @@ main { padding: 12px 16px 0; }
   background: var(--dim);
 }
 .monitor-pricing-key i.is-value { background: var(--chart-1); height: 3px; }
-.monitor-pricing-key i.is-ma7 { background: #c5ccd8; }
+.monitor-pricing-key i.is-ma7 { background: var(--chart-ma7); }
 /* The 30D line is dotted on the chart, so its swatch is too. */
 .monitor-pricing-key i.is-ma30 {
   width: 12px;
   height: 0;
-  border-top: 2px dotted var(--border);
+  border-top: 2px dotted var(--chart-ma30);
   border-radius: 0;
   background: none;
 }
@@ -2024,7 +2028,7 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
   height: 100%;
   background: transparent;
 }
-.trade-balance-track > i.is-winner { background: var(--winner); }
+.trade-balance-track > i.is-winner { background: var(--winner-fill); }
 .trade-balance-track > i.is-tie { background: var(--dim); }
 .trade-balance p { margin: 8px 0 0; color: var(--dim); font-size: var(--type-caption); }
 .trade-calculate-wrap { display: grid; gap: 8px; margin-top: 16px; text-align: center; }
@@ -2115,7 +2119,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-trade-column.is-winner .league-trade-segment,
 .league-trade-column.is-winner .league-trade-bar.is-empty {
   border-color: transparent;
-  background: var(--winner);
+  background: var(--winner-fill);
   color: var(--on-accent);
 }
 .league-trade-column.is-tie.mine .league-trade-segment,
@@ -2144,7 +2148,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-power-table .trade-power-num { text-align: right; }
 .trade-power-rank { width: 28px; color: var(--dim); }
 .trade-power-team { font-weight: 600; }
-.trade-power-table tr.is-user td { background: rgba(245, 199, 106, 0.07); }
+.trade-power-table tr.is-user td { background: color-mix(in srgb, var(--winner) 8%, transparent); }
 .trade-power-table tr.is-user .trade-power-team { color: var(--winner); }
 .trade-power-table tr.is-partner td { background: var(--opponent-row); }
 .trade-power-up { color: var(--positive); white-space: nowrap; }
@@ -2295,7 +2299,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-aggregate-key i { width: 18px; height: 3px; border-radius: 2px; }
 .trade-aggregate-key i.give,
 .trade-aggregate-key i.get { background: var(--dim); }
-.trade-aggregate-key i.is-winner { background: var(--winner); }
+.trade-aggregate-key i.is-winner { background: var(--winner-fill); }
 .trade-aggregate > p { margin: 9px 2px 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.4; }
 
 .advanced-player-picker { display: block; padding: 2px 0 12px; border-bottom: 1px solid var(--hairline); }
@@ -2513,7 +2517,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .comparison-stacked-bar { display: flex; width: 100%; height: 18px; overflow: hidden; border: 1px solid var(--hairline); border-radius: var(--radius-md); background: transparent; }
 .comparison-segment { display: block; min-width: 0; height: 100%; background: transparent; }
 .comparison-segment.left { border-right: 0; }
-.comparison-segment.winner { background: var(--winner); }
+.comparison-segment.winner { background: var(--winner-fill); }
 .comparison-segment:not(.winner) { background: color-mix(in srgb, var(--dim) 45%, var(--surface)); }
 
 /* Head-to-head comparison: every metric uses the same labeled split-bar language. */
@@ -2654,7 +2658,7 @@ button.league-partner-change:active { color: var(--link-active); }
 }
 .player-comparison-fill.left { right: 0; }
 .player-comparison-fill.right { left: 0; }
-.player-comparison-fill.is-winner { background: var(--winner); }
+.player-comparison-fill.is-winner { background: var(--winner-fill); }
 .comparison-picker-backdrop { position: fixed; z-index: 1000; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-top: max(24px, env(safe-area-inset-top)); background: var(--overlay); }
 .comparison-picker-sheet { width: min(100%, 560px); max-height: min(84dvh, 720px); overflow: hidden; padding: 16px 16px max(16px, env(safe-area-inset-bottom)); border: 1px solid var(--hairline); border-radius: var(--radius-xl) var(--radius-xl) 0 0; background: var(--surface); box-shadow: var(--shadow-sheet); }
 .comparison-picker-sheet > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
