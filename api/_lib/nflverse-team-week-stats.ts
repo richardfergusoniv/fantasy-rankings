@@ -68,22 +68,28 @@ export const TEAM_STATS_POSITIONS: readonly TeamStatsPosition[] = ["QB", "RB", "
  * Display groups for the panel. WRs and TEs draw from the same pool of
  * targets and receiving production, so they are never split apart.
  */
-export type TeamStatsGroupId = "QB" | "RB" | "WRTE";
+export type TeamStatsGroupId = "ALL" | TeamStatsPosition;
 
 export const TEAM_STATS_GROUPS: readonly { id: TeamStatsGroupId; label: string }[] = [
+  { id: "ALL", label: "ALL" },
   { id: "QB", label: "QB" },
   { id: "RB", label: "RB" },
-  { id: "WRTE", label: "WR/TE" },
+  { id: "WR", label: "WR" },
+  { id: "TE", label: "TE" },
 ];
 
 export const TEAM_STATS_GROUP_POSITIONS: Record<TeamStatsGroupId, readonly TeamStatsPosition[]> = {
+  ALL: ["QB", "RB", "WR", "TE"],
   QB: ["QB"],
   RB: ["RB"],
-  WRTE: ["WR", "TE"],
+  WR: ["WR"],
+  TE: ["TE"],
 };
 
-export function teamStatsGroupForPosition(position: TeamStatsPosition): TeamStatsGroupId {
-  return position === "WR" || position === "TE" ? "WRTE" : position;
+/** Links saved before WR and TE were split name the old combined group; they open on WR. */
+export function parseTeamStatsGroup(value: string | null | undefined): TeamStatsGroupId | null {
+  if (value === "WRTE") return "WR";
+  return TEAM_STATS_GROUPS.find((group) => group.id === value)?.id ?? null;
 }
 
 export type TeamWeekStatRow = {
@@ -562,17 +568,18 @@ export function defaultTeamStatsGroup(
   team: string,
 ): TeamStatsGroupId {
   const target = canonicalNflTeam(team);
-  const counts = new Map<TeamStatsGroupId, number>();
+  const counts = new Map<TeamStatsPosition, number>();
   for (const player of rosterPlayers) {
     if (!player.team || canonicalNflTeam(player.team) !== target) continue;
     const position = asSkillPosition(player.position);
     if (!position) continue;
-    const group = teamStatsGroupForPosition(position);
-    counts.set(group, (counts.get(group) ?? 0) + 1);
+    counts.set(position, (counts.get(position) ?? 0) + 1);
   }
-  let best: TeamStatsGroupId = "WRTE";
+  // The default is the position group holding most of the roster's players on this team.
+  let best: TeamStatsGroupId = "WR";
   let bestCount = 0;
   for (const group of TEAM_STATS_GROUPS) {
+    if (group.id === "ALL") continue;
     const count = counts.get(group.id) ?? 0;
     if (count > bestCount) {
       best = group.id;

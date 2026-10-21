@@ -957,7 +957,7 @@ function ScatterPlot({
     ? playerLink({ playerId: focused.playerId ?? null, name: focused.name, team: focused.team, position: focused.position ?? null })
     : null;
   const focusableData = [...plottedData].sort((a, b) => a.name.localeCompare(b.name));
-  // Tapping a point or choosing it from the list focuses it; tapping it again clears.
+  // Tapping a point or choosing it from the dropdown focuses it; tapping it again clears.
   const toggleFocus = (id: string) => setFocusedId((current) => (current === id ? null : id));
   const focusedLabelData = focused && !labelData.some((point) => point.id === focused.id) ? [...labelData, focused] : labelData;
   const xDomain = scatterAxisDomain(plottedData.map((point) => point.x), zoomed);
@@ -1053,6 +1053,19 @@ function ScatterPlot({
             <span className="scatter-axis-x" aria-hidden="true">{axisTitle}</span>
           </div>
           <div className="scatter-inspector">
+            <label className="monitor-value-chart-field scatter-point-select">
+              <span>Player</span>
+              <select
+                aria-label="Choose a player on the chart"
+                value={focused?.id ?? ""}
+                onChange={(event) => setFocusedId(event.target.value || null)}
+              >
+                <option value="">None</option>
+                {focusableData.map((point) => (
+                  <option key={point.id} value={point.id}>{`${point.name} · ${point.team}`}</option>
+                ))}
+              </select>
+            </label>
             {/* One status line stays mounted so changes are announced. */}
             <p className={focused ? "scatter-readout" : "scatter-readout scatter-readout-hint"} role="status">
               {focused ? (
@@ -1069,16 +1082,6 @@ function ScatterPlot({
                 <PlayerNameLink link={focusedLink}>View {focused?.name}’s card</PlayerNameLink>
               </p>
             ) : null}
-            <ul className="scatter-point-list" aria-label="Players on the chart">
-              {focusableData.map((point) => (
-                <li key={point.id}>
-                  <button type="button" aria-pressed={point.id === focusedId} onClick={() => toggleFocus(point.id)}>
-                    <span className="scatter-point-name">{point.name}</span>
-                    <span className="scatter-point-meta">{point.team}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
           </div>
         </>
       )}

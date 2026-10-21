@@ -311,7 +311,7 @@
   box-shadow: var(--shadow-control);
 }
 .monitor-team-stats-group {
-  flex: 0 1 240px;
+  flex: 0 1 300px;
 }
 .team-stats-table-wrap {
   max-width: 100%;
@@ -411,12 +411,6 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-.team-stats-legend-caption {
-  margin: 0;
-  color: var(--dim);
-  font-size: var(--type-caption);
-  line-height: 1.35;
 }
 .team-stats-legend {
   display: flex;
