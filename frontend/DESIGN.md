@@ -6,6 +6,7 @@
 
 - Dark only (`color-scheme: dark`). There is no light theme and no `prefers-color-scheme` handling.
 - Amber is the interactive color: `--action`, `--link`, `--ring`, primary buttons and tab indicators. Dark ink (`--on-accent`) sits on amber fills.
+- `--winner` is the amber highlight for the better side of a comparison or trade; `--warning` is a separate orange-red used only for cautions and always paired with a ⚠ glyph, so a caution never reads as an action.
 - "Mine" (roster rows, the user's team in charts) uses its own teal, `--roster-highlight`, never the action amber.
 - Surfaces step `--background` → `--card` → `--secondary`. Structure comes from flat rows and hairline dividers rather than boxes and shadows.
 - Soft/tough matchup quality uses `--stat-strength-soft` / `--stat-weakness-soft` tints (see `sos-soft` / `sos-tough`).
@@ -17,7 +18,7 @@ Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-bod
 ## Shape and spacing
 
 - Text on tappable controls (buttons, selects, links, chip lists) uses `--type-control` (14px, same as tabs). The 12px `--type-caption` is for metadata, column heads and field labels, not for something you tap.
-- `--radius` is 12px; `sm`/`md`/`xl` derive from it. Small tags use 4px.
+- `--radius` is 12px; `sm`/`md`/`xl` derive from it. Small tags, chips and skeleton lines use `--radius-xs` (4px, derived from `--radius`); never write a bare `4px` radius. Flat list rows, dividers and full-bleed frames use `0` on purpose.
 - 4px spacing steps. Touch targets default to 44px.
 - One primary layout breakpoint at 760px, with additional responsive rules at max-width 420px and max-width 759px.
 

@@ -101,8 +101,15 @@ describe("Look D theme contrast", () => {
   });
 
   it("keeps optimized-total projection amber readable on Look D canvas and panel", () => {
+    const winner = resolveVar(vars, "--winner");
+    expect(winner.toLowerCase()).toBe("#f5c16a");
+    expect(contrastRatio(winner, canvas)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(winner, panel)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("keeps warnings readable and distinct from the amber action color", () => {
     const warning = resolveVar(vars, "--warning");
-    expect(warning.toLowerCase()).toBe("#f5c16a");
+    expect(warning.toLowerCase()).not.toBe(resolveVar(vars, "--link").toLowerCase());
     expect(contrastRatio(warning, canvas)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(warning, panel)).toBeGreaterThanOrEqual(4.5);
   });
@@ -174,5 +181,12 @@ describe("Roster highlight", () => {
   it("stays readable on its tint and with dark ink as a fill", () => {
     expect(contrastRatio(highlight, bg)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(resolveVar(vars, "--on-roster-highlight"), highlight)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("Radius tokens", () => {
+  it("keeps small-tag radii on --radius-xs instead of a bare 4px", () => {
+    const css = readFileSync(themePath, "utf8");
+    expect(css.match(/border-radius: 4px(?=\s*[;}])/g) ?? []).toEqual([]);
   });
 });
