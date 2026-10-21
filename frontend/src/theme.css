@@ -1274,6 +1274,18 @@ main { padding: 12px 16px 0; }
 .monitor-value-chart-panel .monitor-value-chart .scatter-plot-body {
   height: 168px;
 }
+@media (max-width: 759px) {
+  .monitor-value-chart-panel .monitor-value-chart .scatter-plot-body {
+    height: clamp(168px, 34dvh, 300px);
+  }
+}
+.monitor-chart-expand-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--link);
+  font-size: var(--type-caption);
+  font-weight: 600;
+}
 /* Inline builder charts reuse Pricing chart height; keep plot and key stacked. */
 .monitor-builder-chart-panel .monitor-value-chart {
   position: relative;
