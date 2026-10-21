@@ -159,6 +159,8 @@ export function TeamStatsPanel({
   const inspectedWeek = inspection?.key === inspectionKey ? inspection.week : null;
   const inspected = stacks.find((stack) => stack.week === inspectedWeek && stack.total > 0) ?? null;
   const statLabel = TEAM_STATS_STAT_OPTIONS.find((option) => option.id === statId)?.label ?? "";
+  // The same numbers as a table, for reading exact values or navigating without the chart.
+  const [showTable, setShowTable] = useState(false);
 
   // Completed weeks the team actually produced in (excludes byes and the
   // in-progress week) — the denominator for the legend's per-week average.
@@ -250,6 +252,46 @@ export function TeamStatsPanel({
       ) : (
         <div className="team-stats-chart-wrap">
           <div className="team-stats-main">
+            <button
+              type="button"
+              className="scatter-zoom-toggle team-stats-view-toggle"
+              aria-pressed={showTable}
+              onClick={() => setShowTable((value) => !value)}
+            >
+              Table view
+            </button>
+            {showTable ? (
+              <div className="team-stats-table-wrap">
+                <table className="team-stats-table">
+                  <caption className="sr-only">{`${statLabel} by player and week`}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Player</th>
+                      {stacks.map((stack) => <th scope="col" key={stack.week}>{`W${stack.week}`}</th>)}
+                      <th scope="col">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.key} className={playerMeta.get(row.key)?.rostered ? "is-my-roster" : undefined}>
+                        <th scope="row">{row.name}</th>
+                        {stacks.map((stack) => {
+                          const cell = row.weeks.find((candidate) => candidate.week === stack.week);
+                          return (
+                            <td key={stack.week}>
+                              {cell?.hasSourceRow ? formatTeamStatsValue(statId, cell.value) : "—"}
+                              {cell?.hasSourceRow && cell.percent !== null ? <small>{formatTeamStatsPercent(cell.percent)}</small> : null}
+                            </td>
+                          );
+                        })}
+                        <td>{formatTeamStatsValue(statId, row.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <>
             <div className="team-stats-chart">
               {stacks.map((stack) => {
                 const total = stack.total > 0 ? formatTeamStatsValue(statId, stack.total) : "—";
@@ -310,6 +352,8 @@ export function TeamStatsPanel({
                 </ul>
               ) : null}
             </div>
+              </>
+            )}
           </div>
           <ul className="team-stats-legend">
             {rows.map((row) => {

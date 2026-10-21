@@ -140,6 +140,8 @@ export type TeamStatsWeekCell = {
   value: number;
   /** Present for snap % / target share cells. */
   percent: number | null;
+  /** Whether the stats (or, for snaps, snap-count) source row exists for this week; false means the player had no row, e.g. a bye. */
+  hasSourceRow: boolean;
 };
 
 export type TeamStatsPlayerRow = {
@@ -434,13 +436,11 @@ export function buildTeamStatsTable(options: {
   const output: TeamStatsPlayerRow[] = [];
   for (const [key, acc] of players) {
     const weekCells: TeamStatsWeekCell[] = weeks.map((week) => {
-      const { value, percent } = weekValueForStat(
-        options.statId,
-        acc.byWeekStats.get(week),
-        acc.byWeekSnaps.get(week),
-        options.scoringSettings,
-      );
-      return { week, value, percent };
+      const weekStats = acc.byWeekStats.get(week);
+      const weekSnap = acc.byWeekSnaps.get(week);
+      const { value, percent } = weekValueForStat(options.statId, weekStats, weekSnap, options.scoringSettings);
+      const hasSourceRow = options.statId === "snaps" ? weekSnap !== undefined : weekStats !== undefined;
+      return { week, value, percent, hasSourceRow };
     });
     const total = weekCells.reduce((sum, cell) => sum + cell.value, 0);
     // Drop players with no countable activity in-range (keeps table focused).

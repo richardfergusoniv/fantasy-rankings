@@ -777,6 +777,49 @@ main { padding: 12px 16px 0; }
   font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;
 }
+.team-stats-view-toggle {
+  align-self: flex-start;
+  min-height: 44px;
+}
+.team-stats-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.team-stats-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--type-body);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.team-stats-table th,
+.team-stats-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--hairline);
+  text-align: right;
+  white-space: nowrap;
+}
+.team-stats-table thead th {
+  color: var(--dim);
+  font-size: var(--type-caption);
+  font-weight: 700;
+}
+.team-stats-table tbody th {
+  position: sticky;
+  left: 0;
+  background-color: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  text-align: left;
+}
+.team-stats-table td small {
+  display: block;
+  color: var(--dim);
+  font-size: var(--type-caption);
+}
+.team-stats-table tr.is-my-roster th {
+  color: var(--roster-highlight);
+}
 .team-stats-inspector {
   min-height: 44px;
   font-size: var(--type-body);

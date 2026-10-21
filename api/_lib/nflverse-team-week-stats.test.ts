@@ -198,8 +198,22 @@ describe("nflverse-team-week-stats", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]?.name).toBe("A Star");
     expect(rows[0]?.total).toBe(115);
-    expect(rows[0]?.weeks[0]).toEqual({ week: 1, value: 60, percent: 90 });
-    expect(rows[1]?.weeks[1]).toEqual({ week: 2, value: 10, percent: 15 });
+    expect(rows[0]?.weeks[0]).toEqual({ week: 1, value: 60, percent: 90, hasSourceRow: true });
+    expect(rows[1]?.weeks[1]).toEqual({ week: 2, value: 10, percent: 15, hasSourceRow: true });
+  });
+
+  it("marks weeks with no source row so a bye is not shown as a zero", () => {
+    const snaps: TeamWeekSnapRow[] = [
+      { name: "A Star", team: "SEA", position: "WR", week: 1, offenseSnaps: 60, offensePct: 90 },
+      { name: "A Star", team: "SEA", position: "WR", week: 3, offenseSnaps: 0, offensePct: 0 },
+      { name: "B Depth", team: "SEA", position: "WR", week: 1, offenseSnaps: 20, offensePct: 30 },
+      { name: "B Depth", team: "SEA", position: "WR", week: 2, offenseSnaps: 10, offensePct: 15 },
+    ];
+    const rows = buildTeamStatsTable({ stats: [], snaps, team: "SEA", positions: ["WR"], statId: "snaps", throughWeek: 3 });
+    const star = rows.find((row) => row.name === "A Star");
+    expect(star?.weeks.find((cell) => cell.week === 2)).toMatchObject({ value: 0, hasSourceRow: false });
+    // A real source row whose value is zero still counts as present.
+    expect(star?.weeks.find((cell) => cell.week === 3)).toMatchObject({ value: 0, hasSourceRow: true });
   });
 
   it("carries target share as the percent on targets cells", () => {
@@ -221,7 +235,7 @@ describe("nflverse-team-week-stats", () => {
       statId: "targets",
       throughWeek: 1,
     });
-    expect(rows[0]?.weeks[0]).toEqual({ week: 1, value: 8, percent: 25 });
+    expect(rows[0]?.weeks[0]).toEqual({ week: 1, value: 8, percent: 25, hasSourceRow: true });
   });
 
   it("scores fantasy points in league format, first downs included", () => {
@@ -336,7 +350,7 @@ describe("nflverse-team-week-stats", () => {
       name,
       team: "KC",
       position: "WR" as const,
-      weeks: weeks.map((cell) => ({ ...cell, percent: null })),
+      weeks: weeks.map((cell) => ({ ...cell, percent: null, hasSourceRow: true })),
       total,
     });
     const stacks = buildTeamStatsWeekStacks([
@@ -364,9 +378,9 @@ describe("nflverse-team-week-stats", () => {
       team: "KC",
       position: "QB" as const,
       weeks: [
-        { week: 1, value: 20, percent: null },
-        { week: 2, value: -3, percent: null },
-        { week: 3, value: 0, percent: null },
+        { week: 1, value: 20, percent: null, hasSourceRow: true },
+        { week: 2, value: -3, percent: null, hasSourceRow: true },
+        { week: 3, value: 0, percent: null, hasSourceRow: true },
       ],
       total: 17,
     };
