@@ -5,6 +5,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceLine,
   Tooltip,
   XAxis,
   YAxis,
@@ -26,7 +27,13 @@ import {
 } from "../value-history-domain";
 import { PlayerNameLink } from "../tool-links";
 import type { PlayerLinkResolver } from "../tool-player-link";
-import { valueChartYDomain, valueChartZoomStartIndex } from "../value-chart-zoom";
+import {
+  VALUE_CHART_RANGES,
+  valueChartRangeStartIndex,
+  valueChartYDomain,
+  valueChartZoomStartIndex,
+  type ValueChartRange,
+} from "../value-chart-zoom";
 
 type PickerPlayer = {
   playerId: string;
@@ -49,6 +56,14 @@ function formatDateTick(value: string): string {
   return Number.isNaN(date.getTime())
     ? value
     : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
+}
+
+/** Date with the year, for the scrubber (axis ticks omit it). */
+function formatFullDate(value: string): string {
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "numeric" }).format(date);
 }
 
 /** Whole-number FantasyCalc values with thousands separators for tooltips. */
@@ -172,6 +187,9 @@ export function ValueChartPanel({
   const [comparePlayerId, setComparePlayerId] = useState(initialCompareId ?? "");
   const [isExpanded, setIsExpanded] = useState(false);
   const [zoomed, setZoomed] = useState(false);
+  const [range, setRange] = useState<ValueChartRange>("all");
+  // Index into the visible rows the scrubber reads; null follows the latest point.
+  const [scrubIndex, setScrubIndex] = useState<number | null>(null);
   const previousLeagueIdRef = useRef(league.id);
 
   useEffect(() => {
@@ -197,8 +215,13 @@ export function ValueChartPanel({
   useEffect(() => { setComparePlayerId(initialCompareId ?? ""); }, [initialCompareId]);
 
   useEffect(() => {
-    if (!isExpanded) setZoomed(false);
+    if (!isExpanded) {
+      setZoomed(false);
+      setRange("all");
+      setScrubIndex(null);
+    }
   }, [isExpanded]);
+  useEffect(() => { setScrubIndex(null); }, [range, zoomed, playerId, comparePlayerId]);
 
   const requestIds = useMemo(() => {
     const ids = [playerId, comparePlayerId].filter(Boolean);
@@ -252,6 +275,9 @@ export function ValueChartPanel({
     return buildChartRows(primary, compare?.length ? compare : null);
   }, [compareSeries?.points, primarySeries?.points]);
 
+  // A refetch can shift the visible window under a stored scrub index, so drop it when the rows change.
+  useEffect(() => { setScrubIndex(null); }, [chartRows]);
+
   // Empty after trim (all ≤0) counts as unavailable — same empty copy as no history.
   const unavailable = historyQuery.isError
     || (!historyQuery.isPending && requestIds.length > 0 && (
@@ -261,8 +287,18 @@ export function ValueChartPanel({
 
   function renderChart(options: { interactiveZoom: boolean }) {
     const effectiveZoomed = options.interactiveZoom && zoomed;
-    const zoomStart = valueChartZoomStartIndex(chartRows.length, effectiveZoomed);
-    const visibleRows = effectiveZoomed ? chartRows.slice(zoomStart) : chartRows;
+    // Projection rows follow the last historical date; ranges and the scrubber start from the history.
+    const lastHistoricalDate = [...chartRows].reverse().find((row) => row.value !== null)?.date;
+    const rangedRows = options.interactiveZoom
+      ? chartRows.slice(valueChartRangeStartIndex(chartRows.map((row) => row.date), range, lastHistoricalDate))
+      : chartRows;
+    // Zoom never starts past the last historical row, so a short history keeps its only point.
+    const lastRangedHistoricalIndex = rangedRows.reduce((last, row, index) => (row.value !== null ? index : last), 0);
+    const zoomStart = Math.min(valueChartZoomStartIndex(rangedRows.length, effectiveZoomed), lastRangedHistoricalIndex);
+    const visibleRows = effectiveZoomed ? rangedRows.slice(zoomStart) : rangedRows;
+    const defaultScrubIndex = visibleRows.reduce((last, row, index) => (row.value !== null ? index : last), 0);
+    const scrubPosition = Math.min(scrubIndex ?? defaultScrubIndex, visibleRows.length - 1);
+    const scrubbed = visibleRows.length > 0 ? visibleRows[scrubPosition] : undefined;
     const yDomain = valueChartYDomain(
       visibleRows.flatMap((row) => [
         row.value,
@@ -279,8 +315,6 @@ export function ValueChartPanel({
     return (
       <div
         className={`monitor-value-chart${options.interactiveZoom ? " is-expanded-pricing" : " is-compact"}`}
-        role="img"
-        aria-label={`${primarySeries?.name ?? "Player"} FantasyCalc value chart`}
       >
         {options.interactiveZoom ? (
           <div className="scatter-zoom-controls">
@@ -295,9 +329,26 @@ export function ValueChartPanel({
             <span className="sr-only">
               Double-tap the chart to {effectiveZoomed ? "reset" : "zoom into recent values"}.
             </span>
+            <div className="value-chart-ranges" role="group" aria-label="Date range">
+              {VALUE_CHART_RANGES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className="scatter-zoom-toggle"
+                  aria-pressed={range === option.id}
+                  onClick={() => setRange(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
         ) : null}
-        <div className={compact ? undefined : "scatter-axis-rail"}>
+        <div
+          className={compact ? undefined : "scatter-axis-rail"}
+          role="img"
+          aria-label={`${primarySeries?.name ?? "Player"} FantasyCalc value chart`}
+        >
           {compact ? null : <span className="scatter-axis-y" aria-hidden="true">Value</span>}
           <div
             className="scatter-plot-body"
@@ -326,14 +377,14 @@ export function ValueChartPanel({
                 <XAxis
                   dataKey="date"
                   tickFormatter={formatDateTick}
-                  tick={{ fill: "var(--dim)", fontSize: 10 }}
+                  tick={{ fill: "var(--dim)", fontSize: compact ? 10 : 12 }}
                   tickLine={false}
                   axisLine={{ stroke: "var(--hairline)" }}
                   minTickGap={28}
                 />
                 <YAxis
-                  width={compact ? 32 : 36}
-                  tick={{ fill: "var(--dim)", fontSize: 10 }}
+                  width={compact ? 32 : 40}
+                  tick={{ fill: "var(--dim)", fontSize: compact ? 10 : 12 }}
                   tickLine={false}
                   axisLine={false}
                   domain={yDomain}
@@ -412,6 +463,9 @@ export function ValueChartPanel({
                 legendType="none"
                 isAnimationActive={false}
               />
+              {scrubbed && options.interactiveZoom ? (
+                <ReferenceLine x={scrubbed.date} stroke="var(--foreground)" strokeWidth={1} ifOverflow="extendDomain" />
+              ) : null}
               {comparePlayerId ? (
                 <Line
                   type="monotone"
@@ -430,6 +484,27 @@ export function ValueChartPanel({
           </div>
           {compact ? null : <span className="scatter-axis-x" aria-hidden="true">Date</span>}
         </div>
+        {options.interactiveZoom && scrubbed && visibleRows.length > 1 ? (
+          <div className="value-chart-scrubber">
+            <input
+              type="range"
+              aria-label="Scrub chart date"
+              aria-valuetext={formatFullDate(scrubbed.date)}
+              min={0}
+              max={visibleRows.length - 1}
+              step={1}
+              value={scrubPosition}
+              onChange={(event) => setScrubIndex(Number(event.target.value))}
+            />
+            <dl className="value-chart-readout" aria-live="polite">
+              <div><dt>Date</dt><dd>{formatFullDate(scrubbed.date)}</dd></div>
+              <div><dt>Value</dt><dd>{scrubbed.value === null ? "—" : formatWholeValue(scrubbed.value)}</dd></div>
+              <div><dt>7D avg</dt><dd>{scrubbed.ma7 === null ? "—" : formatWholeValue(scrubbed.ma7)}</dd></div>
+              <div><dt>30D avg</dt><dd>{scrubbed.ma30 === null ? "—" : formatWholeValue(scrubbed.ma30)}</dd></div>
+              {comparePlayerId ? <div><dt>{compareName}</dt><dd>{scrubbed.compare === null ? "—" : formatWholeValue(scrubbed.compare)}</dd></div> : null}
+            </dl>
+          </div>
+        ) : null}
         <ul className="monitor-pricing-key" aria-hidden="true">
           <li><i className="is-value" />Value</li>
           <li><i className="is-ma7" />7D avg</li>
