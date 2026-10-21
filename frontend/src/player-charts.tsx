@@ -106,8 +106,8 @@ export function AggregateTradeHistory({
     const date = new Date(`${value}T00:00:00`);
     return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
   };
-  const giveIsWinner = giveColor === "var(--warning)";
-  const getIsWinner = getColor === "var(--warning)";
+  const giveIsWinner = giveColor === "var(--winner)";
+  const getIsWinner = getColor === "var(--winner)";
 
   return (
     <section className="trade-aggregate" aria-labelledby="trade-aggregate-heading">

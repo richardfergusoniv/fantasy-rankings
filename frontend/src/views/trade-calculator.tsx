@@ -210,8 +210,8 @@ export function tradeTrendColors(outcome: "left" | "right" | "tie"): {
     };
   }
   return {
-    giveColor: outcome === "left" ? "var(--warning)" : "var(--dim)",
-    getColor: outcome === "right" ? "var(--warning)" : "var(--dim)",
+    giveColor: outcome === "left" ? "var(--winner)" : "var(--dim)",
+    getColor: outcome === "right" ? "var(--winner)" : "var(--dim)",
     giveStrokeWidth: outcome === "left" ? 2.3 : 1,
     getStrokeWidth: outcome === "right" ? 2.3 : 1,
   };
