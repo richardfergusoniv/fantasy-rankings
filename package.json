@@ -35,6 +35,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "drizzle-kit": "^0.31.0",
     "eslint": "^10.12.0",
+    "playwright-core": "^1.56.1",
     "typescript": "5.6.3",
     "typescript-eslint": "^8.71.1",
     "vite": "^6.0.0",
@@ -54,6 +55,7 @@
     "dev": "vite --config frontend/vite.config.ts",
     "lint": "eslint frontend/src api",
     "test": "vitest run",
+    "test:e2e": "node --test e2e/smoke.test.mjs",
     "typecheck": "tsc --noEmit -p frontend/tsconfig.json && tsc --noEmit -p tsconfig.json"
   },
   "type": "module",
