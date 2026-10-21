@@ -190,10 +190,10 @@ export function LeagueTeamCard({
           tabIndex={-1}
           onClick={(event) => event.stopPropagation()}
         >
-          <header className="power-team-card-header">
+          <div className="power-team-card-header">
             <h2 id={`power-team-card-title-${team.rosterId}`} className={team.isUser ? "is-user" : ""}>{team.teamName}</h2>
             <button type="button" onClick={onClose} aria-label={`Close ${team.teamName} team card`}>×</button>
-          </header>
+          </div>
           <div className={`power-team-card-summary${activeMode === "dynasty" && team.futurePickValue > 0 ? " has-picks" : ""}`}>
             <div><span>Power rank</span><strong>#{team.rank}</strong></div>
             <div>

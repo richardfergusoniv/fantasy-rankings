@@ -534,13 +534,13 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
     <ModalPortal>
       <div className="matchup-card-backdrop" onClick={onClose}>
         <article ref={dialogRef} className="matchup-data-card" role="dialog" aria-modal="true" aria-labelledby="matchup-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
-          <header className="matchup-data-header">
+          <div className="matchup-data-header">
             <div>
               <h2 id="matchup-card-title">{matchup.team} {matchup.isAway ? "@" : "vs"} {matchup.opponent}</h2>
               <span>{fetchedAt ? `PFN grades · ${pfnDateLabel(fetchedAt)}` : "PFN matchup grades"}</span>
             </div>
             <button type="button" onClick={onClose} aria-label="Close matchup data">×</button>
-          </header>
+          </div>
           {toolLinks ? <ToolLinks ariaLabel={`Open ${matchup.team} and ${matchup.opponent} in a tool`} links={toolLinks} /> : null}
 
           {matchup.gamePhase === "final" ? (

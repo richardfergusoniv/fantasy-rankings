@@ -281,13 +281,13 @@ export function TeamDataModal({
     <ModalPortal>
       <div className="matchup-card-backdrop" onClick={onClose}>
         <article ref={dialogRef} className="matchup-data-card team-data-card" role="dialog" aria-modal="true" aria-labelledby="team-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
-          <header className="matchup-data-header">
+          <div className="matchup-data-header">
             <div>
               <h2 id="team-card-title">{selection.team} team card</h2>
               <span>{teamName}{offensiveLine?.fetched_at || defense?.fetched_at || offense?.fetched_at || teamOverall?.fetched_at ? ` · PFN ${pfnDateLabel(offensiveLine?.fetched_at ?? defense?.fetched_at ?? offense?.fetched_at ?? teamOverall?.fetched_at ?? "")}` : ""}</span>
             </div>
             <button type="button" onClick={onClose} aria-label="Close team data">×</button>
-          </header>
+          </div>
 
           <section className="team-card-stat-section" aria-labelledby="team-stats-title">
             <div className="team-card-section-heading">

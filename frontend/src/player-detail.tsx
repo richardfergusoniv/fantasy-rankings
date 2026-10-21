@@ -646,7 +646,7 @@ export function PlayerDetailSheet({
           style={isModal ? { transform: `translate3d(${dragOffset.x}px, 0, 0)` } : undefined}
         >
         {isModal ? <div className="player-sheet-grabber" aria-hidden="true" /> : null}
-        <header className="player-detail-header">
+        <div className="player-detail-header">
           <div>
             <div className="player-detail-title-line">
               <h2 id="player-detail-name">{player.name}</h2>
@@ -657,7 +657,7 @@ export function PlayerDetailSheet({
             {canGoBack ? <button type="button" onClick={navigateBack} aria-label="Previous player">←</button> : null}
             <button type="button" onClick={onClose} aria-label="Close player details">×</button>
           </div>
-        </header>
+        </div>
         {trending && (trending.adds !== null || trending.drops !== null) ? (
           <div className="player-trending" aria-label="Sleeper adds and drops">
             <div><span>Adds</span><strong>{trending.adds === null ? "—" : formatCompactCount(trending.adds)}</strong></div>

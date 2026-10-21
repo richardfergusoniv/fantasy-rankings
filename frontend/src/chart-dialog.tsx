@@ -40,7 +40,7 @@ export function ChartDialog({
           tabIndex={-1}
           onClick={(event) => event.stopPropagation()}
         >
-          <header className="chart-result-header">
+          <div className="chart-result-header">
             <div>
               <h2 id="chart-result-title">{title}</h2>
               {subtitle ? <span>{subtitle}</span> : null}
@@ -55,7 +55,7 @@ export function ChartDialog({
                 ×
               </button>
             </div>
-          </header>
+          </div>
           <div className="chart-result-body">{children}</div>
         </article>
       </div>

@@ -20,6 +20,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
   return (
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
+      aria-controls={undefined}
       className={cn(
         "inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 whitespace-nowrap text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm",
         className,

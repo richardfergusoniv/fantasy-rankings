@@ -488,7 +488,7 @@ function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void 
     <div className="app-shell progressive-shell">
       <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
-      <div className="league-sticky progressive-sticky">
+      <div role="region" aria-label="League and week" className="league-sticky progressive-sticky">
         <div className="week-line"><div><span className="live-dot" /> Loading latest saved week</div><button className="refresh-button" disabled aria-label="Fantasy data is loading"><RefreshIcon spinning /></button></div>
         <label className="league-picker"><span className="sr-only">League list is loading</span><select disabled><option>Loading leagues…</option></select></label>
       </div>
@@ -1171,7 +1171,7 @@ export function App() {
     <div className={`app-shell${primaryPage === "team" ? " matchup-page" : ""}${inspectorDocked ? " is-inspector-docked" : ""}`}>
       <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
-      <div className="league-sticky">
+      <div role="region" aria-label="League and week" className="league-sticky">
           {/* Tool pages need the vertical room on a phone; the ticker stays on the other pages. */}
           {primaryPage === "tools" ? null : <TickerStrip
             data={draftQuery.data}
