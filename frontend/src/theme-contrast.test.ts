@@ -264,3 +264,10 @@ describe("Light theme contrast", () => {
     expect(new Set(hues).size).toBe(3);
   });
 });
+
+describe("Focus outlines", () => {
+  it("use --ring, not the fixed amber --accent that disappears on light surfaces", () => {
+    const css = readFileSync(themePath, "utf8");
+    expect(css.match(/outline\s*:[^;]*var\(--accent\)[^;]*;/g) ?? []).toEqual([]);
+  });
+});
