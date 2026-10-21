@@ -281,7 +281,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .boom-bust-dot.above { top: 37%; }
 .boom-bust-dot.below { top: 63%; }
 .boom-bust-bust-mark { top: 88%; width: 8px; height: 7px; background: var(--dim); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
-.boom-bust-median-mark { z-index: 3; top: 50%; width: 10px; height: 10px; border: 2px solid var(--surface); border-radius: 2px; background: var(--accent); transform: translate(-50%, -50%) rotate(45deg); box-sizing: content-box; }
+.boom-bust-median-mark { z-index: 3; top: 50%; width: 10px; height: 10px; border: 2px solid var(--surface); border-radius: 2px; background: var(--data-mark); transform: translate(-50%, -50%) rotate(45deg); box-sizing: content-box; }
 .boom-bust-mean-mark { z-index: 4; top: 50%; width: 3px; height: 18px; border: 2px solid var(--surface); border-radius: 2px; background: var(--signal); box-sizing: content-box; }
 .boom-bust-labels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 2px; font-variant-numeric: tabular-nums; }
 .boom-bust-labels span { display: grid; gap: 2px; }

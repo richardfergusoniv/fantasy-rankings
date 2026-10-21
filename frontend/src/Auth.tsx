@@ -207,7 +207,7 @@ function AuthScreen() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
       <SkipLink href="#auth-form">Skip to form</SkipLink>
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm py-6">
         <CardHeader>
           <CardTitle className="text-2xl">
             <h1 translate="no">Fantasy Rankings</h1>
@@ -343,7 +343,7 @@ function ConnectSleeper({
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
       <SkipLink href="#connect-form">Skip to form</SkipLink>
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm py-6">
         <CardHeader>
           <CardTitle className="text-2xl">
             <h1>Connect <span translate="no">Sleeper</span></h1>

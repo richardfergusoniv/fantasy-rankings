@@ -293,3 +293,28 @@ describe("Theme file layout", () => {
     expect(imports.at(-1)).toBe("overrides");
   });
 });
+
+describe("Data marks on light surfaces", () => {
+  const vars = parseCssVars(extractRootBlock(readTheme()));
+  const light = (name: string) => resolveVar(vars, name, "light");
+
+  it("keeps amber bars and markers visible on white, their pale track and the grey bar track", () => {
+    expect(contrastRatio(light("--data-mark"), light("--card"))).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(light("--data-mark"), light("--accent-soft"))).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(light("--data-mark"), light("--surface-2"))).toBeGreaterThanOrEqual(3);
+  });
+
+  it("leaves the dark value where it was", () => {
+    expect(resolveVar(vars, "--data-mark").toLowerCase()).toBe(resolveVar(vars, "--accent").toLowerCase());
+  });
+
+  it("does not draw data marks with the fixed accent amber", () => {
+    const css = readTheme();
+    const marks = [".tier-cliff-bar i", ".boom-bust-projection", ".player-chart-peek i b", ".boom-bust-median-mark"];
+    for (const selector of marks) {
+      const rule = css.split("\n").find((line) => line.startsWith(selector));
+      expect(rule, selector).toBeDefined();
+      expect(rule, selector).not.toMatch(/background:\s*var\(--accent\)/);
+    }
+  });
+});
