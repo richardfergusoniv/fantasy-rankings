@@ -1308,6 +1308,7 @@ export function App() {
                 onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
                 linkedPlayerId={selectedPlayerId}
                 onOpenLinkedPlayer={openLinkedPlayer}
+                comparePlayerId={tab === "comparison" ? dashboardUrl.state.comparePlayerId : null}
               />
             ) : null}
         </main>

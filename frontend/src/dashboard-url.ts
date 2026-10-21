@@ -57,6 +57,8 @@ export type DashboardUrlState = {
   gameLinesTeam: string | null;
   /** Trade partner's roster id. */
   tradePartner: string | null;
+  /** Comparison's first player (dashboard player id). */
+  comparePlayerId: string | null;
 };
 
 /** Reset for every tool selection; spread into a commit when leaving a tab. */
@@ -68,6 +70,7 @@ export const CLEARED_TOOL_SELECTIONS = {
   teamStatsStat: null,
   gameLinesTeam: null,
   tradePartner: null,
+  comparePlayerId: null,
 } as const satisfies Partial<DashboardUrlState>;
 
 export const DEFAULT_DASHBOARD_TAB: DashboardTab = "team";
@@ -176,6 +179,7 @@ export function parseDashboardSearch(search: string): DashboardUrlState {
     teamStatsStat: textParam(params.get("tst")),
     gameLinesTeam: textParam(params.get("gt")),
     tradePartner: textParam(params.get("tp")),
+    comparePlayerId: textParam(params.get("c1")),
   };
 }
 
@@ -205,6 +209,7 @@ export function serializeDashboardSearch(state: DashboardUrlState): string {
   }
   if (state.tab === "monitor" && state.gameLinesTeam) params.set("gt", state.gameLinesTeam);
   if (state.tab === "trade" && state.tradePartner) params.set("tp", state.tradePartner);
+  if (state.tab === "comparison" && state.comparePlayerId) params.set("c1", state.comparePlayerId);
   const value = params.toString();
   return value ? `?${value}` : "";
 }
