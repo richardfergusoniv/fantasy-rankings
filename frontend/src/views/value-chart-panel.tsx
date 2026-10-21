@@ -375,6 +375,7 @@ export function ValueChartPanel({
               <ComposedChart
                 data={visibleRows}
                 onClick={options.interactiveZoom ? syncScrubToPointer : undefined}
+                onMouseEnter={options.interactiveZoom ? syncScrubToPointer : undefined}
                 onMouseMove={options.interactiveZoom ? syncScrubToPointer : undefined}
                 margin={compact
                   ? { top: 6, right: 6, bottom: 2, left: 0 }
