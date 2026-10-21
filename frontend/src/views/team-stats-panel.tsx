@@ -279,8 +279,8 @@ export function TeamStatsPanel({
                           const cell = row.weeks.find((candidate) => candidate.week === stack.week);
                           return (
                             <td key={stack.week}>
-                              {cell ? formatTeamStatsValue(statId, cell.value) : "—"}
-                              {cell && cell.percent !== null ? <small>{formatTeamStatsPercent(cell.percent)}</small> : null}
+                              {cell?.hasSourceRow ? formatTeamStatsValue(statId, cell.value) : "—"}
+                              {cell?.hasSourceRow && cell.percent !== null ? <small>{formatTeamStatsPercent(cell.percent)}</small> : null}
                             </td>
                           );
                         })}
