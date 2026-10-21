@@ -1275,6 +1275,7 @@ export function App() {
                   dataset={dashboardUrl.state.chartDataset ?? "advanced"}
                   onDatasetChange={publishChartDataset}
                   layout="monitor"
+                  playerLink={toolPlayerLink}
                 />
               </Suspense>
             )
