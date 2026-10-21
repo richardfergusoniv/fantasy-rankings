@@ -207,7 +207,7 @@ describe("Roster highlight", () => {
 describe("Radius tokens", () => {
   it("keeps small-tag radii on --radius-xs instead of a bare 4px", () => {
     const css = readFileSync(themePath, "utf8");
-    expect(css.match(/border-radius: 4px(?=\s*[;}])/g) ?? []).toEqual([]);
+    expect(css.match(/border-radius\s*:\s*4px\s*(?:!important\s*)?(?=[;}])/g) ?? []).toEqual([]);
   });
 });
 
