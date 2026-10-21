@@ -25,9 +25,13 @@ jobs:
     env:
       PREVIEW_URL: ${{ github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
       DEPLOYED_SHA: ${{ github.event.deployment.sha }}
-      GH_TOKEN: ${{ github.token }}
     steps:
+      # The tests only need a URL, so run the default branch's copy rather than the deployed commit's:
+      # the secrets below must never be exposed to code from a pull request.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -46,6 +50,8 @@ jobs:
         run: npm run test:e2e
       - name: Report on the deployed commit
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           state=failure
           if [ "${{ steps.smoke.outcome }}" = "success" ]; then state=success; fi
