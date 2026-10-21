@@ -447,7 +447,7 @@ export function DraftCenter({
               </span>
               {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
             </button>
-            <span>{row.position === "DEF" ? "DST" : row.position}</span>
+            <span><span className="sr-only">Position </span>{row.position === "DEF" ? "DST" : row.position}</span>
             <span><strong>{isSpecialist ? <><span className="sr-only">Weekly projection </span>{formatProjectionPoints(row.weeklyProjection, row.projectionSource)}</> : row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{row.marketValue.toLocaleString()}</>}</strong></span>
             <span className="draft-row-actions">
               <button type="button" className="draft-icon-button" disabled={!row.playerId} onClick={() => row.playerId && addToMyTeam(row.playerId)} aria-label={`Add ${row.name} to my team`} title="Add to my team"><Plus aria-hidden="true" /></button>
