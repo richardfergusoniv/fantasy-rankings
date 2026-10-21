@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PlayerNameLink } from "./tool-links";
+import type { PlayerLinkResolver } from "./tool-player-link";
 import { CartesianGrid, Customized, Line, LineChart, ReferenceLine, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
@@ -37,6 +39,8 @@ type WeeklyEntity = {
 type PlayerSelection = { playerId?: string; name: string; team: string; position: BasePosition };
 type ChartDatum = {
   id: string; name: string; label: string; team: string; games: number; x: number; y: number; isSelectedTeam: boolean;
+  /** Set where the data source knows them; lets the focused-player link find the player card. */
+  playerId?: string | null; position?: string;
 };
 type ChartAxis = { scale?: unknown };
 type ChartOffset = { left?: number; top?: number; width?: number; height?: number };
@@ -916,6 +920,8 @@ type ScatterPlotProps = {
   yCutoff: number;
   ariaLabel: string;
   compact?: boolean;
+  /** Resolves a focused player to their card; without it no link is shown. */
+  playerLink?: PlayerLinkResolver;
 };
 
 function ScatterPlot({
@@ -933,6 +939,7 @@ function ScatterPlot({
   yCutoff,
   ariaLabel,
   compact = false,
+  playerLink,
 }: ScatterPlotProps) {
   const [zoomed, setZoomed] = useState(false);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -940,6 +947,9 @@ function ScatterPlot({
     [...others, ...leadersWithoutSelectedTeam, ...selectedTeamPlayers].map((point) => [point.id, point]),
   ).values());
   const focused = plottedData.find((point) => point.id === focusedId) ?? null;
+  const focusedLink = focused && playerLink
+    ? playerLink({ playerId: focused.playerId ?? null, name: focused.name, team: focused.team, position: focused.position ?? null })
+    : null;
   const focusableData = [...plottedData].sort((a, b) => a.name.localeCompare(b.name));
   // Tapping a point or choosing it from the list focuses it; tapping it again clears.
   const toggleFocus = (id: string) => setFocusedId((current) => (current === id ? null : id));
@@ -1048,6 +1058,11 @@ function ScatterPlot({
                 </>
               ) : "Tap a point or choose a player to read its values."}
             </p>
+            {focusedLink ? (
+              <p className="tool-player-link-row">
+                <PlayerNameLink link={focusedLink}>View {focused?.name}’s card</PlayerNameLink>
+              </p>
+            ) : null}
             <ul className="scatter-point-list" aria-label="Players on the chart">
               {focusableData.map((point) => (
                 <li key={point.id}>
@@ -1398,7 +1413,7 @@ export function AdvancedStats({ dashboard, league, selectedPlayer, onSelectedPla
   );
 }
 
-function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advanced", onDatasetChange }: { dashboard: Dashboard; league: League; layout?: ChartLayout; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void }) {
+function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advanced", onDatasetChange, playerLink }: { dashboard: Dashboard; league: League; layout?: ChartLayout; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; playerLink?: PlayerLinkResolver }) {
   const monitorDefaultPreset = sharedSkillPresets.find((preset) => preset.label === "Usage vs Production") ?? sharedSkillPresets[0]!;
   const [position, setPosition] = useState<BasePosition>("RB");
   const [window, setWindow] = useState<AnalyticsWindow>("season");
@@ -1415,6 +1430,13 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
   // Monitor defaults into Usage vs Production so the inline chart matches Value chart.
   const [pickerMode, setPickerMode] = useState<ChartPickerMode>(layout === "monitor" ? "derived" : "blank");
   const [isChartOpen, setIsChartOpen] = useState(false);
+  // The card must not open underneath the expanded-chart dialog, so following the link closes it first.
+  const chartPlayerLink: PlayerLinkResolver | undefined = playerLink
+    ? (ref) => {
+      const link = playerLink(ref);
+      return link ? { href: link.href, onOpen: () => { setIsChartOpen(false); link.onOpen(); } } : null;
+    }
+    : undefined;
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
   const metrics = analyticsMetricsForLeague(position, league);
@@ -1521,6 +1543,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
           x,
           y,
           isSelectedTeam: isPlayerOnSelectedTeam(entity, league),
+          position: entity.position,
         }];
       })
       .sort((a, b) => b.games - a.games || (Math.abs(b.x) + Math.abs(b.y)) - (Math.abs(a.x) + Math.abs(a.y)));
@@ -1655,6 +1678,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
             yCutoff={yCutoff}
             ariaLabel={`${position === "DEF" ? "DST" : position} scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
             compact={!showLabels && layout === "monitor"}
+            playerLink={chartPlayerLink}
           />
           <ChartKey teamName={fantasyTeamName(league)} />
           {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
@@ -1935,7 +1959,7 @@ function BoomBustRangePlot({ data, entities }: { data: ChartDatum[]; entities: W
   );
 }
 
-function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onSelectedPlayerChange, layout = "page", dataset = "projections", onDatasetChange }: { dashboard: Dashboard; league: League; view: "charts" | "percentiles"; selectedPlayer?: PlayerSelection | null; onSelectedPlayerChange?: (player: PlayerSelection | null) => void; layout?: ChartLayout; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void }) {
+function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onSelectedPlayerChange, layout = "page", dataset = "projections", onDatasetChange, playerLink }: { dashboard: Dashboard; league: League; view: "charts" | "percentiles"; selectedPlayer?: PlayerSelection | null; onSelectedPlayerChange?: (player: PlayerSelection | null) => void; layout?: ChartLayout; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; playerLink?: PlayerLinkResolver }) {
   const entities = useMemo(() => buildWeeklyEntities(dashboard, league), [dashboard, league.id]);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const [playerQuery, setPlayerQuery] = useState("");
@@ -1952,6 +1976,13 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   // views are not in the URL, so the picker stays blank until the user chooses.
   const [pickerMode, setPickerMode] = useState<ChartPickerMode>(layout === "monitor" ? "derived" : "blank");
   const [isChartOpen, setIsChartOpen] = useState(false);
+  // The card must not open underneath the expanded-chart dialog, so following the link closes it first.
+  const chartPlayerLink: PlayerLinkResolver | undefined = playerLink
+    ? (ref) => {
+      const link = playerLink(ref);
+      return link ? { href: link.href, onOpen: () => { setIsChartOpen(false); link.onOpen(); } } : null;
+    }
+    : undefined;
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
   const selected = selectedPlayer ? entities.find((entity) => isSamePlayer(entity, selectedPlayer)) : undefined;
@@ -2097,6 +2128,8 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
           x,
           y,
           isSelectedTeam: isPlayerOnSelectedTeam(entity, league),
+          playerId: entity.playerId,
+          position: entity.position,
         }];
       })
       .sort((a, b) => (selectedY.lowerIsBetter ? a.y - b.y : b.y - a.y) || (selectedX.lowerIsBetter ? a.x - b.x : b.x - a.x));
@@ -2223,6 +2256,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
               yCutoff={yCutoff}
               ariaLabel={`${position === "DEF" ? "DST" : position} weekly projection scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
               compact={!showLabels && layout === "monitor"}
+              playerLink={chartPlayerLink}
             />
             <ChartKey teamName={fantasyTeamName(league)} />
             {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
@@ -2353,15 +2387,15 @@ function ToolDatasetToggle({ value, onChange, label }: { value: ToolDataset; onC
   );
 }
 
-export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout }) {
+export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange, playerLink }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout; playerLink?: PlayerLinkResolver }) {
   return (
     <section className="monitor-section monitor-builder-chart-panel">
       <header className="section-heading">
         <h2>Analytics</h2>
       </header>
       {dataset === "advanced"
-        ? <AnalyticsChart dashboard={dashboard} league={league} layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} />
-        : <WeeklyProjections dashboard={dashboard} league={league} view="charts" layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} />}
+        ? <AnalyticsChart dashboard={dashboard} league={league} layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} playerLink={playerLink} />
+        : <WeeklyProjections dashboard={dashboard} league={league} view="charts" layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} playerLink={playerLink} />}
     </section>
   );
 }
