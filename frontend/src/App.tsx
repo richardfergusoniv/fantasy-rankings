@@ -51,6 +51,7 @@ import { CommandBar } from "./shell/command-bar";
 import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "./shell/command-palette";
 import { InspectorFrame, useInspectorDockViewport } from "./shell/inspector-frame";
 import { ShortcutsDialog } from "./shell/shortcuts-dialog";
+import { ThemeToggle } from "./shell/theme-toggle";
 import { Explorer, isExplorerMode } from "./views/explorer";
 import { GameLinesPanel } from "./views/game-lines-panel";
 import { Lineup } from "./views/lineup";
@@ -1183,7 +1184,10 @@ export function App() {
           />}
           <div className="week-line">
             <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
+            <div className="week-actions">
+            <ThemeToggle />
             <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label={tab === "draft" ? "Refresh draft data" : "Refresh scores and rankings"}><RefreshIcon spinning={isRefreshing} /></button>
+            </div>
           </div>
           <label className="league-picker">
             <span className="sr-only">Choose league</span>

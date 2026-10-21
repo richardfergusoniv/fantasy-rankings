@@ -17,7 +17,30 @@
           background: #f4f5f7;
         }
       }
+      html[data-theme="light"],
+      html[data-theme="light"] body {
+        background: #f4f5f7;
+      }
+      html[data-theme="dark"],
+      html[data-theme="dark"] body {
+        background: #0e1014;
+      }
     </style>
+    <script>
+      // Apply a saved light/dark choice before first paint; the app takes over once it loads.
+      try {
+        var saved = localStorage.getItem("fantasy-rankings-theme");
+        if (saved === "light" || saved === "dark") {
+          document.documentElement.setAttribute("data-theme", saved);
+          var color = saved === "light" ? "#f4f5f7" : "#0e1014";
+          var metas = document.querySelectorAll('meta[name="theme-color"]');
+          for (var i = 0; i < metas.length; i++) {
+            metas[i].setAttribute("data-system-content", metas[i].getAttribute("content"));
+            metas[i].setAttribute("content", color);
+          }
+        }
+      } catch (e) {}
+    </script>
     <link rel="icon" href="data:," />
     <title>Fantasy Rankings</title>
   </head>
