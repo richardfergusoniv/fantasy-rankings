@@ -275,6 +275,9 @@ export function ValueChartPanel({
     return buildChartRows(primary, compare?.length ? compare : null);
   }, [compareSeries?.points, primarySeries?.points]);
 
+  // A refetch can shift the visible window under a stored scrub index, so drop it when the rows change.
+  useEffect(() => { setScrubIndex(null); }, [chartRows]);
+
   // Empty after trim (all ≤0) counts as unavailable — same empty copy as no history.
   const unavailable = historyQuery.isError
     || (!historyQuery.isPending && requestIds.length > 0 && (
