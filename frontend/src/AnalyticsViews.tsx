@@ -1750,7 +1750,9 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
     setIsChartOpen(true);
   }, [focusPlayer, layout, validPositions]);
 
-  if (!dashboard.analytics.entities.length || !selectedX || !selectedY) {
+  // The monitor keeps its toolbar with no stats, so This week views stay reachable.
+  const hasStats = dashboard.analytics.entities.length > 0;
+  if (!selectedX || !selectedY || (!hasStats && layout !== "monitor")) {
     return (
       <section className={layout === "monitor" ? "monitor-builder-chart-empty" : "analytics-view"}>
         <div className="analytics-empty">
@@ -1859,6 +1861,11 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
         </div>
         {pickerMode === "blank" ? (
           <p className="monitor-empty">Choose a view</p>
+        ) : !hasStats ? (
+          <div className="analytics-empty">
+            <strong>No advanced stats yet.</strong>
+            <span>Refresh after nflverse publishes the next weekly file.</span>
+          </div>
         ) : (
           <div
             className="monitor-value-chart monitor-chart-expand-target"
