@@ -93,6 +93,7 @@
 .subview-tabs { margin: 12px 16px 0; }
 .tools-subview-tabs { max-width: 100%; overflow-x: auto; }
 .explorer-subview-tabs { max-width: 100%; overflow-x: auto; }
+.league-subview-tabs { max-width: 100%; overflow-x: auto; }
 .segmented-control {
   --segment-count: 2;
   --segment-index: 0;
