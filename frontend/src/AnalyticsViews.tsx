@@ -1861,8 +1861,8 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
         </div>
         {pickerMode === "blank" ? (
           <p className="monitor-empty">Choose a view</p>
-        ) : !hasStats && chartKind !== "heatmap" ? (
-          // The FPA heatmap reads matchup data, not advanced stats, and has its own empty state.
+        ) : !hasStats && !isTeamChart ? (
+          // Team charts read matchup and team usage data, not player stats, and have their own empty states.
           <div className="analytics-empty">
             <strong>No advanced stats yet.</strong>
             <span>Refresh after nflverse publishes the next weekly file.</span>
