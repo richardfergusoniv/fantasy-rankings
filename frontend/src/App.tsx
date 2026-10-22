@@ -432,7 +432,7 @@ function assembleStreamedDashboard(
     seasonLongRankings: players?.seasonLongRankings ?? [],
     defenses: players?.defenses ?? [],
     playerTrending: players?.playerTrending ?? {},
-    playerInsights: players?.playerInsights ?? { depth: {}, depthAsOf: null, experts: {}, expertsAsOf: null },
+    playerInsights: players?.playerInsights ?? { depth: {}, depthAsOf: null, experts: {}, expertsAsOf: null, expertsLastKickoff: null },
     strengthOfSchedule: players?.strengthOfSchedule ?? [],
     analytics: analytics?.analytics ?? { asOf: null, throughWeek: null, sourceUrl: "", entities: [], teamUsage: [], teamRecords: [] },
   };

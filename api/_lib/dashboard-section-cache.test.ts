@@ -49,7 +49,7 @@ const sampleDashboard: Dashboard = {
   rankingsAsOf: null,
   fantasyCalcAsOf: null,
   playerTrending: {},
-  playerInsights: { depth: {}, depthAsOf: null, experts: {}, expertsAsOf: null },
+  playerInsights: { depth: {}, depthAsOf: null, experts: {}, expertsAsOf: null, expertsLastKickoff: null },
   leagues: [
     {
       id: "league-1",
