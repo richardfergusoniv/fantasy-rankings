@@ -306,14 +306,6 @@
 .team-usage thead .team-usage-share {
   font-weight: 700;
 }
-.team-usage-total th,
-.team-usage-total td {
-  background: var(--surface-2);
-  color: var(--dim);
-}
-.team-usage-total .team-usage-player {
-  background: var(--surface-2);
-}
 @media (max-width: 759px) {
   .monitor-team-stats-group {
     flex: 1 1 100%;

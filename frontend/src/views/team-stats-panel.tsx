@@ -202,11 +202,10 @@ export function TeamStatsPanel({
   ))), [gridWeeks, rows]);
 
   const groupTotal = completedWeeks.reduce((sum, stack) => sum + stack.total, 0);
-  const groupAverage = groupTotal / playedWeeks;
   // Each player's slice of the group's season total: how the team splits the work.
   // Snaps have none; their Avg is already each player's own snap %.
-  // Signed, like the totals: a negative fantasy player shows a negative share,
-  // so the column still adds to the Total row's 100%.
+  // Signed, like the weekly totals: a negative fantasy player shows a negative
+  // share, so the Share column still adds to 100%.
   const shareLabel = (total: number) => (groupTotal > 0 ? formatTeamStatsPercent((total / groupTotal) * 100) : "—");
 
   const unavailable = dataQuery.isError;
@@ -288,16 +287,6 @@ export function TeamStatsPanel({
               </tr>
             </thead>
             <tbody>
-              {isSnaps ? null : (
-                <tr className="team-usage-total">
-                  <th scope="row" className="team-usage-player">Total</th>
-                  <td className="team-usage-share">{groupTotal > 0 ? "100%" : "—"}</td>
-                  {gridWeeks.map((stack) => (
-                    <td key={stack.week}>{formatTeamStatsValue(statId, stack.total)}</td>
-                  ))}
-                  <td className="team-usage-average">{formatTeamStatsAverage(groupAverage)}</td>
-                </tr>
-              )}
               {gridRows.map(({ row, averageLabel, completedTotal, rostered, cells }) => (
                 <tr key={row.key} className={rostered ? "is-my-roster" : undefined}>
                   <th scope="row" className="team-usage-player">
