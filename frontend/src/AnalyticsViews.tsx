@@ -32,7 +32,7 @@ type SavedChartConfig = Pick<SavedChartView, "dataset" | "position" | "xMetric" 
 type PfnTables = ApiResponse<typeof api, "getPfnTables">["tables"];
 type AnalyticsEntity = Dashboard["analytics"]["entities"][number];
 export type AnalyticsWindow = "season" | "rolling17";
-export type Metric = { key: string; label: string; short: string; unit?: string; lowerIsBetter?: boolean; sourceKey?: string };
+export type Metric = { key: string; label: string; short: string; unit?: string; lowerIsBetter?: boolean; sourceKey?: string; digits?: number; neutral?: boolean };
 type WeeklyEntity = {
   id: string; playerId: string; name: string; team: string; position: BasePosition; opponent: string | null; isAway: boolean | null; isBye: boolean; gameTime: string | null; gamePhase: MatchupSelection["gamePhase"]; values: Record<string, number>;
 };
@@ -80,6 +80,11 @@ const analyticsMetrics: Record<BasePosition, Metric[]> = {
     { key: "snap_share", label: "Snap share", short: "Snap %", unit: "%" },
     { key: "rz_target_share", label: "Red-zone target share", short: "RZ tgt %", unit: "%" },
     { key: "rz_carry_share", label: "Red-zone carry share", short: "RZ carry %", unit: "%" },
+    { key: "expected_points", label: "Expected PPR points", short: "xPts" },
+    { key: "points_over_expected", label: "PPR points over expected", short: "Pts over exp", neutral: true },
+    { key: "time_to_throw", label: "Time to throw", short: "Time to throw", unit: "s", neutral: true },
+    { key: "aggressiveness", label: "Aggressive throw rate", short: "Aggressive %", unit: "%", neutral: true },
+    { key: "air_yards_differential", label: "Air-yards differential", short: "Air yds diff" },
   ],
   RB: [
     { key: "fantasy_league", label: "League fantasy points", short: "League pts", sourceKey: "fantasy_ppr" },
@@ -102,6 +107,11 @@ const analyticsMetrics: Record<BasePosition, Metric[]> = {
     { key: "snap_share", label: "Snap share", short: "Snap %", unit: "%" },
     { key: "rz_target_share", label: "Red-zone target share", short: "RZ tgt %", unit: "%" },
     { key: "rz_carry_share", label: "Red-zone carry share", short: "RZ carry %", unit: "%" },
+    { key: "expected_points", label: "Expected PPR points", short: "xPts" },
+    { key: "points_over_expected", label: "PPR points over expected", short: "Pts over exp", neutral: true },
+    { key: "rush_yards_over_expected", label: "Rush yards over expected per carry", short: "RYOE/att" },
+    { key: "stacked_box_rate", label: "Carries vs 8+ in the box", short: "8+ box %", unit: "%", neutral: true },
+    { key: "rush_efficiency", label: "Rush efficiency (distance per yard)", short: "Rush eff", lowerIsBetter: true },
   ],
   WR: [
     { key: "fantasy_league", label: "League fantasy points", short: "League pts", sourceKey: "fantasy_ppr" },
@@ -121,6 +131,12 @@ const analyticsMetrics: Record<BasePosition, Metric[]> = {
     { key: "snap_share", label: "Snap share", short: "Snap %", unit: "%" },
     { key: "rz_target_share", label: "Red-zone target share", short: "RZ tgt %", unit: "%" },
     { key: "rz_carry_share", label: "Red-zone carry share", short: "RZ carry %", unit: "%" },
+    { key: "expected_points", label: "Expected PPR points", short: "xPts" },
+    { key: "points_over_expected", label: "PPR points over expected", short: "Pts over exp", neutral: true },
+    { key: "separation", label: "Separation at catch point", short: "Separation", unit: " yd" },
+    { key: "cushion", label: "Cushion at snap", short: "Cushion", unit: " yd", neutral: true },
+    { key: "yac_over_expected", label: "YAC over expected per catch", short: "YAC+" },
+    { key: "intended_air_share", label: "Share of team intended air yards", short: "NGS air %", unit: "%" },
   ],
   TE: [
     { key: "fantasy_league", label: "League fantasy points", short: "League pts", sourceKey: "fantasy_ppr" },
@@ -140,6 +156,12 @@ const analyticsMetrics: Record<BasePosition, Metric[]> = {
     { key: "snap_share", label: "Snap share", short: "Snap %", unit: "%" },
     { key: "rz_target_share", label: "Red-zone target share", short: "RZ tgt %", unit: "%" },
     { key: "rz_carry_share", label: "Red-zone carry share", short: "RZ carry %", unit: "%" },
+    { key: "expected_points", label: "Expected PPR points", short: "xPts" },
+    { key: "points_over_expected", label: "PPR points over expected", short: "Pts over exp", neutral: true },
+    { key: "separation", label: "Separation at catch point", short: "Separation", unit: " yd" },
+    { key: "cushion", label: "Cushion at snap", short: "Cushion", unit: " yd", neutral: true },
+    { key: "yac_over_expected", label: "YAC over expected per catch", short: "YAC+" },
+    { key: "intended_air_share", label: "Share of team intended air yards", short: "NGS air %", unit: "%" },
   ],
   K: [
     { key: "fg_attempts", label: "Field-goal attempts", short: "FG att" },
@@ -194,6 +216,7 @@ type ChartPreset = {
 
 const sharedSkillPresets: ChartPreset[] = [
   { label: "Usage vs Production", x: "opportunity", y: "fantasy_league" },
+  { label: "Expected vs actual", x: "expected_points", y: "points_over_expected" },
   { label: "Snap share", x: "snap_week", y: "snap_share", kind: "snap-trend" },
   { label: "Red-zone share", x: "rz_target_share", y: "rz_carry_share" },
   { label: "FPA heatmap", x: "fpa_team", y: "fpa_position", kind: "heatmap" },
@@ -203,6 +226,7 @@ const sharedSkillPresets: ChartPreset[] = [
 const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
   QB: [
     { label: "Volume vs efficiency", x: "pass_attempts", y: "passing_epa" },
+    { label: "Time to throw × aggressiveness", x: "time_to_throw", y: "aggressiveness" },
     {
       label: "Talent ceiling · EPA/play × CPOE",
       x: "epa_per_play",
@@ -231,10 +255,12 @@ const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
     { label: "Receiving leverage", x: "target_share", y: "receiving_epa" },
     { label: "Ground production", x: "carries", y: "rushing_yards" },
     { label: "Backfield share", x: "carry_share", y: "rb_target_share" },
+    { label: "Rushing over expected", x: "stacked_box_rate", y: "rush_yards_over_expected" },
     ...sharedSkillPresets,
   ],
   WR: [
     { label: "Opportunity profile", x: "target_share", y: "air_yards_share" },
+    { label: "Getting open", x: "separation", y: "yac_over_expected" },
     {
       label: "WOPR buy-low / sell-high",
       x: "wopr",
@@ -250,6 +276,7 @@ const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
   ],
   TE: [
     { label: "Opportunity profile", x: "target_share", y: "air_yards_share" },
+    { label: "Getting open", x: "separation", y: "yac_over_expected" },
     { label: "Weighted opportunity", x: "wopr", y: "fantasy_league" },
     { label: "Air-yards conversion", x: "receiving_air_yards", y: "receiving_yards" },
     ...sharedSkillPresets,
@@ -802,7 +829,7 @@ function PercentileCutoffSelect({ axis, value, onChange }: { axis: "X" | "Y"; va
 
 export function metricDisplay(value: number, metric: Metric): string {
   // Ranks are whole numbers ("3", not "3.00").
-  const decimals = metric.key.endsWith("Rank") || Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2;
+  const decimals = metric.digits ?? (metric.key.endsWith("Rank") || Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2);
   return `${formatDecimal(value, decimals)}${metric.unit ?? ""}`;
 }
 
