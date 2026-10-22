@@ -554,7 +554,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
   const makeRowValue = (value: number | null | undefined): ComparisonMetricValue | null => typeof value === "number" && Number.isFinite(value) ? { value } : null;
   // This week's FantasyPros expert consensus (PPR) for each pick.
   const expertRows = (() => {
-    const experts = currentExpertRanks(dashboard.playerInsights, dashboard.asOf) ?? {};
+    const experts = currentExpertRanks(dashboard) ?? {};
     const leftExpert = leftPlayerId ? experts[leftPlayerId] : undefined;
     const rightExpert = rightPlayerId ? experts[rightPlayerId] : undefined;
     if (!leftExpert && !rightExpert) return [];
@@ -568,7 +568,9 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
   })();
   // Consensus prop lines, one row per stat either player has.
   const propRows = (() => {
-    const lines = pfnQuery.data?.propLines.lines ?? [];
+    const propLines = pfnQuery.data?.propLines;
+    // A cached response from before the weekly rollover holds last week's lines.
+    const lines = propLines && propLines.season === dashboard.season && propLines.week === dashboard.week ? propLines.lines : [];
     const leftLines = new Map(lines.filter((line) => leftPlayerId && line.playerId === leftPlayerId).map((line) => [line.stat, line.line]));
     const rightLines = new Map(lines.filter((line) => rightPlayerId && line.playerId === rightPlayerId).map((line) => [line.stat, line.line]));
     const stats = [...new Set([...leftLines.keys(), ...rightLines.keys()])];
@@ -576,7 +578,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
       const def = propStatDef(stat);
       if (!def) return [];
       return [{
-        metric: { key: `prop_${stat}`, label: `${def.label} line`, short: def.short, digits: 1 },
+        metric: { key: `prop_${stat}`, label: `${def.label} line`, short: def.short, digits: 1, lowerIsBetter: stat === "pass_interceptions" },
         leftValue: makeRowValue(leftLines.get(stat)),
         rightValue: makeRowValue(rightLines.get(stat)),
       }];
