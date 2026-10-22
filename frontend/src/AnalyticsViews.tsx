@@ -717,7 +717,8 @@ function PercentileCutoffSelect({ axis, value, onChange }: { axis: "X" | "Y"; va
 }
 
 function metricDisplay(value: number, metric: Metric): string {
-  const decimals = Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2;
+  // Ranks are whole numbers ("3", not "3.00").
+  const decimals = metric.key.endsWith("Rank") || Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2;
   return `${formatDecimal(value, decimals)}${metric.unit ?? ""}`;
 }
 
@@ -2375,18 +2376,6 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   );
 }
 
-function ToolDatasetToggle({ value, onChange, label }: { value: ToolDataset; onChange: (value: ToolDataset) => void; label: string }) {
-  return (
-    <SegmentedControl
-      className="tool-dataset-toggle"
-      value={value}
-      onChange={onChange}
-      label={label}
-      options={[{ value: "advanced", label: "Advanced Stats" }, { value: "projections", label: "Projections" }]}
-    />
-  );
-}
-
 export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange, playerLink, focusPlayer }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout; playerLink?: PlayerLinkResolver; focusPlayer?: AnalyticsFocusPlayer | null }) {
   return (
     <section className="monitor-section monitor-builder-chart-panel">
@@ -2661,8 +2650,9 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
     })
     .slice(0, 40), [needle, options]);
 
-  function choose(entity: ComparisonEntity) {
-    restoreFocus.current = "swap";
+  function choose(entity: ComparisonEntity, fromKeyboard = false) {
+    // A keyboard pick keeps focus on the slot; a tap shouldn't leave a focus ring behind.
+    if (fromKeyboard) restoreFocus.current = "swap";
     onChoose(entity);
     setQuery("");
     setIsEditing(false);
@@ -2696,7 +2686,7 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   const firstMatch = matches[0];
-                  if (firstMatch) { event.preventDefault(); choose(firstMatch); }
+                  if (firstMatch) { event.preventDefault(); choose(firstMatch, true); }
                 } else if (event.key === "Escape") {
                   if (player) {
                     restoreFocus.current = "swap";
@@ -2747,11 +2737,50 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
   );
 }
 
-function ComparisonView({ dashboard, league, dataset, window, validPositions, initialPlayer, initialKey, onOpenPlayer, onOpenMatchup }: {
+/** One key per real player across both sources; defenses are keyed by team. */
+function comparisonIdentity(player: PlayerSelection): string {
+  return `${player.position}:${player.position === "DEF" ? player.team : comparablePlayerName(player.name)}`;
+}
+
+type ComparisonSection = {
+  dataset: ToolDataset;
+  headline: ComparisonRow | undefined;
+  groups: { group: ComparisonGroup; rows: ComparisonRow[] }[];
+};
+
+function comparisonSection(dataset: ToolDataset, position: BasePosition, league: League, left: ComparisonEntity | undefined, right: ComparisonEntity | undefined, extraRows: ComparisonRow[] = []): ComparisonSection {
+  const metricList = dataset === "advanced"
+    ? analyticsMetricsForLeague(position, league)
+    : (() => {
+      const projectionMetrics = weeklyMetrics[position].filter((metric) => !redundantComparisonProjectionKeys.has(metric.key));
+      return position === "DEF" ? projectionMetrics : [...projectionMetrics, ...teamContextMetrics];
+    })();
+  const rows: ComparisonRow[] = metricList.flatMap((metric) => {
+    const leftValue = comparisonValue(left, metric);
+    const rightValue = comparisonValue(right, metric);
+    return leftValue || rightValue ? [{ metric, leftValue, rightValue }] : [];
+  });
+  const orderIndex = new Map(comparisonRowOrder[dataset][position].map((key, index) => [key, index]));
+  const ordered = [...rows, ...extraRows]
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const aOrder = orderIndex.get(a.row.metric.key) ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = orderIndex.get(b.row.metric.key) ?? Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder || a.index - b.index;
+    })
+    .map(({ row }) => row);
+  const headline = ordered.find((row) => comparisonHeadlineKeys.has(row.metric.key));
+  const groups = comparisonGroupOrder[dataset]
+    .map((group) => ({ group, rows: ordered.filter((row) => row !== headline && comparisonGroup(dataset, row.metric.key) === group) }))
+    .filter((entry) => entry.rows.length > 0);
+  return { dataset, headline, groups };
+}
+
+function ComparisonView({ dashboard, league, window, onWindowChange, validPositions, initialPlayer, initialKey, onOpenPlayer, onOpenMatchup }: {
   dashboard: Dashboard;
   league: League;
-  dataset: ToolDataset;
   window: AnalyticsWindow;
+  onWindowChange: (window: AnalyticsWindow) => void;
   validPositions: BasePosition[];
   initialPlayer: PlayerSelection | null;
   initialKey: number;
@@ -2765,44 +2794,53 @@ function ComparisonView({ dashboard, league, dataset, window, validPositions, in
     retry: false,
   });
   const weeklyEntities = useMemo(() => buildWeeklyEntities(dashboard, league, pfnQuery.data?.tables), [dashboard, league.id, pfnQuery.data?.tables]);
-  const weeklyByIdentity = useMemo(() => new Map(weeklyEntities.map((entity) => [`${entity.position}:${comparablePlayerName(entity.name)}`, entity])), [weeklyEntities]);
-  // Every position the league ranks; picking the first player narrows the other slot to that position.
-  const entities = useMemo<ComparisonEntity[]>(() => {
-    const inLeague = (position: string) => (validPositions as string[]).includes(position);
-    if (dataset === "projections") return weeklyEntities.filter((entity) => inLeague(entity.position));
-    return dashboard.analytics.entities.flatMap((entity) => {
-      if (!inLeague(entity.position)) return [];
-      const game = weeklyByIdentity.get(`${entity.position}:${comparablePlayerName(entity.name)}`);
-      return [{
-        id: entity.id,
-        name: entity.name,
-        team: entity.team,
-        position: entity.position,
-        opponent: game?.opponent ?? null,
-        isAway: game?.isAway ?? null,
-        isBye: game?.isBye ?? false,
-        gameTime: game?.gameTime ?? null,
-        gamePhase: game?.gamePhase ?? null,
-        values: window === "season" ? entity.season : entity.rolling17,
-      }];
-    });
-  }, [dashboard.analytics.entities, dataset, validPositions, weeklyByIdentity, weeklyEntities, window]);
+  const weeklyByIdentity = useMemo(() => new Map(weeklyEntities.map((entity) => [comparisonIdentity(entity), entity])), [weeklyEntities]);
+  // This week's projections and the season's advanced stats, for every position the league ranks.
+  const projectionEntities = useMemo(
+    () => weeklyEntities.filter((entity) => validPositions.includes(entity.position)),
+    [validPositions, weeklyEntities],
+  );
+  const advancedEntities = useMemo<ComparisonEntity[]>(() => dashboard.analytics.entities.flatMap((entity) => {
+    if (!(validPositions as string[]).includes(entity.position)) return [];
+    const game = weeklyByIdentity.get(comparisonIdentity(entity as PlayerSelection));
+    return [{
+      id: entity.id,
+      name: entity.name,
+      team: entity.team,
+      position: entity.position as BasePosition,
+      opponent: game?.opponent ?? null,
+      isAway: game?.isAway ?? null,
+      isBye: game?.isBye ?? false,
+      gameTime: game?.gameTime ?? null,
+      gamePhase: game?.gamePhase ?? null,
+      values: window === "season" ? entity.season : entity.rolling17,
+    }];
+  }), [dashboard.analytics.entities, validPositions, weeklyByIdentity, window]);
+  const advancedByIdentity = useMemo(() => new Map(advancedEntities.map((entity) => [comparisonIdentity(entity), entity])), [advancedEntities]);
+  // Pickers search everyone with either projections or stats; a player in both appears once.
+  const candidates = useMemo(() => {
+    const byIdentity = new Map<string, ComparisonEntity>(projectionEntities.map((entity) => [comparisonIdentity(entity), entity]));
+    for (const entity of advancedEntities) {
+      if (!byIdentity.has(comparisonIdentity(entity))) byIdentity.set(comparisonIdentity(entity), entity);
+    }
+    return [...byIdentity.values()];
+  }, [advancedEntities, projectionEntities]);
 
   const [selectedPlayers, setSelectedPlayers] = useState<[PlayerSelection | null, PlayerSelection | null]>([null, null]);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const initialSeedKey = useRef<number | null>(null);
 
   // Both slots start empty. The initialPlayer seed (a player card's "Compare"
-  // link) is applied only when initialKey changes, so dataset/window toggles
-  // never wipe the user's picks.
+  // link) is applied only when initialKey changes, so the window toggle never
+  // wipes the user's picks.
   useEffect(() => {
     if (!initialPlayer || !validPositions.includes(initialPlayer.position)) return;
     if (initialSeedKey.current === initialKey) return;
-    const requested = entities.find((entity) => isSamePlayer(entity, initialPlayer));
+    const requested = candidates.find((entity) => isSamePlayer(entity, initialPlayer));
     if (!requested) return;
     setSelectedPlayers([requested, null]);
     initialSeedKey.current = initialKey;
-  }, [entities, initialKey, initialPlayer, validPositions]);
+  }, [candidates, initialKey, initialPlayer, validPositions]);
 
   // Drop picks whose position the league no longer ranks.
   useEffect(() => {
@@ -2813,20 +2851,16 @@ function ComparisonView({ dashboard, league, dataset, window, validPositions, in
     ]);
   }, [selectedPlayers, validPositions]);
 
-  // Keep selections as player identities rather than source-specific row IDs.
-  // Advanced stats and weekly projections are separate datasets and can use
-  // different IDs for the same player, so resolve each pick against the active
-  // dataset whenever the toggle changes. If one source has not published that
-  // player yet, keep the selected card visible while showing no metrics.
-  const selected = selectedPlayers.map((player): ComparisonEntity | undefined => {
+  // Resolve each pick against both sources by identity: they use different row
+  // IDs for the same player, and either can be missing a player.
+  const resolved = selectedPlayers.map((player) => {
     if (!player) return undefined;
-    const activeEntity = entities.find((entity) => isSamePlayer(entity, player));
-    if (activeEntity) return activeEntity;
-    const weeklyEntity = weeklyEntities.find((entity) => isSamePlayer(entity, player));
-    if (weeklyEntity) return { ...weeklyEntity, values: {} };
-    return {
+    const projection = projectionEntities.find((entity) => isSamePlayer(entity, player))
+      ?? weeklyByIdentity.get(comparisonIdentity(player));
+    const advanced = advancedByIdentity.get(comparisonIdentity(player)) ?? advancedEntities.find((entity) => isSamePlayer(entity, player));
+    const display: ComparisonEntity = projection ?? advanced ?? {
       ...player,
-      id: player.playerId ?? `${player.position}:${comparablePlayerName(player.name)}`,
+      id: player.playerId ?? comparisonIdentity(player),
       opponent: null,
       isAway: null,
       isBye: false,
@@ -2834,12 +2868,13 @@ function ComparisonView({ dashboard, league, dataset, window, validPositions, in
       gamePhase: null,
       values: {},
     };
+    return { display, projection, advanced };
   });
-  const left = selected[0];
-  const right = selected[1];
+  const left = resolved[0]?.display;
+  const right = resolved[1]?.display;
   const position = (left ?? right)?.position ?? null;
   const playerDetailId = (player: ComparisonEntity | undefined): string | undefined => player
-    ? player.playerId ?? weeklyByIdentity.get(`${player.position}:${comparablePlayerName(player.name)}`)?.playerId
+    ? player.playerId ?? weeklyByIdentity.get(comparisonIdentity(player))?.playerId
     : undefined;
   const leftPlayerId = playerDetailId(left);
   const rightPlayerId = playerDetailId(right);
@@ -2848,24 +2883,12 @@ function ComparisonView({ dashboard, league, dataset, window, validPositions, in
   const boomBustQuery = useQuery({
     queryKey: ["comparison-boom-bust-ranges", league.id, position, ...boomBustPlayerIds],
     queryFn: () => api.getBoomBustRanges({ leagueId: league.id, position: position as "QB" | "RB" | "WR" | "TE", playerIds: boomBustPlayerIds }),
-    enabled: dataset === "projections" && supportsBoomBust && boomBustPlayerIds.length === 2,
+    enabled: supportsBoomBust && boomBustPlayerIds.length === 2,
     staleTime: 30 * 60 * 1000,
     retry: false,
   });
-  const metricList = useMemo(() => {
-    if (!position) return [];
-    if (dataset === "advanced") return analyticsMetricsForLeague(position, league);
-    const projectionMetrics = weeklyMetrics[position].filter((metric) => !redundantComparisonProjectionKeys.has(metric.key));
-    return position === "DEF" ? projectionMetrics : [...projectionMetrics, ...teamContextMetrics];
-  }, [dataset, league, position]);
-  const rows: ComparisonRow[] = metricList.flatMap((metric) => {
-    const leftValue = comparisonValue(left, metric);
-    const rightValue = comparisonValue(right, metric);
-    return leftValue || rightValue ? [{ metric, leftValue, rightValue }] : [];
-  });
-  const orderIndex = new Map((position ? comparisonRowOrder[dataset][position] : []).map((key, index) => [key, index]));
   const boomBustRows = (() => {
-    if (dataset !== "projections" || !leftPlayerId || !rightPlayerId) return [];
+    if (!leftPlayerId || !rightPlayerId) return [];
     const ranges = new Map((boomBustQuery.data?.rows ?? []).map((range) => [range.playerId, range]));
     const leftRange = ranges.get(leftPlayerId);
     const rightRange = ranges.get(rightPlayerId);
@@ -2884,41 +2907,45 @@ function ComparisonView({ dashboard, league, dataset, window, validPositions, in
     ];
     return rangeRows.filter((row) => row.leftValue || row.rightValue);
   })();
-
-  const comparisonRows = [...rows, ...boomBustRows]
-    .map((row, index) => ({ row, index }))
-    .sort((a, b) => {
-      const aOrder = orderIndex.get(a.row.metric.key) ?? Number.MAX_SAFE_INTEGER;
-      const bOrder = orderIndex.get(b.row.metric.key) ?? Number.MAX_SAFE_INTEGER;
-      return aOrder - bOrder || a.index - b.index;
-    })
-    .map(({ row }) => row);
-  const headlineRow = comparisonRows.find((row) => comparisonHeadlineKeys.has(row.metric.key));
-  const groupedRows = comparisonGroupOrder[dataset]
-    .map((group) => ({ group, rows: comparisonRows.filter((row) => row !== headlineRow && comparisonGroup(dataset, row.metric.key) === group) }))
-    .filter((entry) => entry.rows.length > 0);
+  const sections = left && right && position ? [
+    comparisonSection("projections", position, league, resolved[0]?.projection, resolved[1]?.projection, boomBustRows),
+    comparisonSection("advanced", position, league, resolved[0]?.advanced, resolved[1]?.advanced),
+  ] : [];
   const selectionStateClass = left && right ? " is-ready" : left || right ? " has-selection" : " is-empty";
+  const optionsBeside = (other: ComparisonEntity | undefined) => other
+    ? candidates.filter((entity) => entity.position === other.position && !isSamePlayer(entity, other))
+    : candidates;
 
   return (
     <section className={`comparison-view${selectionStateClass}`}>
       <div className="comparison-pickers" aria-label="Players being compared">
-        <ComparisonPicker slot={1} player={left} options={right ? entities.filter((entity) => entity.position === right.position && entity.id !== right.id) : entities} onChoose={(entity) => setSelectedPlayers((current) => [entity, current[1]])} onClear={() => setSelectedPlayers((current) => [null, current[1]])} />
-        <ComparisonPicker slot={2} player={right} options={left ? entities.filter((entity) => entity.position === left.position && entity.id !== left.id) : entities} onChoose={(entity) => setSelectedPlayers((current) => [current[0], entity])} onClear={() => setSelectedPlayers((current) => [current[0], null])} />
+        <ComparisonPicker slot={1} player={left} options={optionsBeside(right)} onChoose={(entity) => setSelectedPlayers((current) => [entity, current[1]])} onClear={() => setSelectedPlayers((current) => [null, current[1]])} />
+        <ComparisonPicker slot={2} player={right} options={optionsBeside(left)} onChoose={(entity) => setSelectedPlayers((current) => [current[0], entity])} onClear={() => setSelectedPlayers((current) => [current[0], null])} />
       </div>
 
-      {entities.length === 0 ? (
-        <div className="analytics-empty"><strong>{dataset === "advanced" ? "No advanced stats yet." : "No weekly projections yet."}</strong><span>{dataset === "advanced" ? "Refresh after nflverse publishes the next weekly file." : "Refresh to check the latest Vegas lines and nflverse usage data."}</span></div>
+      {candidates.length === 0 ? (
+        <div className="analytics-empty"><strong>No player data yet.</strong><span>Refresh to check the latest Vegas lines and nflverse data.</span></div>
       ) : left && right ? (
         <section className="comparison-board" aria-label={`${left.name} and ${right.name} comparison`}>
           <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
-          {headlineRow ? <ComparisonMetricRow row={headlineRow} leftName={left.name} rightName={right.name} headline /> : null}
-          {groupedRows.map(({ group, rows: groupRows }) => (
-            <section className="comparison-group" key={group} aria-label={group}>
-              <h3>{group}</h3>
-              {groupRows.map((row) => <ComparisonMetricRow key={row.metric.key} row={row} leftName={left.name} rightName={right.name} />)}
+          {sections.map((section) => (
+            <section className="comparison-section" key={section.dataset} aria-labelledby={`comparison-section-${section.dataset}`}>
+              <header className="comparison-section-head">
+                <h3 id={`comparison-section-${section.dataset}`}>{section.dataset === "projections" ? "This week" : "Season so far"}</h3>
+                {section.dataset === "advanced" ? <SegmentedControl className="comparison-window-toggle" value={window} onChange={onWindowChange} label="Season stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17" }]} /> : null}
+              </header>
+              {section.headline ? <ComparisonMetricRow row={section.headline} leftName={left.name} rightName={right.name} headline /> : null}
+              {section.groups.map(({ group, rows: groupRows }) => (
+                <section className="comparison-group" key={group} aria-label={group}>
+                  <h4>{group}</h4>
+                  {groupRows.map((row) => <ComparisonMetricRow key={row.metric.key} row={row} leftName={left.name} rightName={right.name} />)}
+                </section>
+              ))}
+              {!section.headline && section.groups.length === 0
+                ? <div className="empty-inline">{section.dataset === "projections" ? "No projections for these players yet." : "No season stats for these players yet."}</div>
+                : null}
             </section>
           ))}
-          {comparisonRows.length === 0 ? <div className="empty-inline">No shared metrics are available for these players.</div> : null}
         </section>
       ) : <div className="empty-inline">Choose two players to compare.</div>}
     </section>
@@ -2927,20 +2954,15 @@ function ComparisonView({ dashboard, league, dataset, window, validPositions, in
 
 export function ComparisonTool({ dashboard, league, initialPlayer = null, initialKey = 0, onOpenPlayer, onOpenMatchup }: { dashboard: Dashboard; league: League; initialPlayer?: PlayerSelection | null; initialKey?: number; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
-  const [dataset, setDataset] = useState<ToolDataset>("projections");
   const [window, setWindow] = useState<AnalyticsWindow>("season");
 
   return (
     <div className="comparison-tool">
-      <div className="comparison-toolbar">
-        <ToolDatasetToggle value={dataset} onChange={setDataset} label="Comparison dataset" />
-        {dataset === "advanced" ? <SegmentedControl className="analytics-window-toggle" value={window} onChange={setWindow} label="Advanced stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]} /> : null}
-      </div>
       <ComparisonView
         dashboard={dashboard}
         league={league}
-        dataset={dataset}
         window={window}
+        onWindowChange={setWindow}
         validPositions={validPositions}
         initialPlayer={initialPlayer}
         initialKey={initialKey}
