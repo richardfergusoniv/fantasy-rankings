@@ -30,7 +30,7 @@ import {
   pfnRankForRow,
   projectionComponentsForPlayer,
 } from "./dashboard-shared";
-import { formatCompactCount, formatDecimal, formatPercent } from "./lib/format-number";
+import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { MatchupTag, ModalPortal, SegmentedControl, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
@@ -38,18 +38,18 @@ const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) 
 
 export const detailAdvancedMetrics: Partial<Record<BasePosition, DetailMetric[]>> = {
   QB: [
-    { key: "pass_attempts", label: "Pass attempts / game", digits: 1 },
-    { key: "completion_pct", label: "Completion rate", unit: "%", digits: 1 },
-    { key: "cpoe", label: "CPOE", unit: "%", digits: 1 },
+    { key: "pass_attempts", label: "Pass attempts / game", digits: 2 },
+    { key: "completion_pct", label: "Completion rate", unit: "%", digits: 2 },
+    { key: "cpoe", label: "CPOE", unit: "%", digits: 2 },
     { key: "epa_per_play", label: "EPA / play", digits: 2 },
-    { key: "carries", label: "Carries / game", digits: 1 },
-    { key: "snap_share", label: "Snap share", unit: "%", digits: 1 },
+    { key: "carries", label: "Carries / game", digits: 2 },
+    { key: "snap_share", label: "Snap share", unit: "%", digits: 2 },
   ],
   RB: [
-    { key: "touches", label: "Touches / game", digits: 1 },
-    { key: "target_share", label: "Target share", unit: "%", digits: 1 },
-    { key: "snap_share", label: "Snap share", unit: "%", digits: 1 },
-    { key: "scrimmage_yards", label: "Scrimmage yds / game", digits: 1 },
+    { key: "touches", label: "Touches / game", digits: 2 },
+    { key: "target_share", label: "Target share", unit: "%", digits: 2 },
+    { key: "snap_share", label: "Snap share", unit: "%", digits: 2 },
+    { key: "scrimmage_yards", label: "Scrimmage yds / game", digits: 2 },
     { key: "yards_per_touch", label: "Yards / touch", digits: 2, derived: (values) => {
       const touches = values.touches;
       const yards = values.scrimmage_yards;
@@ -58,10 +58,10 @@ export const detailAdvancedMetrics: Partial<Record<BasePosition, DetailMetric[]>
     { key: "rushing_epa", label: "Rushing EPA / game", digits: 2 },
   ],
   WR: [
-    { key: "targets", label: "Targets / game", digits: 1 },
-    { key: "target_share", label: "Target share", unit: "%", digits: 1 },
-    { key: "snap_share", label: "Snap share", unit: "%", digits: 1 },
-    { key: "air_yards_share", label: "Air-yards share", unit: "%", digits: 1 },
+    { key: "targets", label: "Targets / game", digits: 2 },
+    { key: "target_share", label: "Target share", unit: "%", digits: 2 },
+    { key: "snap_share", label: "Snap share", unit: "%", digits: 2 },
+    { key: "air_yards_share", label: "Air-yards share", unit: "%", digits: 2 },
     { key: "wopr", label: "WOPR", digits: 2 },
     { key: "yards_per_target", label: "Yards / target", digits: 2, derived: (values) => {
       const targets = values.targets;
@@ -70,10 +70,10 @@ export const detailAdvancedMetrics: Partial<Record<BasePosition, DetailMetric[]>
     } },
   ],
   TE: [
-    { key: "targets", label: "Targets / game", digits: 1 },
-    { key: "target_share", label: "Target share", unit: "%", digits: 1 },
-    { key: "snap_share", label: "Snap share", unit: "%", digits: 1 },
-    { key: "air_yards_share", label: "Air-yards share", unit: "%", digits: 1 },
+    { key: "targets", label: "Targets / game", digits: 2 },
+    { key: "target_share", label: "Target share", unit: "%", digits: 2 },
+    { key: "snap_share", label: "Snap share", unit: "%", digits: 2 },
+    { key: "air_yards_share", label: "Air-yards share", unit: "%", digits: 2 },
     { key: "wopr", label: "WOPR", digits: 2 },
     { key: "yards_per_target", label: "Yards / target", digits: 2, derived: (values) => {
       const targets = values.targets;
@@ -82,16 +82,16 @@ export const detailAdvancedMetrics: Partial<Record<BasePosition, DetailMetric[]>
     } },
   ],
   K: [
-    { key: "fg_attempts", label: "FG attempts / game", digits: 1 },
-    { key: "fg_pct", label: "Field-goal rate", unit: "%", digits: 1 },
-    { key: "fg_50_plus", label: "50+ FG / game", digits: 1 },
-    { key: "pat_attempts", label: "PAT attempts / game", digits: 1 },
+    { key: "fg_attempts", label: "FG attempts / game", digits: 2 },
+    { key: "fg_pct", label: "Field-goal rate", unit: "%", digits: 2 },
+    { key: "fg_50_plus", label: "50+ FG / game", digits: 2 },
+    { key: "pat_attempts", label: "PAT attempts / game", digits: 2 },
   ],
   DEF: [
-    { key: "qb_hits", label: "QB hits / game", digits: 1 },
-    { key: "sacks", label: "Sacks / game", digits: 1 },
-    { key: "takeaways", label: "Takeaways / game", digits: 1 },
-    { key: "tackles_for_loss", label: "TFL / game", digits: 1 },
+    { key: "qb_hits", label: "QB hits / game", digits: 2 },
+    { key: "sacks", label: "Sacks / game", digits: 2 },
+    { key: "takeaways", label: "Takeaways / game", digits: 2 },
+    { key: "tackles_for_loss", label: "TFL / game", digits: 2 },
   ],
 };
 
@@ -210,7 +210,7 @@ export function PlayerTeamContext({
             <div key={stat.label}>
               <span>{stat.label}</span>
               <strong className={rankToneClassName(stat.rank)}>{stat.rank === null ? "—" : `#${stat.rank}`}</strong>
-              {stat.suffix ? <small>{formatDecimal(stat.value, 1)}{stat.suffix}</small> : null}
+              {stat.suffix ? <small>{formatDecimal(stat.value, 2)}{stat.suffix}</small> : null}
             </div>
           ))}
         </div>
@@ -271,7 +271,7 @@ export function SeasonGameLog({
           {rateRows.map((row) => (
             <div key={row.key}>
               <span>{row.label}</span>
-              <strong className={row.rank === null ? undefined : rankToneClassName(row.rank)}>{row.rate === null ? "—" : formatDecimal(row.rate, 1)}</strong>
+              <strong className={row.rank === null ? undefined : rankToneClassName(row.rank)}>{row.rate === null ? "—" : formatDecimal(row.rate, 2)}</strong>
             </div>
           ))}
         </div>
@@ -283,7 +283,7 @@ export function SeasonGameLog({
             <article key={`${game.season}-${game.week}`}>
               <div><strong>W{game.week}</strong><span>{game.opponent ? `vs ${game.opponent}` : "Opponent unavailable"}</span></div>
               <p>{gameLogSummary(player.position, game.stats)}</p>
-              <b>{formatDecimal(game.points, 1)}<small>PTS</small></b>
+              <b>{formatPoints(game.points)}<small>PTS</small></b>
             </article>
           ))}
         </div>
@@ -318,7 +318,7 @@ export function PlayerAdvancedPanel({ player, analytics, children }: { player: P
         <div className="section-heading"><h3 id="player-advanced-metrics-heading">Efficiency &amp; usage</h3><span>{entity ? `${entity.seasonGames} games` : null}</span></div>
         {metrics.length > 0 ? (
           <div className="player-advanced-grid">
-            {metrics.map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{metric.unit === "%" ? formatPercent(metric.value) : `${formatDecimal(metric.value, metric.digits ?? 1)}${metric.unit ?? ""}`}</strong></div>)}
+            {metrics.map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{metric.unit === "%" ? formatPercent(metric.value) : `${formatDecimal(metric.value, metric.digits ?? 2)}${metric.unit ?? ""}`}</strong></div>)}
           </div>
         ) : <div className="player-tab-empty compact"><strong>No advanced metrics yet</strong><span>nflverse has not published a matching season row for this player.</span></div>}
         {entity && analytics.throughWeek !== null ? <p className="player-tab-source">Through Week {analytics.throughWeek} · nflverse weekly player stats</p> : null}
@@ -684,7 +684,7 @@ export function PlayerDetailSheet({
         {mode === "chart" ? (
           <div className="player-chart-peek">
             <div><span>Week {week} {player.gamePhase === "final" ? "points" : player.gamePhase === "live" ? "live projection" : "projection"}</span><i><b style={{ width: `${weeklyWidth}%` }} /></i><strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong></div>
-            <div><span>Season-long market value</span><i><b style={{ width: `${valueWidth}%` }} /></i><strong>{player.seasonValue === null ? "—" : player.seasonValue.toLocaleString()}</strong></div>
+            <div><span>Season-long market value</span><i><b style={{ width: `${valueWidth}%` }} /></i><strong>{player.seasonValue === null ? "—" : formatWhole(player.seasonValue)}</strong></div>
           </div>
         ) : (
           <div className="player-detail-values">
@@ -698,7 +698,7 @@ export function PlayerDetailSheet({
             <div>
               <span>Season-long value</span>
               <div className="player-detail-value-row">
-                <strong>{player.seasonValue === null ? "—" : player.seasonValue.toLocaleString()}</strong>
+                <strong>{player.seasonValue === null ? "—" : formatWhole(player.seasonValue)}</strong>
                 <small>{player.seasonRank === null ? "No season rank" : <>{positionLabel} <span className={rankToneClassName(player.seasonRank)}>#{player.seasonRank}</span></>}</small>
               </div>
             </div>
@@ -724,13 +724,13 @@ export function PlayerDetailSheet({
               {player.waiverTrends.adds ? (
                 <div>
                   <span className="trending-add">+{player.waiverTrends.adds.rank} TREND</span>
-                  <strong>{player.waiverTrends.adds.count.toLocaleString()} adds</strong>
+                  <strong>{formatWhole(player.waiverTrends.adds.count)} adds</strong>
                 </div>
               ) : null}
               {player.waiverTrends.drops ? (
                 <div>
                   <span className="trending-drop">−{player.waiverTrends.drops.rank} DROP</span>
-                  <strong>{player.waiverTrends.drops.count.toLocaleString()} drops</strong>
+                  <strong>{formatWhole(player.waiverTrends.drops.count)} drops</strong>
                 </div>
               ) : null}
             </div>
@@ -743,7 +743,7 @@ export function PlayerDetailSheet({
               {projectionComponents.map((component) => (
                 <div key={component.key}>
                   <span>{component.label}</span>
-                  <strong>{component.isYards ? formatDecimal(Math.round(component.value), 0) : formatDecimal(component.value, 1)}</strong>
+                  <strong>{component.isYards ? formatWhole(component.value) : formatDecimal(component.value, 2)}</strong>
                 </div>
               ))}
             </div>
@@ -756,7 +756,7 @@ export function PlayerDetailSheet({
               {defenseProjectionComponents.map((component) => (
                 <div key={component.key}>
                   <span>{component.label}</span>
-                  <strong>{component.isYards ? formatDecimal(Math.round(component.value), 0) : formatDecimal(component.value, 1)}</strong>
+                  <strong>{component.isYards ? formatWhole(component.value) : formatDecimal(component.value, 2)}</strong>
                 </div>
               ))}
             </div>
@@ -837,9 +837,9 @@ export function BoomBustPanel({
   const plotMinimum = weeklyScores.length > 0 ? Math.min(...weeklyScores.map((score) => score.points)) : null;
   const range = plotMinimum !== null && ceiling !== null ? ceiling - plotMinimum : 0;
   const markerPosition = (value: number): number => range === 0 || plotMinimum === null ? 50 : ((value - plotMinimum) / range) * 100;
-  const scoreLabel = (value: number | null): string => value === null ? "—" : formatDecimal(value, 1);
+  const scoreLabel = (value: number | null): string => formatPoints(value);
   const gameLabel = (score: { season: number; week: number }): string => view === "last3" ? `${score.season} Week ${score.week}` : `Week ${score.week}`;
-  const description = weeklyScores.map((score) => `${gameLabel(score)}: ${formatDecimal(score.points, 1)}`).join(", ");
+  const description = weeklyScores.map((score) => `${gameLabel(score)}: ${formatPoints(score.points)}`).join(", ");
   const showQuartiles = weeklyScores.length >= 8 && firstQuartile !== null && thirdQuartile !== null;
   const quartileDescription = showQuartiles ? ` Interquartile range ${scoreLabel(firstQuartile)} to ${scoreLabel(thirdQuartile)}.` : "";
   const rangeLabel = view === "last3" ? "2024 through 2026 regular-season weekly scores" : "2026 weekly scores";
@@ -872,7 +872,7 @@ export function BoomBustPanel({
               <div
                 className="boom-bust-iqr"
                 style={{ left: `${markerPosition(firstQuartile)}%`, width: `${markerPosition(thirdQuartile) - markerPosition(firstQuartile)}%` }}
-                title={`Middle 50%: ${formatDecimal(firstQuartile, 1)}–${formatDecimal(thirdQuartile, 1)} points`}
+                title={`Middle 50%: ${formatPoints(firstQuartile)}–${formatPoints(thirdQuartile)} points`}
               />
             ) : null}
             {weeklyScores.map((score, index) => (
@@ -880,12 +880,12 @@ export function BoomBustPanel({
                 className={`boom-bust-dot ${index % 2 === 0 ? "above" : "below"}`}
                 key={`${score.season}-${score.week}`}
                 style={{ left: `${markerPosition(score.points)}%` }}
-                title={`${gameLabel(score)}: ${formatDecimal(score.points, 1)} points`}
+                title={`${gameLabel(score)}: ${formatPoints(score.points)} points`}
               />
             ))}
-            <i className="boom-bust-bust-mark" style={{ left: `${markerPosition(floor)}%` }} title={weeklyScores.length >= 5 ? `Bust (10th percentile): ${formatDecimal(floor, 1)} points` : `Bust (minimum): ${formatDecimal(floor, 1)} points`} />
-            <i className="boom-bust-median-mark" style={{ left: `${markerPosition(medianScore)}%` }} title={`Median: ${formatDecimal(medianScore, 1)} points`} />
-            <i className="boom-bust-mean-mark" style={{ left: `${markerPosition(meanScore)}%` }} title={`Mean: ${formatDecimal(meanScore, 1)} points`} />
+            <i className="boom-bust-bust-mark" style={{ left: `${markerPosition(floor)}%` }} title={weeklyScores.length >= 5 ? `Bust (10th percentile): ${formatPoints(floor)} points` : `Bust (minimum): ${formatPoints(floor)} points`} />
+            <i className="boom-bust-median-mark" style={{ left: `${markerPosition(medianScore)}%` }} title={`Median: ${formatPoints(medianScore)} points`} />
+            <i className="boom-bust-mean-mark" style={{ left: `${markerPosition(meanScore)}%` }} title={`Mean: ${formatPoints(meanScore)} points`} />
           </div>
           <div className="boom-bust-labels">
             <span><small>Bust</small><strong>{scoreLabel(floor)}</strong></span>

@@ -118,7 +118,7 @@ export function shortLeagueName(name: string): string {
 }
 
 export function points(value: number | null): string {
-  return formatPoints(value, 1);
+  return formatPoints(value);
 }
 
 /** While a player sheet drag is active, the page behind it is inert and text selection is off. */

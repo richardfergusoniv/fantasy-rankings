@@ -5,7 +5,7 @@ import { perGame, perGameRank } from "./team-per-game";
 describe("perGame", () => {
   it("divides the season total by games played and keeps one decimal", () => {
     expect(perGame(121, 5)).toBe(24.2);
-    expect(formatDecimal(perGame(121, 5) ?? 0, 1)).toBe("24.2");
+    expect(formatDecimal(perGame(121, 5) ?? 0, 2)).toBe("24.20");
     expect(perGame(1860, 5)).toBe(372);
   });
 

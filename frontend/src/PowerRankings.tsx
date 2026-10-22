@@ -5,6 +5,7 @@ import type { MatchupSelection } from "./dashboard-types";
 import { formatRecord, LeagueTeamCard, positionLabel } from "./league-team-card";
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { SegmentedControl, points, shortLeagueName } from "./shared";
+import { formatDecimal, formatPercent, formatWhole } from "./lib/format-number";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
 type League = Dashboard["leagues"][number];
@@ -126,7 +127,7 @@ export function PowerRankings({
           <strong>#{mine.rank}</strong>
         </div>
         <p>of {powerRankings.length} teams</p>
-        <small>{scope === "week" ? `${points(mine.totalValue)} projected optimized-lineup points` : `${mine.totalValue.toLocaleString()} total roster value`}</small>
+        <small>{scope === "week" ? `${points(mine.totalValue)} projected optimized-lineup points` : `${formatWhole(mine.totalValue)} total roster value`}</small>
       </Card>
 
       <section className="power-chart-section" aria-labelledby="position-strength-heading">
@@ -141,7 +142,7 @@ export function PowerRankings({
             <polygon points={teamPolygon} className="radar-team" />
             {radarData.map((row, index) => {
               const [x = "150", y = "130"] = radarPoint(index, row.strength).split(",");
-              return <circle key={row.position} cx={x} cy={y} r="3.5" className="radar-dot"><title>{`${positionLabel(row.position)}: ${scope === "week" ? points(row.value) : row.value.toLocaleString()} (${row.strength}% of league leader)`}</title></circle>;
+              return <circle key={row.position} cx={x} cy={y} r="3.5" className="radar-dot"><title>{`${positionLabel(row.position)}: ${scope === "week" ? points(row.value) : formatWhole(row.value)} (${formatPercent(row.strength)} of league leader)`}</title></circle>;
             })}
             {positions.map((position, index) => {
               const [xText = "150", yText = "130"] = radarPoint(index, 100, 112).split(",");
@@ -153,9 +154,9 @@ export function PowerRankings({
         <p className="power-position-table-label">League average</p>
         <div className="power-position-values" role="list" aria-label="League average value by position">
           {radarData.map((row) => (
-            <div key={row.position} role="listitem"><span>{positionLabel(row.position)}</span><strong>{scope === "week" ? points(row.average) : Math.round(row.average).toLocaleString()}</strong></div>
+            <div key={row.position} role="listitem"><span>{positionLabel(row.position)}</span><strong>{scope === "week" ? points(row.average) : formatWhole(row.average)}</strong></div>
           ))}
-          {scope === "week" ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className="power-position-total power-position-total-highlight" role="listitem"><span>Total</span><strong>{Math.round(totalAverage).toLocaleString()}</strong></div>}
+          {scope === "week" ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className="power-position-total power-position-total-highlight" role="listitem"><span>Total</span><strong>{formatWhole(totalAverage)}</strong></div>}
         </div>
       </section>
 
@@ -178,14 +179,14 @@ export function PowerRankings({
                     <strong>{team.teamName}<span className="power-team-record"> · {formatRecord(team.record)}</span></strong>
                     {isOpponent ? <span className="sr-only">This week's opponent</span> : null}
                   </span>
-                  <span className="power-total"><strong>{scope === "week" ? points(team.totalValue) : team.totalValue.toLocaleString()}</strong></span>
+                  <span className="power-total"><strong>{scope === "week" ? points(team.totalValue) : formatWhole(team.totalValue)}</strong></span>
                 </button>
               </div>
             );
           })}
         </div>
         {isDynastyView ? (
-          <p className="power-future-picks-average">League avg future picks: <strong>{avgFuturePickValue.toLocaleString(undefined, { maximumFractionDigits: 1 })}</strong></p>
+          <p className="power-future-picks-average">League avg future picks: <strong>{formatDecimal(avgFuturePickValue, 2)}</strong></p>
         ) : null}
       </section>
       {selectedTeam ? (
