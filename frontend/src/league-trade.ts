@@ -50,6 +50,64 @@ export function isFantasyCalcPickId(playerId: string): boolean {
   return FANTASY_CALC_PICK_ID.test(playerId) && playerId.startsWith("FP_");
 }
 
+export type HistoricalPickAssetRef = {
+  playerId: string;
+  name: string;
+  position: string;
+  value: number;
+};
+
+function pickOrdinalLabel(round: number): string {
+  return round === 1 ? "1st" : round === 2 ? "2nd" : round === 3 ? "3rd" : `${round}th`;
+}
+
+/**
+ * FantasyCalc market row for a future pick season/round at a given tier.
+ * Falls back to Mid when the requested tier template is missing.
+ */
+export function marketPickTemplate<T extends HistoricalPickAssetRef>(
+  assets: ReadonlyArray<T>,
+  season: number,
+  round: number,
+  tier: "early" | "mid" | "late" = "mid",
+): T | undefined {
+  const ordinal = pickOrdinalLabel(round);
+  const candidates = assets.filter((asset) => (
+    asset.position === "PICK"
+    && asset.name.includes(String(season))
+    && asset.name.toLowerCase().includes(ordinal)
+  ));
+  if (candidates.length === 0) return undefined;
+  const tierMatch = candidates.find((asset) => new RegExp(`\\b${tier}\\b`, "i").test(asset.name));
+  if (tierMatch) return tierMatch;
+  const midMatch = candidates.find((asset) => /\bmid\b/i.test(asset.name));
+  if (midMatch) return midMatch;
+  return [...candidates].sort((a, b) => b.value - a.value)[0];
+}
+
+/**
+ * Value a not-yet-drafted historical trade pick the same way the current
+ * trade calculator does: use the league owned-pick row already tiered for the
+ * original slot owner (`pick:…:season:round:originalRosterId`). Fall back to
+ * the Mid FantasyCalc market template when the owner or owned pick is unknown.
+ */
+export function resolveHistoricalPickAsset<T extends HistoricalPickAssetRef>(
+  marketAssets: ReadonlyArray<T>,
+  ownedPicks: ReadonlyArray<T>,
+  season: number,
+  round: number,
+  originalRosterId: number | null | undefined,
+): T | undefined {
+  if (originalRosterId != null) {
+    const suffix = `:${season}:${round}:${originalRosterId}`;
+    const owned = ownedPicks.find((pick) => (
+      pick.position === "PICK" && pick.playerId.endsWith(suffix)
+    ));
+    if (owned) return owned;
+  }
+  return marketPickTemplate(marketAssets, season, round, "mid");
+}
+
 export type ValueHistoryAssetRef = {
   playerId: string;
   position: string;

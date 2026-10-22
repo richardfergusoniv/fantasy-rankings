@@ -20,6 +20,11 @@ import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cac
 
 const SLEEPER_BASE = "https://api.sleeper.app/v1";
 const HISTORICAL_TRADES_CACHE_MS = 24 * 60 * 60 * 1000;
+/**
+ * Bump when the historical-trade payload shape changes so past-season rows
+ * (cached forever) are fetched again. v2 adds originalRosterId on picks.
+ */
+const HISTORICAL_TRADES_CACHE_VERSION = 2;
 /** Current-season draft maps can still grow as rookie drafts finish; refresh daily. */
 export const HISTORICAL_DRAFT_PICK_MAP_CACHE_MS = 24 * 60 * 60 * 1000;
 
@@ -124,6 +129,8 @@ const historicalTradePickSchema = z.object({
   round: z.number().int(),
   description: z.string(),
   fromRosterId: z.number().int().nullable(),
+  /** Sleeper `roster_id` on the pick — original slot owner used for Early/Mid/Late tier. */
+  originalRosterId: z.number().int().nullable().optional().default(null),
   draftedPlayerId: z.string().nullable(),
   draftedPlayerName: z.string().nullable(),
 });
@@ -669,6 +676,7 @@ async function fetchHistoricalSeason(
                 round: pickRound,
                 description: `${pickSeason} ${ordinalRound(pickRound)}-round pick`,
                 fromRosterId: pick.previous_owner_id ?? pick.roster_id ?? null,
+                originalRosterId: pick.roster_id ?? null,
                 draftedPlayerId,
                 draftedPlayerName,
               },
@@ -766,7 +774,7 @@ export async function loadHistoricalTrades(
   for (const league of requestedLeagues) {
     const season = Number(league.season ?? 0);
     if (!Number.isInteger(season) || season <= 0) continue;
-    const cacheId = `${league.league_id}:${season}`;
+    const cacheId = `${league.league_id}:${season}:v${HISTORICAL_TRADES_CACHE_VERSION}`;
     const cachedRows = await db
       .select()
       .from(schema.historicalTrades)

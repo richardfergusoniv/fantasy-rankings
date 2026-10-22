@@ -4,6 +4,8 @@ import {
   compactPlayerName,
   formatTeamRecord,
   isFantasyCalcPickId,
+  marketPickTemplate,
+  resolveHistoricalPickAsset,
   resolveValueHistoryPlayerId,
   tradeValueVerdict,
 } from "./league-trade";
@@ -80,5 +82,40 @@ describe("resolveValueHistoryPlayerId", () => {
       value: 4618,
       overallRank: 25,
     }, market)).toBe("FP_2027_early_0");
+  });
+});
+
+describe("resolveHistoricalPickAsset", () => {
+  const market = [
+    { playerId: "FP_2027_early_0", name: "2027 Early 1st", position: "PICK", value: 4618 },
+    { playerId: "FP_2027_mid_0", name: "2027 Mid 1st", position: "PICK", value: 3041 },
+    { playerId: "FP_2027_late_0", name: "2027 Late 1st", position: "PICK", value: 1820 },
+  ];
+  // Same rows the current calculator builds in dashboard-build: tiered templates
+  // keyed by original slot owner (`pick:league:season:round:originalRosterId`).
+  const ownedPicks = [
+    { playerId: "pick:lg:2027:1:6", name: "2027 1st · Cellar Dweller", position: "PICK", value: 4618 },
+    { playerId: "pick:lg:2027:1:3", name: "2027 1st · Contender", position: "PICK", value: 1820 },
+    { playerId: "pick:lg:2027:1:1", name: "2027 1st · Mid Pack", position: "PICK", value: 3041 },
+  ];
+
+  it("uses the early-tier owned pick for an early original owner", () => {
+    const asset = resolveHistoricalPickAsset(market, ownedPicks, 2027, 1, 6);
+    expect(asset?.playerId).toBe("pick:lg:2027:1:6");
+    expect(asset?.value).toBe(4618);
+    expect(marketPickTemplate(market, 2027, 1, "early")?.playerId).toBe("FP_2027_early_0");
+  });
+
+  it("uses the late-tier owned pick for a late original owner", () => {
+    const asset = resolveHistoricalPickAsset(market, ownedPicks, 2027, 1, 3);
+    expect(asset?.playerId).toBe("pick:lg:2027:1:3");
+    expect(asset?.value).toBe(1820);
+    expect(marketPickTemplate(market, 2027, 1, "late")?.playerId).toBe("FP_2027_late_0");
+  });
+
+  it("falls back to the Mid FantasyCalc row when the original owner is unknown", () => {
+    expect(resolveHistoricalPickAsset(market, ownedPicks, 2027, 1, null)?.playerId).toBe("FP_2027_mid_0");
+    expect(resolveHistoricalPickAsset(market, ownedPicks, 2027, 1, undefined)?.playerId).toBe("FP_2027_mid_0");
+    expect(resolveHistoricalPickAsset(market, ownedPicks, 2027, 1, 99)?.playerId).toBe("FP_2027_mid_0");
   });
 });
