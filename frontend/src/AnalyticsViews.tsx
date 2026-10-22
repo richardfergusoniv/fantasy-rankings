@@ -1861,7 +1861,8 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
         </div>
         {pickerMode === "blank" ? (
           <p className="monitor-empty">Choose a view</p>
-        ) : !hasStats ? (
+        ) : !hasStats && chartKind !== "heatmap" ? (
+          // The FPA heatmap reads matchup data, not advanced stats, and has its own empty state.
           <div className="analytics-empty">
             <strong>No advanced stats yet.</strong>
             <span>Refresh after nflverse publishes the next weekly file.</span>
@@ -2502,6 +2503,12 @@ export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetC
   // One Saved view list covers both datasets; picking a view from the other one
   // switches charts and hands over the position and the view.
   const [handoff, setHandoff] = useState<ChartHandoff | null>(null);
+  // The new chart reads the handoff as it mounts (child effects run first), so clear
+  // it after any dataset change; a later switch, such as a player's Advanced stats
+  // link, then can't replay it.
+  useEffect(() => {
+    setHandoff(null);
+  }, [dataset]);
   const switchDataset = onDatasetChange
     ? (next: ToolDataset, nextHandoff: ChartHandoff) => {
       setHandoff(nextHandoff);
