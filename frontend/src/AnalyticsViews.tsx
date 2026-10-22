@@ -2632,13 +2632,23 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
   const [query, setQuery] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const swapRef = useRef<HTMLButtonElement>(null);
+  // Picking, Escape and clear unmount the focused control; say where focus goes next.
+  const restoreFocus = useRef<"swap" | "input" | null>(null);
   const inputId = `comparison-position-player-${slot}`;
   const needle = comparablePlayerName(query.trim());
   const showSearch = !player || isEditing;
 
   useEffect(() => {
-    if (isEditing) inputRef.current?.focus();
-  }, [isEditing]);
+    if (isEditing) {
+      inputRef.current?.focus();
+    } else if (restoreFocus.current === "swap" && player) {
+      swapRef.current?.focus();
+    } else if (restoreFocus.current === "input" && !player) {
+      inputRef.current?.focus();
+    }
+    if (!isEditing) restoreFocus.current = null;
+  }, [isEditing, player]);
 
   const matches = useMemo(() => options
     .filter((entity) => needle && comparablePlayerName(entity.name).includes(needle))
@@ -2652,6 +2662,7 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
     .slice(0, 40), [needle, options]);
 
   function choose(entity: ComparisonEntity) {
+    restoreFocus.current = "swap";
     onChoose(entity);
     setQuery("");
     setIsEditing(false);
@@ -2687,8 +2698,10 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
                   const firstMatch = matches[0];
                   if (firstMatch) { event.preventDefault(); choose(firstMatch); }
                 } else if (event.key === "Escape") {
-                  if (player) stopEditing();
-                  else setQuery("");
+                  if (player) {
+                    restoreFocus.current = "swap";
+                    stopEditing();
+                  } else setQuery("");
                 }
               }}
               autoComplete="off"
@@ -2701,11 +2714,11 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
         </>
       ) : player ? (
         <div className="comparison-pick-chosen">
-          <button type="button" className="comparison-pick-swap" onClick={() => setIsEditing(true)} aria-label={`Replace player ${slot}, ${player.name}`}>
+          <button ref={swapRef} type="button" className="comparison-pick-swap" onClick={() => setIsEditing(true)} aria-label={`Replace player ${slot}, ${player.name}`}>
             <strong>{player.name}</strong>
             <span>{comparisonPickMeta(player)}</span>
           </button>
-          <button type="button" className="comparison-pick-clear" onClick={() => { onClear(); stopEditing(); }} aria-label={`Clear player ${slot}`}>×</button>
+          <button type="button" className="comparison-pick-clear" onClick={() => { restoreFocus.current = "input"; onClear(); stopEditing(); }} aria-label={`Clear player ${slot}`}>×</button>
         </div>
       ) : null}
       {showSearch && needle ? (
