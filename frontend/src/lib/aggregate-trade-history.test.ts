@@ -175,4 +175,20 @@ describe("buildAggregateTradeHistoryData", () => {
     expect(latest?.give).toBe(bars.give);
     expect(latest?.get).toBe(bars.get);
   });
+
+  it("ignores a historical anchor before the plotted history window and pins the latest point instead", () => {
+    const liveGive = [asset("olave", 5_113)];
+    const liveGet = [asset("nabers", 6_377)];
+    const bars = tradeBarTotals(liveGive, liveGet);
+    const rows = buildAggregateTradeHistoryData({
+      give: liveGive,
+      get: liveGet,
+      historyByPlayerId,
+      anchorDate: "2025-09-01",
+    });
+    expect(rows.some((row) => row.date === "2025-09-01")).toBe(false);
+    const latest = rows[rows.length - 1];
+    expect(latest?.give).toBe(bars.give);
+    expect(latest?.get).toBe(bars.get);
+  });
 });

@@ -119,8 +119,23 @@ export function buildAggregateTradeHistoryData({
   for (const points of chartHistoryByPlayerId.values()) {
     for (const point of points) dateSet.add(point.date);
   }
-  if (anchorDate) dateSet.add(anchorDate);
   let dates = [...dateSet].sort();
+  // Only pin to a historical trade day when it sits inside the plotted
+  // history window. Pre-window trades (before stored snapshots begin) would
+  // otherwise invent a leading date and scale the latest point off the bars.
+  const firstDate = dates[0];
+  const lastDate = dates[dates.length - 1];
+  const anchorInWindow = Boolean(
+    anchorDate
+    && firstDate
+    && lastDate
+    && anchorDate >= firstDate
+    && anchorDate <= lastDate,
+  );
+  if (anchorInWindow && anchorDate) {
+    dateSet.add(anchorDate);
+    dates = [...dateSet].sort();
+  }
   if (dates.length === 0) {
     // Assets with no stored history still need a point so the graph can match
     // the bars (flat lines at current trade values).
@@ -128,7 +143,7 @@ export function buildAggregateTradeHistoryData({
     dates = [anchorDate ?? utcTodayKey(now)];
   }
 
-  const effectiveAnchor = anchorDate && dates.includes(anchorDate)
+  const effectiveAnchor = anchorDate && anchorInWindow
     ? anchorDate
     : (dates[dates.length - 1] ?? utcTodayKey(now));
 
