@@ -559,7 +559,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     const rightExpert = rightPlayerId ? experts[rightPlayerId] : undefined;
     if (!leftExpert && !rightExpert) return [];
     const rows: ComparisonRow[] = [
-      { metric: { key: "expertProjection", label: "Expert projection (PPR)", short: "Expert pts", unit: " pts", digits: 1 }, leftValue: makeRowValue(leftExpert?.projection), rightValue: makeRowValue(rightExpert?.projection) },
+      { metric: { key: "expertProjection", label: "Expert projection (PPR)", short: "Expert pts", unit: " pts" }, leftValue: makeRowValue(leftExpert?.projection), rightValue: makeRowValue(rightExpert?.projection) },
       { metric: { key: "expertPositionRank", label: "Expert rank", short: "ECR", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.positionRank), rightValue: makeRowValue(rightExpert?.positionRank) },
       { metric: { key: "expertBestRank", label: "Best expert rank", short: "Best", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.best), rightValue: makeRowValue(rightExpert?.best) },
       { metric: { key: "expertWorstRank", label: "Worst expert rank", short: "Worst", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.worst), rightValue: makeRowValue(rightExpert?.worst) },
@@ -578,7 +578,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
       const def = propStatDef(stat);
       if (!def) return [];
       return [{
-        metric: { key: `prop_${stat}`, label: `${def.label} line`, short: def.short, digits: 1, lowerIsBetter: stat === "pass_interceptions" },
+        metric: { key: `prop_${stat}`, label: `${def.label} line`, short: def.short, lowerIsBetter: stat === "pass_interceptions" },
         leftValue: makeRowValue(leftLines.get(stat)),
         rightValue: makeRowValue(rightLines.get(stat)),
       }];

@@ -33,7 +33,7 @@ import {
   sleeperInjuryTag,
 } from "../dashboard-shared";
 import type { RankingHorizon, RankingPosition } from "../dashboard-url";
-import { formatDecimal, formatPercent, formatWholePercent } from "../lib/format-number";
+import { formatDecimal, formatPercent, formatWhole } from "../lib/format-number";
 import {
   SOS_POSITIONS,
   fantasySosRanksForTeam,
@@ -247,7 +247,7 @@ export function TeamDataModal({
     const rate = perGame(total, usage.games);
     if (rate === null) return { text: "—", rank: null, status: "no-games" as const };
     return {
-      text: formatDecimal(rate, 1),
+      text: formatDecimal(rate, 2),
       rank: perGameRank(
         usageLeague.map((row) => ({ total: read(row), games: row.games })),
         total,
@@ -331,12 +331,12 @@ export function TeamDataModal({
               </div>
               <div>
                 <span>Pace of play</span>
-                {coloredStat(usage ? formatDecimal(usage.playsPerGame, 1) : "—", usageRank((row) => row.playsPerGame))}
+                {coloredStat(usage ? formatDecimal(usage.playsPerGame, 2) : "—", usageRank((row) => row.playsPerGame))}
                 {missingNote(!usage, "nflverse unavailable")}
               </div>
               <div>
                 <span>Run / pass split</span>
-                <strong>{usage ? `${formatWholePercent(usage.runPct)} / ${formatWholePercent(usage.passPct)}` : "—"}</strong>
+                <strong>{usage ? `${formatPercent(usage.runPct)} / ${formatPercent(usage.passPct)}` : "—"}</strong>
                 {missingNote(!usage, "nflverse unavailable")}
               </div>
             </div>
@@ -370,7 +370,7 @@ export function TeamDataModal({
               <div>
                 <span>Penalties</span>
                 {rankLabel(penaltyRank, loading)}
-                {loading ? null : <span className="sr-only">{penPerGame === null ? "Penalties per game unavailable" : `${formatDecimal(penPerGame, 1)} penalties per game`}</span>}
+                {loading ? null : <span className="sr-only">{penPerGame === null ? "Penalties per game unavailable" : `${formatDecimal(penPerGame, 2)} penalties per game`}</span>}
               </div>
               <div>
                 <span>Defense</span>
@@ -418,7 +418,7 @@ export function TeamDataModal({
               </div>
               <div>
                 <span>Yards / play</span>
-                {coloredStat(yardsPerPlay === null ? "—" : formatDecimal(yardsPerPlay, 1), pfnRankForRow(offense, offenseRow, "yds_per_play"))}
+                {coloredStat(yardsPerPlay === null ? "—" : formatDecimal(yardsPerPlay, 2), pfnRankForRow(offense, offenseRow, "yds_per_play"))}
               </div>
               <div>
                 <span>Explosive play rate</span>
@@ -855,7 +855,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                 onPointerDown={() => prefetchPlayerPanels(row)}
                 onFocus={() => prefetchPlayerPanels(row)}
                 onClick={() => selectSearchResult(row)}
-                aria-label={`View ${row.name}, ${row.position === "DEF" ? "DST" : row.position}, ${accessibleMatchupLabel(row.team, row.opponent, row.isAway, row.isBye)}, ${row.weeklyProjection === null ? "no projection" : `${formatProjectionPoints(row.weeklyProjection, row.projectionSource)} projected points`}, ${row.seasonValue === null ? "no season value" : `${row.seasonValue.toLocaleString()} season value`}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${isMine ? ", on your team" : ""}${isSelected ? ", selected" : ""}`}
+                aria-label={`View ${row.name}, ${row.position === "DEF" ? "DST" : row.position}, ${accessibleMatchupLabel(row.team, row.opponent, row.isAway, row.isBye)}, ${row.weeklyProjection === null ? "no projection" : `${formatProjectionPoints(row.weeklyProjection, row.projectionSource)} projected points`}, ${row.seasonValue === null ? "no season value" : `${formatWhole(row.seasonValue)} season value`}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${isMine ? ", on your team" : ""}${isSelected ? ", selected" : ""}`}
               >
                 <span className="player-search-main">
                   <span className="player-search-name">
@@ -866,7 +866,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                   <span className="player-search-meta"><span>{row.position}</span><MatchupTag team={row.team} opponent={row.opponent} isAway={row.isAway} isBye={row.isBye} position={row.position} entry={sosEntry} onClick={row.team && row.opponent && onOpenMatchup ? (event) => { event.stopPropagation(); onOpenMatchup({ team: row.team ?? "", opponent: row.opponent ?? "", isAway: row.isAway, gamePhase: row.gamePhase ?? null }); } : undefined} /></span>
                 </span>
                 <span className="player-search-value"><strong>{formatProjectionPoints(row.weeklyProjection, row.projectionSource)}</strong><small>{row.weeklyProjection === null ? "No projection" : row.weeklyRank === null ? "—" : `#${row.weeklyRank}`}</small></span>
-                <span className="player-search-value"><strong>{row.seasonValue === null ? "—" : row.seasonValue.toLocaleString()}</strong><small>{row.seasonRank === null ? "—" : `#${row.seasonRank}`}</small></span>
+                <span className="player-search-value"><strong>{row.seasonValue === null ? "—" : formatWhole(row.seasonValue)}</strong><small>{row.seasonRank === null ? "—" : `#${row.seasonRank}`}</small></span>
               </button>
               );
             }}
@@ -910,7 +910,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                   ? accessibleMatchupLabel(detail.team, detail.opponent, detail.isAway, detail.isBye)
                   : "no projection";
               const accessibleValue = isSeasonLong
-                ? `${Math.round(row.projection ?? 0).toLocaleString()} ${row.projectionLabel}`
+                ? `${formatWhole(row.projection ?? 0)} ${row.projectionLabel}`
                 : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
               const rosteredBy = row.rosterTeamName && row.rosterId === null ? `, rostered by ${row.rosterTeamName}` : "";
               const expert = expertRanks ? expertRanks[row.key] : undefined;
@@ -971,7 +971,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                       {expert && expert.best !== expert.worst ? <span>{expert.best}–{expert.worst}</span> : expert ? <span>{expert.best}</span> : null}
                     </span>
                   ) : null}
-                  <span className="ranking-proj"><strong>{isSeasonLong ? Math.round(row.projection ?? 0).toLocaleString() : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : <span>{row.projectionLabel}</span>}</span>
+                  <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : <span>{row.projectionLabel}</span>}</span>
                 </>
               );
               const openPlayer = () => {
