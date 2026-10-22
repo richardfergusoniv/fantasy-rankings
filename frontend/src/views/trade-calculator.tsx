@@ -661,8 +661,7 @@ export function historicalReceivedAssets(
       });
       continue;
     }
-    // Prefer Sleeper's original slot owner; older cached payloads only have fromRosterId.
-    const originalRosterId = pick.originalRosterId ?? pick.fromRosterId ?? null;
+    const originalRosterId = pick.originalRosterId ?? null;
     const current = pick.season > currentSeason
       ? resolveHistoricalPickAsset(assets, ownedPicks, pick.season, pick.round, originalRosterId)
       : undefined;
