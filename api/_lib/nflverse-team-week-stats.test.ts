@@ -431,6 +431,15 @@ describe("teamStatsRecordedWeeks", () => {
     expect(teamStatsRecordedWeeks(options)).toEqual([1, 2, 3]);
   });
 
+  it("keeps a player whose only fantasy weeks were negative", () => {
+    const backup = { ...statRow("Backup", 2, 0), position: "QB" as const, interceptions: 2, fantasyPpr: -4 };
+    const starter = { ...statRow("Starter", 2, 0), position: "QB" as const, passingYards: 250, fantasyPpr: 10 };
+    const rows = buildTeamStatsTable({
+      stats: [starter, backup], snaps: [], team: "CIN", positions: ["QB"], statId: "fantasy_points", throughWeek: 2,
+    });
+    expect(rows.map((row) => [row.name, row.total])).toEqual([["Starter", 10], ["Backup", -4]]);
+  });
+
   it("reads snap rows for snaps", () => {
     const snaps: TeamWeekSnapRow[] = [
       { name: "A", team: "CIN", position: "TE", week: 2, offenseSnaps: 10, offensePct: 15 },

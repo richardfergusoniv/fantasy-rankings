@@ -480,7 +480,9 @@ export function buildTeamStatsTable(options: {
     });
     const total = weekCells.reduce((sum, cell) => sum + cell.value, 0);
     // Drop players with no countable activity in-range (keeps table focused).
-    if (total <= 0 && !weekCells.some((cell) => cell.percent !== null && cell.percent > 0)) {
+    // Any non-zero value counts, so a quarterback whose only fantasy weeks
+    // were negative stays in and his points reach the grid's totals.
+    if (!weekCells.some((cell) => cell.value !== 0 || (cell.percent !== null && cell.percent > 0))) {
       continue;
     }
     output.push({
