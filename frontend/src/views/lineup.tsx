@@ -24,6 +24,7 @@ import {
   matchupProjectionClassName,
   optimizedTotalProjectionClassName,
 } from "./lineup-projection";
+import { teamOutlook, winPercent, winProbability } from "./win-probability";
 
 export {
   isOptimizedLineupChanged,
@@ -40,6 +41,7 @@ export function MatchupPlayer({
   isSwappedIn = false,
   isDemoted = false,
   selected = false,
+  expertRank = null,
   onOpen,
   onOpenMatchup,
 }: {
@@ -49,6 +51,8 @@ export function MatchupPlayer({
   isSwappedIn?: boolean;
   isDemoted?: boolean;
   selected?: boolean;
+  /** Experts lineup: this week's FantasyPros position rank ("WR6"). */
+  expertRank?: string | null;
   onOpen?: (player: RosterPlayer) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
 }) {
@@ -68,14 +72,15 @@ export function MatchupPlayer({
   const scoreDescription = `${formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)} ${score.label === "PROJ" ? "projected points" : "points"}`;
   const injuryDescription = player.injuryStatus ? `, injury status ${player.injuryStatus}` : "";
   const substitutionDescription = isSwappedIn
-    ? ", swapped into optimized lineup"
+    ? ", swapped into this lineup"
     : isDemoted
-      ? ", moved to bench in optimized lineup"
+      ? ", moved to bench in this lineup"
       : "";
+  const expertDescription = expertRank ? `, expert rank ${expertRank}` : "";
   const selectedDescription = selected ? ", selected" : "";
   return (
     <div className={`matchup-player ${side}${isSwappedIn ? " swapped-in" : ""}${isDemoted ? " demoted" : ""}${selected ? " is-player-selected" : ""}`}>
-      <button type="button" className="matchup-player-open" onClick={openPlayer} aria-label={`View ${player.name} details and news, ${position}, ${matchup}, ${scoreDescription}${injuryDescription}${substitutionDescription}${selectedDescription}`}>
+      <button type="button" className="matchup-player-open" onClick={openPlayer} aria-label={`View ${player.name} details and news, ${position}, ${matchup}, ${scoreDescription}${expertDescription}${injuryDescription}${substitutionDescription}${selectedDescription}`}>
         <span className="matchup-name-line">
           <strong>{player.name}</strong>
           {selected ? <span className="player-selected-chip">Selected</span> : null}
@@ -102,9 +107,15 @@ export function MatchupPlayer({
       </div>
       <button type="button" className={matchupProjectionClassName({ scoreLabel: score.label })} onClick={openPlayer} tabIndex={-1} aria-hidden="true">
         <b>{formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)}</b>
+        {expertRank ? <small className="matchup-expert-rank">{expertRank}</small> : null}
       </button>
     </div>
   );
+}
+
+/** The same player on this week's FantasyPros consensus projection (null when unranked). */
+export function expertProjected(player: RosterPlayer, experts: Dashboard["playerInsights"]["experts"] | undefined): RosterPlayer {
+  return { ...player, projection: experts?.[player.playerId]?.projection ?? null, projectionSource: "sleeper" };
 }
 
 export function forecastTotal(players: RosterPlayer[], now = Date.now()): number | null {
@@ -124,7 +135,7 @@ export function Lineup({
   onOpenMatchup: (matchup: MatchupSelection) => void;
   onOpenLeagueTeam?: (rosterId: number) => void;
 } & PlayerLink) {
-  const [mode, setMode] = useState<"current" | "optimized">("current");
+  const [mode, setMode] = useState<"current" | "optimized" | "experts">("current");
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), LOCK_TICK_MS);
@@ -139,16 +150,47 @@ export function Lineup({
     () => optimizeLineup(league.starters, league.bench, nowMs),
     [league.starters, league.bench, nowMs],
   );
-  const mine = mode === "optimized" ? optimized.starters : league.starters;
-  const myBench = sortPlayersByFantasyPosition(mode === "optimized" ? optimized.bench : league.bench);
-  const theirs = opponent?.starters;
-  const theirBench = opponent?.bench ? sortPlayersByFantasyPosition(opponent.bench) : undefined;
+  // Experts: the same players on this week's FantasyPros consensus projections (PPR).
+  const experts = dashboard.playerInsights?.experts;
+  const hasExperts = Object.keys(experts ?? {}).length > 0;
+  const activeMode = mode === "experts" && !hasExperts ? "current" : mode;
+  const withExpertProjection = (player: RosterPlayer): RosterPlayer => expertProjected(player, experts);
+  const expertRankFor = (player: RosterPlayer | undefined): string | null => {
+    const rank = player ? experts?.[player.playerId]?.positionRank : null;
+    if (!player || rank == null) return null;
+    return `${player.position === "DEF" ? "DST" : player.position}${rank}`;
+  };
+  const expertLineup = useMemo(
+    () => optimizeLineup(
+      league.starters.map((player) => expertProjected(player, experts)),
+      league.bench.map((player) => expertProjected(player, experts)),
+      nowMs,
+    ),
+    [league.starters, league.bench, experts, nowMs],
+  );
+  const mine = activeMode === "optimized" ? optimized.starters : activeMode === "experts" ? expertLineup.starters : league.starters;
+  const myBench = sortPlayersByFantasyPosition(activeMode === "optimized" ? optimized.bench : activeMode === "experts" ? expertLineup.bench : league.bench);
+  const theirs = activeMode === "experts" ? opponent?.starters.map(withExpertProjection) : opponent?.starters;
+  const theirBench = opponent?.bench
+    ? sortPlayersByFantasyPosition(activeMode === "experts" ? opponent.bench.map(withExpertProjection) : opponent.bench)
+    : undefined;
+  const isReordered = activeMode !== "current";
   const currentForecast = useMemo(() => forecastTotal(league.starters, nowMs), [league.starters, nowMs]);
   const optimizedForecast = useMemo(() => forecastTotal(optimized.starters, nowMs), [optimized.starters, nowMs]);
   const opponentForecast = useMemo(
     () => forecastTotal(opponent?.starters ?? [], nowMs),
     [opponent?.starters, nowMs],
   );
+  const expertForecast = useMemo(() => forecastTotal(expertLineup.starters, nowMs), [expertLineup.starters, nowMs]);
+  const opponentExpertForecast = useMemo(
+    () => forecastTotal((opponent?.starters ?? []).map((player) => expertProjected(player, experts)), nowMs),
+    [opponent?.starters, experts, nowMs],
+  );
+  const myForecast = activeMode === "optimized" ? optimizedForecast : activeMode === "experts" ? expertForecast : currentForecast;
+  const theirForecast = activeMode === "experts" ? opponentExpertForecast : opponentForecast;
+  const myOutlook = useMemo(() => teamOutlook(mine, nowMs), [mine, nowMs]);
+  const theirOutlook = useMemo(() => (theirs ? teamOutlook(theirs, nowMs) : null), [theirs, nowMs]);
+  const myWinPercent = myOutlook && theirOutlook ? winPercent(winProbability(myOutlook, theirOutlook)) : null;
   const lineupChanged = isOptimizedLineupChanged(
     optimized.starters.map((starter) => starter.playerId),
     league.starters.map((starter) => starter.playerId),
@@ -190,10 +232,12 @@ export function Lineup({
     <>
       <SegmentedControl
         className="lineup-mode-toggle page-tab-control"
-        value={mode}
+        value={activeMode}
         onChange={setMode}
         label="Your lineup version"
-        options={[{ value: "current", label: "Current lineup" }, { value: "optimized", label: "Optimized lineup" }]}
+        options={hasExperts
+          ? [{ value: "current", label: "Current" }, { value: "optimized", label: "Optimized" }, { value: "experts", label: "Experts" }]
+          : [{ value: "current", label: "Current lineup" }, { value: "optimized", label: "Optimized lineup" }]}
       />
 
       <Card className="matchup-score gap-0 py-0 shadow-sm" aria-label="Head-to-head score">
@@ -214,8 +258,8 @@ export function Lineup({
           <div className="score-line">
             <strong>{formatProjectionPoints(league.teamActual)}</strong>
             <small className={myTotalProjectionClassName}>
-              {forecastPoints(mode === "optimized" ? optimizedForecast : currentForecast, mode === "optimized" ? optimized.starters : league.starters)}
-              <span className="sr-only"> projected points{optimizedTotalDescription}</span>
+              {forecastPoints(myForecast, mine)}
+              <span className="sr-only">{activeMode === "experts" ? " expert projected points" : " projected points"}{optimizedTotalDescription}</span>
             </small>
           </div>
         </div>
@@ -234,8 +278,24 @@ export function Lineup({
           ) : (
             <span>{opponentTeamName}</span>
           )}
-          <div className="score-line"><strong>{formatProjectionPoints(opponent?.teamActual ?? null)}</strong><small>{forecastPoints(opponentForecast, opponent?.starters ?? [])}<span className="sr-only"> projected points</span></small></div>
+          <div className="score-line"><strong>{formatProjectionPoints(opponent?.teamActual ?? null)}</strong><small>{forecastPoints(theirForecast, theirs ?? [])}<span className="sr-only">{activeMode === "experts" ? " expert projected points" : " projected points"}</span></small></div>
         </div>
+        {myWinPercent !== null && myOutlook && theirOutlook ? (
+          <div className="matchup-win-probability">
+            <div className="matchup-win-labels" aria-hidden="true">
+              <strong className="is-mine">{myWinPercent}%</strong>
+              <span>Win probability</span>
+              <strong>{100 - myWinPercent}%</strong>
+            </div>
+            <div className="matchup-win-bar" role="img" aria-label={`Win probability: ${userTeamName} ${myWinPercent} percent, ${opponentTeamName} ${100 - myWinPercent} percent`}>
+              <span className="is-mine" style={{ width: `${myWinPercent}%` }} />
+            </div>
+            <div className="matchup-win-ranges">
+              <span><small>Likely range</small>{myOutlook.low}–{myOutlook.high}</span>
+              <span><small>Likely range</small>{theirOutlook.low}–{theirOutlook.high}</span>
+            </div>
+          </div>
+        ) : null}
       </Card>
 
       <section className="lineup-section matchup-section">
@@ -251,7 +311,8 @@ export function Lineup({
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
                 selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
-                isSwappedIn={mode === "optimized" && Boolean(matchupCell(myPlayer)) && !league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
+                isSwappedIn={isReordered && Boolean(matchupCell(myPlayer)) && !league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
+                expertRank={activeMode === "experts" ? expertRankFor(myPlayer) : null}
               />
               <span className="matchup-slot">{(myPlayer?.lineupSlot ?? theirs?.lineupSlot ?? "—").replace("_", " ")}</span>
               <MatchupPlayer
@@ -261,6 +322,7 @@ export function Lineup({
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
                 selected={Boolean(linkedPlayerId && theirs?.playerId === linkedPlayerId)}
+                expertRank={activeMode === "experts" ? expertRankFor(theirs) : null}
               />
             </div>
           ))}
@@ -282,7 +344,8 @@ export function Lineup({
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
                 selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
-                isDemoted={mode === "optimized" && Boolean(myPlayer) && league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
+                isDemoted={isReordered && Boolean(myPlayer) && league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
+                expertRank={activeMode === "experts" ? expertRankFor(myPlayer) : null}
               />
               <span className="matchup-slot">BN</span>
               <MatchupPlayer
@@ -292,6 +355,7 @@ export function Lineup({
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
                 selected={Boolean(linkedPlayerId && theirs?.playerId === linkedPlayerId)}
+                expertRank={activeMode === "experts" ? expertRankFor(theirs) : null}
               />
             </div>
           ))}
