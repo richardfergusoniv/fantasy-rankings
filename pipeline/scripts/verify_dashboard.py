@@ -4,7 +4,11 @@
 This is the programmatic diff from the props-twice-daily-pull cron, encoded:
   - every staged player/league pair is present in the dashboard rankings
   - QB/RB/WR/TE are tagged with the staged file's source (`vegas` for a
-    vegas-consensus file, `first_down` for a First Down fallback file)
+    vegas-consensus file, `first_down` for a First Down-only file). On a
+    partial-Vegas + First Down gap-fill day the staged primary is still
+    the Vegas file: Vegas-covered players must be tagged `vegas`, while
+    players filled from First Down (tagged `first_down`) or Sleeper
+    last-resort (tagged `sleeper`) are allowed outside the staged set
   - Vegas files only: raw stats (expected_stats and TD probability)
     match the dashboard's projectionComponents exactly. The fallback's
     contract is points-only (a single replicated projection per
@@ -162,6 +166,9 @@ def main() -> int:
                 if r["leagueProjection"] not in (0, None):
                     errors.append(f"SUPPRESSED {p['player']} {lid}: leagueProjection {r['leagueProjection']} (expected 0)")
                 continue
+            # Staged primary rows must keep the primary tag. Gap-fill
+            # (`first_down`) and Sleeper last-resort are only for players
+            # the primary board does not cover — never for a staged hit.
             if r["projectionSource"] != expected_tag:
                 errors.append(f"TAG {p['player']} {lid}: {r['projectionSource']} (expected {expected_tag})")
             if r["leagueProjection"] is None or abs(r["leagueProjection"] - val) > POINT_TOLERANCE:
@@ -171,18 +178,22 @@ def main() -> int:
         if expected_tag == "vegas":
             r0 = by_key.get((league_ids[0], p["player"]))
             if r0 is not None and r0.get("injuryStatus") not in UNAVAILABLE_STATUSES:
-                comp = r0.get("projectionComponents")
-                if not comp:
-                    errors.append(f"NO COMP {p['player']}")
+                if r0.get("projectionSource") != "vegas":
+                    # Already reported as TAG above; skip component checks.
+                    pass
                 else:
-                    for sk, dk in STAT_MAP.items():
-                        if sk in p["expected_stats"]:
-                            dv = comp.get(dk)
-                            if dv is None or abs(dv - p["expected_stats"][sk]) > 1e-9:
-                                errors.append(f"STAT {p['player']} {sk}: dash={dv} staged={p['expected_stats'][sk]}")
-                    td_error = td_probability_error(p, comp)
-                    if td_error:
-                        errors.append(td_error)
+                    comp = r0.get("projectionComponents")
+                    if not comp:
+                        errors.append(f"NO COMP {p['player']}")
+                    else:
+                        for sk, dk in STAT_MAP.items():
+                            if sk in p["expected_stats"]:
+                                dv = comp.get(dk)
+                                if dv is None or abs(dv - p["expected_stats"][sk]) > 1e-9:
+                                    errors.append(f"STAT {p['player']} {sk}: dash={dv} staged={p['expected_stats'][sk]}")
+                        td_error = td_probability_error(p, comp)
+                        if td_error:
+                            errors.append(td_error)
 
     # K: never vegas/first_down; mostly sleeper; fallback-with-no-projection
     # allowed for pool kickers with no data from any source.
@@ -223,9 +234,18 @@ def main() -> int:
     # Sleeper pool, but a player can leave the pool (or the staged file)
     # legitimately. The hard rule is the wrong-name ban above.
 
+    # Primary-tag extras are failures. first_down / sleeper rows outside the
+    # staged primary are expected on gap-fill / last-resort days.
     extra = [r["name"] for r in rankings if r["projectionSource"] == expected_tag and r["name"] not in staged_names]
     if extra:
         errors.append(f"{expected_tag.upper()} EXTRA: {sorted(set(extra))[:10]}")
+    if expected_tag == "vegas":
+        for r in rankings:
+            if r["position"] == "K":
+                continue
+            if r["projectionSource"] not in ("vegas", "first_down", "sleeper", "fallback"):
+                errors.append(f"BAD SOURCE {r['name']}: {r['projectionSource']}")
+                break
 
     defs = dash["defenses"]
     defs_by_league: dict[str, set] = {}
