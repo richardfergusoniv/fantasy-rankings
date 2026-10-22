@@ -3,6 +3,7 @@ import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import type { Dashboard, League, MatchupSelection } from "./dashboard-types";
 import { compareByFantasyPosition } from "./fantasy-position-order";
 import { MatchupTag, ModalPortal, points, useDialogFocusTrap } from "./shared";
+import { formatWhole } from "./lib/format-number";
 
 type RosterPlayer = League["tradeTeams"][number]["players"][number];
 type SeasonRow = Dashboard["seasonLongRankings"][number];
@@ -130,7 +131,7 @@ export function LeagueTeamCard({
     const { player, season } = row;
     const metric = scope === "week"
       ? points(player.projection)
-      : (season?.value ?? 0).toLocaleString();
+      : formatWhole(season?.value ?? 0);
     const metricLabel = scope === "week" ? "PROJ" : "VALUE";
     const slotChip = scope === "week" && player.isStarter ? starterSlotChip(player) : null;
     const isSelected = selectedPlayerId === player.playerId;
@@ -198,13 +199,13 @@ export function LeagueTeamCard({
             <div><span>Power rank</span><strong>#{team.rank}</strong></div>
             <div>
               <span>{scope === "week" ? "Projection" : "Roster value"}</span>
-              <strong>{scope === "week" ? points(team.totalValue) : (team.totalValue - team.futurePickValue).toLocaleString()}</strong>
+              <strong>{scope === "week" ? points(team.totalValue) : formatWhole(team.totalValue - team.futurePickValue)}</strong>
             </div>
-            {activeMode === "dynasty" && team.futurePickValue > 0 ? <div><span>Future picks</span><strong>+{team.futurePickValue.toLocaleString()}</strong></div> : null}
+            {activeMode === "dynasty" && team.futurePickValue > 0 ? <div><span>Future picks</span><strong>+{formatWhole(team.futurePickValue)}</strong></div> : null}
           </div>
           <div className="power-team-card-positions" role="list" aria-label={`${team.teamName} position values`}>
             {positions.map((position) => (
-              <div key={position} role="listitem"><span>{positionLabel(position)}</span><strong>{scope === "week" ? points(team.positionValues[position]) : team.positionValues[position].toLocaleString()}</strong></div>
+              <div key={position} role="listitem"><span>{positionLabel(position)}</span><strong>{scope === "week" ? points(team.positionValues[position]) : formatWhole(team.positionValues[position])}</strong></div>
             ))}
           </div>
           {toolLinks ? <ToolLinks ariaLabel={`Open ${team.teamName} in a tool`} links={toolLinks} /> : null}
