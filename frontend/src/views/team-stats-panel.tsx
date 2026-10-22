@@ -7,7 +7,6 @@ import {
   TEAM_STATS_STAT_OPTIONS,
   TEAM_WEEK_STATS_STALE_MS,
   buildTeamStatsTable,
-  buildTeamStatsWeekStacks,
   canonicalNflTeam,
   defaultTeamStatsGroup,
   defaultTeamStatsTeam,
@@ -15,6 +14,7 @@ import {
   formatTeamStatsValue,
   normalizeTeamStatsPlayerName,
   parseTeamStatsGroup,
+  teamStatsRecordedWeeks,
   teamStatsLegendCaption,
   type TeamStatsGroupId,
   type TeamStatsStatId,
@@ -27,28 +27,24 @@ import { PlayerNameLink } from "../tool-links";
 import type { PlayerLinkResolver } from "../tool-player-link";
 
 /**
- * Player colors for the stacked bars, built from the app's three chart
- * families (amber chart-1, blue chart-5, slate chart-2). Each family spans
- * its full lightness range — pale tint, base, deep shade — and the rank
- * order cycles families while alternating ends, so a hue only ever repeats
- * at the opposite end of its scale (bright gold vs deep bronze, never two
- * mid-tones side by side). Green and red stay reserved for good/bad.
+ * Cell shading for the usage grid: one blue scale (green and red stay
+ * reserved for good and bad), capped so text stays readable in both themes.
  */
-const TEAM_STATS_PALETTE = [
-  "var(--chart-1)",
-  "color-mix(in srgb, var(--chart-5) 45%, black)",
-  "color-mix(in srgb, var(--chart-2) 40%, white)",
-  "color-mix(in srgb, var(--chart-1) 45%, black)",
-  "var(--chart-5)",
-  "color-mix(in srgb, var(--chart-2) 50%, black)",
-  "var(--accent)",
-  "color-mix(in srgb, var(--chart-5) 40%, white)",
-  "var(--chart-2)",
-  "color-mix(in srgb, var(--chart-5) 35%, var(--chart-2))",
-];
-const TEAM_STATS_OTHER_COLOR = "color-mix(in srgb, var(--chart-2) 65%, black)";
+const TEAM_STATS_SHADE_MAX = 55;
 
-/** Legend averages keep one decimal (season totals in the chart stay whole). */
+function cellShade(intensity: number): string | undefined {
+  const clamped = Math.max(0, Math.min(1, intensity));
+  if (clamped <= 0) return undefined;
+  return `color-mix(in srgb, var(--chart-5) ${Math.round(4 + clamped * (TEAM_STATS_SHADE_MAX - 4))}%, transparent)`;
+}
+
+/** "Kenneth Walker III" → "K. Walker III", for the narrow phone column. */
+function shortPlayerName(name: string): string {
+  const [first, ...rest] = name.trim().split(/\s+/);
+  return rest.length > 0 && first ? `${first[0]}. ${rest.join(" ")}` : name;
+}
+
+/** Averages keep one decimal (weekly values stay whole). */
 function formatTeamStatsAverage(value: number): string {
   const rounded = Math.round(value * 10) / 10;
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
@@ -152,58 +148,66 @@ export function TeamStatsPanel({
     });
   }, [dataQuery.data, league.scoringSettings, selectedGroup, selectedTeam, statId, throughWeek]);
 
-  const stacks = useMemo(() => buildTeamStatsWeekStacks(rows), [rows]);
-
-  // Tap a week to read every player's value and share (the bars carry values only as hover text).
-  // The pick carries the context it was made in, so changing team, group or stat drops it in the same render.
-  const inspectionKey = `${selectedTeam}|${selectedGroup}|${statId}`;
-  const [inspection, setInspection] = useState<{ key: string; week: number } | null>(null);
-  const inspectedWeek = inspection?.key === inspectionKey ? inspection.week : null;
-  const inspected = stacks.find((stack) => stack.week === inspectedWeek && stack.total > 0) ?? null;
   const statLabel = TEAM_STATS_STAT_OPTIONS.find((option) => option.id === statId)?.label ?? "";
-  // The same numbers as a table, for reading exact values or navigating without the chart.
-  const [showTable, setShowTable] = useState(false);
+  // Snap counts mean little across players, so snaps read as each player's snap %.
+  const isSnaps = statId === "snaps";
+  // Weeks with recorded stats for the team and group, read from the source rows
+  // before the table drops players with no season activity: a week only they
+  // played (no TE touchdowns) keeps its column and counts toward the averages.
+  // Byes and unplayed weeks get no column. Each week's total sums the signed
+  // values, so a quarterback's negative fantasy week counts against it.
+  const gridWeeks = useMemo(() => {
+    if (!dataQuery.data) return [];
+    return teamStatsRecordedWeeks({
+      stats: dataQuery.data.stats,
+      snaps: dataQuery.data.snaps,
+      team: selectedTeam,
+      positions: TEAM_STATS_GROUP_POSITIONS[selectedGroup],
+      statId,
+      throughWeek,
+    }).map((weekNumber) => ({
+      week: weekNumber,
+      total: rows.reduce((sum, row) => sum + (row.weeks.find((cell) => cell.week === weekNumber)?.value ?? 0), 0),
+    }));
+  }, [dataQuery.data, rows, selectedGroup, selectedTeam, statId, throughWeek]);
 
-  // Completed weeks the team actually produced in (excludes byes and the
-  // in-progress week) — the denominator for the legend's per-week average.
-  const playedWeeks = useMemo(
-    () => Math.max(
-      1,
-      stacks.filter((stack) => stack.week < week && stack.hasActivity).length,
-    ),
-    [stacks, week],
-  );
+  // Completed recorded weeks (excludes byes and the in-progress week) — the
+  // denominator for each player's per-game average.
+  const completedWeeks = useMemo(() => gridWeeks.filter((stack) => stack.week < week), [gridWeeks, week]);
+  const playedWeeks = Math.max(1, completedWeeks.length);
 
-  const playerMeta = useMemo(() => {
-    const meta = new Map<string, { color: string; rostered: boolean }>();
-    rows.forEach((row, index) => {
-      meta.set(row.key, {
-        // Past the palette (ALL can list 20+ players) the rest share the grey
-        // "Other" color rather than repeating a hue that would read as two players.
-        color: TEAM_STATS_PALETTE[index] ?? TEAM_STATS_OTHER_COLOR,
-        rostered: isRosteredPlayer(row, league),
-      });
-    });
-    return meta;
-  }, [league, rows]);
-
-  // Legend: each player's per-game average over completed weeks. A partial
-  // in-progress week would otherwise leak into the average (CodeRabbit, PR #129).
-  const legendIsPercent = statId === "snaps" || statId === "targets";
-  const legendRows = useMemo(() => rows.map((row) => {
+  // Per-game averages over completed weeks only: a partial in-progress week
+  // would otherwise leak in (CodeRabbit, PR #129). Rows sort by this average.
+  const gridRows = useMemo(() => rows.map((row) => {
     const completedCells = row.weeks.filter((cell) => cell.week < week);
-    const completedTotal = completedCells
-      .reduce((sum, cell) => sum + cell.value, 0);
-    const completedPercentTotal = completedCells
-      .reduce((sum, cell) => sum + (cell.percent ?? 0), 0);
-    const value = legendIsPercent ? completedPercentTotal / playedWeeks : completedTotal / playedWeeks;
+    const completedTotal = completedCells.reduce((sum, cell) => sum + cell.value, 0);
+    const value = isSnaps
+      ? completedCells.reduce((sum, cell) => sum + (cell.percent ?? 0), 0) / playedWeeks
+      : completedTotal / playedWeeks;
     return {
       row,
-      value,
-      label: legendIsPercent ? formatTeamStatsPercent(value) : formatTeamStatsAverage(value),
+      average: value,
+      completedTotal,
+      averageLabel: isSnaps ? formatTeamStatsPercent(value) : formatTeamStatsAverage(value),
+      rostered: isRosteredPlayer(row, league),
+      cells: new Map(row.weeks.map((cell) => [cell.week, cell])),
     };
-  }), [legendIsPercent, playedWeeks, rows, week]);
-  const legendMax = Math.max(0, ...legendRows.map((entry) => entry.value));
+  }).sort((left, right) => right.average - left.average), [isSnaps, league, playedWeeks, rows, week]);
+
+  // Count stats tint by each player's share of that week, scaled so the
+  // largest share in the grid is the darkest cell (a group of ten rarely
+  // has anyone near 100%). Snaps tint by the snap % itself.
+  const maxShare = useMemo(() => Math.max(0, ...gridWeeks.flatMap((stack) => (
+    stack.total > 0 ? rows.map((row) => (row.weeks.find((cell) => cell.week === stack.week)?.value ?? 0) / stack.total) : []
+  ))), [gridWeeks, rows]);
+
+  const groupTotal = completedWeeks.reduce((sum, stack) => sum + stack.total, 0);
+  const groupAverage = groupTotal / playedWeeks;
+  // Each player's slice of the group's season total: how the team splits the work.
+  // Snaps have none; their Avg is already each player's own snap %.
+  // Signed, like the totals: a negative fantasy player shows a negative share,
+  // so the column still adds to the Total row's 100%.
+  const shareLabel = (total: number) => (groupTotal > 0 ? formatTeamStatsPercent((total / groupTotal) * 100) : "—");
 
   const unavailable = dataQuery.isError;
   const loading = dataQuery.isPending;
@@ -256,16 +260,6 @@ export function TeamStatsPanel({
             ))}
           </select>
         </label>
-        {!unavailable && !loading && rows.length > 0 ? (
-          <button
-            type="button"
-            className="scatter-zoom-toggle team-stats-view-toggle"
-            aria-pressed={showTable}
-            onClick={() => setShowTable((value) => !value)}
-          >
-            Table view
-          </button>
-        ) : null}
       </div>
 
       {unavailable ? (
@@ -282,129 +276,62 @@ export function TeamStatsPanel({
       ) : rows.length === 0 ? (
         <p className="monitor-empty">No players</p>
       ) : (
-        <div className="team-stats-chart-wrap">
-          <div className="team-stats-main">
-            {showTable ? (
-              <div className="team-stats-table-wrap">
-                <table className="team-stats-table">
-                  <caption className="sr-only">{`${statLabel} by player and week`}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Player</th>
-                      {stacks.map((stack) => <th scope="col" key={stack.week}>{`W${stack.week}`}</th>)}
-                      <th scope="col">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.key} className={playerMeta.get(row.key)?.rostered ? "is-my-roster" : undefined}>
-                        <th scope="row">{row.name}</th>
-                        {stacks.map((stack) => {
-                          const cell = row.weeks.find((candidate) => candidate.week === stack.week);
-                          return (
-                            <td key={stack.week}>
-                              {cell?.hasSourceRow ? formatTeamStatsValue(statId, cell.value) : "—"}
-                              {cell?.hasSourceRow && cell.percent !== null ? <small>{formatTeamStatsPercent(cell.percent)}</small> : null}
-                            </td>
-                          );
-                        })}
-                        <td>{formatTeamStatsValue(statId, row.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <>
-            <div className="team-stats-chart">
-              {stacks.map((stack) => {
-                const total = stack.total > 0 ? formatTeamStatsValue(statId, stack.total) : "—";
-                return (
-                  <button
-                    key={stack.week}
-                    type="button"
-                    className={`team-stats-week${inspected?.week === stack.week ? " is-inspected" : ""}`}
-                    disabled={stack.total <= 0}
-                    aria-pressed={inspected?.week === stack.week}
-                    aria-label={stack.total > 0 ? `Week ${stack.week}, ${total} ${statLabel}` : `Week ${stack.week}, no activity`}
-                    onClick={() => setInspection(inspectedWeek === stack.week ? null : { key: inspectionKey, week: stack.week })}
-                  >
-                    <span className="team-stats-bar">
-                      {stack.segments.map((segment) => {
-                        const meta = playerMeta.get(segment.key);
-                        return (
-                          <span
-                            key={segment.key}
-                            className="team-stats-seg"
-                            style={{
-                              height: `${segment.share * 100}%`,
-                              backgroundColor: segment.key === "__other__"
-                                ? TEAM_STATS_OTHER_COLOR
-                                : meta?.color ?? TEAM_STATS_OTHER_COLOR,
-                            }}
-                            title={`${segment.name} · W${stack.week}: ${formatTeamStatsValue(statId, segment.value)} (${formatTeamStatsPercent(segment.share * 100)})`}
-                          />
-                        );
-                      })}
-                    </span>
-                    <span className="team-stats-week-label">{`W${stack.week}`}</span>
-                    <span className="team-stats-week-total">{total}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="team-stats-inspector">
-              {/* One status line stays mounted so changes are announced; the player list sits outside it. */}
-              <p className={inspected ? "team-stats-inspector-title" : "team-stats-inspector-hint"} role="status">
-                {inspected ? (
-                  <>
-                    <strong>{`Week ${inspected.week}`}</strong>{" "}
-                    <span>{`${formatTeamStatsValue(statId, inspected.total)} ${statLabel}`}</span>
-                  </>
-                ) : "Tap a week to see each player’s share of that week."}
-              </p>
-              {inspected ? (
-                <ul aria-label={`Share of week ${inspected.week} ${statLabel}`}>
-                  {inspected.segments.map((segment) => (
-                    <li key={segment.key}>
-                      <i style={{ backgroundColor: segment.key === "__other__" ? TEAM_STATS_OTHER_COLOR : playerMeta.get(segment.key)?.color ?? TEAM_STATS_OTHER_COLOR }} />
-                      <span className="team-stats-inspector-name">{segment.name}</span>
-                      <span className="team-stats-inspector-value">{formatTeamStatsValue(statId, segment.value)}</span>
-                      <span className="team-stats-inspector-share">{formatTeamStatsPercent(segment.share * 100)}</span>
-                    </li>
+        <div className="team-usage-scroll">
+          <table className="team-usage">
+            <caption className="sr-only">{`${statLabel} by player and week. ${teamStatsLegendCaption(statId)}`}</caption>
+            <thead>
+              <tr>
+                <th scope="col" className="team-usage-player">Player</th>
+                {isSnaps ? null : <th scope="col" className="team-usage-share">Share</th>}
+                {gridWeeks.map((stack) => <th scope="col" key={stack.week}>{`W${stack.week}`}</th>)}
+                <th scope="col" className="team-usage-average">Avg</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isSnaps ? null : (
+                <tr className="team-usage-total">
+                  <th scope="row" className="team-usage-player">Total</th>
+                  <td className="team-usage-share">{groupTotal > 0 ? "100%" : "—"}</td>
+                  {gridWeeks.map((stack) => (
+                    <td key={stack.week}>{formatTeamStatsValue(statId, stack.total)}</td>
                   ))}
-                </ul>
-              ) : null}
-            </div>
-              </>
-            )}
-          </div>
-          <div className="team-stats-legend-group">
-          <ul className="team-stats-legend" aria-label={teamStatsLegendCaption(statId)}>
-            {legendRows.map(({ row, value, label }) => {
-              const meta = playerMeta.get(row.key);
-              const color = meta?.color ?? TEAM_STATS_OTHER_COLOR;
-              const width = legendIsPercent ? Math.min(100, value) : (legendMax > 0 ? (value / legendMax) * 100 : 0);
-              return (
-                <li key={row.key} className={meta?.rostered ? "is-my-roster" : undefined}>
-                  <i style={{ backgroundColor: color }} />
-                  <span className="team-stats-legend-name">
+                  <td className="team-usage-average">{formatTeamStatsAverage(groupAverage)}</td>
+                </tr>
+              )}
+              {gridRows.map(({ row, averageLabel, completedTotal, rostered, cells }) => (
+                <tr key={row.key} className={rostered ? "is-my-roster" : undefined}>
+                  <th scope="row" className="team-usage-player">
                     <PlayerNameLink
                       link={playerLink?.({ playerId: row.playerId, name: row.name, team: row.team, position: row.position }) ?? null}
                       label={`Open ${row.name}`}
                     >
-                      {row.name}
+                      <span className="team-usage-name">
+                        <span className="team-usage-name-full">{row.name}</span>
+                        <span className="team-usage-name-short" aria-hidden="true">{shortPlayerName(row.name)}</span>
+                      </span>
                     </PlayerNameLink>
-                  </span>
-                  <span className="team-stats-legend-total">{label}</span>
-                  <span className="team-stats-legend-meter" aria-hidden="true">
-                    <span style={{ width: `${Math.max(0, width)}%`, backgroundColor: color }} />
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          </div>
+                    {selectedGroup === "ALL" ? <span className="team-usage-position">{row.position}</span> : null}
+                  </th>
+                  {isSnaps ? null : <td className="team-usage-share">{shareLabel(completedTotal)}</td>}
+                  {gridWeeks.map((stack) => {
+                    const cell = cells.get(stack.week);
+                    if (!cell?.hasSourceRow) {
+                      return <td key={stack.week} className="is-empty">—</td>;
+                    }
+                    const intensity = isSnaps
+                      ? (cell.percent ?? 0) / 100
+                      : stack.total > 0 && maxShare > 0 ? cell.value / stack.total / maxShare : 0;
+                    return (
+                      <td key={stack.week} style={{ backgroundColor: cellShade(intensity) }}>
+                        {isSnaps ? formatTeamStatsPercent(cell.percent ?? 0) : formatTeamStatsValue(statId, cell.value)}
+                      </td>
+                    );
+                  })}
+                  <td className="team-usage-average">{averageLabel}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </section>

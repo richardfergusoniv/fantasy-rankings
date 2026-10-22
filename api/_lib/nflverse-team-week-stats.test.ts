@@ -12,6 +12,7 @@ import {
   parseTeamWeekSnapCountsCsv,
   parseTeamStatsGroup,
   teamStatsLegendCaption,
+  teamStatsRecordedWeeks,
   type TeamWeekSnapRow,
   type TeamWeekStatRow,
 } from "./nflverse-team-week-stats.js";
@@ -406,13 +407,54 @@ describe("nflverse-team-week-stats", () => {
   });
 });
 
+describe("teamStatsRecordedWeeks", () => {
+  const statRow = (name: string, week: number, receivingTds: number, team = "CIN"): TeamWeekStatRow => ({
+    playerId: name, name, team, opponent: "", position: "TE", week,
+    targets: 0, receptions: 0, receivingYards: 0, carries: 0, rushingYards: 0,
+    receivingTds, rushingTds: 0, passingTds: 0, fantasyPpr: 0, targetShare: null,
+    completions: 0, passAttempts: 0, passingYards: 0, interceptions: 0,
+    passingFirstDowns: 0, rushingFirstDowns: 0, receivingFirstDowns: 0, sacksTaken: 0,
+    fumblesLost: 0, passing2pt: 0, rushing2pt: 0, receiving2pt: 0,
+  });
+
+  it("keeps a week only a zero-season player appeared in", () => {
+    const stats = [
+      statRow("Scorer", 1, 1),
+      statRow("Blocker", 2, 0),
+      statRow("Scorer", 3, 1),
+      statRow("Other Team", 4, 2, "KC"),
+      statRow("Scorer", 9, 1),
+    ];
+    const options = { stats, snaps: [], team: "CIN", positions: ["TE"] as const, statId: "tds" as const, throughWeek: 8 };
+    // The table drops Blocker (no TDs all season), so its rows alone miss week 2.
+    expect(buildTeamStatsTable(options).map((row) => row.name)).toEqual(["Scorer"]);
+    expect(teamStatsRecordedWeeks(options)).toEqual([1, 2, 3]);
+  });
+
+  it("keeps a player whose only fantasy weeks were negative", () => {
+    const backup = { ...statRow("Backup", 2, 0), position: "QB" as const, interceptions: 2, fantasyPpr: -4 };
+    const starter = { ...statRow("Starter", 2, 0), position: "QB" as const, passingYards: 250, fantasyPpr: 10 };
+    const rows = buildTeamStatsTable({
+      stats: [starter, backup], snaps: [], team: "CIN", positions: ["QB"], statId: "fantasy_points", throughWeek: 2,
+    });
+    expect(rows.map((row) => [row.name, row.total])).toEqual([["Starter", 10], ["Backup", -4]]);
+  });
+
+  it("reads snap rows for snaps", () => {
+    const snaps: TeamWeekSnapRow[] = [
+      { name: "A", team: "CIN", position: "TE", week: 2, offenseSnaps: 10, offensePct: 15 },
+    ];
+    expect(teamStatsRecordedWeeks({ stats: [statRow("Scorer", 1, 1)], snaps, team: "CIN", positions: ["TE"], statId: "snaps", throughWeek: 8 })).toEqual([2]);
+  });
+});
+
 describe("teamStatsLegendCaption", () => {
   it("says snap % is a per-player rate that can pass 100% across a group", () => {
     expect(teamStatsLegendCaption("snaps")).toMatch(/more than 100%/);
   });
 
-  it("names target share without the overlap note", () => {
-    expect(teamStatsLegendCaption("targets")).toBe("Average target share per game.");
+  it("labels targets as a per-game count, like the other count stats", () => {
+    expect(teamStatsLegendCaption("targets")).toBe("Targets, average per game.");
   });
 
   it("labels count stats as per-game averages", () => {
