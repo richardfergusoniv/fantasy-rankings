@@ -263,7 +263,7 @@ describe("Light theme contrast", () => {
   it("keeps borders and chart series visible against the panel", () => {
     expect(contrastRatio(light("--border"), panel)).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(light("--row-divider"), panel)).toBeGreaterThanOrEqual(2.6);
-    for (const name of ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5", "--chart-ma7", "--chart-ma30"]) {
+    for (const name of ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5"]) {
       expect(contrastRatio(light(name), panel), `${name} on panel`).toBeGreaterThanOrEqual(3);
     }
   });

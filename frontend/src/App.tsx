@@ -56,14 +56,13 @@ import { Explorer, isExplorerMode } from "./views/explorer";
 import { GameLinesPanel } from "./views/game-lines-panel";
 import { Lineup } from "./views/lineup";
 import { TeamStatsPanel } from "./views/team-stats-panel";
-import { ValueChartPanel } from "./views/value-chart-panel";
 
-const DOCKABLE_INSPECTOR_TABS = new Set<Tab>(["team", "rankings", "waivers", "draft", "power", "monitor", "team-stats", "pricing", "analytics"]);
+const DOCKABLE_INSPECTOR_TABS = new Set<Tab>(["team", "rankings", "waivers", "draft", "power", "monitor", "team-stats", "analytics"]);
 
 /** The former Monitor page's tools, now subviews under Tools. The
  * "monitor" tab id predates the move and still names Game lines, so
  * existing ?tab=monitor links land in the right place. */
-const MARKET_TOOL_TABS = new Set<Tab>(["monitor", "team-stats", "pricing", "analytics"]);
+const MARKET_TOOL_TABS = new Set<Tab>(["monitor", "team-stats", "analytics"]);
 
 const LazyPowerRankings = lazy(() => import("./PowerRankings").then((module) => ({ default: module.PowerRankings })));
 const LazyConnectedTeamCard = lazy(() => import("./views/player-pool").then((module) => ({ default: module.ConnectedTeamCard })));
@@ -114,7 +113,7 @@ function primaryPageForTab(tab: Tab): PrimaryPage {
   if (tab === "power") return "league";
   if (tab === "draft") return "draft";
   if (tab === "trade") return "players";
-  if (tab === "monitor" || tab === "team-stats" || tab === "pricing" || tab === "analytics") return "tools";
+  if (tab === "monitor" || tab === "team-stats" || tab === "analytics") return "tools";
   const unreachable: never = tab;
   return unreachable;
 }
@@ -540,7 +539,6 @@ export function App() {
       comparison: "Players",
       monitor: "Game lines",
       "team-stats": "Team stats",
-      pricing: "Pricing",
       analytics: "Analytics",
     };
     document.title = `${titles[tab]} · Fantasy Rankings`;
@@ -1230,7 +1228,6 @@ export function App() {
             <TabsList aria-label="Tools views">
               <TabsTrigger value="monitor">Game lines</TabsTrigger>
               <TabsTrigger value="team-stats">Team stats</TabsTrigger>
-              <TabsTrigger value="pricing">Pricing</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
             </TabsList>
           </Tabs>
@@ -1249,7 +1246,6 @@ export function App() {
             comparison: "Player comparison",
             monitor: "Game lines",
             "team-stats": "Team stats",
-            pricing: "Pricing",
             analytics: "Analytics",
           } satisfies Record<Tab, string>)[tab]}</h1>
           {currentSectionLoading ? <SectionLoading label={`Loading ${({ team: "Matchup", players: "Players", league: "League", draft: "Draft", tools: "Tools" } as const)[primaryPage]}…`} />
@@ -1271,15 +1267,6 @@ export function App() {
                 season={activeDashboard.season}
                 week={activeDashboard.week}
                 initial={{ team: dashboardUrl.state.teamStatsTeam, group: dashboardUrl.state.teamStatsGroup, stat: dashboardUrl.state.teamStatsStat }}
-                onSelectionChange={dashboardUrl.commit}
-                playerLink={toolPlayerLink}
-              />
-            )
-            : tab === "pricing" ? (
-              <ValueChartPanel
-                league={league}
-                dashboard={activeDashboard}
-                initial={{ playerId: dashboardUrl.state.pricingPlayerId, compareId: dashboardUrl.state.pricingCompareId }}
                 onSelectionChange={dashboardUrl.commit}
                 playerLink={toolPlayerLink}
               />

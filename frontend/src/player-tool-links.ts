@@ -1,6 +1,6 @@
 import type { DashboardUrlState } from "./dashboard-url";
 
-export type PlayerToolLinkKey = "pricing" | "comparison" | "advanced-stats" | "team-stats" | "game-lines" | "trade";
+export type PlayerToolLinkKey = "comparison" | "advanced-stats" | "team-stats" | "game-lines" | "trade";
 
 export type PlayerToolLink = {
   key: PlayerToolLinkKey;
@@ -27,20 +27,16 @@ type ToolLinkPlayer = {
   playerId: string;
   position: string;
   team: string | null;
-  seasonValue: number | null;
   isBye: boolean;
 };
 
 /**
  * Tools a player can be opened in. A destination is listed only when it can show
- * something for this player: Pricing needs a market value, Compare a position it can pair within, Advanced stats a QB/RB/WR/TE, Team stats a team and
+ * something for this player: Compare a position it can pair within, Advanced stats a QB/RB/WR/TE, Team stats a team and
  * a QB/RB/WR/TE position, Game lines a team that plays this week.
  */
 export function playerToolLinks(player: ToolLinkPlayer): PlayerToolLink[] {
   const links: PlayerToolLink[] = [];
-  if (player.position !== "PICK" && player.seasonValue !== null) {
-    links.push({ key: "pricing", label: "Pricing", patch: { tab: "pricing", pricingPlayerId: player.playerId } });
-  }
   if (COMPARISON_POSITIONS.has(player.position)) {
     links.push({ key: "comparison", label: "Compare", patch: { tab: "comparison", comparePlayerId: player.playerId } });
   }

@@ -108,13 +108,13 @@ describe("closing overlays against a simulated history", () => {
     const tapped = browser(state({ tab: "rankings" }));
     tapped.commit({ playerId: "p1" });
     const opened = tapped.index;
-    tapped.commit({ tab: "pricing", playerId: null, pricingPlayerId: "p1" });
+    tapped.commit({ tab: "team-stats", playerId: null, teamStatsTeam: "KC" });
     tapped.back();
     tapped.close("player");
     expect(tapped.index).toBe(opened - 1);
 
     const landed = browser(state({ tab: "rankings", playerId: "p1" }));
-    landed.commit({ tab: "pricing", playerId: null, pricingPlayerId: "p1" });
+    landed.commit({ tab: "team-stats", playerId: null, teamStatsTeam: "KC" });
     landed.back();
     landed.close("player");
     expect(landed.index).toBe(0);

@@ -10,7 +10,6 @@ export const DASHBOARD_TABS = [
   "trade",
   "monitor",
   "team-stats",
-  "pricing",
   "analytics",
 ] as const;
 
@@ -53,8 +52,6 @@ export type DashboardUrlState = {
   /** Open matchup dialog; travels in `mu` so Back from a tool brings it back. */
   matchup: MatchupSelection | null;
   /** Tool selections. Only serialized on their own tab (see serializeDashboardSearch). */
-  pricingPlayerId: string | null;
-  pricingCompareId: string | null;
   teamStatsTeam: string | null;
   teamStatsGroup: string | null;
   teamStatsStat: string | null;
@@ -70,8 +67,6 @@ export type DashboardUrlState = {
 /** Reset for every tool selection and the matchup dialog; spread into a commit when leaving a tab. */
 export const CLEARED_TOOL_SELECTIONS = {
   matchup: null,
-  pricingPlayerId: null,
-  pricingCompareId: null,
   teamStatsTeam: null,
   teamStatsGroup: null,
   teamStatsStat: null,
@@ -154,6 +149,8 @@ export function resolveDashboardTab(rawTab: string | null): {
     return { tab: "rankings", legacyTradeMode: null };
   }
   if (rawTab === "charts") return { tab: "analytics", legacyTradeMode: null };
+  // Pricing was retired; its player's value now lives on the player card.
+  if (rawTab === "pricing") return { tab: "rankings", legacyTradeMode: null };
   return { tab: DEFAULT_DASHBOARD_TAB, legacyTradeMode: null };
 }
 
@@ -203,10 +200,8 @@ export function parseDashboardSearch(search: string): DashboardUrlState {
     draftRoom: oneOf(params.get("room"), DRAFT_ROOMS),
     chartDataset: oneOf(params.get("chart"), CHART_DATASETS),
     tradeMode: resolveTradeMode(params, legacyTradeMode),
-    playerId: textParam(params.get("player")),
+    playerId: textParam(params.get("player")) ?? (rawTab === "pricing" ? textParam(params.get("pp")) : null),
     matchup: parseMatchupParam(params.get("mu")),
-    pricingPlayerId: textParam(params.get("pp")),
-    pricingCompareId: textParam(params.get("pc")),
     teamStatsTeam: textParam(params.get("ts")),
     teamStatsGroup: textParam(params.get("tg")),
     teamStatsStat: textParam(params.get("tst")),
@@ -233,10 +228,6 @@ export function serializeDashboardSearch(state: DashboardUrlState): string {
   if (state.matchup) params.set("mu", serializeMatchupParam(state.matchup));
   // Tool selections only travel with their own tab, so leaving a tool never
   // leaks its parameters into other tabs' links.
-  if (state.tab === "pricing") {
-    if (state.pricingPlayerId) params.set("pp", state.pricingPlayerId);
-    if (state.pricingCompareId) params.set("pc", state.pricingCompareId);
-  }
   if (state.tab === "team-stats") {
     if (state.teamStatsTeam) params.set("ts", state.teamStatsTeam);
     if (state.teamStatsGroup) params.set("tg", state.teamStatsGroup);
