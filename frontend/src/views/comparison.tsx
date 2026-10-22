@@ -5,6 +5,7 @@ import type { MatchupSelection } from "../dashboard-types";
 import { formatCompactCount } from "../lib/format-number";
 import { depthLabel, MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 import { propStatDef } from "../../../api/_lib/prop-line-reads";
+import { currentExpertRanks } from "../expert-ranks";
 import {
   analyticsMetricsForLeague,
   basePositionOrder,
@@ -553,7 +554,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
   const makeRowValue = (value: number | null | undefined): ComparisonMetricValue | null => typeof value === "number" && Number.isFinite(value) ? { value } : null;
   // This week's FantasyPros expert consensus (PPR) for each pick.
   const expertRows = (() => {
-    const experts = dashboard.playerInsights?.experts ?? {};
+    const experts = currentExpertRanks(dashboard.playerInsights, dashboard.asOf) ?? {};
     const leftExpert = leftPlayerId ? experts[leftPlayerId] : undefined;
     const rightExpert = rightPlayerId ? experts[rightPlayerId] : undefined;
     if (!leftExpert && !rightExpert) return [];
