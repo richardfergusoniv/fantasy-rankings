@@ -604,12 +604,11 @@ export function formatTeamStatsValue(statId: TeamStatsStatId, value: number): st
 }
 
 /**
- * What the legend's per-player figure means. Snap % is each player's own rate,
+ * What the Avg column means. Snap % is each player's own rate,
  * not a split of one total, so a position group's rows can add to more than 100%.
  */
 export function teamStatsLegendCaption(statId: TeamStatsStatId): string {
   if (statId === "snaps") return "Average snap % per game. Players share the field, so rows can add to more than 100%.";
-  if (statId === "targets") return "Average target share per game.";
   return `${teamStatsStatDef(statId).label}, average per game.`;
 }
 

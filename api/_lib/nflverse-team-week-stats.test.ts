@@ -411,8 +411,8 @@ describe("teamStatsLegendCaption", () => {
     expect(teamStatsLegendCaption("snaps")).toMatch(/more than 100%/);
   });
 
-  it("names target share without the overlap note", () => {
-    expect(teamStatsLegendCaption("targets")).toBe("Average target share per game.");
+  it("labels targets as a per-game count, like the other count stats", () => {
+    expect(teamStatsLegendCaption("targets")).toBe("Targets, average per game.");
   });
 
   it("labels count stats as per-game averages", () => {

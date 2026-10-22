@@ -215,281 +215,123 @@
   font-size: var(--type-caption);
   font-weight: 600;
 }
-.team-stats-chart-wrap {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
-  gap: 16px;
-  align-items: start;
+.monitor-team-stats-group {
+  flex: 0 1 300px;
 }
-.team-stats-main,
-.team-stats-legend-group {
-  min-width: 0;
-  padding: 16px;
+/* Team stats: a usage grid. Rows are players (sorted by average), columns are
+   weeks; each cell's blue tint is that player's share of the work that week. */
+.team-usage-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
   background: var(--surface);
 }
-.team-stats-main {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.team-stats-chart {
-  display: flex;
-  gap: 6px;
-  align-items: flex-end;
-  min-width: 0;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-.team-stats-week {
-  display: flex;
-  flex: 1 0 40px;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  min-height: 44px;
-  padding: 4px 2px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-/* Inset so the ring is not clipped by the chart's scroll container. */
-.team-stats-week:focus-visible {
-  outline: 2px solid var(--link);
-  outline-offset: -2px;
-}
-.team-stats-week:disabled {
-  cursor: default;
-}
-.team-stats-week:not(:disabled):hover .team-stats-bar {
-  box-shadow: 0 0 0 1px var(--border);
-}
-.team-stats-week.is-inspected {
-  border-color: var(--border);
-  background-color: var(--surface-2);
-}
-.team-stats-bar {
-  display: flex;
-  flex-direction: column-reverse;
+.team-usage {
   width: 100%;
-  max-width: 64px;
-  height: 180px;
-  overflow: hidden;
-  border-radius: var(--radius-xs);
-  background-color: var(--surface-2);
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums lining-nums;
 }
-.team-stats-week:disabled .team-stats-bar {
-  background-color: transparent;
-  border-bottom: 2px solid var(--hairline);
-  border-radius: 0;
+.team-usage th,
+.team-usage td {
+  height: 44px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: var(--type-body);
+  text-align: center;
+  white-space: nowrap;
 }
-.team-stats-seg {
-  display: block;
-  width: 100%;
-  min-height: 2px;
-  box-shadow: inset 0 -1px 0 var(--inset-edge);
+.team-usage td {
+  min-width: 52px;
+  font-weight: 600;
 }
-.team-stats-week-label {
+.team-usage tbody tr:last-child th,
+.team-usage tbody tr:last-child td {
+  border-bottom: 0;
+}
+.team-usage thead th {
+  height: 36px;
   color: var(--dim);
   font-size: var(--type-caption);
   font-weight: 700;
   letter-spacing: .02em;
 }
-.team-stats-week-total {
-  color: var(--text);
-  font-size: var(--type-caption);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums lining-nums;
-}
-.team-stats-view-toggle {
-  min-height: 44px;
-  margin-left: auto;
-  box-shadow: var(--shadow-control);
-}
-.monitor-team-stats-group {
-  flex: 0 1 300px;
-}
-.team-stats-table-wrap {
-  max-width: 100%;
-  overflow-x: auto;
-}
-.team-stats-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: var(--type-body);
-  font-variant-numeric: tabular-nums lining-nums;
-}
-.team-stats-table th,
-.team-stats-table td {
-  padding: 8px;
-  border-bottom: 1px solid var(--hairline);
-  text-align: right;
-  white-space: nowrap;
-}
-.team-stats-table thead th:first-child {
-  text-align: left;
-}
-.team-stats-table thead th {
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 700;
-}
-.team-stats-table tbody th {
+.team-usage .team-usage-player {
   position: sticky;
   left: 0;
-  background-color: var(--surface);
-  color: var(--text);
-  font-weight: 600;
+  z-index: 1;
+  width: 1%;
+  max-width: 200px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: 1px 0 0 var(--hairline);
   text-align: left;
+  text-overflow: ellipsis;
 }
-.team-stats-table td small {
-  display: block;
+.team-usage tbody .team-usage-player {
+  font-weight: 600;
+}
+.team-usage-name {
+  color: var(--text);
+}
+.team-usage-name-short {
+  display: none;
+}
+.team-usage-position {
+  margin-left: 6px;
   color: var(--dim);
   font-size: var(--type-caption);
+  font-weight: 600;
 }
-.team-stats-table tr.is-my-roster th {
+.team-usage tr.is-my-roster .team-usage-name {
   color: var(--roster-highlight);
 }
-.team-stats-inspector {
-  min-height: 44px;
-  font-size: var(--type-body);
+.team-usage td.is-empty {
+  color: var(--dim);
+  font-weight: 400;
 }
-.team-stats-inspector ul {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
+.team-usage .team-usage-average {
+  border-left: 1px solid var(--hairline);
+  font-weight: 800;
 }
-.team-stats-inspector li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.team-usage thead .team-usage-average {
+  font-weight: 700;
 }
-.team-stats-inspector li i {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-}
-.team-stats-inspector-title {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  margin: 0;
-}
-.team-stats-inspector-title span,
-.team-stats-inspector-hint,
-.team-stats-inspector-share {
+.team-usage-total th,
+.team-usage-total td {
+  background: var(--surface-2);
   color: var(--dim);
 }
-.team-stats-inspector-hint {
-  margin: 0;
-}
-.team-stats-inspector-name {
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.team-stats-inspector-value {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums lining-nums;
-}
-.team-stats-inspector-share {
-  min-width: 48px;
-  text-align: right;
-  font-variant-numeric: tabular-nums lining-nums;
-}
-.team-stats-legend-group {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.team-stats-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.team-stats-legend li {
-  display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
-  grid-template-areas:
-    "swatch name total"
-    ". meter meter";
-  align-items: center;
-  gap: 4px 8px;
-  font-size: var(--type-body);
-  line-height: 1.25;
-}
-.team-stats-legend li i {
-  grid-area: swatch;
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-}
-.team-stats-legend-name {
-  grid-area: name;
-  overflow: hidden;
-  color: var(--text);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.team-stats-legend li.is-my-roster .team-stats-legend-name {
-  color: var(--roster-highlight);
-}
-.team-stats-legend-total {
-  grid-area: total;
-  color: var(--text);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums lining-nums;
-}
-.team-stats-legend-meter {
-  grid-area: meter;
-  display: block;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 2px;
+.team-usage-total .team-usage-player {
   background: var(--surface-2);
 }
-.team-stats-legend-meter > span {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-}
 @media (max-width: 759px) {
-  .team-stats-chart-wrap {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .team-stats-main,
-  .team-stats-legend-group {
-    padding: 12px;
-  }
-  .team-stats-bar {
-    height: 150px;
-  }
-  .team-stats-chart {
-    gap: 4px;
-  }
-  .team-stats-week {
-    flex-basis: 32px;
-  }
   .monitor-team-stats-group {
     flex: 1 1 100%;
   }
-  .team-stats-view-toggle {
-    margin-left: 0;
+  .team-usage th,
+  .team-usage td {
+    padding-inline: 6px;
+  }
+  .team-usage td {
+    min-width: 44px;
+  }
+  .team-usage .team-usage-player {
+    max-width: 128px;
+  }
+  /* Phone: "K. Walker III" fits the sticky column; the full name stays for screen readers. */
+  .team-usage-name-full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .team-usage-name-short {
+    display: inline;
   }
 }
 .props-sort-field {
