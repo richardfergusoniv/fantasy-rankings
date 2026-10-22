@@ -71,7 +71,7 @@
 
 The `lib/` copies listed above were removed. Live code is `api/_lib/`, including `api/_lib/schema.ts`.
 
-See `PHASE2-STATUS.md` for full details. `app/` is unmodified. `npm run typecheck` covers `frontend/` only.
+See `PHASE2-STATUS.md` for full details. `app/` has since been removed. `npm run typecheck` covers `frontend/` only.
 
 ### ✅ Shipped since the list above
 
@@ -124,7 +124,7 @@ Per ANALYSIS.md §5, §10:
 
 ## Database migrations
 
-Postgres migrations live in `drizzle-pg/`. `app/drizzle/` is the Hatch SQLite history and is not applied to Supabase.
+Postgres migrations live in `drizzle-pg/`. The old Hatch SQLite history (`app/drizzle/`) was removed from the repo.
 
 `drizzle.config.ts` reads `api/_lib/schema.ts`, writes SQL to `drizzle-pg/`, and connects with `DATABASE_URL`. Route handlers use that same schema through `api/_lib/db.ts`.
 

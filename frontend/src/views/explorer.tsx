@@ -19,7 +19,7 @@ export function isExplorerMode(tab: string): tab is ExplorerMode {
 }
 
 const LazyPlayerPool = lazy(() => import("./player-pool").then((module) => ({ default: module.PlayerPool })));
-const LazyComparisonTool = lazy(() => import("../AnalyticsViews").then((module) => ({ default: module.ComparisonTool })));
+const LazyComparisonTool = lazy(() => import("./comparison").then((module) => ({ default: module.ComparisonTool })));
 
 function ExplorerFallback({ label }: { label: string }) {
   return (
