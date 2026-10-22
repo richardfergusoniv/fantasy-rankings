@@ -420,7 +420,7 @@ export async function loadPlayerInsightsSnapshot(options?: { force?: boolean }):
 }
 
 export type PlayerInsightsRefreshResult = {
-  ok: true;
+  ok: boolean;
   status: "committed" | "kept-previous" | "fresh-cache" | "empty";
   opportunity: number;
   ngs: number;
@@ -431,7 +431,8 @@ export type PlayerInsightsRefreshResult = {
 
 function refreshResult(status: PlayerInsightsRefreshResult["status"], snapshot: PlayerInsightsSnapshot | null): PlayerInsightsRefreshResult {
   return {
-    ok: true,
+    // "empty": nothing could be fetched and nothing is stored, so report a failure.
+    ok: status !== "empty",
     status,
     opportunity: snapshot ? Object.keys(snapshot.opportunity).length : 0,
     ngs: snapshot ? Object.keys(snapshot.ngs).length : 0,
