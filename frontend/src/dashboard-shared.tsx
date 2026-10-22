@@ -23,7 +23,7 @@ import type {
   RosterPlayer,
   TradeAsset,
 } from "./dashboard-types";
-import { formatDecimal, formatPercent } from "./lib/format-number";
+import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { ModalPortal, useDialogFocusTrap } from "./shared";
 import {
   TRADE_REMOVE_TOAST_ID,
@@ -150,9 +150,8 @@ export function shortLeagueName(name: string): string {
     .replace("Hoe Ass Dynasty League", "Hoe Ass Dynasty");
 }
 
-export function formatProjectionPoints(value: number | null, source?: PlayerSearchResult["projectionSource"]): string {
-  if (value === null) return "—";
-  return source === "vegas" ? value.toString() : formatDecimal(value, 1);
+export function formatProjectionPoints(value: number | null, _source?: PlayerSearchResult["projectionSource"]): string {
+  return formatPoints(value);
 }
 
 export const projectionComponentFields: Partial<Record<BasePosition, ReadonlyArray<{ key: string; label: string }>>> = {
@@ -270,14 +269,8 @@ export function decimalPlaces(value: number): number {
   return Math.max(0, fractionLength - exponent);
 }
 
-export function forecastPoints(value: number | null, players: RosterPlayer[]): string {
-  if (value === null) return "—";
-  const vegasPrecision = players.reduce((precision, player) => (
-    player.gamePhase !== "final" && player.projectionSource === "vegas" && player.projection !== null
-      ? Math.max(precision, decimalPlaces(player.projection))
-      : precision
-  ), 0);
-  return vegasPrecision > 0 ? formatDecimal(value, vegasPrecision) : formatProjectionPoints(value);
+export function forecastPoints(value: number | null, _players: RosterPlayer[]): string {
+  return formatPoints(value);
 }
 
 export function comparablePlayerName(value: string): string {
@@ -379,8 +372,7 @@ export function movementPercent(value: number, change: number | null): number | 
 export function movementLabel(percent: number | null): string {
   if (percent === null) return "No 30-day history";
   if (!Number.isFinite(percent)) return "Up from zero over 30 days";
-  const rounded = Math.round(percent);
-  return `${rounded > 0 ? "+" : ""}${rounded}% over 30 days`;
+  return `${formatPercent(percent, { sign: "exceptZero" })} over 30 days`;
 }
 
 export function SectionError({ title, onRetry, retrying = false, compact = false }: { title: string; onRetry: () => void; retrying?: boolean; compact?: boolean }) {
@@ -432,12 +424,12 @@ export function pfnDateLabel(value: string): string {
 }
 
 export const matchupStatConfigs: ReadonlyArray<MatchupStatConfig> = [
-  { label: "Grade", offKey: "grade", defKey: "grade", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: true },
-  { label: "Scoring", offKey: "ppg", defKey: "pts_allowed_per_game", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: false },
-  { label: "Pass", offKey: "pass", defKey: "pass", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: true },
-  { label: "Run", offKey: "run", defKey: "run", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: true },
+  { label: "Grade", offKey: "grade", defKey: "grade", format: (value) => formatDecimal(value, 2), offHigher: true, defHigher: true },
+  { label: "Scoring", offKey: "ppg", defKey: "pts_allowed_per_game", format: (value) => formatPoints(value), offHigher: true, defHigher: false },
+  { label: "Pass", offKey: "pass", defKey: "pass", format: (value) => formatDecimal(value, 2), offHigher: true, defHigher: true },
+  { label: "Run", offKey: "run", defKey: "run", format: (value) => formatDecimal(value, 2), offHigher: true, defHigher: true },
   { label: "EPA/Play", offKey: "epa_per_play", defKey: "epa_per_play", format: (value) => formatDecimal(value, 2, { sign: "always" }), offHigher: true, defHigher: false },
-  { label: "Yds/Play", offKey: "yds_per_play", defKey: "yds_per_play", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: false },
+  { label: "Yds/Play", offKey: "yds_per_play", defKey: "yds_per_play", format: (value) => formatDecimal(value, 2), offHigher: true, defHigher: false },
   { label: "Success%", offKey: "success_pct", defKey: "success_pct", format: (value) => formatPercent(value), offHigher: true, defHigher: false },
   { label: "Expl%", offKey: "expl_pct", defKey: "expl_pct", format: (value) => formatPercent(value), offHigher: true, defHigher: false },
 ];
@@ -574,8 +566,8 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                           <span className="matchup-reference-arrow" aria-hidden="true">›</span>
                         </button>
                       ) : <strong>{matchup.team}</strong>}
-                      <span className={`matchup-reference-tag${sosBadgeClass(teamOffSosRank)}`}>OFF SOS: {teamOffSos === null ? "—" : formatDecimal(teamOffSos, 1)}</span>
-                      <span className={`matchup-reference-tag${sosBadgeClass(teamDefSosRank)}`}>DEF SOS: {teamDefSos === null ? "—" : formatDecimal(teamDefSos, 1)}</span>
+                      <span className={`matchup-reference-tag${sosBadgeClass(teamOffSosRank)}`}>OFF SOS: {teamOffSos === null ? "—" : formatDecimal(teamOffSos, 2)}</span>
+                      <span className={`matchup-reference-tag${sosBadgeClass(teamDefSosRank)}`}>DEF SOS: {teamDefSos === null ? "—" : formatDecimal(teamDefSos, 2)}</span>
                     </div>
                     <div className="matchup-stat-team">
                       {onOpenTeam ? (
@@ -584,8 +576,8 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                           <span className="matchup-reference-arrow" aria-hidden="true">›</span>
                         </button>
                       ) : <strong>{matchup.opponent}</strong>}
-                      <span className={`matchup-reference-tag${sosBadgeClass(oppOffSosRank)}`}>OFF SOS: {oppOffSos === null ? "—" : formatDecimal(oppOffSos, 1)}</span>
-                      <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : formatDecimal(oppDefSos, 1)}</span>
+                      <span className={`matchup-reference-tag${sosBadgeClass(oppOffSosRank)}`}>OFF SOS: {oppOffSos === null ? "—" : formatDecimal(oppOffSos, 2)}</span>
+                      <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : formatDecimal(oppDefSos, 2)}</span>
                     </div>
                   </div>
                   {matchupStatGroups.map((stat) => (

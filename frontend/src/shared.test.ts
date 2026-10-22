@@ -13,9 +13,9 @@ import {
 } from "./shared";
 
 describe("points", () => {
-  it("shows one decimal, and an em dash when the score is missing", () => {
-    expect(points(12)).toBe("12.0");
-    expect(points(9.25)).toBe("9.3");
+  it("shows two decimals, and an em dash when the score is missing", () => {
+    expect(points(12)).toBe("12.00");
+    expect(points(9.25)).toBe("9.25");
     expect(points(null)).toBe("—");
   });
 });

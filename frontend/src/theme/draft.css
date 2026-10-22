@@ -128,17 +128,6 @@
   overflow: clip;
 }
 
-/* Boom/bust uses sub-tab tokens (same family as other in-card segmented controls). */
-.boom-bust-toggle {
-  min-height: var(--sub-tab-height);
-  height: var(--sub-tab-height);
-}
-.boom-bust-toggle button {
-  min-height: var(--sub-tab-button-height);
-  height: var(--sub-tab-button-height);
-  font-size: var(--sub-tab-font-size);
-  font-weight: var(--sub-tab-font-weight);
-}
 .bench-section summary,
 .omitted-chart-labels summary,
 .drafted-elsewhere summary { min-height: 44px; }

@@ -1,3 +1,4 @@
+import { formatWhole } from "./lib/format-number";
 const nameSuffixes = new Set(["jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"]);
 
 export type LeagueRosterAsset = {
@@ -203,7 +204,7 @@ export function formatTeamRecord(record: TeamRecord): string {
 export function tradeValueVerdict(giveTotal: number, getTotal: number, partnerName: string): string {
   const margin = Math.abs(getTotal - giveTotal);
   if (margin === 0) return "This trade is even.";
-  const amount = margin.toLocaleString();
+  const amount = formatWhole(margin);
   if (getTotal > giveTotal) return `You win by ${amount}.`;
   return `${partnerName} wins by ${amount}.`;
 }

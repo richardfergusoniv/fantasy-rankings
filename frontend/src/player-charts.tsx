@@ -3,6 +3,7 @@ import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import type { TradeAsset, ValueHistorySeries } from "./dashboard-types";
 import { buildAggregateTradeHistoryData } from "./lib/aggregate-trade-history";
 import { trimValueHistoryToContinuousStart } from "./value-history-domain";
+import { formatWhole } from "./lib/format-number";
 
 export function PlayerValueTrend({ name, history, isLoading }: { name: string; history: ValueHistorySeries | undefined; isLoading: boolean }) {
   const points = trimValueHistoryToContinuousStart(history?.points ?? []);
@@ -18,7 +19,7 @@ export function PlayerValueTrend({ name, history, isLoading }: { name: string; h
     <section className="player-value-trend" aria-label={`${name} FantasyCalc value history`}>
       <div className="trade-stock-heading">
         <span>Value history</span>
-        {change !== null ? <strong className={change > 0 ? "up" : change < 0 ? "down" : "flat"}>{change > 0 ? "+" : ""}{change.toLocaleString()}</strong> : isLoading && !history ? null : <strong className="flat">{points.length} snapshot{points.length === 1 ? "" : "s"}</strong>}
+        {change !== null ? <strong className={change > 0 ? "up" : change < 0 ? "down" : "flat"}>{formatWhole(change, { sign: "exceptZero" })}</strong> : isLoading && !history ? null : <strong className="flat">{points.length} snapshot{points.length === 1 ? "" : "s"}</strong>}
       </div>
       {isLoading && !history ? (
         <div className="loading-shimmer player-value-trend-loading" aria-hidden="true" />
@@ -29,7 +30,7 @@ export function PlayerValueTrend({ name, history, isLoading }: { name: string; h
               <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
               <XAxis dataKey="date" tickFormatter={formatDateTick} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={18} />
               <YAxis domain={["dataMin", "dataMax"]} width={42} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={false} />
-              <Tooltip labelFormatter={(label) => formatDateTick(String(label))} contentStyle={chartTooltipStyle} />
+              <Tooltip labelFormatter={(label) => formatDateTick(String(label))} formatter={(value) => [formatWhole(Number(value)), "Value"]} contentStyle={chartTooltipStyle} />
               <Line type="monotone" dataKey="value" name="Value" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: points.length === 1 ? 3 : 2, fill: "var(--chart-1)" }} activeDot={{ r: 4 }} connectNulls={false} />
             </LineChart>
           </ChartContainer>
@@ -91,7 +92,7 @@ export function AggregateTradeHistory({
                 <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
                 <XAxis dataKey="date" tickFormatter={formatDateTick} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={24} />
                 <YAxis width={48} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={false} />
-                <Tooltip labelFormatter={(label) => formatDateTick(String(label))} formatter={(value, name) => [Number(value).toLocaleString(), name === "give" ? "You give" : "You get"]} contentStyle={chartTooltipStyle} />
+                <Tooltip labelFormatter={(label) => formatDateTick(String(label))} formatter={(value, name) => [formatWhole(Number(value)), name === "give" ? "You give" : "You get"]} contentStyle={chartTooltipStyle} />
                 {hasGive ? <Line type="monotone" dataKey="give" name="give" stroke={giveColor} strokeWidth={giveStrokeWidth} dot={false} connectNulls={false} /> : null}
                 {hasGet ? <Line type="monotone" dataKey="get" name="get" stroke={getColor} strokeWidth={getStrokeWidth} dot={false} connectNulls={false} /> : null}
               </LineChart>

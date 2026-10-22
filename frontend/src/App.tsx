@@ -34,7 +34,7 @@ import {
   shortLeagueName,
   signOutForPersonalData,
 } from "./dashboard-shared";
-import { formatDecimal } from "./lib/format-number";
+import { formatDecimal, formatPoints } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
 import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
 import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
@@ -218,7 +218,7 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
       .map(({ row, edge }) => ({
         key: `adp:${row.format}:${row.playerId ?? row.name}`,
         source: "ADP",
-        label: tickerLabel(row.name, `ADP ${formatDecimal(row.adp, 1)} · ${formatDecimal(edge, 1, { sign: "always" })} vs MFL`),
+        label: tickerLabel(row.name, `ADP ${formatDecimal(row.adp, 2)} · ${formatPoints(edge, { sign: "always" })} vs MFL`),
         quote: null,
         move: edge,
         tone: Math.abs(edge) < 0.05 ? "neutral" : edge > 0 ? "up" : "down",
@@ -235,7 +235,7 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
       <span className={`ticker-source ${item.source === "BREAKING" ? "breaking" : ""}`}>{item.source}</span>
       <span className="ticker-label">{item.label}</span>
       {item.quote ? <strong>{item.quote}</strong> : null}
-      {item.move !== null && Math.abs(item.move) >= 0.05 ? <span className={`ticker-move ${item.tone}`}>{item.move > 0 ? "▲" : "▼"}{formatDecimal(Math.abs(item.move), 1)}</span> : null}
+      {item.move !== null && Math.abs(item.move) >= 0.05 ? <span className={`ticker-move ${item.tone}`}>{item.move > 0 ? "▲" : "▼"}{formatDecimal(Math.abs(item.move), 2)}</span> : null}
     </>
   );
 

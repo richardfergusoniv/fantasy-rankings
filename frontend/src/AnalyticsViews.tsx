@@ -16,7 +16,7 @@ import {
   rollbackSavedChartViewMutation,
   settleSavedChartViewMutation,
 } from "./chart-view-cache";
-import { formatDecimal } from "./lib/format-number";
+import { formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { ChartDialog } from "./chart-dialog";
 import { MatchupTag, SegmentedControl, shortLeagueName } from "./shared";
 import { scatterAxisDomain } from "./scatter-zoom";
@@ -801,9 +801,10 @@ function PercentileCutoffSelect({ axis, value, onChange }: { axis: "X" | "Y"; va
 }
 
 export function metricDisplay(value: number, metric: Metric): string {
-  // Ranks are whole numbers ("3", not "3.00").
-  const decimals = metric.key.endsWith("Rank") || Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2;
-  return `${formatDecimal(value, decimals)}${metric.unit ?? ""}`;
+  if (metric.unit === "%") return formatPercent(value);
+  // Ranks stay whole; analytics values are per-game averages / fractional → two decimals.
+  if (metric.key.endsWith("Rank")) return formatWhole(value);
+  return `${formatDecimal(value, 2)}${metric.unit ?? ""}`;
 }
 
 function ordinalSuffix(value: number): string {
@@ -1087,7 +1088,17 @@ function ScatterPlot({
             tickLine={false}
             axisLine={false}
           />
-          <Tooltip cursor={{ stroke: "var(--dim)", strokeDasharray: "3 3", strokeOpacity: 0.45 }} contentStyle={chartTooltipStyle} />
+          <Tooltip
+            cursor={{ stroke: "var(--dim)", strokeDasharray: "3 3", strokeOpacity: 0.45 }}
+            formatter={(value, name) => {
+              const numeric = Number(value);
+              if (!Number.isFinite(numeric)) return [String(value), name];
+              const label = String(name ?? "");
+              if (label.includes("%")) return [formatPercent(numeric), name];
+              return [formatDecimal(numeric, 2), name];
+            }}
+            contentStyle={chartTooltipStyle}
+          />
           {showQuadrants ? <ReferenceLine x={xCutoff} stroke="var(--hairline)" strokeWidth={1} strokeDasharray="4 8" /> : null}
           {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--hairline)" strokeWidth={1} strokeDasharray="4 8" /> : null}
           <ZAxis range={[dotSize, dotSize]} />
@@ -1214,7 +1225,16 @@ function SnapShareTrendChart({
             axisLine={false}
             label={{ value: "Snap %", angle: -90, position: "insideLeft", fill: "var(--text)", fontSize: 10, fontWeight: 700 }}
           />
-          <Tooltip contentStyle={chartTooltipStyle} />
+          <Tooltip
+            formatter={(value, name) => {
+              const numeric = Number(value);
+              if (!Number.isFinite(numeric)) return [String(value), name];
+              const label = String(name ?? "");
+              if (label.toLowerCase().includes("snap") || label.includes("%")) return [formatPercent(numeric), name];
+              return [formatDecimal(numeric, 2), name];
+            }}
+            contentStyle={chartTooltipStyle}
+          />
           {series.map((item) => (
             <Line key={item.id} type="monotone" dataKey={item.id} name={item.label} stroke={item.color} strokeWidth={2} dot={{ r: 2 }} connectNulls={false} />
           ))}
@@ -1257,7 +1277,7 @@ function FpaHeatmap({
                 key={`${team}-${position}`}
                 style={{ background: fpaHeatColor(cell.rank) }}
               >
-                <strong>{formatDecimal(cell.avg, 1)}</strong>
+                <strong>{formatPoints(cell.avg)}</strong>
               </div>
             );
           }),
@@ -2039,9 +2059,9 @@ function TierCliffPlot({ data }: { data: ChartDatum[] }) {
         const gap = gaps[index] ?? 0;
         return <li key={row.id}>
           <span className="tier-cliff-rank">{Math.round(row.x)}</span>
-          <span className="tier-cliff-player"><strong>{row.name}</strong><small>{row.team} · {formatDecimal(row.y, 1)} projected</small></span>
+          <span className="tier-cliff-player"><strong>{row.name}</strong><small>{row.team} · {formatPoints(row.y)} projected</small></span>
           <span className="tier-cliff-bar" aria-hidden="true"><i style={{ width: `${Math.max(3, (gap / maxGap) * 100)}%` }} /></span>
-          <strong className="tier-cliff-drop">−{formatDecimal(gap, 1)}</strong>
+          <strong className="tier-cliff-drop">−{formatPoints(gap)}</strong>
         </li>;
       })}
     </ol>
@@ -2068,7 +2088,7 @@ function BoomBustRangePlot({ data, entities }: { data: ChartDatum[]; entities: W
             <i className="boom-bust-band" style={{ left: `${left}%`, width: `${width}%` }} />
             <i className="boom-bust-projection" style={{ left: `${projection}%` }} />
           </span>
-          <span className="boom-bust-values"><strong>{formatDecimal(row.x, 1)}<span className="sr-only"> projected points</span></strong><small><span className="sr-only">2026 scoring range </span>{formatDecimal(floor, 1)}–{formatDecimal(ceiling, 1)}</small></span>
+          <span className="boom-bust-values"><strong>{formatPoints(row.x)}<span className="sr-only"> projected points</span></strong><small><span className="sr-only">2026 scoring range </span>{formatPoints(floor)}–{formatPoints(ceiling)}</small></span>
         </li>;
       })}
     </ol>
