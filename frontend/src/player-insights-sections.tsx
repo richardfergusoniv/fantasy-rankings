@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import type { AnalyticsEntity, PlayerSearchResult } from "./dashboard-types";
-import { formatDecimal } from "./lib/format-number";
+import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { TEAM_WEEK_STATS_STALE_MS } from "../../api/_lib/nflverse-team-week-stats";
 import {
   buildPropHistory,
@@ -12,7 +12,7 @@ import {
 } from "../../api/_lib/prop-line-reads";
 
 function formatLine(value: number): string {
-  return Number.isInteger(value) ? String(value) : formatDecimal(value, 1);
+  return Number.isInteger(value) ? String(value) : formatDecimal(value, 2);
 }
 
 function formatOdds(odds: number | null): string {
@@ -109,16 +109,16 @@ export function PlayerExpectedPoints({ entity }: { entity: AnalyticsEntity | und
     <section className="player-expected-section" aria-labelledby="player-expected-heading">
       <div className="section-heading"><h3 id="player-expected-heading">Expected points</h3><span>{weeks.length} games · PPR</span></div>
       <div className="player-advanced-grid">
-        <div><span>Expected / game</span><strong>{formatDecimal(expected, 1)}</strong></div>
-        <div><span>Actual / game</span><strong>{formatDecimal(expected + over, 1)}</strong></div>
-        <div><span>Difference</span><strong>{formatDecimal(over, 1, { sign: "exceptZero" })}</strong></div>
+        <div><span>Expected / game</span><strong>{formatPoints(expected)}</strong></div>
+        <div><span>Actual / game</span><strong>{formatPoints(expected + over)}</strong></div>
+        <div><span>Difference</span><strong>{formatPoints(over, { sign: "exceptZero" })}</strong></div>
       </div>
       {weeks.length > 0 ? (
         <>
           <div
             className="player-expected-chart"
             role="img"
-            aria-label={weeks.map((point) => `Week ${point.week}: expected ${formatDecimal(point.expected, 1)}, actual ${formatDecimal(point.actual, 1)}`).join("; ")}
+            aria-label={weeks.map((point) => `Week ${point.week}: expected ${formatPoints(point.expected)}, actual ${formatPoints(point.actual)}`).join("; ")}
           >
             {weeks.map((point) => (
               <div key={point.week} className="player-expected-week">
@@ -142,15 +142,15 @@ export function PlayerExpectedPoints({ entity }: { entity: AnalyticsEntity | und
 }
 
 const NEXT_GEN_FIELDS: Array<{ key: string; label: string; format: (value: number) => string }> = [
-  { key: "separation", label: "Separation", format: (value) => `${formatDecimal(value, 1)} yd` },
-  { key: "cushion", label: "Cushion", format: (value) => `${formatDecimal(value, 1)} yd` },
-  { key: "yac_over_expected", label: "YAC over expected", format: (value) => formatDecimal(value, 1, { sign: "exceptZero" }) },
-  { key: "intended_air_share", label: "Air-yard share", format: (value) => `${formatDecimal(value, 1)}%` },
+  { key: "separation", label: "Separation", format: (value) => `${formatDecimal(value, 2)} yd` },
+  { key: "cushion", label: "Cushion", format: (value) => `${formatDecimal(value, 2)} yd` },
+  { key: "yac_over_expected", label: "YAC over expected", format: (value) => formatDecimal(value, 2, { sign: "exceptZero" }) },
+  { key: "intended_air_share", label: "Air-yard share", format: (value) => formatPercent(value) },
   { key: "rush_yards_over_expected", label: "Rush yds over exp / carry", format: (value) => formatDecimal(value, 2, { sign: "exceptZero" }) },
-  { key: "stacked_box_rate", label: "Carries vs 8+ box", format: (value) => `${formatDecimal(value, 1)}%` },
+  { key: "stacked_box_rate", label: "Carries vs 8+ box", format: (value) => formatPercent(value) },
   { key: "time_to_throw", label: "Time to throw", format: (value) => `${formatDecimal(value, 2)}s` },
-  { key: "aggressiveness", label: "Aggressive throws", format: (value) => `${formatDecimal(value, 1)}%` },
-  { key: "air_yards_differential", label: "Air-yards differential", format: (value) => formatDecimal(value, 1, { sign: "exceptZero" }) },
+  { key: "aggressiveness", label: "Aggressive throws", format: (value) => formatPercent(value) },
+  { key: "air_yards_differential", label: "Air-yards differential", format: (value) => formatDecimal(value, 2, { sign: "exceptZero" }) },
 ];
 
 /** NFL Next Gen Stats season figures; only players with enough snaps qualify. */
