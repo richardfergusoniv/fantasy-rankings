@@ -389,14 +389,16 @@ export function GameLinesPanel({
     const present = new Set((boardLines ?? []).map((line) => asPropPosition(line.position) ?? "WR"));
     return PROP_POSITIONS.filter((code) => code === "QB" || code === "RB" || code === "WR" || code === "TE" || present.has(code));
   }, [boardLines]);
+  // A position the refreshed board no longer has falls back to All.
+  const activePosition = position === "ALL" || positionOptions.includes(position) ? position : "ALL";
   const statOptions = useMemo(() => {
     if (!boardLines) return PROP_STAT_OPTIONS;
     const present = new Set(boardLines
-      .filter((line) => position === "ALL" || (asPropPosition(line.position) ?? "WR") === position)
+      .filter((line) => activePosition === "ALL" || (asPropPosition(line.position) ?? "WR") === activePosition)
       .map((line) => line.stat));
     return PROP_STAT_OPTIONS.filter((option) => present.has(option.id));
-  }, [boardLines, position]);
-  // A stat the new position has no lines for falls back to All.
+  }, [boardLines, activePosition]);
+  // A stat the board has no lines for at this position falls back to All.
   const activeStatId = statId === "ALL" || statOptions.some((option) => option.id === statId) ? statId : "ALL";
 
   const propRows = useMemo(() => {
@@ -406,7 +408,7 @@ export function GameLinesPanel({
     for (const line of lines) {
       if (!isPropStatId(line.stat)) continue;
       const positionCode = asPropPosition(line.position) ?? "WR";
-      if (position !== "ALL" && positionCode !== position) continue;
+      if (activePosition !== "ALL" && positionCode !== activePosition) continue;
       if (activeStatId !== "ALL" && line.stat !== activeStatId) continue;
 
       const team = line.team ? canonicalNflTeam(line.team) : null;
@@ -461,7 +463,7 @@ export function GameLinesPanel({
     gameTeamFilter,
     opponentIds,
     opponentKeys,
-    position,
+    activePosition,
     propLinesQuery.data?.propLines.lines,
     rosterIds,
     rosterKeys,
@@ -589,8 +591,15 @@ export function GameLinesPanel({
           <div className="monitor-value-chart-controls monitor-props-controls">
             <SegmentedControl
               className="monitor-props-position"
-              value={position}
-              onChange={(value) => setPosition(value)}
+              value={activePosition}
+              onChange={(value) => {
+                setPosition(value);
+                // Switching to a position without the chosen stat clears it, so
+                // switching back doesn't bring the old stat back.
+                const keepsStat = statId === "ALL" || (boardLines ?? []).some((line) =>
+                  line.stat === statId && (value === "ALL" || (asPropPosition(line.position) ?? "WR") === value));
+                if (!keepsStat) setStatId("ALL");
+              }}
               label="Position"
               options={[
                 { value: "ALL" as const, label: "All" },
