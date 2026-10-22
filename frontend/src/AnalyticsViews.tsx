@@ -440,6 +440,68 @@ const defaultWeeklyAxes: Record<BasePosition, [string, string]> = {
   DEF: ["opponentTotal", "projection"],
 };
 
+/** A chart's player group: one position, or FLEX (RB, WR and TE together). */
+type ChartPosition = BasePosition | "FLEX";
+const flexPositions: readonly BasePosition[] = ["RB", "WR", "TE"];
+// Ranks, tier drops and boom/bust ranges are per position, so they don't mix in FLEX.
+const flexExcludedWeeklyKeys = new Set(["leaguePositionRank", "fantasyCalcPositionRank", "tierCliff", "boomBustRange"]);
+
+function chartPositionOptions(validPositions: readonly BasePosition[]): ChartPosition[] {
+  const options: ChartPosition[] = [...validPositions];
+  if (flexPositions.every((item) => validPositions.includes(item))) options.splice(options.indexOf("TE") + 1, 0, "FLEX");
+  return options;
+}
+
+function chartPositionLabel(position: string): string {
+  return position === "DEF" ? "DST" : position;
+}
+
+function inChartPosition(entityPosition: string, position: ChartPosition): boolean {
+  return position === "FLEX" ? (flexPositions as readonly string[]).includes(entityPosition) : entityPosition === position;
+}
+
+/** Metrics every list has, in the first list's order. */
+function sharedMetrics(lists: Metric[][]): Metric[] {
+  const [first = [], ...rest] = lists;
+  return first.filter((metric) => rest.every((list) => list.some((other) => other.key === metric.key)));
+}
+
+function chartAnalyticsMetrics(position: ChartPosition, league: League): Metric[] {
+  return position === "FLEX" ? sharedMetrics(flexPositions.map((item) => analyticsMetricsForLeague(item, league))) : analyticsMetricsForLeague(position, league);
+}
+
+function chartWeeklyMetrics(position: ChartPosition): Metric[] {
+  return position === "FLEX"
+    ? sharedMetrics(flexPositions.map((item) => weeklyMetrics[item])).filter((metric) => !flexExcludedWeeklyKeys.has(metric.key))
+    : weeklyMetrics[position];
+}
+
+function chartAnalyticsPresets(position: ChartPosition): ChartPreset[] {
+  return position === "FLEX" ? sharedSkillPresets : analyticsPresets[position];
+}
+
+function chartWeeklyPresets(position: ChartPosition): ChartPreset[] {
+  return position === "FLEX"
+    ? projectionPresets.filter((preset) => !flexExcludedWeeklyKeys.has(preset.x) && !flexExcludedWeeklyKeys.has(preset.y))
+    : weeklyPresets[position];
+}
+
+function chartAnalyticsAxes(position: ChartPosition): [string, string] {
+  return position === "FLEX" ? ["opportunity", "fantasy_league"] : defaultAnalyticsAxes[position];
+}
+
+function chartWeeklyAxes(position: ChartPosition): [string, string] {
+  return position === "FLEX" ? ["teamTotal", "league"] : defaultWeeklyAxes[position];
+}
+
+/** Saved views store one base position, so a FLEX chart can't be saved; this only fills the type. */
+function savedConfigPosition(position: ChartPosition): BasePosition {
+  return position === "FLEX" ? "RB" : position;
+}
+
+/** What a chart hands to the other dataset's chart when a view from that dataset is picked. */
+type ChartHandoff = { position: ChartPosition; preset?: ChartPreset; savedView?: SavedChartView };
+
 type ChartPickerMode = "blank" | "derived";
 
 type ChartLayout = "page" | "monitor";
@@ -454,13 +516,17 @@ type SavedViewControlsProps = {
   onSelectedSavedViewIdChange: (id: string | null) => void;
   onApplySavedView: (view: SavedChartView) => void;
   onApplyBuiltIn: (preset: ChartPreset) => void;
+  /** The other dataset's built-in views for this position; picking one hands off to that chart. */
+  otherPresets?: ChartPreset[];
+  onSwitchDataset?: (handoff: Omit<ChartHandoff, "position">) => void;
+  canSave?: boolean;
   advancedOpen: boolean;
   onAdvancedOpenChange: (open: boolean) => void;
   children: ReactNode;
   layout?: ChartLayout;
 };
 
-function SavedViewControls({ dataset, presets, validPositions, config, pickerMode, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, advancedOpen, onAdvancedOpenChange, children, layout = "page" }: SavedViewControlsProps) {
+function SavedViewControls({ dataset, presets, validPositions, config, pickerMode, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, otherPresets = [], onSwitchDataset, canSave = true, advancedOpen, onAdvancedOpenChange, children, layout = "page" }: SavedViewControlsProps) {
   const queryClient = useQueryClient();
   const [isNaming, setIsNaming] = useState(false);
   const [name, setName] = useState("");
@@ -475,9 +541,10 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
     staleTime: 60_000,
     retry: false,
   });
-  const views = (viewsQuery.data?.views ?? [])
-    .filter((view) => view.dataset === dataset)
-    .filter((view) => validPositions.includes(view.position));
+  const allViews = (viewsQuery.data?.views ?? [])
+    .filter((view) => validPositions.includes(view.position))
+    .filter((view) => onSwitchDataset || view.dataset === dataset);
+  const views = allViews.filter((view) => view.dataset === dataset);
   const selectedSavedView = views.find((view) => view.id === selectedSavedViewId);
   const matchingPreset = presets.find((preset) => preset.x === config.xMetric && preset.y === config.yMetric);
   const pickerValue = pickerMode === "blank"
@@ -485,7 +552,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
     : selectedSavedView
       ? `saved:${selectedSavedView.id}`
       : matchingPreset
-        ? `builtin:${matchingPreset.x}|${matchingPreset.y}`
+        ? `builtin:${dataset}:${matchingPreset.x}|${matchingPreset.y}`
         : "custom";
 
   const saveMutation = useMutation({
@@ -587,21 +654,38 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
         setMessage("");
         if (!nextValue) return;
         if (nextValue.startsWith("saved:")) {
-          const view = views.find((item) => `saved:${item.id}` === nextValue);
-          if (view) onApplySavedView(view);
+          const view = allViews.find((item) => `saved:${item.id}` === nextValue);
+          if (!view) return;
+          if (view.dataset === dataset) onApplySavedView(view);
+          else onSwitchDataset?.({ savedView: view });
           return;
         }
         if (nextValue.startsWith("builtin:")) {
-          const preset = presets.find((item) => `builtin:${item.x}|${item.y}` === nextValue);
-          if (preset) onApplyBuiltIn(preset);
+          const [, presetDataset, axes] = nextValue.split(":");
+          const list = presetDataset === dataset ? presets : otherPresets;
+          const preset = list.find((item) => `${item.x}|${item.y}` === axes);
+          if (!preset) return;
+          if (presetDataset === dataset) onApplyBuiltIn(preset);
+          else onSwitchDataset?.({ preset });
         }
       }}
     >
       <option value="" disabled hidden>Choose a view</option>
-      <optgroup label="Built-in views">
-        {presets.map((preset) => <option key={`${preset.x}-${preset.y}`} value={`builtin:${preset.x}|${preset.y}`}>{preset.label}</option>)}
-      </optgroup>
-      {views.length > 0 ? <optgroup label="My saved views">{views.map((view) => <option key={view.id} value={`saved:${view.id}`}>{view.name}</option>)}</optgroup> : null}
+      {onSwitchDataset
+        ? ([["projections", "This week"], ["advanced", "Season"]] as const).map(([groupDataset, groupLabel]) => {
+          const groupPresets = groupDataset === dataset ? presets : otherPresets;
+          return groupPresets.length > 0 ? (
+            <optgroup key={groupDataset} label={groupLabel}>
+              {groupPresets.map((preset) => <option key={`${preset.x}-${preset.y}`} value={`builtin:${groupDataset}:${preset.x}|${preset.y}`}>{preset.label}</option>)}
+            </optgroup>
+          ) : null;
+        })
+        : (
+          <optgroup label="Built-in views">
+            {presets.map((preset) => <option key={`${preset.x}-${preset.y}`} value={`builtin:${dataset}:${preset.x}|${preset.y}`}>{preset.label}</option>)}
+          </optgroup>
+        )}
+      {allViews.length > 0 ? <optgroup label="My saved views">{allViews.map((view) => <option key={view.id} value={`saved:${view.id}`}>{view.name}</option>)}</optgroup> : null}
       {pickerValue === "custom" ? <option value="custom" disabled hidden>Custom</option> : null}
     </select>
   );
@@ -647,10 +731,10 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
         </DialogHeader>
         <DialogCloseButton label="Close advanced chart controls" />
         <div className="saved-view-actions">
-          <Button type="button" variant="outline" size="sm" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessageIsError(false); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</Button>
+          {canSave ? <Button type="button" variant="outline" size="sm" className="saved-view-save-trigger" onClick={() => { setIsNaming((open) => !open); setMessageIsError(false); setMessage(""); }}>{isNaming ? "Cancel" : "Save current view"}</Button> : null}
           {selectedSavedView ? <button type="button" className="saved-view-delete" onClick={() => setPendingDelete(selectedSavedView)} disabled={deleteMutation.isPending}>Delete “{selectedSavedView.name}”</button> : null}
         </div>
-        {isNaming ? (
+        {isNaming && canSave ? (
           <form className="saved-view-form" onSubmit={submitName}>
             <label htmlFor={`${dataset}-saved-view-name`}>View name</label>
             <div>
@@ -1414,9 +1498,9 @@ export function AdvancedStats({ dashboard, league, selectedPlayer, onSelectedPla
   );
 }
 
-function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advanced", onDatasetChange, playerLink, focusPlayer }: { dashboard: Dashboard; league: League; layout?: ChartLayout; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; playerLink?: PlayerLinkResolver; focusPlayer?: AnalyticsFocusPlayer | null }) {
+function AnalyticsChart({ dashboard, league, layout = "page", initialView = null, onSwitchDataset, playerLink, focusPlayer }: { dashboard: Dashboard; league: League; layout?: ChartLayout; initialView?: ChartHandoff | null; onSwitchDataset?: (dataset: ToolDataset, handoff: ChartHandoff) => void; playerLink?: PlayerLinkResolver; focusPlayer?: AnalyticsFocusPlayer | null }) {
   const monitorDefaultPreset = sharedSkillPresets.find((preset) => preset.label === "Usage vs Production") ?? sharedSkillPresets[0]!;
-  const [position, setPosition] = useState<BasePosition>("RB");
+  const [position, setPosition] = useState<ChartPosition>("RB");
   const [window, setWindow] = useState<AnalyticsWindow>("season");
   const [xMetric, setXMetric] = useState(layout === "monitor" ? monitorDefaultPreset.x : defaultAnalyticsAxes.RB[0]);
   const [yMetric, setYMetric] = useState(layout === "monitor" ? monitorDefaultPreset.y : defaultAnalyticsAxes.RB[1]);
@@ -1440,13 +1524,14 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
     : undefined;
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
-  const metrics = analyticsMetricsForLeague(position, league);
-  const presets = analyticsPresets[position];
+  const metrics = chartAnalyticsMetrics(position, league);
+  const presets = chartAnalyticsPresets(position);
+  const positionOptions = chartPositionOptions(validPositions);
   const selectedX = metrics.find((metric) => metric.key === xMetric) ?? metrics[0];
   const selectedY = metrics.find((metric) => metric.key === yMetric) ?? metrics[1] ?? metrics[0];
   const config: SavedChartConfig = {
     dataset: "advanced",
-    position,
+    position: savedConfigPosition(position),
     xMetric: chartKind === "scatter" ? (selectedX?.key ?? xMetric) : xMetric,
     yMetric: chartKind === "scatter" ? (selectedY?.key ?? yMetric) : yMetric,
     window,
@@ -1460,9 +1545,9 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
     setAdvancedOpen(false);
   }
 
-  function choosePosition(nextPosition: BasePosition) {
+  function choosePosition(nextPosition: ChartPosition) {
     if (layout === "monitor") {
-      const nextPresets = analyticsPresets[nextPosition];
+      const nextPresets = chartAnalyticsPresets(nextPosition);
       const preferred = nextPresets.find((preset) => preset.label === "Usage vs Production") ?? nextPresets[0];
       setPosition(nextPosition);
       if (preferred) {
@@ -1472,7 +1557,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
         setSelectedSavedViewId(null);
         setPickerMode("derived");
       } else {
-        const [nextX, nextY] = defaultAnalyticsAxes[nextPosition];
+        const [nextX, nextY] = chartAnalyticsAxes(nextPosition);
         setXMetric(nextX);
         setYMetric(nextY);
         setChartKind("scatter");
@@ -1481,7 +1566,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
       }
       return;
     }
-    const [nextX, nextY] = defaultAnalyticsAxes[nextPosition];
+    const [nextX, nextY] = chartAnalyticsAxes(nextPosition);
     setPosition(nextPosition);
     setXMetric(nextX);
     setYMetric(nextY);
@@ -1495,9 +1580,9 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
   // otherwise the first valid position — with that position's default axes and
   // no selected saved view.
   useEffect(() => {
-    if (validPositions.includes(position)) return;
+    if (positionOptions.includes(position)) return;
     choosePosition(validPositions.includes("RB") ? "RB" : validPositions[0] ?? "QB");
-  }, [validPositions, position, choosePosition]);
+  }, [validPositions, positionOptions, position, choosePosition]);
 
   function applySavedView(view: SavedChartView) {
     if (view.dataset !== "advanced") return;
@@ -1526,10 +1611,24 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
     closeAdvancedControls();
   }
 
+  // Opened from the other dataset's chart: keep its position and show the view picked there.
+  const appliedHandoff = useRef(false);
+  useEffect(() => {
+    if (!initialView || appliedHandoff.current) return;
+    appliedHandoff.current = true;
+    if (initialView.savedView) {
+      applySavedView(initialView.savedView);
+      return;
+    }
+    if (positionOptions.includes(initialView.position)) choosePosition(initialView.position);
+    if (initialView.preset) applyBuiltInPreset(initialView.preset);
+  }, [initialView, positionOptions, applySavedView, choosePosition, applyBuiltInPreset]);
+  const isTeamChart = chartKind === "heatmap" || chartKind === "team-scatter";
+
   const chartData = useMemo(() => {
     if (chartKind !== "scatter" || !selectedX || !selectedY) return [];
     const mapped = dashboard.analytics.entities
-      .filter((entity) => entity.position === position)
+      .filter((entity) => inChartPosition(entity.position, position))
       .flatMap((entity): ChartDatum[] => {
         const source = window === "season" ? entity.season : entity.rolling17;
         const x = metricSourceValue(source, selectedX);
@@ -1557,7 +1656,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
   const snapTrendSeries = useMemo(() => {
     if (chartKind !== "snap-trend") return [];
     const mapped = dashboard.analytics.entities
-      .filter((entity) => entity.position === position && (entity.weeklySnaps?.length ?? 0) > 0)
+      .filter((entity) => inChartPosition(entity.position, position) && (entity.weeklySnaps?.length ?? 0) > 0)
       .map((entity) => ({
         id: entity.id,
         name: entity.name,
@@ -1651,7 +1750,9 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
     setIsChartOpen(true);
   }, [focusPlayer, layout, validPositions]);
 
-  if (!dashboard.analytics.entities.length || !selectedX || !selectedY) {
+  // The monitor keeps its toolbar with no stats, so This week views stay reachable.
+  const hasStats = dashboard.analytics.entities.length > 0;
+  if (!selectedX || !selectedY || (!hasStats && layout !== "monitor" && !isTeamChart)) {
     return (
       <section className={layout === "monitor" ? "monitor-builder-chart-empty" : "analytics-view"}>
         <div className="analytics-empty">
@@ -1666,7 +1767,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
     <>
       {chartKind === "snap-trend" ? (
         snapTrendSeries.length > 0
-          ? <SnapShareTrendChart series={snapTrendSeries} ariaLabel={`${position} weekly offensive snap share`} />
+          ? <SnapShareTrendChart series={snapTrendSeries} ariaLabel={`${chartPositionLabel(position)} weekly offensive snap share`} />
           : <div className="analytics-empty"><strong>No snap share data yet.</strong></div>
       ) : null}
       {chartKind === "heatmap" ? (
@@ -1694,7 +1795,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
             showQuadrants={showQuadrants}
             xCutoff={xCutoff}
             yCutoff={yCutoff}
-            ariaLabel={`${position === "DEF" ? "DST" : position} scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
+            ariaLabel={`${chartPositionLabel(position)} scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
             compact={!showLabels && layout === "monitor"}
             playerLink={chartPlayerLink}
             focusRequestId={showLabels ? focusEntityId : null}
@@ -1717,6 +1818,9 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
       onSelectedSavedViewIdChange={setSelectedSavedViewId}
       onApplySavedView={applySavedView}
       onApplyBuiltIn={applyBuiltInPreset}
+      otherPresets={chartWeeklyPresets(position)}
+      onSwitchDataset={onSwitchDataset ? (handoff) => onSwitchDataset("projections", { ...handoff, position }) : undefined}
+      canSave={position !== "FLEX"}
       advancedOpen={advancedOpen}
       onAdvancedOpenChange={setAdvancedOpen}
       layout={layout}
@@ -1743,26 +1847,26 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
     return (
       <div className="monitor-builder-chart">
         <div className="monitor-value-chart-controls">
-          {onDatasetChange ? (
+          {/* Team charts plot every team, so the position row would do nothing. */}
+          {isTeamChart ? null : (
             <SegmentedControl
-              className="monitor-chart-dataset"
-              value={dataset}
-              onChange={onDatasetChange}
-              label="Chart dataset"
-              options={[{ value: "advanced", label: "Advanced Stats" }, { value: "projections", label: "Projections" }]}
+              className="monitor-chart-position"
+              value={position}
+              onChange={choosePosition}
+              label="Chart position"
+              options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))}
             />
-          ) : null}
-          <SegmentedControl
-            className="monitor-chart-position"
-            value={position}
-            onChange={choosePosition}
-            label="Chart position"
-            options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
-          />
+          )}
           {advancedControls}
         </div>
         {pickerMode === "blank" ? (
           <p className="monitor-empty">Choose a view</p>
+        ) : !hasStats && !isTeamChart ? (
+          // Team charts read matchup and team usage data, not player stats, and have their own empty states.
+          <div className="analytics-empty">
+            <strong>No advanced stats yet.</strong>
+            <span>Refresh after nflverse publishes the next weekly file.</span>
+          </div>
         ) : (
           <div
             className="monitor-value-chart monitor-chart-expand-target"
@@ -1796,13 +1900,15 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
 
   return (
     <section className="analytics-view">
-      <SegmentedControl
-        className="analytics-position-tabs"
-        value={position}
-        onChange={choosePosition}
-        label="Chart position"
-        options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
-      />
+      {isTeamChart ? null : (
+        <SegmentedControl
+          className="analytics-position-tabs"
+          value={position}
+          onChange={choosePosition}
+          label="Chart position"
+          options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))}
+        />
+      )}
 
       {advancedControls}
 
@@ -1810,7 +1916,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
       <ChartDialog
         isOpen={isChartOpen}
         onClose={() => setIsChartOpen(false)}
-        title={chartKind === "heatmap" ? "FPA" : chartKind === "team-scatter" ? "Pace x PROE" : chartKind === "snap-trend" ? "Snap share" : `${position === "DEF" ? "DST" : position} field`}
+        title={chartKind === "heatmap" ? "FPA" : chartKind === "team-scatter" ? "Pace x PROE" : chartKind === "snap-trend" ? "Snap share" : `${chartPositionLabel(position)} field`}
         subtitle={chartKind === "scatter" ? `${window === "season" ? `${dashboard.season} games so far` : "Each player’s latest 17 games"} · per-game averages` : undefined}
         count={chartCount}
         countLabel={chartKind === "heatmap" || chartKind === "team-scatter" ? "teams" : position === "DEF" ? "teams" : "players"}
@@ -1969,12 +2075,12 @@ function BoomBustRangePlot({ data, entities }: { data: ChartDatum[]; entities: W
   );
 }
 
-function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onSelectedPlayerChange, layout = "page", dataset = "projections", onDatasetChange, playerLink }: { dashboard: Dashboard; league: League; view: "charts" | "percentiles"; selectedPlayer?: PlayerSelection | null; onSelectedPlayerChange?: (player: PlayerSelection | null) => void; layout?: ChartLayout; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; playerLink?: PlayerLinkResolver }) {
+function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onSelectedPlayerChange, layout = "page", initialView = null, onSwitchDataset, playerLink }: { dashboard: Dashboard; league: League; view: "charts" | "percentiles"; selectedPlayer?: PlayerSelection | null; onSelectedPlayerChange?: (player: PlayerSelection | null) => void; layout?: ChartLayout; initialView?: ChartHandoff | null; onSwitchDataset?: (dataset: ToolDataset, handoff: ChartHandoff) => void; playerLink?: PlayerLinkResolver }) {
   const entities = useMemo(() => buildWeeklyEntities(dashboard, league), [dashboard, league.id]);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const [playerQuery, setPlayerQuery] = useState("");
   const monitorDefaultPreset = projectionPresets[0]!;
-  const [position, setPosition] = useState<BasePosition>("RB");
+  const [position, setPosition] = useState<ChartPosition>("RB");
   const [xMetric, setXMetric] = useState(layout === "monitor" ? monitorDefaultPreset.x : defaultWeeklyAxes.RB[0]);
   const [yMetric, setYMetric] = useState(layout === "monitor" ? monitorDefaultPreset.y : defaultWeeklyAxes.RB[1]);
   const [plotLimit, setPlotLimit] = useState<PlotLimit>("40");
@@ -2028,21 +2134,22 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
     }).sort((a, b) => b.percentile - a.percentile || a.metricIndex - b.metricIndex);
   }, [entities, selected]);
 
-  const metrics = weeklyMetrics[position];
-  const presets = weeklyPresets[position];
+  const metrics = chartWeeklyMetrics(position);
+  const presets = chartWeeklyPresets(position);
+  const positionOptions = chartPositionOptions(validPositions);
   const selectedX = metrics.find((metric) => metric.key === xMetric) ?? metrics[0];
   const selectedY = metrics.find((metric) => metric.key === yMetric) ?? metrics[1] ?? metrics[0];
   const isTierCliffView = selectedX?.key === "leaguePositionRank" && selectedY?.key === "league";
   const isBoomBustView = selectedX?.key === "league" && selectedY?.key === "boomBustRange";
   const boomBustPlayerIds = useMemo(() => entities
-    .filter((entity) => entity.position === position && typeof entity.values.league === "number")
+    .filter((entity) => inChartPosition(entity.position, position) && typeof entity.values.league === "number")
     .sort((a, b) => (b.values.league ?? 0) - (a.values.league ?? 0))
     .slice(0, 24)
     .map((entity) => entity.playerId), [entities, position]);
   const boomBustRangesQuery = useQuery({
     queryKey: ["projection-boom-bust-ranges", league.id, position, boomBustPlayerIds],
     queryFn: () => api.getBoomBustRanges({ leagueId: league.id, position: position as "QB" | "RB" | "WR" | "TE", playerIds: boomBustPlayerIds }),
-    enabled: view === "charts" && isBoomBustView && position !== "K" && position !== "DEF" && boomBustPlayerIds.length > 0,
+    enabled: view === "charts" && isBoomBustView && position !== "K" && position !== "DEF" && position !== "FLEX" && boomBustPlayerIds.length > 0,
     staleTime: 30 * 60 * 1000,
     retry: false,
   });
@@ -2057,7 +2164,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   }, [boomBustRangesQuery.data, entities]);
   const config: SavedChartConfig = {
     dataset: "projections",
-    position,
+    position: savedConfigPosition(position),
     xMetric: selectedX?.key ?? xMetric,
     yMetric: selectedY?.key ?? yMetric,
     window: "season",
@@ -2071,9 +2178,9 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
     setAdvancedOpen(false);
   }
 
-  function choosePosition(nextPosition: BasePosition) {
+  function choosePosition(nextPosition: ChartPosition) {
     if (layout === "monitor") {
-      const nextPresets = weeklyPresets[nextPosition];
+      const nextPresets = chartWeeklyPresets(nextPosition);
       const preferred = nextPresets[0];
       setPosition(nextPosition);
       if (preferred) {
@@ -2082,7 +2189,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
         setSelectedSavedViewId(null);
         setPickerMode("derived");
       } else {
-        const [nextX, nextY] = defaultWeeklyAxes[nextPosition];
+        const [nextX, nextY] = chartWeeklyAxes(nextPosition);
         setXMetric(nextX);
         setYMetric(nextY);
         setSelectedSavedViewId(null);
@@ -2090,7 +2197,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
       }
       return;
     }
-    const [nextX, nextY] = defaultWeeklyAxes[nextPosition];
+    const [nextX, nextY] = chartWeeklyAxes(nextPosition);
     setPosition(nextPosition);
     setXMetric(nextX);
     setYMetric(nextY);
@@ -2102,9 +2209,9 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   // to RB when valid, otherwise the first valid position — with that position's
   // default axes and no selected saved view.
   useEffect(() => {
-    if (validPositions.includes(position)) return;
+    if (positionOptions.includes(position)) return;
     choosePosition(validPositions.includes("RB") ? "RB" : validPositions[0] ?? "QB");
-  }, [validPositions, position, choosePosition]);
+  }, [validPositions, positionOptions, position, choosePosition]);
 
   function applySavedView(view: SavedChartView) {
     if (view.dataset !== "projections") return;
@@ -2121,10 +2228,31 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
     setSelectedSavedViewId(view.id);
     setPickerMode("derived");
   }
+
+  function applyBuiltInPreset(preset: ChartPreset) {
+    setXMetric(preset.x);
+    setYMetric(preset.y);
+    setSelectedSavedViewId(null);
+    setPickerMode("derived");
+    closeAdvancedControls();
+  }
+
+  // Opened from the other dataset's chart: keep its position and show the view picked there.
+  const appliedHandoff = useRef(false);
+  useEffect(() => {
+    if (!initialView || appliedHandoff.current) return;
+    appliedHandoff.current = true;
+    if (initialView.savedView) {
+      applySavedView(initialView.savedView);
+      return;
+    }
+    if (positionOptions.includes(initialView.position)) choosePosition(initialView.position);
+    if (initialView.preset) applyBuiltInPreset(initialView.preset);
+  }, [initialView, positionOptions, applySavedView, choosePosition, applyBuiltInPreset]);
   const chartData = useMemo(() => {
     if (!selectedX || !selectedY) return [];
     const mapped = chartEntities
-      .filter((entity) => entity.position === position)
+      .filter((entity) => inChartPosition(entity.position, position))
       .flatMap((entity): ChartDatum[] => {
         const x = entity.values[selectedX.key];
         const y = entity.values[selectedY.key];
@@ -2163,7 +2291,8 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   const labeledIds = new Set(labelData.map((row) => row.id));
   const omittedNames = chartData.filter((row) => !labeledIds.has(row.id)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
 
-  if (!entities.length || !selectedX || !selectedY) {
+  const hasProjections = entities.length > 0;
+  if (!selectedX || !selectedY || (!hasProjections && layout !== "monitor")) {
     return <section className="weekly-projections-view"><div className="analytics-empty"><strong>No weekly projections yet.</strong><span>Refresh to check the latest Vegas lines and nflverse usage data.</span></div></section>;
   }
 
@@ -2264,7 +2393,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
               showQuadrants={showQuadrants}
               xCutoff={xCutoff}
               yCutoff={yCutoff}
-              ariaLabel={`${position === "DEF" ? "DST" : position} weekly projection scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
+              ariaLabel={`${chartPositionLabel(position)} weekly projection scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
               compact={!showLabels && layout === "monitor"}
               playerLink={chartPlayerLink}
             />
@@ -2283,7 +2412,10 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
             selectedSavedViewId={selectedSavedViewId}
             onSelectedSavedViewIdChange={setSelectedSavedViewId}
             onApplySavedView={applySavedView}
-            onApplyBuiltIn={(preset) => { setXMetric(preset.x); setYMetric(preset.y); setSelectedSavedViewId(null); setPickerMode("derived"); closeAdvancedControls(); }}
+            onApplyBuiltIn={applyBuiltInPreset}
+            otherPresets={chartAnalyticsPresets(position)}
+            onSwitchDataset={onSwitchDataset ? (handoff) => onSwitchDataset("advanced", { ...handoff, position }) : undefined}
+            canSave={position !== "FLEX"}
             advancedOpen={advancedOpen}
             onAdvancedOpenChange={setAdvancedOpen}
             layout={layout}
@@ -2303,26 +2435,19 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
           return (
             <div className="monitor-builder-chart">
               <div className="monitor-value-chart-controls">
-                {onDatasetChange ? (
-                  <SegmentedControl
-                    className="monitor-chart-dataset"
-                    value={dataset}
-                    onChange={onDatasetChange}
-                    label="Chart dataset"
-                    options={[{ value: "advanced", label: "Advanced Stats" }, { value: "projections", label: "Projections" }]}
-                  />
-                ) : null}
                 <SegmentedControl
                   className="monitor-chart-position"
                   value={position}
                   onChange={choosePosition}
                   label="Weekly chart position"
-                  options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
+                  options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))}
                 />
                 {weeklyControls}
               </div>
               {pickerMode === "blank" ? (
                 <p className="monitor-empty">Choose a view</p>
+              ) : !hasProjections ? (
+                <div className="analytics-empty"><strong>No weekly projections yet.</strong><span>Refresh to check the latest Vegas lines and nflverse usage data.</span></div>
               ) : (
                 <div
                   className="monitor-value-chart monitor-chart-expand-target"
@@ -2356,13 +2481,13 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
 
         return (
           <>
-            <SegmentedControl className="analytics-position-tabs" value={position} onChange={choosePosition} label="Weekly chart position" options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))} />
+            <SegmentedControl className="analytics-position-tabs" value={position} onChange={choosePosition} label="Weekly chart position" options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))} />
             {weeklyControls}
             <button type="button" className="chart-open-button" disabled={pickerMode === "blank"} aria-disabled={pickerMode === "blank"} onClick={() => { if (pickerMode !== "blank") setIsChartOpen(true); }}>View chart</button>
             <ChartDialog
               isOpen={isChartOpen}
               onClose={() => setIsChartOpen(false)}
-              title={`${position === "DEF" ? "DST" : position} field`}
+              title={`${chartPositionLabel(position)} field`}
               subtitle={`Week ${dashboard.week} projections`}
               count={chartData.length}
               countLabel={position === "DEF" ? "teams" : "players"}
@@ -2377,14 +2502,29 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
 }
 
 export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange, playerLink, focusPlayer }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout; playerLink?: PlayerLinkResolver; focusPlayer?: AnalyticsFocusPlayer | null }) {
+  // One Saved view list covers both datasets; picking a view from the other one
+  // switches charts and hands over the position and the view.
+  const [handoff, setHandoff] = useState<ChartHandoff | null>(null);
+  // The new chart reads the handoff as it mounts (child effects run first), so clear
+  // it after any dataset change; a later switch, such as a player's Advanced stats
+  // link, then can't replay it.
+  useEffect(() => {
+    setHandoff(null);
+  }, [dataset]);
+  const switchDataset = onDatasetChange
+    ? (next: ToolDataset, nextHandoff: ChartHandoff) => {
+      setHandoff(nextHandoff);
+      onDatasetChange(next);
+    }
+    : undefined;
   return (
     <section className="monitor-section monitor-builder-chart-panel">
       <header className="sr-only">
         <h2>Analytics</h2>
       </header>
       {dataset === "advanced"
-        ? <AnalyticsChart dashboard={dashboard} league={league} layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} playerLink={playerLink} focusPlayer={focusPlayer} />
-        : <WeeklyProjections dashboard={dashboard} league={league} view="charts" layout="monitor" dataset={dataset} onDatasetChange={onDatasetChange} playerLink={playerLink} />}
+        ? <AnalyticsChart dashboard={dashboard} league={league} layout="monitor" initialView={handoff} onSwitchDataset={switchDataset} playerLink={playerLink} focusPlayer={focusPlayer} />
+        : <WeeklyProjections dashboard={dashboard} league={league} view="charts" layout="monitor" initialView={handoff} onSwitchDataset={switchDataset} playerLink={playerLink} />}
     </section>
   );
 }
