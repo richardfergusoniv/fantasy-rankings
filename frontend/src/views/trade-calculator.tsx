@@ -288,6 +288,8 @@ export function TradeValueDialog({
   title = "Trade value",
   subtitle,
   powerRankingsAfter,
+  /** YYYY-MM-DD; historical trades pin the graph to bar totals on this day. */
+  valueAnchorDate = null,
 }: {
   give: TradeAsset[];
   get: TradeAsset[];
@@ -301,6 +303,7 @@ export function TradeValueDialog({
   getLabel?: string;
   title?: string;
   subtitle?: ReactNode;
+  valueAnchorDate?: string | null;
 }) {
   const giveTotal = tradeTotal(give);
   const getTotal = tradeTotal(get);
@@ -397,6 +400,7 @@ export function TradeValueDialog({
             get={get}
             historyByPlayerId={historyByPlayerId}
             isLoading={historyRequestIds.length > 0 && historyQuery.isPending}
+            anchorDate={valueAnchorDate}
             giveColor={giveColor}
             getColor={getColor}
             giveStrokeWidth={giveStrokeWidth}
@@ -869,6 +873,7 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
           subtitle={<>Week {selectedTrade.week}, {selectedTrade.season} · <HistoricalTeamMatchup trade={selectedTrade} league={league} /></>}
           formatKey={league.seasonLongFormat.key}
           marketAssets={formatAssets}
+          valueAnchorDate={selectedTrade.createdAt.slice(0, 10)}
           onClose={() => setSelectedTradeId(null)}
         />
       ) : null}
