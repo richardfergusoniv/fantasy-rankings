@@ -19,6 +19,7 @@ import type { DraftPosition, DraftRoom } from "../dashboard-url";
 import { SegmentedControl } from "../shared";
 import { markDraftPlayerTaken, undoDraftPlayerTaken } from "../undo";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
+import { formatWhole } from "../lib/format-number";
 
 type DraftRow = DraftCenterData["adp"][number] & {
   adpSource: "ffc" | "fantasycalc" | "projection";
@@ -448,7 +449,7 @@ export function DraftCenter({
               {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
             </button>
             <span><span className="sr-only">Position </span>{row.position === "DEF" ? "DST" : row.position}</span>
-            <span><strong>{isSpecialist ? <><span className="sr-only">Weekly projection </span>{formatProjectionPoints(row.weeklyProjection, row.projectionSource)}</> : row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{row.marketValue.toLocaleString()}</>}</strong></span>
+            <span><strong>{isSpecialist ? <><span className="sr-only">Weekly projection </span>{formatProjectionPoints(row.weeklyProjection, row.projectionSource)}</> : row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{formatWhole(row.marketValue)}</>}</strong></span>
             <span className="draft-row-actions">
               <button type="button" className="draft-icon-button" disabled={!row.playerId} onClick={() => row.playerId && addToMyTeam(row.playerId)} aria-label={`Add ${row.name} to my team`} title="Add to my team"><Plus aria-hidden="true" /></button>
               {liveDraft ? null : <button type="button" className="draft-icon-button draft-taken-button" disabled={!row.playerId} onClick={() => row.playerId && markTaken(row.playerId)} aria-label={`Drafted by another team, ${row.name}`} title="Drafted by another team"><UserX aria-hidden="true" /></button>}
@@ -472,6 +473,7 @@ export function DraftCenter({
     <section className="draft-center">
       <h2 className="sr-only">Draft Room</h2>
       <SegmentedControl
+        className="page-tab-control"
         value={mode}
         onChange={(value) => publishDraftFilters({ room: value })}
         label="Draft room view"

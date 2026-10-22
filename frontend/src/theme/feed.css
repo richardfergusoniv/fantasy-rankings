@@ -149,5 +149,4 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .trade-grade-grid > div { border-right: 1px solid var(--hairline); }
   .trade-grade-grid > div:last-child { border-right: 0; }
   .power-position-values { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
-  .position-tabs button { font-size: var(--sub-tab-font-size); font-weight: var(--sub-tab-font-weight); }
 }

@@ -1,9 +1,14 @@
 /**
- * Locale-aware display for scores, projections, and percentages.
+ * Locale-aware display for scores, projections, percentages, and whole counts.
  *
  * Digits are rounded with `toFixed` first so the decimal places stay the same
  * as the previous display. `Intl.NumberFormat` then applies grouping and the
  * locale's separators and signs.
+ *
+ * Display rules:
+ * - Fantasy points / projections / fractional stats: exactly 2 decimals
+ * - Percentages (0–100 scale): nearest tenth with a "%" suffix
+ * - Inherently whole values (trade/dynasty value, ranks, counts): no decimals
  *
  * Percentages in this app are already on a 0–100 scale, so the helper appends
  * "%" instead of using `style: "percent"` (which would multiply by 100).
@@ -60,9 +65,10 @@ export function formatDecimal(value: number, decimals: number, options: FormatDe
   return formatterFor(options.locale, decimals, signDisplayFor(sign, magnitude === 0)).format(signed);
 }
 
-export function formatPoints(value: number | null, decimals = 1, options?: FormatDecimalOptions): string {
+/** Fantasy points, projections, scores, averages, and other fractional display values. */
+export function formatPoints(value: number | null, options?: FormatDecimalOptions): string {
   if (value === null) return "—";
-  return formatDecimal(value, decimals, options);
+  return formatDecimal(value, 2, options);
 }
 
 /** A 0–100 percentage with exactly one decimal, such as 68.0%. */
@@ -70,7 +76,16 @@ export function formatPercent(value: number, options?: FormatDecimalOptions): st
   return `${formatDecimal(value, 1, options)}%`;
 }
 
-/** A 0–100 percentage rounded to a whole number, such as 42%. */
+/**
+ * Inherently whole-number display (trade/dynasty value, ranks, snaps, yards, etc.).
+ * Rounds to the nearest integer and keeps thousands separators.
+ */
+export function formatWhole(value: number | null, options?: FormatDecimalOptions): string {
+  if (value === null) return "—";
+  if (!Number.isFinite(value)) return String(value);
+  return formatDecimal(Math.round(value), 0, options);
+}
+
 /** Compact count for market-sentiment figures: 950 → "950", 234135 → "234K", 1200000 → "1.2M". */
 export function formatCompactCount(value: number): string {
   if (value < 1000) return String(Math.round(value));
@@ -78,6 +93,7 @@ export function formatCompactCount(value: number): string {
   return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
 }
 
+/** @deprecated Prefer formatPercent — percentages display to the nearest tenth. */
 export function formatWholePercent(value: number, options?: FormatDecimalOptions): string {
   return `${formatDecimal(value, 0, options)}%`;
 }
