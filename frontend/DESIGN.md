@@ -25,7 +25,7 @@ Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-bod
 ## Tools
 
 - Each Tools view (Game lines, Team stats, Pricing, Analytics) opens with one toolbar of pill controls (`.monitor-value-chart-field`: caption and value inside one 44px control) that wraps on a phone. The sub-tab names the view, so the view's own heading is screen-reader only.
-- Team stats is a usage grid (players by weeks). Cells tint on one blue scale (`--chart-5`, capped so text stays readable): by snap % for snaps, otherwise by share of that week's group total, scaled to the largest share in the grid.
+- Team stats is a usage grid (players by weeks) that answers how the team splits the work: after the name comes each player's season Share of the group total (count stats; snaps show snap % instead), then the weeks and Avg. Cells tint on one blue scale (`--chart-5`, capped so text stays readable): by snap % for snaps, otherwise by share of that week's group total, scaled to the largest share in the grid.
 - Summary before detail: Game lines opens with the week's slate and the picked game's board, Pricing with the latest value and its 30-day move. Charts and tables sit on one `--card` surface panel each.
 
 ## Rules

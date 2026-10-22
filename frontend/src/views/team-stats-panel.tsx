@@ -172,12 +172,14 @@ export function TeamStatsPanel({
   // would otherwise leak in (CodeRabbit, PR #129). Rows sort by this average.
   const gridRows = useMemo(() => rows.map((row) => {
     const completedCells = row.weeks.filter((cell) => cell.week < week);
+    const completedTotal = completedCells.reduce((sum, cell) => sum + cell.value, 0);
     const value = isSnaps
       ? completedCells.reduce((sum, cell) => sum + (cell.percent ?? 0), 0) / playedWeeks
-      : completedCells.reduce((sum, cell) => sum + cell.value, 0) / playedWeeks;
+      : completedTotal / playedWeeks;
     return {
       row,
       average: value,
+      completedTotal,
       averageLabel: isSnaps ? formatTeamStatsPercent(value) : formatTeamStatsAverage(value),
       rostered: isRosteredPlayer(row, league),
       cells: new Map(row.weeks.map((cell) => [cell.week, cell])),
@@ -191,7 +193,11 @@ export function TeamStatsPanel({
     stack.total > 0 ? rows.map((row) => (row.weeks.find((cell) => cell.week === stack.week)?.value ?? 0) / stack.total) : []
   ))), [gridWeeks, rows]);
 
-  const groupAverage = completedWeeks.reduce((sum, stack) => sum + stack.total, 0) / playedWeeks;
+  const groupTotal = completedWeeks.reduce((sum, stack) => sum + stack.total, 0);
+  const groupAverage = groupTotal / playedWeeks;
+  // Each player's slice of the group's season total: how the team splits the work.
+  // Snaps have none; their Avg is already each player's own snap %.
+  const shareLabel = (total: number) => (groupTotal > 0 ? formatTeamStatsPercent((Math.max(0, total) / groupTotal) * 100) : "—");
 
   const unavailable = dataQuery.isError;
   const loading = dataQuery.isPending;
@@ -266,6 +272,7 @@ export function TeamStatsPanel({
             <thead>
               <tr>
                 <th scope="col" className="team-usage-player">Player</th>
+                {isSnaps ? null : <th scope="col" className="team-usage-share">Share</th>}
                 {gridWeeks.map((stack) => <th scope="col" key={stack.week}>{`W${stack.week}`}</th>)}
                 <th scope="col" className="team-usage-average">Avg</th>
               </tr>
@@ -274,13 +281,14 @@ export function TeamStatsPanel({
               {isSnaps ? null : (
                 <tr className="team-usage-total">
                   <th scope="row" className="team-usage-player">Total</th>
+                  <td className="team-usage-share">{groupTotal > 0 ? "100%" : "—"}</td>
                   {gridWeeks.map((stack) => (
                     <td key={stack.week}>{formatTeamStatsValue(statId, stack.total)}</td>
                   ))}
                   <td className="team-usage-average">{formatTeamStatsAverage(groupAverage)}</td>
                 </tr>
               )}
-              {gridRows.map(({ row, averageLabel, rostered, cells }) => (
+              {gridRows.map(({ row, averageLabel, completedTotal, rostered, cells }) => (
                 <tr key={row.key} className={rostered ? "is-my-roster" : undefined}>
                   <th scope="row" className="team-usage-player">
                     <PlayerNameLink
@@ -294,6 +302,7 @@ export function TeamStatsPanel({
                     </PlayerNameLink>
                     {selectedGroup === "ALL" ? <span className="team-usage-position">{row.position}</span> : null}
                   </th>
+                  {isSnaps ? null : <td className="team-usage-share">{shareLabel(completedTotal)}</td>}
                   {gridWeeks.map((stack) => {
                     const cell = cells.get(stack.week);
                     if (!cell?.hasSourceRow) {

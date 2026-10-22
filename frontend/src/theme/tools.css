@@ -299,6 +299,13 @@
 .team-usage thead .team-usage-average {
   font-weight: 700;
 }
+.team-usage .team-usage-share {
+  border-right: 1px solid var(--hairline);
+  font-weight: 800;
+}
+.team-usage thead .team-usage-share {
+  font-weight: 700;
+}
 .team-usage-total th,
 .team-usage-total td {
   background: var(--surface-2);
