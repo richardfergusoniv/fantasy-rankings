@@ -44,6 +44,7 @@ const sampleDashboard: Dashboard = {
   rankingsAsOf: null,
   fantasyCalcAsOf: null,
   playerTrending: {},
+  playerInsights: { depth: {}, depthAsOf: null, experts: {}, expertsAsOf: null },
   leagues: [
     {
       id: "league-1",

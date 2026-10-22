@@ -34,6 +34,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Refresh player insights
+        # Expected points, Next Gen Stats, depth charts and expert ranks.
+        # Best effort: the rebuild keeps the last snapshot if this fails.
+        continue-on-error: true
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-ten.vercel.app' }}
+        run: |
+          curl -sS --fail-with-body --max-time 120 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/cron/jobs?job=refresh-player-insights"
       - name: Call dashboard rebuild
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
