@@ -116,7 +116,7 @@ async function handleRefreshChartExtras(): Promise<Response> {
 
 async function handleRefreshPlayerInsights(): Promise<Response> {
   const result = await refreshPlayerInsightsSnapshot();
-  return json({ job: "refresh-player-insights", ...result });
+  return json({ job: "refresh-player-insights", ...result }, result.ok ? 200 : 502);
 }
 
 async function handleRefreshNflPlayers(): Promise<Response> {
