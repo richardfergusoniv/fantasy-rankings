@@ -124,6 +124,8 @@ const historicalTradePickSchema = z.object({
   round: z.number().int(),
   description: z.string(),
   fromRosterId: z.number().int().nullable(),
+  /** Sleeper `roster_id` on the pick — original slot owner used for Early/Mid/Late tier. */
+  originalRosterId: z.number().int().nullable().optional().default(null),
   draftedPlayerId: z.string().nullable(),
   draftedPlayerName: z.string().nullable(),
 });
@@ -669,6 +671,7 @@ async function fetchHistoricalSeason(
                 round: pickRound,
                 description: `${pickSeason} ${ordinalRound(pickRound)}-round pick`,
                 fromRosterId: pick.previous_owner_id ?? pick.roster_id ?? null,
+                originalRosterId: pick.roster_id ?? null,
                 draftedPlayerId,
                 draftedPlayerName,
               },

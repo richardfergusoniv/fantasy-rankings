@@ -28,6 +28,7 @@ import {
   buildLeagueRosterRows,
   compactAssetName,
   formatTeamRecord,
+  resolveHistoricalPickAsset,
   resolveValueHistoryPlayerId,
   rosterPositionLabel,
   type LeagueRosterRow,
@@ -594,14 +595,17 @@ export function HistoricalTeamMatchup({ trade, league }: { trade: HistoricalTrad
   return <><HistoricalTeamName team={first} league={league} /><i className="historical-team-separator" aria-hidden="true">↔</i><HistoricalTeamName team={second} league={league} /></>;
 }
 
-export function historicalPickValue(assets: TradeAsset[], season: number, round: number): TradeAsset | undefined {
-  const ordinal = round === 1 ? "1st" : round === 2 ? "2nd" : round === 3 ? "3rd" : `${round}th`;
-  return assets
-    .filter((asset) => asset.position === "PICK" && asset.name.includes(String(season)) && asset.name.toLowerCase().includes(ordinal))
-    .sort((a, b) => Number(/\bmid\b/i.test(b.name)) - Number(/\bmid\b/i.test(a.name)) || b.value - a.value)[0];
+export function historicalPickValue(assets: TradeAsset[], season: number, round: number, originalRosterId?: number | null, ownedPicks: TradeAsset[] = []): TradeAsset | undefined {
+  return resolveHistoricalPickAsset(assets, ownedPicks, season, round, originalRosterId);
 }
 
-export function historicalReceivedAssets(team: HistoricalTradeTeam, assets: TradeAsset[], tradeId: string, currentSeason: number): { display: HistoricalTradeDisplayAsset[]; valued: TradeAsset[] } {
+export function historicalReceivedAssets(
+  team: HistoricalTradeTeam,
+  assets: TradeAsset[],
+  tradeId: string,
+  currentSeason: number,
+  ownedPicks: TradeAsset[] = [],
+): { display: HistoricalTradeDisplayAsset[]; valued: TradeAsset[] } {
   const byPlayerId = new Map(assets.filter((asset) => asset.position !== "PICK").map((asset) => [asset.playerId, asset]));
   const display: HistoricalTradeDisplayAsset[] = [];
   const valued: TradeAsset[] = [];
@@ -657,7 +661,11 @@ export function historicalReceivedAssets(team: HistoricalTradeTeam, assets: Trad
       });
       continue;
     }
-    const current = pick.season > currentSeason ? historicalPickValue(assets, pick.season, pick.round) : undefined;
+    // Prefer Sleeper's original slot owner; older cached payloads only have fromRosterId.
+    const originalRosterId = pick.originalRosterId ?? pick.fromRosterId ?? null;
+    const current = pick.season > currentSeason
+      ? resolveHistoricalPickAsset(assets, ownedPicks, pick.season, pick.round, originalRosterId)
+      : undefined;
     const note = pick.season <= currentSeason ? "pick already used" : current ? null : "no current pick value";
     const value = current?.value ?? 0;
     display.push({
@@ -692,11 +700,17 @@ export function historicalReceivedAssets(team: HistoricalTradeTeam, assets: Trad
   return { display, valued };
 }
 
-export function historicalPerspectiveAssets(trade: HistoricalTrade, selected: HistoricalTradeTeam, assets: TradeAsset[], currentSeason: number): {
+export function historicalPerspectiveAssets(
+  trade: HistoricalTrade,
+  selected: HistoricalTradeTeam,
+  assets: TradeAsset[],
+  currentSeason: number,
+  ownedPicks: TradeAsset[] = [],
+): {
   give: { display: HistoricalTradeDisplayAsset[]; valued: TradeAsset[] };
   get: { display: HistoricalTradeDisplayAsset[]; valued: TradeAsset[] };
 } {
-  const received = historicalReceivedAssets(selected, assets, trade.id, currentSeason);
+  const received = historicalReceivedAssets(selected, assets, trade.id, currentSeason, ownedPicks);
   const otherTeams = trade.teams.filter((team) => team.rosterId !== selected.rosterId);
   const outgoingPlayers = otherTeams.flatMap((team) => team.assets.players.filter((player) => player.fromRosterId === selected.rosterId || (trade.teams.length === 2 && player.fromRosterId === null)));
   const outgoingPicks = otherTeams.flatMap((team) => team.assets.picks.filter((pick) => pick.fromRosterId === selected.rosterId || (trade.teams.length === 2 && pick.fromRosterId === null)));
@@ -708,7 +722,7 @@ export function historicalPerspectiveAssets(trade: HistoricalTrade, selected: Hi
     isUserTeam: selected.isUserTeam,
     assets: { players: outgoingPlayers, picks: outgoingPicks, faabReceived: outgoingFaab },
   };
-  return { give: historicalReceivedAssets(gaveTeam, assets, `${trade.id}:gave`, currentSeason), get: received };
+  return { give: historicalReceivedAssets(gaveTeam, assets, `${trade.id}:gave`, currentSeason, ownedPicks), get: received };
 }
 
 export function compactHistoricalAssets(team: HistoricalTradeTeam): string {
@@ -730,6 +744,10 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
   const formatAssets = useMemo(
     () => dashboard.seasonLongRankings.filter((row) => row.formatKey === league.seasonLongFormat.key),
     [dashboard.seasonLongRankings, league.seasonLongFormat.key],
+  );
+  const ownedPicks = useMemo(
+    () => league.tradeTeams.flatMap((team) => team.ownedPicks),
+    [league.tradeTeams],
   );
   const queryKey = ["historical-trades", league.id, selectedSeason] as const;
   const tradesQuery = useQuery({
@@ -773,7 +791,9 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
 
   const selectedTrade = tradesQuery.data?.trades.find((trade) => trade.id === selectedTradeId) ?? null;
   const selectedTeam = selectedTrade?.teams.find((team) => team.isUserTeam) ?? selectedTrade?.teams[0] ?? null;
-  const perspective = selectedTrade && selectedTeam ? historicalPerspectiveAssets(selectedTrade, selectedTeam, formatAssets, dashboard.season) : null;
+  const perspective = selectedTrade && selectedTeam
+    ? historicalPerspectiveAssets(selectedTrade, selectedTeam, formatAssets, dashboard.season, ownedPicks)
+    : null;
   const counterpart = selectedTrade && selectedTeam
     ? selectedTrade.teams.find((team) => team.rosterId !== selectedTeam.rosterId) ?? null
     : null;
@@ -783,7 +803,7 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
     return [...groups.entries()].sort(([a], [b]) => b - a);
   }, [tradesQuery.data?.trades]);
   const renderTradeRows = (trades: HistoricalTrade[]) => trades.map((trade) => {
-    const teamValues = trade.teams.map((team) => ({ team, value: tradeTotal(historicalReceivedAssets(team, formatAssets, trade.id, dashboard.season).valued) }));
+    const teamValues = trade.teams.map((team) => ({ team, value: tradeTotal(historicalReceivedAssets(team, formatAssets, trade.id, dashboard.season, ownedPicks).valued) }));
     const rankedTeams = [...teamValues].sort((a, b) => b.value - a.value);
     const leadingTeam = rankedTeams[0];
     const maxValue = leadingTeam?.value ?? 0;
