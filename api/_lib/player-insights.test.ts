@@ -5,6 +5,7 @@ vi.mock("./db.js", () => ({ db: {}, schema: {} }));
 const {
   csvObjects,
   depthFromRows,
+  mergeNgsSources,
   parseExperts,
   parseNgs,
   parseOpportunity,
@@ -61,6 +62,19 @@ describe("parseNgs", () => {
         rush_efficiency: 3.9,
       },
     });
+  });
+});
+
+describe("mergeNgsSources", () => {
+  it("merges files by gsis id", () => {
+    expect(mergeNgsSources([{ "00-1": { separation: 2.7 } }, { "00-1": { rush_efficiency: 3.9 } }, { "00-2": { time_to_throw: 2.8 } }])).toEqual({
+      "00-1": { separation: 2.7, rush_efficiency: 3.9 },
+      "00-2": { time_to_throw: 2.8 },
+    });
+  });
+
+  it("is empty when any file had no season rows, so the previous set is kept", () => {
+    expect(mergeNgsSources([{ "00-1": { separation: 2.7 } }, {}, { "00-2": { time_to_throw: 2.8 } }])).toEqual({});
   });
 });
 
