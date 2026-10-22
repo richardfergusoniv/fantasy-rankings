@@ -1,11 +1,8 @@
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import type { TradeAsset, ValueHistorySeries } from "./dashboard-types";
-import {
-  activeValueHistoryStartDate,
-  sliceValueHistoryForSharedDomain,
-  trimValueHistoryToContinuousStart,
-} from "./value-history-domain";
+import { buildAggregateTradeHistoryData } from "./lib/aggregate-trade-history";
+import { trimValueHistoryToContinuousStart } from "./value-history-domain";
 
 export function PlayerValueTrend({ name, history, isLoading }: { name: string; history: ValueHistorySeries | undefined; isLoading: boolean }) {
   const points = trimValueHistoryToContinuousStart(history?.points ?? []);
@@ -47,6 +44,7 @@ export function AggregateTradeHistory({
   get,
   historyByPlayerId,
   isLoading,
+  anchorDate = null,
   giveColor = "var(--chart-4)",
   getColor = "var(--chart-3)",
   giveStrokeWidth = 2.3,
@@ -56,50 +54,23 @@ export function AggregateTradeHistory({
   get: TradeAsset[];
   historyByPlayerId: Map<string, ValueHistorySeries>;
   isLoading: boolean;
+  /** YYYY-MM-DD trade day for historical trades; omit for live (latest point). */
+  anchorDate?: string | null;
   giveColor?: string;
   getColor?: string;
   giveStrokeWidth?: number;
   getStrokeWidth?: number;
 }) {
-  // Per-asset continuous trim, then a shared start across plotted assets so
-  // one isolated early point cannot pad empty months on the x-axis.
-  const trimmedPointsByPlayerId = new Map(
-    [...historyByPlayerId.entries()].map(([id, series]) => [
-      id,
-      trimValueHistoryToContinuousStart(series.points),
-    ]),
+  // Same per-asset bar values (incl. waiver) with history scaled to the anchor.
+  const historyPointsByPlayerId = new Map(
+    [...historyByPlayerId.entries()].map(([id, series]) => [id, series.points]),
   );
-  const plottedTrimmedSeries = [...give, ...get].flatMap((asset) => {
-    const points = trimmedPointsByPlayerId.get(asset.playerId);
-    return points?.length ? [points] : [];
+  const data = buildAggregateTradeHistoryData({
+    give,
+    get,
+    historyByPlayerId: historyPointsByPlayerId,
+    anchorDate,
   });
-  const startDate = activeValueHistoryStartDate(plottedTrimmedSeries);
-  const chartPointsByPlayerId = new Map(
-    [...trimmedPointsByPlayerId.entries()].map(([id, points]) => [
-      id,
-      sliceValueHistoryForSharedDomain(points, startDate),
-    ]),
-  );
-  // Assets with no stored history must not null out a mixed side's aggregate.
-  const chartGive = give.filter((asset) => (chartPointsByPlayerId.get(asset.playerId)?.length ?? 0) > 0);
-  const chartGet = get.filter((asset) => (chartPointsByPlayerId.get(asset.playerId)?.length ?? 0) > 0);
-  const dates = [...new Set(
-    [...chartGive, ...chartGet].flatMap((asset) => (
-      chartPointsByPlayerId.get(asset.playerId)?.map((point) => point.date) ?? []
-    )),
-  )].sort();
-  const pointMap = new Map(
-    [...chartPointsByPlayerId.entries()].map(([id, points]) => [
-      id,
-      new Map(points.map((point) => [point.date, point.value])),
-    ]),
-  );
-  const totalOn = (assets: TradeAsset[], date: string): number | null => {
-    if (assets.length === 0) return null;
-    const values = assets.map((asset) => pointMap.get(asset.playerId)?.get(date));
-    return values.every((value): value is number => typeof value === "number") ? values.reduce((sum, value) => sum + value, 0) : null;
-  };
-  const data = dates.map((date) => ({ date, give: totalOn(chartGive, date), get: totalOn(chartGet, date) }));
   const hasGive = data.some((point) => point.give !== null);
   const hasGet = data.some((point) => point.get !== null);
   const formatDateTick = (value: string): string => {

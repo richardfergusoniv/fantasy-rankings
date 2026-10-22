@@ -1,5 +1,3 @@
-import type { TradeAsset } from "../dashboard-types";
-
 // FantasyCalc's waiver adjustment: in an uneven trade, the side sending
 // fewer pieces gains open roster spots, and each spot is worth roughly a
 // waiver-wire pickup. That side is credited, for each of the other side's
@@ -11,9 +9,11 @@ const WAIVER_VALUE_FRACTION = 0.6982;
 const WAIVER_SPOT_CAP = 753;
 const WAIVER_SPOT_CAP_STEP = 0.23;
 
+export type WaiverAdjustmentAsset = { value: number };
+
 export function waiverAdjustments(
-  give: TradeAsset[],
-  get: TradeAsset[],
+  give: ReadonlyArray<WaiverAdjustmentAsset>,
+  get: ReadonlyArray<WaiverAdjustmentAsset>,
 ): { give: number; get: number } {
   if (give.length === 0 || get.length === 0 || give.length === get.length) {
     return { give: 0, get: 0 };
