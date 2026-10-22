@@ -380,6 +380,34 @@ function weekValueForStat(
 }
 
 /**
+ * Weeks (1..throughWeek) with at least one recorded source row for the team
+ * and positions: snap rows for snaps, stat rows otherwise. Read before
+ * buildTeamStatsTable drops players with no season activity, so a week only
+ * those players appeared in (a zero-TD week) still counts as played.
+ */
+export function teamStatsRecordedWeeks(options: {
+  stats: TeamWeekStatRow[];
+  snaps: TeamWeekSnapRow[];
+  team: string;
+  positions: readonly TeamStatsPosition[];
+  statId: TeamStatsStatId;
+  throughWeek: number;
+}): number[] {
+  const team = canonicalNflTeam(options.team);
+  const throughWeek = Math.max(1, Math.floor(options.throughWeek));
+  const source: ReadonlyArray<{ team: string; position: TeamStatsPosition; week: number }> = options.statId === "snaps"
+    ? options.snaps
+    : options.stats;
+  const weeks = new Set<number>();
+  for (const row of source) {
+    if (row.team !== team || !options.positions.includes(row.position)) continue;
+    if (row.week < 1 || row.week > throughWeek) continue;
+    weeks.add(row.week);
+  }
+  return [...weeks].sort((a, b) => a - b);
+}
+
+/**
  * Build week-by-week rows for one team + position group + stat.
  * Columns span weeks 1..throughWeek; sorted by season total descending.
  */

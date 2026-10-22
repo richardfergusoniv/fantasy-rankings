@@ -7,7 +7,6 @@ import {
   TEAM_STATS_STAT_OPTIONS,
   TEAM_WEEK_STATS_STALE_MS,
   buildTeamStatsTable,
-  buildTeamStatsWeekStacks,
   canonicalNflTeam,
   defaultTeamStatsGroup,
   defaultTeamStatsTeam,
@@ -15,6 +14,7 @@ import {
   formatTeamStatsValue,
   normalizeTeamStatsPlayerName,
   parseTeamStatsGroup,
+  teamStatsRecordedWeeks,
   teamStatsLegendCaption,
   type TeamStatsGroupId,
   type TeamStatsStatId,
@@ -148,20 +148,28 @@ export function TeamStatsPanel({
     });
   }, [dataQuery.data, league.scoringSettings, selectedGroup, selectedTeam, statId, throughWeek]);
 
-  const stacks = useMemo(() => buildTeamStatsWeekStacks(rows), [rows]);
-
   const statLabel = TEAM_STATS_STAT_OPTIONS.find((option) => option.id === statId)?.label ?? "";
   // Snap counts mean little across players, so snaps read as each player's snap %.
   const isSnaps = statId === "snaps";
-  // Weeks with recorded stats; byes and unplayed weeks get no column. A
-  // recorded week where the whole group made zero (no TE touchdowns) still
-  // counts: it shows its zeros and counts toward the averages.
-  const gridWeeks = useMemo(
-    () => stacks.filter((stack) => rows.some((row) => (
-      row.weeks.some((cell) => cell.week === stack.week && cell.hasSourceRow)
-    ))),
-    [rows, stacks],
-  );
+  // Weeks with recorded stats for the team and group, read from the source rows
+  // before the table drops players with no season activity: a week only they
+  // played (no TE touchdowns) keeps its column and counts toward the averages.
+  // Byes and unplayed weeks get no column. Each week's total sums the signed
+  // values, so a quarterback's negative fantasy week counts against it.
+  const gridWeeks = useMemo(() => {
+    if (!dataQuery.data) return [];
+    return teamStatsRecordedWeeks({
+      stats: dataQuery.data.stats,
+      snaps: dataQuery.data.snaps,
+      team: selectedTeam,
+      positions: TEAM_STATS_GROUP_POSITIONS[selectedGroup],
+      statId,
+      throughWeek,
+    }).map((weekNumber) => ({
+      week: weekNumber,
+      total: rows.reduce((sum, row) => sum + (row.weeks.find((cell) => cell.week === weekNumber)?.value ?? 0), 0),
+    }));
+  }, [dataQuery.data, rows, selectedGroup, selectedTeam, statId, throughWeek]);
 
   // Completed recorded weeks (excludes byes and the in-progress week) — the
   // denominator for each player's per-game average.
