@@ -91,9 +91,13 @@
 .primary-tabs button.active svg { color: var(--link); }
 
 .subview-tabs { margin: 12px 16px 0; }
-.tools-subview-tabs { max-width: 100%; overflow-x: auto; }
-.explorer-subview-tabs { max-width: 100%; overflow-x: auto; }
-.league-subview-tabs { max-width: 100%; overflow-x: auto; }
+/* Equal-width page tabs on every viewport — no horizontal scroll strip. */
+.tools-subview-tabs,
+.explorer-subview-tabs,
+.league-subview-tabs {
+  max-width: 100%;
+  overflow-x: hidden;
+}
 .segmented-control {
   --segment-count: 2;
   --segment-index: 0;
@@ -101,10 +105,10 @@
   isolation: isolate;
   display: grid;
   grid-template-columns: repeat(var(--segment-count), minmax(0, 1fr));
-  gap: 0;
+  gap: var(--tab-gap);
   min-height: var(--sub-tab-height);
   height: var(--sub-tab-height);
-  padding: 2px;
+  padding: var(--tab-track-padding);
   border-radius: var(--radius);
   background: var(--segment-track);
   font-family: var(--font-ui);
@@ -112,10 +116,10 @@
 .segmented-control .segment-thumb {
   position: absolute;
   z-index: -1;
-  top: 2px;
-  bottom: 2px;
-  left: 2px;
-  width: calc((100% - 4px) / var(--segment-count));
+  top: var(--tab-track-padding);
+  bottom: var(--tab-track-padding);
+  left: var(--tab-track-padding);
+  width: calc((100% - (2 * var(--tab-track-padding))) / var(--segment-count));
   border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 2px);
   background: var(--hairline);
@@ -130,7 +134,7 @@
   min-width: 0;
   min-height: var(--sub-tab-button-height);
   height: var(--sub-tab-button-height);
-  padding: 0 7px;
+  padding: 0 var(--tab-button-padding-inline);
   overflow: hidden;
   border: 0;
   border-radius: var(--radius);
@@ -145,7 +149,7 @@
   transition: color .12s ease-out;
 }
 .segmented-control button.active { color: var(--link); }
-/* Page-level in-page tabs (Matchup Current/Optimized, League Week/Season/Dynasty). */
+/* Page-level in-page tabs (Matchup, League scope, Draft Board/My Team). */
 .segmented-control.page-tab-control {
   min-height: var(--page-tab-height);
   height: var(--page-tab-height);
@@ -153,19 +157,25 @@
 .segmented-control.page-tab-control button {
   min-height: var(--page-tab-button-height);
   height: var(--page-tab-button-height);
+  padding: 0 var(--tab-button-padding-inline);
   font-size: var(--page-tab-font-size);
   font-weight: var(--page-tab-font-weight);
 }
-/* Players / Tools subview rows share page-tab tokens. */
+/* Players / Tools subview rows share page-tab tokens + segmented track chrome. */
 .subview-tabs [data-slot="tabs-list"] {
   min-height: var(--page-tab-height);
   height: var(--page-tab-height);
-  padding: 2px;
+  gap: var(--tab-gap);
+  padding: var(--tab-track-padding);
+  border-radius: var(--radius);
+  background: var(--segment-track);
   font-family: var(--font-ui);
 }
 .subview-tabs [data-slot="tabs-trigger"] {
   min-height: var(--page-tab-button-height);
   height: var(--page-tab-button-height);
+  padding: 0 var(--tab-button-padding-inline);
+  border-radius: calc(var(--radius) - 2px);
   font-family: inherit;
   font-size: var(--page-tab-font-size);
   font-weight: var(--page-tab-font-weight);

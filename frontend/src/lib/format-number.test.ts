@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWholePercent } from "./format-number";
+import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole, formatWholePercent } from "./format-number";
 
 describe("formatDecimal", () => {
   it("keeps the same rounded digits as toFixed and adds grouping", () => {
@@ -28,10 +28,18 @@ describe("formatDecimal", () => {
 });
 
 describe("formatPoints", () => {
-  it("shows an em dash for a missing score and one decimal otherwise", () => {
+  it("shows an em dash for a missing score and exactly two decimals otherwise", () => {
     expect(formatPoints(null)).toBe("—");
-    expect(formatPoints(12, 1, { locale: "en-US" })).toBe("12.0");
-    expect(formatPoints(9.25, 1, { locale: "en-US" })).toBe("9.3");
+    expect(formatPoints(12, { locale: "en-US" })).toBe("12.00");
+    expect(formatPoints(9.25, { locale: "en-US" })).toBe("9.25");
+    expect(formatPoints(8, { locale: "en-US" })).toBe("8.00");
+    expect(formatPoints(104.567, { locale: "en-US" })).toBe("104.57");
+    expect(formatPoints(12.3, { locale: "en-US" })).toBe("12.30");
+  });
+
+  it("supports signed display for deltas", () => {
+    expect(formatPoints(1.2, { locale: "en-US", sign: "always" })).toBe("+1.20");
+    expect(formatPoints(-2.5, { locale: "en-US", sign: "exceptZero" })).toBe("-2.50");
   });
 });
 
@@ -41,6 +49,23 @@ describe("formatPercent", () => {
     expect(formatPercent(12, { locale: "en-US" })).toBe("12.0%");
     expect(formatPercent(42, { locale: "en-US" })).toBe("42.0%");
     expect(formatPercent(68, { locale: "en-US" })).toBe("68.0%");
+    expect(formatPercent(34.54, { locale: "en-US" })).toBe("34.5%");
+  });
+});
+
+describe("formatWhole", () => {
+  it("rounds to a whole number with grouping and supports null", () => {
+    expect(formatWhole(null)).toBe("—");
+    expect(formatWhole(10391, { locale: "en-US" })).toBe("10,391");
+    expect(formatWhole(10.4, { locale: "en-US" })).toBe("10");
+    expect(formatWhole(10.6, { locale: "en-US" })).toBe("11");
+    expect(formatWhole(0, { locale: "en-US" })).toBe("0");
+  });
+
+  it("supports signed display for value changes", () => {
+    expect(formatWhole(250, { locale: "en-US", sign: "exceptZero" })).toBe("+250");
+    expect(formatWhole(-1200, { locale: "en-US", sign: "exceptZero" })).toBe("-1,200");
+    expect(formatWhole(0, { locale: "en-US", sign: "exceptZero" })).toBe("0");
   });
 });
 

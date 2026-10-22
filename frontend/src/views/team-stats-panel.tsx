@@ -10,8 +10,6 @@ import {
   canonicalNflTeam,
   defaultTeamStatsGroup,
   defaultTeamStatsTeam,
-  formatTeamStatsPercent,
-  formatTeamStatsValue,
   normalizeTeamStatsPlayerName,
   parseTeamStatsGroup,
   teamStatsRecordedWeeks,
@@ -25,6 +23,7 @@ import type { League } from "../dashboard-types";
 import { SegmentedControl } from "../shared";
 import { PlayerNameLink } from "../tool-links";
 import type { PlayerLinkResolver } from "../tool-player-link";
+import { formatPercent, formatPoints, formatWhole } from "../lib/format-number";
 
 /**
  * Cell shading for the usage grid: one blue scale (green and red stay
@@ -44,10 +43,17 @@ function shortPlayerName(name: string): string {
   return rest.length > 0 && first ? `${first[0]}. ${rest.join(" ")}` : name;
 }
 
-/** Averages keep one decimal (weekly values stay whole). */
 function formatTeamStatsAverage(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return formatPoints(value);
+}
+
+function displayTeamStatsValue(statId: TeamStatsStatId, value: number): string {
+  if (statId === "fantasy_points") return formatPoints(value);
+  return formatWhole(value);
+}
+
+function displayTeamStatsPercent(percent: number): string {
+  return formatPercent(percent);
 }
 
 function isRosteredPlayer(
@@ -188,7 +194,7 @@ export function TeamStatsPanel({
       row,
       average: value,
       completedTotal,
-      averageLabel: isSnaps ? formatTeamStatsPercent(value) : formatTeamStatsAverage(value),
+      averageLabel: isSnaps ? displayTeamStatsPercent(value) : formatTeamStatsAverage(value),
       rostered: isRosteredPlayer(row, league),
       cells: new Map(row.weeks.map((cell) => [cell.week, cell])),
     };
@@ -206,7 +212,7 @@ export function TeamStatsPanel({
   // Snaps have none; their Avg is already each player's own snap %.
   // Signed, like the weekly totals: a negative fantasy player shows a negative
   // share, so the Share column still adds to 100%.
-  const shareLabel = (total: number) => (groupTotal > 0 ? formatTeamStatsPercent((total / groupTotal) * 100) : "—");
+  const shareLabel = (total: number) => (groupTotal > 0 ? displayTeamStatsPercent((total / groupTotal) * 100) : "—");
 
   const unavailable = dataQuery.isError;
   const loading = dataQuery.isPending;
@@ -312,7 +318,7 @@ export function TeamStatsPanel({
                       : stack.total > 0 && maxShare > 0 ? cell.value / stack.total / maxShare : 0;
                     return (
                       <td key={stack.week} style={{ backgroundColor: cellShade(intensity) }}>
-                        {isSnaps ? formatTeamStatsPercent(cell.percent ?? 0) : formatTeamStatsValue(statId, cell.value)}
+                        {isSnaps ? displayTeamStatsPercent(cell.percent ?? 0) : displayTeamStatsValue(statId, cell.value)}
                       </td>
                     );
                   })}

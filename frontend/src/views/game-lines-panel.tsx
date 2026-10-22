@@ -79,7 +79,7 @@ async function fetchText(url: string): Promise<string> {
   return response.text();
 }
 
-function formatPropNumber(value: number | null, digits = 1): string {
+function formatPropNumber(value: number | null, digits = 2): string {
   if (value === null || !Number.isFinite(value)) return "—";
   if (Number.isInteger(value)) return String(value);
   return formatDecimal(value, digits);
@@ -87,7 +87,7 @@ function formatPropNumber(value: number | null, digits = 1): string {
 
 function formatMove(move: number | null): string {
   if (move === null || !Number.isFinite(move) || move === 0) return "—";
-  return formatDecimal(move, 1, { sign: "exceptZero" });
+  return formatDecimal(move, 2, { sign: "exceptZero" });
 }
 
 function formatAmericanOdds(odds: number | null): string {

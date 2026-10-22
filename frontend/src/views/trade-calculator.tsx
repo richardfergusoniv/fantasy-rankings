@@ -39,6 +39,7 @@ import { SegmentedControl } from "../shared";
 import { redraftTwinFormat } from "../../../api/_lib/season-long-format";
 import { clearTradeSide, removeTradePlayer, restoreTradePlayer } from "../undo";
 import { useUnsavedLeaveWarning } from "../unsaved-input";
+import { formatWhole } from "../lib/format-number";
 
 export function TradeAssetRow({ asset, onRemove, onOpenPlayer }: { asset: TradeAsset; onRemove: () => void; onOpenPlayer: (playerId: string) => void }) {
   return (
@@ -51,7 +52,7 @@ export function TradeAssetRow({ asset, onRemove, onOpenPlayer }: { asset: TradeA
           </div>
           <span>{asset.position === "PICK" ? "Dynasty draft pick" : asset.team ?? "Free agent"}</span>
         </div>
-        <div className="trade-asset-value"><strong>{asset.value.toLocaleString()}</strong></div>
+        <div className="trade-asset-value"><strong>{formatWhole(asset.value)}</strong></div>
         <button className="remove-asset" onClick={onRemove} aria-label={`Remove ${asset.name}`} title={`Remove ${asset.name}`}>×</button>
       </div>
     </div>
@@ -117,7 +118,7 @@ export function TradeSide({ title, assets, availableAssets, onAdd, onRemove, onC
               {matches.map((asset) => (
                 <button type="button" key={asset.playerId} onClick={() => chooseAsset(asset)}>
                   <span><strong>{asset.name}</strong><small>{asset.position} · {asset.team ?? "Draft pick"}</small></span>
-                  <b>{asset.value.toLocaleString()}</b>
+                  <b>{formatWhole(asset.value)}</b>
                 </button>
               ))}
               {matches.length === 0 ? <div className="trade-search-empty">No eligible assets match “{query.trim()}”.</div> : null}
@@ -137,7 +138,7 @@ export function leagueRosterAccessibleName(row: LeagueRosterRow): string {
     row.name,
     position,
     team,
-    row.value === null ? "no league value" : `value ${row.value.toLocaleString()}`,
+    row.value === null ? "no league value" : `value ${formatWhole(row.value)}`,
     row.isRookie ? "rookie" : null,
     row.injuryStatus ? `injury status ${row.injuryStatus}` : null,
   ].filter((part): part is string => Boolean(part));
@@ -180,7 +181,7 @@ export function LeagueRosterList({
               </span>
               <span className="league-roster-meta">
                 <span>{row.position === "PICK" ? "Pick" : row.team ?? "FA"}</span>
-                <b>{row.value === null ? "—" : row.value.toLocaleString()}</b>
+                <b>{row.value === null ? "—" : formatWhole(row.value)}</b>
               </span>
             </label>
           </li>
@@ -268,7 +269,7 @@ export function LeagueTradeValueColumn({
       <div className={`league-trade-bar${entries.length === 0 ? " is-empty" : ""}`}>
         {entries.length === 0 ? <span>0</span> : entries.map((entry) => (
           <div className={`league-trade-segment${entry.isAdjustment ? " is-adjustment" : ""}`} key={entry.key} style={{ flexGrow: Math.max(entry.value, 1) }}>
-            <span>{entry.value.toLocaleString()}</span>
+            <span>{formatWhole(entry.value)}</span>
           </div>
         ))}
       </div>
@@ -359,8 +360,8 @@ export function TradeValueDialog({
     node.scrollTop = 0;
   }, []);
   const chartLabel = [
-    `${giveLabel} sends ${give.length ? give.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${giveAdjustedTotal.toLocaleString()}${adjustment.give > 0 ? ` including a waiver adjustment of ${adjustment.give.toLocaleString()}` : ""}`,
-    `${getLabel} sends ${get.length ? get.map((asset) => `${asset.name} ${asset.value.toLocaleString()}`).join(", ") : "nothing"}, total ${getAdjustedTotal.toLocaleString()}${adjustment.get > 0 ? ` including a waiver adjustment of ${adjustment.get.toLocaleString()}` : ""}`,
+    `${giveLabel} sends ${give.length ? give.map((asset) => `${asset.name} ${formatWhole(asset.value)}`).join(", ") : "nothing"}, total ${formatWhole(giveAdjustedTotal)}${adjustment.give > 0 ? ` including a waiver adjustment of ${formatWhole(adjustment.give)}` : ""}`,
+    `${getLabel} sends ${get.length ? get.map((asset) => `${asset.name} ${formatWhole(asset.value)}`).join(", ") : "nothing"}, total ${formatWhole(getAdjustedTotal)}${adjustment.get > 0 ? ` including a waiver adjustment of ${formatWhole(adjustment.get)}` : ""}`,
   ].join(" ");
   const { giveColor, getColor, giveStrokeWidth, getStrokeWidth } = tradeTrendColors(outcome);
 
@@ -382,7 +383,7 @@ export function TradeValueDialog({
                 outcome={outcome === "left" ? "winner" : outcome === "tie" ? "tie" : "loser"}
                 adjustment={adjustment.give}
               />
-              <div className="league-trade-total"><span>Total trade value</span><strong>{giveAdjustedTotal.toLocaleString()}</strong></div>
+              <div className="league-trade-total"><span>Total trade value</span><strong>{formatWhole(giveAdjustedTotal)}</strong></div>
             </div>
             <div className="league-trade-side">
               <LeagueTradeValueColumn
@@ -392,7 +393,7 @@ export function TradeValueDialog({
                 outcome={outcome === "right" ? "winner" : outcome === "tie" ? "tie" : "loser"}
                 adjustment={adjustment.get}
               />
-              <div className="league-trade-total"><span>Total trade value</span><strong>{getAdjustedTotal.toLocaleString()}</strong></div>
+              <div className="league-trade-total"><span>Total trade value</span><strong>{formatWhole(getAdjustedTotal)}</strong></div>
             </div>
           </div>
           <AggregateTradeHistory
@@ -418,7 +419,7 @@ export function TradeValueDialog({
                     <tr key={row.rosterId} className={row.isUser ? "is-user" : row.isParty ? "is-partner" : undefined}>
                       <td className="trade-power-rank">{row.rank}</td>
                       <td className="trade-power-team">{row.teamName}</td>
-                      <td className="trade-power-num">{row.totalValue.toLocaleString()}</td>
+                      <td className="trade-power-num">{formatWhole(row.totalValue)}</td>
                       <td className="trade-power-num">
                         {!row.isParty ? (
                           <span className="trade-power-same">—</span>
@@ -821,7 +822,7 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
       >
         <span className="trade-history-row-heading"><span>Week {trade.week} · {trade.season}</span><strong><HistoricalTeamMatchup trade={trade} league={league} /></strong></span>
         <span className="trade-history-assets">{trade.teams.map((team) => <span key={team.rosterId}><b><HistoricalTeamName team={team} league={league} /></b>{compactHistoricalAssets(team)}</span>)}</span>
-        <span className="trade-history-winner">{winners.length !== 1 || !leadingTeam ? "Even" : <><HistoricalTeamName team={leadingTeam.team} league={league} /> won · +{Math.max(0, maxValue - runnerUp).toLocaleString()}</>}</span>
+        <span className="trade-history-winner">{winners.length !== 1 || !leadingTeam ? "Even" : <><HistoricalTeamName team={leadingTeam.team} league={league} /> won · +{formatWhole(Math.max(0, maxValue - runnerUp))}</>}</span>
       </button>
     );
   });
