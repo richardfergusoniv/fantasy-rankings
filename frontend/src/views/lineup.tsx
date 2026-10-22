@@ -152,7 +152,7 @@ export function Lineup({
     [league.starters, league.bench, nowMs],
   );
   // Experts: the same players on this week's FantasyPros consensus projections (PPR).
-  const experts = currentExpertRanks(dashboard.playerInsights, dashboard.asOf) ?? undefined;
+  const experts = currentExpertRanks(dashboard) ?? undefined;
   const hasExperts = experts !== undefined;
   const activeMode = mode === "experts" && !hasExperts ? "current" : mode;
   const withExpertProjection = (player: RosterPlayer): RosterPlayer => expertProjected(player, experts);
