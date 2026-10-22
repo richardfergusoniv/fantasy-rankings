@@ -28,11 +28,8 @@ import {
 import { PlayerNameLink } from "../tool-links";
 import type { PlayerLinkResolver } from "../tool-player-link";
 import {
-  VALUE_CHART_RANGES,
-  valueChartRangeStartIndex,
   valueChartYDomain,
   valueChartZoomStartIndex,
-  type ValueChartRange,
 } from "../value-chart-zoom";
 
 type PickerPlayer = {
@@ -187,7 +184,6 @@ export function ValueChartPanel({
   const [comparePlayerId, setComparePlayerId] = useState(initialCompareId ?? "");
   const [isExpanded, setIsExpanded] = useState(false);
   const [zoomed, setZoomed] = useState(false);
-  const [range, setRange] = useState<ValueChartRange>("all");
   // Index into the visible rows the scrubber reads; null follows the latest point.
   const [scrubIndex, setScrubIndex] = useState<number | null>(null);
   const previousLeagueIdRef = useRef(league.id);
@@ -220,7 +216,7 @@ export function ValueChartPanel({
       setScrubIndex(null);
     }
   }, [isExpanded]);
-  useEffect(() => { setScrubIndex(null); }, [range, zoomed, playerId, comparePlayerId]);
+  useEffect(() => { setScrubIndex(null); }, [zoomed, playerId, comparePlayerId]);
 
   const requestIds = useMemo(() => {
     const ids = [playerId, comparePlayerId].filter(Boolean);
@@ -302,13 +298,10 @@ export function ValueChartPanel({
 
   function renderChart(options: { interactiveZoom: boolean }) {
     const effectiveZoomed = options.interactiveZoom && zoomed;
-    // Projection rows follow the last historical date; ranges and the scrubber start from the history.
-    const lastHistoricalDate = [...chartRows].reverse().find((row) => row.value !== null)?.date;
-    const rangedRows = chartRows.slice(valueChartRangeStartIndex(chartRows.map((row) => row.date), range, lastHistoricalDate));
     // Zoom never starts past the last historical row, so a short history keeps its only point.
-    const lastRangedHistoricalIndex = rangedRows.reduce((last, row, index) => (row.value !== null ? index : last), 0);
-    const zoomStart = Math.min(valueChartZoomStartIndex(rangedRows.length, effectiveZoomed), lastRangedHistoricalIndex);
-    const visibleRows = effectiveZoomed ? rangedRows.slice(zoomStart) : rangedRows;
+    const lastHistoricalIndex = chartRows.reduce((last, row, index) => (row.value !== null ? index : last), 0);
+    const zoomStart = Math.min(valueChartZoomStartIndex(chartRows.length, effectiveZoomed), lastHistoricalIndex);
+    const visibleRows = effectiveZoomed ? chartRows.slice(zoomStart) : chartRows;
     const defaultScrubIndex = visibleRows.reduce((last, row, index) => (row.value !== null ? index : last), 0);
     // Tapping or hovering the plot moves the scrubber, so the tooltip and the readout never disagree.
     const syncScrubToPointer = (state: { activeTooltipIndex?: number | string | null }) => {
@@ -347,19 +340,6 @@ export function ValueChartPanel({
             <span className="sr-only">
               Double-tap the chart to {effectiveZoomed ? "reset" : "zoom into recent values"}.
             </span>
-            <div className="value-chart-ranges" role="group" aria-label="Date range">
-              {VALUE_CHART_RANGES.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className="scatter-zoom-toggle"
-                  aria-pressed={range === option.id}
-                  onClick={() => setRange(option.id)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
           </div>
         ) : null}
         <div
@@ -622,29 +602,16 @@ export function ValueChartPanel({
                     ) : null}
                   </div>
                 ) : null}
-                <div className="value-chart-ranges" role="group" aria-label="Date range">
-                  {VALUE_CHART_RANGES.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className="scatter-zoom-toggle"
-                      aria-pressed={range === option.id}
-                      onClick={() => setRange(option.id)}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className="scatter-zoom-toggle pricing-expand"
-                    aria-label="Open Pricing. The expanded view has a zoom and a date scrubber."
-                    onClick={() => setIsExpanded(true)}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="scatter-zoom-toggle pricing-expand"
+                  aria-label="Open Pricing. The expanded view has a zoom and a date scrubber."
+                  onClick={() => setIsExpanded(true)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </div>
               <div
                 className="monitor-chart-expand-target"

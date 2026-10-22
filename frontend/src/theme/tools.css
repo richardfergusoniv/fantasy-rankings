@@ -681,17 +681,6 @@
   border-radius: 0;
   background: none;
 }
-.value-chart-ranges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-left: auto;
-  min-width: 0;
-}
-.value-chart-ranges .scatter-zoom-toggle {
-  min-width: 44px;
-  min-height: 44px;
-}
 .value-chart-scrubber {
   display: flex;
   flex-direction: column;
@@ -756,7 +745,7 @@
 .monitor-builder-chart-panel .monitor-chart-expand-target:hover {
   border-color: var(--border);
 }
-/* Pricing opens with the number: latest value, its 30-day move, then ranges. */
+/* Pricing opens with the number: latest value and its 30-day move. */
 .pricing-summary {
   display: flex;
   flex-wrap: wrap;
@@ -819,9 +808,6 @@
 }
 .pricing-figures .tool-player-link-row a.tool-player-link[href] {
   min-height: 32px;
-}
-.pricing-summary .value-chart-ranges {
-  margin-left: 0;
 }
 .pricing-summary .scatter-zoom-toggle {
   min-width: 44px;
