@@ -97,7 +97,7 @@ import {
   type ChartStatRow,
 } from "./chart-metric-transforms.js";
 import { loadChartExtrasSnapshot, type ChartExtrasSnapshot } from "./nflverse-chart-extras.js";
-import { loadPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./player-insights.js";
+import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./player-insights.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -1530,8 +1530,8 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   // Down boards are still rejected by projectionBoardIsUsable.
   const useVegasPrimary = projectionBoardIsUsable(vegasProjectionSnapshot);
   let defenses: z.infer<typeof defenseSchema>[] = [];
-  // Bounded: a slow refetch of the free sources keeps the cached snapshot (or none).
-  const insightsSnapshot = await withDeadline(loadPlayerInsightsSnapshot(), 20_000).catch(() => null);
+  // Read only: the refresh-player-insights cron job owns refetching the sources.
+  const insightsSnapshot = await readPlayerInsightsSnapshot().catch(() => null);
   let analytics: z.infer<typeof analyticsSchema> = {
     asOf: null,
     throughWeek: null,
