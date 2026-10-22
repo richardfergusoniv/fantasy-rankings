@@ -205,7 +205,9 @@ export function TeamStatsPanel({
   const groupAverage = groupTotal / playedWeeks;
   // Each player's slice of the group's season total: how the team splits the work.
   // Snaps have none; their Avg is already each player's own snap %.
-  const shareLabel = (total: number) => (groupTotal > 0 ? formatTeamStatsPercent((Math.max(0, total) / groupTotal) * 100) : "—");
+  // Signed, like the totals: a negative fantasy player shows a negative share,
+  // so the column still adds to the Total row's 100%.
+  const shareLabel = (total: number) => (groupTotal > 0 ? formatTeamStatsPercent((total / groupTotal) * 100) : "—");
 
   const unavailable = dataQuery.isError;
   const loading = dataQuery.isPending;
