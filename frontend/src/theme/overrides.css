@@ -41,8 +41,6 @@ h3 { font-size: var(--type-section); font-weight: 600; }
 /* Paper surfaces: warm borders and only quiet, warm-tinted depth. */
 .player-detail-values,
 .trade-balance,
-.comparison-chart-card,
-.comparison-selector-card,
 .scatter-frame,
 .power-radar,
 .news-status {
@@ -56,7 +54,6 @@ h3 { font-size: var(--type-section); font-weight: 600; }
 .trade-result-card,
 .chart-result-card,
 .trade-picker,
-.comparison-picker-sheet,
 .power-team-card {
   border-color: var(--border);
   border-radius: var(--radius-xl);
@@ -201,15 +198,12 @@ a:active { color: var(--link-active); }
 .trade-picker-player > strong,
 .advanced-player-results > button > span > strong,
 .advanced-player-name h2,
-.comparison-picker-results > button span > strong,
-.comparison-heading > div > strong,
 .tier-cliff-player > strong,
 .boom-bust-player > strong,
 .drafted-elsewhere button > span > strong,
 .draft-player-name-line > strong {
   font-weight: 600;
 }
-
 
 /*
  * Boxed-player rhythm
@@ -222,8 +216,7 @@ a:active { color: var(--link-active); }
 .player-row,
 .ranking-row,
 .player-search-result,
-.trade-result-row,
-.comparison-picker-results > button {
+.trade-result-row {
   min-height: var(--player-box-height);
 }
 
@@ -339,15 +332,13 @@ a:active { color: var(--link-active); }
 .matchup-name-line strong,
 .player-name,
 .ranking-name-line strong,
-.player-search-name strong,
-.comparison-picker-results strong {
+.player-search-name strong {
   line-height: var(--player-name-leading);
 }
 
 .player-main,
 .ranking-player,
-.player-search-main,
-.comparison-picker-results > button > span {
+.player-search-main {
   display: grid;
   min-width: 0;
   grid-template-rows: var(--player-box-half) var(--player-box-half);
@@ -357,8 +348,7 @@ a:active { color: var(--link-active); }
 
 .player-name-line,
 .ranking-name-line,
-.player-search-name,
-.comparison-picker-results > button > span > strong {
+.player-search-name {
   min-height: var(--player-box-half);
   align-items: flex-end;
   margin-top: 0;
@@ -370,8 +360,7 @@ a:active { color: var(--link-active); }
 
 .player-meta,
 .ranking-meta-line,
-.player-search-meta,
-.comparison-picker-results > button > span > small {
+.player-search-meta {
   min-height: var(--player-box-half);
   align-items: flex-start;
   margin-top: 0;
@@ -388,24 +377,6 @@ a:active { color: var(--link-active); }
 .ranking-row,
 .player-search-result {
   padding-inline: var(--player-box-inline);
-}
-
-.comparison-selector-card .comparison-cards {
-  align-items: start;
-  grid-auto-rows: max-content;
-}
-.comparison-picker-results > button {
-  align-items: stretch;
-  padding-block: 0;
-}
-.comparison-picker-results > button > span > strong {
-  display: flex;
-}
-.comparison-picker-results > button > span > small {
-  display: flex;
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 600;
 }
 
 .draft-row button.draft-player-open,

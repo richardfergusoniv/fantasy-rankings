@@ -2520,7 +2520,34 @@ function comparisonBarShares(row: ComparisonRow): [number, number] {
   return leftWins ? [leaderShare, 100 - leaderShare] : [100 - leaderShare, leaderShare];
 }
 
-function ComparisonMetricRow({ row, leftName, rightName }: { row: ComparisonRow; leftName: string; rightName: string }) {
+// The card's lead number: league fantasy points (advanced) or the league projection.
+const comparisonHeadlineKeys = new Set(["fantasy_league", "league", "projection"]);
+
+type ComparisonGroup = "Projection" | "Stat line" | "Team context" | "Market" | "Production" | "Usage" | "Efficiency";
+
+const comparisonUsageKeys = new Set([
+  "touches", "carries", "targets", "pass_attempts", "opportunity", "opportunity_share", "snap_share",
+  "rz_target_share", "rz_carry_share", "target_share", "carry_share", "rb_target_share", "air_yards_share", "wopr",
+  "fg_attempts", "pat_attempts",
+]);
+const comparisonEfficiencyKeys = new Set(["completion_pct", "cpoe", "passing_epa", "rushing_epa", "receiving_epa", "epa_per_play", "racr", "fg_pct"]);
+const comparisonTeamContextKeys = new Set(["teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank", "opponentTotal"]);
+const comparisonMarketKeys = new Set(["fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange"]);
+
+function comparisonGroup(dataset: ToolDataset, key: string): ComparisonGroup {
+  if (dataset === "advanced") return comparisonUsageKeys.has(key) ? "Usage" : comparisonEfficiencyKeys.has(key) ? "Efficiency" : "Production";
+  if (key.startsWith("stat_")) return "Stat line";
+  if (comparisonTeamContextKeys.has(key)) return "Team context";
+  if (comparisonMarketKeys.has(key)) return "Market";
+  return "Projection";
+}
+
+const comparisonGroupOrder: Record<ToolDataset, ComparisonGroup[]> = {
+  projections: ["Projection", "Stat line", "Team context", "Market"],
+  advanced: ["Production", "Usage", "Efficiency"],
+};
+
+function ComparisonMetricRow({ row, leftName, rightName, headline = false }: { row: ComparisonRow; leftName: string; rightName: string; headline?: boolean }) {
   const { metric, leftValue, rightValue } = row;
   const leftWins = Boolean(leftValue && rightValue && (metric.lowerIsBetter ? leftValue.value < rightValue.value : leftValue.value > rightValue.value));
   const rightWins = Boolean(leftValue && rightValue && (metric.lowerIsBetter ? rightValue.value < leftValue.value : rightValue.value > leftValue.value));
@@ -2528,35 +2555,25 @@ function ComparisonMetricRow({ row, leftName, rightName }: { row: ComparisonRow;
   const leftDisplay = leftValue ? metricDisplay(leftValue.value, metric) : "—";
   const rightDisplay = rightValue ? metricDisplay(rightValue.value, metric) : "—";
   const [leftShare, rightShare] = comparisonBarShares(row);
+  const valueClass = (value: ComparisonMetricValue | null, wins: boolean, loses: boolean) =>
+    `comparison-row-value${wins ? " is-winner" : ""}${!value ? " is-unavailable" : loses ? " is-loser" : ""}`;
 
   return (
     <div
-      className="comparison-data-row"
+      className={`comparison-row${headline ? " is-headline" : ""}`}
       role="group"
       aria-label={`${metric.label}. ${leftName}: ${leftDisplay}${leftWins ? ", leads" : tied ? ", tied" : ""}. ${rightName}: ${rightDisplay}${rightWins ? ", leads" : tied ? ", tied" : ""}.`}
     >
-      <div className="comparison-data-side left" aria-hidden="true">
-        <strong className={`comparison-data-value${leftWins ? " is-winner" : ""}${!leftValue ? " is-unavailable" : rightWins ? " is-loser" : ""}`}>{leftDisplay}</strong>
-        <div className="player-comparison-track">
-          <span
-            className={`player-comparison-fill left${leftWins ? " is-winner" : ""}`}
-            style={{ width: `${leftValue ? leftShare : 0}%` }}
-          />
-        </div>
-      </div>
-      <div className="comparison-data-label">
-        <b>{metric.label}</b>
+      <span className="comparison-row-label" aria-hidden="true">
+        {metric.label}
         {metric.lowerIsBetter ? <small>Lower is better</small> : null}
-      </div>
-      <div className="comparison-data-side right" aria-hidden="true">
-        <div className="player-comparison-track">
-          <span
-            className={`player-comparison-fill right${rightWins ? " is-winner" : ""}`}
-            style={{ width: `${rightValue ? rightShare : 0}%` }}
-          />
-        </div>
-        <strong className={`comparison-data-value${rightWins ? " is-winner" : ""}${!rightValue ? " is-unavailable" : leftWins ? " is-loser" : ""}`}>{rightDisplay}</strong>
-      </div>
+      </span>
+      <strong className={valueClass(leftValue, leftWins, rightWins)} aria-hidden="true">{leftDisplay}</strong>
+      <span className="comparison-split" aria-hidden="true">
+        <i className={`${leftWins ? "is-winner" : ""}${!leftValue ? " is-empty" : ""}`} style={{ flexGrow: leftShare }} />
+        <i className={`${rightWins ? "is-winner" : ""}${!rightValue ? " is-empty" : ""}`} style={{ flexGrow: rightShare }} />
+      </span>
+      <strong className={valueClass(rightValue, rightWins, leftWins)} aria-hidden="true">{rightDisplay}</strong>
     </div>
   );
 }
@@ -2567,15 +2584,30 @@ function comparisonMatchupLabel(player: ComparisonEntity): string {
   return `${player.isAway ? "@" : "vs"} ${player.opponent}`;
 }
 
-function ComparisonHeadToHead({ left, right, leftPlayerId, rightPlayerId, trending }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"] }) {
+/** Position, team and opponent in one short line; unknowns are left out rather than spelled out. */
+function comparisonPickMeta(player: ComparisonEntity): string {
+  const position = player.position === "DEF" ? "DST" : player.position;
+  if (!player.team) return position;
+  if (player.isBye) return `${position} · ${player.team} · Bye`;
+  return player.opponent ? `${position} · ${player.team} ${player.isAway ? "@" : "vs"} ${player.opponent}` : `${position} · ${player.team}`;
+}
+
+function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trending, sosEntry, onOpenPlayer, onOpenMatchup }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"]; sosEntry?: StrengthOfScheduleEntryLike; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
   return (
-    <div className="comparison-head-to-head" aria-label={`${left.name} versus ${right.name}`}>
+    <header className="comparison-board-head" aria-label={`${left.name} versus ${right.name}`}>
       {[{ player: left, playerId: leftPlayerId }, { player: right, playerId: rightPlayerId }].map(({ player, playerId }, index) => {
-        const trend = playerId ? trending[playerId] : undefined;
+        const trend = playerId ? trending?.[playerId] : undefined;
         return (
-          <div className="comparison-head-player" key={player.id}>
-            <strong>{player.name}</strong>
-            <span>{player.team || "Team TBD"} · {comparisonMatchupLabel(player)}</span>
+          <div className={`comparison-board-player${index === 0 ? " is-left" : " is-right"}`} key={player.id}>
+            {playerId && onOpenPlayer
+              ? <button type="button" className="comparison-board-name" onClick={() => onOpenPlayer(playerId)} aria-label={`View ${player.name} details and news`}>{player.name}</button>
+              : <strong className="comparison-board-name">{player.name}</strong>}
+            <span className="comparison-board-meta">
+              {player.team && player.opponent && !player.isBye
+                ? <MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} />
+                : <span>{player.team || "Team TBD"} · {comparisonMatchupLabel(player)}</span>}
+              {player.gameTime ? <time>{gameTimeLabel(player.gameTime)}</time> : null}
+            </span>
             {trend && (trend.adds !== null || trend.drops !== null) ? (
               <span className="comparison-trending">
                 {trend.adds !== null ? <>Adds <strong>{formatCompactCount(trend.adds)}</strong></> : null}
@@ -2583,29 +2615,40 @@ function ComparisonHeadToHead({ left, right, leftPlayerId, rightPlayerId, trendi
                 {trend.drops !== null ? <>Drops <strong>{formatCompactCount(trend.drops)}</strong></> : null}
               </span>
             ) : null}
-            <time>{gameTimeLabel(player.gameTime)}</time>
-            {index === 0 ? <i aria-hidden="true">VS</i> : null}
           </div>
         );
       })}
-    </div>
+    </header>
   );
 }
 
-function ComparisonPlayerSlot({ slot, player, playerId, options, sosEntry, onChoose, onClear, onOpenPlayer, onOpenMatchup }: {
+function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
   slot: 1 | 2;
   player: ComparisonEntity | undefined;
-  playerId?: string;
   options: ComparisonEntity[];
-  sosEntry?: StrengthOfScheduleEntryLike;
   onChoose: (entity: ComparisonEntity) => void;
   onClear: () => void;
-  onOpenPlayer?: (playerId: string) => void;
-  onOpenMatchup?: (matchup: MatchupSelection) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const swapRef = useRef<HTMLButtonElement>(null);
+  // Picking, Escape and clear unmount the focused control; say where focus goes next.
+  const restoreFocus = useRef<"swap" | "input" | null>(null);
   const inputId = `comparison-position-player-${slot}`;
   const needle = comparablePlayerName(query.trim());
+  const showSearch = !player || isEditing;
+
+  useEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+    } else if (restoreFocus.current === "swap" && player) {
+      swapRef.current?.focus();
+    } else if (restoreFocus.current === "input" && !player) {
+      inputRef.current?.focus();
+    }
+    if (!isEditing) restoreFocus.current = null;
+  }, [isEditing, player]);
 
   const matches = useMemo(() => options
     .filter((entity) => needle && comparablePlayerName(entity.name).includes(needle))
@@ -2619,87 +2662,99 @@ function ComparisonPlayerSlot({ slot, player, playerId, options, sosEntry, onCho
     .slice(0, 40), [needle, options]);
 
   function choose(entity: ComparisonEntity) {
+    restoreFocus.current = "swap";
     onChoose(entity);
     setQuery("");
+    setIsEditing(false);
   }
 
-  function clear() {
-    onClear();
+  function stopEditing() {
     setQuery("");
+    setIsEditing(false);
   }
 
   return (
-    <section className={`comparison-player-slot slot-${slot}${player ? " is-populated" : ""}`} aria-labelledby={`${inputId}-label`}>
-      <div className="trade-side-heading comparison-slot-header">
-        <div><h2 id={`${inputId}-label`}>Player {slot}</h2></div>
-        {player ? <button type="button" onClick={clear} aria-label={`Clear player ${slot}`}>Clear</button> : null}
-      </div>
-      <div id={`${inputId}-editor`} className="trade-side-search-wrap comparison-slot-editor">
-        <label className="sr-only" htmlFor={inputId}>{player ? `Replace player ${slot}` : `Search for player ${slot}`}</label>
-        <div className="search-field comparison-slot-search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-          <input
-            id={inputId}
-            type="search"
-            aria-label={player ? `Search to replace player ${slot}` : `Search players for comparison slot ${slot}`}
-            name={`comparison-player-${slot}`}
-            placeholder={player ? `Replace ${player.name}…` : `Add player ${slot}…`}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                const firstMatch = matches[0];
-                if (firstMatch) { event.preventDefault(); choose(firstMatch); }
-              } else if (event.key === "Escape") {
-                setQuery("");
-              }
-            }}
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="none"
-            spellCheck={false}
-          />
-          {query ? <button className="search-clear" type="button" onClick={() => setQuery("")} aria-label={`Clear player ${slot} search`}>×</button> : null}
-        </div>
-        {needle ? (
-          <div className="comparison-slot-results inline-search-results" aria-label={`Players available for comparison slot ${slot}`} aria-live="polite">
-            {matches.map((entity) => (
-              <button type="button" aria-current={player?.id === entity.id ? "true" : undefined} className={player?.id === entity.id ? "is-selected" : ""} key={entity.id} onClick={() => choose(entity)}>
-                <span className="comparison-result-copy">
-                  <span className="comparison-result-primary"><strong>{entity.name}</strong><b>{entity.position === "DEF" ? "DST" : entity.position}</b></span>
-                  <span className="comparison-result-meta"><span className="comparison-matchup"><MatchupTag team={entity.team} opponent={entity.opponent} isAway={entity.isAway} isBye={entity.isBye} position={entity.position} entry={sosEntry} /></span><time>{gameTimeLabel(entity.gameTime)}</time></span>
-                </span>
-              </button>
-            ))}
-            {matches.length === 0 ? <div className="trade-search-empty">No players match “{query.trim()}”.</div> : null}
+    <div className={`comparison-pick slot-${slot}${player ? " is-picked" : ""}`}>
+      {showSearch ? (
+        <>
+          <label className="sr-only" htmlFor={inputId}>{player ? `Replace player ${slot}` : `Search for player ${slot}`}</label>
+          <div className="search-field comparison-pick-search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            <input
+              ref={inputRef}
+              id={inputId}
+              type="search"
+              aria-label={player ? `Search to replace player ${slot}` : `Search players for comparison slot ${slot}`}
+              name={`comparison-player-${slot}`}
+              placeholder={player ? `Replace ${player.name}…` : `Add player ${slot}…`}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onBlur={(event) => {
+                // Leaving the search without picking keeps the current player.
+                if (player && !event.currentTarget.closest(".comparison-pick")?.contains(event.relatedTarget)) stopEditing();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  const firstMatch = matches[0];
+                  if (firstMatch) { event.preventDefault(); choose(firstMatch); }
+                } else if (event.key === "Escape") {
+                  if (player) {
+                    restoreFocus.current = "swap";
+                    stopEditing();
+                  } else setQuery("");
+                }
+              }}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+            />
+            {query ? <button className="search-clear" type="button" onClick={() => setQuery("")} aria-label={`Clear player ${slot} search`}>×</button> : null}
           </div>
-        ) : null}
-      </div>
-      {player ? (
-        <div className="comparison-selected-player">
-          <div className="comparison-player-primary">
-            {playerId && onOpenPlayer ? <button type="button" className="comparison-player-open" onClick={() => onOpenPlayer(playerId)} aria-label={`View ${player.name} details and news`}><strong>{player.name}</strong></button> : <strong>{player.name}</strong>}
-            <b>{player.position === "DEF" ? "DST" : player.position}</b>
-          </div>
-          <div className="comparison-player-meta">
-            <span className="comparison-matchup"><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} /></span>
-            <time>{gameTimeLabel(player.gameTime)}</time>
-          </div>
+        </>
+      ) : player ? (
+        <div className="comparison-pick-chosen">
+          <button ref={swapRef} type="button" className="comparison-pick-swap" onClick={() => setIsEditing(true)} aria-label={`Replace player ${slot}, ${player.name}`}>
+            <strong>{player.name}</strong>
+            <span>{comparisonPickMeta(player)}</span>
+          </button>
+          <button type="button" className="comparison-pick-clear" onClick={() => { restoreFocus.current = "input"; onClear(); stopEditing(); }} aria-label={`Clear player ${slot}`}>×</button>
         </div>
       ) : null}
-    </section>
+      {showSearch && needle ? (
+        <div className="comparison-pick-results" aria-label={`Players available for comparison slot ${slot}`} aria-live="polite">
+          {matches.map((entity) => (
+            <button
+              type="button"
+              aria-current={player?.id === entity.id ? "true" : undefined}
+              className={player?.id === entity.id ? "is-selected" : ""}
+              key={entity.id}
+              // Keep focus in the search so picking a result doesn't count as leaving it.
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => choose(entity)}
+            >
+              <span className="comparison-result-primary"><strong>{entity.name}</strong></span>
+              <span className="comparison-result-meta">
+                <span>{comparisonPickMeta(entity)}</span>
+                {entity.gameTime ? <time>{gameTimeLabel(entity.gameTime)}</time> : null}
+              </span>
+            </button>
+          ))}
+          {matches.length === 0 ? <div className="trade-search-empty">No players match “{query.trim()}”.</div> : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
-function ComparisonView({ dashboard, league, dataset, window, position, initialPlayer, initialKey, onInitialPlayerApplied, onOpenPlayer, onOpenMatchup }: {
+function ComparisonView({ dashboard, league, dataset, window, validPositions, initialPlayer, initialKey, onOpenPlayer, onOpenMatchup }: {
   dashboard: Dashboard;
   league: League;
   dataset: ToolDataset;
   window: AnalyticsWindow;
-  position: BasePosition;
+  validPositions: BasePosition[];
   initialPlayer: PlayerSelection | null;
   initialKey: number;
-  onInitialPlayerApplied: () => void;
   onOpenPlayer?: (playerId: string) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
 }) {
@@ -2711,10 +2766,12 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
   });
   const weeklyEntities = useMemo(() => buildWeeklyEntities(dashboard, league, pfnQuery.data?.tables), [dashboard, league.id, pfnQuery.data?.tables]);
   const weeklyByIdentity = useMemo(() => new Map(weeklyEntities.map((entity) => [`${entity.position}:${comparablePlayerName(entity.name)}`, entity])), [weeklyEntities]);
+  // Every position the league ranks; picking the first player narrows the other slot to that position.
   const entities = useMemo<ComparisonEntity[]>(() => {
-    if (dataset === "projections") return weeklyEntities.filter((entity) => entity.position === position);
+    const inLeague = (position: string) => (validPositions as string[]).includes(position);
+    if (dataset === "projections") return weeklyEntities.filter((entity) => inLeague(entity.position));
     return dashboard.analytics.entities.flatMap((entity) => {
-      if (entity.position !== position) return [];
+      if (!inLeague(entity.position)) return [];
       const game = weeklyByIdentity.get(`${entity.position}:${comparablePlayerName(entity.name)}`);
       return [{
         id: entity.id,
@@ -2729,25 +2786,32 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
         values: window === "season" ? entity.season : entity.rolling17,
       }];
     });
-  }, [dashboard.analytics.entities, dataset, position, weeklyByIdentity, weeklyEntities, window]);
+  }, [dashboard.analytics.entities, dataset, validPositions, weeklyByIdentity, weeklyEntities, window]);
 
   const [selectedPlayers, setSelectedPlayers] = useState<[PlayerSelection | null, PlayerSelection | null]>([null, null]);
-  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const initialSeedKey = useRef<number | null>(null);
 
-  // Both slots start empty. The initialPlayer seed (waiver-row "Compare" swipe)
-  // is applied only when initialKey changes, so dataset/window toggles never
-  // wipe the user's picks.
+  // Both slots start empty. The initialPlayer seed (a player card's "Compare"
+  // link) is applied only when initialKey changes, so dataset/window toggles
+  // never wipe the user's picks.
   useEffect(() => {
-    if (!initialPlayer || initialPlayer.position !== position) return;
+    if (!initialPlayer || !validPositions.includes(initialPlayer.position)) return;
     if (initialSeedKey.current === initialKey) return;
     const requested = entities.find((entity) => isSamePlayer(entity, initialPlayer));
     if (!requested) return;
     setSelectedPlayers([requested, null]);
     initialSeedKey.current = initialKey;
-    onInitialPlayerApplied();
-  }, [entities, initialKey, initialPlayer, onInitialPlayerApplied, position]);
+  }, [entities, initialKey, initialPlayer, validPositions]);
+
+  // Drop picks whose position the league no longer ranks.
+  useEffect(() => {
+    if (selectedPlayers.every((player) => !player || validPositions.includes(player.position))) return;
+    setSelectedPlayers(([first, second]) => [
+      first && validPositions.includes(first.position) ? first : null,
+      second && validPositions.includes(second.position) ? second : null,
+    ]);
+  }, [selectedPlayers, validPositions]);
 
   // Keep selections as player identities rather than source-specific row IDs.
   // Advanced stats and weekly projections are separate datasets and can use
@@ -2773,6 +2837,7 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
   });
   const left = selected[0];
   const right = selected[1];
+  const position = (left ?? right)?.position ?? null;
   const playerDetailId = (player: ComparisonEntity | undefined): string | undefined => player
     ? player.playerId ?? weeklyByIdentity.get(`${player.position}:${comparablePlayerName(player.name)}`)?.playerId
     : undefined;
@@ -2788,6 +2853,7 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
     retry: false,
   });
   const metricList = useMemo(() => {
+    if (!position) return [];
     if (dataset === "advanced") return analyticsMetricsForLeague(position, league);
     const projectionMetrics = weeklyMetrics[position].filter((metric) => !redundantComparisonProjectionKeys.has(metric.key));
     return position === "DEF" ? projectionMetrics : [...projectionMetrics, ...teamContextMetrics];
@@ -2797,7 +2863,7 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
     const rightValue = comparisonValue(right, metric);
     return leftValue || rightValue ? [{ metric, leftValue, rightValue }] : [];
   });
-  const orderIndex = new Map(comparisonRowOrder[dataset][position].map((key, index) => [key, index]));
+  const orderIndex = new Map((position ? comparisonRowOrder[dataset][position] : []).map((key, index) => [key, index]));
   const boomBustRows = (() => {
     if (dataset !== "projections" || !leftPlayerId || !rightPlayerId) return [];
     const ranges = new Map((boomBustQuery.data?.rows ?? []).map((range) => [range.playerId, range]));
@@ -2827,40 +2893,33 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
       return aOrder - bOrder || a.index - b.index;
     })
     .map(({ row }) => row);
+  const headlineRow = comparisonRows.find((row) => comparisonHeadlineKeys.has(row.metric.key));
+  const groupedRows = comparisonGroupOrder[dataset]
+    .map((group) => ({ group, rows: comparisonRows.filter((row) => row !== headlineRow && comparisonGroup(dataset, row.metric.key) === group) }))
+    .filter((entry) => entry.rows.length > 0);
   const selectionStateClass = left && right ? " is-ready" : left || right ? " has-selection" : " is-empty";
 
   return (
     <section className={`comparison-view${selectionStateClass}`}>
-      <div className="comparison-selector-card" aria-label={`${position === "DEF" ? "DST" : position} players being compared`}>
-        <div className="comparison-cards">
-          <ComparisonPlayerSlot slot={1} player={left} playerId={leftPlayerId} options={entities.filter((entity) => entity.id !== right?.id)} sosEntry={sosEntry} onChoose={(entity) => setSelectedPlayers((current) => [entity, current[1]])} onClear={() => setSelectedPlayers((current) => [null, current[1]])} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
-          <ComparisonPlayerSlot slot={2} player={right} playerId={rightPlayerId} options={entities.filter((entity) => entity.id !== left?.id)} sosEntry={sosEntry} onChoose={(entity) => setSelectedPlayers((current) => [current[0], entity])} onClear={() => setSelectedPlayers((current) => [current[0], null])} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
-        </div>
+      <div className="comparison-pickers" aria-label="Players being compared">
+        <ComparisonPicker slot={1} player={left} options={right ? entities.filter((entity) => entity.position === right.position && entity.id !== right.id) : entities} onChoose={(entity) => setSelectedPlayers((current) => [entity, current[1]])} onClear={() => setSelectedPlayers((current) => [null, current[1]])} />
+        <ComparisonPicker slot={2} player={right} options={left ? entities.filter((entity) => entity.position === left.position && entity.id !== left.id) : entities} onChoose={(entity) => setSelectedPlayers((current) => [current[0], entity])} onClear={() => setSelectedPlayers((current) => [current[0], null])} />
       </div>
 
       {entities.length === 0 ? (
-        <div className="analytics-empty"><strong>{dataset === "advanced" ? `No ${position === "DEF" ? "DST" : position} advanced stats yet.` : `No ${position === "DEF" ? "DST" : position} weekly projections yet.`}</strong><span>{dataset === "advanced" ? "Refresh after nflverse publishes the next weekly file." : "Refresh to check the latest Vegas lines and nflverse usage data."}</span></div>
+        <div className="analytics-empty"><strong>{dataset === "advanced" ? "No advanced stats yet." : "No weekly projections yet."}</strong><span>{dataset === "advanced" ? "Refresh after nflverse publishes the next weekly file." : "Refresh to check the latest Vegas lines and nflverse usage data."}</span></div>
       ) : left && right ? (
-        <>
-          <button type="button" className="chart-open-button" onClick={() => setIsComparisonOpen(true)}>View comparison</button>
-          <ChartDialog
-            isOpen={isComparisonOpen}
-            onClose={() => setIsComparisonOpen(false)}
-            title="Player comparison"
-            showCount={false}
-            closeLabel="Close comparison"
-          >
-            <div className="comparison-overview" aria-label={`${left.name} and ${right.name} comparison`}>
-              <ComparisonHeadToHead left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} />
-
-              {comparisonRows.length > 0 ? (
-                <div className="comparison-metric-list">
-                  {comparisonRows.map((row) => <ComparisonMetricRow key={row.metric.key} row={row} leftName={left.name} rightName={right.name} />)}
-                </div>
-              ) : <div className="empty-inline">No shared metrics are available for these players.</div>}
-            </div>
-          </ChartDialog>
-        </>
+        <section className="comparison-board" aria-label={`${left.name} and ${right.name} comparison`}>
+          <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
+          {headlineRow ? <ComparisonMetricRow row={headlineRow} leftName={left.name} rightName={right.name} headline /> : null}
+          {groupedRows.map(({ group, rows: groupRows }) => (
+            <section className="comparison-group" key={group} aria-label={group}>
+              <h3>{group}</h3>
+              {groupRows.map((row) => <ComparisonMetricRow key={row.metric.key} row={row} leftName={left.name} rightName={right.name} />)}
+            </section>
+          ))}
+          {comparisonRows.length === 0 ? <div className="empty-inline">No shared metrics are available for these players.</div> : null}
+        </section>
       ) : <div className="empty-inline">Choose two players to compare.</div>}
     </section>
   );
@@ -2868,64 +2927,26 @@ function ComparisonView({ dashboard, league, dataset, window, position, initialP
 
 export function ComparisonTool({ dashboard, league, initialPlayer = null, initialKey = 0, onOpenPlayer, onOpenMatchup }: { dashboard: Dashboard; league: League; initialPlayer?: PlayerSelection | null; initialKey?: number; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
-  const [position, setPosition] = useState<BasePosition | null>(null);
   const [dataset, setDataset] = useState<ToolDataset>("projections");
   const [window, setWindow] = useState<AnalyticsWindow>("season");
-  const [pendingSeed, setPendingSeed] = useState<{ key: number; player: PlayerSelection } | null>(null);
-  const observedSeedKey = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!initialPlayer || observedSeedKey.current === initialKey) return;
-    observedSeedKey.current = initialKey;
-    if (!validPositions.includes(initialPlayer.position)) return;
-    setPosition(initialPlayer.position);
-    setPendingSeed({ key: initialKey, player: initialPlayer });
-  }, [initialKey, initialPlayer, validPositions]);
-
-  useEffect(() => {
-    if (!position || validPositions.includes(position)) return;
-    setPosition(null);
-    setPendingSeed(null);
-  }, [position, validPositions]);
-
-  function choosePosition(next: BasePosition) {
-    if (next === position) return;
-    setPosition(next);
-    setPendingSeed(null);
-  }
 
   return (
     <div className="comparison-tool">
-      {/* Keep shared controls in the same order as Charts: dataset, then position, then window. */}
-      <ToolDatasetToggle value={dataset} onChange={setDataset} label="Comparison dataset" />
-      <SegmentedControl<BasePosition | "">
-        className="comparison-position-toggle analytics-position-tabs"
-        value={position ?? ""}
-        onChange={(next) => { if (next) choosePosition(next); }}
-        label="Comparison position"
-        options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
+      <div className="comparison-toolbar">
+        <ToolDatasetToggle value={dataset} onChange={setDataset} label="Comparison dataset" />
+        {dataset === "advanced" ? <SegmentedControl className="analytics-window-toggle" value={window} onChange={setWindow} label="Advanced stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]} /> : null}
+      </div>
+      <ComparisonView
+        dashboard={dashboard}
+        league={league}
+        dataset={dataset}
+        window={window}
+        validPositions={validPositions}
+        initialPlayer={initialPlayer}
+        initialKey={initialKey}
+        onOpenPlayer={onOpenPlayer}
+        onOpenMatchup={onOpenMatchup}
       />
-      {dataset === "advanced" ? <SegmentedControl className="lineup-mode-toggle analytics-window-toggle" value={window} onChange={setWindow} label="Advanced stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]} /> : null}
-      {position ? (
-        <ComparisonView
-          key={position}
-          dashboard={dashboard}
-          league={league}
-          dataset={dataset}
-          window={window}
-          position={position}
-          initialPlayer={pendingSeed?.player ?? null}
-          initialKey={pendingSeed?.key ?? 0}
-          onInitialPlayerApplied={() => setPendingSeed(null)}
-          onOpenPlayer={onOpenPlayer}
-          onOpenMatchup={onOpenMatchup}
-        />
-      ) : (
-        <div className="comparison-position-empty empty-stack">
-          <strong>Select a position to start.</strong>
-          <span>You’ll choose two players from that position.</span>
-        </div>
-      )}
     </div>
   );
 }

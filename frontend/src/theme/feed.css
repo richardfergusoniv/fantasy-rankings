@@ -70,7 +70,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 
 @media (prefers-reduced-motion: reduce) {
   .spin, .animate-spin, .animate-pulse, .loading-shimmer::after, .player-detail-backdrop, .player-detail-sheet, .player-detail-content, .news-card-backdrop, .news-card-modal, .matchup-card-backdrop, .matchup-data-card, .trade-result-backdrop, .trade-result-card, .chart-result-backdrop, .chart-result-card, .power-team-card-backdrop, .power-team-card, .ticker-track, [data-slot="dialog-overlay"], [data-slot="dialog-content"] { animation: none; }
-  .segment-thumb, .matchup-row, .player-detail-sheet, .player-detail-content, .player-chart-peek i b, .bench-section summary svg, .trade-balance-track span, .percentile-bar > i, .comparison-bar > i, .comparison-segment, .player-comparison-segment { transition: none; }
+  .segment-thumb, .matchup-row, .player-detail-sheet, .player-detail-content, .player-chart-peek i b, .bench-section summary svg, .trade-balance-track span, .percentile-bar > i, .comparison-bar > i, .comparison-segment, .comparison-split i { transition: none; }
   .ticker-viewport { overflow-x: auto; scrollbar-width: none; }
   .ticker-viewport::-webkit-scrollbar { display: none; }
   .ticker-copy { display: none; }
@@ -126,14 +126,8 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .matchup-score, .lineup-section, .bench-section { max-width: 860px; }
   .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
   .rankings-view, .trade-view, .advanced-stats-view, .analytics-view, .weekly-projections-view, .comparison-view, .power-view, .monitor-section { max-width: 920px; }
-  .comparison-cards { max-width: 620px; gap: 20px; }
-  .comparison-selector-card .comparison-cards { grid-template-columns: minmax(0, 1fr); }
-  .comparison-player-slot.slot-2 { border-top: 0; border-left: 0; }
-  .comparison-metric-row { display: grid; grid-template-columns: minmax(190px, 240px) minmax(0, 1fr); align-items: center; gap: 14px; padding: 9px 2px; }
   .comparison-metric-label { display: block; margin-bottom: 0; }
   .comparison-metric-label span { display: block; margin-top: 3px; }
-  .comparison-picker-backdrop { align-items: center; padding: 28px; }
-  .comparison-picker-sheet { border-radius: var(--radius-xl); }
   .analytics-selectors { grid-template-columns: minmax(210px, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) 170px; }
   .analytics-selectors.advanced-only-selectors { grid-template-columns: repeat(2, minmax(0, 1fr)) repeat(3, minmax(120px, .62fr)); }
   .chart-preset-only, .saved-view-block { max-width: 620px; }

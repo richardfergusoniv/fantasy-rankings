@@ -76,8 +76,6 @@
   }
 }
 
-
-
 .matchup-page .score-team { padding: 12px; }
 .matchup-page .score-team > span { font-size: var(--type-caption); font-weight: 600; }
 .matchup-page .score-line { gap: 7px; margin-top: 7px; }
@@ -268,5 +266,4 @@
 
 @media (min-width: 760px) {
   .matchup-page .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
-  .matchup-data-card .comparison-metric-row { grid-template-columns: 76px minmax(0, 1fr); }
 }
