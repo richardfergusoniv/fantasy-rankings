@@ -442,7 +442,7 @@ function refreshResult(status: PlayerInsightsRefreshResult["status"], snapshot: 
 }
 
 export async function refreshPlayerInsightsSnapshot(): Promise<PlayerInsightsRefreshResult> {
-  const previous = await readPlayerInsightsSnapshot();
+  const previous = await readPlayerInsightsSnapshot().catch(() => null);
   if (previous && Date.now() - Date.parse(previous.fetchedAt) < PLAYER_INSIGHTS_CACHE_MS) {
     return refreshResult("fresh-cache", previous);
   }
