@@ -250,22 +250,18 @@ export function parseExperts(
 // Fetching
 // ---------------------------------------------------------------------------
 
-async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+/** The timeout covers the whole download, not only the response headers. */
+async function fetchCsv(url: string, timeoutMs = 30_000): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { headers: { "user-agent": "fantasy-rankings-player-insights/1.0" }, signal: controller.signal });
     if (!response.ok) throw new Error(`${url} HTTP ${response.status}`);
-    return response;
+    if (!url.endsWith(".gz")) return await response.text();
+    return gunzipSync(Buffer.from(await response.arrayBuffer())).toString("utf8");
   } finally {
     clearTimeout(timer);
   }
-}
-
-async function fetchCsv(url: string, timeoutMs = 30_000): Promise<string> {
-  const response = await fetchWithTimeout(url, timeoutMs);
-  if (!url.endsWith(".gz")) return await response.text();
-  return gunzipSync(Buffer.from(await response.arrayBuffer())).toString("utf8");
 }
 
 /**
