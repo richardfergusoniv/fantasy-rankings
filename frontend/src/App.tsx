@@ -1172,8 +1172,7 @@ export function App() {
       <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       <div role="region" aria-label="League and week" className="league-sticky">
-          {/* Tool pages need the vertical room on a phone; the ticker stays on the other pages. */}
-          {primaryPage === "tools" ? null : <TickerStrip
+          <TickerStrip
             data={draftQuery.data}
             news={newsQuery.data}
             rosterPlayerIds={selectedLeagueRosterIds}
@@ -1181,7 +1180,7 @@ export function App() {
             prominentPlayerIds={selectedLeagueProminentIds}
             onPlayer={openTickerPlayer}
             onNews={setTickerNews}
-          />}
+          />
           <div className="week-line">
             <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
             <div className="week-actions">
