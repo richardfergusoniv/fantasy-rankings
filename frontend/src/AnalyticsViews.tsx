@@ -443,8 +443,8 @@ const defaultWeeklyAxes: Record<BasePosition, [string, string]> = {
 /** A chart's player group: one position, or FLEX (RB, WR and TE together). */
 type ChartPosition = BasePosition | "FLEX";
 const flexPositions: readonly BasePosition[] = ["RB", "WR", "TE"];
-// Position ranks and boom/bust ranges are per position, so they don't mix in FLEX.
-const flexExcludedWeeklyKeys = new Set(["leaguePositionRank", "boomBustRange"]);
+// Ranks, tier drops and boom/bust ranges are per position, so they don't mix in FLEX.
+const flexExcludedWeeklyKeys = new Set(["leaguePositionRank", "fantasyCalcPositionRank", "tierCliff", "boomBustRange"]);
 
 function chartPositionOptions(validPositions: readonly BasePosition[]): ChartPosition[] {
   const options: ChartPosition[] = [...validPositions];
@@ -1752,7 +1752,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
 
   // The monitor keeps its toolbar with no stats, so This week views stay reachable.
   const hasStats = dashboard.analytics.entities.length > 0;
-  if (!selectedX || !selectedY || (!hasStats && layout !== "monitor")) {
+  if (!selectedX || !selectedY || (!hasStats && layout !== "monitor" && !isTeamChart)) {
     return (
       <section className={layout === "monitor" ? "monitor-builder-chart-empty" : "analytics-view"}>
         <div className="analytics-empty">
@@ -1900,13 +1900,15 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
 
   return (
     <section className="analytics-view">
-      <SegmentedControl
-        className="analytics-position-tabs"
-        value={position}
-        onChange={choosePosition}
-        label="Chart position"
-        options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))}
-      />
+      {isTeamChart ? null : (
+        <SegmentedControl
+          className="analytics-position-tabs"
+          value={position}
+          onChange={choosePosition}
+          label="Chart position"
+          options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))}
+        />
+      )}
 
       {advancedControls}
 
