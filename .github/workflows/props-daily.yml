@@ -15,14 +15,15 @@ name: Props daily pull
 # dispatches always run. The concurrency group keeps the two crons from
 # overlapping so the later run can see the earlier run's result.
 #
-# First Down fallback: if Vegas validation fails on the player-count
-# minimum alone (validator exit 3, i.e. fewer than 200 players), the run
-# scrapes First Down Studio's rankings, builds fallback projections
-# (source "first_down", >= 150 players, K rows copied from the Vegas
-# build), validates and stages those instead, and pushes normally.
-# Any other validation failure is a hard fail. A manual dispatch can
-# force the fallback path with the force_fallback input (used to test
-# the fallback end to end).
+# Thin Vegas + First Down gap-fill: if Vegas validation fails on the
+# player-count minimum alone (validator exit 3, i.e. fewer than 200
+# players), the run still keeps a partial Vegas board when it has at
+# least one non-K player, scrapes First Down Studio, builds fallback
+# projections (source "first_down", K rows copied from the Vegas build),
+# and pushes BOTH so the dashboard uses Vegas as primary with First Down
+# gap-fill. Empty or kickers-only Vegas files are discarded (First Down
+# only). Any other Vegas validation failure is a hard fail. A manual
+# dispatch can force First-Down-only with the force_fallback input.
 
 on:
   schedule:
@@ -102,8 +103,9 @@ jobs:
           WEEK=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["week"])' "$FILE")
           echo "week=$WEEK" >> "$GITHUB_OUTPUT"
           if [ "$FORCE_FALLBACK" = "true" ]; then
-            echo "force_fallback set: bypassing Vegas validation, using First Down fallback"
+            echo "force_fallback set: bypassing Vegas, using First Down only"
             echo "use_fallback=true" >> "$GITHUB_OUTPUT"
+            echo "keep_vegas=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           set +e
@@ -112,9 +114,20 @@ jobs:
           set -e
           if [ "$CODE" = "0" ]; then
             echo "use_fallback=false" >> "$GITHUB_OUTPUT"
+            echo "keep_vegas=true" >> "$GITHUB_OUTPUT"
           elif [ "$CODE" = "3" ]; then
-            echo "Vegas yielded fewer than 200 players: engaging First Down fallback"
-            echo "use_fallback=true" >> "$GITHUB_OUTPUT"
+            # Structure must still pass; only the 200-player floor failed.
+            python3 pipeline/scripts/validate_projections.py --min-players 0 "$FILE"
+            NON_K=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(sum(1 for p in d["projections"] if p.get("position")!="K"))' "$FILE")
+            if [ "$NON_K" -ge 1 ]; then
+              echo "Vegas yielded fewer than 200 players but has $NON_K non-K: keeping partial Vegas and engaging First Down gap-fill"
+              echo "use_fallback=true" >> "$GITHUB_OUTPUT"
+              echo "keep_vegas=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "Vegas board is empty or kickers-only ($NON_K non-K): discarding it, First Down only"
+              echo "use_fallback=true" >> "$GITHUB_OUTPUT"
+              echo "keep_vegas=false" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "Validation failed with code $CODE (not a player-count failure); failing the run"
             exit 1
@@ -149,10 +162,17 @@ jobs:
       - name: Stage projections
         if: steps.guard.outputs.go == 'true'
         run: |
-          if [ "${{ steps.validate.outputs.use_fallback }}" = "true" ]; then
-            cp "${{ steps.fallback.outputs.file }}" pipeline/data/staged_for_push.json
-          else
+          # staged_for_push is the verify primary: Vegas whenever kept,
+          # otherwise First Down. A companion First Down file is staged
+          # when both boards are pushed (partial-Vegas gap-fill day).
+          rm -f pipeline/data/staged_firstdown_for_push.json
+          if [ "${{ steps.validate.outputs.keep_vegas }}" = "true" ]; then
             cp "${{ steps.validate.outputs.file }}" pipeline/data/staged_for_push.json
+            if [ "${{ steps.validate.outputs.use_fallback }}" = "true" ]; then
+              cp "${{ steps.fallback.outputs.file }}" pipeline/data/staged_firstdown_for_push.json
+            fi
+          else
+            cp "${{ steps.fallback.outputs.file }}" pipeline/data/staged_for_push.json
           fi
 
       - name: Stage prop line snapshots
@@ -185,18 +205,31 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          python3 pipeline/scripts/push_ingest.py projections | tee /tmp/push_projections.json
-          python3 - <<'EOF'
-          import json
-          result = json.load(open('/tmp/push_projections.json'))
-          staged = json.load(open('pipeline/data/staged_for_push.json'))
-          expected = len(staged['projections'])
-          assert result.get('ok') is True, f"push not ok: {result}"
-          assert result.get('status') == 'committed', f"unexpected push status: {result}"
-          assert result.get('savedProjections') == expected, \
-              f"savedProjections {result.get('savedProjections')} != staged {expected}"
-          print(f"push verified: committed, savedProjections={expected}")
-          EOF
+          # Preserve the verify primary, then push it (Vegas when kept) before
+          # any First Down companion so both land under distinct snapshot ids.
+          cp pipeline/data/staged_for_push.json pipeline/data/staged_verify_primary.json
+          for STAGED in pipeline/data/staged_verify_primary.json pipeline/data/staged_firstdown_for_push.json; do
+            if [ ! -f "$STAGED" ]; then
+              continue
+            fi
+            cp "$STAGED" pipeline/data/staged_for_push.json
+            LABEL=$(basename "$STAGED" .json)
+            python3 pipeline/scripts/push_ingest.py projections | tee "/tmp/push_${LABEL}.json"
+            RESULT_FILE="/tmp/push_${LABEL}.json" STAGED_FILE="$STAGED" LABEL="$LABEL" python3 - <<'PY'
+          import json, os
+          result = json.load(open(os.environ["RESULT_FILE"]))
+          staged = json.load(open(os.environ["STAGED_FILE"]))
+          label = os.environ["LABEL"]
+          expected = len(staged["projections"])
+          assert result.get("ok") is True, f"push not ok ({label}): {result}"
+          assert result.get("status") == "committed", f"unexpected push status ({label}): {result}"
+          assert result.get("savedProjections") == expected, (
+              f"savedProjections {result.get('savedProjections')} != staged {expected} ({label})"
+          )
+          print(f"push verified ({label}): committed, savedProjections={expected}, source={staged.get('source')}")
+          PY
+          done
+          cp pipeline/data/staged_verify_primary.json pipeline/data/staged_for_push.json
 
       - name: Push prop line snapshots to Vercel
         if: steps.guard.outputs.go == 'true'

@@ -15,7 +15,9 @@ Checks (mirrors the props-twice-daily-pull cron rules):
 Usage: validate_projections.py [--min-players N] <projections_file>
 Exit 0 on pass, 1 on fail (message printed), 3 when the failure is the
 player-count minimum (the props workflow treats exit 3 as the trigger
-for the First Down Studio fallback; other failures stay hard fails).
+to also build First Down; a partial Vegas board with >=1 non-K player
+is still kept and pushed alongside First Down. Other failures stay
+hard fails).
 """
 from __future__ import annotations
 
@@ -27,6 +29,11 @@ from pathlib import Path
 EXPECTED_LEAGUES = 6
 MIN_PLAYERS = 200
 MAX_AGE_SECS = 3600
+
+
+def non_kicker_count(projections: list) -> int:
+    """Skill-position rows that make a partial Vegas board worth keeping."""
+    return sum(1 for row in projections if row.get("position") != "K")
 
 
 def main() -> int:
