@@ -1745,30 +1745,21 @@ function AnalyticsChart({ dashboard, league, layout = "page", dataset = "advance
       <div className="monitor-builder-chart">
         <div className="monitor-value-chart-controls">
           {onDatasetChange ? (
-            <label className="monitor-value-chart-field">
-              <span>Chart dataset</span>
-              <select
-                aria-label="Chart dataset"
-                value={dataset}
-                onChange={(event) => onDatasetChange(event.target.value as ToolDataset)}
-              >
-                <option value="advanced">Advanced Stats</option>
-                <option value="projections">Projections</option>
-              </select>
-            </label>
+            <SegmentedControl
+              className="monitor-chart-dataset"
+              value={dataset}
+              onChange={onDatasetChange}
+              label="Chart dataset"
+              options={[{ value: "advanced", label: "Advanced Stats" }, { value: "projections", label: "Projections" }]}
+            />
           ) : null}
-          <label className="monitor-value-chart-field">
-            <span>Chart position</span>
-            <select
-              aria-label="Chart position"
-              value={position}
-              onChange={(event) => choosePosition(event.target.value as BasePosition)}
-            >
-              {validPositions.map((item) => (
-                <option key={item} value={item}>{item === "DEF" ? "DST" : item}</option>
-              ))}
-            </select>
-          </label>
+          <SegmentedControl
+            className="monitor-chart-position"
+            value={position}
+            onChange={choosePosition}
+            label="Chart position"
+            options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
+          />
           {advancedControls}
         </div>
         {pickerMode === "blank" ? (
@@ -2314,30 +2305,21 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
             <div className="monitor-builder-chart">
               <div className="monitor-value-chart-controls">
                 {onDatasetChange ? (
-                  <label className="monitor-value-chart-field">
-                    <span>Chart dataset</span>
-                    <select
-                      aria-label="Chart dataset"
-                      value={dataset}
-                      onChange={(event) => onDatasetChange(event.target.value as ToolDataset)}
-                    >
-                      <option value="advanced">Advanced Stats</option>
-                      <option value="projections">Projections</option>
-                    </select>
-                  </label>
+                  <SegmentedControl
+                    className="monitor-chart-dataset"
+                    value={dataset}
+                    onChange={onDatasetChange}
+                    label="Chart dataset"
+                    options={[{ value: "advanced", label: "Advanced Stats" }, { value: "projections", label: "Projections" }]}
+                  />
                 ) : null}
-                <label className="monitor-value-chart-field">
-                  <span>Chart position</span>
-                  <select
-                    aria-label="Weekly chart position"
-                    value={position}
-                    onChange={(event) => choosePosition(event.target.value as BasePosition)}
-                  >
-                    {validPositions.map((item) => (
-                      <option key={item} value={item}>{item === "DEF" ? "DST" : item}</option>
-                    ))}
-                  </select>
-                </label>
+                <SegmentedControl
+                  className="monitor-chart-position"
+                  value={position}
+                  onChange={choosePosition}
+                  label="Weekly chart position"
+                  options={validPositions.map((item) => ({ value: item, label: item === "DEF" ? "DST" : item }))}
+                />
                 {weeklyControls}
               </div>
               {pickerMode === "blank" ? (

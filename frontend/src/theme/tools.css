@@ -215,8 +215,19 @@
   font-size: var(--type-caption);
   font-weight: 600;
 }
-.monitor-team-stats-group {
-  flex: 0 1 300px;
+.monitor-team-stats-group,
+.monitor-props-position,
+.monitor-chart-position {
+  flex: 0 1 320px;
+}
+.monitor-chart-dataset {
+  flex: 0 1 260px;
+}
+@media (max-width: 759px) {
+  .monitor-chart-dataset,
+  .monitor-chart-position {
+    flex: 1 1 100%;
+  }
 }
 /* Team stats: a usage grid. Rows are players (sorted by average), columns are
    weeks; each cell's blue tint is that player's share of the work that week. */
@@ -1023,7 +1034,10 @@
   }
   .monitor-props-controls {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .monitor-props-controls .monitor-props-position {
+    grid-column: 1 / -1;
   }
   .monitor-props-controls .monitor-value-chart-field {
     padding-left: 10px;

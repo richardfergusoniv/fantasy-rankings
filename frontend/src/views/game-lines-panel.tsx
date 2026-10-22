@@ -34,6 +34,7 @@ import {
 } from "../../../api/_lib/prop-line-reads";
 import { api } from "../api";
 import { SectionError } from "../dashboard-shared";
+import { SegmentedControl } from "../shared";
 import type { League } from "../dashboard-types";
 import { formatDecimal } from "../lib/format-number";
 import { PlayerNameLink } from "../tool-links";
@@ -380,6 +381,26 @@ export function GameLinesPanel({
     ]);
   }, [selectedGame]);
 
+  // Position buttons: the four skill positions always, K and DEF only when the
+  // board has lines for them. The Stat list offers only stats the board has
+  // for the chosen position, so WR never lists pass yards or sacks.
+  const boardLines = propLinesQuery.data?.propLines.lines;
+  const positionOptions = useMemo(() => {
+    const present = new Set((boardLines ?? []).map((line) => asPropPosition(line.position) ?? "WR"));
+    return PROP_POSITIONS.filter((code) => code === "QB" || code === "RB" || code === "WR" || code === "TE" || present.has(code));
+  }, [boardLines]);
+  // A position the refreshed board no longer has falls back to All.
+  const activePosition = position === "ALL" || positionOptions.includes(position) ? position : "ALL";
+  const statOptions = useMemo(() => {
+    if (!boardLines) return PROP_STAT_OPTIONS;
+    const present = new Set(boardLines
+      .filter((line) => activePosition === "ALL" || (asPropPosition(line.position) ?? "WR") === activePosition)
+      .map((line) => line.stat));
+    return PROP_STAT_OPTIONS.filter((option) => present.has(option.id));
+  }, [boardLines, activePosition]);
+  // A stat the board has no lines for at this position falls back to All.
+  const activeStatId = statId === "ALL" || statOptions.some((option) => option.id === statId) ? statId : "ALL";
+
   const propRows = useMemo(() => {
     const lines = propLinesQuery.data?.propLines.lines ?? [];
     const built: PropTableRow[] = [];
@@ -387,8 +408,8 @@ export function GameLinesPanel({
     for (const line of lines) {
       if (!isPropStatId(line.stat)) continue;
       const positionCode = asPropPosition(line.position) ?? "WR";
-      if (position !== "ALL" && positionCode !== position) continue;
-      if (statId !== "ALL" && line.stat !== statId) continue;
+      if (activePosition !== "ALL" && positionCode !== activePosition) continue;
+      if (activeStatId !== "ALL" && line.stat !== activeStatId) continue;
 
       const team = line.team ? canonicalNflTeam(line.team) : null;
       if (gameTeamFilter && (!team || !gameTeamFilter.has(normalizeGameLineTeam(team)))) {
@@ -442,11 +463,11 @@ export function GameLinesPanel({
     gameTeamFilter,
     opponentIds,
     opponentKeys,
-    position,
+    activePosition,
     propLinesQuery.data?.propLines.lines,
     rosterIds,
     rosterKeys,
-    statId,
+    activeStatId,
     weekStatsByPlayer,
   ]);
 
@@ -568,28 +589,32 @@ export function GameLinesPanel({
           ) : null}
 
           <div className="monitor-value-chart-controls monitor-props-controls">
-            <label className="monitor-value-chart-field">
-              <span>Position</span>
-              <select
-                aria-label="Position"
-                value={position}
-                onChange={(event) => setPosition(event.target.value as PropPosition | "ALL")}
-              >
-                <option value="ALL">All</option>
-                {PROP_POSITIONS.map((code) => (
-                  <option key={code} value={code}>{code}</option>
-                ))}
-              </select>
-            </label>
+            <SegmentedControl
+              className="monitor-props-position"
+              value={activePosition}
+              onChange={(value) => {
+                setPosition(value);
+                // Switching to a position without the chosen stat clears it, so
+                // switching back doesn't bring the old stat back.
+                const keepsStat = statId === "ALL" || (boardLines ?? []).some((line) =>
+                  line.stat === statId && (value === "ALL" || (asPropPosition(line.position) ?? "WR") === value));
+                if (!keepsStat) setStatId("ALL");
+              }}
+              label="Position"
+              options={[
+                { value: "ALL" as const, label: "All" },
+                ...positionOptions.map((code) => ({ value: code, label: code })),
+              ]}
+            />
             <label className="monitor-value-chart-field">
               <span>Stat</span>
               <select
                 aria-label="Stat"
-                value={statId}
+                value={activeStatId}
                 onChange={(event) => setStatId(event.target.value)}
               >
                 <option value="ALL">All</option>
-                {PROP_STAT_OPTIONS.map((option) => (
+                {statOptions.map((option) => (
                   <option key={option.id} value={option.id}>{option.label}</option>
                 ))}
               </select>
