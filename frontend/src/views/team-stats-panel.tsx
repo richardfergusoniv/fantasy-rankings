@@ -153,18 +153,20 @@ export function TeamStatsPanel({
   const statLabel = TEAM_STATS_STAT_OPTIONS.find((option) => option.id === statId)?.label ?? "";
   // Snap counts mean little across players, so snaps read as each player's snap %.
   const isSnaps = statId === "snaps";
-  // Weeks with recorded stats; byes and unplayed weeks get no column.
-  const gridWeeks = useMemo(() => stacks.filter((stack) => stack.hasActivity), [stacks]);
-
-  // Completed weeks the team actually produced in (excludes byes and the
-  // in-progress week) — the denominator for each player's per-game average.
-  const playedWeeks = useMemo(
-    () => Math.max(
-      1,
-      stacks.filter((stack) => stack.week < week && stack.hasActivity).length,
-    ),
-    [stacks, week],
+  // Weeks with recorded stats; byes and unplayed weeks get no column. A
+  // recorded week where the whole group made zero (no TE touchdowns) still
+  // counts: it shows its zeros and counts toward the averages.
+  const gridWeeks = useMemo(
+    () => stacks.filter((stack) => rows.some((row) => (
+      row.weeks.some((cell) => cell.week === stack.week && cell.hasSourceRow)
+    ))),
+    [rows, stacks],
   );
+
+  // Completed recorded weeks (excludes byes and the in-progress week) — the
+  // denominator for each player's per-game average.
+  const completedWeeks = useMemo(() => gridWeeks.filter((stack) => stack.week < week), [gridWeeks, week]);
+  const playedWeeks = Math.max(1, completedWeeks.length);
 
   // Per-game averages over completed weeks only: a partial in-progress week
   // would otherwise leak in (CodeRabbit, PR #129). Rows sort by this average.
@@ -189,9 +191,7 @@ export function TeamStatsPanel({
     stack.total > 0 ? rows.map((row) => (row.weeks.find((cell) => cell.week === stack.week)?.value ?? 0) / stack.total) : []
   ))), [gridWeeks, rows]);
 
-  const groupAverage = stacks
-    .filter((stack) => stack.week < week && stack.hasActivity)
-    .reduce((sum, stack) => sum + stack.total, 0) / playedWeeks;
+  const groupAverage = completedWeeks.reduce((sum, stack) => sum + stack.total, 0) / playedWeeks;
 
   const unavailable = dataQuery.isError;
   const loading = dataQuery.isPending;
