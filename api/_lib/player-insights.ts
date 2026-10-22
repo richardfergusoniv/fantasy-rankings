@@ -159,6 +159,19 @@ const NGS_COLUMNS: Record<keyof typeof NGS_URLS, Array<[string, string]>> = {
 };
 
 /** Season rows (week 0) for one NGS file, merged into `into` by gsis id. */
+/**
+ * One map of Next Gen Stats by gsis id, or empty when any file had no season
+ * rows, so the refresh keeps the previous set instead of a partial one.
+ */
+export function mergeNgsSources(sources: Array<Record<string, Record<string, number>>>): Record<string, Record<string, number>> {
+  if (sources.some((source) => Object.keys(source).length === 0)) return {};
+  const merged: Record<string, Record<string, number>> = {};
+  for (const source of sources) {
+    for (const [id, metrics] of Object.entries(source)) Object.assign((merged[id] ??= {}), metrics);
+  }
+  return merged;
+}
+
 export function parseNgs(
   csv: string,
   kind: keyof typeof NGS_URLS,
@@ -328,10 +341,11 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
     fetchLatestDepthRows(DEPTH_CHARTS_2026_URL).catch(() => []),
   ]);
   const ids = parsePlayerIds(idsCsv);
-  const ngs: Record<string, Record<string, number>> = {};
-  parseNgs(receivingCsv, "receiving", ngs);
-  parseNgs(rushingCsv, "rushing", ngs);
-  parseNgs(passingCsv, "passing", ngs);
+  const ngs = mergeNgsSources([
+    parseNgs(receivingCsv, "receiving"),
+    parseNgs(rushingCsv, "rushing"),
+    parseNgs(passingCsv, "passing"),
+  ]);
   const { depth, asOf: depthAsOf } = depthFromRows(depthRows, ids.sleeperByGsis);
   const { experts, asOf: expertsAsOf, lastKickoff: expertsLastKickoff } = parseExperts(expertsCsv, ids.sleeperByFantasyPros);
   return {
