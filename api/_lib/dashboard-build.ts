@@ -731,21 +731,15 @@ function buildAnalytics(
         rollingMetrics.rz_carry_share = rz.rzCarryShare;
       }
     }
-    // Expected points and Next Gen Stats are season figures too; same on both windows.
+    // Expected points and Next Gen Stats cover this season only, so they stay off
+    // the rolling-17 window, which reaches back into last season.
     const opportunity = insights?.opportunity[latest.id];
     if (opportunity && opportunity.games > 0) {
-      const perGame = {
-        expected_points: opportunity.expected / opportunity.games,
-        points_over_expected: (opportunity.actual - opportunity.expected) / opportunity.games,
-      };
-      Object.assign(seasonMetrics, perGame);
-      Object.assign(rollingMetrics, perGame);
+      seasonMetrics.expected_points = opportunity.expected / opportunity.games;
+      seasonMetrics.points_over_expected = (opportunity.actual - opportunity.expected) / opportunity.games;
     }
     const ngs = latest.position === "K" || latest.position === "DEF" ? undefined : insights?.ngs[latest.id];
-    if (ngs) {
-      Object.assign(seasonMetrics, ngs);
-      Object.assign(rollingMetrics, ngs);
-    }
+    if (ngs) Object.assign(seasonMetrics, ngs);
     entities.push({
       id: key,
       name: latest.name,
