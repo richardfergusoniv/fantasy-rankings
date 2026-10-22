@@ -5,7 +5,6 @@ export default tseslint.config(
     ignores: [
       "**/node_modules/**",
       "frontend/dist/**",
-      "app/**",
       "drizzle-pg/**",
       "pipeline/**",
       "lib/**",

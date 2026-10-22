@@ -35,4 +35,4 @@ Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-bod
 
 ## History
 
-`app/DESIGN.md` documents the legacy Hatch app. It does not describe this frontend.
+`docs/DESIGN.md` documents the legacy Hatch app. It does not describe this frontend.
