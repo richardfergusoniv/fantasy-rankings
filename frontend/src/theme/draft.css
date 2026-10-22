@@ -142,7 +142,6 @@
 .bench-section summary,
 .omitted-chart-labels summary,
 .drafted-elsewhere summary { min-height: 44px; }
-.comparison-slot-actions button,
 .trade-side-heading button,
 .draft-remove-link,
 .integration-actions button { min-width: 44px; min-height: 44px; }
@@ -152,7 +151,6 @@
 .integration-actions a,
 .chart-research-note a,
 .player-news-item a { display: inline-flex; min-height: 44px; align-items: center; }
-
 
 /* Projection chart treatments */
 .tier-cliff-list { display: grid; margin: 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
