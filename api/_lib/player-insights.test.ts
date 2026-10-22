@@ -94,9 +94,9 @@ describe("ids, depth and experts", () => {
 
   it("reads expert ranks for skill players, kickers and defenses", () => {
     const csv = [
-      "scrape_date,fantasypros_id,player_name,pos,team,ecr,best,worst,pos_rank,r2p_pts",
-      '2026-10-22,"23046","Puka Nacua","WR","LAR",1,1,1,"WR1","24.4"',
-      '2026-10-22,"8170","Minnesota Vikings","DST","MIN",3.2,1,6,"DST3",NA',
+      "scrape_date,fantasypros_id,player_name,pos,team,ecr,best,worst,pos_rank,r2p_pts,player_game_kickoff_ts",
+      '2026-10-22,"23046","Puka Nacua","WR","LAR",1,1,1,"WR1","24.4",1792947600',
+      '2026-10-22,"8170","Minnesota Vikings","DST","MIN",3.2,1,6,"DST3",NA,1793060100',
       '2026-10-22,"555","Some Linebacker","LB","MIN",2,1,3,"LB2","9"',
       '2026-10-22,"999","No Sleeper","WR","DAL",40,30,50,"WR40","5"',
       '2026-10-22,"777","Davante Adams","WR","LAR",bad,1,1,"WR9","1"',
@@ -107,6 +107,7 @@ describe("ids, depth and experts", () => {
         MIN: { ecr: 3.2, best: 1, worst: 6, positionRank: 3, projection: null },
       },
       asOf: "2026-10-22",
+      lastKickoff: "2026-10-27T00:15:00.000Z",
     });
   });
 });

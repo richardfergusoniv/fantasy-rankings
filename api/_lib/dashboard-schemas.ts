@@ -276,9 +276,17 @@ export const playerInsightsSchema = z.object({
     projection: z.number().nullable(),
   })),
   expertsAsOf: z.string().nullable(),
+  /** Last kickoff of the slate the expert ranks cover; identifies their week. */
+  expertsLastKickoff: z.string().nullable().default(null),
 });
 
-export const emptyPlayerInsights: z.infer<typeof playerInsightsSchema> = { depth: {}, depthAsOf: null, experts: {}, expertsAsOf: null };
+export const emptyPlayerInsights: z.infer<typeof playerInsightsSchema> = {
+  depth: {},
+  depthAsOf: null,
+  experts: {},
+  expertsAsOf: null,
+  expertsLastKickoff: null,
+};
 
 export const dashboardResponse = z.object({
   status: z.enum(["ok", "partial"]),
