@@ -48,6 +48,7 @@ import {
 import { formatRecord } from "../league-team-card";
 import { leaguePowerTeamForPlayer } from "../league-roster";
 import { WindowVirtualList } from "../virtual-list";
+import { currentExpertRanks } from "../expert-ranks";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
 
@@ -492,7 +493,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   const queryClient = useQueryClient();
   const isSeasonLong = effectiveHorizon !== "week";
   // This week's FantasyPros consensus beside our projection (weekly view only).
-  const expertRanks = !isSeasonLong && Object.keys(dashboard.playerInsights?.experts ?? {}).length > 0 ? dashboard.playerInsights.experts : null;
+  const expertRanks = isSeasonLong ? null : currentExpertRanks(dashboard.playerInsights, dashboard.asOf);
   const pfnTablesQuery = useQuery({
     queryKey: ["pfn-tables"],
     queryFn: () => api.getPfnTables({}),
