@@ -233,12 +233,16 @@
   --designation-size: 12px;
   --tab-font-size: var(--type-tab);
   --tab-font-weight: 600;
-  /* In-page page tabs: Matchup Current/Optimized, Players Rankings…, League scope, Tools Trade/Draft. */
+  /* Shared chrome for both tab tiers (SegmentedControl + Radix TabsList). */
+  --tab-track-padding: 2px;
+  --tab-button-padding-inline: 7px;
+  --tab-gap: 0;
+  /* In-page page tabs: Matchup Current/Optimized, Players/Tools subviews, League scope, Draft Board/My Team. */
   --page-tab-height: 48px;
   --page-tab-button-height: 44px;
   --page-tab-font-size: var(--type-tab);
   --page-tab-font-weight: 600;
-  /* Sub-tabs: Trade League-adjusted/Market/History is the standard (36 track / 32 button). */
+  /* Sub-tabs: Trade League/Market/History is the standard (36 track / 32 button). */
   --sub-tab-height: 36px;
   --sub-tab-button-height: var(--compact-control-height);
   --sub-tab-font-size: var(--type-tab);
