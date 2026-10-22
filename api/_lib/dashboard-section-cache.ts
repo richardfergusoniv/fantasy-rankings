@@ -451,6 +451,7 @@ export function buildDashboardCacheWrites(args: {
         seasonLongRankings: sections.players.seasonLongRankings,
         defenses: sections.players.defenses,
         strengthOfSchedule: sections.players.strengthOfSchedule,
+        playerInsights: sections.players.playerInsights,
       };
       const sectionPayloads: Array<{ section: DashboardCacheSection; data: unknown }> = [
         { section: "meta", data: sections.meta },
