@@ -185,6 +185,33 @@ describe("readAllUserDashboardSections (dashboardFromSectionRows)", () => {
     expect(hit!.dashboard.weeklyChartRankings).toEqual(sampleDashboard.rankings);
   });
 
+  it("keeps player insights through the players section", () => {
+    const fetchedAt = new Date("2026-10-12T03:00:00.000Z");
+    const playerInsights = {
+      depth: { "player-1": { position: "QB", rank: 1 } },
+      depthAsOf: "2026-10-12T00:00:00Z",
+      experts: { "player-1": { ecr: 3, best: 1, worst: 6, positionRank: 3, projection: 21.5 } },
+      expertsAsOf: "2026-10-12",
+    };
+    const writes = buildDashboardCacheWrites({
+      cacheKey: "dashboard:user:user-1",
+      dashboard: { ...sampleDashboard, playerInsights },
+      fetchedAt,
+      live: false,
+      encode: encodeSourceCachePayload,
+      serializeFull: serializeDashboardForCache,
+    });
+    const hit = dashboardFromSectionRows({
+      sleeperUserId: "user-1",
+      rows: writesAsRows(writes).filter((row) => row.cacheKey !== "dashboard:user:user-1"),
+      decode: decodeSourceCachePayload,
+      parseSectionData: parseStoredSectionData,
+      nowMs: fetchedAt.getTime() + 1_000,
+      ttlMs: sectionCacheTtlMs,
+    });
+    expect(hit!.dashboard.playerInsights).toEqual(playerInsights);
+  });
+
   it("returns null on version mismatch across section envelopes", () => {
     const fetchedAt = new Date("2026-10-12T03:00:00.000Z");
     const writes = buildDashboardCacheWrites({

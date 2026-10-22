@@ -385,7 +385,8 @@ export async function loadPlayerInsightsSnapshot(options?: { force?: boolean }):
   try {
     const snapshot = await fetchPlayerInsightsSnapshot();
     if (!looksComplete(snapshot)) return previous;
-    // A depth or expert source that failed this run keeps its last good rows.
+    // A Next Gen Stats or depth source that failed this run keeps its last good rows.
+    if (Object.keys(snapshot.ngs).length === 0 && previous) snapshot.ngs = previous.ngs;
     if (Object.keys(snapshot.depth).length === 0 && previous) {
       snapshot.depth = previous.depth;
       snapshot.depthAsOf = previous.depthAsOf;
