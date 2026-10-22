@@ -579,7 +579,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
 
   const savedViewSelect = (
     <select
-      aria-label={`Choose ${dataset === "advanced" ? "advanced" : "weekly"} saved chart view`}
+      aria-label="Saved view"
       value={pickerValue}
       onChange={(event) => {
         const nextValue = event.target.value;
@@ -610,14 +610,12 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
     <>
     {layout === "monitor" ? (
       <label className="monitor-value-chart-field">
-        <span>Saved view</span>
         {savedViewSelect}
       </label>
     ) : (
       <div className="saved-view-block">
         <div className="saved-view-row">
           <label className="chart-preset-select">
-            <span>Saved view</span>
             {savedViewSelect}
           </label>
         </div>
