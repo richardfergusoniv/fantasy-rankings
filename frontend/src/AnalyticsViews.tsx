@@ -2721,7 +2721,8 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
               key={entity.id}
               // Keep focus in the search so picking a result doesn't count as leaving it.
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => choose(entity)}
+              // detail 0 means Enter or Space on the button, not a pointer click.
+              onClick={(event) => choose(entity, event.detail === 0)}
             >
               <span className="comparison-result-primary"><strong>{entity.name}</strong></span>
               <span className="comparison-result-meta">
