@@ -472,6 +472,7 @@ export function DraftCenter({
     <section className="draft-center">
       <h2 className="sr-only">Draft Room</h2>
       <SegmentedControl
+        className="page-tab-control"
         value={mode}
         onChange={(value) => publishDraftFilters({ room: value })}
         label="Draft room view"

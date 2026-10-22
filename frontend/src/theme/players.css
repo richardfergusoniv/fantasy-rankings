@@ -1,19 +1,7 @@
 /* Player rankings, player cards, news cards and the player detail panel. */
-/* One equal-width row (QB … ROOK) — sub-tab height/type tokens. */
+/* One equal-width row (QB … ROOK) — inherits sub-tab SegmentedControl tokens. */
 .position-filter-row .position-tabs {
-  min-height: var(--sub-tab-height);
-  height: var(--sub-tab-height);
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-.position-filter-row .position-tabs::-webkit-scrollbar { display: none; }
-.position-filter-row .position-tabs button {
-  min-height: var(--sub-tab-button-height);
-  height: var(--sub-tab-button-height);
-  padding-inline: 2px;
-  font-size: var(--sub-tab-font-size);
-  font-weight: var(--sub-tab-font-weight);
+  overflow-x: hidden;
 }
 .rankings-note { display: flex; justify-content: flex-end; gap: 10px; margin: 10px 2px 6px; color: var(--dim); font-size: var(--type-caption); }
 .ranking-row { display: grid; width: 100%; grid-template-columns: minmax(0,1fr) 62px; gap: 8px; min-height: 52px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--row-divider); background: var(--surface); color: var(--text); text-align: left; }
@@ -207,7 +195,8 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-tabs [data-slot="tabs-list"] {
   min-height: var(--sub-tab-height);
   height: var(--sub-tab-height);
-  padding: 2px;
+  gap: var(--tab-gap);
+  padding: var(--tab-track-padding);
   border-radius: var(--radius);
   background: var(--segment-track);
   font-family: var(--font-ui);
@@ -215,7 +204,8 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-tabs [data-slot="tabs-trigger"] {
   min-height: var(--sub-tab-button-height);
   height: var(--sub-tab-button-height);
-  padding: 0 7px;
+  padding: 0 var(--tab-button-padding-inline);
+  border-radius: calc(var(--radius) - 2px);
   font-family: inherit;
   font-size: var(--sub-tab-font-size);
   font-weight: var(--sub-tab-font-weight);

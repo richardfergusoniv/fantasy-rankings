@@ -851,10 +851,16 @@ export function BoomBustPanel({
           <span>Boom / Bust</span>
           <strong>{weeklyScores.length > 0 ? `${weeklyScores.length} game${weeklyScores.length === 1 ? "" : "s"}` : "Weekly range"}</strong>
         </div>
-        <div className="boom-bust-toggle" role="group" aria-label="Boom Bust history range">
-          <button type="button" className={view === "season" ? "active" : ""} aria-pressed={view === "season"} onClick={() => onViewChange("season")}>2026</button>
-          <button type="button" className={view === "last3" ? "active" : ""} aria-pressed={view === "last3"} onClick={() => onViewChange("last3")}>Last 3 Years</button>
-        </div>
+        <SegmentedControl
+          className="boom-bust-toggle"
+          value={view}
+          onChange={onViewChange}
+          label="Boom Bust history range"
+          options={[
+            { value: "season", label: "2026" },
+            { value: "last3", label: "Last 3 Years" },
+          ]}
+        />
       </div>
       {isLoading && !history ? (
         <div className="loading-shimmer boom-bust-loading" aria-hidden="true" />
