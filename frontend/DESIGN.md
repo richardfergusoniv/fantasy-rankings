@@ -4,7 +4,7 @@
 
 ## Theme
 
-- Light and dark follow the device by default (`color-scheme: light dark`). The sun/moon button beside refresh cycles device, light, dark; a saved choice sets `data-theme` on `<html>`, which `base.css` maps to a single `color-scheme`, and a small script in `index.html` applies it before first paint (`frontend/src/theme-preference.ts`). Every color token in `:root` is written `light-dark(<light>, <dark>)`, so there is one token block and components never branch on theme. Amber fills (`--action`, `--accent`, `--winner-fill`) and `--on-accent` ink are the same in both themes; amber *text* (`--link`, `--winner`) and teal/warning text switch to darker values in light so they stay at 4.5:1 on white. The contrast test checks the light palette too. Colors that live outside CSS (chart strokes) use tokens such as `--chart-ma7`, never raw hex.
+- Light and dark follow the device by default (`color-scheme: light dark`). The sun/moon button beside refresh cycles device, light, dark; a saved choice sets `data-theme` on `<html>`, which `base.css` maps to a single `color-scheme`, and a small script in `index.html` applies it before first paint (`frontend/src/theme-preference.ts`). Every color token in `:root` is written `light-dark(<light>, <dark>)`, so there is one token block and components never branch on theme. Amber fills (`--action`, `--accent`, `--winner-fill`) and `--on-accent` ink are the same in both themes; amber *text* (`--link`, `--winner`) and teal/warning text switch to darker values in light so they stay at 4.5:1 on white. The contrast test checks the light palette too. Colors that live outside CSS (chart strokes) use tokens such as `--chart-1`, never raw hex.
 - Amber is the interactive color: `--action`, `--link`, `--ring`, primary buttons and tab indicators. Dark ink (`--on-accent`) sits on amber fills.
 - `--winner` is the amber highlight for the better side of a comparison or trade; `--warning` is a separate orange-red used only for cautions and always paired with a ⚠ glyph, so a caution never reads as an action.
 - "Mine" (roster rows, the user's team in charts) uses its own teal, `--roster-highlight`, never the action amber.
@@ -24,9 +24,9 @@ Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-bod
 
 ## Tools
 
-- Each Tools view (Game lines, Team stats, Pricing, Analytics) opens with one toolbar of pill controls (`.monitor-value-chart-field`: caption and value inside one 44px control) that wraps on a phone. The sub-tab names the view, so the view's own heading is screen-reader only.
+- Each Tools view (Game lines, Team stats, Analytics) opens with one toolbar of pill controls (`.monitor-value-chart-field`: caption and value inside one 44px control) that wraps on a phone. The sub-tab names the view, so the view's own heading is screen-reader only.
 - Team stats is a usage grid (players by weeks) that answers how the team splits the work: after the name comes each player's season Share of the group total (count stats; snaps show snap % instead), then the weeks and Avg. Cells tint on one blue scale (`--chart-5`, capped so text stays readable): by snap % for snaps, otherwise by share of that week's group total, scaled to the largest share in the grid.
-- Summary before detail: Game lines opens with the week's slate and the picked game's board, Pricing with the latest value and its 30-day move. Charts and tables sit on one `--card` surface panel each.
+- Summary before detail: Game lines opens with the week's slate and the picked game's board. A player's market value, its 30-day move and its value trend live on the player card. Charts and tables sit on one `--card` surface panel each.
 
 ## Rules
 

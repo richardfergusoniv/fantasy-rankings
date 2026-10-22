@@ -170,8 +170,6 @@
   --on-accent: #14120a;
   --signal: var(--muted-foreground);
   --signal-soft: var(--secondary);
-  --chart-ma7: light-dark(#4b5565, #c5ccd8);
-  --chart-ma30: light-dark(#8a93a3, #6b7588);
   --inset-edge: light-dark(rgb(0 0 0 / .12), rgb(10 12 16 / .55));
   --winner-fill: var(--chart-1);
   --data-mark: light-dark(#a86f00, #f5c16a);

@@ -43,7 +43,7 @@ describe("dashboard URL state", () => {
   });
 
   it("round-trips older tab values including matchup", () => {
-    for (const tab of ["team", "rankings", "waivers", "power", "draft", "trade", "comparison", "monitor", "team-stats", "pricing", "analytics"] as const) {
+    for (const tab of ["team", "rankings", "waivers", "power", "draft", "trade", "comparison", "monitor", "team-stats", "analytics"] as const) {
       const original = state({ tab });
       expect(parseDashboardSearch(serializeDashboardSearch(original))).toEqual(original);
     }
@@ -116,10 +116,6 @@ describe("dashboard URL state", () => {
     expect(dashboardUrlHistoryMode(emptyDashboardUrlState(), state({ tab: "power" }))).toBe("push");
   });
   it("round-trips tool selections on their own tab", () => {
-    const pricing = state({ tab: "pricing", pricingPlayerId: "4046", pricingCompareId: "6794" });
-    expect(serializeDashboardSearch(pricing)).toBe("?tab=pricing&pp=4046&pc=6794");
-    expect(parseDashboardSearch("?tab=pricing&pp=4046&pc=6794")).toEqual(pricing);
-
     const teamStats = state({ tab: "team-stats", teamStatsTeam: "KC", teamStatsGroup: "wr", teamStatsStat: "targets" });
     expect(serializeDashboardSearch(teamStats)).toBe("?tab=team-stats&ts=KC&tg=wr&tst=targets");
     expect(parseDashboardSearch(serializeDashboardSearch(teamStats))).toEqual(teamStats);
@@ -130,19 +126,25 @@ describe("dashboard URL state", () => {
   });
 
   it("drops a tool's parameters when the URL is for another tab", () => {
-    expect(serializeDashboardSearch(state({ tab: "rankings", pricingPlayerId: "4046", teamStatsTeam: "KC", gameLinesTeam: "KC" }))).toBe("?tab=rankings");
-    expect(serializeDashboardSearch(state({ tab: "pricing", teamStatsTeam: "KC" }))).toBe("?tab=pricing");
+    expect(serializeDashboardSearch(state({ tab: "rankings", teamStatsTeam: "KC", gameLinesTeam: "KC" }))).toBe("?tab=rankings");
+    expect(serializeDashboardSearch(state({ tab: "team-stats", gameLinesTeam: "KC" }))).toBe("?tab=team-stats");
   });
 
   it("ignores blank tool parameters and keeps a card link's open player separate", () => {
-    expect(parseDashboardSearch("?tab=pricing&pp=%20&pc=")).toEqual(state({ tab: "pricing" }));
-    expect(serializeDashboardSearch(state({ tab: "pricing", pricingPlayerId: "4046", playerId: "4046" }))).toBe("?tab=pricing&player=4046&pp=4046");
+    expect(parseDashboardSearch("?tab=team-stats&ts=%20&tg=")).toEqual(state({ tab: "team-stats" }));
+    expect(serializeDashboardSearch(state({ tab: "team-stats", teamStatsTeam: "KC", playerId: "4046" }))).toBe("?tab=team-stats&player=4046&ts=KC");
   });
 
   it("replaces history for tool selection edits and pushes when entering a tool", () => {
-    const pricing = state({ tab: "pricing", pricingPlayerId: "1" });
-    expect(dashboardUrlHistoryMode(pricing, state({ tab: "pricing", pricingPlayerId: "2" }))).toBe("replace");
-    expect(dashboardUrlHistoryMode(state({ tab: "rankings", playerId: "1" }), pricing)).toBe("push");
+    const teamStats = state({ tab: "team-stats", teamStatsTeam: "KC" });
+    expect(dashboardUrlHistoryMode(teamStats, state({ tab: "team-stats", teamStatsTeam: "BUF" }))).toBe("replace");
+    expect(dashboardUrlHistoryMode(state({ tab: "rankings", playerId: "1" }), teamStats)).toBe("push");
+  });
+
+  it("opens a retired Pricing link as that player's card on Rankings", () => {
+    expect(parseDashboardSearch("?tab=pricing&pp=4046&pc=6794")).toEqual(state({ tab: "rankings", playerId: "4046" }));
+    expect(parseDashboardSearch("?tab=pricing&player=1&pp=2")).toEqual(state({ tab: "rankings", playerId: "1" }));
+    expect(parseDashboardSearch("?tab=pricing")).toEqual(state({ tab: "rankings" }));
   });
 
   it("carries the comparison player only on the comparison tab", () => {
@@ -156,7 +158,7 @@ describe("dashboard URL state", () => {
     const analytics = state({ tab: "analytics", chartDataset: "advanced", analyticsPlayerId: "4046" });
     expect(serializeDashboardSearch(analytics)).toBe("?tab=analytics&chart=advanced&ap=4046");
     expect(parseDashboardSearch("?tab=analytics&chart=advanced&ap=4046")).toEqual(analytics);
-    expect(serializeDashboardSearch(state({ tab: "pricing", analyticsPlayerId: "4046" }))).toBe("?tab=pricing");
+    expect(serializeDashboardSearch(state({ tab: "team-stats", analyticsPlayerId: "4046" }))).toBe("?tab=team-stats");
   });
 
   it("carries the trade partner only on the trade tab", () => {

@@ -1,4 +1,4 @@
-/* Tools: game lines, team stats, props and the pricing chart. */
+/* Tools: game lines, team stats and props. */
 /* Chip stays ~16px; the pseudo-element gives a 44px hit box without taking layout space. */
 .matchup-score-team-open::before {
   position: absolute;
@@ -122,16 +122,6 @@
 .monitor-chart-expand-card .chart-result-body {
   padding: 10px 14px 14px;
 }
-.monitor-value-chart.is-expanded-pricing {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-.monitor-value-chart.is-expanded-pricing .scatter-plot-body {
-  flex: 1 1 auto;
-  min-height: 0;
-}
 .monitor-value-chart-field select {
   flex: 1 1 auto;
   width: auto;
@@ -202,18 +192,6 @@
   width: 100%;
   min-width: 0;
   height: 220px;
-}
-.monitor-pricing-key {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  margin: 0;
-  padding: 8px 0 0;
-  list-style: none;
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 600;
 }
 .monitor-team-stats-group,
 .monitor-props-position,
@@ -660,167 +638,17 @@
     background-color: var(--opponent-row);
   }
 }
-.monitor-pricing-key li {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.monitor-pricing-key i {
-  width: 8px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--dim);
-}
-.monitor-pricing-key i.is-value { background: var(--chart-1); height: 3px; }
-.monitor-pricing-key i.is-ma7 { background: var(--chart-ma7); }
-/* The 30D line is dotted on the chart, so its swatch is too. */
-.monitor-pricing-key i.is-ma30 {
-  width: 12px;
-  height: 0;
-  border-top: 2px dotted var(--chart-ma30);
-  border-radius: 0;
-  background: none;
-}
-.value-chart-scrubber {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-top: 8px;
-}
-.value-chart-scrubber input[type="range"] {
-  width: 100%;
-  height: 44px;
-  margin: 0;
-  background: transparent;
-  accent-color: var(--chart-1);
-}
-.value-chart-readout {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin: 0;
-}
-.value-chart-readout div {
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-}
-.value-chart-readout dt {
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 700;
-}
-.value-chart-readout dd {
-  margin: 0;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums lining-nums;
-}
-.monitor-pricing-key i.is-trend {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--chart-2) 55%, transparent);
-}
-.monitor-pricing-key i.is-compare { background: var(--chart-5); height: 3px; }
-.monitor-value-chart-panel .monitor-value-chart {
-  height: auto;
-}
-.monitor-value-chart-panel .monitor-value-chart .scatter-plot-body {
-  height: 280px;
-}
-@media (max-width: 759px) {
-  .monitor-value-chart-panel .monitor-value-chart .scatter-plot-body {
-    height: clamp(200px, 34dvh, 300px);
-  }
-}
 /* Inline tool charts sit on one surface panel; the whole panel opens the expanded view. */
-.monitor-value-chart-panel > .monitor-chart-expand-target,
 .monitor-builder-chart-panel .monitor-chart-expand-target {
   padding: 16px 12px 12px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
   background: var(--surface);
 }
-.monitor-value-chart-panel > .monitor-chart-expand-target:hover,
 .monitor-builder-chart-panel .monitor-chart-expand-target:hover {
   border-color: var(--border);
 }
-/* Pricing opens with the number: latest value and its 30-day move. */
-.pricing-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 16px;
-  align-items: flex-end;
-  justify-content: space-between;
-}
-.pricing-figures {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-.pricing-figure {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  align-items: baseline;
-  margin: 0;
-  font-variant-numeric: tabular-nums lining-nums;
-}
-.pricing-value {
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -.02em;
-  line-height: 1;
-}
-.pricing-change {
-  display: inline-flex;
-  gap: 4px;
-  align-items: baseline;
-  font-size: var(--type-control);
-  font-weight: 700;
-}
-.pricing-change.is-up { color: var(--positive); }
-.pricing-change.is-down { color: var(--negative); }
-.pricing-change-span {
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 600;
-}
-.pricing-figure.is-compare {
-  align-items: center;
-  gap: 8px;
-  color: var(--dim);
-  font-size: var(--type-control);
-  font-weight: 600;
-}
-.pricing-figure.is-compare i {
-  width: 10px;
-  height: 3px;
-  border-radius: 1px;
-  background: var(--chart-5);
-}
-.pricing-compare-value {
-  color: var(--text);
-  font-weight: 700;
-}
-.pricing-figures .tool-player-link-row {
-  padding: 0;
-}
-.pricing-figures .tool-player-link-row a.tool-player-link[href] {
-  min-height: 32px;
-}
-.pricing-summary .scatter-zoom-toggle {
-  min-width: 44px;
-  min-height: 44px;
-  background: var(--surface);
-  box-shadow: var(--shadow-control);
-}
-.pricing-expand {
-  display: inline-grid;
-  place-items: center;
-  color: var(--text);
-}
-/* Inline builder charts reuse Pricing chart height; keep plot and key stacked. */
+/* Inline builder charts: keep plot and key stacked. */
 .monitor-builder-chart-panel .monitor-value-chart {
   position: relative;
   height: auto;
