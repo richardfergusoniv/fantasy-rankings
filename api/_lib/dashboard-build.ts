@@ -1531,7 +1531,9 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const useVegasPrimary = projectionBoardIsUsable(vegasProjectionSnapshot);
   let defenses: z.infer<typeof defenseSchema>[] = [];
   // Read only: the refresh-player-insights cron job owns refetching the sources.
-  const insightsSnapshot = await readPlayerInsightsSnapshot().catch(() => null);
+  // The snapshot is one season's; another season gets none rather than stale ranks.
+  const storedInsights = await readPlayerInsightsSnapshot().catch(() => null);
+  const insightsSnapshot = storedInsights?.season === season ? storedInsights : null;
   let analytics: z.infer<typeof analyticsSchema> = {
     asOf: null,
     throughWeek: null,
