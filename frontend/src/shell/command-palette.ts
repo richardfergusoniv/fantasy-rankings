@@ -33,7 +33,7 @@ export const PRIMARY_COMMAND_PAGES: CommandPageItem[] = [
   { kind: "page", id: "team", label: "Matchup", tab: "team" },
   { kind: "page", id: "players", label: "Players", tab: "rankings" },
   { kind: "page", id: "league", label: "League", tab: "power" },
-  { kind: "page", id: "tools", label: "Tools", tab: "trade" },
+  { kind: "page", id: "tools", label: "Tools", tab: "monitor" },
 ];
 
 /** Extra destinations reachable from the palette (not primary nav). */
