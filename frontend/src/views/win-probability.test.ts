@@ -36,7 +36,7 @@ describe("teamOutlook and winProbability", () => {
     expect(outlook?.mean).toBe(30);
     // sqrt((0.4*20)^2 + (0.55*10)^2) = sqrt(64 + 30.25)
     expect(outlook?.sd).toBeCloseTo(Math.sqrt(94.25), 6);
-    expect(outlook?.low).toBe(Math.round(30 - 1.2816 * Math.sqrt(94.25)));
+    expect(outlook?.low).toBeCloseTo(30 - 1.2816 * Math.sqrt(94.25), 6);
   });
 
   it("favors the higher projection and is even for equal teams", () => {
@@ -50,7 +50,8 @@ describe("teamOutlook and winProbability", () => {
     const done = (actual: number) => ({ ...base, playerId: "1", position: "WR", projection: 10, gamePhase: "final" as const, actual });
     expect(winProbability(teamOutlook([done(20)])!, teamOutlook([done(10)])!)).toBe(1);
     expect(winPercent(1)).toBe(100);
-    expect(winPercent(0.999)).toBe(99);
-    expect(winPercent(0.001)).toBe(1);
+    expect(winPercent(0.9999)).toBe(99.9);
+    expect(winPercent(0.0001)).toBe(0.1);
+    expect(winPercent(0.6234)).toBe(62.3);
   });
 });

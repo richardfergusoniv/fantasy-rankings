@@ -55,8 +55,8 @@ export function teamOutlook(players: readonly LiveForecastPlayer[], now = Date.n
   return {
     mean,
     sd,
-    low: Math.max(0, Math.round(mean - RANGE_Z * sd)),
-    high: Math.round(mean + RANGE_Z * sd),
+    low: Math.max(0, mean - RANGE_Z * sd),
+    high: mean + RANGE_Z * sd,
   };
 }
 
@@ -77,9 +77,9 @@ export function winProbability(mine: TeamOutlook, theirs: TeamOutlook): number {
   return normalCdf(margin / spread);
 }
 
-/** Whole percent for display, kept off 0 and 100 until the result is certain. */
+/** Percent to the nearest tenth for display, kept off 0 and 100 until the result is certain. */
 export function winPercent(probability: number): number {
   if (probability <= 0) return 0;
   if (probability >= 1) return 100;
-  return Math.min(99, Math.max(1, Math.round(probability * 100)));
+  return Math.min(99.9, Math.max(0.1, Math.round(probability * 1000) / 10));
 }

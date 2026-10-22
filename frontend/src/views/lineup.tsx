@@ -25,6 +25,7 @@ import {
   optimizedTotalProjectionClassName,
 } from "./lineup-projection";
 import { currentExpertRanks } from "../expert-ranks";
+import { formatPercent, formatPoints } from "../lib/format-number";
 import { teamOutlook, winPercent, winProbability } from "./win-probability";
 
 export {
@@ -284,16 +285,16 @@ export function Lineup({
         {myWinPercent !== null && myOutlook && theirOutlook ? (
           <div className="matchup-win-probability">
             <div className="matchup-win-labels" aria-hidden="true">
-              <strong className="is-mine">{myWinPercent}%</strong>
+              <strong className="is-mine">{formatPercent(myWinPercent)}</strong>
               <span>Win probability</span>
-              <strong>{100 - myWinPercent}%</strong>
+              <strong>{formatPercent(100 - myWinPercent)}</strong>
             </div>
-            <div className="matchup-win-bar" role="img" aria-label={`Win probability: ${userTeamName} ${myWinPercent} percent, ${opponentTeamName} ${100 - myWinPercent} percent`}>
+            <div className="matchup-win-bar" role="img" aria-label={`Win probability: ${userTeamName} ${formatPercent(myWinPercent)}, ${opponentTeamName} ${formatPercent(100 - myWinPercent)}`}>
               <span className="is-mine" style={{ width: `${myWinPercent}%` }} />
             </div>
             <div className="matchup-win-ranges">
-              <span><small>Likely range</small>{myOutlook.low}–{myOutlook.high}</span>
-              <span><small>Likely range</small>{theirOutlook.low}–{theirOutlook.high}</span>
+              <span><small>Likely range</small>{formatPoints(myOutlook.low)}–{formatPoints(myOutlook.high)}</span>
+              <span><small>Likely range</small>{formatPoints(theirOutlook.low)}–{formatPoints(theirOutlook.high)}</span>
             </div>
           </div>
         ) : null}
