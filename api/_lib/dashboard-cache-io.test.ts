@@ -54,7 +54,7 @@ const sampleDashboard: Dashboard = {
   rankingsAsOf: null,
   fantasyCalcAsOf: null,
   playerTrending: {},
-  playerInsights: { depth: {}, depthAsOf: null, experts: {}, expertsAsOf: null },
+  playerInsights: { depth: {}, depthAsOf: null, experts: {}, expertsAsOf: null, expertsLastKickoff: null },
   leagues: [
     {
       id: "league-1",
@@ -192,6 +192,7 @@ describe("readAllUserDashboardSections (dashboardFromSectionRows)", () => {
       depthAsOf: "2026-10-12T00:00:00Z",
       experts: { "player-1": { ecr: 3, best: 1, worst: 6, positionRank: 3, projection: 21.5 } },
       expertsAsOf: "2026-10-12",
+      expertsLastKickoff: "2026-10-14T00:15:00.000Z",
     };
     const writes = buildDashboardCacheWrites({
       cacheKey: "dashboard:user:user-1",

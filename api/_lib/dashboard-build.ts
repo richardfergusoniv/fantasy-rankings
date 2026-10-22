@@ -2074,7 +2074,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     fantasyCalcAsOf,
     playerTrending,
     playerInsights: insightsSnapshot
-      ? { depth: insightsSnapshot.depth, depthAsOf: insightsSnapshot.depthAsOf, experts: insightsSnapshot.experts, expertsAsOf: insightsSnapshot.expertsAsOf }
+      ? { depth: insightsSnapshot.depth, depthAsOf: insightsSnapshot.depthAsOf, experts: insightsSnapshot.experts, expertsAsOf: insightsSnapshot.expertsAsOf, expertsLastKickoff: insightsSnapshot.expertsLastKickoff }
       : emptyPlayerInsights,
     leagues: leagues.filter((league): league is NonNullable<typeof league> => league !== null),
     rankings,

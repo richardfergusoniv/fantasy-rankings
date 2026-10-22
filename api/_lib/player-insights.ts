@@ -74,6 +74,8 @@ export const playerInsightsSnapshotSchema = z.object({
   depthAsOf: z.string().nullable(),
   experts: z.record(z.string(), expertSchema),
   expertsAsOf: z.string().nullable(),
+  /** Last kickoff of the slate the expert ranks cover; identifies their week. */
+  expertsLastKickoff: z.string().nullable().default(null),
 });
 
 export type PlayerInsightsSnapshot = z.infer<typeof playerInsightsSnapshotSchema>;
@@ -223,9 +225,10 @@ const EXPERT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DST"]);
 export function parseExperts(
   csv: string,
   sleeperByFantasyPros: Map<string, string>,
-): { experts: Record<string, PlayerExpertRank>; asOf: string | null } {
+): { experts: Record<string, PlayerExpertRank>; asOf: string | null; lastKickoff: string | null } {
   const experts: Record<string, PlayerExpertRank> = {};
   let asOf: string | null = null;
+  let lastKickoffSeconds: number | null = null;
   for (const row of csvObjects(csv)) {
     if (!EXPERT_POSITIONS.has(row.pos)) continue;
     const id = row.pos === "DST" ? canonicalTeam(row.team) : sleeperByFantasyPros.get(row.fantasypros_id);
@@ -242,8 +245,11 @@ export function parseExperts(
       projection: num(row.r2p_pts),
     };
     if (row.scrape_date && (!asOf || row.scrape_date > asOf)) asOf = row.scrape_date;
+    const kickoff = num(row.player_game_kickoff_ts);
+    if (kickoff !== null && (lastKickoffSeconds === null || kickoff > lastKickoffSeconds)) lastKickoffSeconds = kickoff;
   }
-  return { experts, asOf };
+  const lastKickoff = lastKickoffSeconds === null ? null : new Date(lastKickoffSeconds * 1000).toISOString();
+  return { experts, asOf, lastKickoff };
 }
 
 // ---------------------------------------------------------------------------
@@ -327,7 +333,7 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
   parseNgs(rushingCsv, "rushing", ngs);
   parseNgs(passingCsv, "passing", ngs);
   const { depth, asOf: depthAsOf } = depthFromRows(depthRows, ids.sleeperByGsis);
-  const { experts, asOf: expertsAsOf } = parseExperts(expertsCsv, ids.sleeperByFantasyPros);
+  const { experts, asOf: expertsAsOf, lastKickoff: expertsLastKickoff } = parseExperts(expertsCsv, ids.sleeperByFantasyPros);
   return {
     fetchedAt: new Date().toISOString(),
     season: SEASON,
@@ -337,6 +343,7 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
     depthAsOf,
     experts,
     expertsAsOf,
+    expertsLastKickoff,
   };
 }
 

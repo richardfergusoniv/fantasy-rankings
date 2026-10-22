@@ -29,10 +29,12 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
     staleTime: 60 * 60 * 1000,
     retry: false,
   });
-  const lines = useMemo(
-    () => (pfnQuery.data?.propLines.lines ?? []).filter((line) => line.playerId === player.playerId && propStatDef(line.stat)),
-    [pfnQuery.data?.propLines.lines, player.playerId],
-  );
+  const propLines = pfnQuery.data?.propLines;
+  const lines = useMemo(() => {
+    // A cached response from before the weekly rollover holds last week's lines.
+    if (!propLines || propLines.season !== season || propLines.week !== week) return [];
+    return propLines.lines.filter((line) => line.playerId === player.playerId && propStatDef(line.stat));
+  }, [propLines, player.playerId, season, week]);
   const historyQuery = useQuery({
     queryKey: ["nflverse-team-week-stats", season],
     queryFn: () => api.getTeamWeekStats({ season }),

@@ -493,7 +493,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   const queryClient = useQueryClient();
   const isSeasonLong = effectiveHorizon !== "week";
   // This week's FantasyPros consensus beside our projection (weekly view only).
-  const expertRanks = isSeasonLong ? null : currentExpertRanks(dashboard.playerInsights, dashboard.asOf);
+  const expertRanks = isSeasonLong ? null : currentExpertRanks(dashboard);
   const pfnTablesQuery = useQuery({
     queryKey: ["pfn-tables"],
     queryFn: () => api.getPfnTables({}),
