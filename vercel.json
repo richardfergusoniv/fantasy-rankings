@@ -6,7 +6,7 @@
     "api/draft-center.ts": {
       "maxDuration": 60
     },
-    "api/trades/history.ts": {
+    "api/data/[kind].ts": {
       "maxDuration": 60
     },
     "api/dashboard.ts": {
@@ -25,12 +25,28 @@
   "outputDirectory": "frontend/dist",
   "rewrites": [
     {
-      "destination": "/index.html",
-      "source": "/((?!api/).*)"
+      "source": "/api/box-score",
+      "destination": "/api/data/box-score"
+    },
+    {
+      "source": "/api/pfn-tables",
+      "destination": "/api/data/pfn-tables"
+    },
+    {
+      "source": "/api/value-history",
+      "destination": "/api/data/value-history"
+    },
+    {
+      "source": "/api/trades/history",
+      "destination": "/api/data/trades-history"
     },
     {
       "source": "/api/dashboard/section",
       "destination": "/api/dashboard?__section=1"
+    },
+    {
+      "destination": "/index.html",
+      "source": "/((?!api/).*)"
     }
   ]
 }

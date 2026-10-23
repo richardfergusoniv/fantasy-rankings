@@ -6,17 +6,18 @@ import {
   queryBool,
   queryInt,
   unauthorized,
-} from "../_lib/api-utils.js";
-import { resolveSleeperUserId } from "../_lib/auth.js";
-import { historicalTradesResponse, loadHistoricalTrades } from "../_lib/trades.js";
+} from "./api-utils.js";
+import { resolveSleeperUserId } from "./auth.js";
+import { historicalTradesResponse, loadHistoricalTrades } from "./trades.js";
 
 /**
  * GET /api/trades/history?leagueId=&refresh=&season=
+ * (served via /api/data/trades-history; old URL rewritten in vercel.json)
  *
  * Replaces `getHistoricalTrades`.
  *
  * May be slow (walks the Sleeper previous_league chain for dynasty leagues);
- * vercel.json sets maxDuration: 60 for this route (Hobby plan cap).
+ * vercel.json sets maxDuration: 60 for api/data/[kind].ts (Hobby plan cap).
  */
 
 const querySchema = z.object({
@@ -25,7 +26,7 @@ const querySchema = z.object({
   season: z.number().int().positive().optional(),
 });
 
-export async function GET(req: Request): Promise<Response> {
+export async function handleTradesHistory(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url, "https://localhost");
     const parsed = querySchema.safeParse({
@@ -57,5 +58,3 @@ export async function GET(req: Request): Promise<Response> {
     return internalError(err);
   }
 }
-
-export const config = { maxDuration: 60 };

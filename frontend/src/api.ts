@@ -9,14 +9,14 @@
  */
 
 import type { BoomBustHistory, BoomBustRanges } from "../../api/boom-bust/[type]";
-import type { MatchupBoxScore } from "../../api/box-score";
+import type { MatchupBoxScore } from "../../api/_lib/box-score";
 import type { SavedChartView, SavedChartViewInput } from "../../api/chart-views";
 import type { Dashboard, DashboardSection } from "../../api/_lib/dashboard-schemas";
 import type { DraftCenter } from "../../api/draft-center";
-import type { PfnTables, TeamWeekStats } from "../../api/pfn-tables";
+import type { PfnTables, TeamWeekStats } from "../../api/_lib/pfn-tables";
 import type { PlayerNews } from "../../api/player-news";
 import type { HistoricalTrades } from "../../api/_lib/trades";
-import type { ValueHistory } from "../../api/value-history";
+import type { ValueHistory } from "../../api/_lib/value-history";
 import { getAccessToken } from "./supabase";
 
 type ApiMethod<T> = T extends (...args: never[]) => Promise<infer R> ? R : never;
