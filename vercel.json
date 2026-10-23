@@ -20,6 +20,9 @@
     },
     "api/player-news.ts": {
       "maxDuration": 60
+    },
+    "api/chat.ts": {
+      "maxDuration": 60
     }
   },
   "outputDirectory": "frontend/dist",

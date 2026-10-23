@@ -11,6 +11,7 @@ export const DASHBOARD_TABS = [
   "monitor",
   "team-stats",
   "analytics",
+  "chat",
 ] as const;
 
 /** Former Explorer Tables datasets — ignored when present on legacy URLs. */

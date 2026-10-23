@@ -130,4 +130,52 @@ export const api = {
   }): Promise<MatchupBoxScore> => request(`/api/box-score${buildQuery(args)}`),
 
   getPlayerNews: (_args?: EmptyArgs): Promise<PlayerNews> => request("/api/player-news"),
+
+  getChatAvailability: async (_args?: EmptyArgs): Promise<{ available: boolean }> => {
+    const token = await getAccessToken();
+    const headers = new Headers({ "content-type": "application/json" });
+    if (token) headers.set("authorization", `Bearer ${token}`);
+    const res = await fetch("/api/chat", { method: "GET", headers, cache: "no-store" });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`API ${res.status} /api/chat: ${body.slice(0, 200)}`);
+    }
+    return (await res.json()) as { available: boolean };
+  },
+
+  postChat: async (args: {
+    message: string;
+    history?: Array<{ role: "user" | "assistant"; content: string }>;
+  }): Promise<{ ok: true; reply: string; model: string; toolSteps: number }> => {
+    const token = await getAccessToken();
+    const headers = new Headers({ "content-type": "application/json" });
+    if (token) headers.set("authorization", `Bearer ${token}`);
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        message: args.message,
+        history: args.history ?? [],
+      }),
+    });
+    const bodyText = await res.text().catch(() => "");
+    let body: unknown = null;
+    try {
+      body = bodyText ? JSON.parse(bodyText) : null;
+    } catch {
+      body = null;
+    }
+    if (!res.ok) {
+      const err = new Error(`API ${res.status} /api/chat: ${bodyText.slice(0, 200)}`) as Error & {
+        status?: number;
+        code?: string;
+      };
+      err.status = res.status;
+      if (body && typeof body === "object" && "code" in body && typeof (body as { code: unknown }).code === "string") {
+        err.code = (body as { code: string }).code;
+      }
+      throw err;
+    }
+    return body as { ok: true; reply: string; model: string; toolSteps: number };
+  },
 };

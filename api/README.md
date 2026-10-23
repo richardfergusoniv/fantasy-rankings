@@ -15,6 +15,9 @@ Live handlers export named `GET`, `POST`, and `DELETE` functions. Several Hatch 
 | `ingest/[target].ts` | POST | `/api/ingest/projections`, `/api/ingest/matchup-grades`, `/api/ingest/pfn-tables`, `/api/ingest/player-news-x` |
 | `cron/jobs.ts` | GET | `/api/cron/jobs?job=rebuild-dashboard`, `?job=refresh-fantasycalc`, `?job=read-dashboard-snapshot`, `?job=backfill-value-history`, or `?job=backfill-pick-value-history` |
 | `user.ts` | GET, POST | `/api/user` |
+| `chat.ts` | GET, POST | `/api/chat`. Requires a signed-in Sleeper user. GET returns `{ available }` (OpenRouter key present). POST runs a tool-calling agent on OpenRouter free models (`OPENROUTER_API_KEY`; optional `OPENROUTER_MODEL` override, must end in `:free`). Default `thinkingmachines/inkling:free`; fallback on 429/5xx `nvidia/nemotron-3-ultra-550b-a55b:free`. Up to 8 tool steps / 55s deadline / `maxDuration: 60`. Tools cover leagues, cards, rankings, trades, matchups, news, advanced stats, projections, value history, lineup/waiver/trade suggestions, and draft info (read-only; dashboard + `source_cache` preferred). |
+
+**Function count:** 10 under `api/` (excluding `_lib`). Hobby cap is 12.
 
 ## Conventions
 
