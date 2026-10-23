@@ -25,6 +25,7 @@ import type {
   TradeAsset,
 } from "./dashboard-types";
 import { RankStrip } from "./components/rank-strip";
+import { TeamLogo } from "./components/nfl-image";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { ModalPortal, useDialogFocusTrap } from "./shared";
 import {
@@ -537,7 +538,11 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
       <div className="matchup-card-backdrop" onClick={onClose}>
         <article ref={dialogRef} className="matchup-data-card" role="dialog" aria-modal="true" aria-labelledby="matchup-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
           <div className="matchup-data-header">
-            <div>
+            <div className="matchup-data-logos">
+              <TeamLogo team={matchup.team} className="team-logo-lg" />
+              <TeamLogo team={matchup.opponent} className="team-logo-lg" />
+            </div>
+            <div className="matchup-data-title">
               <h2 id="matchup-card-title">{matchup.team} {matchup.isAway ? "@" : "vs"} {matchup.opponent}</h2>
               <span>PFN grades</span>
             </div>

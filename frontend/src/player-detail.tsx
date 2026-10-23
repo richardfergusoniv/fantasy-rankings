@@ -3,6 +3,7 @@ import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
+import { PlayerHeadshot } from "@/components/nfl-image";
 import type {
   AnalyticsEntity,
   BasePosition,
@@ -701,7 +702,9 @@ export function PlayerDetailSheet({
         >
         {isModal ? <div className="player-sheet-grabber" aria-hidden="true" /> : null}
         <div className="player-detail-header">
-          <div>
+          <div className="player-detail-identity">
+            <PlayerHeadshot playerId={player.playerId} position={player.position} team={player.team} />
+            <div className="player-detail-identity-text">
             <div className="player-detail-title-line">
               <h2 id="player-detail-name">{player.name}</h2>
             </div>
@@ -713,6 +716,7 @@ export function PlayerDetailSheet({
               waiversHref={waiversHref}
               onOpenWaivers={onOpenWaivers}
             /></p>
+            </div>
           </div>
           <div className="player-detail-actions">
             {canGoBack ? <button type="button" onClick={navigateBack} aria-label="Previous player">←</button> : null}

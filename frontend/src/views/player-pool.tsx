@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TeamLogo } from "@/components/nfl-image";
 import { api } from "../api";
 import type {
   Dashboard,
@@ -300,7 +301,8 @@ export function TeamDataModal({
       <div className="matchup-card-backdrop" onClick={onClose}>
         <article ref={dialogRef} className="matchup-data-card team-data-card" role="dialog" aria-modal="true" aria-labelledby="team-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
           <div className="matchup-data-header">
-            <div>
+            <TeamLogo team={selection.team} className="team-logo-lg" />
+            <div className="matchup-data-title">
               <h2 id="team-card-title">{selection.team} team card</h2>
               <span>{teamName}</span>
             </div>
