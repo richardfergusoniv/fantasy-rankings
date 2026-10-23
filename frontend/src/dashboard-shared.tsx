@@ -495,6 +495,8 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   const defense = tables?.defense ?? null;
   const teamCode = canonicalNflTeam(matchup.team);
   const opponentCode = canonicalNflTeam(matchup.opponent);
+  const teamCodeLabel = teamCode && teamCode.length <= 4 ? teamCode : matchup.team;
+  const opponentCodeLabel = opponentCode && opponentCode.length <= 4 ? opponentCode : matchup.opponent;
   const findRow = (table: PfnTable | null, code: string | null) => table?.rows.find((row) => canonicalNflTeam(row.team) === code);
   const teamRows = {
     offense: findRow(offense, teamCode),
@@ -586,8 +588,8 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                   </div>
                   <Tabs value={pairingTab} onValueChange={(value) => setPairingTab(value as "team-offense" | "team-defense")} className="matchup-pairing-tabs">
                     <TabsList aria-label="Matchup side">
-                      <TabsTrigger id="matchup-team-offense-tab" value="team-offense" aria-controls="matchup-team-offense-panel">{teamCode ?? matchup.team} {matchupPairings[0].leftUnit} vs {opponentCode ?? matchup.opponent} {matchupPairings[0].rightUnit}</TabsTrigger>
-                      <TabsTrigger id="matchup-team-defense-tab" value="team-defense" aria-controls="matchup-team-defense-panel">{teamCode ?? matchup.team} {matchupPairings[1].leftUnit} vs {opponentCode ?? matchup.opponent} {matchupPairings[1].rightUnit}</TabsTrigger>
+                      <TabsTrigger id="matchup-team-offense-tab" value="team-offense" aria-controls="matchup-team-offense-panel">{teamCodeLabel} {matchupPairings[0].leftUnit} vs {opponentCodeLabel} {matchupPairings[0].rightUnit}</TabsTrigger>
+                      <TabsTrigger id="matchup-team-defense-tab" value="team-defense" aria-controls="matchup-team-defense-panel">{teamCodeLabel} {matchupPairings[1].leftUnit} vs {opponentCodeLabel} {matchupPairings[1].rightUnit}</TabsTrigger>
                     </TabsList>
                   </Tabs>
                   {matchupPairings.filter((pairing) => pairing.id === pairingTab).map((pairing) => (
