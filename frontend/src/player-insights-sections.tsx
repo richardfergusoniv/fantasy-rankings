@@ -7,6 +7,7 @@ import { TEAM_WEEK_STATS_STALE_MS } from "../../api/_lib/nflverse-team-week-stat
 import {
   buildPropHistory,
   indexWeekStatsByPlayer,
+  isHiddenHalfPointPropStat,
   propPlayerMatchKey,
   propStatDef,
 } from "../../api/_lib/prop-line-reads";
@@ -33,7 +34,11 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
   const lines = useMemo(() => {
     // A cached response from before the weekly rollover holds last week's lines.
     if (!propLines || propLines.season !== season || propLines.week !== week) return [];
-    return propLines.lines.filter((line) => line.playerId === player.playerId && propStatDef(line.stat));
+    return propLines.lines.filter((line) => (
+      line.playerId === player.playerId
+      && propStatDef(line.stat)
+      && !isHiddenHalfPointPropStat(line.stat)
+    ));
   }, [propLines, player.playerId, season, week]);
   const historyQuery = useQuery({
     queryKey: ["nflverse-team-week-stats", season],

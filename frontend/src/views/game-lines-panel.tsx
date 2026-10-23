@@ -25,6 +25,7 @@ import {
   compareHitRateDesc,
   impliedProbability,
   indexWeekStatsByPlayer,
+  isHiddenHalfPointPropStat,
   isPropStatId,
   propPlayerMatchKey,
   propStatDef,
@@ -395,11 +396,12 @@ export function GameLinesPanel({
   // A position the refreshed board no longer has falls back to All.
   const activePosition = position === "ALL" || positionOptions.includes(position) ? position : "ALL";
   const statOptions = useMemo(() => {
-    if (!boardLines) return PROP_STAT_OPTIONS;
+    const visible = PROP_STAT_OPTIONS.filter((option) => !isHiddenHalfPointPropStat(option.id));
+    if (!boardLines) return visible;
     const present = new Set(boardLines
       .filter((line) => activePosition === "ALL" || (asPropPosition(line.position) ?? "WR") === activePosition)
       .map((line) => line.stat));
-    return PROP_STAT_OPTIONS.filter((option) => present.has(option.id));
+    return visible.filter((option) => present.has(option.id));
   }, [boardLines, activePosition]);
   // A stat the board has no lines for at this position falls back to All.
   const activeStatId = statId === "ALL" || statOptions.some((option) => option.id === statId) ? statId : "ALL";
@@ -409,7 +411,7 @@ export function GameLinesPanel({
     const built: PropTableRow[] = [];
 
     for (const line of lines) {
-      if (!isPropStatId(line.stat)) continue;
+      if (!isPropStatId(line.stat) || isHiddenHalfPointPropStat(line.stat)) continue;
       const positionCode = asPropPosition(line.position) ?? "WR";
       if (activePosition !== "ALL" && positionCode !== activePosition) continue;
       if (activeStatId !== "ALL" && line.stat !== activeStatId) continue;

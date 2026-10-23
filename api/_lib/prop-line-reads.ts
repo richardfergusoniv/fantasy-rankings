@@ -146,6 +146,17 @@ export function propStatDef(statId: string): PropStatDef | null {
   return PROP_STAT_OPTIONS.find((option) => option.id === statId) ?? null;
 }
 
+/** Live consensus lines for these markets are always 0.5 — hide from UI only. */
+const HIDDEN_HALF_POINT_PROP_STATS = new Set<string>([
+  "anytime_td",
+  "first_td",
+  "pass_interceptions",
+]);
+
+export function isHiddenHalfPointPropStat(stat: string): boolean {
+  return HIDDEN_HALF_POINT_PROP_STATS.has(stat);
+}
+
 /**
  * Summarize opening → latest movement from our own dated pulls.
  * Used for player props today; the same helper is ready for game-line

@@ -127,7 +127,6 @@ export function PowerRankings({
           <strong>#{mine.rank}</strong>
         </div>
         <p>of {powerRankings.length} teams</p>
-        <small>{scope === "week" ? `${points(mine.totalValue)} projected optimized-lineup points` : `${formatWhole(mine.totalValue)} total roster value`}</small>
       </Card>
 
       <section className="power-chart-section" aria-labelledby="position-strength-heading">
