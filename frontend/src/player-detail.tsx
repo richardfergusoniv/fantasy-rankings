@@ -33,7 +33,7 @@ import {
 import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
-import { MatchupTag, ModalPortal, SegmentedControl, DepthChangeMark, depthChange, depthLabel, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { MatchupTag, ModalPortal, SegmentedControl, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
 
@@ -403,8 +403,6 @@ export function PlayerDetailSheet({
   suspended = false,
   trending,
   season,
-  depth,
-  depthPrevious,
 }: {
   player: PlayerSearchResult;
   week: number;
@@ -439,10 +437,6 @@ export function PlayerDetailSheet({
   trending?: { adds: number | null; drops: number | null };
   /** Season, for this player's prop history. Props are hidden without it. */
   season?: number;
-  /** Latest depth-chart rank at his position. */
-  depth?: { position: string; rank: number };
-  /** His depth-chart rank a week ago, to show a move. */
-  depthPrevious?: { position: string; rank: number };
 }) {
   const isModal = presentation === "modal";
   const sheetRef = useRef<HTMLElement | null>(null);
@@ -627,7 +621,6 @@ export function PlayerDetailSheet({
   const weeklyWidth = player.weeklyProjection === null ? 0 : Math.min(100, Math.max(4, player.weeklyProjection / 30 * 100));
   const valueWidth = player.seasonValue === null ? 0 : Math.min(100, Math.max(4, player.seasonValue / 10_000 * 100));
   const positionLabel = player.position === "DEF" ? "DST" : player.position;
-  const depthMove = depthChange(depth, depthPrevious);
   const projectionComponents = projectionComponentsForPlayer(player);
   const defenseProjectionComponents = player.defenseComponents
     ? Object.entries(defenseComponentLabels).flatMap(([key, label]) => {
@@ -664,7 +657,7 @@ export function PlayerDetailSheet({
             <div className="player-detail-title-line">
               <h2 id="player-detail-name">{player.name}</h2>
             </div>
-            <p><span>{positionLabel}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} />{depth ? <span className="depth-chart-tag">{depthLabel(depth)}</span> : null}{depthMove ? <DepthChangeMark change={depthMove} /> : null}</p>
+            <p><span>{positionLabel}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} /></p>
           </div>
           <div className="player-detail-actions">
             {canGoBack ? <button type="button" onClick={navigateBack} aria-label="Previous player">←</button> : null}
@@ -776,7 +769,6 @@ export function PlayerDetailSheet({
             </div>
           </section>
         ) : null}
-        <PlayerTeamContext player={player} sosEntry={sosEntry} />
         <section className="player-news-section" aria-label={`${player.name} news`}>
           <div className="section-heading"><h3>Latest news</h3><span>{newsItems.length > 0 ? newsItems.length : null}</span></div>
           {newsError && onRetryNews ? (
@@ -792,17 +784,14 @@ export function PlayerDetailSheet({
             </article>
           )) : <div className="empty-inline compact">No recent news for this player.</div>}
         </section>
-        {player.position !== "PICK" && player.seasonValue !== null ? (
-          <Suspense fallback={<div className="loading-shimmer player-value-trend-loading" aria-hidden="true" />}>
-            <LazyPlayerValueTrend name={player.name} history={valueHistory} isLoading={historyQuery.isPending} />
-          </Suspense>
-        ) : null}
-        {supportsBoomBust ? (
-          <BoomBustPanel name={player.name} view={boomBustView} onViewChange={setBoomBustView} history={boomBustQuery.data} isLoading={boomBustQuery.isPending} />
-        ) : null}
         </div> : null}
         {activeTab === "season" ? (
           <div id="player-detail-season-panel" role="tabpanel" aria-labelledby="player-detail-season-tab">
+            {player.position !== "PICK" && player.seasonValue !== null ? (
+              <Suspense fallback={<div className="loading-shimmer player-value-trend-loading" aria-hidden="true" />}>
+                <LazyPlayerValueTrend name={player.name} history={valueHistory} isLoading={historyQuery.isPending} />
+              </Suspense>
+            ) : null}
             <SeasonGameLog player={player} history={boomBustQuery.data} analytics={analytics} isLoading={boomBustQuery.isPending} />
           </div>
         ) : null}
@@ -810,6 +799,9 @@ export function PlayerDetailSheet({
           <div id="player-detail-advanced-panel" role="tabpanel" aria-labelledby="player-detail-advanced-tab">
             <PlayerAdvancedPanel player={player} analytics={analytics}>
               <PlayerTeamContext player={player} sosEntry={sosEntry} />
+              {supportsBoomBust ? (
+                <BoomBustPanel name={player.name} view={boomBustView} onViewChange={setBoomBustView} history={boomBustQuery.data} isLoading={boomBustQuery.isPending} />
+              ) : null}
             </PlayerAdvancedPanel>
           </div>
         ) : null}
