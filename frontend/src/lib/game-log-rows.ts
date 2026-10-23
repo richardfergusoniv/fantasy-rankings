@@ -10,12 +10,12 @@ export type GameLogRow<T extends GameLogEntry> =
  * becomes a "gap" row. Weeks before the first game are not invented.
  */
 export function buildGameLogRows<T extends GameLogEntry>(oldestFirst: readonly T[]): GameLogRow<T>[] {
-  const maxPoints = Math.max(1, ...oldestFirst.map((game) => game.points));
+  const maxPoints = Math.max(0, ...oldestFirst.map((game) => game.points));
   return [...oldestFirst].reverse().flatMap((game, index, newestFirst): GameLogRow<T>[] => {
     const earlier = newestFirst[index + 1];
     const gaps = earlier && earlier.season === game.season
       ? Array.from({ length: Math.max(0, game.week - earlier.week - 1) }, (_unused, offset): GameLogRow<T> => ({ kind: "gap", season: game.season, week: game.week - 1 - offset }))
       : [];
-    return [{ kind: "game", game, share: Math.min(1, Math.max(0, game.points / maxPoints)) }, ...gaps];
+    return [{ kind: "game", game, share: maxPoints > 0 ? Math.min(1, Math.max(0, game.points / maxPoints)) : 0 }, ...gaps];
   });
 }

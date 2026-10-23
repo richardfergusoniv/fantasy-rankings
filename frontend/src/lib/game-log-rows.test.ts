@@ -20,4 +20,14 @@ describe("buildGameLogRows", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ kind: "game", share: 0 });
   });
+
+  it("scales a season whose best game is under a point to that game", () => {
+    const rows = buildGameLogRows([game(2026, 1, 0.2), game(2026, 2, 0.5)]);
+    expect(rows.map((row) => (row.kind === "game" ? row.share : -1))).toEqual([1, 0.4]);
+  });
+
+  it("gives no bar when no game scored", () => {
+    const rows = buildGameLogRows([game(2026, 1, 0), game(2026, 2, -1)]);
+    expect(rows.map((row) => (row.kind === "game" ? row.share : -1))).toEqual([0, 0]);
+  });
 });
