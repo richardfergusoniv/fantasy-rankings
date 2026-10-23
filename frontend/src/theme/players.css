@@ -221,13 +221,19 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-season-totals span, .player-advanced-grid span { min-width: 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.25; }
 .player-season-totals strong, .player-advanced-grid strong { flex: none; font-size: var(--type-body); font-weight: 700; font-variant-numeric: tabular-nums; }
 .player-game-log-list { border-top: 1px solid var(--hairline); }
-.player-game-log-list article { display: grid; grid-template-columns: 60px minmax(0, 1fr) 44px; min-height: 64px; align-items: center; gap: 8px; padding: 8px 2px; border-bottom: 1px solid var(--hairline); }
+.player-game-log-list article { position: relative; isolation: isolate; display: grid; grid-template-columns: 60px minmax(0, 1fr) 44px; min-height: 64px; align-items: center; gap: 8px; padding: 8px 2px; border-bottom: 1px solid var(--hairline); }
+/* A bar behind each game, as long as its points are against the season's best game. */
+.player-game-log-list article::before { position: absolute; z-index: -1; inset: 0 auto 0 0; width: calc(var(--share, 0) * 100%); background: var(--accent-soft); content: ""; }
+.player-game-log-list article.is-gap { min-height: 48px; grid-template-columns: 60px minmax(0, 1fr); }
+.player-game-log-list article.is-gap::before { content: none; }
+.player-game-log-list article.is-gap strong, .player-game-log-list article.is-gap p { color: var(--dim); }
+.player-rate-value { display: inline-flex; flex: none; align-items: baseline; gap: 6px; font-weight: 400; }
+.player-rate-value small { min-width: 2.2ch; color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 .player-game-log-list article > div { display: grid; gap: 2px; }
 .player-game-log-list article > div strong { font-size: var(--type-body); }
 .player-game-log-list article > div span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .player-game-log-list article p { margin: 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.4; }
 .player-game-log-list article > b { display: grid; gap: 1px; justify-items: end; font-size: var(--type-body); font-weight: 700; }
-.player-game-log-list article > b small { color: var(--dim); font-size: var(--type-caption); letter-spacing: .05em; }
 .player-tab-loading { display: grid; gap: 8px; padding-top: 14px; }
 .player-tab-loading span { display: block; height: 64px; border-radius: var(--radius-md); }
 .player-tab-empty { display: grid; min-height: 180px; place-content: center; justify-items: center; gap: 5px; padding: 22px 14px; text-align: center; }
