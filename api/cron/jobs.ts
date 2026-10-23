@@ -24,9 +24,10 @@ import { refreshNflPlayersCache } from "../_lib/nfl-players-cache.js";
 import { withDeadline } from "../_lib/sleeper.js";
 import { refreshTeamSituationalSnapshot } from "../_lib/team-situational.js";
 import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
+import { refreshPlayerInsightsSnapshot } from "../_lib/player-insights.js";
 
 /**
- * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-nfl-players | backfill-value-history | backfill-pick-value-history
+ * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-player-insights | refresh-nfl-players | backfill-value-history | backfill-pick-value-history
  *
  * One function for the scheduled jobs (Vercel's 12-function budget).
  * Vercel Cron invokes with GET; auth is `Authorization: Bearer <CRON_SECRET>`
@@ -48,6 +49,9 @@ import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
  *   replacing cache; keeps the last valid snapshot on failure.
  * - refresh-chart-extras: rebuilds compact nflverse snap / red-zone / PROE
  *   metrics for Charts presets into `nflverse-chart-extras-2026-v1`.
+ * - refresh-player-insights: rebuilds expected points, Next Gen Stats,
+ *   depth-chart ranks and FantasyPros weekly expert ranks into
+ *   `player-insights-2026-v1`. Keeps the last snapshot when a pull is thin.
  * - refresh-nfl-players: pulls Sleeper `/players/nfl`, stores a compact
  *   team/status roster map in `nfl-players-roster-v1` (not the full dump),
  *   and keeps the previous snapshot when the pull is thin or fails.
@@ -110,6 +114,11 @@ async function handleRefreshChartExtras(): Promise<Response> {
   return json({ job: "refresh-chart-extras", ...result });
 }
 
+async function handleRefreshPlayerInsights(): Promise<Response> {
+  const result = await refreshPlayerInsightsSnapshot();
+  return json({ job: "refresh-player-insights", ...result }, result.ok ? 200 : 502);
+}
+
 async function handleRefreshNflPlayers(): Promise<Response> {
   const result = await refreshNflPlayersCache();
   return json({ job: "refresh-nfl-players", ...result });
@@ -152,11 +161,12 @@ export async function GET(req: Request): Promise<Response> {
     if (job === "read-dashboard-snapshot") return await handleReadDashboardSnapshot();
     if (job === "refresh-team-situational") return await handleRefreshTeamSituational();
     if (job === "refresh-chart-extras") return await handleRefreshChartExtras();
+    if (job === "refresh-player-insights") return await handleRefreshPlayerInsights();
     if (job === "refresh-nfl-players") return await handleRefreshNflPlayers();
     if (job === "backfill-value-history") return await handleBackfillValueHistory(url);
     if (job === "backfill-pick-value-history") return await handleBackfillPickValueHistory(url);
     return badRequest(
-      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, refresh-nfl-players, backfill-value-history, or backfill-pick-value-history.",
+      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, refresh-player-insights, refresh-nfl-players, backfill-value-history, or backfill-pick-value-history.",
     );
   } catch (err) {
     await captureServerError(err, { route: "cron/jobs", job: job ?? "unknown" });

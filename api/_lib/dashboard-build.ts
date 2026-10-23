@@ -24,6 +24,7 @@ import {
   tradeValuationSchema,
   type Dashboard,
   CACHE_KEY,
+  emptyPlayerInsights,
 } from "./dashboard-schemas.js";
 import {
   buildDashboardCacheWrites,
@@ -96,6 +97,7 @@ import {
   type ChartStatRow,
 } from "./chart-metric-transforms.js";
 import { loadChartExtrasSnapshot, type ChartExtrasSnapshot } from "./nflverse-chart-extras.js";
+import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./player-insights.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -692,6 +694,7 @@ function buildAnalytics(
   currentCsv: string,
   season: number,
   extras: ChartExtrasSnapshot | null = null,
+  insights: PlayerInsightsSnapshot | null = null,
 ): { throughWeek: number | null; entities: AnalyticsEntity[]; teamUsage: z.infer<typeof teamUsageSchema>[] } {
   const allRows = [...parseAnalyticsRows(previousCsv), ...parseAnalyticsRows(currentCsv)];
   applyChartExtrasToRows(allRows, extras);
@@ -728,6 +731,15 @@ function buildAnalytics(
         rollingMetrics.rz_carry_share = rz.rzCarryShare;
       }
     }
+    // Expected points and Next Gen Stats cover this season only, so they stay off
+    // the rolling-17 window, which reaches back into last season.
+    const opportunity = insights?.opportunity[latest.id];
+    if (opportunity && opportunity.games > 0) {
+      seasonMetrics.expected_points = opportunity.expected / opportunity.games;
+      seasonMetrics.points_over_expected = (opportunity.actual - opportunity.expected) / opportunity.games;
+    }
+    const ngs = latest.position === "K" || latest.position === "DEF" ? undefined : insights?.ngs[latest.id];
+    if (ngs) Object.assign(seasonMetrics, ngs);
     entities.push({
       id: key,
       name: latest.name,
@@ -738,6 +750,7 @@ function buildAnalytics(
       season: seasonMetrics,
       rolling17: rollingMetrics,
       weeklySnaps: weeklySnaps.get(latest.id) ?? [],
+      weeklyExpected: (opportunity?.weeks ?? []).map(([week, expected, actual]) => ({ week, expected, actual })),
     });
   }
   entities.sort((a, b) => a.position.localeCompare(b.position) || a.name.localeCompare(b.name));
@@ -1511,6 +1524,10 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   // Down boards are still rejected by projectionBoardIsUsable.
   const useVegasPrimary = projectionBoardIsUsable(vegasProjectionSnapshot);
   let defenses: z.infer<typeof defenseSchema>[] = [];
+  // Read only: the refresh-player-insights cron job owns refetching the sources.
+  // The snapshot is one season's; another season gets none rather than stale ranks.
+  const storedInsights = await readPlayerInsightsSnapshot().catch(() => null);
+  const insightsSnapshot = storedInsights?.season === season ? storedInsights : null;
   let analytics: z.infer<typeof analyticsSchema> = {
     asOf: null,
     throughWeek: null,
@@ -1524,7 +1541,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   } else if (currentStatsResult.status === "fulfilled" && previousStatsResult.status === "fulfilled") {
     try {
       const chartExtras = await loadChartExtrasSnapshot();
-      const built = buildAnalytics(previousStatsResult.value, currentStatsResult.value, season, chartExtras);
+      const built = buildAnalytics(previousStatsResult.value, currentStatsResult.value, season, chartExtras, insightsSnapshot);
       analytics = { asOf: new Date().toISOString(), throughWeek: built.throughWeek, sourceUrl: NFLVERSE_PLAYER_STATS_2026_URL, entities: built.entities, teamUsage: built.teamUsage, teamRecords };
       if (built.entities.length === 0) sourceErrors.push("nflverse advanced stats did not include any current-season games.");
     } catch {
@@ -2050,6 +2067,9 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     rankingsAsOf: useVegasPrimary ? (vegasProjectionSnapshot?.built_at ?? null) : null,
     fantasyCalcAsOf,
     playerTrending,
+    playerInsights: insightsSnapshot
+      ? { depth: insightsSnapshot.depth, depthAsOf: insightsSnapshot.depthAsOf, experts: insightsSnapshot.experts, expertsAsOf: insightsSnapshot.expertsAsOf, expertsLastKickoff: insightsSnapshot.expertsLastKickoff }
+      : emptyPlayerInsights,
     leagues: leagues.filter((league): league is NonNullable<typeof league> => league !== null),
     rankings,
     weeklyChartRankings,

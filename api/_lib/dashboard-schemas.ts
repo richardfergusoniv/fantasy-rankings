@@ -191,6 +191,13 @@ export const weeklySnapPointSchema = z.object({
   snapShare: z.number(),
 });
 
+/** One game of expected vs actual PPR points (ffopportunity). */
+export const weeklyExpectedPointSchema = z.object({
+  week: z.number().int(),
+  expected: z.number(),
+  actual: z.number(),
+});
+
 export const analyticsEntitySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -201,6 +208,7 @@ export const analyticsEntitySchema = z.object({
   season: z.record(z.string(), z.number()),
   rolling17: z.record(z.string(), z.number()),
   weeklySnaps: z.array(weeklySnapPointSchema).default([]),
+  weeklyExpected: z.array(weeklyExpectedPointSchema).default([]),
 });
 
 export const teamUsageSchema = z.object({
@@ -253,6 +261,33 @@ export const playerTrendingEntrySchema = z.object({
   drops: z.number().int().nullable(),
 });
 
+/**
+ * Depth-chart rank and this week's FantasyPros expert consensus, keyed by
+ * Sleeper player id (team code for defenses).
+ */
+export const playerInsightsSchema = z.object({
+  depth: z.record(z.string(), z.object({ position: z.string(), rank: z.number().int() })),
+  depthAsOf: z.string().nullable(),
+  experts: z.record(z.string(), z.object({
+    ecr: z.number(),
+    best: z.number().int(),
+    worst: z.number().int(),
+    positionRank: z.number().int().nullable(),
+    projection: z.number().nullable(),
+  })),
+  expertsAsOf: z.string().nullable(),
+  /** Last kickoff of the slate the expert ranks cover; identifies their week. */
+  expertsLastKickoff: z.string().nullable().default(null),
+});
+
+export const emptyPlayerInsights: z.infer<typeof playerInsightsSchema> = {
+  depth: {},
+  depthAsOf: null,
+  experts: {},
+  expertsAsOf: null,
+  expertsLastKickoff: null,
+};
+
 export const dashboardResponse = z.object({
   status: z.enum(["ok", "partial"]),
   season: z.number().int(),
@@ -261,6 +296,7 @@ export const dashboardResponse = z.object({
   rankingsAsOf: z.string().nullable(),
   fantasyCalcAsOf: z.string().nullable(),
   playerTrending: z.record(z.string(), playerTrendingEntrySchema).default({}),
+  playerInsights: playerInsightsSchema.default(emptyPlayerInsights),
   leagues: z.array(leagueSchema),
   rankings: z.array(rankingSchema),
   weeklyChartRankings: z.array(rankingSchema),
@@ -327,6 +363,7 @@ export const dashboardPlayersSchema = dashboardResponse.pick({
   defenses: true,
   strengthOfSchedule: true,
   playerTrending: true,
+  playerInsights: true,
 });
 
 /** Trade teams + starter slots (Matchup/Monitor/Power/Trade). Waiver pool is separate. */

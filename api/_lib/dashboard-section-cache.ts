@@ -5,6 +5,7 @@ import {
   dashboardPlayersSchema,
   dashboardTradeSchema,
   dashboardTradeWaiverSchema,
+  emptyPlayerInsights,
   leaguePowerSchema,
   leagueTeamSchema,
   type Dashboard,
@@ -162,6 +163,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
       defenses: dashboard.defenses,
       strengthOfSchedule: dashboard.strengthOfSchedule ?? [],
       playerTrending: dashboard.playerTrending ?? {},
+      playerInsights: dashboard.playerInsights ?? emptyPlayerInsights,
     },
     league: {
       leagues: dashboard.leagues.map(
@@ -407,6 +409,7 @@ export function assembleDashboardFromSections(
     seasonLongRankings: players.data.seasonLongRankings,
     defenses: players.data.defenses,
     playerTrending: players.data.playerTrending ?? {},
+    playerInsights: players.data.playerInsights ?? emptyPlayerInsights,
     analytics: analytics.data.analytics,
     strengthOfSchedule: players.data.strengthOfSchedule ?? [],
   };
@@ -448,6 +451,7 @@ export function buildDashboardCacheWrites(args: {
         seasonLongRankings: sections.players.seasonLongRankings,
         defenses: sections.players.defenses,
         strengthOfSchedule: sections.players.strengthOfSchedule,
+        playerInsights: sections.players.playerInsights,
       };
       const sectionPayloads: Array<{ section: DashboardCacheSection; data: unknown }> = [
         { section: "meta", data: sections.meta },
