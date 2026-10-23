@@ -27,7 +27,12 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
   const pfnQuery = useQuery({
     // Ask for the card's own week; the server's default is the NFL week, which can differ.
     queryKey: ["pfn-tables", season, week],
-    queryFn: () => api.getPfnTables({ season, week }),
+    queryFn: async () => {
+      const response = await api.getPfnTables({ season, week });
+      // An empty list from a degraded server response is a failure, not "no props posted".
+      if (response.propLines.degraded) throw new Error("Prop lines unavailable");
+      return response;
+    },
     staleTime: 60 * 60 * 1000,
     retry: 1,
   });
