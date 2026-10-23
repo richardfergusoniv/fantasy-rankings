@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { abbreviatedName, buildTeamDepthChart } from "./team-depth-chart";
+import { abbreviatedName, buildTeamDepthChart, depthChartPlayers } from "./team-depth-chart";
 
 const canonical = (team: string | null) => (team === "JAC" ? "JAX" : team);
 const player = (playerId: string, name: string, team: string, position: string, projection: number | null = null, injuryStatus: string | null = null) => ({
@@ -75,5 +75,25 @@ describe("buildTeamDepthChart", () => {
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.cells.filter(Boolean)).toHaveLength(1);
+  });
+});
+
+describe("depthChartPlayers", () => {
+  const weekly = [player("w1", "Weekly Guy", "CIN", "WR", 9)];
+  const seasonLong = [
+    { playerId: "s1", name: "Season Guy", team: "CIN", position: "WR" },
+    { playerId: "s2", name: "No Team", team: null, position: "WR" },
+    { playerId: "s3", name: "2027 1st", team: null, position: "PICK" },
+    { playerId: "s4", name: "A Pick", team: "CIN", position: "PICK" },
+  ];
+
+  it("prefers this week's rankings", () => {
+    expect(depthChartPlayers(weekly, seasonLong)).toEqual(weekly);
+  });
+
+  it("falls back to season-long players with a team, leaving out picks", () => {
+    expect(depthChartPlayers([], seasonLong)).toEqual([
+      { playerId: "s1", name: "Season Guy", team: "CIN", position: "WR", leagueProjection: null, injuryStatus: null },
+    ]);
   });
 });

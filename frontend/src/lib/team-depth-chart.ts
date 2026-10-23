@@ -28,6 +28,20 @@ export type DepthChartRow = {
   cells: [DepthChartCell | null, DepthChartCell | null, DepthChartCell | null];
 };
 
+type SeasonLongPlayer = { playerId: string; name: string; team: string | null; position: string };
+
+/**
+ * The players to place on a depth chart: this week's rankings, which carry
+ * projections and injury status, or, when there are none, the season-long rows
+ * (names and teams only) so the chart still shows who is where.
+ */
+export function depthChartPlayers(weekly: readonly DepthChartPlayer[], seasonLong: readonly SeasonLongPlayer[]): DepthChartPlayer[] {
+  if (weekly.length > 0) return [...weekly];
+  return seasonLong.flatMap((row) => row.team && row.position !== "PICK"
+    ? [{ playerId: row.playerId, name: row.name, team: row.team, position: row.position, leagueProjection: null, injuryStatus: null }]
+    : []);
+}
+
 /** "M. Hale" for "Marcus Hale", keeping a suffix: "O. Beckham Jr.". */
 export function abbreviatedName(name: string): string {
   const parts = name.trim().split(/\s+/);

@@ -34,7 +34,7 @@ import {
 } from "../dashboard-shared";
 import type { RankingHorizon, RankingPosition } from "../dashboard-url";
 import { formatDecimal, formatPercent, formatPoints, formatWhole } from "../lib/format-number";
-import { abbreviatedName, buildTeamDepthChart, type DepthChartRow } from "../lib/team-depth-chart";
+import { abbreviatedName, buildTeamDepthChart, depthChartPlayers, type DepthChartRow } from "../lib/team-depth-chart";
 import {
   DepthChangeMark,
   SOS_POSITIONS,
@@ -519,11 +519,11 @@ export function ConnectedTeamCard({
   const situational = teamSituational?.rows.find((row) => (canonicalNflTeam(row.team) ?? row.team) === teamCode) ?? null;
   const depthChart = useMemo(() => buildTeamDepthChart({
     team,
-    players: dashboard.rankings.filter((row) => row.leagueId === leagueId),
+    players: depthChartPlayers(dashboard.rankings.filter((row) => row.leagueId === leagueId), dashboard.seasonLongRankings),
     depth: dashboard.playerInsights?.depth ?? {},
     depthPrevious: dashboard.playerInsights?.depthPrevious ?? {},
     canonical: canonicalNflTeam,
-  }), [dashboard.playerInsights, dashboard.rankings, leagueId, team]);
+  }), [dashboard.playerInsights, dashboard.rankings, dashboard.seasonLongRankings, leagueId, team]);
   return (
     <TeamDataModal
       selection={{ team }}
@@ -617,11 +617,11 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   const leagueRankings = useMemo(() => dashboard.rankings.filter((row) => row.leagueId === league.id), [dashboard.rankings, league.id]);
   const selectedTeamDepthChart = useMemo(() => selectedTeam ? buildTeamDepthChart({
     team: selectedTeam.team,
-    players: leagueRankings,
+    players: depthChartPlayers(leagueRankings, dashboard.seasonLongRankings),
     depth: dashboard.playerInsights?.depth ?? {},
     depthPrevious: dashboard.playerInsights?.depthPrevious ?? {},
     canonical: canonicalNflTeam,
-  }) : [], [dashboard.playerInsights, leagueRankings, selectedTeam]);
+  }) : [], [dashboard.playerInsights, dashboard.seasonLongRankings, leagueRankings, selectedTeam]);
   const leagueDefenses = useMemo(() => dashboard.defenses.filter((row) => row.leagueId === league.id), [dashboard.defenses, league.id]);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
 
