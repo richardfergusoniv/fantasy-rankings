@@ -51,6 +51,9 @@ describe("teamOutlook and winProbability", () => {
     const final = { ...base, playerId: "2", position: "WR", projection: 10, gamePhase: "final" as const, actual: 10 };
     expect(teamOutlook([live])?.sd).toBeGreaterThan(0);
     expect(winProbability(teamOutlook([live])!, teamOutlook([final])!)).toBeLessThan(1);
+    const scoreless = { ...live, actual: 0 };
+    expect(teamOutlook([scoreless])?.sd).toBeGreaterThan(0);
+    expect(winProbability(teamOutlook([final])!, teamOutlook([scoreless])!)).toBeLessThan(1);
   });
 
   it("is certain once every game is final", () => {

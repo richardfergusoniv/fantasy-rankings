@@ -22,6 +22,8 @@ export const SCORE_SPREAD_BY_POSITION: Record<string, number> = {
   DST: 0.75,
 };
 const DEFAULT_SCORE_SPREAD = 0.55;
+/** Spread basis for a live player with no projection: roughly a fringe starter's week. */
+const UNPROJECTED_SPREAD_BASIS = 5;
 /** Score range shown to the user: the middle 80% of outcomes. */
 const RANGE_Z = 1.2816;
 
@@ -48,8 +50,9 @@ export function teamOutlook(players: readonly LiveForecastPlayer[], now = Date.n
     mean += forecast;
     const spread = SCORE_SPREAD_BY_POSITION[player.position] ?? DEFAULT_SCORE_SPREAD;
     // A player with no projection (unranked in Experts mode) but a live game still
-    // carries uncertainty; spread off the live forecast instead of zero.
-    const sd = spread * Math.max(0, player.projection ?? forecast) * remainingShare(player);
+    // carries uncertainty, even while still scoreless.
+    const basis = player.projection ?? Math.max(forecast, UNPROJECTED_SPREAD_BASIS);
+    const sd = spread * Math.max(0, basis) * remainingShare(player);
     variance += sd * sd;
   }
   if (counted === 0) return null;
