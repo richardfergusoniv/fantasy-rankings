@@ -218,8 +218,8 @@
 /* Each pairing is a heading over stat rows; a row is the name, the gap in ranks, and one strip. */
 .matchup-pairing { padding: 10px 0 4px; border-bottom: 1px solid var(--hairline); }
 .matchup-pairing:last-child { border-bottom: 0; }
-.matchup-pairing h4 { margin: 0 0 4px; color: var(--text); font-size: var(--type-body); font-weight: 700; }
 .matchup-pairing-tabs { margin: 0 0 10px; }
+.matchup-pairing-tabs [data-slot="tabs-trigger"] { white-space: normal; text-align: center; }
 .matchup-stat-row { padding: 6px 0 2px; }
 .matchup-stat-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: var(--type-control); }
 .matchup-stat-gap { font-size: var(--type-caption); font-variant-numeric: tabular-nums lining-nums; }
