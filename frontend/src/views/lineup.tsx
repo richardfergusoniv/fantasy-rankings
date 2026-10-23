@@ -43,7 +43,6 @@ export function MatchupPlayer({
   isSwappedIn = false,
   isDemoted = false,
   selected = false,
-  expertRank = null,
   onOpen,
   onOpenMatchup,
 }: {
@@ -53,8 +52,6 @@ export function MatchupPlayer({
   isSwappedIn?: boolean;
   isDemoted?: boolean;
   selected?: boolean;
-  /** Experts lineup: this week's FantasyPros position rank ("WR6"). */
-  expertRank?: string | null;
   onOpen?: (player: RosterPlayer) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
 }) {
@@ -78,11 +75,10 @@ export function MatchupPlayer({
     : isDemoted
       ? ", moved to bench in this lineup"
       : "";
-  const expertDescription = expertRank ? `, expert rank ${expertRank}` : "";
   const selectedDescription = selected ? ", selected" : "";
   return (
     <div className={`matchup-player ${side}${isSwappedIn ? " swapped-in" : ""}${isDemoted ? " demoted" : ""}${selected ? " is-player-selected" : ""}`}>
-      <button type="button" className="matchup-player-open" onClick={openPlayer} aria-label={`View ${player.name} details and news, ${position}, ${matchup}, ${scoreDescription}${expertDescription}${injuryDescription}${substitutionDescription}${selectedDescription}`}>
+      <button type="button" className="matchup-player-open" onClick={openPlayer} aria-label={`View ${player.name} details and news, ${position}, ${matchup}, ${scoreDescription}${injuryDescription}${substitutionDescription}${selectedDescription}`}>
         <span className="matchup-name-line">
           <strong>{player.name}</strong>
           {selected ? <span className="player-selected-chip">Selected</span> : null}
@@ -109,7 +105,6 @@ export function MatchupPlayer({
       </div>
       <button type="button" className={matchupProjectionClassName({ scoreLabel: score.label })} onClick={openPlayer} tabIndex={-1} aria-hidden="true">
         <b>{formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)}</b>
-        {expertRank ? <small className="matchup-expert-rank">{expertRank}</small> : null}
       </button>
     </div>
   );
@@ -157,11 +152,6 @@ export function Lineup({
   const hasExperts = experts !== undefined;
   const activeMode = mode === "experts" && !hasExperts ? "current" : mode;
   const withExpertProjection = (player: RosterPlayer): RosterPlayer => expertProjected(player, experts);
-  const expertRankFor = (player: RosterPlayer | undefined): string | null => {
-    const rank = player ? experts?.[player.playerId]?.positionRank : null;
-    if (!player || rank == null) return null;
-    return `${player.position === "DEF" ? "DST" : player.position}${rank}`;
-  };
   const expertLineup = useMemo(
     () => optimizeLineup(
       league.starters.map((player) => expertProjected(player, experts)),
@@ -310,7 +300,6 @@ export function Lineup({
                 onOpenMatchup={onOpenMatchup}
                 selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
                 isSwappedIn={isReordered && Boolean(matchupCell(myPlayer)) && !league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
-                expertRank={activeMode === "experts" ? expertRankFor(myPlayer) : null}
               />
               <span className="matchup-slot">{(myPlayer?.lineupSlot ?? theirs?.lineupSlot ?? "—").replace("_", " ")}</span>
               <MatchupPlayer
@@ -320,7 +309,6 @@ export function Lineup({
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
                 selected={Boolean(linkedPlayerId && theirs?.playerId === linkedPlayerId)}
-                expertRank={activeMode === "experts" ? expertRankFor(theirs) : null}
               />
             </div>
           ))}
@@ -343,7 +331,6 @@ export function Lineup({
                 onOpenMatchup={onOpenMatchup}
                 selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
                 isDemoted={isReordered && Boolean(myPlayer) && league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
-                expertRank={activeMode === "experts" ? expertRankFor(myPlayer) : null}
               />
               <span className="matchup-slot">BN</span>
               <MatchupPlayer
@@ -353,7 +340,6 @@ export function Lineup({
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
                 selected={Boolean(linkedPlayerId && theirs?.playerId === linkedPlayerId)}
-                expertRank={activeMode === "experts" ? expertRankFor(theirs) : null}
               />
             </div>
           ))}
