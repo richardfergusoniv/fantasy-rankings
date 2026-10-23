@@ -988,11 +988,18 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                 : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
               const rosteredBy = row.rosterTeamName && row.rosterId === null ? `, rostered by ${row.rosterTeamName}` : "";
               const expert = expertRanks ? expertRanks[row.key] : undefined;
-              const expertRankLabel = expert?.positionRank != null ? `${row.position === "DEF" ? "DST" : row.position}${expert.positionRank}` : null;
+              // FLEX/SUPER rows in the ECR tab sort by overall ECR, so they show
+              // the overall rank; position tabs and waivers keep position ranks.
+              const expertOverall = effectiveHorizon === "ecr" && (effectivePosition === "FLEX" || effectivePosition === "SUPER");
+              const expertRankLabel = expertOverall
+                ? expert?.ecr != null ? `#${expert.ecr}` : null
+                : expert?.positionRank != null ? `${row.position === "DEF" ? "DST" : row.position}${expert.positionRank}` : null;
               const accessibleExpert = !showExpertColumn
                 ? ""
                 : expertRankLabel
-                  ? `, expert rank ${expertRankLabel}, range ${expert?.best} to ${expert?.worst}`
+                  ? expertOverall
+                    ? `, expert overall rank ${expert?.ecr}`
+                    : `, expert rank ${expertRankLabel}, range ${expert?.best} to ${expert?.worst}`
                   : ", expert rank unavailable";
               const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${accessibleExpert}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${rosteredBy}${isSelected ? ", selected" : ""}`;
               const rosterId = row.rosterId;
@@ -1046,7 +1053,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                   {showExpertColumn ? (
                     <span className="ranking-ecr" aria-hidden="true">
                       <strong>{expertRankLabel ?? "—"}</strong>
-                      {expert && expert.best !== expert.worst ? <span>{expert.best}–{expert.worst}</span> : expert ? <span>{expert.best}</span> : null}
+                      {expertOverall ? null : expert && expert.best !== expert.worst ? <span>{expert.best}–{expert.worst}</span> : expert ? <span>{expert.best}</span> : null}
                     </span>
                   ) : null}
                   <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : <span>{row.projectionLabel}</span>}</span>
