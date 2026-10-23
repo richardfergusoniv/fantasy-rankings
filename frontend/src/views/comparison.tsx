@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { MatchupSelection } from "../dashboard-types";
 import { GapBar } from "../components/gap-bar";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RankStrip } from "../components/rank-strip";
 import { formatCompactCount } from "../lib/format-number";
 import { DepthChangeMark, depthChange, depthLabel, MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
@@ -641,15 +642,14 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
       ) : left && right ? (
         <section className="comparison-board" aria-label={`${left.name} and ${right.name} comparison`}>
           <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} depth={dashboard.playerInsights?.depth ?? {}} depthPrevious={dashboard.playerInsights?.depthPrevious ?? {}} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
-          <SegmentedControl
-            className="comparison-section-tabs"
-            value={sectionTab}
-            onChange={setSectionTab}
-            label="Comparison data"
-            options={[{ value: "projections", label: `Week ${dashboard.week}` }, { value: "advanced", label: "Season" }]}
-          />
+          <Tabs value={sectionTab} onValueChange={(value) => setSectionTab(value as "projections" | "advanced")} className="comparison-section-tabs">
+            <TabsList aria-label="Comparison data">
+              <TabsTrigger id="comparison-projections-tab" value="projections" aria-controls="comparison-projections-panel">Week {dashboard.week}</TabsTrigger>
+              <TabsTrigger id="comparison-advanced-tab" value="advanced" aria-controls="comparison-advanced-panel">Season</TabsTrigger>
+            </TabsList>
+          </Tabs>
           {sections.filter((section) => section.dataset === sectionTab).map((section) => (
-            <section className="comparison-section" key={section.dataset} aria-label={section.dataset === "projections" ? `Week ${dashboard.week}` : "Season"}>
+            <section className="comparison-section" key={section.dataset} id={`comparison-${section.dataset}-panel`} role="tabpanel" aria-labelledby={`comparison-${section.dataset}-tab`}>
               {section.dataset === "advanced" ? (
                 <header className="comparison-section-head">
                   <SegmentedControl className="comparison-window-toggle" value={window} onChange={onWindowChange} label="Season stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17" }]} />
