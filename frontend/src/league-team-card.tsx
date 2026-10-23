@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, type MouseEvent } from "react";
 import type { Dashboard, League, MatchupSelection } from "./dashboard-types";
 import { compareByFantasyPosition } from "./fantasy-position-order";
 import { weeklyOpponentRosterId } from "./power-opponent";
-import { DepthChangeMark, MatchupTag, ModalPortal, SegmentedControl, depthChange, leagueRank, points, useDialogFocusTrap } from "./shared";
+import { DepthChangeMark, MatchupTag, ModalPortal, depthChange, leagueRank, points, useDialogFocusTrap } from "./shared";
 import type { EcrTeam } from "./lib/ecr-power-rankings";
 import { formatWhole } from "./lib/format-number";
 
@@ -70,7 +70,6 @@ export function LeagueTeamCard({
   const returnPlayerRowRef = useRef<HTMLElement | null>(null);
   const wasPlayerCardOpenRef = useRef(false);
   useDialogFocusTrap(dialogRef, onClose, !playerCardOpen);
-  const [rosterList, setRosterList] = useState<"starters" | "bench">("starters");
   const activeMode = league.seasonLongFormat.isDynasty ? mode : "seasonLong";
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const isOpponent = scope === "week" && weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams) === team.rosterId;
@@ -139,14 +138,6 @@ export function LeagueTeamCard({
       })
       .sort((a, b) => b.season.value - a.season.value || a.player.name.localeCompare(b.player.name));
   }, [league.rankingPositions, matchupSlotOrder, roster, scope, seasonRowsByPlayerId]);
-
-  const starters = scope === "week" ? rows.filter(({ player }) => player.isStarter) : rows;
-  const bench = scope === "week" ? rows.filter(({ player }) => !player.isStarter) : [];
-  const showRosterTabs = scope === "week" && bench.length > 0;
-
-  useEffect(() => {
-    setRosterList("starters");
-  }, [team.rosterId, scope, mode]);
 
   const renderPlayer = (row: RosterRow) => {
     const { player, season } = row;
@@ -244,24 +235,7 @@ export function LeagueTeamCard({
           </div>
           <div className="power-team-card-roster" role="region" aria-label={`${team.teamName} roster`}>
             {rows.length > 0 ? (
-              <>
-                {showRosterTabs ? (
-                  <SegmentedControl
-                    className="power-roster-tabs"
-                    value={rosterList}
-                    onChange={setRosterList}
-                    label={`${team.teamName} roster list`}
-                    options={[
-                      { value: "starters", label: "Starters" },
-                      { value: "bench", label: "Bench" },
-                    ]}
-                  />
-                ) : null}
-                {(showRosterTabs
-                  ? (rosterList === "bench" ? bench : starters)
-                  : rows
-                ).map((row) => renderPlayer(row))}
-              </>
+              <>{rows.map((row) => renderPlayer(row))}</>
             ) : <div className="power-roster-empty">No roster values for this format.</div>}
           </div>
         </section>
