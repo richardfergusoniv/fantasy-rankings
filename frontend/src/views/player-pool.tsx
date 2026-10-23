@@ -182,10 +182,6 @@ export function TeamDataModal({
 }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   useDialogFocusTrap(dialogRef, onClose);
-  const [teamTab, setTeamTab] = useState<"stats" | "pfn" | "advanced" | "depth">("stats");
-  useEffect(() => {
-    setTeamTab("stats");
-  }, [selection.team]);
   const teamCode = canonicalNflTeam(selection.team);
   const lineRow = offensiveLine?.rows.find((row) => canonicalNflTeam(row.team) === teamCode);
   const defenseRow = defense?.rows.find((row) => canonicalNflTeam(row.team) === teamCode);
@@ -304,26 +300,14 @@ export function TeamDataModal({
           <div className="matchup-data-header">
             <div>
               <h2 id="team-card-title">{selection.team} team card</h2>
-              <span>{teamName}{offensiveLine?.fetched_at || defense?.fetched_at || offense?.fetched_at || teamOverall?.fetched_at ? ` · PFN ${pfnDateLabel(offensiveLine?.fetched_at ?? defense?.fetched_at ?? offense?.fetched_at ?? teamOverall?.fetched_at ?? "")}` : ""}</span>
+              <span>{teamName}</span>
             </div>
             <button type="button" onClick={onClose} aria-label="Close team data">×</button>
           </div>
 
-          <SegmentedControl
-            className="team-card-tabs"
-            value={teamTab}
-            onChange={setTeamTab}
-            label={`${selection.team} team card sections`}
-            options={[
-              { value: "stats", label: "Stats" },
-              { value: "pfn", label: "PFN" },
-              { value: "advanced", label: "Advanced" },
-              ...(depthChart.length > 0 ? [{ value: "depth" as const, label: "Depth" }] : []),
-            ]}
-          />
-
-          {teamTab === "depth" && depthChart.length > 0 ? (
+          {depthChart.length > 0 ? (
             <section className="team-card-stat-section" aria-label="Depth chart">
+              <h4 className="team-card-section-heading">Depth</h4>
               <table className="depth-grid">
                 <thead>
                   <tr><th scope="col"><span className="sr-only">Position</span></th><th scope="col">1st</th><th scope="col">2nd</th><th scope="col">3rd</th></tr>
@@ -352,8 +336,8 @@ export function TeamDataModal({
             </section>
           ) : null}
 
-          {teamTab === "stats" ? (
-            <section className="team-card-stat-section" aria-label="Stats">
+          <section className="team-card-stat-section" aria-label="Stats">
+              <h4 className="team-card-section-heading">Stats</h4>
               <div className="team-card-metrics">
                 <div>
                   <span>Points/G</span>
@@ -400,11 +384,10 @@ export function TeamDataModal({
                   {missingNote(!usage, "nflverse unavailable")}
                 </div>
               </div>
-            </section>
-          ) : null}
+          </section>
 
-          {teamTab === "pfn" ? (
-            <section className="team-card-stat-section" aria-label="PFN">
+          <section className="team-card-stat-section" aria-label="PFN">
+              <h4 className="team-card-section-heading">PFN</h4>
               <div className="team-card-metrics">
                 <div>
                   <span>Overall</span>
@@ -450,11 +433,10 @@ export function TeamDataModal({
                   );
                 })}
               </div>
-            </section>
-          ) : null}
+          </section>
 
-          {teamTab === "advanced" ? (
-            <section className="team-card-stat-section" aria-label="Advanced">
+          <section className="team-card-stat-section" aria-label="Advanced">
+              <h4 className="team-card-section-heading">Advanced</h4>
               <div className="team-card-metrics team-card-advanced-metrics">
                 <div>
                   <span>Red-zone TD rate</span>
@@ -489,7 +471,6 @@ export function TeamDataModal({
                 </p>
               ) : null}
             </section>
-          ) : null}
           {loadError ? <SectionError title="Team data didn’t load." onRetry={onRetry} compact /> : null}
         </article>
       </div>
