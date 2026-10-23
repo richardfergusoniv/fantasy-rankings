@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { MatchupSelection } from "../dashboard-types";
 import { GapBar } from "../components/gap-bar";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RankStrip } from "../components/rank-strip";
 import { formatCompactCount } from "../lib/format-number";
 import { DepthChangeMark, depthChange, depthLabel, MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
@@ -508,6 +509,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
   }, [advancedEntities, projectionEntities]);
 
   const [selectedPlayers, setSelectedPlayers] = useState<[PlayerSelection | null, PlayerSelection | null]>([null, null]);
+  const [sectionTab, setSectionTab] = useState<"projections" | "advanced">("projections");
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const initialSeedKey = useRef<number | null>(null);
 
@@ -640,12 +642,19 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
       ) : left && right ? (
         <section className="comparison-board" aria-label={`${left.name} and ${right.name} comparison`}>
           <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} depth={dashboard.playerInsights?.depth ?? {}} depthPrevious={dashboard.playerInsights?.depthPrevious ?? {}} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
-          {sections.map((section) => (
-            <section className="comparison-section" key={section.dataset} aria-labelledby={`comparison-section-${section.dataset}`}>
-              <header className="comparison-section-head">
-                <h3 id={`comparison-section-${section.dataset}`}>{section.dataset === "projections" ? "This week" : "Season so far"}</h3>
-                {section.dataset === "advanced" ? <SegmentedControl className="comparison-window-toggle" value={window} onChange={onWindowChange} label="Season stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17" }]} /> : null}
-              </header>
+          <Tabs value={sectionTab} onValueChange={(value) => setSectionTab(value as "projections" | "advanced")} className="comparison-section-tabs">
+            <TabsList aria-label="Comparison data">
+              <TabsTrigger id="comparison-projections-tab" value="projections" aria-controls="comparison-projections-panel">Week {dashboard.week}</TabsTrigger>
+              <TabsTrigger id="comparison-advanced-tab" value="advanced" aria-controls="comparison-advanced-panel">Season</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {sections.filter((section) => section.dataset === sectionTab).map((section) => (
+            <section className="comparison-section" key={section.dataset} id={`comparison-${section.dataset}-panel`} role="tabpanel" aria-labelledby={`comparison-${section.dataset}-tab`}>
+              {section.dataset === "advanced" ? (
+                <header className="comparison-section-head">
+                  <SegmentedControl className="comparison-window-toggle" value={window} onChange={onWindowChange} label="Season stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17" }]} />
+                </header>
+              ) : null}
               {section.headline ? <ComparisonMetricRow row={section.headline} leftName={left.name} rightName={right.name} headline /> : null}
               {section.groups.map(({ group, rows: groupRows }) => (
                 <section className="comparison-group" key={group} aria-label={group}>
