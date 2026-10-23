@@ -36,6 +36,7 @@ import {
 } from "./dashboard-shared";
 import { formatDecimal, formatPoints } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
+import { withStreamedAnalytics } from "./dashboard-analytics";
 import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
 import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, waiversSearchPreservingContext } from "./dashboard-url";
 import { createPlayerResolver, type DashboardPlayerRow, type PlayerLinkResolver } from "./tool-player-link";
@@ -618,7 +619,7 @@ export function App() {
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
-    enabled: MARKET_TOOL_TABS.has(tab) || tab === "rankings" || tab === "waivers" || tab === "comparison",
+    enabled: MARKET_TOOL_TABS.has(tab) || tab === "rankings" || tab === "waivers" || tab === "comparison" || playerHistory.isOpen,
     refetchInterval: pollWhileSectionBuilding,
   });
   // tradeTeams (+ starter slots) for Matchup/Power/Trade. Live-polled with
@@ -761,8 +762,10 @@ export function App() {
     tradeWaiverQuery.isPending,
   ]);
   // Every section is projected from the same saved dashboard snapshot; no
-  // render-time source refresh or projection merge occurs.
-  const dashboard = freshestDashboard(dashboardQuery.data, streamedDashboard, browserDashboard);
+  // render-time source refresh occurs. The one merge: a cache/refresh
+  // dashboard whose analytics section is empty for this snapshot must not
+  // shadow the streamed analytics section (see dashboard-analytics.ts).
+  const dashboard = withStreamedAnalytics(freshestDashboard(dashboardQuery.data, streamedDashboard, browserDashboard), streamedDashboard);
 
   const league = dashboard?.leagues.find((item) => item.id === selectedLeagueId) ?? dashboard?.leagues[0];
   const selectedLeagueRosterIds = useMemo(
@@ -1119,6 +1122,14 @@ export function App() {
     };
   };
 
+  // The analytics section reports a null payload while it is still
+  // building; the query itself has completed by then, so pending alone
+  // would flash the panel's empty state during the build.
+  const analyticsLoading =
+    analyticsQuery.isPending
+    || (!analyticsQuery.isError
+      && analyticsQuery.data?.section === "analytics"
+      && analyticsQuery.data.data == null);
   const playerSheet = playerHistory.current ? (
     <PlayerDetailSheet
       player={playerHistory.current}
@@ -1127,6 +1138,7 @@ export function App() {
       formatKey={league.seasonLongFormat.key}
       mode="details"
       analytics={dashboard.analytics}
+      analyticsLoading={analyticsLoading}
       sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)}
       newsItems={tickerPlayerNews}
       newsLoading={newsLoading}

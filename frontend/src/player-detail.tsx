@@ -295,7 +295,7 @@ export function normalizePlayerIdentity(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export function PlayerAdvancedPanel({ player, analytics, children }: { player: PlayerSearchResult; analytics: Dashboard["analytics"]; children: ReactNode }) {
+export function PlayerAdvancedPanel({ player, analytics, isLoading = false, children }: { player: PlayerSearchResult; analytics: Dashboard["analytics"]; isLoading?: boolean; children: ReactNode }) {
   const position = (["QB", "RB", "WR", "TE", "K", "DEF"] as string[]).includes(player.position) ? player.position as BasePosition : null;
   const normalizedPlayerName = normalizePlayerIdentity(player.name);
   const playerTeam = canonicalNflTeam(player.team);
@@ -319,7 +319,7 @@ export function PlayerAdvancedPanel({ player, analytics, children }: { player: P
           <div className="player-advanced-grid">
             {metrics.map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{metric.unit === "%" ? formatPercent(metric.value) : `${formatDecimal(metric.value, metric.digits ?? 2)}${metric.unit ?? ""}`}</strong></div>)}
           </div>
-        ) : <div className="player-tab-empty compact"><strong>No advanced metrics yet</strong><span>nflverse has not published a matching season row for this player.</span></div>}
+        ) : isLoading ? <div className="player-tab-empty compact" role="status"><strong>Loading advanced metrics…</strong></div> : <div className="player-tab-empty compact"><strong>No advanced metrics yet</strong></div>}
         {entity && analytics.throughWeek !== null ? <p className="player-tab-source">Through Week {analytics.throughWeek} · nflverse weekly player stats</p> : null}
       </section>
       <PlayerExpectedPoints entity={entity} />
@@ -381,6 +381,7 @@ export function PlayerDetailSheet({
   formatKey,
   mode,
   analytics,
+  analyticsLoading = false,
   newsItems,
   sosEntry,
   newsLoading = false,
@@ -408,6 +409,7 @@ export function PlayerDetailSheet({
   formatKey: string;
   mode: "details" | "chart";
   analytics: Dashboard["analytics"];
+  analyticsLoading?: boolean;
   newsItems: PlayerNewsItem[];
   sosEntry?: StrengthOfScheduleEntryLike;
   newsLoading?: boolean;
@@ -795,7 +797,7 @@ export function PlayerDetailSheet({
         ) : null}
         {activeTab === "advanced" ? (
           <div id="player-detail-advanced-panel" role="tabpanel" aria-labelledby="player-detail-advanced-tab">
-            <PlayerAdvancedPanel player={player} analytics={analytics}>
+            <PlayerAdvancedPanel player={player} analytics={analytics} isLoading={analyticsLoading}>
               <PlayerTeamContext player={player} sosEntry={sosEntry} />
               {supportsBoomBust ? (
                 <BoomBustPanel name={player.name} view={boomBustView} onViewChange={setBoomBustView} history={boomBustQuery.data} isLoading={boomBustQuery.isPending} />
