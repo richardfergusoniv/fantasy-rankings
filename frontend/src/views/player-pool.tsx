@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "../api";
 import type {
   Dashboard,
@@ -182,6 +183,7 @@ export function TeamDataModal({
 }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   useDialogFocusTrap(dialogRef, onClose);
+  const [tab, setTab] = useState<"overview" | "advanced">("overview");
   const teamCode = canonicalNflTeam(selection.team);
   const lineRow = offensiveLine?.rows.find((row) => canonicalNflTeam(row.team) === teamCode);
   const defenseRow = defense?.rows.find((row) => canonicalNflTeam(row.team) === teamCode);
@@ -305,6 +307,14 @@ export function TeamDataModal({
             <button type="button" onClick={onClose} aria-label="Close team data">×</button>
           </div>
 
+          <Tabs value={tab} onValueChange={(value) => setTab(value as "overview" | "advanced")} className="team-card-tabs">
+            <TabsList aria-label="Team data">
+              <TabsTrigger id="team-card-overview-tab" value="overview" aria-controls="team-card-overview-panel">Offense</TabsTrigger>
+              <TabsTrigger id="team-card-advanced-tab" value="advanced" aria-controls="team-card-advanced-panel">Analytics</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {tab === "overview" ? (
+            <div id="team-card-overview-panel" role="tabpanel" aria-labelledby="team-card-overview-tab">
           {depthChart.length > 0 ? (
             <section className="team-card-stat-section" aria-label="Depth chart">
               <h4 className="team-card-section-heading">Depth</h4>
@@ -386,6 +396,9 @@ export function TeamDataModal({
               </div>
           </section>
 
+            </div>
+          ) : (
+            <div id="team-card-advanced-panel" role="tabpanel" aria-labelledby="team-card-advanced-tab">
           <section className="team-card-stat-section" aria-label="PFN">
               <h4 className="team-card-section-heading">PFN</h4>
               <div className="team-card-metrics">
@@ -471,6 +484,8 @@ export function TeamDataModal({
                 </p>
               ) : null}
             </section>
+            </div>
+          )}
           {loadError ? <SectionError title="Team data didn’t load." onRetry={onRetry} compact /> : null}
         </article>
       </div>

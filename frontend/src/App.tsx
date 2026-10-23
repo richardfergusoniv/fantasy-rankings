@@ -1146,17 +1146,17 @@ export function App() {
       newsLoading={newsLoading}
       newsError={newsError}
       onRetryNews={retryNews}
-      onOpenMatchup={setSelectedMatchup}
+      onOpenTeam={setTeamCardTeam}
       onBack={playerHistory.back}
       canGoBack={playerHistory.canGoBack}
-      onClose={() => { setRosterCardRosterId(null); playerHistory.close(); closeLinkedPlayer(); }}
+      onClose={() => { setRosterCardRosterId(null); setTeamCardTeam(null); playerHistory.close(); closeLinkedPlayer(); }}
       presentation={inspectorPresentation}
       rosterTeamName={rosterTeam?.teamName ?? null}
       rosterLabel={rosterTeam ? `Open ${rosterTeam.teamName}, ${formatRecord(rosterTeam.record)} record, rank ${rosterTeam.rank}` : null}
       onOpenRosterTeam={rosterTeam ? () => setRosterCardRosterId(rosterTeam.rosterId) : undefined}
       waiversHref={showAvailableBadge ? waiversHref : undefined}
       onOpenWaivers={showAvailableBadge ? () => dashboardUrl.commit({ tab: "waivers" }) : undefined}
-      suspended={rosterCardOnTop}
+      suspended={rosterCardOnTop || teamCardTeam !== null}
       trending={dashboard.playerTrending?.[playerHistory.current.playerId]}
       season={dashboard.season}
     />

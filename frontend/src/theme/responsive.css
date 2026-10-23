@@ -253,6 +253,7 @@
 .team-card-overview > div + div { border-left: 1px solid var(--hairline); }
 .team-card-overview span, .team-card-overview small { color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
 .team-card-overview strong { overflow: hidden; color: var(--text); font-size: var(--type-section); font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.team-card-tabs { margin: 12px 0 0; }
 .team-card-stat-section { margin-top: 14px; }
 .team-card-stat-section + .team-card-stat-section { margin-top: 18px; }
 .team-card-section-heading { margin: 0 0 6px; font-size: var(--type-body); font-weight: 700; }
