@@ -5,29 +5,11 @@ import { matchupToolLinks, playerToolLinks, teamTradeLinks } from "./player-tool
 const base = { playerId: "4046", position: "WR", team: "KC", isBye: false };
 
 describe("playerToolLinks", () => {
-  it("offers Compare, Advanced stats, Team stats and Game lines for a rostered WR", () => {
-    const links = playerToolLinks(base);
-    expect(links.map((link) => link.key)).toEqual(["comparison", "advanced-stats", "team-stats", "game-lines"]);
-    expect(links[0]?.patch).toEqual({ tab: "comparison", comparePlayerId: "4046" });
-    expect(links[1]?.patch).toEqual({ tab: "analytics", chartDataset: "advanced", analyticsPlayerId: "4046" });
-    expect(links[2]?.patch).toEqual({ tab: "team-stats", teamStatsTeam: "KC", teamStatsGroup: "WR" });
-    expect(links[3]?.patch).toEqual({ tab: "monitor", gameLinesTeam: "KC" });
-  });
-
-  it("maps positions onto Team stats groups and skips kickers and defenses", () => {
-    expect(playerToolLinks({ ...base, position: "TE" })[2]?.patch.teamStatsGroup).toBe("TE");
-    expect(playerToolLinks({ ...base, position: "QB" })[2]?.patch.teamStatsGroup).toBe("QB");
-    expect(playerToolLinks({ ...base, position: "RB" })[2]?.patch.teamStatsGroup).toBe("RB");
-    for (const position of ["K", "DEF"]) {
-      const keys = playerToolLinks({ ...base, position }).map((link) => link.key);
-      expect(keys).not.toContain("team-stats");
-      expect(keys).not.toContain("advanced-stats");
-    }
-  });
-
-  it("omits destinations that would have nothing to show", () => {
-    expect(playerToolLinks({ ...base, isBye: true }).map((link) => link.key)).toEqual(["comparison", "advanced-stats", "team-stats"]);
-    expect(playerToolLinks({ ...base, team: null }).map((link) => link.key)).toEqual(["comparison", "advanced-stats"]);
+  it("returns no player-card Open-in destinations", () => {
+    expect(playerToolLinks(base)).toEqual([]);
+    expect(playerToolLinks({ ...base, position: "TE" })).toEqual([]);
+    expect(playerToolLinks({ ...base, isBye: true })).toEqual([]);
+    expect(playerToolLinks({ ...base, team: null })).toEqual([]);
     expect(playerToolLinks({ playerId: "pick-1", position: "PICK", team: null, isBye: false })).toEqual([]);
   });
 });
@@ -49,13 +31,8 @@ describe("toolLinkSearch", () => {
 });
 
 describe("matchupToolLinks", () => {
-  it("links a game to its lines and each side's team stats", () => {
-    const links = matchupToolLinks({ team: "KC", opponent: "BUF" });
-    expect(links.map((link) => link.id)).toEqual(["game-lines", "team-stats-KC", "team-stats-BUF"]);
-    expect(links.map((link) => link.label)).toEqual(["Game lines", "KC stats", "BUF stats"]);
-    expect(links[0]?.patch).toEqual({ tab: "monitor", gameLinesTeam: "KC" });
-    expect(links[2]?.patch).toEqual({ tab: "team-stats", teamStatsTeam: "BUF" });
-    expect(new Set(links.map((link) => link.id)).size).toBe(3);
+  it("returns no matchup Open-in destinations", () => {
+    expect(matchupToolLinks({ team: "KC", opponent: "BUF" })).toEqual([]);
   });
 });
 

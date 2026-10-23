@@ -278,6 +278,8 @@ export function LeagueTradeValueColumn({
   );
 }
 
+type TradeValuePanel = "bars" | "line" | "table";
+
 export function TradeValueDialog({
   give,
   get,
@@ -295,7 +297,7 @@ export function TradeValueDialog({
   give: TradeAsset[];
   get: TradeAsset[];
   formatKey: string;
-  /** Post-trade power table (League-adjusted card only). */
+  /** Post-trade power table (League + History cards). */
   powerRankingsAfter?: PowerShiftRow[];
   /** FantasyCalc market rows for this format (used to map owned picks → `FP_*` ids). */
   marketAssets?: TradeAsset[];
@@ -306,6 +308,7 @@ export function TradeValueDialog({
   subtitle?: ReactNode;
   valueAnchorDate?: string | null;
 }) {
+  const [panel, setPanel] = useState<TradeValuePanel>("bars");
   const giveTotal = tradeTotal(give);
   const getTotal = tradeTotal(get);
   const adjustment = waiverAdjustments(give, get);
@@ -365,6 +368,88 @@ export function TradeValueDialog({
   ].join(" ");
   const { giveColor, getColor, giveStrokeWidth, getStrokeWidth } = tradeTrendColors(outcome);
 
+  let panelBody: ReactNode;
+  switch (panel) {
+    case "bars":
+      panelBody = (
+        <div className="league-trade-chart" role="img" aria-label={chartLabel}>
+          <div className="league-trade-side">
+            <LeagueTradeValueColumn
+              side="mine"
+              assets={give}
+              height={columnHeight(giveAdjustedTotal, give.length + (adjustment.give > 0 ? 1 : 0))}
+              outcome={outcome === "left" ? "winner" : outcome === "tie" ? "tie" : "loser"}
+              adjustment={adjustment.give}
+            />
+            <div className="league-trade-total"><span>Total trade value</span><strong>{formatWhole(giveAdjustedTotal)}</strong></div>
+          </div>
+          <div className="league-trade-side">
+            <LeagueTradeValueColumn
+              side="theirs"
+              assets={get}
+              height={columnHeight(getAdjustedTotal, get.length + (adjustment.get > 0 ? 1 : 0))}
+              outcome={outcome === "right" ? "winner" : outcome === "tie" ? "tie" : "loser"}
+              adjustment={adjustment.get}
+            />
+            <div className="league-trade-total"><span>Total trade value</span><strong>{formatWhole(getAdjustedTotal)}</strong></div>
+          </div>
+        </div>
+      );
+      break;
+    case "line":
+      panelBody = (
+        <AggregateTradeHistory
+          give={give}
+          get={get}
+          historyByPlayerId={historyByPlayerId}
+          isLoading={historyRequestIds.length > 0 && historyQuery.isPending}
+          anchorDate={valueAnchorDate}
+          giveColor={giveColor}
+          getColor={getColor}
+          giveStrokeWidth={giveStrokeWidth}
+          getStrokeWidth={getStrokeWidth}
+        />
+      );
+      break;
+    case "table":
+      panelBody = powerRankingsAfter && powerRankingsAfter.length > 0 ? (
+        <section className="trade-power" aria-label="Power rankings after this trade">
+          <h3>Power Rankings</h3>
+          <table className="trade-power-table">
+            <thead>
+              <tr><th scope="col">#</th><th scope="col">Team</th><th scope="col" className="trade-power-num">Power</th><th scope="col" className="trade-power-num">Change</th></tr>
+            </thead>
+            <tbody>
+              {powerRankingsAfter.map((row) => (
+                <tr key={row.rosterId} className={row.isUser ? "is-user" : row.isParty ? "is-partner" : undefined}>
+                  <td className="trade-power-rank">{row.rank}</td>
+                  <td className="trade-power-team">{row.teamName}</td>
+                  <td className="trade-power-num">{formatWhole(row.totalValue)}</td>
+                  <td className="trade-power-num">
+                    {!row.isParty ? (
+                      <span className="trade-power-same">—</span>
+                    ) : row.rank < row.previousRank ? (
+                      <span className="trade-power-up">▲{row.previousRank - row.rank}</span>
+                    ) : row.rank > row.previousRank ? (
+                      <span className="trade-power-down">▼{row.rank - row.previousRank}</span>
+                    ) : (
+                      <span className="trade-power-flat">{row.totalValue >= row.previousTotalValue ? "▲0" : "▼0"}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null;
+      break;
+    default: {
+      const _exhaustive: never = panel;
+      panelBody = _exhaustive;
+      break;
+    }
+  }
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="league-trade-dialog">
@@ -374,69 +459,18 @@ export function TradeValueDialog({
           {subtitle ? <span className="league-trade-dialog-subtitle">{subtitle}</span> : null}
         </DialogHeader>
         <div className="league-trade-dialog-body" ref={bodyRef}>
-          <div className="league-trade-chart" role="img" aria-label={chartLabel}>
-            <div className="league-trade-side">
-              <LeagueTradeValueColumn
-                side="mine"
-                assets={give}
-                height={columnHeight(giveAdjustedTotal, give.length + (adjustment.give > 0 ? 1 : 0))}
-                outcome={outcome === "left" ? "winner" : outcome === "tie" ? "tie" : "loser"}
-                adjustment={adjustment.give}
-              />
-              <div className="league-trade-total"><span>Total trade value</span><strong>{formatWhole(giveAdjustedTotal)}</strong></div>
-            </div>
-            <div className="league-trade-side">
-              <LeagueTradeValueColumn
-                side="theirs"
-                assets={get}
-                height={columnHeight(getAdjustedTotal, get.length + (adjustment.get > 0 ? 1 : 0))}
-                outcome={outcome === "right" ? "winner" : outcome === "tie" ? "tie" : "loser"}
-                adjustment={adjustment.get}
-              />
-              <div className="league-trade-total"><span>Total trade value</span><strong>{formatWhole(getAdjustedTotal)}</strong></div>
-            </div>
-          </div>
-          <AggregateTradeHistory
-            give={give}
-            get={get}
-            historyByPlayerId={historyByPlayerId}
-            isLoading={historyRequestIds.length > 0 && historyQuery.isPending}
-            anchorDate={valueAnchorDate}
-            giveColor={giveColor}
-            getColor={getColor}
-            giveStrokeWidth={giveStrokeWidth}
-            getStrokeWidth={getStrokeWidth}
+          <SegmentedControl
+            className="trade-value-panel-tabs"
+            value={panel}
+            onChange={setPanel}
+            label="Trade value view"
+            options={[
+              { value: "bars", label: "Bars" },
+              { value: "line", label: "Line" },
+              { value: "table", label: "Table" },
+            ]}
           />
-          {powerRankingsAfter && powerRankingsAfter.length > 0 ? (
-            <section className="trade-power" aria-label="Power rankings after this trade">
-              <h3>Power Rankings</h3>
-              <table className="trade-power-table">
-                <thead>
-                  <tr><th scope="col">#</th><th scope="col">Team</th><th scope="col" className="trade-power-num">Power</th><th scope="col" className="trade-power-num">Change</th></tr>
-                </thead>
-                <tbody>
-                  {powerRankingsAfter.map((row) => (
-                    <tr key={row.rosterId} className={row.isUser ? "is-user" : row.isParty ? "is-partner" : undefined}>
-                      <td className="trade-power-rank">{row.rank}</td>
-                      <td className="trade-power-team">{row.teamName}</td>
-                      <td className="trade-power-num">{formatWhole(row.totalValue)}</td>
-                      <td className="trade-power-num">
-                        {!row.isParty ? (
-                          <span className="trade-power-same">—</span>
-                        ) : row.rank < row.previousRank ? (
-                          <span className="trade-power-up">▲{row.previousRank - row.rank}</span>
-                        ) : row.rank > row.previousRank ? (
-                          <span className="trade-power-down">▼{row.rank - row.previousRank}</span>
-                        ) : (
-                          <span className="trade-power-flat">{row.totalValue >= row.previousTotalValue ? "▲0" : "▼0"}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          ) : null}
+          {panelBody}
         </div>
       </DialogContent>
     </Dialog>
@@ -798,9 +832,26 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
   const perspective = selectedTrade && selectedTeam
     ? historicalPerspectiveAssets(selectedTrade, selectedTeam, formatAssets, dashboard.season, ownedPicks)
     : null;
-  const counterpart = selectedTrade && selectedTeam
+  const counterpart = selectedTrade && selectedTeam && selectedTrade.teams.length === 2
     ? selectedTrade.teams.find((team) => team.rosterId !== selectedTeam.rosterId) ?? null
     : null;
+  const powerRankings = league.seasonLongFormat.isDynasty
+    ? league.powerRankingsDynasty
+    : league.powerRankingsSeasonLong;
+  // "As of the trade date": History reuses today's FantasyCalc valued give/get
+  // (same assets as the winner call) plus current league power rows — same
+  // powerRankingsAfterTrade deltas as League mode, not a historical rebuild.
+  const powerRankingsAfter = useMemo(
+    () => selectedTeam && counterpart && perspective && powerRankings.length > 0
+      ? powerRankingsAfterTrade(powerRankings, {
+        myRosterId: selectedTeam.rosterId,
+        partnerRosterId: counterpart.rosterId,
+        give: perspective.give.valued,
+        get: perspective.get.valued,
+      })
+      : undefined,
+    [counterpart, perspective, powerRankings, selectedTeam],
+  );
   const grouped = useMemo(() => {
     const groups = new Map<number, HistoricalTrade[]>();
     for (const trade of tradesQuery.data?.trades ?? []) groups.set(trade.season, [...(groups.get(trade.season) ?? []), trade]);
@@ -870,11 +921,12 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
           give={perspective.give.valued}
           get={perspective.get.valued}
           giveLabel={selectedTeam.teamName}
-          getLabel={counterpart && selectedTrade.teams.length === 2 ? counterpart.teamName : "You get"}
+          getLabel={counterpart ? counterpart.teamName : "You get"}
           subtitle={<>Week {selectedTrade.week}, {selectedTrade.season} · <HistoricalTeamMatchup trade={selectedTrade} league={league} /></>}
           formatKey={league.seasonLongFormat.key}
           marketAssets={formatAssets}
           valueAnchorDate={selectedTrade.createdAt.slice(0, 10)}
+          powerRankingsAfter={powerRankingsAfter}
           onClose={() => setSelectedTradeId(null)}
         />
       ) : null}

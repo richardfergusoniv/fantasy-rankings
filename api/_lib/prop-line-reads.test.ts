@@ -5,6 +5,7 @@ import {
   compareHitRateDesc,
   currentWeekPropLines,
   impliedProbability,
+  isHiddenHalfPointPropStat,
   propStatActual,
   summarizePropLineMovement,
 } from "./prop-line-reads.js";
@@ -220,6 +221,16 @@ describe("propStatActual / history", () => {
       "Never Over",
       "No History",
     ]);
+  });
+});
+
+describe("isHiddenHalfPointPropStat", () => {
+  it("hides the three always-0.5 markets from UI", () => {
+    expect(isHiddenHalfPointPropStat("anytime_td")).toBe(true);
+    expect(isHiddenHalfPointPropStat("first_td")).toBe(true);
+    expect(isHiddenHalfPointPropStat("pass_interceptions")).toBe(true);
+    expect(isHiddenHalfPointPropStat("pass_yards")).toBe(false);
+    expect(isHiddenHalfPointPropStat("receptions")).toBe(false);
   });
 });
 

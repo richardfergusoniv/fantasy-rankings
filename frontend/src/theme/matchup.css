@@ -155,9 +155,5 @@
 .matchup-win-labels span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .matchup-win-bar { display: flex; height: 8px; overflow: hidden; border-radius: var(--radius-xs); background: var(--border); }
 .matchup-win-bar .is-mine { background: var(--roster-highlight); }
-.matchup-win-ranges { display: flex; justify-content: space-between; font-size: var(--type-body); font-variant-numeric: tabular-nums; }
-.matchup-win-ranges span { display: grid; gap: 1px; }
-.matchup-win-ranges span:last-child { text-align: right; }
-.matchup-win-ranges small { color: var(--dim); font-size: var(--type-caption); }
 /* Experts lineup: FantasyPros position rank under the projected points. */
 .matchup-player-score .matchup-expert-rank { color: var(--dim); font-size: var(--type-caption); font-weight: 700; line-height: 1; }

@@ -37,10 +37,8 @@ import {
 import { formatDecimal, formatPoints } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
 import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
-import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
+import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, waiversSearchPreservingContext } from "./dashboard-url";
 import { createPlayerResolver, type DashboardPlayerRow, type PlayerLinkResolver } from "./tool-player-link";
-import { matchupToolLinks, playerToolLinks, teamTradeLinks, type PlayerToolLink } from "./player-tool-links";
-import type { ToolLinkItem } from "./tool-links";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
 import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
@@ -1121,21 +1119,6 @@ export function App() {
     };
   };
 
-  // Links into the tools: real hrefs, plus in-app navigation that first closes every card and dialog.
-  function toolLinkItems(links: (PlayerToolLink & { id?: string })[]): ToolLinkItem[] {
-    return links.map((link) => ({
-      key: link.id ?? link.key,
-      label: link.label,
-      href: toolLinkSearch(dashboardUrl.state, link.patch),
-      onOpen: () => {
-        // Cards stack (a roster card or team card under the sheet or dialog opened from it); leaving for a tool must not uncover one.
-        // The dialog closes with the navigation itself (CLEARED_TOOL_SELECTIONS drops `mu`), so Back reopens it.
-        setRosterCardRosterId(null);
-        setTeamCardTeam(null);
-        dashboardUrl.commit({ ...CLEARED_TOOL_SELECTIONS, playerId: null, ...link.patch });
-      },
-    }));
-  }
   const playerSheet = playerHistory.current ? (
     <PlayerDetailSheet
       player={playerHistory.current}
@@ -1159,7 +1142,6 @@ export function App() {
       onOpenRosterTeam={rosterTeam ? () => setRosterCardRosterId(rosterTeam.rosterId) : undefined}
       waiversHref={showAvailableBadge ? waiversHref : undefined}
       onOpenWaivers={showAvailableBadge ? () => dashboardUrl.commit({ tab: "waivers" }) : undefined}
-      toolLinks={toolLinkItems(playerToolLinks(playerHistory.current))}
       suspended={rosterCardOnTop}
       trending={dashboard.playerTrending?.[playerHistory.current.playerId]}
       season={dashboard.season}
@@ -1331,7 +1313,7 @@ export function App() {
       </div>
       {!inspectorDocked ? playerSheet : null}
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
-      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} toolLinks={toolLinkItems(matchupToolLinks(selectedMatchup))} suspended={teamCardTeam !== null} /> : null}
+      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} suspended={teamCardTeam !== null} /> : null}
       {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
       {rosterCardTeam ? (
         <LeagueTeamCard
@@ -1346,7 +1328,6 @@ export function App() {
           onPlayerIntent={prefetchDashboardPlayer}
           onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
           onOpenMatchup={setSelectedMatchup}
-          toolLinks={toolLinkItems(teamTradeLinks(rosterCardTeam))}
           onClose={() => setRosterCardRosterId(null)}
         />
       ) : null}

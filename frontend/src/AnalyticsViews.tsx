@@ -214,9 +214,11 @@ type ChartPreset = {
   research?: { source: string; sourceUrl: string; insight: string };
 };
 
+// Presets checked against live dashboard analytics (2026 week 7 cache).
+// Removed empty ones: Expected vs actual (no ffopportunity merge), NGS charts
+// (time_to_throw / Getting open / Rushing over expected — no NGS on entities).
 const sharedSkillPresets: ChartPreset[] = [
   { label: "Usage vs Production", x: "opportunity", y: "fantasy_league" },
-  { label: "Expected vs actual", x: "expected_points", y: "points_over_expected" },
   { label: "Snap share", x: "snap_week", y: "snap_share", kind: "snap-trend" },
   { label: "Red-zone share", x: "rz_target_share", y: "rz_carry_share" },
   { label: "FPA heatmap", x: "fpa_team", y: "fpa_position", kind: "heatmap" },
@@ -226,7 +228,6 @@ const sharedSkillPresets: ChartPreset[] = [
 const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
   QB: [
     { label: "Volume vs efficiency", x: "pass_attempts", y: "passing_epa" },
-    { label: "Time to throw × aggressiveness", x: "time_to_throw", y: "aggressiveness" },
     {
       label: "Talent ceiling · EPA/play × CPOE",
       x: "epa_per_play",
@@ -255,12 +256,10 @@ const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
     { label: "Receiving leverage", x: "target_share", y: "receiving_epa" },
     { label: "Ground production", x: "carries", y: "rushing_yards" },
     { label: "Backfield share", x: "carry_share", y: "rb_target_share" },
-    { label: "Rushing over expected", x: "stacked_box_rate", y: "rush_yards_over_expected" },
     ...sharedSkillPresets,
   ],
   WR: [
     { label: "Opportunity profile", x: "target_share", y: "air_yards_share" },
-    { label: "Getting open", x: "separation", y: "yac_over_expected" },
     {
       label: "WOPR buy-low / sell-high",
       x: "wopr",
@@ -276,7 +275,6 @@ const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
   ],
   TE: [
     { label: "Opportunity profile", x: "target_share", y: "air_yards_share" },
-    { label: "Getting open", x: "separation", y: "yac_over_expected" },
     { label: "Weighted opportunity", x: "wopr", y: "fantasy_league" },
     { label: "Air-yards conversion", x: "receiving_air_yards", y: "receiving_yards" },
     ...sharedSkillPresets,
@@ -437,12 +435,14 @@ for (const position of ["QB", "RB", "WR", "TE"] as const) {
   else metrics.push(...stats);
 }
 
+// Weekly presets checked against live rankings/defenses cache. Removed empty:
+// Team environment / Scoring environment (teamTotal never set — opponent
+// projected points are null), Matchup leverage (opponentTotal likewise).
 const projectionPresets: ChartPreset[] = [
   { label: "Vegas vs Sleeper", x: "vegasProjection", y: "sleeperProjection" },
   { label: "Projection vs FantasyCalc value", x: "league", y: "fantasyCalcValue" },
   { label: "Positional tier cliffs", x: "leaguePositionRank", y: "league" },
   { label: "Projection vs boom/bust range", x: "league", y: "boomBustRange" },
-  { label: "Team environment", x: "teamTotal", y: "league" },
 ];
 
 const weeklyPresets: Record<BasePosition, ChartPreset[]> = {
@@ -453,17 +453,16 @@ const weeklyPresets: Record<BasePosition, ChartPreset[]> = {
   K: [
     { label: "Projection vs Sleeper", x: "sleeperProjection", y: "league" },
     { label: "Projected kicker ranks", x: "leaguePositionRank", y: "league" },
-    { label: "Scoring environment", x: "teamTotal", y: "league" },
   ],
-  DEF: [{ label: "Matchup leverage", x: "opponentTotal", y: "projection" }],
+  DEF: [],
 };
 
 const defaultWeeklyAxes: Record<BasePosition, [string, string]> = {
-  QB: ["teamTotal", "league"],
-  RB: ["teamTotal", "league"],
-  WR: ["teamTotal", "league"],
-  TE: ["teamTotal", "league"],
-  K: ["teamTotal", "league"],
+  QB: ["leaguePositionRank", "league"],
+  RB: ["leaguePositionRank", "league"],
+  WR: ["leaguePositionRank", "league"],
+  TE: ["leaguePositionRank", "league"],
+  K: ["leaguePositionRank", "league"],
   DEF: ["opponentTotal", "projection"],
 };
 
@@ -518,7 +517,7 @@ function chartAnalyticsAxes(position: ChartPosition): [string, string] {
 }
 
 function chartWeeklyAxes(position: ChartPosition): [string, string] {
-  return position === "FLEX" ? ["teamTotal", "league"] : defaultWeeklyAxes[position];
+  return position === "FLEX" ? ["league", "fantasyCalcValue"] : defaultWeeklyAxes[position];
 }
 
 /** Saved views store one base position, so a FLEX chart can't be saved; this only fills the type. */

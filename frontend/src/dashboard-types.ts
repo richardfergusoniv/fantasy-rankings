@@ -71,7 +71,7 @@ export type PlayerSearchResult = {
     drops: { rank: number; count: number } | null;
   };
 };
-export type PlayerDetailTab = "overview" | "season" | "advanced";
+export type PlayerDetailTab = "overview" | "season" | "advanced" | "props";
 export type AnalyticsEntity = Dashboard["analytics"]["entities"][number];
 export type DetailMetric = {
   key: string;

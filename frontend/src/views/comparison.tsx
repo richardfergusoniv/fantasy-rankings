@@ -4,7 +4,7 @@ import { api } from "../api";
 import type { MatchupSelection } from "../dashboard-types";
 import { formatCompactCount } from "../lib/format-number";
 import { depthLabel, MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
-import { propStatDef } from "../../../api/_lib/prop-line-reads";
+import { isHiddenHalfPointPropStat, propStatDef } from "../../../api/_lib/prop-line-reads";
 import { currentExpertRanks } from "../expert-ranks";
 import {
   analyticsMetricsForLeague,
@@ -69,55 +69,55 @@ const comparisonRowOrder: Record<"projections" | "advanced", Record<BasePosition
   projections: {
     QB: [
       "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
-      "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank",
+      "expertProjection", "expertPositionRank",
       "stat_pass_yd", "stat_pass_td", "stat_pass_int", "stat_rush_yd", "stat_rush_td",
-      "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
-      "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
+      "teamTotal", "teamOLineRank", "matchupPositionRank",
+      "fantasyCalcValue",
     ],
     RB: [
       "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
-      "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank",
+      "expertProjection", "expertPositionRank",
       "stat_rush_yd", "stat_rush_td", "stat_rec", "stat_rec_yd", "stat_rec_td",
-      "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
-      "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
+      "teamTotal", "teamOLineRank", "matchupPositionRank",
+      "fantasyCalcValue",
     ],
     WR: [
       "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
-      "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank",
+      "expertProjection", "expertPositionRank",
       "stat_rec", "stat_rec_yd", "stat_rec_td", "stat_rush_yd", "stat_rush_td",
-      "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
-      "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
+      "teamTotal", "teamOLineRank", "matchupPositionRank",
+      "fantasyCalcValue",
     ],
     TE: [
       "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
-      "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank",
+      "expertProjection", "expertPositionRank",
       "stat_rec", "stat_rec_yd", "stat_rec_td", "stat_rush_yd", "stat_rush_td",
-      "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
-      "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
+      "teamTotal", "teamOLineRank", "matchupPositionRank",
+      "fantasyCalcValue",
     ],
     K: [
       "league", "sleeperProjection", "leaguePositionRank",
-      "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank",
-      "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
-      "fantasyCalcValue", "fantasyCalcPositionRank",
+      "expertProjection", "expertPositionRank",
+      "teamTotal", "teamOLineRank", "matchupPositionRank",
+      "fantasyCalcValue",
     ],
-    DEF: ["projection", "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank", "opponentTotal"],
+    DEF: ["projection", "expertProjection", "expertPositionRank", "opponentTotal"],
   },
   advanced: {
     QB: [
       "fantasy_league",
       "pass_attempts", "completions", "passing_yards", "passing_tds", "interceptions", "passing_air_yards",
       "carries", "rushing_yards", "rushing_tds",
-      "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
+      "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
       "completion_pct", "cpoe", "passing_epa", "epa_per_play",
       "expected_points", "points_over_expected",
-      "time_to_throw", "aggressiveness", "air_yards_differential",
+      "time_to_throw", "aggressiveness",
     ],
     RB: [
       "fantasy_league",
       "touches", "carries", "rushing_yards", "rushing_tds",
       "targets", "receptions", "receiving_yards", "receiving_tds", "scrimmage_yards",
-      "target_share", "carry_share", "rb_target_share", "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
+      "target_share", "carry_share", "rb_target_share", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
       "rushing_epa", "receiving_epa",
       "expected_points", "points_over_expected",
       "rush_yards_over_expected", "stacked_box_rate", "rush_efficiency",
@@ -125,18 +125,18 @@ const comparisonRowOrder: Record<"projections" | "advanced", Record<BasePosition
     WR: [
       "fantasy_league",
       "targets", "receptions", "receiving_yards", "receiving_tds", "receiving_air_yards", "yards_after_catch",
-      "target_share", "air_yards_share", "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
-      "wopr", "racr", "receiving_epa",
+      "target_share", "air_yards_share", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
+      "receiving_epa",
       "expected_points", "points_over_expected",
-      "separation", "cushion", "yac_over_expected", "intended_air_share",
+      "separation", "yac_over_expected", "intended_air_share",
     ],
     TE: [
       "fantasy_league",
       "targets", "receptions", "receiving_yards", "receiving_tds", "receiving_air_yards", "yards_after_catch",
-      "target_share", "air_yards_share", "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
-      "wopr", "racr", "receiving_epa",
+      "target_share", "air_yards_share", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
+      "receiving_epa",
       "expected_points", "points_over_expected",
-      "separation", "cushion", "yac_over_expected", "intended_air_share",
+      "separation", "yac_over_expected", "intended_air_share",
     ],
     K: ["fg_attempts", "fg_made", "fg_pct", "fg_40_plus", "fg_50_plus", "pat_attempts", "pat_made", "kicks_made"],
     DEF: [
@@ -145,6 +145,13 @@ const comparisonRowOrder: Record<"projections" | "advanced", Record<BasePosition
     ],
   },
 };
+
+/** Rows removed from comparison only; metric defs stay in AnalyticsViews for other tools. */
+const hiddenComparisonKeys = new Set([
+  "expertBestRank", "expertWorstRank", "boomBustRange", "fantasyCalcPositionRank", "tierCliff",
+  "teamOffenseRank", "opponentDefenseRank",
+  "opportunity", "wopr", "racr", "cushion", "air_yards_differential",
+]);
 
 function comparisonBarShares(row: ComparisonRow): [number, number] {
   const left = row.leftValue?.value;
@@ -164,18 +171,18 @@ const comparisonHeadlineKeys = new Set(["fantasy_league", "league", "projection"
 type ComparisonGroup = "Projection" | "Experts" | "Props" | "Stat line" | "Team context" | "Market" | "Production" | "Expected points" | "Usage" | "Efficiency" | "Next Gen";
 
 const comparisonUsageKeys = new Set([
-  "touches", "carries", "targets", "pass_attempts", "opportunity", "opportunity_share", "snap_share",
-  "rz_target_share", "rz_carry_share", "target_share", "carry_share", "rb_target_share", "air_yards_share", "wopr",
+  "touches", "carries", "targets", "pass_attempts", "opportunity_share", "snap_share",
+  "rz_target_share", "rz_carry_share", "target_share", "carry_share", "rb_target_share", "air_yards_share",
   "fg_attempts", "pat_attempts",
 ]);
-const comparisonEfficiencyKeys = new Set(["completion_pct", "cpoe", "passing_epa", "rushing_epa", "receiving_epa", "epa_per_play", "racr", "fg_pct"]);
-const comparisonTeamContextKeys = new Set(["teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank", "opponentTotal"]);
-const comparisonMarketKeys = new Set(["fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange"]);
+const comparisonEfficiencyKeys = new Set(["completion_pct", "cpoe", "passing_epa", "rushing_epa", "receiving_epa", "epa_per_play", "fg_pct"]);
+const comparisonTeamContextKeys = new Set(["teamTotal", "teamOLineRank", "matchupPositionRank", "opponentTotal"]);
+const comparisonMarketKeys = new Set(["fantasyCalcValue"]);
 const comparisonExpectedKeys = new Set(["expected_points", "points_over_expected"]);
 const comparisonNextGenKeys = new Set([
-  "separation", "cushion", "yac_over_expected", "intended_air_share",
+  "separation", "yac_over_expected", "intended_air_share",
   "rush_yards_over_expected", "stacked_box_rate", "rush_efficiency",
-  "time_to_throw", "aggressiveness", "air_yards_differential",
+  "time_to_throw", "aggressiveness",
 ]);
 
 function comparisonGroup(dataset: ToolDataset, key: string): ComparisonGroup {
@@ -413,12 +420,12 @@ type ComparisonSection = {
 };
 
 function comparisonSection(dataset: ToolDataset, position: BasePosition, league: League, left: ComparisonEntity | undefined, right: ComparisonEntity | undefined, extraRows: ComparisonRow[] = []): ComparisonSection {
-  const metricList = dataset === "advanced"
+  const metricList = (dataset === "advanced"
     ? analyticsMetricsForLeague(position, league)
     : (() => {
       const projectionMetrics = weeklyMetrics[position].filter((metric) => !redundantComparisonProjectionKeys.has(metric.key));
       return position === "DEF" ? projectionMetrics : [...projectionMetrics, ...teamContextMetrics];
-    })();
+    })()).filter((metric) => !hiddenComparisonKeys.has(metric.key));
   const rows: ComparisonRow[] = metricList.flatMap((metric) => {
     const leftValue = comparisonValue(left, metric);
     const rightValue = comparisonValue(right, metric);
@@ -561,8 +568,6 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     const rows: ComparisonRow[] = [
       { metric: { key: "expertProjection", label: "Expert projection (PPR)", short: "Expert pts", unit: " pts" }, leftValue: makeRowValue(leftExpert?.projection), rightValue: makeRowValue(rightExpert?.projection) },
       { metric: { key: "expertPositionRank", label: "Expert rank", short: "ECR", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.positionRank), rightValue: makeRowValue(rightExpert?.positionRank) },
-      { metric: { key: "expertBestRank", label: "Best expert rank", short: "Best", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.best), rightValue: makeRowValue(rightExpert?.best) },
-      { metric: { key: "expertWorstRank", label: "Worst expert rank", short: "Worst", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.worst), rightValue: makeRowValue(rightExpert?.worst) },
     ];
     return rows.filter((row) => row.leftValue || row.rightValue);
   })();
@@ -573,12 +578,12 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     const lines = propLines && propLines.season === dashboard.season && propLines.week === dashboard.week ? propLines.lines : [];
     const leftLines = new Map(lines.filter((line) => leftPlayerId && line.playerId === leftPlayerId).map((line) => [line.stat, line.line]));
     const rightLines = new Map(lines.filter((line) => rightPlayerId && line.playerId === rightPlayerId).map((line) => [line.stat, line.line]));
-    const stats = [...new Set([...leftLines.keys(), ...rightLines.keys()])];
+    const stats = [...new Set([...leftLines.keys(), ...rightLines.keys()])].filter((stat) => !isHiddenHalfPointPropStat(stat));
     return stats.flatMap((stat): ComparisonRow[] => {
       const def = propStatDef(stat);
       if (!def) return [];
       return [{
-        metric: { key: `prop_${stat}`, label: `${def.label} line`, short: def.short, lowerIsBetter: stat === "pass_interceptions" },
+        metric: { key: `prop_${stat}`, label: `${def.label} line`, short: def.short, lowerIsBetter: false },
         leftValue: makeRowValue(leftLines.get(stat)),
         rightValue: makeRowValue(rightLines.get(stat)),
       }];

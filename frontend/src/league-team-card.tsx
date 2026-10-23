@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, type MouseEvent } from "react";
-import { ToolLinks, type ToolLinkItem } from "./tool-links";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { Dashboard, League, MatchupSelection } from "./dashboard-types";
 import { compareByFantasyPosition } from "./fantasy-position-order";
-import { MatchupTag, ModalPortal, points, useDialogFocusTrap } from "./shared";
+import { MatchupTag, ModalPortal, SegmentedControl, points, useDialogFocusTrap } from "./shared";
 import { formatWhole } from "./lib/format-number";
 
 type RosterPlayer = League["tradeTeams"][number]["players"][number];
@@ -43,7 +42,6 @@ export function LeagueTeamCard({
   onPlayerIntent,
   onOpenPlayer,
   onOpenMatchup,
-  toolLinks,
   onClose,
 }: {
   team: PowerTeam;
@@ -58,13 +56,13 @@ export function LeagueTeamCard({
   onPlayerIntent: (playerId: string) => void;
   onOpenPlayer: (playerId: string) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
-  toolLinks?: ToolLinkItem[];
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const returnPlayerRowRef = useRef<HTMLElement | null>(null);
   const wasPlayerCardOpenRef = useRef(false);
   useDialogFocusTrap(dialogRef, onClose, !playerCardOpen);
+  const [rosterList, setRosterList] = useState<"starters" | "bench">("starters");
   const activeMode = league.seasonLongFormat.isDynasty ? mode : "seasonLong";
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const positions: PowerPosition[] = scope === "week"
@@ -126,6 +124,11 @@ export function LeagueTeamCard({
 
   const starters = scope === "week" ? rows.filter(({ player }) => player.isStarter) : rows;
   const bench = scope === "week" ? rows.filter(({ player }) => !player.isStarter) : [];
+  const showRosterTabs = scope === "week" && bench.length > 0;
+
+  useEffect(() => {
+    setRosterList("starters");
+  }, [team.rosterId, scope, mode]);
 
   const renderPlayer = (row: RosterRow) => {
     const { player, season } = row;
@@ -208,13 +211,25 @@ export function LeagueTeamCard({
               <div key={position} role="listitem"><span>{positionLabel(position)}</span><strong>{scope === "week" ? points(team.positionValues[position]) : formatWhole(team.positionValues[position])}</strong></div>
             ))}
           </div>
-          {toolLinks ? <ToolLinks ariaLabel={`Open ${team.teamName} in a tool`} links={toolLinks} /> : null}
           <div className="power-team-card-roster" role="region" aria-label={`${team.teamName} roster`}>
             {rows.length > 0 ? (
               <>
-                {starters.map((row) => renderPlayer(row))}
-                {bench.length > 0 ? <div className="power-bench-heading">Bench</div> : null}
-                {bench.map((row) => renderPlayer(row))}
+                {showRosterTabs ? (
+                  <SegmentedControl
+                    className="power-roster-tabs"
+                    value={rosterList}
+                    onChange={setRosterList}
+                    label={`${team.teamName} roster list`}
+                    options={[
+                      { value: "starters", label: "Starters" },
+                      { value: "bench", label: "Bench" },
+                    ]}
+                  />
+                ) : null}
+                {(showRosterTabs
+                  ? (rosterList === "bench" ? bench : starters)
+                  : rows
+                ).map((row) => renderPlayer(row))}
               </>
             ) : <div className="power-roster-empty">No roster values for this format.</div>}
           </div>

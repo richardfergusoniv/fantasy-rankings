@@ -678,6 +678,7 @@ export function PlayerDetailSheet({
             <TabsTrigger id="player-detail-overview-tab" value="overview" aria-controls="player-detail-overview-panel">Overview</TabsTrigger>
             <TabsTrigger id="player-detail-season-tab" value="season" aria-controls="player-detail-season-panel">Season</TabsTrigger>
             <TabsTrigger id="player-detail-advanced-tab" value="advanced" aria-controls="player-detail-advanced-panel">Advanced</TabsTrigger>
+            <TabsTrigger id="player-detail-props-tab" value="props" aria-controls="player-detail-props-panel">Props</TabsTrigger>
           </TabsList>
         </Tabs>
         {activeTab === "overview" ? <div id="player-detail-overview-panel" role="tabpanel" aria-labelledby="player-detail-overview-tab">
@@ -726,7 +727,6 @@ export function PlayerDetailSheet({
           {player.seasonValue !== null ? <span className="player-detail-movement">{movementLabel(player.movement30Day)}</span> : null}
         </div>
         {toolLinks ? <ToolLinks ariaLabel={`Open ${player.name} in a tool`} links={toolLinks} /> : null}
-        {season !== undefined && player.gamePhase !== "final" ? <PlayerPropsSection player={player} season={season} week={week} /> : null}
         {player.waiverTrends && (player.waiverTrends.adds || player.waiverTrends.drops) ? (
           <section className="player-detail-waiver-trends" aria-label={`${player.name} waiver activity`}>
             <div className="section-heading"><h3>Waiver activity</h3><span>Last 24 hours</span></div>
@@ -807,6 +807,11 @@ export function PlayerDetailSheet({
             <PlayerAdvancedPanel player={player} analytics={analytics}>
               <PlayerTeamContext player={player} sosEntry={sosEntry} />
             </PlayerAdvancedPanel>
+          </div>
+        ) : null}
+        {activeTab === "props" ? (
+          <div id="player-detail-props-panel" role="tabpanel" aria-labelledby="player-detail-props-tab">
+            {season !== undefined && player.gamePhase !== "final" ? <PlayerPropsSection player={player} season={season} week={week} /> : null}
           </div>
         ) : null}
         </div>
