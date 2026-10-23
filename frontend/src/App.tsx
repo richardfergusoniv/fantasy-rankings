@@ -1122,6 +1122,14 @@ export function App() {
     };
   };
 
+  // The analytics section reports a null payload while it is still
+  // building; the query itself has completed by then, so pending alone
+  // would flash the panel's empty state during the build.
+  const analyticsLoading =
+    analyticsQuery.isPending
+    || (!analyticsQuery.isError
+      && analyticsQuery.data?.section === "analytics"
+      && analyticsQuery.data.data == null);
   const playerSheet = playerHistory.current ? (
     <PlayerDetailSheet
       player={playerHistory.current}
@@ -1130,7 +1138,7 @@ export function App() {
       formatKey={league.seasonLongFormat.key}
       mode="details"
       analytics={dashboard.analytics}
-      analyticsLoading={analyticsQuery.isPending}
+      analyticsLoading={analyticsLoading}
       sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)}
       newsItems={tickerPlayerNews}
       newsLoading={newsLoading}
