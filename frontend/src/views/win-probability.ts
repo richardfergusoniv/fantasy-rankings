@@ -79,7 +79,8 @@ export function winProbability(mine: TeamOutlook, theirs: TeamOutlook): number {
   const spread = Math.sqrt(mine.sd * mine.sd + theirs.sd * theirs.sd);
   const margin = mine.mean - theirs.mean;
   if (spread === 0) return margin > 0 ? 1 : margin < 0 ? 0 : 0.5;
-  return normalCdf(margin / spread);
+  // Something is still to play, so stay off the certain endpoints even when the CDF rounds to them.
+  return Math.min(1 - Number.EPSILON, Math.max(Number.EPSILON, normalCdf(margin / spread)));
 }
 
 /** Percent to the nearest tenth for display, kept off 0 and 100 until the result is certain. */

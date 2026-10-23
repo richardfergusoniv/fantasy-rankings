@@ -56,6 +56,14 @@ describe("teamOutlook and winProbability", () => {
     expect(winProbability(teamOutlook([final])!, teamOutlook([scoreless])!)).toBeLessThan(1);
   });
 
+  it("is never certain while a game is still to play", () => {
+    const lopsided = { mean: 200, sd: 1, low: 0, high: 0 };
+    const close = { mean: 10, sd: 1, low: 0, high: 0 };
+    expect(winProbability(lopsided, close)).toBeLessThan(1);
+    expect(winProbability(close, lopsided)).toBeGreaterThan(0);
+    expect(winPercent(winProbability(lopsided, close))).toBe(99.9);
+  });
+
   it("is certain once every game is final", () => {
     const done = (actual: number) => ({ ...base, playerId: "1", position: "WR", projection: 10, gamePhase: "final" as const, actual });
     expect(winProbability(teamOutlook([done(20)])!, teamOutlook([done(10)])!)).toBe(1);
