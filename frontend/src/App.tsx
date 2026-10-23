@@ -1130,6 +1130,7 @@ export function App() {
       formatKey={league.seasonLongFormat.key}
       mode="details"
       analytics={dashboard.analytics}
+      analyticsLoading={analyticsQuery.isPending}
       sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)}
       newsItems={tickerPlayerNews}
       newsLoading={newsLoading}
