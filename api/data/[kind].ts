@@ -1,5 +1,6 @@
 import { json, methodNotAllowed } from "../_lib/api-utils.js";
 import { handleBoxScore } from "../_lib/box-score.js";
+import { kindFromPath } from "../_lib/data-kind.js";
 import { handlePfnTables } from "../_lib/pfn-tables.js";
 import { handleTradesHistory } from "../_lib/trades-history.js";
 import { handleValueHistory } from "../_lib/value-history.js";
@@ -17,22 +18,10 @@ import { handleValueHistory } from "../_lib/value-history.js";
  *   /api/trades/history     → /api/data/trades-history
  */
 
-const DATA_KINDS = ["box-score", "pfn-tables", "value-history", "trades-history"] as const;
-type DataKind = (typeof DATA_KINDS)[number];
-
-function isDataKind(value: string): value is DataKind {
-  return (DATA_KINDS as readonly string[]).includes(value);
-}
-
-function kindFromPath(pathname: string): string {
-  const segments = pathname.split("/").filter(Boolean);
-  return segments[segments.length - 1] ?? "";
-}
-
 export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url, "https://localhost");
   const kind = kindFromPath(url.pathname);
-  if (!isDataKind(kind)) {
+  if (!kind) {
     return json({ ok: false, error: "Unknown data kind." }, 404);
   }
   switch (kind) {
