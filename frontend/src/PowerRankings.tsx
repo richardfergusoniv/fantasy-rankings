@@ -56,36 +56,11 @@ export function PowerRankings({
   const opponentRosterId = scope === "week"
     ? weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams)
     : null;
-  const leagueAverageTotal = scope === "restOfSeason" && powerRankings.length > 0
-    ? powerRankings.reduce((total, team) => total + team.totalValue, 0) / powerRankings.length
-    : null;
   const isDynastyView = scope === "restOfSeason" && activeMode === "dynasty";
   const leagueAveragePicks = isDynastyView && powerRankings.length > 0
     ? powerRankings.reduce((total, team) => total + team.futurePickValue, 0) / powerRankings.length
     : null;
   const selectedTeam = selectedTeamId === null ? null : powerRankings.find((team) => team.rosterId === selectedTeamId) ?? null;
-
-  type PowerListEntry =
-    | { kind: "team"; team: (typeof displayedTeams)[number] }
-    | { kind: "average"; total: number };
-
-  const powerListEntries = useMemo((): PowerListEntry[] => {
-    if (leagueAverageTotal === null) {
-      return displayedTeams.map((team) => ({ kind: "team" as const, team }));
-    }
-    const averageEntry = { kind: "average" as const, total: leagueAverageTotal };
-    const entries: PowerListEntry[] = [];
-    let inserted = false;
-    for (const team of displayedTeams) {
-      if (!inserted && team.totalValue < leagueAverageTotal) {
-        entries.push(averageEntry);
-        inserted = true;
-      }
-      entries.push({ kind: "team", team });
-    }
-    if (!inserted) entries.push(averageEntry);
-    return entries;
-  }, [displayedTeams, leagueAverageTotal]);
 
   const radarData = positions.map((position) => {
     const values = powerRankings.map((team) => team.positionValues[position]);
@@ -195,19 +170,7 @@ export function PowerRankings({
           <h2 id="league-power-heading">League power rankings</h2>
         </div>
         <div className="power-table" role="list">
-          {powerListEntries.map((entry) => {
-            if (entry.kind === "average") {
-              return (
-                <div className="power-list-item" role="listitem" key="league-average">
-                  <div className="power-row is-average" aria-label={`League average ${formatWhole(entry.total)}`}>
-                    <strong className="power-rank" aria-hidden="true" />
-                    <span className="power-team"><strong>League avg</strong></span>
-                    <span className="power-total"><strong>{formatWhole(entry.total)}</strong></span>
-                  </div>
-                </div>
-              );
-            }
-            const { team } = entry;
+          {displayedTeams.map((team) => {
             const isOpponent = opponentRosterId !== null && team.rosterId === opponentRosterId;
             return (
               <div className="power-list-item" role="listitem" key={team.rosterId}>
