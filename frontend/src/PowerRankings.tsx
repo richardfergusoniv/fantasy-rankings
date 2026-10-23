@@ -5,7 +5,7 @@ import type { MatchupSelection } from "./dashboard-types";
 import { formatRecord, LeagueTeamCard, positionLabel } from "./league-team-card";
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { SegmentedControl, points, shortLeagueName } from "./shared";
-import { formatDecimal, formatPercent, formatWhole } from "./lib/format-number";
+import { formatPercent, formatWhole } from "./lib/format-number";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
 type League = Dashboard["leagues"][number];
@@ -56,10 +56,9 @@ export function PowerRankings({
   const opponentRosterId = scope === "week"
     ? weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams)
     : null;
-  const isDynastyView = scope === "restOfSeason" && activeMode === "dynasty";
-  const avgFuturePickValue = isDynastyView && powerRankings.length > 0
-    ? powerRankings.reduce((total, team) => total + team.futurePickValue, 0) / powerRankings.length
-    : 0;
+  const leagueAverageTotal = scope === "restOfSeason" && powerRankings.length > 0
+    ? powerRankings.reduce((total, team) => total + team.totalValue, 0) / powerRankings.length
+    : null;
   const selectedTeam = selectedTeamId === null ? null : powerRankings.find((team) => team.rosterId === selectedTeamId) ?? null;
 
   const radarData = positions.map((position) => {
@@ -160,7 +159,12 @@ export function PowerRankings({
       </section>
 
       <section className="power-table-section" aria-labelledby="league-power-heading">
-        <div className="section-heading power-section-heading"><h2 id="league-power-heading">League power rankings</h2>{scope === "restOfSeason" ? <span>full roster value</span> : null}</div>
+        <div className="section-heading power-section-heading">
+          <h2 id="league-power-heading">League power rankings</h2>
+          {leagueAverageTotal !== null ? (
+            <span aria-label="League average">{formatWhole(leagueAverageTotal)}</span>
+          ) : null}
+        </div>
         <div className="power-table" role="list">
           {displayedTeams.map((team) => {
             const isOpponent = opponentRosterId !== null && team.rosterId === opponentRosterId;
@@ -184,9 +188,6 @@ export function PowerRankings({
             );
           })}
         </div>
-        {isDynastyView ? (
-          <p className="power-future-picks-average">League avg future picks: <strong>{formatDecimal(avgFuturePickValue, 2)}</strong></p>
-        ) : null}
       </section>
       {selectedTeam ? (
         <LeagueTeamCard
