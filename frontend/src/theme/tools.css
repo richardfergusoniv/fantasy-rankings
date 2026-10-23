@@ -208,6 +208,29 @@
 }
 /* Team stats: a usage grid. Rows are players (sorted by average), columns are
    weeks; each cell's blue tint is that player's share of the work that week. */
+.team-stats-chart-open {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+.team-stats-chart-open:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+.team-stats-chart-open .scatter-frame {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  height: min(52dvh, 420px);
+}
+.team-stats-table-dialog .chart-result-body {
+  overflow: auto;
+}
 .team-usage-scroll {
   max-width: 100%;
   overflow-x: auto;

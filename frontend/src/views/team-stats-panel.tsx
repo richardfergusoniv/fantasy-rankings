@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+import { ChartContainer, chartTooltipStyle } from "@/components/ui/chart";
 import {
   NFL_TEAM_CODES,
   TEAM_STATS_GROUP_POSITIONS,
@@ -15,15 +17,18 @@ import {
   teamStatsRecordedWeeks,
   teamStatsLegendCaption,
   type TeamStatsGroupId,
+  type TeamStatsPlayerRow,
   type TeamStatsStatId,
 } from "../../../api/_lib/nflverse-team-week-stats";
 import { api } from "../api";
+import { ChartDialog } from "../chart-dialog";
 import { SectionError } from "../dashboard-shared";
 import type { League } from "../dashboard-types";
+import { buildTeamStatsChartSeries, type TeamStatsChartSeries } from "../lib/team-stats-chart";
+import { formatPercent, formatPoints, formatWhole } from "../lib/format-number";
 import { SegmentedControl } from "../shared";
 import { PlayerNameLink } from "../tool-links";
 import type { PlayerLinkResolver } from "../tool-player-link";
-import { formatPercent, formatPoints, formatWhole } from "../lib/format-number";
 
 /**
  * Cell shading for the usage grid: one blue scale (green and red stay
@@ -67,6 +72,167 @@ function isRosteredPlayer(
     && canonicalNflTeam(rostered.team) === player.team
     && normalizeTeamStatsPlayerName(rostered.name) === entityName
   ));
+}
+
+function TeamStatsLineChart({
+  series,
+  weeks,
+  statId,
+  statLabel,
+  isSnaps,
+  ariaLabel,
+}: {
+  series: readonly TeamStatsChartSeries[];
+  weeks: readonly number[];
+  statId: TeamStatsStatId;
+  statLabel: string;
+  isSnaps: boolean;
+  ariaLabel: string;
+}) {
+  const data = useMemo(() => weeks.map((week) => {
+    const row: Record<string, number | string | null> = { week };
+    for (const item of series) {
+      const point = item.points.find((candidate) => candidate.week === week);
+      row[item.id] = point?.value ?? null;
+    }
+    return row;
+  }), [series, weeks]);
+
+  return (
+    <div className="scatter-frame team-stats-line-chart" role="img" aria-label={ariaLabel}>
+      <ChartContainer
+        config={Object.fromEntries(series.map((item) => [item.id, { label: item.label, color: item.color }]))}
+        className="aspect-auto h-full"
+      >
+        <LineChart data={data} margin={{ top: 22, right: 10, bottom: 28, left: 2 }}>
+          <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
+          <XAxis
+            dataKey="week"
+            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tickLine={false}
+            axisLine={{ stroke: "var(--border)" }}
+            label={{ value: "Week", position: "insideBottom", offset: -12, fill: "var(--text)", fontSize: 10, fontWeight: 700 }}
+          />
+          <YAxis
+            domain={isSnaps ? [0, 100] : ["auto", "auto"]}
+            width={40}
+            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tickLine={false}
+            axisLine={false}
+            label={{
+              value: isSnaps ? "Snap %" : statLabel,
+              angle: -90,
+              position: "insideLeft",
+              fill: "var(--text)",
+              fontSize: 10,
+              fontWeight: 700,
+            }}
+          />
+          <Tooltip
+            formatter={(value, name) => {
+              const numeric = Number(value);
+              if (!Number.isFinite(numeric)) return ["—", name];
+              if (isSnaps) return [formatPercent(numeric), name];
+              return [displayTeamStatsValue(statId, numeric), name];
+            }}
+            labelFormatter={(label) => `Week ${label}`}
+            contentStyle={chartTooltipStyle}
+          />
+          {series.map((item) => (
+            <Line
+              key={item.id}
+              type="monotone"
+              dataKey={item.id}
+              name={item.label}
+              stroke={item.color}
+              strokeWidth={item.rostered ? 2.5 : 1.5}
+              strokeOpacity={item.rostered ? 1 : 0.45}
+              dot={{ r: item.rostered ? 3 : 2 }}
+              connectNulls={false}
+            />
+          ))}
+        </LineChart>
+      </ChartContainer>
+    </div>
+  );
+}
+
+function TeamStatsWeekTable({
+  gridRows,
+  gridWeeks,
+  isSnaps,
+  statId,
+  statLabel,
+  selectedGroup,
+  maxShare,
+  shareLabel,
+  playerLink,
+}: {
+  gridRows: Array<{
+    row: TeamStatsPlayerRow;
+    averageLabel: string;
+    completedTotal: number;
+    rostered: boolean;
+    cells: Map<number, TeamStatsPlayerRow["weeks"][number]>;
+  }>;
+  gridWeeks: Array<{ week: number; total: number }>;
+  isSnaps: boolean;
+  statId: TeamStatsStatId;
+  statLabel: string;
+  selectedGroup: TeamStatsGroupId;
+  maxShare: number;
+  shareLabel: (total: number) => string;
+  playerLink?: PlayerLinkResolver;
+}) {
+  return (
+    <div className="team-usage-scroll">
+      <table className="team-usage">
+        <caption className="sr-only">{`${statLabel} by player and week. ${teamStatsLegendCaption(statId)}`}</caption>
+        <thead>
+          <tr>
+            <th scope="col" className="team-usage-player">Player</th>
+            {isSnaps ? null : <th scope="col" className="team-usage-share">Share</th>}
+            {gridWeeks.map((stack) => <th scope="col" key={stack.week}>{`W${stack.week}`}</th>)}
+            <th scope="col" className="team-usage-average">Avg</th>
+          </tr>
+        </thead>
+        <tbody>
+          {gridRows.map(({ row, averageLabel, completedTotal, rostered, cells }) => (
+            <tr key={row.key} className={rostered ? "is-my-roster" : undefined}>
+              <th scope="row" className="team-usage-player">
+                <PlayerNameLink
+                  link={playerLink?.({ playerId: row.playerId, name: row.name, team: row.team, position: row.position }) ?? null}
+                  label={`Open ${row.name}`}
+                >
+                  <span className="team-usage-name">
+                    <span className="team-usage-name-full">{row.name}</span>
+                    <span className="team-usage-name-short" aria-hidden="true">{shortPlayerName(row.name)}</span>
+                  </span>
+                </PlayerNameLink>
+                {selectedGroup === "ALL" ? <span className="team-usage-position">{row.position}</span> : null}
+              </th>
+              {isSnaps ? null : <td className="team-usage-share">{shareLabel(completedTotal)}</td>}
+              {gridWeeks.map((stack) => {
+                const cell = cells.get(stack.week);
+                if (!cell?.hasSourceRow) {
+                  return <td key={stack.week} className="is-empty">—</td>;
+                }
+                const intensity = isSnaps
+                  ? (cell.percent ?? 0) / 100
+                  : stack.total > 0 && maxShare > 0 ? cell.value / stack.total / maxShare : 0;
+                return (
+                  <td key={stack.week} style={{ backgroundColor: cellShade(intensity) }}>
+                    {isSnaps ? displayTeamStatsPercent(cell.percent ?? 0) : displayTeamStatsValue(statId, cell.value)}
+                  </td>
+                );
+              })}
+              <td className="team-usage-average">{averageLabel}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export type TeamStatsSelection = {
@@ -121,6 +287,7 @@ export function TeamStatsPanel({
   const selectedGroup = userGroup ?? defaultGroup;
 
   const [statId, setStatId] = useState<TeamStatsStatId>(initialStat ?? "snaps");
+  const [tableOpen, setTableOpen] = useState(false);
 
   // The URL is the source of truth while this tool is open: a link that drops
   // a parameter returns that control to its default instead of keeping the
@@ -214,8 +381,25 @@ export function TeamStatsPanel({
   // share, so the Share column still adds to 100%.
   const shareLabel = (total: number) => (groupTotal > 0 ? displayTeamStatsPercent((total / groupTotal) * 100) : "—");
 
+  const chartSeries = useMemo(
+    () => buildTeamStatsChartSeries(rows, gridWeeks.map((stack) => stack.week), isSnaps, league),
+    [gridWeeks, isSnaps, league, rows],
+  );
+
   const unavailable = dataQuery.isError;
   const loading = dataQuery.isPending;
+
+  const tableProps = {
+    gridRows,
+    gridWeeks,
+    isSnaps,
+    statId,
+    statLabel,
+    selectedGroup,
+    maxShare,
+    shareLabel,
+    playerLink,
+  };
 
   return (
     <section className="monitor-section monitor-team-stats-panel">
@@ -281,53 +465,40 @@ export function TeamStatsPanel({
       ) : rows.length === 0 ? (
         <p className="monitor-empty">No players</p>
       ) : (
-        <div className="team-usage-scroll">
-          <table className="team-usage">
-            <caption className="sr-only">{`${statLabel} by player and week. ${teamStatsLegendCaption(statId)}`}</caption>
-            <thead>
-              <tr>
-                <th scope="col" className="team-usage-player">Player</th>
-                {isSnaps ? null : <th scope="col" className="team-usage-share">Share</th>}
-                {gridWeeks.map((stack) => <th scope="col" key={stack.week}>{`W${stack.week}`}</th>)}
-                <th scope="col" className="team-usage-average">Avg</th>
-              </tr>
-            </thead>
-            <tbody>
-              {gridRows.map(({ row, averageLabel, completedTotal, rostered, cells }) => (
-                <tr key={row.key} className={rostered ? "is-my-roster" : undefined}>
-                  <th scope="row" className="team-usage-player">
-                    <PlayerNameLink
-                      link={playerLink?.({ playerId: row.playerId, name: row.name, team: row.team, position: row.position }) ?? null}
-                      label={`Open ${row.name}`}
-                    >
-                      <span className="team-usage-name">
-                        <span className="team-usage-name-full">{row.name}</span>
-                        <span className="team-usage-name-short" aria-hidden="true">{shortPlayerName(row.name)}</span>
-                      </span>
-                    </PlayerNameLink>
-                    {selectedGroup === "ALL" ? <span className="team-usage-position">{row.position}</span> : null}
-                  </th>
-                  {isSnaps ? null : <td className="team-usage-share">{shareLabel(completedTotal)}</td>}
-                  {gridWeeks.map((stack) => {
-                    const cell = cells.get(stack.week);
-                    if (!cell?.hasSourceRow) {
-                      return <td key={stack.week} className="is-empty">—</td>;
-                    }
-                    const intensity = isSnaps
-                      ? (cell.percent ?? 0) / 100
-                      : stack.total > 0 && maxShare > 0 ? cell.value / stack.total / maxShare : 0;
-                    return (
-                      <td key={stack.week} style={{ backgroundColor: cellShade(intensity) }}>
-                        {isSnaps ? displayTeamStatsPercent(cell.percent ?? 0) : displayTeamStatsValue(statId, cell.value)}
-                      </td>
-                    );
-                  })}
-                  <td className="team-usage-average">{averageLabel}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div
+            className="team-stats-chart-open"
+            role="button"
+            tabIndex={0}
+            aria-label={`Open ${statLabel} week-by-week table`}
+            onClick={() => setTableOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setTableOpen(true);
+              }
+            }}
+          >
+            <TeamStatsLineChart
+              series={chartSeries}
+              weeks={gridWeeks.map((stack) => stack.week)}
+              statId={statId}
+              statLabel={statLabel}
+              isSnaps={isSnaps}
+              ariaLabel={`${selectedTeam} ${statLabel} by week`}
+            />
+          </div>
+          <ChartDialog
+            isOpen={tableOpen}
+            onClose={() => setTableOpen(false)}
+            title={`${selectedTeam} · ${statLabel}`}
+            showCount={false}
+            closeLabel="Close team stats table"
+            className="monitor-chart-expand-card team-stats-table-dialog"
+          >
+            <TeamStatsWeekTable {...tableProps} />
+          </ChartDialog>
+        </>
       )}
     </section>
   );
