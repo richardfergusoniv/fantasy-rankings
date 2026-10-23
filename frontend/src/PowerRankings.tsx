@@ -109,6 +109,9 @@ export function PowerRankings({
   const teamPolygon = radarData.map((row, index) => radarPoint(index, row.strength)).join(" ");
   const averagePolygon = radarData.map((row, index) => radarPoint(index, row.averageStrength)).join(" ");
   const totalAverage = radarData.reduce((total, row) => total + row.average, 0);
+  const leagueAverageDisplayTotal = leagueAveragePicks !== null
+    ? totalAverage + leagueAveragePicks
+    : totalAverage;
   const scopeToggle = (
     <SegmentedControl
       className="lineup-mode-toggle power-scope-toggle page-tab-control"
@@ -183,7 +186,7 @@ export function PowerRankings({
           {leagueAveragePicks !== null ? (
             <div role="listitem"><span>PICKS</span><strong>{formatWhole(leagueAveragePicks)}</strong></div>
           ) : null}
-          {scope === "week" ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className="power-position-total power-position-total-highlight" role="listitem"><span>Total</span><strong>{formatWhole(totalAverage)}</strong></div>}
+          {scope === "week" ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className="power-position-total power-position-total-highlight" role="listitem"><span>Total</span><strong>{formatWhole(leagueAverageDisplayTotal)}</strong></div>}
         </div>
       </section>
 
