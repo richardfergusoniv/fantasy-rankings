@@ -17,6 +17,7 @@ import {
   CHAT_MAX_INPUT_CHARS,
   readOpenRouterApiKey,
 } from "./_lib/chat-config.js";
+import { ChatAgentTimeoutError, OpenRouterError } from "./_lib/chat-openrouter.js";
 import { checkChatRateLimit } from "./_lib/chat-rate-limit.js";
 
 const historyMessageSchema = z.object({
@@ -87,6 +88,17 @@ export async function POST(req: Request): Promise<Response> {
       toolSteps: result.toolSteps,
     });
   } catch (err) {
+    if (err instanceof OpenRouterError || err instanceof ChatAgentTimeoutError) {
+      console.error("[chat POST] upstream", err instanceof OpenRouterError ? err.status : "timeout");
+      return json(
+        {
+          ok: false,
+          error: "The chat model is busy. Try again shortly.",
+          code: "chat_upstream_unavailable",
+        },
+        503,
+      );
+    }
     console.error("[chat POST]", err instanceof Error ? err.message : err);
     return internalError(err);
   }

@@ -1,10 +1,11 @@
 /**
  * Tool-calling agent loop over OpenRouter chat completions.
  */
-import { CHAT_MAX_TOOL_STEPS } from "./chat-config.js";
+import { CHAT_AGENT_DEADLINE_MS, CHAT_MAX_TOOL_STEPS } from "./chat-config.js";
 import {
   buildInitialMessages,
   callOpenRouterWithFallback,
+  ChatAgentTimeoutError,
   type ChatCompletionMessage,
   type OpenRouterFetch,
 } from "./chat-openrouter.js";
@@ -26,6 +27,7 @@ export type RunChatAgentArgs = {
   maxToolSteps?: number;
   primaryModel?: string;
   fallbackModel?: string;
+  deadlineMs?: number;
   /** Injectable dispatcher for unit tests. */
   dispatchTool?: typeof dispatchChatTool;
 };
@@ -44,60 +46,83 @@ export async function runChatAgent(args: RunChatAgentArgs): Promise<RunChatAgent
   const maxSteps = args.maxToolSteps ?? CHAT_MAX_TOOL_STEPS;
   const dispatch = args.dispatchTool ?? dispatchChatTool;
   const messages = buildInitialMessages(args.history ?? [], args.userMessage);
+  const deadlineMs = args.deadlineMs ?? CHAT_AGENT_DEADLINE_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), deadlineMs);
   let modelUsed = "";
   let toolSteps = 0;
 
-  for (let step = 0; step <= maxSteps; step += 1) {
-    const { response, model } = await callOpenRouterWithFallback({
-      apiKey: args.apiKey,
-      messages,
-      tools: CHAT_TOOL_DEFINITIONS,
-      fetchImpl: args.fetchImpl,
-      primaryModel: args.primaryModel,
-      fallbackModel: args.fallbackModel,
-    });
-    modelUsed = model;
-    const choice = response.choices[0];
-    if (!choice) {
-      return { reply: "No response from the model.", model: modelUsed, toolSteps };
-    }
-    const message = choice.message;
-    const toolCalls = message.tool_calls ?? [];
+  try {
+    for (let step = 0; step <= maxSteps; step += 1) {
+      if (controller.signal.aborted) throw new ChatAgentTimeoutError();
 
-    if (toolCalls.length === 0 || step === maxSteps) {
-      const reply = assistantContent(message);
-      return {
-        reply: reply || (toolCalls.length > 0
-          ? "I hit the tool step limit before finishing. Ask again with a narrower question."
-          : "No answer returned."),
-        model: modelUsed,
-        toolSteps,
-      };
-    }
-
-    messages.push({
-      role: "assistant",
-      content: message.content ?? null,
-      tool_calls: toolCalls,
-    });
-
-    for (const call of toolCalls) {
-      if (toolSteps >= maxSteps) break;
-      toolSteps += 1;
-      const name = call.function?.name ?? "";
-      const parsedArgs = parseToolCallArguments(call.function?.arguments);
-      const result = await dispatch(name, parsedArgs, args.ctx);
-      messages.push({
-        role: "tool",
-        tool_call_id: call.id,
-        content: JSON.stringify(result),
+      const { response, model } = await callOpenRouterWithFallback({
+        apiKey: args.apiKey,
+        messages,
+        tools: CHAT_TOOL_DEFINITIONS,
+        fetchImpl: args.fetchImpl,
+        primaryModel: args.primaryModel,
+        fallbackModel: args.fallbackModel,
+        signal: controller.signal,
       });
-    }
-  }
+      modelUsed = model;
+      const choice = response.choices[0];
+      if (!choice) {
+        return { reply: "No response from the model.", model: modelUsed, toolSteps };
+      }
+      const message = choice.message;
+      const toolCalls = message.tool_calls ?? [];
 
-  return {
-    reply: "I hit the tool step limit before finishing. Ask again with a narrower question.",
-    model: modelUsed,
-    toolSteps,
-  };
+      if (toolCalls.length === 0 || step === maxSteps) {
+        const reply = assistantContent(message);
+        return {
+          reply: reply || (toolCalls.length > 0
+            ? "I hit the tool step limit before finishing. Ask again with a narrower question."
+            : "No answer returned."),
+          model: modelUsed,
+          toolSteps,
+        };
+      }
+
+      messages.push({
+        role: "assistant",
+        content: message.content ?? null,
+        tool_calls: toolCalls,
+      });
+
+      for (const call of toolCalls) {
+        if (toolSteps >= maxSteps) {
+          messages.push({
+            role: "tool",
+            tool_call_id: call.id,
+            content: JSON.stringify({ ok: false, error: "Tool step limit reached." }),
+          });
+          continue;
+        }
+        toolSteps += 1;
+        const name = call.function?.name ?? "";
+        const parsedArgs = parseToolCallArguments(call.function?.arguments);
+        let result: unknown;
+        try {
+          result = await dispatch(name, parsedArgs, args.ctx);
+        } catch (err) {
+          console.error("[chat tool]", name, err instanceof Error ? err.message : err);
+          result = { ok: false, error: "Tool failed. Data is temporarily unavailable." };
+        }
+        messages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify(result),
+        });
+      }
+    }
+
+    return {
+      reply: "I hit the tool step limit before finishing. Ask again with a narrower question.",
+      model: modelUsed,
+      toolSteps,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
 }

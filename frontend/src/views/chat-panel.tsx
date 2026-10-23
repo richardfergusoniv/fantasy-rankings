@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { CHAT_MAX_HISTORY_MESSAGES, CHAT_MAX_INPUT_CHARS } from "../../../api/_lib/chat-config";
 import { api } from "../api";
 
 type ChatRole = "user" | "assistant";
@@ -13,6 +14,16 @@ type ChatMessage = {
 
 function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function historyForRequest(messages: ChatMessage[]): Array<{ role: ChatRole; content: string }> {
+  return messages
+    .slice(-CHAT_MAX_HISTORY_MESSAGES)
+    .map((item) => ({
+      role: item.role,
+      content: item.content.slice(0, CHAT_MAX_INPUT_CHARS),
+    }))
+    .filter((item) => item.content.length > 0);
 }
 
 export function ChatPanel() {
@@ -41,12 +52,12 @@ export function ChatPanel() {
   }, [messages, sending]);
 
   async function send() {
-    const text = draft.trim();
+    const text = draft.trim().slice(0, CHAT_MAX_INPUT_CHARS);
     if (!text || sending || unavailable) return;
     setError(null);
     setDraft("");
     const userMessage: ChatMessage = { id: newId(), role: "user", content: text };
-    const history = messages.map((item) => ({ role: item.role, content: item.content }));
+    const history = historyForRequest(messages);
     setMessages((prev) => [...prev, userMessage]);
     setSending(true);
     try {
@@ -56,17 +67,22 @@ export function ChatPanel() {
         { id: newId(), role: "assistant", content: result.reply },
       ]);
     } catch (err) {
-      const status = err && typeof err === "object" && "status" in err
-        ? Number((err as { status?: number }).status)
-        : 0;
+      setMessages((prev) => prev.filter((item) => item.id !== userMessage.id));
       const code = err && typeof err === "object" && "code" in err
         ? String((err as { code?: string }).code ?? "")
         : "";
-      if (status === 503 || code === "chat_unavailable") {
+      const status = err && typeof err === "object" && "status" in err
+        ? Number((err as { status?: number }).status)
+        : 0;
+      if (code === "chat_unavailable") {
         setUnavailable(true);
         return;
       }
-      if (status === 429) {
+      if (code === "chat_upstream_unavailable") {
+        setError("The chat model is busy. Try again shortly.");
+        return;
+      }
+      if (status === 429 || code === "rate_limited") {
         setError("Too many questions. Try again in a few minutes.");
         return;
       }
@@ -113,7 +129,7 @@ export function ChatPanel() {
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Ask about your league"
-          maxLength={2000}
+          maxLength={CHAT_MAX_INPUT_CHARS}
           disabled={sending}
           autoComplete="off"
           autoCorrect="off"

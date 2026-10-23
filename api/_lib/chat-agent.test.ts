@@ -93,4 +93,102 @@ describe("runChatAgent", () => {
       }),
     ).rejects.toThrow(/Refusing non-free/);
   });
+
+  it("answers every tool_call when the step budget is exhausted mid-message", async () => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      calls += 1;
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages: Array<{ role: string; tool_call_id?: string; content?: string | null }>;
+      };
+      if (calls === 1) {
+        return new Response(
+          JSON.stringify({
+            choices: [{
+              message: {
+                role: "assistant",
+                content: null,
+                tool_calls: [
+                  { id: "c1", type: "function", function: { name: "get_my_leagues", arguments: "{}" } },
+                  { id: "c2", type: "function", function: { name: "get_my_leagues", arguments: "{}" } },
+                  { id: "c3", type: "function", function: { name: "get_my_leagues", arguments: "{}" } },
+                ],
+              },
+            }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      const toolMsgs = body.messages.filter((item) => item.role === "tool");
+      expect(toolMsgs).toHaveLength(3);
+      expect(toolMsgs.map((item) => item.tool_call_id)).toEqual(["c1", "c2", "c3"]);
+      expect(toolMsgs[2]?.content).toContain("Tool step limit reached");
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { role: "assistant", content: "Partial answer." } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const dispatchTool = vi.fn(async () => ({ ok: true }));
+    const result = await runChatAgent({
+      apiKey: "sk-or-test",
+      userMessage: "Tell me everything",
+      ctx: { userId: "u1", sleeperUserId: "s1" },
+      fetchImpl,
+      dispatchTool,
+      maxToolSteps: 2,
+    });
+
+    expect(dispatchTool).toHaveBeenCalledTimes(2);
+    expect(result.toolSteps).toBe(2);
+    expect(result.reply).toBe("Partial answer.");
+  });
+
+  it("turns tool dispatch failures into tool results", async () => {
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages: Array<{ role: string; content?: string | null }>;
+      };
+      const last = body.messages[body.messages.length - 1];
+      if (last?.role === "tool") {
+        expect(String(last.content)).toContain("Tool failed");
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { role: "assistant", content: "Data is temporarily unavailable." } }],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          choices: [{
+            message: {
+              role: "assistant",
+              content: null,
+              tool_calls: [{
+                id: "call_1",
+                type: "function",
+                function: { name: "get_trade_history", arguments: "{\"leagueId\":\"lg1\"}" },
+              }],
+            },
+          }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const result = await runChatAgent({
+      apiKey: "sk-or-test",
+      userMessage: "Recent trades?",
+      ctx: { userId: "u1", sleeperUserId: "s1" },
+      fetchImpl,
+      dispatchTool: async () => {
+        throw new Error("db down");
+      },
+    });
+
+    expect(result.reply).toBe("Data is temporarily unavailable.");
+  });
 });

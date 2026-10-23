@@ -1,6 +1,7 @@
 /**
  * OpenRouter OpenAI-compatible chat completions client.
  * Paid models are refused; on 429/5xx the free fallback model is tried once.
+ * Client-side aborts / deadlines are not retried as upstream failures.
  */
 import {
   CHAT_SYSTEM_PROMPT,
@@ -64,10 +65,23 @@ export class OpenRouterError extends Error {
   }
 }
 
+export class ChatAgentTimeoutError extends Error {
+  constructor(message = "Chat agent deadline exceeded.") {
+    super(message);
+    this.name = "ChatAgentTimeoutError";
+  }
+}
+
 function assertFreeModel(model: string): void {
   if (!isFreeOpenRouterModel(model)) {
     throw new Error(`Refusing non-free OpenRouter model: ${model}`);
   }
+}
+
+function isAbortError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  if (err instanceof Error && err.name === "AbortError") return true;
+  return "name" in err && (err as { name: unknown }).name === "AbortError";
 }
 
 export async function callOpenRouterChat(
@@ -75,23 +89,32 @@ export async function callOpenRouterChat(
     apiKey: string;
     body: OpenRouterRequest;
     fetchImpl?: OpenRouterFetch;
+    signal?: AbortSignal;
   },
 ): Promise<ChatCompletionResponse> {
   assertFreeModel(args.body.model);
+  if (args.signal?.aborted) throw new ChatAgentTimeoutError();
   const fetchImpl = args.fetchImpl ?? fetch;
-  const response = await fetchImpl(`${OPENROUTER_BASE_URL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${args.apiKey}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      ...args.body,
-      // Keep free: never let OpenRouter fall through to paid models.
-      provider: { require_parameters: true },
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetchImpl(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${args.apiKey}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        ...args.body,
+        // Keep free: never let OpenRouter fall through to paid models.
+        provider: { require_parameters: true },
+      }),
+      signal: args.signal,
+    });
+  } catch (err) {
+    if (isAbortError(err) || args.signal?.aborted) throw new ChatAgentTimeoutError();
+    throw err;
+  }
 
   const text = await response.text();
   if (!response.ok) {
@@ -115,7 +138,7 @@ function shouldFallback(status: number): boolean {
 
 /**
  * Call OpenRouter with the configured free primary model; on 429/5xx retry
- * once with the free fallback model.
+ * once with the free fallback model. Aborts / deadlines are not retried.
  */
 export async function callOpenRouterWithFallback(args: {
   apiKey: string;
@@ -124,6 +147,7 @@ export async function callOpenRouterWithFallback(args: {
   fetchImpl?: OpenRouterFetch;
   primaryModel?: string;
   fallbackModel?: string;
+  signal?: AbortSignal;
 }): Promise<{ response: ChatCompletionResponse; model: string }> {
   const primary = args.primaryModel ?? resolveOpenRouterModel();
   const fallback = args.fallbackModel ?? resolveOpenRouterFallbackModel();
@@ -142,15 +166,18 @@ export async function callOpenRouterWithFallback(args: {
       apiKey: args.apiKey,
       body: { ...bodyBase, model: primary },
       fetchImpl: args.fetchImpl,
+      signal: args.signal,
     });
     return { response, model: primary };
   } catch (err) {
+    if (err instanceof ChatAgentTimeoutError) throw err;
     if (!(err instanceof OpenRouterError) || !shouldFallback(err.status)) throw err;
     if (fallback === primary) throw err;
     const response = await callOpenRouterChat({
       apiKey: args.apiKey,
       body: { ...bodyBase, model: fallback },
       fetchImpl: args.fetchImpl,
+      signal: args.signal,
     });
     return { response, model: fallback };
   }

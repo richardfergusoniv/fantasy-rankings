@@ -99,4 +99,18 @@ describe("api/chat handler", () => {
     expect(res.status).toBe(400);
     expect(runChatAgentMock).not.toHaveBeenCalled();
   });
+
+  it("POST maps OpenRouter failures to a retryable 503", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    const { OpenRouterError } = await import("./chat-openrouter.js");
+    runChatAgentMock.mockRejectedValue(new OpenRouterError(429, "rate limited"));
+
+    const res = await POST(authReq("POST", { message: "Hi" }));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      code: "chat_upstream_unavailable",
+    });
+  });
 });

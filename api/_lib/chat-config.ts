@@ -21,6 +21,9 @@ export const CHAT_MAX_HISTORY_MESSAGES = 20;
 export const CHAT_RATE_LIMIT_MAX = 20;
 export const CHAT_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 
+/** Stay under the Vercel Hobby 60s function cap across tool steps. */
+export const CHAT_AGENT_DEADLINE_MS = 55_000;
+
 export const CHAT_SYSTEM_PROMPT = [
   "You are a fantasy football assistant for this app.",
   "Answer only from tool results. Cite numbers from tools.",

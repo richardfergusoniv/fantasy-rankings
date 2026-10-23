@@ -371,50 +371,109 @@ async function loadBoomBustSummary(args: {
   }
 }
 
+function findRosterPlayer(
+  dashboard: Dashboard,
+  playerId: string,
+): { playerId: string; name: string; team: string | null; position: string; injuryStatus: string | null } | null {
+  for (const league of dashboard.leagues) {
+    for (const player of [...league.starters, ...league.bench]) {
+      if (player.playerId === playerId) {
+        return {
+          playerId: player.playerId,
+          name: player.name,
+          team: player.team,
+          position: player.position,
+          injuryStatus: player.injuryStatus,
+        };
+      }
+    }
+    for (const team of league.tradeTeams) {
+      for (const player of team.players) {
+        if (player.playerId === playerId) {
+          return {
+            playerId: player.playerId,
+            name: player.name,
+            team: player.team,
+            position: player.position,
+            injuryStatus: player.injuryStatus,
+          };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function resolvePlayerIdentity(
+  dashboard: Dashboard,
+  args: { playerId?: string; playerName?: string },
+): { playerId: string; nameHint: string | null } | { error: string } {
+  const trimmedId = args.playerId?.trim() || "";
+  const needle = args.playerName ? normalizeName(args.playerName) : "";
+  if (!trimmedId && !needle) {
+    return { error: "Provide playerId or playerName." };
+  }
+
+  if (trimmedId) {
+    const rankingHit =
+      dashboard.rankings.find((row) => row.playerId === trimmedId)
+      ?? dashboard.seasonLongRankings.find((row) => row.playerId === trimmedId && row.position !== "PICK");
+    if (rankingHit) return { playerId: rankingHit.playerId, nameHint: rankingHit.name };
+    const rosterHit = findRosterPlayer(dashboard, trimmedId);
+    if (rosterHit) return { playerId: rosterHit.playerId, nameHint: rosterHit.name };
+    if (dashboard.leagues.some((league) => league.rosteredPlayerIds.includes(trimmedId))) {
+      return { playerId: trimmedId, nameHint: null };
+    }
+    return { error: "Player not found." };
+  }
+
+  const byName =
+    dashboard.rankings.find((row) => normalizeName(row.name).includes(needle))
+    ?? dashboard.seasonLongRankings.find(
+      (row) => row.position !== "PICK" && normalizeName(row.name).includes(needle),
+    );
+  if (byName) return { playerId: byName.playerId, nameHint: byName.name };
+
+  for (const league of dashboard.leagues) {
+    for (const player of [...league.starters, ...league.bench]) {
+      if (normalizeName(player.name).includes(needle)) {
+        return { playerId: player.playerId, nameHint: player.name };
+      }
+    }
+  }
+  return { error: "Player not found." };
+}
+
 async function toolGetPlayerCard(
   ctx: ChatToolContext,
   args: { playerId?: string; playerName?: string; leagueId?: string },
 ) {
   const dashboard = await loadDashboard(ctx);
-  const needle = args.playerName ? normalizeName(args.playerName) : "";
-  let playerId = args.playerId?.trim() || "";
+  const resolved = resolvePlayerIdentity(dashboard, args);
+  if ("error" in resolved) return { ok: false as const, error: resolved.error };
+  const playerId = resolved.playerId;
 
-  const rankingHit =
-    (playerId
-      ? dashboard.rankings.find((row) => row.playerId === playerId)
-      : needle
-        ? dashboard.rankings.find((row) => normalizeName(row.name).includes(needle))
-        : undefined)
-    ?? (playerId
-      ? dashboard.seasonLongRankings.find((row) => row.playerId === playerId && row.position !== "PICK")
-      : needle
-        ? dashboard.seasonLongRankings.find(
-          (row) => row.position !== "PICK" && normalizeName(row.name).includes(needle),
-        )
-        : undefined);
-
-  if (!rankingHit && !playerId) {
-    return { ok: false as const, error: "Provide playerId or playerName." };
-  }
-  if (rankingHit) playerId = rankingHit.playerId;
-  if (!playerId) return { ok: false as const, error: "Player not found." };
-
-  const weekly =
-    dashboard.rankings.find((row) => row.playerId === playerId)
-    ?? dashboard.weeklyChartRankings.find((row) => row.playerId === playerId)
-    ?? null;
-  const seasonRows = dashboard.seasonLongRankings.filter(
-    (row) => row.playerId === playerId && row.position !== "PICK",
-  );
-  const insights = dashboard.playerInsights.experts[playerId] ?? null;
-  const trending = dashboard.playerTrending[playerId] ?? null;
   const league =
     (args.leagueId ? findLeague(dashboard, args.leagueId) : null)
     ?? dashboard.leagues.find((item) => item.rosteredPlayerIds.includes(playerId))
     ?? dashboard.leagues[0]
     ?? null;
 
-  const position = (weekly?.position ?? seasonRows[0]?.position ?? null) as
+  const weekly =
+    (league
+      ? dashboard.rankings.find((row) => row.playerId === playerId && row.leagueId === league.id)
+      : undefined)
+    ?? dashboard.rankings.find((row) => row.playerId === playerId)
+    ?? dashboard.weeklyChartRankings.find((row) => row.playerId === playerId)
+    ?? null;
+  const seasonRows = dashboard.seasonLongRankings.filter(
+    (row) => row.playerId === playerId && row.position !== "PICK",
+  );
+  const roster = findRosterPlayer(dashboard, playerId);
+  const insights = dashboard.playerInsights.experts[playerId] ?? null;
+  const trending = dashboard.playerTrending[playerId] ?? null;
+
+  const position = (weekly?.position ?? seasonRows[0]?.position ?? roster?.position ?? null) as
     | "QB"
     | "RB"
     | "WR"
@@ -436,10 +495,10 @@ async function toolGetPlayerCard(
   return {
     ok: true as const,
     playerId,
-    name: weekly?.name ?? seasonRows[0]?.name ?? args.playerName ?? playerId,
-    team: weekly?.team ?? seasonRows[0]?.team ?? null,
-    position: weekly?.position ?? seasonRows[0]?.position ?? null,
-    injuryStatus: weekly?.injuryStatus ?? null,
+    name: weekly?.name ?? seasonRows[0]?.name ?? roster?.name ?? resolved.nameHint ?? args.playerName ?? playerId,
+    team: weekly?.team ?? seasonRows[0]?.team ?? roster?.team ?? null,
+    position: weekly?.position ?? seasonRows[0]?.position ?? roster?.position ?? null,
+    injuryStatus: weekly?.injuryStatus ?? roster?.injuryStatus ?? null,
     weekly: weekly
       ? {
         leagueProjection: weekly.leagueProjection,

@@ -353,4 +353,42 @@ describe("dispatchChatTool", () => {
     expect(result.weekly?.leagueProjection).toBe(18.2);
     expect(result.seasonLongValues[0]?.value).toBe(8000);
   });
+
+  it("rejects unknown player ids and missing identity args", async () => {
+    const ctx = ctxWithDashboard(baseDashboard());
+    expect(await dispatchChatTool("get_player_card", {}, ctx)).toEqual({
+      ok: false,
+      error: "Provide playerId or playerName.",
+    });
+    expect(await dispatchChatTool("get_player_card", { playerId: "missing-id" }, ctx)).toEqual({
+      ok: false,
+      error: "Player not found.",
+    });
+  });
+
+  it("prefers the league-specific weekly ranking row", async () => {
+    const dashboard = baseDashboard();
+    dashboard.rankings = [
+      {
+        ...dashboard.rankings[0]!,
+        leagueId: "other",
+        leagueProjection: 9.9,
+        leagueRank: 99,
+      },
+      {
+        ...dashboard.rankings[0]!,
+        leagueId: "lg1",
+        leagueProjection: 18.2,
+        leagueRank: 1,
+      },
+    ];
+    const result = await dispatchChatTool(
+      "get_player_card",
+      { playerId: "p1", leagueId: "lg1" },
+      ctxWithDashboard(dashboard),
+    ) as { ok: boolean; weekly: { leagueProjection: number | null; leagueRank: number } };
+    expect(result.ok).toBe(true);
+    expect(result.weekly.leagueProjection).toBe(18.2);
+    expect(result.weekly.leagueRank).toBe(1);
+  });
 });
