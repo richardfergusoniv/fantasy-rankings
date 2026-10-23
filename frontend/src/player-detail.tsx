@@ -9,7 +9,6 @@ import type {
   BoomBustHistory,
   Dashboard,
   DetailMetric,
-  MatchupSelection,
   PlayerDetailTab,
   PlayerNewsItem,
   PlayerSearchResult,
@@ -33,7 +32,7 @@ import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatW
 import { buildGameLogRows } from "./lib/game-log-rows";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
-import { MatchupTag, ModalPortal, SegmentedControl, positionalSosRank, rankAgainst, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { ModalPortal, SegmentedControl, positionalSosRank, rankAgainst, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
 
@@ -356,6 +355,24 @@ export function PlayerAdvancedPanel({ player, analytics, isLoading = false, lead
   );
 }
 
+/** The player's NFL team, as a badge that opens the team card. */
+function PlayerTeamBadge({ team, onOpen }: { team: string | null; onOpen?: () => void }) {
+  if (!team) return null;
+  if (!onOpen) return <span className="matchup-reference-tag season-team-pill">{team}</span>;
+  return (
+    <button
+      type="button"
+      className="matchup-reference-tag season-team-pill matchup-reference-button"
+      aria-label={`View ${team} team data`}
+      aria-haspopup="dialog"
+      onClick={onOpen}
+    >
+      <span className="matchup-reference-button-label">{team}</span>
+      <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+    </button>
+  );
+}
+
 function PlayerRosterBadge({
   playerName,
   rosterTeamName,
@@ -415,7 +432,7 @@ export function PlayerDetailSheet({
   newsError = false,
   onRetryNews,
   onModeChange,
-  onOpenMatchup,
+  onOpenTeam,
   onBack,
   canGoBack,
   onClose,
@@ -443,7 +460,8 @@ export function PlayerDetailSheet({
   newsError?: boolean;
   onRetryNews?: () => void;
   onModeChange?: (mode: "details" | "chart") => void;
-  onOpenMatchup?: (matchup: MatchupSelection) => void;
+  /** Open this player's NFL team card. */
+  onOpenTeam?: (team: string) => void;
   onBack: () => void;
   canGoBack: boolean;
   onClose: () => void;
@@ -687,7 +705,7 @@ export function PlayerDetailSheet({
             <div className="player-detail-title-line">
               <h2 id="player-detail-name">{player.name}</h2>
             </div>
-            <p><span>{positionLabel}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} />{player.injuryStatus ? <span className="player-detail-injury">{player.injuryStatus}</span> : null}<PlayerRosterBadge
+            <p><span>{positionLabel}</span><PlayerTeamBadge team={player.team} onOpen={player.team && onOpenTeam ? () => onOpenTeam(player.team ?? "") : undefined} />{player.injuryStatus ? <span className="player-detail-injury">{player.injuryStatus}</span> : null}<PlayerRosterBadge
               playerName={player.name}
               rosterTeamName={rosterTeamName}
               rosterLabel={rosterLabel}
