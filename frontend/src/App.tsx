@@ -67,6 +67,7 @@ const LazyConnectedTeamCard = lazy(() => import("./views/player-pool").then((mod
 const LazyDraftCenter = lazy(() => import("./views/draft-center").then((module) => ({ default: module.DraftCenter })));
 const LazyTradeCalculator = lazy(() => import("./views/trade-calculator").then((module) => ({ default: module.TradeCalculator })));
 const LazyChartsTool = lazy(() => import("./AnalyticsViews").then((module) => ({ default: module.ChartsTool })));
+const LazyChatPanel = lazy(() => import("./views/chat-panel").then((module) => ({ default: module.ChatPanel })));
 
 function SafeAreaTopScrim({ backgroundColor }: { backgroundColor?: string }) {
   return (
@@ -110,7 +111,7 @@ function primaryPageForTab(tab: Tab): PrimaryPage {
   if (tab === "rankings" || tab === "waivers" || tab === "comparison") return "players";
   if (tab === "power" || tab === "trade") return "league";
   if (tab === "draft") return "draft";
-  if (tab === "monitor" || tab === "team-stats" || tab === "analytics") return "tools";
+  if (tab === "monitor" || tab === "team-stats" || tab === "analytics" || tab === "chat") return "tools";
   const unreachable: never = tab;
   return unreachable;
 }
@@ -538,6 +539,7 @@ export function App() {
       monitor: "Game lines",
       "team-stats": "Team stats",
       analytics: "Analytics",
+      chat: "Chat",
     };
     document.title = `${titles[tab]} · Fantasy Rankings`;
   }, [tab]);
@@ -1221,6 +1223,7 @@ export function App() {
               <TabsTrigger value="monitor">Game lines</TabsTrigger>
               <TabsTrigger value="team-stats">Team stats</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
+              <TabsTrigger value="chat">Chat</TabsTrigger>
             </TabsList>
           </Tabs>
         ) : null}
@@ -1239,6 +1242,7 @@ export function App() {
             monitor: "Game lines",
             "team-stats": "Team stats",
             analytics: "Analytics",
+            chat: "Chat",
           } satisfies Record<Tab, string>)[tab]}</h1>
           {currentSectionLoading ? <SectionLoading label={`Loading ${({ team: "Matchup", players: "Players", league: "League", draft: "Draft", tools: "Tools" } as const)[primaryPage]}…`} />
             : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
@@ -1274,6 +1278,11 @@ export function App() {
                   playerLink={toolPlayerLink}
                   focusPlayer={analyticsFocusPlayer}
                 />
+              </Suspense>
+            )
+            : tab === "chat" ? (
+              <Suspense fallback={<SectionLoading label="Loading chat…" />}>
+                <LazyChatPanel />
               </Suspense>
             )
             : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={(rosterId) => setRosterCardRosterId(rosterId)} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />

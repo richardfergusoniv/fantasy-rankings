@@ -13,7 +13,8 @@ export type Tab =
   | "comparison"
   | "monitor"
   | "team-stats"
-  | "analytics";
+  | "analytics"
+  | "chat";
 export type PlayerLink = {
   /** URL `playerId` — drives Selected chip and shell inspector open. */
   linkedPlayerId: string | null;
