@@ -25,6 +25,12 @@ describe("withStreamedAnalytics", () => {
     expect((merged as unknown as { marker: string }).marker).toBe("winner");
   });
 
+  it("does not copy analytics from an older snapshot into a newer dashboard", () => {
+    const winner = dashboardWith(emptyAnalytics, "winner");
+    const streamed = { ...dashboardWith(populatedAnalytics, "streamed"), asOf: "2026-10-22T00:00:00.000Z" } as Dashboard;
+    expect(withStreamedAnalytics(winner, streamed)).toBe(winner);
+  });
+
   it("keeps the winner's analytics when it is already populated", () => {
     const winner = dashboardWith(populatedAnalytics, "winner");
     const streamed = dashboardWith(populatedAnalytics, "streamed");
