@@ -7,7 +7,7 @@ import {
   resolveOpenRouterFallbackModel,
   resolveOpenRouterModel,
 } from "./chat-config.js";
-import { callOpenRouterChat } from "./chat-openrouter.js";
+import { callOpenRouterChat, ChatAgentTimeoutError } from "./chat-openrouter.js";
 
 describe("chat-config free models", () => {
   it("allows up to eight tool steps under the 60s deadline", () => {
@@ -40,5 +40,27 @@ describe("chat-config free models", () => {
         fetchImpl: async () => new Response("nope", { status: 500 }),
       }),
     ).rejects.toThrow(/Refusing non-free/);
+  });
+
+  it("maps aborted response body reads to ChatAgentTimeoutError", async () => {
+    const abortErr = new Error("aborted");
+    abortErr.name = "AbortError";
+    await expect(
+      callOpenRouterChat({
+        apiKey: "sk-or-test",
+        body: {
+          model: "thinkingmachines/inkling:free",
+          messages: [{ role: "user", content: "hi" }],
+        },
+        fetchImpl: async () =>
+          ({
+            ok: true,
+            status: 200,
+            text: async () => {
+              throw abortErr;
+            },
+          }) as Response,
+      }),
+    ).rejects.toBeInstanceOf(ChatAgentTimeoutError);
   });
 });

@@ -116,7 +116,13 @@ export async function callOpenRouterChat(
     throw err;
   }
 
-  const text = await response.text();
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (err) {
+    if (isAbortError(err) || args.signal?.aborted) throw new ChatAgentTimeoutError();
+    throw err;
+  }
   if (!response.ok) {
     throw new OpenRouterError(response.status, text.slice(0, 500));
   }
