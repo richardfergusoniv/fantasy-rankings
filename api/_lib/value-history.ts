@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
-import { db, schema } from "./_lib/db.js";
+import { db, schema } from "./db.js";
 import {
   badRequest,
   internalError,
   json,
   unauthorized,
-} from "./_lib/api-utils.js";
-import { resolveSleeperUserId } from "./_lib/auth.js";
+} from "./api-utils.js";
+import { resolveSleeperUserId } from "./auth.js";
 import {
   extendSparseValueHistoryThroughToday,
   FANTASY_CALC_SNAPSHOT_PRESETS,
@@ -19,17 +19,18 @@ import {
   upsertPlayerValueSnapshots,
   utcDateKey,
   VALUE_HISTORY_CHART_MIN_DATE,
-} from "./_lib/player-value-history.js";
-import { isNflValueHistoryInSeason } from "./_lib/season-week.js";
+} from "./player-value-history.js";
+import { isNflValueHistoryInSeason } from "./season-week.js";
 import {
   fetchJson,
   type FantasyCalcHistoryResponse,
   type FantasyCalcRow,
-} from "./_lib/sleeper.js";
-import { readNflState } from "./_lib/user-leagues.js";
+} from "./sleeper.js";
+import { readNflState } from "./user-leagues.js";
 
 /**
  * GET /api/value-history?formatKey=&playerIds=a,b,c
+ * (served via /api/data/value-history; old URL rewritten in vercel.json)
  *
  * Replaces `getValueHistory`. Returns FantasyCalc value time series per
  * player from `VALUE_HISTORY_CHART_MIN_DATE` through today, backfilling from
@@ -105,7 +106,7 @@ function setValueHistoryCache(cacheKey: string, entry: CacheEntry): void {
   valueHistoryCache.set(cacheKey, entry);
 }
 
-export async function GET(req: Request): Promise<Response> {
+export async function handleValueHistory(req: Request): Promise<Response> {
   try {
     const sleeperUserId = await resolveSleeperUserId(req);
     if (!sleeperUserId) return unauthorized("Sign in required.");

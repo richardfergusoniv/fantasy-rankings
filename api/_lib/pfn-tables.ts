@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { inArray } from "drizzle-orm";
-import { db, schema } from "./_lib/db.js";
-import { badRequest, internalError, json } from "./_lib/api-utils.js";
+import { db, schema } from "./db.js";
+import { badRequest, internalError, json } from "./api-utils.js";
 import {
   readTeamSituationalSnapshot,
   type TeamSituationalSnapshot,
-} from "./_lib/team-situational.js";
-import { decodeSourceCachePayload } from "./_lib/source-cache-payload.js";
-import { loadPropLineWeek, type PropLineWeekPayload } from "./_lib/prop-line-week.js";
+} from "./team-situational.js";
+import { decodeSourceCachePayload } from "./source-cache-payload.js";
+import { loadPropLineWeek, type PropLineWeekPayload } from "./prop-line-week.js";
 import {
   TEAM_WEEK_STATS_STALE_MS,
   nflversePlayerWeekStatsUrl,
@@ -16,10 +16,11 @@ import {
   parseTeamWeekSnapCountsCsv,
   type TeamWeekSnapRow,
   type TeamWeekStatRow,
-} from "./_lib/nflverse-team-week-stats.js";
+} from "./nflverse-team-week-stats.js";
 
 /**
  * GET /api/pfn-tables
+ * (served via /api/data/pfn-tables; old URL rewritten in vercel.json)
  *
  * Replaces `getpfntables`. Pure read of `pfn:*` keys from `source_cache`,
  * plus the cached team-situational snapshot.
@@ -172,7 +173,7 @@ async function loadPfnTables(): Promise<PfnTables["tables"]> {
   return tables;
 }
 
-export async function GET(req: Request): Promise<Response> {
+export async function handlePfnTables(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url, "https://localhost");
     if (url.searchParams.has("team-week-stats")) {

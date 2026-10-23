@@ -5,11 +5,12 @@ import {
   internalError,
   isAdminUserId,
   json,
-} from "./_lib/api-utils.js";
-import { canonicalTeam, fetchJson } from "./_lib/sleeper.js";
+} from "./api-utils.js";
+import { canonicalTeam, fetchJson } from "./sleeper.js";
 
 /**
  * GET /api/box-score?team=&opponent=&season=&week=
+ * (served via /api/data/box-score; old URL rewritten in vercel.json)
  *
  * Replaces `getMatchupBoxScore`. Admin-only (was owner-gated in Hatch).
  * Looks up a game's final score via ESPN's public scoreboard API.
@@ -71,7 +72,7 @@ function espnWeekParams(week: number): { seasontype: number; week: number } {
   return { seasontype: 2, week };
 }
 
-export async function GET(req: Request): Promise<Response> {
+export async function handleBoxScore(req: Request): Promise<Response> {
   try {
     const user = await getRequestUser(req);
     if (!isAdminUserId(user?.id)) {
