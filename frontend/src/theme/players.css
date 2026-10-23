@@ -356,7 +356,6 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .player-expected-legend { display: flex; gap: 14px; padding: 8px 2px 0; color: var(--dim); font-size: var(--type-caption); }
 .player-expected-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .player-expected-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
-.player-detail-header p .depth-chart-tag { margin-left: 6px; }
 .depth-change { display: inline-flex; flex: none; align-items: center; margin-left: 4px; font-size: var(--type-caption); font-weight: 700; line-height: 16px; white-space: nowrap; }
 .depth-change.is-up { color: var(--positive); }
 .depth-change.is-down { color: var(--negative); }

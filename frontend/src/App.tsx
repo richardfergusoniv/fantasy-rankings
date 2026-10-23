@@ -1145,8 +1145,6 @@ export function App() {
       suspended={rosterCardOnTop}
       trending={dashboard.playerTrending?.[playerHistory.current.playerId]}
       season={dashboard.season}
-      depth={dashboard.playerInsights?.depth[playerHistory.current.playerId]}
-      depthPrevious={dashboard.playerInsights?.depthPrevious?.[playerHistory.current.playerId]}
     />
   ) : null;
 
