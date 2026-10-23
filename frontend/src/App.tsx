@@ -618,7 +618,7 @@ export function App() {
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
-    enabled: MARKET_TOOL_TABS.has(tab) || tab === "rankings" || tab === "waivers" || tab === "comparison",
+    enabled: MARKET_TOOL_TABS.has(tab) || tab === "rankings" || tab === "waivers" || tab === "comparison" || playerHistory.isOpen,
     refetchInterval: pollWhileSectionBuilding,
   });
   // tradeTeams (+ starter slots) for Matchup/Power/Trade. Live-polled with
