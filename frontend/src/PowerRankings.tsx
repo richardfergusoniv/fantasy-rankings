@@ -59,7 +59,33 @@ export function PowerRankings({
   const leagueAverageTotal = scope === "restOfSeason" && powerRankings.length > 0
     ? powerRankings.reduce((total, team) => total + team.totalValue, 0) / powerRankings.length
     : null;
+  const isDynastyView = scope === "restOfSeason" && activeMode === "dynasty";
+  const leagueAveragePicks = isDynastyView && powerRankings.length > 0
+    ? powerRankings.reduce((total, team) => total + team.futurePickValue, 0) / powerRankings.length
+    : null;
   const selectedTeam = selectedTeamId === null ? null : powerRankings.find((team) => team.rosterId === selectedTeamId) ?? null;
+
+  type PowerListEntry =
+    | { kind: "team"; team: (typeof displayedTeams)[number] }
+    | { kind: "average"; total: number };
+
+  const powerListEntries = useMemo((): PowerListEntry[] => {
+    if (leagueAverageTotal === null) {
+      return displayedTeams.map((team) => ({ kind: "team" as const, team }));
+    }
+    const averageEntry = { kind: "average" as const, total: leagueAverageTotal };
+    const entries: PowerListEntry[] = [];
+    let inserted = false;
+    for (const team of displayedTeams) {
+      if (!inserted && team.totalValue < leagueAverageTotal) {
+        entries.push(averageEntry);
+        inserted = true;
+      }
+      entries.push({ kind: "team", team });
+    }
+    if (!inserted) entries.push(averageEntry);
+    return entries;
+  }, [displayedTeams, leagueAverageTotal]);
 
   const radarData = positions.map((position) => {
     const values = powerRankings.map((team) => team.positionValues[position]);
@@ -83,6 +109,9 @@ export function PowerRankings({
   const teamPolygon = radarData.map((row, index) => radarPoint(index, row.strength)).join(" ");
   const averagePolygon = radarData.map((row, index) => radarPoint(index, row.averageStrength)).join(" ");
   const totalAverage = radarData.reduce((total, row) => total + row.average, 0);
+  const leagueAverageDisplayTotal = leagueAveragePicks !== null
+    ? totalAverage + leagueAveragePicks
+    : totalAverage;
   const scopeToggle = (
     <SegmentedControl
       className="lineup-mode-toggle power-scope-toggle page-tab-control"
@@ -154,19 +183,31 @@ export function PowerRankings({
           {radarData.map((row) => (
             <div key={row.position} role="listitem"><span>{positionLabel(row.position)}</span><strong>{scope === "week" ? points(row.average) : formatWhole(row.average)}</strong></div>
           ))}
-          {scope === "week" ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className="power-position-total power-position-total-highlight" role="listitem"><span>Total</span><strong>{formatWhole(totalAverage)}</strong></div>}
+          {leagueAveragePicks !== null ? (
+            <div role="listitem"><span>PICKS</span><strong>{formatWhole(leagueAveragePicks)}</strong></div>
+          ) : null}
+          {scope === "week" ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className="power-position-total power-position-total-highlight" role="listitem"><span>Total</span><strong>{formatWhole(leagueAverageDisplayTotal)}</strong></div>}
         </div>
       </section>
 
       <section className="power-table-section" aria-labelledby="league-power-heading">
         <div className="section-heading power-section-heading">
           <h2 id="league-power-heading">League power rankings</h2>
-          {leagueAverageTotal !== null ? (
-            <span aria-label="League average">{formatWhole(leagueAverageTotal)}</span>
-          ) : null}
         </div>
         <div className="power-table" role="list">
-          {displayedTeams.map((team) => {
+          {powerListEntries.map((entry) => {
+            if (entry.kind === "average") {
+              return (
+                <div className="power-list-item" role="listitem" key="league-average">
+                  <div className="power-row is-average" aria-label={`League average ${formatWhole(entry.total)}`}>
+                    <strong className="power-rank" aria-hidden="true" />
+                    <span className="power-team"><strong>League avg</strong></span>
+                    <span className="power-total"><strong>{formatWhole(entry.total)}</strong></span>
+                  </div>
+                </div>
+              );
+            }
+            const { team } = entry;
             const isOpponent = opponentRosterId !== null && team.rosterId === opponentRosterId;
             return (
               <div className="power-list-item" role="listitem" key={team.rosterId}>

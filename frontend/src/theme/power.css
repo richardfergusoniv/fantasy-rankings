@@ -6,7 +6,6 @@
 .power-hero p { margin: 0; color: var(--text); font-size: var(--type-body); font-weight: 600; }
 .power-chart-section, .power-table-section { margin-top: 18px; }
 .power-section-heading { align-items: flex-end; }
-.power-section-heading > span { margin-left: auto; text-align: right; }
 .power-radar { height: 286px; display: grid; place-items: center; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); }
 .power-radar svg { display: block; width: min(100%, 390px); height: 278px; overflow: visible; }
 .power-radar text { fill: var(--text); font-size: var(--type-caption); font-weight: 700; }
@@ -26,11 +25,13 @@
 .power-row { display: grid; width: 100%; grid-template-columns: 26px minmax(0, 1fr) 82px; gap: 8px; min-height: 58px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); text-align: left; }
 .power-row.is-user { background: var(--roster-highlight-bg); }
 .power-row.is-opponent { background: var(--opponent-row); }
+.power-row.is-average { background: var(--surface-2); }
 .power-row-toggle { cursor: pointer; touch-action: pan-y; }
 .power-row-toggle:active { background: var(--surface-2); }
 .power-rank { color: var(--dim); font-size: var(--type-body); font-weight: 700; }
 .power-row.is-user .power-rank, .power-row.is-user .power-team > strong, .power-row.is-user .power-total strong { color: var(--link); }
 .power-row.is-opponent .power-rank, .power-row.is-opponent .power-team > strong, .power-row.is-opponent .power-total strong { color: var(--foreground); }
+.power-row.is-average .power-rank, .power-row.is-average .power-team > strong, .power-row.is-average .power-total strong { color: var(--dim); }
 .power-team { min-width: 0; }
 .power-team > strong { display: block; overflow: hidden; font-size: var(--type-body); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .power-team-record { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
