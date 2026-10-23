@@ -104,7 +104,7 @@ export function LeagueTeamCard({
         ...player,
         projection: ecr.projections.get(player.playerId) ?? null,
         isStarter: ecr.starterIds.has(player.playerId),
-        lineupSlot: ecr.starterIds.has(player.playerId) ? player.lineupSlot : null,
+        lineupSlot: ecr.slotByPlayerId.get(player.playerId) ?? null,
       })),
     };
   }, [ecr, league.tradeTeams, team.rosterId]);

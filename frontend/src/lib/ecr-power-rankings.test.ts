@@ -41,4 +41,25 @@ describe("buildEcrPowerRankings", () => {
     expect(result.map((entry) => entry.team.teamName)).toEqual(["A", "B"]);
     expect(result[0]?.team.totalValue).toBe(0);
   });
+
+  it("picks the best lineup across overlapping flex slots", () => {
+    const base = league();
+    const flexLeague = {
+      ...base,
+      tradeStarterSlots: ["REC_FLEX", "WRRB_FLEX"],
+      tradeTeams: [{ rosterId: 1, players: [player("w", "WR"), player("t", "TE"), player("r", "RB")] }, base.tradeTeams[1]],
+    } as unknown as League;
+    const result = buildEcrPowerRankings(flexLeague, { w: expert(20), t: expert(19), r: expert(18) });
+    const a = result.find((entry) => entry.team.rosterId === 1)!;
+    expect(a.team.totalValue).toBe(39);
+    expect(a.slotByPlayerId.get("t")).toBe("REC_FLEX");
+    expect(a.slotByPlayerId.get("w")).toBe("WRRB_FLEX");
+  });
+
+  it("starts unprojected players at zero when slots are left over", () => {
+    const result = buildEcrPowerRankings(league(), { q1: expert(20) });
+    const a = result.find((entry) => entry.team.rosterId === 1)!;
+    expect(a.starterIds).toEqual(new Set(["q1", "r1", "r2"]));
+    expect(a.team.totalValue).toBe(20);
+  });
 });
