@@ -18,6 +18,10 @@ import {
   sleeperActualStats,
 } from "./sleeper.js";
 import { loadHistoricalTrades } from "./trades.js";
+import {
+  dispatchExtendedChatTool,
+  EXTENDED_CHAT_TOOL_DEFINITIONS,
+} from "./chat-tools-extended.js";
 
 export type ChatToolContext = {
   userId: string;
@@ -150,6 +154,7 @@ export const CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
       },
     },
   },
+  ...EXTENDED_CHAT_TOOL_DEFINITIONS,
 ];
 
 export const CHAT_TOOL_NAMES = CHAT_TOOL_DEFINITIONS.map((tool) => tool.function.name);
@@ -181,7 +186,7 @@ export function waiverAdjustments(
   return fewerIsGive ? { give: credit, get: 0 } : { give: 0, get: credit };
 }
 
-async function loadDashboard(ctx: ChatToolContext): Promise<Dashboard> {
+export async function loadDashboard(ctx: ChatToolContext): Promise<Dashboard> {
   if (!ctx.dashboardPromise) {
     ctx.dashboardPromise = (async () => {
       const cached = await readUserDashboardCache(ctx.sleeperUserId);
@@ -193,15 +198,15 @@ async function loadDashboard(ctx: ChatToolContext): Promise<Dashboard> {
   return ctx.dashboardPromise;
 }
 
-function findLeague(dashboard: Dashboard, leagueId: string) {
+export function findLeague(dashboard: Dashboard, leagueId: string) {
   return dashboard.leagues.find((league) => league.id === leagueId) ?? null;
 }
 
-function normalizeName(value: string): string {
+export function normalizeName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function leagueAssets(dashboard: Dashboard, leagueId: string) {
+export function leagueAssets(dashboard: Dashboard, leagueId: string) {
   const league = findLeague(dashboard, leagueId);
   if (!league) return [];
   const formatKey = league.seasonLongFormat.key;
@@ -325,7 +330,7 @@ async function loadPlayerNews(playerId: string, limit = 8) {
   }
 }
 
-async function loadBoomBustSummary(args: {
+export async function loadBoomBustSummary(args: {
   leagueId: string;
   playerId: string;
   position: "QB" | "RB" | "WR" | "TE";
@@ -814,8 +819,11 @@ export async function dispatchChatTool(
       if (!parsed.success) return { ok: false, error: "Invalid arguments.", issues: parsed.error.issues };
       return toolGetWeekMatchup(ctx, parsed.data);
     }
-    default:
+    default: {
+      const extended = await dispatchExtendedChatTool(name, args, ctx);
+      if (extended !== null) return extended;
       return { ok: false, error: `Unknown tool: ${name}` };
+    }
   }
 }
 

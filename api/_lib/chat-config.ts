@@ -9,7 +9,7 @@ export const FALLBACK_OPENROUTER_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
 /** Cap tool-calling rounds per user question. */
-export const CHAT_MAX_TOOL_STEPS = 5;
+export const CHAT_MAX_TOOL_STEPS = 8;
 
 /** Max characters accepted in a single user message. */
 export const CHAT_MAX_INPUT_CHARS = 2_000;
@@ -27,6 +27,7 @@ export const CHAT_AGENT_DEADLINE_MS = 55_000;
 export const CHAT_SYSTEM_PROMPT = [
   "You are a fantasy football assistant for this app.",
   "Answer only from tool results. Cite numbers from tools.",
+  "When suggesting lineups, waivers, or trades, cite the projections, values, or power-rank numbers the suggestion is based on.",
   "If data is missing, say so. Be concise. Do not invent stats, rankings, or news.",
   "Prefer the signed-in user's leagues and rosters when the question says 'my' or 'our'.",
 ].join(" ");

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHAT_MAX_TOOL_STEPS,
   DEFAULT_OPENROUTER_MODEL,
   FALLBACK_OPENROUTER_MODEL,
   isFreeOpenRouterModel,
@@ -9,6 +10,10 @@ import {
 import { callOpenRouterChat } from "./chat-openrouter.js";
 
 describe("chat-config free models", () => {
+  it("allows up to eight tool steps under the 60s deadline", () => {
+    expect(CHAT_MAX_TOOL_STEPS).toBe(8);
+  });
+
   it("only accepts :free model ids", () => {
     expect(isFreeOpenRouterModel("thinkingmachines/inkling:free")).toBe(true);
     expect(isFreeOpenRouterModel("openai/gpt-4o")).toBe(false);
