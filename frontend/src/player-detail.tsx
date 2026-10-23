@@ -600,8 +600,9 @@ export function PlayerDetailSheet({
   const supportsBoomBust = boomBustPosition !== null;
   const [boomBustView, setBoomBustView] = useState<"season" | "last3">("season");
   useEffect(() => setBoomBustView("season"), [player.playerId]);
-  const [showAllNews, setShowAllNews] = useState(false);
-  useEffect(() => setShowAllNews(false), [player.playerId]);
+  // Which player's news was expanded; another player starts collapsed with no reset step.
+  const [newsExpandedFor, setNewsExpandedFor] = useState<string | null>(null);
+  const showAllNews = newsExpandedFor === player.playerId;
   const boomBustQuery = useQuery({
     queryKey: ["boom-bust-history", leagueId, player.playerId, boomBustView],
     queryFn: () => {
@@ -738,7 +739,7 @@ export function PlayerDetailSheet({
                 </article>
               ))}
               {!showAllNews && newsItems.length > 3 ? (
-                <button type="button" className="player-news-more" onClick={() => setShowAllNews(true)}>Show {Math.min(newsItems.length, 8) - 3} more</button>
+                <button type="button" className="player-news-more" onClick={() => setNewsExpandedFor(player.playerId)}>Show {Math.min(newsItems.length, 8) - 3} more</button>
               ) : null}
             </>
           ) : <div className="empty-inline compact">No recent news for this player.</div>}
