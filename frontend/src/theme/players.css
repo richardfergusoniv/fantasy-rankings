@@ -345,6 +345,7 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .player-props-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 0.7fr 0.7fr 0.6fr 1.3fr; min-height: 44px; align-items: center; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--hairline); font-size: var(--type-body); font-variant-numeric: tabular-nums; }
 .player-props-row > :nth-child(n + 2) { text-align: right; }
 .player-props-row > :nth-child(3) { color: var(--dim); }
+.player-props-row > :nth-child(3).is-plus { color: var(--positive); }
 .player-props-row > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-props-row.is-head { min-height: 32px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; letter-spacing: .02em; }
 .player-props-row .player-props-history { width: 100%; max-width: 96px; height: 22px; margin-left: auto; }

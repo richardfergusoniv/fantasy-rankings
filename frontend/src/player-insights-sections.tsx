@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import type { AnalyticsEntity, PlayerSearchResult } from "./dashboard-types";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
+import { sortPropLines } from "./lib/prop-line-order";
 import { TEAM_WEEK_STATS_STALE_MS } from "../../api/_lib/nflverse-team-week-stats";
 import {
   buildPropHistory,
@@ -40,12 +41,12 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
   const lines = useMemo(() => {
     // A degraded response carries no lines and season/week 0.
     if (!propLines || propLines.season !== season || propLines.week !== week) return [];
-    return propLines.lines.filter((line) => (
+    return sortPropLines(propLines.lines.filter((line) => (
       line.playerId === player.playerId
       && propStatDef(line.stat)
       && !isHiddenHalfPointPropStat(line.stat)
-    ));
-  }, [propLines, player.playerId, season, week]);
+    )), player.position);
+  }, [propLines, player.playerId, player.position, season, week]);
   const historyQuery = useQuery({
     queryKey: ["nflverse-team-week-stats", season],
     queryFn: () => api.getTeamWeekStats({ season }),
@@ -70,7 +71,7 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
   }
   return (
     <section className="player-props-section" aria-label={`${player.name} props`}>
-      <div className="section-heading"><h3>Props</h3><span>Week {week}</span></div>
+      <div className="section-heading"><h3>Props</h3></div>
       <div className="player-props-grid" role="table" aria-label={`${player.name} prop lines`}>
         <div className="player-props-row is-head" role="row">
           <span role="columnheader">Stat</span>
@@ -88,7 +89,7 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
             <div className="player-props-row" role="row" key={line.stat}>
               <span role="cell">{def?.label ?? line.stat}</span>
               <strong role="cell">{formatLine(line.line)}</strong>
-              <span role="cell">{formatOdds(line.overOdds)}</span>
+              <span role="cell" className={line.overOdds !== null && line.overOdds > 0 ? "is-plus" : undefined}>{formatOdds(line.overOdds)}</span>
               <span role="cell">{line.bookCount > 0 ? line.bookCount : "—"}</span>
               <span role="cell">
                 <span
