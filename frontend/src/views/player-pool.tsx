@@ -307,6 +307,7 @@ export function TeamDataModal({
 
           {depthChart.length > 0 ? (
             <section className="team-card-stat-section" aria-label="Depth chart">
+              <h4 className="team-card-section-heading">Depth</h4>
               <table className="depth-grid">
                 <thead>
                   <tr><th scope="col"><span className="sr-only">Position</span></th><th scope="col">1st</th><th scope="col">2nd</th><th scope="col">3rd</th></tr>
@@ -336,6 +337,7 @@ export function TeamDataModal({
           ) : null}
 
           <section className="team-card-stat-section" aria-label="Stats">
+              <h4 className="team-card-section-heading">Stats</h4>
               <div className="team-card-metrics">
                 <div>
                   <span>Points/G</span>
@@ -385,6 +387,7 @@ export function TeamDataModal({
           </section>
 
           <section className="team-card-stat-section" aria-label="PFN">
+              <h4 className="team-card-section-heading">PFN</h4>
               <div className="team-card-metrics">
                 <div>
                   <span>Overall</span>
@@ -433,6 +436,7 @@ export function TeamDataModal({
           </section>
 
           <section className="team-card-stat-section" aria-label="Advanced">
+              <h4 className="team-card-section-heading">Advanced</h4>
               <div className="team-card-metrics team-card-advanced-metrics">
                 <div>
                   <span>Red-zone TD rate</span>

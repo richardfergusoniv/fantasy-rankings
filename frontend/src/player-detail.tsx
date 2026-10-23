@@ -185,13 +185,12 @@ export function PlayerTeamContext({
     addStat("Team scoring", offense, teamOffense, "ppg", { suffix: " PPG" });
   }
 
-  const fetchedAt = offensiveLine?.fetched_at ?? offense?.fetched_at ?? defense?.fetched_at ?? null;
   const contextRows = sosRank === null && stats.length === 0;
   return (
     <section className="player-team-context" aria-label={`${player.name} team and matchup context`}>
       <div className="section-heading">
         <h3>Team context</h3>
-        <span>{fetchedAt ? `PFN · ${pfnDateLabel(fetchedAt)}` : "PFN"}</span>
+        <span>PFN</span>
       </div>
       {query.isPending && sosRank === null ? (
         <div className="player-team-context-state" role="status">Loading team context…</div>
