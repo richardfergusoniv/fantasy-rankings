@@ -269,3 +269,8 @@ export function MatchupTag({
     </button>
   );
 }
+
+/** "Depth WR1": a player's rank at his position on the latest depth chart. */
+export function depthLabel(depth: { position: string; rank: number }): string {
+  return `Depth ${depth.position}${depth.rank}`;
+}

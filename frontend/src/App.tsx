@@ -1162,6 +1162,8 @@ export function App() {
       toolLinks={toolLinkItems(playerToolLinks(playerHistory.current))}
       suspended={rosterCardOnTop}
       trending={dashboard.playerTrending?.[playerHistory.current.playerId]}
+      season={dashboard.season}
+      depth={dashboard.playerInsights?.depth[playerHistory.current.playerId]}
     />
   ) : null;
 

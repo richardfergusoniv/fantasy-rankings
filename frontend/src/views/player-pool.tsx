@@ -48,6 +48,7 @@ import {
 import { formatRecord } from "../league-team-card";
 import { leaguePowerTeamForPlayer } from "../league-roster";
 import { WindowVirtualList } from "../virtual-list";
+import { currentExpertRanks } from "../expert-ranks";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
 
@@ -491,6 +492,8 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   const [selectedTeam, setSelectedTeam] = useState<TeamCardSelection | null>(null);
   const queryClient = useQueryClient();
   const isSeasonLong = effectiveHorizon !== "week";
+  // This week's FantasyPros consensus beside our projection (weekly view only).
+  const expertRanks = isSeasonLong ? null : currentExpertRanks(dashboard);
   const pfnTablesQuery = useQuery({
     queryKey: ["pfn-tables"],
     queryFn: () => api.getPfnTables({}),
@@ -910,7 +913,12 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                 ? `${formatWhole(row.projection ?? 0)} ${row.projectionLabel}`
                 : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
               const rosteredBy = row.rosterTeamName && row.rosterId === null ? `, rostered by ${row.rosterTeamName}` : "";
-              const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${rosteredBy}${isSelected ? ", selected" : ""}`;
+              const expert = expertRanks ? expertRanks[row.key] : undefined;
+              const expertRankLabel = expert?.positionRank != null ? `${row.position === "DEF" ? "DST" : row.position}${expert.positionRank}` : null;
+              const accessibleExpert = expertRankLabel
+                ? `, expert rank ${expertRankLabel}, range ${expert?.best} to ${expert?.worst}`
+                : expertRanks ? ", expert rank unavailable" : "";
+              const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${accessibleExpert}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${rosteredBy}${isSelected ? ", selected" : ""}`;
               const rosterId = row.rosterId;
               const content = (
                 <>
@@ -959,6 +967,12 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                       ) : null}
                     </span>
                   </span>
+                  {expertRanks ? (
+                    <span className="ranking-ecr" aria-hidden="true">
+                      <strong>{expertRankLabel ?? "—"}</strong>
+                      {expert && expert.best !== expert.worst ? <span>{expert.best}–{expert.worst}</span> : expert ? <span>{expert.best}</span> : null}
+                    </span>
+                  ) : null}
                   <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : <span>{row.projectionLabel}</span>}</span>
                 </>
               );
@@ -968,7 +982,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
               };
               return (
                 <div
-                  className={`ranking-row ranking-row-button${isMine ? " is-my-roster" : ""}${isSelected ? " is-player-selected" : ""}`}
+                  className={`ranking-row ranking-row-button${expertRanks ? " has-expert-rank" : ""}${isMine ? " is-my-roster" : ""}${isSelected ? " is-player-selected" : ""}`}
                   key={row.key}
                 >
                   <button

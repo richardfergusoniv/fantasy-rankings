@@ -32,7 +32,8 @@ import {
 } from "./dashboard-shared";
 import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
-import { MatchupTag, ModalPortal, SegmentedControl, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
+import { MatchupTag, ModalPortal, SegmentedControl, depthLabel, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
 
@@ -323,6 +324,8 @@ export function PlayerAdvancedPanel({ player, analytics, children }: { player: P
         ) : <div className="player-tab-empty compact"><strong>No advanced metrics yet</strong><span>nflverse has not published a matching season row for this player.</span></div>}
         {entity && analytics.throughWeek !== null ? <p className="player-tab-source">Through Week {analytics.throughWeek} · nflverse weekly player stats</p> : null}
       </section>
+      <PlayerExpectedPoints entity={entity} />
+      <PlayerNextGen entity={entity} />
       {children}
     </div>
   );
@@ -399,6 +402,8 @@ export function PlayerDetailSheet({
   toolLinks,
   suspended = false,
   trending,
+  season,
+  depth,
 }: {
   player: PlayerSearchResult;
   week: number;
@@ -431,6 +436,10 @@ export function PlayerDetailSheet({
   suspended?: boolean;
   /** Sleeper trending adds/drops for this player (null side = not on that list). */
   trending?: { adds: number | null; drops: number | null };
+  /** Season, for this player's prop history. Props are hidden without it. */
+  season?: number;
+  /** Latest depth-chart rank at his position. */
+  depth?: { position: string; rank: number };
 }) {
   const isModal = presentation === "modal";
   const sheetRef = useRef<HTMLElement | null>(null);
@@ -651,7 +660,7 @@ export function PlayerDetailSheet({
             <div className="player-detail-title-line">
               <h2 id="player-detail-name">{player.name}</h2>
             </div>
-            <p><span>{positionLabel}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} /></p>
+            <p><span>{positionLabel}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} />{depth ? <span className="depth-chart-tag">{depthLabel(depth)}</span> : null}</p>
           </div>
           <div className="player-detail-actions">
             {canGoBack ? <button type="button" onClick={navigateBack} aria-label="Previous player">←</button> : null}
@@ -717,6 +726,7 @@ export function PlayerDetailSheet({
           {player.seasonValue !== null ? <span className="player-detail-movement">{movementLabel(player.movement30Day)}</span> : null}
         </div>
         {toolLinks ? <ToolLinks ariaLabel={`Open ${player.name} in a tool`} links={toolLinks} /> : null}
+        {season !== undefined && player.gamePhase !== "final" ? <PlayerPropsSection player={player} season={season} week={week} /> : null}
         {player.waiverTrends && (player.waiverTrends.adds || player.waiverTrends.drops) ? (
           <section className="player-detail-waiver-trends" aria-label={`${player.name} waiver activity`}>
             <div className="section-heading"><h3>Waiver activity</h3><span>Last 24 hours</span></div>

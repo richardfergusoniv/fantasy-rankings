@@ -335,3 +335,32 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
   color: var(--text);
   box-shadow: var(--shadow-modal);
 }
+/* Latest depth-chart rank (nflverse); a quiet outlined chip beside the matchup tag. */
+.depth-chart-tag { display: inline-flex; flex: none; align-items: center; padding: 0 5px; border: 1px solid var(--hairline); border-radius: var(--radius-xs); color: var(--dim); font-size: var(--type-caption); font-weight: 700; line-height: 16px; white-space: nowrap; }
+/* Player card: this week's prop lines. */
+.player-props-section { margin-top: 16px; }
+.player-props-grid { border-top: 1px solid var(--hairline); }
+.player-props-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 0.7fr 0.7fr 0.6fr 1.3fr; min-height: 44px; align-items: center; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--hairline); font-size: var(--type-body); font-variant-numeric: tabular-nums; }
+.player-props-row > :nth-child(n + 2) { text-align: right; }
+.player-props-row > :nth-child(3) { color: var(--dim); }
+.player-props-row > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-props-row.is-head { min-height: 32px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; letter-spacing: .02em; }
+.player-props-row .player-props-history { width: 100%; max-width: 96px; height: 22px; margin-left: auto; }
+/* Advanced tab: expected vs actual points by week. */
+.player-expected-chart { display: flex; height: 92px; align-items: flex-end; gap: 10px; padding: 12px 2px 0; overflow-x: auto; }
+.player-expected-week { display: grid; flex: 1 0 28px; justify-items: center; gap: 4px; color: var(--dim); font-size: var(--type-caption); }
+.player-expected-bars { display: flex; height: 64px; align-items: flex-end; gap: 3px; }
+.player-expected-bars span { width: 9px; min-height: 2px; border-radius: 2px 2px 0 0; }
+.player-expected-chart .is-expected, .player-expected-legend .is-expected { background: var(--chart-2); }
+.player-expected-chart .is-actual, .player-expected-legend .is-actual { background: var(--data-mark); }
+.player-expected-legend { display: flex; gap: 14px; padding: 8px 2px 0; color: var(--dim); font-size: var(--type-caption); }
+.player-expected-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.player-expected-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
+.player-detail-header p .depth-chart-tag { margin-left: 6px; }
+/* Rankings (weekly): FantasyPros expert rank and best–worst range beside our projection. */
+.rankings-view .ranking-row.has-expert-rank { grid-template-columns: minmax(0, 1fr) 52px 62px; }
+.ranking-ecr { position: relative; z-index: 1; text-align: right; pointer-events: none; font-variant-numeric: tabular-nums lining-nums; }
+.ranking-ecr strong { display: block; color: var(--text); font-size: var(--type-body); font-weight: 700; }
+.ranking-ecr span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.player-props-section .section-heading { position: static; min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.player-props-section .section-heading h3 { margin: 0; font-size: var(--type-section); }

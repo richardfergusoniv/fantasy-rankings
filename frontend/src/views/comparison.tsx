@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { MatchupSelection } from "../dashboard-types";
 import { formatCompactCount } from "../lib/format-number";
-import { MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
+import { depthLabel, MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
+import { propStatDef } from "../../../api/_lib/prop-line-reads";
+import { currentExpertRanks } from "../expert-ranks";
 import {
   analyticsMetricsForLeague,
   basePositionOrder,
@@ -67,34 +69,39 @@ const comparisonRowOrder: Record<"projections" | "advanced", Record<BasePosition
   projections: {
     QB: [
       "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
+      "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank",
       "stat_pass_yd", "stat_pass_td", "stat_pass_int", "stat_rush_yd", "stat_rush_td",
       "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
       "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
     ],
     RB: [
       "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
+      "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank",
       "stat_rush_yd", "stat_rush_td", "stat_rec", "stat_rec_yd", "stat_rec_td",
       "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
       "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
     ],
     WR: [
       "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
+      "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank",
       "stat_rec", "stat_rec_yd", "stat_rec_td", "stat_rush_yd", "stat_rush_td",
       "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
       "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
     ],
     TE: [
       "league", "sleeperProjection", "leaguePositionRank", "boomCeiling", "bustFloor",
+      "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank",
       "stat_rec", "stat_rec_yd", "stat_rec_td", "stat_rush_yd", "stat_rush_td",
       "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
       "fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange",
     ],
     K: [
       "league", "sleeperProjection", "leaguePositionRank",
+      "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank",
       "teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank",
       "fantasyCalcValue", "fantasyCalcPositionRank",
     ],
-    DEF: ["projection", "opponentTotal"],
+    DEF: ["projection", "expertProjection", "expertPositionRank", "expertBestRank", "expertWorstRank", "opponentTotal"],
   },
   advanced: {
     QB: [
@@ -103,6 +110,8 @@ const comparisonRowOrder: Record<"projections" | "advanced", Record<BasePosition
       "carries", "rushing_yards", "rushing_tds",
       "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
       "completion_pct", "cpoe", "passing_epa", "epa_per_play",
+      "expected_points", "points_over_expected",
+      "time_to_throw", "aggressiveness", "air_yards_differential",
     ],
     RB: [
       "fantasy_league",
@@ -110,18 +119,24 @@ const comparisonRowOrder: Record<"projections" | "advanced", Record<BasePosition
       "targets", "receptions", "receiving_yards", "receiving_tds", "scrimmage_yards",
       "target_share", "carry_share", "rb_target_share", "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
       "rushing_epa", "receiving_epa",
+      "expected_points", "points_over_expected",
+      "rush_yards_over_expected", "stacked_box_rate", "rush_efficiency",
     ],
     WR: [
       "fantasy_league",
       "targets", "receptions", "receiving_yards", "receiving_tds", "receiving_air_yards", "yards_after_catch",
       "target_share", "air_yards_share", "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
       "wopr", "racr", "receiving_epa",
+      "expected_points", "points_over_expected",
+      "separation", "cushion", "yac_over_expected", "intended_air_share",
     ],
     TE: [
       "fantasy_league",
       "targets", "receptions", "receiving_yards", "receiving_tds", "receiving_air_yards", "yards_after_catch",
       "target_share", "air_yards_share", "opportunity", "opportunity_share", "snap_share", "rz_target_share", "rz_carry_share",
       "wopr", "racr", "receiving_epa",
+      "expected_points", "points_over_expected",
+      "separation", "cushion", "yac_over_expected", "intended_air_share",
     ],
     K: ["fg_attempts", "fg_made", "fg_pct", "fg_40_plus", "fg_50_plus", "pat_attempts", "pat_made", "kicks_made"],
     DEF: [
@@ -134,7 +149,7 @@ const comparisonRowOrder: Record<"projections" | "advanced", Record<BasePosition
 function comparisonBarShares(row: ComparisonRow): [number, number] {
   const left = row.leftValue?.value;
   const right = row.rightValue?.value;
-  if (left === undefined || right === undefined || left === right) return [50, 50];
+  if (left === undefined || right === undefined || left === right || row.metric.neutral) return [50, 50];
 
   const leftWins = row.metric.lowerIsBetter ? left < right : left > right;
   const distance = Math.abs(left - right);
@@ -146,7 +161,7 @@ function comparisonBarShares(row: ComparisonRow): [number, number] {
 // The card's lead number: league fantasy points (advanced) or the league projection.
 const comparisonHeadlineKeys = new Set(["fantasy_league", "league", "projection"]);
 
-type ComparisonGroup = "Projection" | "Stat line" | "Team context" | "Market" | "Production" | "Usage" | "Efficiency";
+type ComparisonGroup = "Projection" | "Experts" | "Props" | "Stat line" | "Team context" | "Market" | "Production" | "Expected points" | "Usage" | "Efficiency" | "Next Gen";
 
 const comparisonUsageKeys = new Set([
   "touches", "carries", "targets", "pass_attempts", "opportunity", "opportunity_share", "snap_share",
@@ -156,9 +171,21 @@ const comparisonUsageKeys = new Set([
 const comparisonEfficiencyKeys = new Set(["completion_pct", "cpoe", "passing_epa", "rushing_epa", "receiving_epa", "epa_per_play", "racr", "fg_pct"]);
 const comparisonTeamContextKeys = new Set(["teamTotal", "teamOffenseRank", "teamOLineRank", "opponentDefenseRank", "matchupPositionRank", "opponentTotal"]);
 const comparisonMarketKeys = new Set(["fantasyCalcValue", "fantasyCalcPositionRank", "tierCliff", "boomBustRange"]);
+const comparisonExpectedKeys = new Set(["expected_points", "points_over_expected"]);
+const comparisonNextGenKeys = new Set([
+  "separation", "cushion", "yac_over_expected", "intended_air_share",
+  "rush_yards_over_expected", "stacked_box_rate", "rush_efficiency",
+  "time_to_throw", "aggressiveness", "air_yards_differential",
+]);
 
 function comparisonGroup(dataset: ToolDataset, key: string): ComparisonGroup {
-  if (dataset === "advanced") return comparisonUsageKeys.has(key) ? "Usage" : comparisonEfficiencyKeys.has(key) ? "Efficiency" : "Production";
+  if (dataset === "advanced") {
+    if (comparisonExpectedKeys.has(key)) return "Expected points";
+    if (comparisonNextGenKeys.has(key)) return "Next Gen";
+    return comparisonUsageKeys.has(key) ? "Usage" : comparisonEfficiencyKeys.has(key) ? "Efficiency" : "Production";
+  }
+  if (key.startsWith("expert")) return "Experts";
+  if (key.startsWith("prop_")) return "Props";
   if (key.startsWith("stat_")) return "Stat line";
   if (comparisonTeamContextKeys.has(key)) return "Team context";
   if (comparisonMarketKeys.has(key)) return "Market";
@@ -166,14 +193,14 @@ function comparisonGroup(dataset: ToolDataset, key: string): ComparisonGroup {
 }
 
 const comparisonGroupOrder: Record<ToolDataset, ComparisonGroup[]> = {
-  projections: ["Projection", "Stat line", "Team context", "Market"],
-  advanced: ["Production", "Usage", "Efficiency"],
+  projections: ["Projection", "Experts", "Props", "Stat line", "Team context", "Market"],
+  advanced: ["Production", "Expected points", "Usage", "Efficiency", "Next Gen"],
 };
 
 function ComparisonMetricRow({ row, leftName, rightName, headline = false }: { row: ComparisonRow; leftName: string; rightName: string; headline?: boolean }) {
   const { metric, leftValue, rightValue } = row;
-  const leftWins = Boolean(leftValue && rightValue && (metric.lowerIsBetter ? leftValue.value < rightValue.value : leftValue.value > rightValue.value));
-  const rightWins = Boolean(leftValue && rightValue && (metric.lowerIsBetter ? rightValue.value < leftValue.value : rightValue.value > leftValue.value));
+  const leftWins = Boolean(!metric.neutral && leftValue && rightValue && (metric.lowerIsBetter ? leftValue.value < rightValue.value : leftValue.value > rightValue.value));
+  const rightWins = Boolean(!metric.neutral && leftValue && rightValue && (metric.lowerIsBetter ? rightValue.value < leftValue.value : rightValue.value > leftValue.value));
   const tied = Boolean(leftValue && rightValue && leftValue.value === rightValue.value);
   const leftDisplay = leftValue ? metricDisplay(leftValue.value, metric) : "—";
   const rightDisplay = rightValue ? metricDisplay(rightValue.value, metric) : "—";
@@ -215,11 +242,12 @@ function comparisonPickMeta(player: ComparisonEntity): string {
   return player.opponent ? `${position} · ${player.team} ${player.isAway ? "@" : "vs"} ${player.opponent}` : `${position} · ${player.team}`;
 }
 
-function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trending, sosEntry, onOpenPlayer, onOpenMatchup }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"]; sosEntry?: StrengthOfScheduleEntryLike; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
+function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trending, depth, sosEntry, onOpenPlayer, onOpenMatchup }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"]; depth: Dashboard["playerInsights"]["depth"]; sosEntry?: StrengthOfScheduleEntryLike; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
   return (
     <header className="comparison-board-head" aria-label={`${left.name} versus ${right.name}`}>
       {[{ player: left, playerId: leftPlayerId }, { player: right, playerId: rightPlayerId }].map(({ player, playerId }, index) => {
         const trend = playerId ? trending?.[playerId] : undefined;
+        const depthRank = playerId ? depth[playerId] : undefined;
         return (
           <div className={`comparison-board-player${index === 0 ? " is-left" : " is-right"}`} key={player.id}>
             {playerId && onOpenPlayer
@@ -230,6 +258,7 @@ function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trend
                 ? <MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} />
                 : <span>{player.team || "Team TBD"} · {comparisonMatchupLabel(player)}</span>}
               {player.gameTime ? <time>{gameTimeLabel(player.gameTime)}</time> : null}
+              {depthRank ? <span className="depth-chart-tag" title="Depth chart">{depthLabel(depthRank)}</span> : null}
             </span>
             {trend && (trend.adds !== null || trend.drops !== null) ? (
               <span className="comparison-trending">
@@ -522,6 +551,39 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     staleTime: 30 * 60 * 1000,
     retry: false,
   });
+  const makeRowValue = (value: number | null | undefined): ComparisonMetricValue | null => typeof value === "number" && Number.isFinite(value) ? { value } : null;
+  // This week's FantasyPros expert consensus (PPR) for each pick.
+  const expertRows = (() => {
+    const experts = currentExpertRanks(dashboard) ?? {};
+    const leftExpert = leftPlayerId ? experts[leftPlayerId] : undefined;
+    const rightExpert = rightPlayerId ? experts[rightPlayerId] : undefined;
+    if (!leftExpert && !rightExpert) return [];
+    const rows: ComparisonRow[] = [
+      { metric: { key: "expertProjection", label: "Expert projection (PPR)", short: "Expert pts", unit: " pts" }, leftValue: makeRowValue(leftExpert?.projection), rightValue: makeRowValue(rightExpert?.projection) },
+      { metric: { key: "expertPositionRank", label: "Expert rank", short: "ECR", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.positionRank), rightValue: makeRowValue(rightExpert?.positionRank) },
+      { metric: { key: "expertBestRank", label: "Best expert rank", short: "Best", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.best), rightValue: makeRowValue(rightExpert?.best) },
+      { metric: { key: "expertWorstRank", label: "Worst expert rank", short: "Worst", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.worst), rightValue: makeRowValue(rightExpert?.worst) },
+    ];
+    return rows.filter((row) => row.leftValue || row.rightValue);
+  })();
+  // Consensus prop lines, one row per stat either player has.
+  const propRows = (() => {
+    const propLines = pfnQuery.data?.propLines;
+    // A cached response from before the weekly rollover holds last week's lines.
+    const lines = propLines && propLines.season === dashboard.season && propLines.week === dashboard.week ? propLines.lines : [];
+    const leftLines = new Map(lines.filter((line) => leftPlayerId && line.playerId === leftPlayerId).map((line) => [line.stat, line.line]));
+    const rightLines = new Map(lines.filter((line) => rightPlayerId && line.playerId === rightPlayerId).map((line) => [line.stat, line.line]));
+    const stats = [...new Set([...leftLines.keys(), ...rightLines.keys()])];
+    return stats.flatMap((stat): ComparisonRow[] => {
+      const def = propStatDef(stat);
+      if (!def) return [];
+      return [{
+        metric: { key: `prop_${stat}`, label: `${def.label} line`, short: def.short, lowerIsBetter: stat === "pass_interceptions" },
+        leftValue: makeRowValue(leftLines.get(stat)),
+        rightValue: makeRowValue(rightLines.get(stat)),
+      }];
+    });
+  })();
   const boomBustRows = (() => {
     if (!leftPlayerId || !rightPlayerId) return [];
     const ranges = new Map((boomBustQuery.data?.rows ?? []).map((range) => [range.playerId, range]));
@@ -543,7 +605,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     return rangeRows.filter((row) => row.leftValue || row.rightValue);
   })();
   const sections = left && right && position ? [
-    comparisonSection("projections", position, league, resolved[0]?.projection, resolved[1]?.projection, boomBustRows),
+    comparisonSection("projections", position, league, resolved[0]?.projection, resolved[1]?.projection, [...boomBustRows, ...expertRows, ...propRows]),
     comparisonSection("advanced", position, league, resolved[0]?.advanced, resolved[1]?.advanced),
   ] : [];
   const selectionStateClass = left && right ? " is-ready" : left || right ? " has-selection" : " is-empty";
@@ -562,7 +624,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
         <div className="analytics-empty"><strong>No player data yet.</strong><span>Refresh to check the latest Vegas lines and nflverse data.</span></div>
       ) : left && right ? (
         <section className="comparison-board" aria-label={`${left.name} and ${right.name} comparison`}>
-          <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
+          <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} depth={dashboard.playerInsights?.depth ?? {}} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
           {sections.map((section) => (
             <section className="comparison-section" key={section.dataset} aria-labelledby={`comparison-section-${section.dataset}`}>
               <header className="comparison-section-head">
