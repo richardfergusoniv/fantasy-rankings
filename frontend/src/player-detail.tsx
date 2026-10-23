@@ -318,14 +318,13 @@ export function PlayerAdvancedPanel({ player, analytics, isLoading = false, lead
     });
     return { ...metric, value, rank: value === null ? null : rankAgainst(peers, value) };
   });
-  const hasMetrics = metrics.some((metric) => metric.value !== null);
 
   return (
     <div className="player-advanced-panel">
       {leading}
       <section aria-labelledby="player-advanced-metrics-heading">
         <div className="section-heading"><h3 id="player-advanced-metrics-heading">Efficiency &amp; usage</h3></div>
-        {hasMetrics ? (
+        {entity && metrics.length > 0 ? (
           <div className="player-advanced-grid">
             {metrics.map((metric) => (
               <div key={metric.key}>
