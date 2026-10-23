@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { MatchupSelection } from "../dashboard-types";
+import { GapBar } from "../components/gap-bar";
+import { RankStrip } from "../components/rank-strip";
 import { formatCompactCount } from "../lib/format-number";
-import { depthLabel, MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
+import { DepthChangeMark, depthChange, depthLabel, MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 import { isHiddenHalfPointPropStat, propStatDef } from "../../../api/_lib/prop-line-reads";
 import { currentExpertRanks } from "../expert-ranks";
 import {
@@ -153,18 +155,6 @@ const hiddenComparisonKeys = new Set([
   "opportunity", "wopr", "racr", "cushion", "air_yards_differential",
 ]);
 
-function comparisonBarShares(row: ComparisonRow): [number, number] {
-  const left = row.leftValue?.value;
-  const right = row.rightValue?.value;
-  if (left === undefined || right === undefined || left === right || row.metric.neutral) return [50, 50];
-
-  const leftWins = row.metric.lowerIsBetter ? left < right : left > right;
-  const distance = Math.abs(left - right);
-  const scale = Math.max(Math.abs(left) + Math.abs(right), distance, 1);
-  const leaderShare = Math.min(76, 50 + (distance / scale) * 50);
-  return leftWins ? [leaderShare, 100 - leaderShare] : [100 - leaderShare, leaderShare];
-}
-
 // The card's lead number: league fantasy points (advanced) or the league projection.
 const comparisonHeadlineKeys = new Set(["fantasy_league", "league", "projection"]);
 
@@ -204,6 +194,13 @@ const comparisonGroupOrder: Record<ToolDataset, ComparisonGroup[]> = {
   advanced: ["Production", "Expected points", "Usage", "Efficiency", "Next Gen"],
 };
 
+/** "Hale" for "Marcus Hale", unless both players share a surname. */
+function comparisonShortName(name: string, other: string): string {
+  const last = name.trim().split(/\s+/).at(-1) ?? name;
+  const otherLast = other.trim().split(/\s+/).at(-1) ?? other;
+  return last.toLowerCase() === otherLast.toLowerCase() ? name : last;
+}
+
 function ComparisonMetricRow({ row, leftName, rightName, headline = false }: { row: ComparisonRow; leftName: string; rightName: string; headline?: boolean }) {
   const { metric, leftValue, rightValue } = row;
   const leftWins = Boolean(!metric.neutral && leftValue && rightValue && (metric.lowerIsBetter ? leftValue.value < rightValue.value : leftValue.value > rightValue.value));
@@ -211,26 +208,37 @@ function ComparisonMetricRow({ row, leftName, rightName, headline = false }: { r
   const tied = Boolean(leftValue && rightValue && leftValue.value === rightValue.value);
   const leftDisplay = leftValue ? metricDisplay(leftValue.value, metric) : "—";
   const rightDisplay = rightValue ? metricDisplay(rightValue.value, metric) : "—";
-  const [leftShare, rightShare] = comparisonBarShares(row);
   const valueClass = (value: ComparisonMetricValue | null, wins: boolean, loses: boolean) =>
     `comparison-row-value${wins ? " is-winner" : ""}${!value ? " is-unavailable" : loses ? " is-loser" : ""}`;
+  const gap = leftValue && rightValue && (leftWins || rightWins) ? metricDisplay(Math.abs(leftValue.value - rightValue.value), metric) : null;
+  // Ranks sit on one #1-to-last line, each with its own label; every other metric gets the gap bar.
+  const rankStrip = metric.key.endsWith("Rank") && leftValue && rightValue;
+  const rankTotal = rankStrip ? Math.max(32, leftValue.value, rightValue.value) : 32;
 
   return (
     <div
-      className={`comparison-row${headline ? " is-headline" : ""}`}
+      className={`comparison-row${headline ? " is-headline" : ""}${rankStrip ? " is-rank" : ""}`}
       role="group"
       aria-label={`${metric.label}. ${leftName}: ${leftDisplay}${leftWins ? ", leads" : tied ? ", tied" : ""}. ${rightName}: ${rightDisplay}${rightWins ? ", leads" : tied ? ", tied" : ""}.`}
     >
       <span className="comparison-row-label" aria-hidden="true">
         {metric.label}
-        {metric.lowerIsBetter ? <small>Lower is better</small> : null}
+        {gap ? <strong className="comparison-row-delta">+{gap}</strong> : null}
       </span>
-      <strong className={valueClass(leftValue, leftWins, rightWins)} aria-hidden="true">{leftDisplay}</strong>
-      <span className="comparison-split" aria-hidden="true">
-        <i className={`${leftWins ? "is-winner" : ""}${!leftValue ? " is-empty" : ""}`} style={{ flexGrow: leftShare }} />
-        <i className={`${rightWins ? "is-winner" : ""}${!rightValue ? " is-empty" : ""}`} style={{ flexGrow: rightShare }} />
-      </span>
-      <strong className={valueClass(rightValue, rightWins, leftWins)} aria-hidden="true">{rightDisplay}</strong>
+      {rankStrip ? (
+        <RankStrip
+          first={{ label: `${comparisonShortName(leftName, rightName)} #${leftDisplay}`, rank: leftValue.value }}
+          second={{ label: `${comparisonShortName(rightName, leftName)} #${rightDisplay}`, rank: rightValue.value }}
+          total={rankTotal}
+          ariaLabel={`${metric.label}: ${leftName} ${leftDisplay}, ${rightName} ${rightDisplay}`}
+        />
+      ) : (
+        <>
+          <strong className={valueClass(leftValue, leftWins, rightWins)} aria-hidden="true">{leftDisplay}</strong>
+          <GapBar left={leftValue?.value} right={rightValue?.value} lowerIsBetter={metric.lowerIsBetter} neutral={metric.neutral} />
+          <strong className={valueClass(rightValue, rightWins, leftWins)} aria-hidden="true">{rightDisplay}</strong>
+        </>
+      )}
     </div>
   );
 }
@@ -249,12 +257,13 @@ function comparisonPickMeta(player: ComparisonEntity): string {
   return player.opponent ? `${position} · ${player.team} ${player.isAway ? "@" : "vs"} ${player.opponent}` : `${position} · ${player.team}`;
 }
 
-function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trending, depth, sosEntry, onOpenPlayer, onOpenMatchup }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"]; depth: Dashboard["playerInsights"]["depth"]; sosEntry?: StrengthOfScheduleEntryLike; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
+function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trending, depth, depthPrevious, sosEntry, onOpenPlayer, onOpenMatchup }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"]; depth: Dashboard["playerInsights"]["depth"]; depthPrevious: Dashboard["playerInsights"]["depthPrevious"]; sosEntry?: StrengthOfScheduleEntryLike; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
   return (
     <header className="comparison-board-head" aria-label={`${left.name} versus ${right.name}`}>
       {[{ player: left, playerId: leftPlayerId }, { player: right, playerId: rightPlayerId }].map(({ player, playerId }, index) => {
         const trend = playerId ? trending?.[playerId] : undefined;
         const depthRank = playerId ? depth[playerId] : undefined;
+        const depthMove = depthChange(depthRank, playerId ? depthPrevious[playerId] : undefined);
         return (
           <div className={`comparison-board-player${index === 0 ? " is-left" : " is-right"}`} key={player.id}>
             {playerId && onOpenPlayer
@@ -266,6 +275,7 @@ function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trend
                 : <span>{player.team || "Team TBD"} · {comparisonMatchupLabel(player)}</span>}
               {player.gameTime ? <time>{gameTimeLabel(player.gameTime)}</time> : null}
               {depthRank ? <span className="depth-chart-tag" title="Depth chart">{depthLabel(depthRank)}</span> : null}
+              {depthMove ? <DepthChangeMark change={depthMove} /> : null}
             </span>
             {trend && (trend.adds !== null || trend.drops !== null) ? (
               <span className="comparison-trending">
@@ -629,7 +639,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
         <div className="analytics-empty"><strong>No player data yet.</strong><span>Refresh to check the latest Vegas lines and nflverse data.</span></div>
       ) : left && right ? (
         <section className="comparison-board" aria-label={`${left.name} and ${right.name} comparison`}>
-          <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} depth={dashboard.playerInsights?.depth ?? {}} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
+          <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} depth={dashboard.playerInsights?.depth ?? {}} depthPrevious={dashboard.playerInsights?.depthPrevious ?? {}} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
           {sections.map((section) => (
             <section className="comparison-section" key={section.dataset} aria-labelledby={`comparison-section-${section.dataset}`}>
               <header className="comparison-section-head">

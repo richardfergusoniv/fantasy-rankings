@@ -47,6 +47,8 @@
 .power-team-card-header { position: sticky; z-index: 2; top: 0; display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 9px 16px; border-bottom: 1px solid var(--hairline); background: var(--surface); }
 .power-team-card-header h2 { min-width: 0; margin: 0; overflow: hidden; font-size: var(--type-display); line-height: 1.12; font-weight: 700; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
 .power-team-card-header h2.is-user { color: var(--roster-highlight); }
+.power-team-card-heading { display: grid; min-width: 0; gap: 2px; }
+.power-team-card-heading > span { overflow: hidden; color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .power-team-card-header button { flex: none; display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface-2); color: var(--dim); font-size: var(--type-section); line-height: 1; cursor: pointer; }
 .power-team-card-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--hairline); }
 .power-team-card-summary.has-picks { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -62,6 +64,7 @@
 .power-team-card-positions span, .power-team-card-positions strong { display: block; }
 .power-team-card-positions span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .power-team-card-positions strong { margin-top: 2px; overflow: hidden; font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; }
+.power-position-rank { display: block; margin-top: 1px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
 .power-team-card-roster .ranking-row:last-child { border-bottom: 0; }
 .power-team-card-roster .matchup-reference-tag.sos-soft:not(.matchup-reference-button),
 .power-team-card-roster .matchup-reference-button.sos-soft .matchup-reference-button-label {

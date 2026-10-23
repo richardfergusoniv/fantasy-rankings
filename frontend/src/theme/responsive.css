@@ -215,15 +215,23 @@
   font-size: 13px;
 }
 .matchup-stat-team:last-child .matchup-team-open { justify-content: flex-end; }
-.matchup-stat-group { padding: 8px 0 10px; border-bottom: 1px solid var(--hairline); }
-.matchup-stat-group:last-child { border-bottom: 0; }
-.matchup-stat-group .comparison-metric-label { margin-bottom: 8px; }
-.matchup-stat-group .comparison-metric-label strong { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.matchup-stat-group .comparison-values > span { align-items: baseline; gap: 6px; }
-.matchup-stat-group .comparison-values > span:last-child { justify-content: flex-end; text-align: right; }
-.matchup-stat-group .matchup-unit-label { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.matchup-stat-group .matchup-stat-value { color: var(--text); font-size: var(--type-body); font-weight: 700; font-variant-numeric: tabular-nums; }
-.matchup-stat-group > .comparison-bar-group + .comparison-bar-group { margin-top: 8px; }
+/* Each pairing is a heading over stat rows; a row is the name, the gap in ranks, and one strip. */
+.matchup-pairing { padding: 10px 0 4px; border-bottom: 1px solid var(--hairline); }
+.matchup-pairing:last-child { border-bottom: 0; }
+.matchup-pairing h4 { margin: 0 0 4px; color: var(--text); font-size: var(--type-body); font-weight: 700; }
+.matchup-stat-row { padding: 6px 0 2px; }
+.matchup-stat-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: var(--type-control); }
+.matchup-stat-gap { font-size: var(--type-caption); font-variant-numeric: tabular-nums lining-nums; }
+.matchup-stat-gap.is-for { color: var(--positive); }
+.matchup-stat-gap.is-against { color: var(--negative); }
+.matchup-stat-unranked { padding: 6px 0 10px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.matchup-your-players { margin-top: 16px; }
+.matchup-your-players h3 { margin: 0 0 4px; font-size: var(--type-section); font-weight: 700; }
+.matchup-your-player { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--hairline); }
+.matchup-your-player > span:first-child { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: var(--type-body); }
+.matchup-your-player small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.matchup-your-player-points { color: var(--dim); font-size: var(--type-control); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+.matchup-your-player.is-starter .matchup-your-player-points { color: var(--roster-highlight); }
 .matchup-grade-table { border-top: 1px solid var(--hairline); border-bottom: 0; }
 .matchup-grade-row { min-height: 38px; gap: 8px; }
 .matchup-grade-row.header { min-height: 32px; font-size: var(--type-caption); }
@@ -254,6 +262,17 @@
 .team-card-overview strong { overflow: hidden; color: var(--text); font-size: var(--type-section); font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
 .team-card-stat-section { margin-top: 14px; }
 .team-card-stat-section + .team-card-stat-section { margin-top: 18px; }
+/* Depth chart: positions down the side, the 1st to 3rd on the chart across. */
+.depth-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.depth-grid th,
+.depth-grid td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--hairline); text-align: left; vertical-align: top; }
+.depth-grid thead th { padding-top: 6px; padding-bottom: 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.depth-grid thead th:first-child { width: 40px; }
+.depth-grid tbody th { padding-top: 12px; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.depth-grid-name { display: block; overflow: hidden; color: var(--text); font-size: var(--type-control); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.depth-grid-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.depth-grid-status.is-out { color: var(--negative); }
+.depth-grid-status.is-questionable { color: var(--warning); }
 .team-card-tabs { margin: 0 0 10px; }
 .team-card-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--hairline); }
 .team-card-metrics > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; padding: 8px 8px 8px 0; border-bottom: 1px solid var(--hairline); }

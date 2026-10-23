@@ -33,8 +33,10 @@ import {
   sleeperInjuryTag,
 } from "../dashboard-shared";
 import type { RankingHorizon, RankingPosition } from "../dashboard-url";
-import { formatDecimal, formatPercent, formatWhole } from "../lib/format-number";
+import { formatDecimal, formatPercent, formatPoints, formatWhole } from "../lib/format-number";
+import { abbreviatedName, buildTeamDepthChart, depthChartPlayers, type DepthChartRow } from "../lib/team-depth-chart";
 import {
+  DepthChangeMark,
   SOS_POSITIONS,
   fantasySosRanksForTeam,
   MatchupTag,
@@ -129,6 +131,15 @@ export function SeasonTeamPill({ team, lineRank, onOpen }: { team: string | null
   );
 }
 
+const OUT_INJURY_CODES = new Set(["O", "IR", "PUP", "SUS", "NFI", "INA"]);
+
+/** "⚠ Q" for a questionable or doubtful player, "Out" and the like in the negative tone. */
+function DepthGridStatus({ status }: { status: string }) {
+  const code = sleeperInjuryTag(status);
+  const out = OUT_INJURY_CODES.has(code);
+  return <span className={`depth-grid-status ${out ? "is-out" : "is-questionable"}`} title={status}>{out ? (code === "O" ? "Out" : code) : `⚠ ${code}`}</span>;
+}
+
 export function TeamDataModal({
   selection,
   offensiveLine,
@@ -142,6 +153,7 @@ export function TeamDataModal({
   usageLeague = [],
   recordLeague = [],
   situationalLeague = [],
+  depthChart = [],
   sosEntry,
   loading,
   loadError,
@@ -160,6 +172,8 @@ export function TeamDataModal({
   usageLeague?: readonly TeamUsage[];
   recordLeague?: readonly NflTeamRecord[];
   situationalLeague?: readonly TeamSituationalRow[];
+  /** QB, RB, WR and TE three deep, when the depth chart is known. */
+  depthChart?: readonly DepthChartRow[];
   sosEntry?: StrengthOfScheduleEntryLike;
   loading: boolean;
   loadError: boolean;
@@ -168,7 +182,7 @@ export function TeamDataModal({
 }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   useDialogFocusTrap(dialogRef, onClose);
-  const [teamTab, setTeamTab] = useState<"stats" | "pfn" | "advanced">("stats");
+  const [teamTab, setTeamTab] = useState<"stats" | "pfn" | "advanced" | "depth">("stats");
   useEffect(() => {
     setTeamTab("stats");
   }, [selection.team]);
@@ -304,8 +318,39 @@ export function TeamDataModal({
               { value: "stats", label: "Stats" },
               { value: "pfn", label: "PFN" },
               { value: "advanced", label: "Advanced" },
+              ...(depthChart.length > 0 ? [{ value: "depth" as const, label: "Depth" }] : []),
             ]}
           />
+
+          {teamTab === "depth" && depthChart.length > 0 ? (
+            <section className="team-card-stat-section" aria-label="Depth chart">
+              <table className="depth-grid">
+                <thead>
+                  <tr><th scope="col"><span className="sr-only">Position</span></th><th scope="col">1st</th><th scope="col">2nd</th><th scope="col">3rd</th></tr>
+                </thead>
+                <tbody>
+                  {depthChart.map((row) => (
+                    <tr key={row.position}>
+                      <th scope="row">{row.position}</th>
+                      {row.cells.map((cell, slot) => (
+                        <td key={slot}>
+                          {cell ? (
+                            <>
+                              <span className="depth-grid-name">{abbreviatedName(cell.name)}{cell.change ? <DepthChangeMark change={cell.change} compact /> : null}</span>
+                              <span className="depth-grid-meta">
+                                <span>{formatPoints(cell.projection)}</span>
+                                {cell.injuryStatus ? <DepthGridStatus status={cell.injuryStatus} /> : null}
+                              </span>
+                            </>
+                          ) : null}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ) : null}
 
           {teamTab === "stats" ? (
             <section className="team-card-stat-section" aria-label="Stats">
@@ -473,9 +518,17 @@ export function ConnectedTeamCard({
   const teamSituational = pfnTablesQuery.data?.teamSituational ?? null;
   const teamCode = canonicalNflTeam(team) ?? team;
   const situational = teamSituational?.rows.find((row) => (canonicalNflTeam(row.team) ?? row.team) === teamCode) ?? null;
+  const depthChart = useMemo(() => buildTeamDepthChart({
+    team,
+    players: depthChartPlayers(dashboard.rankings.filter((row) => row.leagueId === leagueId), dashboard.seasonLongRankings),
+    depth: dashboard.playerInsights?.depth ?? {},
+    depthPrevious: dashboard.playerInsights?.depthPrevious ?? {},
+    canonical: canonicalNflTeam,
+  }), [dashboard.playerInsights, dashboard.rankings, dashboard.seasonLongRankings, leagueId, team]);
   return (
     <TeamDataModal
       selection={{ team }}
+      depthChart={depthChart}
       offensiveLine={tables?.["offensive-line"] ?? null}
       defense={tables?.defense ?? null}
       offense={tables?.offense ?? null}
@@ -563,6 +616,13 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
     return map;
   }, [league]);
   const leagueRankings = useMemo(() => dashboard.rankings.filter((row) => row.leagueId === league.id), [dashboard.rankings, league.id]);
+  const selectedTeamDepthChart = useMemo(() => selectedTeam ? buildTeamDepthChart({
+    team: selectedTeam.team,
+    players: depthChartPlayers(leagueRankings, dashboard.seasonLongRankings),
+    depth: dashboard.playerInsights?.depth ?? {},
+    depthPrevious: dashboard.playerInsights?.depthPrevious ?? {},
+    canonical: canonicalNflTeam,
+  }) : [], [dashboard.playerInsights, dashboard.seasonLongRankings, leagueRankings, selectedTeam]);
   const leagueDefenses = useMemo(() => dashboard.defenses.filter((row) => row.leagueId === league.id), [dashboard.defenses, league.id]);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
 
@@ -1097,6 +1157,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
       {selectedTeam ? (
         <TeamDataModal
           selection={selectedTeam}
+          depthChart={selectedTeamDepthChart}
           offensiveLine={offensiveLine}
           defense={defense}
           offense={offense}

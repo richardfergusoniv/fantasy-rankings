@@ -23,7 +23,9 @@ import type {
   RosterPlayer,
   TradeAsset,
 } from "./dashboard-types";
+import { RankStrip } from "./components/rank-strip";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
+import { playersInGame } from "./lib/matchup-players";
 import { ModalPortal, useDialogFocusTrap } from "./shared";
 import {
   TRADE_REMOVE_TOAST_ID,
@@ -441,7 +443,36 @@ export function matchupGrade(table: PfnTable | null, row: PfnRow | undefined, ke
   };
 }
 
-export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, toolLinks, suspended = false }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; toolLinks?: ToolLinkItem[]; suspended?: boolean }) {
+type MatchupPairing = { leftUnit: string; rightUnit: string; leftLabel: string; rightLabel: string };
+
+/** One stat: the two units' ranks on one #1-to-32 line, with the gap in ranks beside the name. */
+function MatchupStatRow({ stat, pairing, left, right }: { stat: MatchupStatConfig; pairing: MatchupPairing; left: MatchupGrade; right: MatchupGrade }) {
+  const leftValue = left.value === null ? "—" : stat.format(left.value);
+  const rightValue = right.value === null ? "—" : stat.format(right.value);
+  const leftRank = left.rank;
+  const rightRank = right.rank;
+  const gap = leftRank !== null && rightRank !== null ? Math.abs(leftRank - rightRank) : 0;
+  const leftLeads = leftRank !== null && rightRank !== null && leftRank < rightRank;
+  return (
+    <div className="matchup-stat-row">
+      <div className="matchup-stat-row-head">
+        <strong>{stat.label}</strong>
+        {gap > 0 ? <strong className={`matchup-stat-gap ${leftLeads ? "is-for" : "is-against"}`}>+{gap}</strong> : null}
+      </div>
+      {leftRank !== null && rightRank !== null ? (
+        <RankStrip
+          first={{ label: `${pairing.leftUnit} #${leftRank} · ${leftValue}`, rank: leftRank }}
+          second={{ label: `${pairing.rightUnit} #${rightRank} · ${rightValue}`, rank: rightRank }}
+          ariaLabel={`${stat.label}: ${pairing.leftLabel} ranks ${leftRank} (${leftValue}), ${pairing.rightLabel} ranks ${rightRank} (${rightValue})${gap > 0 ? `, ${leftLeads ? pairing.leftLabel : pairing.rightLabel} has the edge by ${gap} ranks` : ""}`}
+        />
+      ) : (
+        <div className="matchup-stat-unranked">{pairing.leftUnit} {leftValue} · {pairing.rightUnit} {rightValue}</div>
+      )}
+    </div>
+  );
+}
+
+export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, toolLinks, suspended = false, rosterPlayers }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; toolLinks?: ToolLinkItem[]; suspended?: boolean; /** The user's starters and bench, to list who plays in this game. */ rosterPlayers?: readonly RosterPlayer[] }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   useDialogFocusTrap(dialogRef, onClose, !suspended);
   const tablesQuery = useQuery({
@@ -507,18 +538,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
       rightSide: "offense" as const,
     },
   ];
-  const matchupStatGroups = matchupStatConfigs.map((stat) => ({
-    ...stat,
-    pairings: matchupPairings.map((pairing) => ({
-      ...pairing,
-      left: pairing.leftSide === "offense"
-        ? matchupGrade(offense, pairing.leftRow, stat.offKey, stat.offHigher)
-        : matchupGrade(defense, pairing.leftRow, stat.defKey, stat.defHigher),
-      right: pairing.rightSide === "offense"
-        ? matchupGrade(offense, pairing.rightRow, stat.offKey, stat.offHigher)
-        : matchupGrade(defense, pairing.rightRow, stat.defKey, stat.defHigher),
-    })),
-  }));
+  const yourPlayers = rosterPlayers ? playersInGame(rosterPlayers, [matchup.team, matchup.opponent], canonicalNflTeam) : [];
   const fetchedAt = offensiveLine?.fetched_at ?? offense?.fetched_at ?? defense?.fetched_at ?? null;
   const score = scoreQuery.data;
 
@@ -580,58 +600,40 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                       <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : formatDecimal(oppDefSos, 2)}</span>
                     </div>
                   </div>
-                  {matchupStatGroups.map((stat) => (
-                    <div className="matchup-stat-group" key={stat.label}>
-                      <div className="comparison-metric-label"><strong>{stat.label}</strong></div>
-                      {stat.pairings.map((pairing) => {
-                        const leftWins = pairing.left.rank !== null && pairing.right.rank !== null && pairing.left.rank < pairing.right.rank;
-                        const rightWins = pairing.left.rank !== null && pairing.right.rank !== null && pairing.right.rank < pairing.left.rank;
-                        const leftPoints = pairing.left.rank === null ? null : 33 - pairing.left.rank;
-                        const rightPoints = pairing.right.rank === null ? null : 33 - pairing.right.rank;
-                        const pointsTotal = leftPoints !== null && rightPoints !== null ? leftPoints + rightPoints : 0;
-                        const leftShare = leftPoints !== null && rightPoints !== null && pointsTotal > 0
-                          ? (leftPoints / pointsTotal) * 100
-                          : 50;
-                        const rightShare = 100 - leftShare;
-                        const leftValue = pairing.left.value === null ? "—" : stat.format(pairing.left.value);
-                        const rightValue = pairing.right.value === null ? "—" : stat.format(pairing.right.value);
-                        const leftRank = pairing.left.rank === null ? "rank unavailable" : `rank #${pairing.left.rank}`;
-                        const rightRank = pairing.right.rank === null ? "rank unavailable" : `rank #${pairing.right.rank}`;
-                        const edgeLabel = leftWins
-                          ? `${pairing.leftLabel} has the edge`
-                          : rightWins
-                            ? `${pairing.rightLabel} has the edge`
-                            : pairing.left.rank === null || pairing.right.rank === null
-                              ? "the edge is unavailable"
-                              : "neither side has the edge";
-                        return (
-                          <div className="comparison-bar-group" key={`${stat.label}-${pairing.id}`}>
-                            <div className="comparison-values" aria-hidden="true">
-                              <span>
-                                <span className="matchup-unit-label">{pairing.leftUnit}</span>
-                                <strong className="matchup-stat-value">{leftValue}</strong>
-                                {pairing.left.rank === null ? null : <small>#{pairing.left.rank}</small>}
-                              </span>
-                              <span>
-                                <span className="matchup-unit-label">{pairing.rightUnit}</span>
-                                <strong className="matchup-stat-value">{rightValue}</strong>
-                                {pairing.right.rank === null ? null : <small>#{pairing.right.rank}</small>}
-                              </span>
-                            </div>
-                            <div className="comparison-stacked-bar" role="img" aria-label={`${stat.label}, ${pairing.leftSide} versus ${pairing.rightSide}: ${pairing.leftLabel}, ${leftValue}, ${leftRank}; ${pairing.rightLabel}, ${rightValue}, ${rightRank}; ${edgeLabel}.`}>
-                              <i className={`comparison-segment left${leftWins ? " winner" : ""}`} style={{ width: `${leftShare}%` }} aria-hidden="true" />
-                              <i className={`comparison-segment right${rightWins ? " winner" : ""}`} style={{ width: `${rightShare}%` }} aria-hidden="true" />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                  {matchupPairings.map((pairing) => (
+                    <section className="matchup-pairing" key={pairing.id} aria-label={`${pairing.leftLabel} versus ${pairing.rightLabel}`}>
+                      <h4>{pairing.leftLabel} vs {pairing.rightLabel}</h4>
+                      {matchupStatConfigs.map((stat) => (
+                        <MatchupStatRow
+                          key={stat.label}
+                          stat={stat}
+                          pairing={pairing}
+                          left={pairing.leftSide === "offense"
+                            ? matchupGrade(offense, pairing.leftRow, stat.offKey, stat.offHigher)
+                            : matchupGrade(defense, pairing.leftRow, stat.defKey, stat.defHigher)}
+                          right={pairing.rightSide === "offense"
+                            ? matchupGrade(offense, pairing.rightRow, stat.offKey, stat.offHigher)
+                            : matchupGrade(defense, pairing.rightRow, stat.defKey, stat.defHigher)}
+                        />
+                      ))}
+                    </section>
                   ))}
                 </div>
               </section>
               {!offense || !defense ? <SectionError title="PFN matchup data is incomplete." onRetry={() => { void tablesQuery.refetch(); }} retrying={tablesQuery.isFetching} compact /> : null}
             </>
           )}
+          {yourPlayers.length > 0 ? (
+            <section className="matchup-your-players" aria-labelledby="matchup-your-players-heading">
+              <h3 id="matchup-your-players-heading">Your players in this game</h3>
+              {yourPlayers.map((player) => (
+                <div className={`matchup-your-player${player.isStarter ? " is-starter" : ""}`} key={player.playerId}>
+                  <span><strong>{player.name}</strong><small>{player.position === "DEF" ? "DST" : player.position} · {player.team}</small></span>
+                  <span className="matchup-your-player-points">{player.projection === null ? "—" : formatPoints(player.projection)} {player.isStarter ? "start" : "bench"}</span>
+                </div>
+              ))}
+            </section>
+          ) : null}
         </article>
       </div>
     </ModalPortal>

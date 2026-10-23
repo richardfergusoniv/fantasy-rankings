@@ -274,3 +274,21 @@ export function MatchupTag({
 export function depthLabel(depth: { position: string; rank: number }): string {
   return `Depth ${depth.position}${depth.rank}`;
 }
+
+type DepthRank = { position: string; rank: number };
+
+/** How a player moved on the depth chart over the past week; null when he held his rank or was unlisted. */
+export function depthChange(current: DepthRank | undefined, previous: DepthRank | undefined): { direction: "up" | "down"; position: string; from: number } | null {
+  if (!current || !previous || current.position !== previous.position || current.rank === previous.rank) return null;
+  return { direction: current.rank < previous.rank ? "up" : "down", position: current.position, from: previous.rank };
+}
+
+/** "▲ from 2": the move, in the app's up and down tones. `compact` keeps only the arrow. */
+export function DepthChangeMark({ change, compact = false }: { change: NonNullable<ReturnType<typeof depthChange>>; compact?: boolean }) {
+  const label = `${change.direction === "up" ? "Up" : "Down"} from ${change.position}${change.from} on the depth chart`;
+  return (
+    <span className={`depth-change is-${change.direction}`} role="img" aria-label={label}>
+      <span aria-hidden="true">{change.direction === "up" ? "▲" : "▼"}{compact ? "" : ` from ${change.from}`}</span>
+    </span>
+  );
+}

@@ -90,17 +90,6 @@
 .comparison-result-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .comparison-result-meta time { flex: none; line-height: 20px; white-space: nowrap; }
 
-.comparison-bar-group { min-width: 0; }
-.comparison-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 6px; }
-.comparison-values > span { display: flex; min-width: 0; align-items: baseline; gap: 6px; overflow: hidden; color: var(--text); white-space: nowrap; }
-.comparison-values > span:last-child { justify-content: flex-end; text-align: right; }
-.comparison-values strong { overflow: hidden; font-size: var(--type-body); font-weight: 700; font-variant-numeric: tabular-nums; text-overflow: ellipsis; }
-.comparison-values small { flex: none; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.comparison-stacked-bar { display: flex; width: 100%; height: 18px; overflow: hidden; border: 1px solid var(--hairline); border-radius: var(--radius-md); background: transparent; }
-.comparison-segment { display: block; min-width: 0; height: 100%; background: transparent; }
-.comparison-segment.left { border-right: 0; }
-.comparison-segment.winner { background: var(--winner-fill); }
-.comparison-segment:not(.winner) { background: color-mix(in srgb, var(--dim) 45%, var(--surface)); }
 
 /* The card: names, the headline number, then grouped stat rows on hairlines. */
 .comparison-board { max-width: 720px; margin-top: 12px; padding: 4px 14px 6px; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--card); }
@@ -125,8 +114,10 @@ button.comparison-board-name:hover { color: var(--link); }
   border-bottom: 1px solid var(--hairline);
 }
 .comparison-group > .comparison-row:last-child { border-bottom: 0; }
+/* A rank row is the label over one strip; the strip carries both players' ranks. */
+.comparison-row.is-rank { grid-template-areas: "label" "bar"; grid-template-columns: minmax(0, 1fr); }
+.comparison-row.is-rank .rank-strip { grid-area: bar; }
 .comparison-row-label { display: flex; min-width: 0; grid-area: label; align-items: baseline; gap: 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.comparison-row-label small { font-size: var(--type-caption); font-weight: 600; }
 .comparison-row-value { color: var(--text); font-size: var(--type-body); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; line-height: 1.1; }
 .comparison-row > .comparison-row-value:first-of-type { grid-area: left; }
 .comparison-row > .comparison-row-value:last-of-type { grid-area: right; text-align: right; }
@@ -134,15 +125,30 @@ button.comparison-board-name:hover { color: var(--link); }
 .comparison-row-value.is-loser,
 .comparison-row-value.is-unavailable { color: var(--dim); }
 .comparison-row-value.is-unavailable { font-weight: 600; }
-/* One bar per row, split by each player's share; the leader's side is amber. */
-.comparison-split { display: flex; grid-area: bar; height: 10px; gap: 2px; }
-.comparison-split i { flex: 1 1 0; min-width: 0; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--chart-2) 45%, transparent); transition: flex-grow .18s ease; }
-.comparison-split i.is-winner { background: var(--winner-fill); }
-.comparison-split i.is-empty { background: color-mix(in srgb, var(--chart-2) 14%, transparent); }
+/* One bar per row grows from a center line toward the leader, as long as the real gap. */
+.gap-bar { position: relative; display: block; grid-area: bar; height: 10px; border-radius: var(--radius-xs); background: var(--segment-track); }
+.gap-bar-fill { position: absolute; top: 0; bottom: 0; background: var(--winner-fill); }
+.gap-bar-fill.is-left { right: 50%; border-radius: var(--radius-xs) 0 0 var(--radius-xs); }
+.gap-bar-fill.is-right { left: 50%; border-radius: 0 var(--radius-xs) var(--radius-xs) 0; }
+.gap-bar-center { position: absolute; top: -3px; bottom: -3px; left: 50%; width: 2px; margin-left: -1px; background: var(--text); }
+/* Two ranks on one #1-to-last line; the gap between the dots is the gap in ranks. */
+.rank-strip { position: relative; height: 56px; margin-inline: 10px; }
+.rank-strip-track,
+.rank-strip-span { position: absolute; top: 26px; height: 4px; border-radius: 2px; }
+.rank-strip-track { right: 0; left: 0; background: var(--segment-track); }
+.rank-strip-span { background: var(--dim); }
+.rank-strip.has-lead .rank-strip-span { background: var(--winner-fill); }
+.rank-strip-dot { position: absolute; top: 20px; box-sizing: border-box; width: 16px; height: 16px; margin-left: -8px; border: 2px solid var(--dim); border-radius: 50%; background: var(--card); }
+.rank-strip-dot.is-lead { border-color: var(--winner-fill); background: var(--winner-fill); }
+.rank-strip-label { position: absolute; color: var(--dim); font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+.rank-strip-label.is-first { top: 0; }
+.rank-strip-label.is-second { top: 38px; }
+.rank-strip-label.is-lead { color: var(--winner); }
+.comparison-row-delta { margin-left: auto; color: var(--winner); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
 .comparison-row.is-headline { padding: 12px 0; border-bottom: 0; }
 .comparison-row.is-headline .comparison-row-label { color: var(--text); font-size: var(--type-body); }
 .comparison-row.is-headline .comparison-row-value { font-size: var(--type-display); font-weight: 800; letter-spacing: -.02em; }
-.comparison-row.is-headline .comparison-split { height: 14px; }
+.comparison-row.is-headline .gap-bar { height: 14px; }
 /* Two halves: this week's outlook, then the season so far. */
 .comparison-section + .comparison-section { margin-top: 6px; border-top: 2px solid var(--border); }
 .comparison-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 14px 0 4px; }

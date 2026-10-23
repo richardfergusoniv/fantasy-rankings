@@ -72,6 +72,8 @@ export const playerInsightsSnapshotSchema = z.object({
   ngs: z.record(z.string(), z.record(z.string(), z.number())),
   depth: z.record(z.string(), depthSchema),
   depthAsOf: z.string().nullable(),
+  /** The same ranks from the oldest chart in the past week, to show who moved. */
+  depthPrevious: z.record(z.string(), depthSchema).default({}),
   experts: z.record(z.string(), expertSchema),
   expertsAsOf: z.string().nullable(),
   /** Last kickoff of the slate the expert ranks cover; identifies their week. */
@@ -233,6 +235,21 @@ export function depthFromRows(
   return { depth, asOf };
 }
 
+/**
+ * The ranks from the oldest chart in the rows that came before the newest one,
+ * so a player's move over the past week shows against the latest ranks.
+ */
+export function previousDepthFromRows(
+  rows: Iterable<Record<string, string>>,
+  sleeperByGsis: Map<string, string>,
+): Record<string, PlayerDepth> {
+  const list = [...rows];
+  const dates = [...new Set(list.map((row) => row.dt).filter(Boolean))].sort();
+  const previousDt = dates.length > 1 ? dates[0] : null;
+  if (!previousDt) return {};
+  return depthFromRows(list.filter((row) => row.dt === previousDt), sleeperByGsis).depth;
+}
+
 const EXPERT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DST"]);
 
 export function parseExperts(
@@ -283,11 +300,13 @@ async function fetchCsv(url: string, timeoutMs = 30_000): Promise<string> {
   }
 }
 
+const DEPTH_COMPARE_DAYS = 7;
+
 /**
  * The 2026 depth-chart file holds every daily chart (tens of MB), newest
- * first. Read only the newest chart's rows, then stop the download.
+ * first. Read the charts from the newest back a week, then stop the download.
  */
-async function fetchLatestDepthRows(url: string): Promise<Record<string, string>[]> {
+async function fetchRecentDepthRows(url: string): Promise<Record<string, string>[]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(SOURCE_TIMEOUT_MS, 30_000));
   const rows: Record<string, string>[] = [];
@@ -299,6 +318,7 @@ async function fetchLatestDepthRows(url: string): Promise<Record<string, string>
     let buffer = "";
     let header: string[] | null = null;
     let firstDt: string | null = null;
+    let cutoff = Number.NEGATIVE_INFINITY;
     for (;;) {
       const { done, value } = await reader.read();
       buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
@@ -315,8 +335,13 @@ async function fetchLatestDepthRows(url: string): Promise<Record<string, string>
         header.forEach((key, column) => {
           row[key] = cells[column] ?? "";
         });
-        firstDt ??= row.dt;
-        if (row.dt !== firstDt) {
+        if (firstDt === null) {
+          firstDt = row.dt ?? "";
+          const newest = Date.parse(firstDt);
+          if (Number.isFinite(newest)) cutoff = newest - DEPTH_COMPARE_DAYS * 24 * 60 * 60 * 1000;
+        }
+        const rowTime = Date.parse(row.dt ?? "");
+        if (Number.isFinite(rowTime) && rowTime < cutoff) {
           await reader.cancel();
           return rows;
         }
@@ -338,7 +363,7 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
     fetchCsv(NGS_URLS.passing),
     fetchCsv(PLAYER_IDS_URL),
     fetchCsv(FANTASYPROS_WEEKLY_URL),
-    fetchLatestDepthRows(DEPTH_CHARTS_2026_URL).catch(() => []),
+    fetchRecentDepthRows(DEPTH_CHARTS_2026_URL).catch(() => []),
   ]);
   const ids = parsePlayerIds(idsCsv);
   const ngs = mergeNgsSources([
@@ -347,6 +372,7 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
     parseNgs(passingCsv, "passing"),
   ]);
   const { depth, asOf: depthAsOf } = depthFromRows(depthRows, ids.sleeperByGsis);
+  const depthPrevious = previousDepthFromRows(depthRows, ids.sleeperByGsis);
   const { experts, asOf: expertsAsOf, lastKickoff: expertsLastKickoff } = parseExperts(expertsCsv, ids.sleeperByFantasyPros);
   return {
     fetchedAt: new Date().toISOString(),
@@ -355,6 +381,7 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
     ngs,
     depth,
     depthAsOf,
+    depthPrevious,
     experts,
     expertsAsOf,
     expertsLastKickoff,
@@ -411,6 +438,7 @@ export async function loadPlayerInsightsSnapshot(options?: { force?: boolean }):
     if (Object.keys(snapshot.depth).length === 0 && previous) {
       snapshot.depth = previous.depth;
       snapshot.depthAsOf = previous.depthAsOf;
+      snapshot.depthPrevious = previous.depthPrevious;
     }
     await writePlayerInsightsSnapshot(snapshot);
     return snapshot;

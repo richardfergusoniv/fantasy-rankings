@@ -429,7 +429,7 @@ function assembleStreamedDashboard(
     seasonLongRankings: players?.seasonLongRankings ?? [],
     defenses: players?.defenses ?? [],
     playerTrending: players?.playerTrending ?? {},
-    playerInsights: players?.playerInsights ?? { depth: {}, depthAsOf: null, experts: {}, expertsAsOf: null, expertsLastKickoff: null },
+    playerInsights: players?.playerInsights ?? { depth: {}, depthAsOf: null, depthPrevious: {}, experts: {}, expertsAsOf: null, expertsLastKickoff: null },
     strengthOfSchedule: players?.strengthOfSchedule ?? [],
     analytics: analytics?.analytics ?? { asOf: null, throughWeek: null, sourceUrl: "", entities: [], teamUsage: [], teamRecords: [] },
   };
@@ -1146,6 +1146,7 @@ export function App() {
       trending={dashboard.playerTrending?.[playerHistory.current.playerId]}
       season={dashboard.season}
       depth={dashboard.playerInsights?.depth[playerHistory.current.playerId]}
+      depthPrevious={dashboard.playerInsights?.depthPrevious?.[playerHistory.current.playerId]}
     />
   ) : null;
 
@@ -1313,7 +1314,7 @@ export function App() {
       </div>
       {!inspectorDocked ? playerSheet : null}
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
-      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} suspended={teamCardTeam !== null} /> : null}
+      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} suspended={teamCardTeam !== null} rosterPlayers={[...league.starters, ...league.bench]} /> : null}
       {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
       {rosterCardTeam ? (
         <LeagueTeamCard
@@ -1322,6 +1323,7 @@ export function App() {
           dashboard={activeDashboard}
           scope="week"
           mode="seasonLong"
+          powerRankings={league.powerRankingsWeek}
           playerCardOpen={!rosterCardOnTop}
           layer="above-player"
           selectedPlayerId={selectedPlayerId}
