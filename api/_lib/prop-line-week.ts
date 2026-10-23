@@ -26,6 +26,8 @@ export type PropLineWeekPayload = {
   pulledAt: string | null;
   /** When the staged Sleeper Picks board was pulled (null = no board). */
   sleeperPulledAt: string | null;
+  /** Set only when the lines could not be loaded, so an empty list is not "no lines posted". */
+  degraded?: true;
   lines: Array<{
     playerId: string;
     name: string;

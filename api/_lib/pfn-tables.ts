@@ -211,6 +211,7 @@ export async function handlePfnTables(req: Request): Promise<Response> {
           week: parsedQuery.data.week ?? 0,
           pulledAt: null,
           sleeperPulledAt: null,
+          degraded: true,
           lines: [],
         };
       }),
