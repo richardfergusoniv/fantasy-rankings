@@ -709,7 +709,7 @@ export function PlayerDetailSheet({
               <span>Season-long value</span>
               <div className="player-detail-value-row">
                 <strong>{player.seasonValue === null ? "—" : formatWhole(player.seasonValue)}</strong>
-                {player.seasonValue !== null && player.movement30Day !== null ? <span className={`player-detail-delta ${player.movement30Day < 0 ? "is-down" : player.movement30Day > 0 ? "is-up" : ""}`} title={movementLabel(player.movement30Day)}>{player.movement30Day < 0 ? "▼" : player.movement30Day > 0 ? "▲" : ""} {Number.isFinite(player.movement30Day) ? formatPercent(Math.abs(player.movement30Day)) : "New"}</span> : null}
+                {player.seasonValue !== null && player.movement30Day !== null ? <span className={`player-detail-delta ${player.movement30Day < 0 ? "is-down" : player.movement30Day > 0 ? "is-up" : ""}`} title={movementLabel(player.movement30Day)}>{player.movement30Day < 0 ? "▼" : player.movement30Day > 0 ? "▲" : ""} {Number.isFinite(player.movement30Day) ? formatPercent(Math.abs(player.movement30Day)) : "New"}</span> : player.seasonValue !== null ? <span className="player-detail-delta">{movementLabel(null)}</span> : null}
                 <small>{player.seasonRank === null ? "No season rank" : <>{positionLabel} <span className={rankToneClassName(player.seasonRank)}>#{player.seasonRank}</span></>}</small>
               </div>
             </div>
