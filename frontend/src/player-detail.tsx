@@ -606,14 +606,14 @@ export function PlayerDetailSheet({
       if (!boomBustPosition) throw new Error("Unsupported position");
       return api.getBoomBustHistory({ leagueId, playerId: player.playerId, position: boomBustPosition, view: boomBustView });
     },
-    enabled: supportsBoomBust,
+    enabled: supportsBoomBust && (activeTab === "season" || activeTab === "advanced"),
     staleTime: 30 * 60 * 1000,
     retry: false,
   });
   const historyQuery = useQuery({
     queryKey: ["fantasycalc-value-history", formatKey, [player.playerId]],
     queryFn: () => api.getValueHistory({ formatKey, playerIds: [player.playerId] }),
-    enabled: player.position !== "PICK" && player.seasonValue !== null,
+    enabled: player.position !== "PICK" && player.seasonValue !== null && activeTab === "season",
     staleTime: 30 * 60 * 1000,
   });
   const valueHistory = historyQuery.data?.series.find((series) => series.playerId === player.playerId);
