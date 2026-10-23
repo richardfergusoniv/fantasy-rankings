@@ -93,7 +93,8 @@
 .subview-tabs { margin: 12px 16px 0; }
 /* Equal-width page tabs on every viewport — no horizontal scroll strip. */
 .tools-subview-tabs,
-.explorer-subview-tabs {
+.explorer-subview-tabs,
+.league-subview-tabs {
   max-width: 100%;
   overflow-x: hidden;
 }

@@ -553,11 +553,11 @@
   }
   .props-table tbody tr {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     grid-template-areas:
-      "player player player player hit"
-      "stat line sleeper odds move"
-      "history history history history history";
+      "player player player player player hit"
+      "stat line sleeper odds books move"
+      "history history history history history history";
     gap: 8px 6px;
     padding: 12px 4px;
     border-bottom: 1px solid var(--hairline);
@@ -596,6 +596,7 @@
   .props-table tbody td.props-cell-line { grid-area: line; }
   .props-table tbody td.props-cell-sleeper { grid-area: sleeper; }
   .props-table tbody td.props-cell-odds { grid-area: odds; }
+  .props-table tbody td.props-cell-books { grid-area: books; }
   .props-table tbody td.props-cell-move { grid-area: move; }
   .props-table tbody td.props-cell-hit {
     grid-area: hit;

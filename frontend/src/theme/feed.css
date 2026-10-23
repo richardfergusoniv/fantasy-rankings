@@ -122,6 +122,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .subview-tabs { width: 360px; margin-left: 32px; }
   .tools-subview-tabs { width: min(640px, 100%); }
   .explorer-subview-tabs { width: min(720px, 100%); }
+  .league-subview-tabs { width: min(640px, 100%); }
   main { padding: 10px 32px 30px; }
   .matchup-score, .lineup-section, .bench-section { max-width: 860px; }
   .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }

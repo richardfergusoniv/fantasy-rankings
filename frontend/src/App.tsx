@@ -110,9 +110,8 @@ function NavigationIcon({ page }: { page: PrimaryPage }) {
 function primaryPageForTab(tab: Tab): PrimaryPage {
   if (tab === "team") return "team";
   if (tab === "rankings" || tab === "waivers" || tab === "comparison") return "players";
-  if (tab === "power") return "league";
+  if (tab === "power" || tab === "trade") return "league";
   if (tab === "draft") return "draft";
-  if (tab === "trade") return "players";
   if (tab === "monitor" || tab === "team-stats" || tab === "analytics") return "tools";
   const unreachable: never = tab;
   return unreachable;
@@ -1219,6 +1218,13 @@ export function App() {
               <TabsTrigger value="rankings">Rankings</TabsTrigger>
               <TabsTrigger value="waivers">Waivers</TabsTrigger>
               <TabsTrigger value="comparison">Comparison</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        ) : null}
+        {primaryPage === "league" ? (
+          <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="subview-tabs league-subview-tabs">
+            <TabsList aria-label="League views">
+              <TabsTrigger value="power">Power</TabsTrigger>
               <TabsTrigger value="trade">Trade</TabsTrigger>
             </TabsList>
           </Tabs>

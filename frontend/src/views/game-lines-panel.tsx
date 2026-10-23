@@ -55,6 +55,8 @@ type PropTableRow = {
   /** Median price on the played side (under for his players, over otherwise). */
   odds: number | null;
   implied: number | null;
+  /** Sportsbooks behind the consensus line. */
+  books: number;
   /** Sleeper Picks line for this player/stat, when Sleeper offers it. */
   sleeperLine: number | null;
   /** Sleeper's line is softer than consensus for the played direction. */
@@ -94,10 +96,11 @@ function formatAmericanOdds(odds: number | null): string {
   return rounded > 0 ? `+${rounded}` : `${rounded}`;
 }
 
-type PropSortKey = "player" | "stat" | "line" | "move" | "odds" | "sleeper" | "hit";
+type PropSortKey = "player" | "stat" | "line" | "move" | "odds" | "books" | "sleeper" | "hit";
 
 const PROP_SORT_OPTIONS: ReadonlyArray<[PropSortKey, string]> = [
   ["odds", "Odds"],
+  ["books", "Books"],
   ["hit", "Hit"],
   ["move", "Move"],
   ["line", "Line"],
@@ -443,6 +446,7 @@ export function GameLinesPanel({
         move: line.move,
         odds: direction === "under" ? line.underOdds : line.overOdds,
         implied: impliedProbability(direction === "under" ? line.underOdds : line.overOdds),
+        books: line.bookCount,
         sleeperLine: line.sleeper?.line ?? null,
         sleeperFavorable: line.sleeper
           ? (direction === "over" ? line.sleeper.line < line.line : line.sleeper.line > line.line)
@@ -503,6 +507,9 @@ export function GameLinesPanel({
           else cmp = a.implied - b.implied;
           break;
         }
+        case "books":
+          cmp = a.books - b.books;
+          break;
         case "sleeper": {
           if (a.sleeperLine === null && b.sleeperLine === null) cmp = 0;
           else if (a.sleeperLine === null) return 1;
@@ -662,6 +669,7 @@ export function GameLinesPanel({
                     {sortHeader("sleeper", "Sleeper")}
                     {sortHeader("move", "Move")}
                     {sortHeader("odds", "Odds")}
+                    {sortHeader("books", "Books")}
                     {sortHeader("hit", "Hit")}
                     <th scope="col" className="props-history-head">History</th>
                   </tr>
@@ -713,6 +721,7 @@ export function GameLinesPanel({
                         </td>
                         <td data-label="Move" className="props-cell-move">{formatMove(row.move)}</td>
                         <td data-label="Odds" className="props-cell-odds">{formatAmericanOdds(row.odds)}</td>
+                        <td data-label="Books" className="props-cell-books">{row.books > 0 ? row.books : "—"}</td>
                         <td data-label="Hit" className="props-cell-hit">
                           <span className={hitTone ? `props-hit props-hit-${hitTone}` : "props-hit"}>
                             {formatHitRate(hits, misses, row.hitRate)}
