@@ -915,7 +915,9 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
               const rosteredBy = row.rosterTeamName && row.rosterId === null ? `, rostered by ${row.rosterTeamName}` : "";
               const expert = expertRanks ? expertRanks[row.key] : undefined;
               const expertRankLabel = expert?.positionRank != null ? `${row.position === "DEF" ? "DST" : row.position}${expert.positionRank}` : null;
-              const accessibleExpert = expertRankLabel ? `, expert rank ${expertRankLabel}, range ${expert?.best} to ${expert?.worst}` : "";
+              const accessibleExpert = expertRankLabel
+                ? `, expert rank ${expertRankLabel}, range ${expert?.best} to ${expert?.worst}`
+                : expertRanks ? ", expert rank unavailable" : "";
               const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${accessibleExpert}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${rosteredBy}${isSelected ? ", selected" : ""}`;
               const rosterId = row.rosterId;
               const content = (
