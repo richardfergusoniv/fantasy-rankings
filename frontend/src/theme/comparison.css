@@ -150,9 +150,8 @@ button.comparison-board-name:hover { color: var(--link); }
 .comparison-row.is-headline .comparison-row-value { font-size: var(--type-display); font-weight: 800; letter-spacing: -.02em; }
 .comparison-row.is-headline .gap-bar { height: 14px; }
 /* Two halves: this week's outlook, then the season so far. */
-.comparison-section + .comparison-section { margin-top: 6px; border-top: 2px solid var(--border); }
+.comparison-section-tabs { margin: 0 0 10px; }
 .comparison-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 14px 0 4px; }
-.comparison-section-head > h3 { margin: 0; font-size: var(--type-section); font-weight: 700; }
 .comparison-section-head > .comparison-window-toggle { flex: 0 1 260px; margin: 0; }
 .comparison-section > .empty-inline { margin: 4px 0 10px; }
 .comparison-group { border-top: 1px solid var(--border); }
