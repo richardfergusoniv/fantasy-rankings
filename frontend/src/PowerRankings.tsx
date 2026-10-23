@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import type { api, ApiResponse } from "./api";
 import type { MatchupSelection } from "./dashboard-types";
+import { currentExpertRanks } from "./expert-ranks";
 import { formatRecord, LeagueTeamCard, positionLabel } from "./league-team-card";
+import { buildEcrPowerRankings } from "./lib/ecr-power-rankings";
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { SegmentedControl, points, shortLeagueName } from "./shared";
 import { formatPercent, formatWhole } from "./lib/format-number";
@@ -28,20 +30,24 @@ export function PowerRankings({
   playerCardOpen: boolean;
   selectedPlayerId?: string | null;
 }) {
-  const [scope, setScope] = useState<"week" | "restOfSeason">("week");
+  const [scope, setScope] = useState<"week" | "ecr" | "restOfSeason">("week");
   const [mode, setMode] = useState<"seasonLong" | "dynasty">("seasonLong");
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const isDynastyLeague = league.seasonLongFormat.isDynasty;
   const activeMode = isDynastyLeague ? mode : "seasonLong";
+  const experts = useMemo(() => currentExpertRanks(dashboard), [dashboard]);
+  const ecrTeams = useMemo(() => (experts ? buildEcrPowerRankings(league, experts) : []), [experts, league]);
+  const isWeekly = scope !== "restOfSeason";
   const powerRankings = scope === "week"
     ? league.powerRankingsWeek
+    : scope === "ecr" ? ecrTeams.map((entry) => entry.team)
     : activeMode === "dynasty" ? league.powerRankingsDynasty : league.powerRankingsSeasonLong;
   const mine = powerRankings.find((team) => team.isUser);
-  const positions: PowerPosition[] = scope === "week"
+  const positions: PowerPosition[] = isWeekly
     ? ["QB", "RB", "WR", "TE", "FLEX"]
     : ["QB", "RB", "WR", "TE"];
-  if (scope === "week" && league.rankingPositions.includes("K")) positions.push("K");
-  if (scope === "week" && league.rankingPositions.includes("DEF")) positions.push("DEF");
+  if (isWeekly && league.rankingPositions.includes("K")) positions.push("K");
+  if (isWeekly && league.rankingPositions.includes("DEF")) positions.push("DEF");
 
   const closeTeamCard = () => setSelectedTeamId(null);
 
@@ -53,7 +59,7 @@ export function PowerRankings({
     () => [...powerRankings].sort((a, b) => a.rank - b.rank),
     [powerRankings],
   );
-  const opponentRosterId = scope === "week"
+  const opponentRosterId = isWeekly
     ? weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams)
     : null;
   const isDynastyView = scope === "restOfSeason" && activeMode === "dynasty";
@@ -90,10 +96,10 @@ export function PowerRankings({
   const scopeToggle = (
     <SegmentedControl
       className="lineup-mode-toggle power-scope-toggle page-tab-control"
-      value={scope === "week" ? "week" : activeMode === "dynasty" ? "dynasty" : "ros"}
+      value={scope === "week" ? "week" : scope === "ecr" ? "ecr" : activeMode === "dynasty" ? "dynasty" : "ros"}
       onChange={(value) => {
-        if (value === "week") {
-          setScope("week");
+        if (value === "week" || value === "ecr") {
+          setScope(value);
         } else if (value === "ros") {
           setScope("restOfSeason");
           setMode("seasonLong");
@@ -104,8 +110,8 @@ export function PowerRankings({
       }}
       label="Power ranking horizon"
       options={isDynastyLeague
-        ? [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
-        : [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season Long" }]}
+        ? [{ value: "week", label: "Vegas" }, { value: "ecr", label: "ECR" }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
+        : [{ value: "week", label: "Vegas" }, { value: "ecr", label: "ECR" }, { value: "ros", label: "Season Long" }]}
     />
   );
 
@@ -114,8 +120,8 @@ export function PowerRankings({
       <section className="power-view">
         {scopeToggle}
         <div className="analytics-empty">
-          <strong>{scope === "week" ? "No weekly power rankings yet." : activeMode === "dynasty" ? "No dynasty power rankings for this league." : "No rest-of-season power rankings for this league."}</strong>
-          <span>{scope === "week" ? "Refresh to check the latest Vegas lines and nflverse usage data." : "Refresh after FantasyCalc publishes values for this league format."}</span>
+          <strong>{scope === "ecr" ? "No ECR power rankings yet." : scope === "week" ? "No weekly power rankings yet." : activeMode === "dynasty" ? "No dynasty power rankings for this league." : "No rest-of-season power rankings for this league."}</strong>
+          <span>{scope === "ecr" ? "FantasyPros projections for this week haven’t loaded." : scope === "week" ? "Refresh to check the latest Vegas lines and nflverse usage data." : "Refresh after FantasyCalc publishes values for this league format."}</span>
         </div>
       </section>
     );
@@ -136,7 +142,7 @@ export function PowerRankings({
         <div className="section-heading power-section-heading">
           <h2 id="position-strength-heading">Position strength</h2>
         </div>
-        <div className="power-radar" role="img" aria-label={`Spider chart of your ${scope === "week" ? "optimized lineup" : "roster"} strength by position in ${shortLeagueName(league.name)}`}>
+        <div className="power-radar" role="img" aria-label={`Spider chart of your ${isWeekly ? "optimized lineup" : "roster"} strength by position in ${shortLeagueName(league.name)}`}>
           <svg viewBox="0 0 300 260" aria-hidden="true">
             {[25, 50, 75, 100].map((level) => <polygon key={level} points={positions.map((_position, index) => radarPoint(index, level)).join(" ")} className="radar-grid" />)}
             {positions.map((_position, index) => <line key={index} x1="150" y1="130" x2={radarPoint(index, 100).split(",")[0]} y2={radarPoint(index, 100).split(",")[1]} className="radar-axis" />)}
@@ -144,7 +150,7 @@ export function PowerRankings({
             <polygon points={teamPolygon} className="radar-team" />
             {radarData.map((row, index) => {
               const [x = "150", y = "130"] = radarPoint(index, row.strength).split(",");
-              return <circle key={row.position} cx={x} cy={y} r="3.5" className="radar-dot"><title>{`${positionLabel(row.position)}: ${scope === "week" ? points(row.value) : formatWhole(row.value)} (${formatPercent(row.strength)} of league leader)`}</title></circle>;
+              return <circle key={row.position} cx={x} cy={y} r="3.5" className="radar-dot"><title>{`${positionLabel(row.position)}: ${isWeekly ? points(row.value) : formatWhole(row.value)} (${formatPercent(row.strength)} of league leader)`}</title></circle>;
             })}
             {positions.map((position, index) => {
               const [xText = "150", yText = "130"] = radarPoint(index, 100, 112).split(",");
@@ -156,12 +162,12 @@ export function PowerRankings({
         <p className="power-position-table-label">League average</p>
         <div className="power-position-values" role="list" aria-label="League average value by position">
           {radarData.map((row) => (
-            <div key={row.position} role="listitem"><span>{positionLabel(row.position)}</span><strong>{scope === "week" ? points(row.average) : formatWhole(row.average)}</strong></div>
+            <div key={row.position} role="listitem"><span>{positionLabel(row.position)}</span><strong>{isWeekly ? points(row.average) : formatWhole(row.average)}</strong></div>
           ))}
           {leagueAveragePicks !== null ? (
             <div role="listitem"><span>PICKS</span><strong>{formatWhole(leagueAveragePicks)}</strong></div>
           ) : null}
-          {scope === "week" ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className="power-position-total power-position-total-highlight" role="listitem"><span>Total</span><strong>{formatWhole(leagueAverageDisplayTotal)}</strong></div>}
+          {isWeekly ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className="power-position-total power-position-total-highlight" role="listitem"><span>Total</span><strong>{formatWhole(leagueAverageDisplayTotal)}</strong></div>}
         </div>
       </section>
 
@@ -186,7 +192,7 @@ export function PowerRankings({
                     <strong>{team.teamName}<span className="power-team-record"> · {formatRecord(team.record)}</span></strong>
                     {isOpponent ? <span className="sr-only">This week's opponent</span> : null}
                   </span>
-                  <span className="power-total"><strong>{scope === "week" ? points(team.totalValue) : formatWhole(team.totalValue)}</strong></span>
+                  <span className="power-total"><strong>{isWeekly ? points(team.totalValue) : formatWhole(team.totalValue)}</strong></span>
                 </button>
               </div>
             );
@@ -198,7 +204,8 @@ export function PowerRankings({
           team={selectedTeam}
           league={league}
           dashboard={dashboard}
-          scope={scope}
+          scope={isWeekly ? "week" : "restOfSeason"}
+          ecr={scope === "ecr" ? ecrTeams.find((entry) => entry.team.rosterId === selectedTeam.rosterId) ?? null : null}
           mode={activeMode}
           powerRankings={powerRankings}
           playerCardOpen={playerCardOpen}
