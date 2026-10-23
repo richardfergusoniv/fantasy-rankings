@@ -43,6 +43,8 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
     retry: 1,
     enabled: lines.length > 0,
   });
+  // Until the game logs load (or if they fail), show no bars rather than "no game" weeks.
+  const historyReady = historyQuery.isSuccess;
   const weekRows = useMemo(() => {
     const prior = (historyQuery.data?.stats ?? []).filter((row) => row.week >= 1 && row.week < week);
     return indexWeekStatsByPlayer(prior).get(propPlayerMatchKey(player.name, player.team, player.position)) ?? [];
@@ -77,12 +79,12 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
                 <span
                   className="props-history player-props-history"
                   role="img"
-                  aria-label={recentWeeks.map((weekNumber) => {
+                  aria-label={!historyReady ? (historyQuery.isError ? "Game history unavailable" : "Loading game history") : recentWeeks.map((weekNumber) => {
                     const cell = byWeek.get(weekNumber);
                     return cell ? `W${weekNumber} ${formatLine(cell.actual)} (${cell.result})` : `W${weekNumber} no game`;
                   }).join(", ") || "No prior games"}
                 >
-                  {recentWeeks.map((weekNumber) => {
+                  {historyReady && recentWeeks.map((weekNumber) => {
                     const cell = byWeek.get(weekNumber);
                     if (!cell) return <span key={weekNumber} className="props-bar is-empty" />;
                     return <span key={weekNumber} className={`props-bar is-${cell.result}`} style={{ height: `${Math.max(4, (cell.actual / scaleMax) * 100)}%` }} />;
