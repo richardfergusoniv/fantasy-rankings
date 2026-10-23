@@ -3,8 +3,8 @@
  * Only `:free` model ids are allowed — never route to paid models.
  */
 
-export const DEFAULT_OPENROUTER_MODEL = "google/gemma-4-31b-it:free";
-export const FALLBACK_OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free";
+export const DEFAULT_OPENROUTER_MODEL = "thinkingmachines/inkling:free";
+export const FALLBACK_OPENROUTER_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
 
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 

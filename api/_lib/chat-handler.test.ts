@@ -71,7 +71,7 @@ describe("api/chat handler", () => {
     resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
     runChatAgentMock.mockResolvedValue({
       reply: "Your WR1 projects 18.20.",
-      model: "google/gemma-4-31b-it:free",
+      model: "thinkingmachines/inkling:free",
       toolSteps: 1,
     });
 
@@ -80,7 +80,7 @@ describe("api/chat handler", () => {
     expect(await res.json()).toEqual({
       ok: true,
       reply: "Your WR1 projects 18.20.",
-      model: "google/gemma-4-31b-it:free",
+      model: "thinkingmachines/inkling:free",
       toolSteps: 1,
     });
     expect(runChatAgentMock).toHaveBeenCalledWith(

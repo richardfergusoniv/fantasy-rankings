@@ -10,14 +10,17 @@ import { callOpenRouterChat } from "./chat-openrouter.js";
 
 describe("chat-config free models", () => {
   it("only accepts :free model ids", () => {
-    expect(isFreeOpenRouterModel("google/gemma-4-31b-it:free")).toBe(true);
+    expect(isFreeOpenRouterModel("thinkingmachines/inkling:free")).toBe(true);
     expect(isFreeOpenRouterModel("openai/gpt-4o")).toBe(false);
   });
 
   it("ignores non-free OPENROUTER_MODEL overrides", () => {
     expect(resolveOpenRouterModel("openai/gpt-4o")).toBe(DEFAULT_OPENROUTER_MODEL);
-    expect(resolveOpenRouterModel("google/gemma-4-31b-it:free")).toBe("google/gemma-4-31b-it:free");
-    expect(resolveOpenRouterFallbackModel().endsWith(":free")).toBe(true);
+    expect(resolveOpenRouterModel("thinkingmachines/inkling:free")).toBe("thinkingmachines/inkling:free");
+    expect(resolveOpenRouterModel("nvidia/nemotron-3-ultra-550b-a55b:free")).toBe(
+      "nvidia/nemotron-3-ultra-550b-a55b:free",
+    );
+    expect(resolveOpenRouterFallbackModel()).toBe(FALLBACK_OPENROUTER_MODEL);
     expect(FALLBACK_OPENROUTER_MODEL.endsWith(":free")).toBe(true);
   });
 
