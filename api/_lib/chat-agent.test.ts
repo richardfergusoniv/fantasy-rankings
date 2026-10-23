@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { runChatAgent } from "./chat-agent.js";
 import { DEFAULT_OPENROUTER_MODEL, FALLBACK_OPENROUTER_MODEL } from "./chat-config.js";
-import { OpenRouterError } from "./chat-openrouter.js";
+import { ChatAgentTimeoutError, OpenRouterError } from "./chat-openrouter.js";
 
 describe("runChatAgent", () => {
   it("runs a tool-calling loop with OpenRouter mocked", async () => {
@@ -190,5 +190,35 @@ describe("runChatAgent", () => {
     });
 
     expect(result.reply).toBe("Data is temporarily unavailable.");
+  });
+
+  it("propagates the agent deadline when a tool hangs", async () => {
+    const fetchImpl = vi.fn(async () => new Response(
+      JSON.stringify({
+        choices: [{
+          message: {
+            role: "assistant",
+            content: null,
+            tool_calls: [{
+              id: "call_1",
+              type: "function",
+              function: { name: "get_my_leagues", arguments: "{}" },
+            }],
+          },
+        }],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ));
+
+    await expect(
+      runChatAgent({
+        apiKey: "sk-or-test",
+        userMessage: "My leagues?",
+        ctx: { userId: "u1", sleeperUserId: "s1" },
+        fetchImpl,
+        deadlineMs: 30,
+        dispatchTool: () => new Promise(() => undefined),
+      }),
+    ).rejects.toBeInstanceOf(ChatAgentTimeoutError);
   });
 });

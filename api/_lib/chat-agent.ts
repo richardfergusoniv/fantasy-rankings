@@ -42,6 +42,31 @@ function assistantContent(message: ChatCompletionMessage): string {
   return typeof message.content === "string" ? message.content.trim() : "";
 }
 
+/** Reject when the agent deadline aborts, even if the underlying tool never sees a signal. */
+function awaitWithAgentDeadline<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      void operation.catch(() => undefined);
+      reject(new ChatAgentTimeoutError());
+    };
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    operation.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 export async function runChatAgent(args: RunChatAgentArgs): Promise<RunChatAgentResult> {
   const maxSteps = args.maxToolSteps ?? CHAT_MAX_TOOL_STEPS;
   const dispatch = args.dispatchTool ?? dispatchChatTool;
@@ -104,8 +129,12 @@ export async function runChatAgent(args: RunChatAgentArgs): Promise<RunChatAgent
         const parsedArgs = parseToolCallArguments(call.function?.arguments);
         let result: unknown;
         try {
-          result = await dispatch(name, parsedArgs, args.ctx);
+          result = await awaitWithAgentDeadline(
+            dispatch(name, parsedArgs, args.ctx),
+            controller.signal,
+          );
         } catch (err) {
+          if (err instanceof ChatAgentTimeoutError) throw err;
           console.error("[chat tool]", name, err instanceof Error ? err.message : err);
           result = { ok: false, error: "Tool failed. Data is temporarily unavailable." };
         }
