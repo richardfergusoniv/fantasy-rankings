@@ -1149,7 +1149,7 @@ export function App() {
       onOpenTeam={setTeamCardTeam}
       onBack={playerHistory.back}
       canGoBack={playerHistory.canGoBack}
-      onClose={() => { setRosterCardRosterId(null); playerHistory.close(); closeLinkedPlayer(); }}
+      onClose={() => { setRosterCardRosterId(null); setTeamCardTeam(null); playerHistory.close(); closeLinkedPlayer(); }}
       presentation={inspectorPresentation}
       rosterTeamName={rosterTeam?.teamName ?? null}
       rosterLabel={rosterTeam ? `Open ${rosterTeam.teamName}, ${formatRecord(rosterTeam.record)} record, rank ${rosterTeam.rank}` : null}
