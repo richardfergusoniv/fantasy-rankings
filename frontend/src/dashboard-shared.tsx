@@ -1,8 +1,9 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { displayedMatchupPoints } from "../../api/_lib/lineup-optimizer";
@@ -25,7 +26,6 @@ import type {
 } from "./dashboard-types";
 import { RankStrip } from "./components/rank-strip";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
-import { playersInGame } from "./lib/matchup-players";
 import { ModalPortal, useDialogFocusTrap } from "./shared";
 import {
   TRADE_REMOVE_TOAST_ID,
@@ -472,8 +472,9 @@ function MatchupStatRow({ stat, pairing, left, right }: { stat: MatchupStatConfi
   );
 }
 
-export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, toolLinks, suspended = false, rosterPlayers }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; toolLinks?: ToolLinkItem[]; suspended?: boolean; /** The user's starters and bench, to list who plays in this game. */ rosterPlayers?: readonly RosterPlayer[] }) {
+export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, toolLinks, suspended = false }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; toolLinks?: ToolLinkItem[]; suspended?: boolean }) {
   const dialogRef = useRef<HTMLElement | null>(null);
+  const [pairingTab, setPairingTab] = useState<"team-offense" | "team-defense">("team-offense");
   useDialogFocusTrap(dialogRef, onClose, !suspended);
   const tablesQuery = useQuery({
     queryKey: ["pfn-tables"],
@@ -491,7 +492,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   const tables = tablesQuery.data?.tables;
   const offense = tables?.offense ?? null;
   const defense = tables?.defense ?? null;
-  const offensiveLine = tables?.["offensive-line"] ?? null;
   const teamCode = canonicalNflTeam(matchup.team);
   const opponentCode = canonicalNflTeam(matchup.opponent);
   const findRow = (table: PfnTable | null, code: string | null) => table?.rows.find((row) => canonicalNflTeam(row.team) === code);
@@ -538,8 +538,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
       rightSide: "offense" as const,
     },
   ];
-  const yourPlayers = rosterPlayers ? playersInGame(rosterPlayers, [matchup.team, matchup.opponent], canonicalNflTeam) : [];
-  const fetchedAt = offensiveLine?.fetched_at ?? offense?.fetched_at ?? defense?.fetched_at ?? null;
   const score = scoreQuery.data;
 
   return (
@@ -549,7 +547,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
           <div className="matchup-data-header">
             <div>
               <h2 id="matchup-card-title">{matchup.team} {matchup.isAway ? "@" : "vs"} {matchup.opponent}</h2>
-              <span>{fetchedAt ? `PFN grades · ${pfnDateLabel(fetchedAt)}` : "PFN matchup grades"}</span>
+              <span>PFN grades</span>
             </div>
             <button type="button" onClick={onClose} aria-label="Close matchup data">×</button>
           </div>
@@ -600,8 +598,14 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                       <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : formatDecimal(oppDefSos, 2)}</span>
                     </div>
                   </div>
-                  {matchupPairings.map((pairing) => (
-                    <section className="matchup-pairing" key={pairing.id} aria-label={`${pairing.leftLabel} versus ${pairing.rightLabel}`}>
+                  <Tabs value={pairingTab} onValueChange={(value) => setPairingTab(value as "team-offense" | "team-defense")} className="matchup-pairing-tabs">
+                    <TabsList aria-label="Matchup side">
+                      <TabsTrigger id="matchup-team-offense-tab" value="team-offense" aria-controls="matchup-team-offense-panel">Team Offense</TabsTrigger>
+                      <TabsTrigger id="matchup-team-defense-tab" value="team-defense" aria-controls="matchup-team-defense-panel">Team Defense</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  {matchupPairings.filter((pairing) => pairing.id === pairingTab).map((pairing) => (
+                    <section className="matchup-pairing" key={pairing.id} id={`matchup-${pairing.id}-panel`} role="tabpanel" aria-labelledby={`matchup-${pairing.id}-tab`}>
                       <h4>{pairing.leftLabel} vs {pairing.rightLabel}</h4>
                       {matchupStatConfigs.map((stat) => (
                         <MatchupStatRow
@@ -623,17 +627,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
               {!offense || !defense ? <SectionError title="PFN matchup data is incomplete." onRetry={() => { void tablesQuery.refetch(); }} retrying={tablesQuery.isFetching} compact /> : null}
             </>
           )}
-          {yourPlayers.length > 0 ? (
-            <section className="matchup-your-players" aria-labelledby="matchup-your-players-heading">
-              <h3 id="matchup-your-players-heading">Your players in this game</h3>
-              {yourPlayers.map((player) => (
-                <div className={`matchup-your-player${player.isStarter ? " is-starter" : ""}`} key={player.playerId}>
-                  <span><strong>{player.name}</strong><small>{player.position === "DEF" ? "DST" : player.position} · {player.team}</small></span>
-                  <span className="matchup-your-player-points">{player.projection === null ? "—" : formatPoints(player.projection)} {player.isStarter ? "start" : "bench"}</span>
-                </div>
-              ))}
-            </section>
-          ) : null}
         </article>
       </div>
     </ModalPortal>
