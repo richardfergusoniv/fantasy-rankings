@@ -33,7 +33,7 @@ import {
 import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
-import { MatchupTag, ModalPortal, SegmentedControl, depthLabel, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { MatchupTag, ModalPortal, SegmentedControl, DepthChangeMark, depthChange, depthLabel, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
 
@@ -404,6 +404,7 @@ export function PlayerDetailSheet({
   trending,
   season,
   depth,
+  depthPrevious,
 }: {
   player: PlayerSearchResult;
   week: number;
@@ -440,6 +441,8 @@ export function PlayerDetailSheet({
   season?: number;
   /** Latest depth-chart rank at his position. */
   depth?: { position: string; rank: number };
+  /** His depth-chart rank a week ago, to show a move. */
+  depthPrevious?: { position: string; rank: number };
 }) {
   const isModal = presentation === "modal";
   const sheetRef = useRef<HTMLElement | null>(null);
@@ -624,6 +627,7 @@ export function PlayerDetailSheet({
   const weeklyWidth = player.weeklyProjection === null ? 0 : Math.min(100, Math.max(4, player.weeklyProjection / 30 * 100));
   const valueWidth = player.seasonValue === null ? 0 : Math.min(100, Math.max(4, player.seasonValue / 10_000 * 100));
   const positionLabel = player.position === "DEF" ? "DST" : player.position;
+  const depthMove = depthChange(depth, depthPrevious);
   const projectionComponents = projectionComponentsForPlayer(player);
   const defenseProjectionComponents = player.defenseComponents
     ? Object.entries(defenseComponentLabels).flatMap(([key, label]) => {
@@ -660,7 +664,7 @@ export function PlayerDetailSheet({
             <div className="player-detail-title-line">
               <h2 id="player-detail-name">{player.name}</h2>
             </div>
-            <p><span>{positionLabel}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} />{depth ? <span className="depth-chart-tag">{depthLabel(depth)}</span> : null}</p>
+            <p><span>{positionLabel}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} />{depth ? <span className="depth-chart-tag">{depthLabel(depth)}</span> : null}{depthMove ? <DepthChangeMark change={depthMove} /> : null}</p>
           </div>
           <div className="player-detail-actions">
             {canGoBack ? <button type="button" onClick={navigateBack} aria-label="Previous player">←</button> : null}

@@ -268,6 +268,8 @@ export const playerTrendingEntrySchema = z.object({
 export const playerInsightsSchema = z.object({
   depth: z.record(z.string(), z.object({ position: z.string(), rank: z.number().int() })),
   depthAsOf: z.string().nullable(),
+  /** Ranks from the oldest chart in the past week; a different rank means he moved. */
+  depthPrevious: z.record(z.string(), z.object({ position: z.string(), rank: z.number().int() })).default({}),
   experts: z.record(z.string(), z.object({
     ecr: z.number(),
     best: z.number().int(),
@@ -283,6 +285,7 @@ export const playerInsightsSchema = z.object({
 export const emptyPlayerInsights: z.infer<typeof playerInsightsSchema> = {
   depth: {},
   depthAsOf: null,
+  depthPrevious: {},
   experts: {},
   expertsAsOf: null,
   expertsLastKickoff: null,

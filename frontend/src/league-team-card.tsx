@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import type { Dashboard, League, MatchupSelection } from "./dashboard-types";
 import { compareByFantasyPosition } from "./fantasy-position-order";
-import { MatchupTag, ModalPortal, SegmentedControl, points, useDialogFocusTrap } from "./shared";
+import { weeklyOpponentRosterId } from "./power-opponent";
+import { DepthChangeMark, MatchupTag, ModalPortal, SegmentedControl, depthChange, leagueRank, points, useDialogFocusTrap } from "./shared";
 import { formatWhole } from "./lib/format-number";
 
 type RosterPlayer = League["tradeTeams"][number]["players"][number];
@@ -36,6 +37,7 @@ export function LeagueTeamCard({
   dashboard,
   scope,
   mode,
+  powerRankings,
   playerCardOpen,
   layer = "default",
   selectedPlayerId = null,
@@ -49,6 +51,8 @@ export function LeagueTeamCard({
   dashboard: Dashboard;
   scope: PowerScope;
   mode: PowerMode;
+  /** Every team in the table this card was opened from, to rank each position. */
+  powerRankings: readonly PowerTeam[];
   playerCardOpen: boolean;
   /** Raise above the player card when this dialog was opened from it. */
   layer?: "default" | "above-player";
@@ -65,6 +69,7 @@ export function LeagueTeamCard({
   const [rosterList, setRosterList] = useState<"starters" | "bench">("starters");
   const activeMode = league.seasonLongFormat.isDynasty ? mode : "seasonLong";
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
+  const isOpponent = scope === "week" && weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams) === team.rosterId;
   const positions: PowerPosition[] = scope === "week"
     ? ["QB", "RB", "WR", "TE", "FLEX"]
     : ["QB", "RB", "WR", "TE"];
@@ -138,6 +143,7 @@ export function LeagueTeamCard({
     const metricLabel = scope === "week" ? "PROJ" : "VALUE";
     const slotChip = scope === "week" && player.isStarter ? starterSlotChip(player) : null;
     const isSelected = selectedPlayerId === player.playerId;
+    const depthMove = depthChange(dashboard.playerInsights?.depth[player.playerId], dashboard.playerInsights?.depthPrevious[player.playerId]);
     const openMatchup = player.team && player.opponent && onOpenMatchup
       ? (event: MouseEvent<HTMLButtonElement>) => {
           event.stopPropagation();
@@ -171,7 +177,7 @@ export function LeagueTeamCard({
             {isSelected ? <span className="player-selected-chip">Selected</span> : null}
             {slotChip ? <span className="power-slot-chip">{slotChip}</span> : null}
           </span>
-          <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span className="ranking-meta-position">{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={openMatchup} /></span></span>
+          <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span className="ranking-meta-position">{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={openMatchup} />{depthMove ? <DepthChangeMark change={depthMove} /> : null}</span></span>
         </span>
         <span className="ranking-proj"><strong>{metric}</strong><span>{metricLabel}</span></span>
       </div>
@@ -195,7 +201,10 @@ export function LeagueTeamCard({
           onClick={(event) => event.stopPropagation()}
         >
           <div className="power-team-card-header">
-            <h2 id={`power-team-card-title-${team.rosterId}`} className={team.isUser ? "is-user" : ""}>{team.teamName}</h2>
+            <div className="power-team-card-heading">
+              <h2 id={`power-team-card-title-${team.rosterId}`} className={team.isUser ? "is-user" : ""}>{team.teamName}</h2>
+              <span>{formatRecord(team.record)}{isOpponent ? " · Your opponent this week" : ""}</span>
+            </div>
             <button type="button" onClick={onClose} aria-label={`Close ${team.teamName} team card`}>×</button>
           </div>
           <div className={`power-team-card-summary${activeMode === "dynasty" && team.futurePickValue > 0 ? " has-picks" : ""}`}>
@@ -207,9 +216,16 @@ export function LeagueTeamCard({
             {activeMode === "dynasty" && team.futurePickValue > 0 ? <div><span>Future picks</span><strong>+{formatWhole(team.futurePickValue)}</strong></div> : null}
           </div>
           <div className="power-team-card-positions" role="list" aria-label={`${team.teamName} position values`}>
-            {positions.map((position) => (
-              <div key={position} role="listitem"><span>{positionLabel(position)}</span><strong>{scope === "week" ? points(team.positionValues[position]) : formatWhole(team.positionValues[position])}</strong></div>
-            ))}
+            {positions.map((position) => {
+              const rank = leagueRank(powerRankings.map((candidate) => candidate.positionValues[position]), team.positionValues[position]);
+              return (
+                <div key={position} role="listitem">
+                  <span>{positionLabel(position)}</span>
+                  <strong>{scope === "week" ? points(team.positionValues[position]) : formatWhole(team.positionValues[position])}</strong>
+                  {rank === null ? null : <small className="power-position-rank" aria-label={`Ranked ${rank} in the league`}>#{rank}</small>}
+                </div>
+              );
+            })}
           </div>
           <div className="power-team-card-roster" role="region" aria-label={`${team.teamName} roster`}>
             {rows.length > 0 ? (

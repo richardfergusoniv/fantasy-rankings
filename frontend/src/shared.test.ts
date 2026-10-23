@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  depthChange,
   fantasySosRanksForTeam,
   points,
   positionalSosRank,
@@ -145,5 +146,22 @@ describe("fantasySosRanksForTeam", () => {
       WR: null,
       TE: null,
     });
+  });
+});
+
+describe("depthChange", () => {
+  it("reports a move up the chart with the old rank", () => {
+    expect(depthChange({ position: "WR", rank: 1 }, { position: "WR", rank: 2 })).toEqual({ direction: "up", position: "WR", from: 2 });
+  });
+
+  it("reports a move down", () => {
+    expect(depthChange({ position: "RB", rank: 2 }, { position: "RB", rank: 1 })).toEqual({ direction: "down", position: "RB", from: 1 });
+  });
+
+  it("is null when the rank held, he was unlisted, or the position changed", () => {
+    expect(depthChange({ position: "WR", rank: 1 }, { position: "WR", rank: 1 })).toBeNull();
+    expect(depthChange({ position: "WR", rank: 1 }, undefined)).toBeNull();
+    expect(depthChange(undefined, { position: "WR", rank: 1 })).toBeNull();
+    expect(depthChange({ position: "TE", rank: 1 }, { position: "WR", rank: 3 })).toBeNull();
   });
 });

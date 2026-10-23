@@ -5,6 +5,7 @@ const experts = { "9493": { ecr: 1, best: 1, worst: 1, positionRank: 1, projecti
 const insights = (expertsLastKickoff: string | null, ranks: Record<string, (typeof experts)["9493"]> = experts) => ({
   depth: {},
   depthAsOf: null,
+  depthPrevious: {},
   experts: ranks,
   expertsAsOf: "2026-10-22",
   expertsLastKickoff,

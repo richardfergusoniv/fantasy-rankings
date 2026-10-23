@@ -5,6 +5,7 @@ vi.mock("./db.js", () => ({ db: {}, schema: {} }));
 const {
   csvObjects,
   depthFromRows,
+  previousDepthFromRows,
   mergeNgsSources,
   parseExperts,
   parseNgs,
@@ -106,6 +107,25 @@ describe("ids, depth and experts", () => {
     });
   });
 
+  it("reads the oldest earlier chart as the previous ranks", () => {
+    const rows = [
+      { dt: "2026-10-22T12:59:29Z", gsis_id: "00-1", pos_abb: "WR", pos_rank: "1" },
+      { dt: "2026-10-22T12:59:29Z", gsis_id: "00-3", pos_abb: "WR", pos_rank: "3" },
+      { dt: "2026-10-18T12:59:29Z", gsis_id: "00-1", pos_abb: "WR", pos_rank: "2" },
+      { dt: "2026-10-16T12:59:29Z", gsis_id: "00-1", pos_abb: "WR", pos_rank: "3" },
+      { dt: "2026-10-16T12:59:29Z", gsis_id: "00-3", pos_abb: "WR", pos_rank: "1" },
+    ];
+    expect(previousDepthFromRows(rows, ids.sleeperByGsis)).toEqual({
+      "12526": { position: "WR", rank: 3 },
+      "4034": { position: "WR", rank: 1 },
+    });
+  });
+
+  it("has no previous ranks when only one chart was read", () => {
+    const rows = [{ dt: "2026-10-22T12:59:29Z", gsis_id: "00-1", pos_abb: "WR", pos_rank: "1" }];
+    expect(previousDepthFromRows(rows, ids.sleeperByGsis)).toEqual({});
+  });
+
   it("reads expert ranks for skill players, kickers and defenses", () => {
     const csv = [
       "scrape_date,fantasypros_id,player_name,pos,team,ecr,best,worst,pos_rank,r2p_pts,player_game_kickoff_ts",
@@ -138,5 +158,19 @@ describe("playerInsightsSnapshotSchema", () => {
       experts: {},
       expertsAsOf: null,
     }).success).toBe(true);
+  });
+
+  it("defaults the previous depth ranks for a snapshot cached before they existed", () => {
+    const parsed = playerInsightsSnapshotSchema.parse({
+      fetchedAt: "2026-10-22T18:00:00.000Z",
+      season: 2026,
+      opportunity: {},
+      ngs: {},
+      depth: {},
+      depthAsOf: null,
+      experts: {},
+      expertsAsOf: null,
+    });
+    expect(parsed.depthPrevious).toEqual({});
   });
 });

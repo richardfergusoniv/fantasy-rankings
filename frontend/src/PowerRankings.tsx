@@ -195,6 +195,7 @@ export function PowerRankings({
           dashboard={dashboard}
           scope={scope}
           mode={activeMode}
+          powerRankings={powerRankings}
           playerCardOpen={playerCardOpen}
           selectedPlayerId={selectedPlayerId}
           onPlayerIntent={onPlayerIntent}
