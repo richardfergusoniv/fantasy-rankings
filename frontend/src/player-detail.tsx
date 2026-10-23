@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,6 +30,7 @@ import {
   projectionComponentsForPlayer,
 } from "./dashboard-shared";
 import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
+import { buildGameLogRows } from "./lib/game-log-rows";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
 import { MatchupTag, ModalPortal, SegmentedControl, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
@@ -257,6 +258,8 @@ export function SeasonGameLog({
     (entity) => normalizePlayerIdentity(entity.name) === playerName || (player.position === "DEF" && canonicalNflTeam(entity.team) === playerTeam),
   ));
 
+  const gameLogRows = buildGameLogRows(games);
+
   if (isLoading && !history) return <div className="player-tab-loading"><span className="loading-shimmer" /><span className="loading-shimmer" /><span className="loading-shimmer" /></div>;
   if (!isBoomBustPosition(player.position)) return <div className="player-tab-empty"><strong>Season log unavailable</strong><span>Weekly stat logs are currently available for QB, RB, WR, and TE.</span></div>;
   if (history?.status === "unavailable") return <div className="player-tab-empty"><strong>Season log didn’t load</strong><span>Try again after the next Sleeper data refresh.</span></div>;
@@ -270,19 +273,27 @@ export function SeasonGameLog({
           {rateRows.map((row) => (
             <div key={row.key}>
               <span>{row.label}</span>
-              <strong className={row.rank === null ? undefined : rankToneClassName(row.rank)}>{row.rate === null ? "—" : formatDecimal(row.rate, 2)}</strong>
+              <b className="player-rate-value">
+                <strong className={row.rank === null ? undefined : rankToneClassName(row.rank)}>{row.rate === null ? "—" : formatDecimal(row.rate, 2)}</strong>
+                {row.rank === null ? null : <small>#{row.rank}</small>}
+              </b>
             </div>
           ))}
         </div>
       </section>
       <section className="player-game-log" aria-labelledby="player-game-log-heading">
-        <div className="section-heading"><h3 id="player-game-log-heading">Game log</h3><span>2026 regular season</span></div>
+        <div className="section-heading"><h3 id="player-game-log-heading">Game log</h3></div>
         <div className="player-game-log-list">
-          {[...games].reverse().map((game) => (
-            <article key={`${game.season}-${game.week}`}>
-              <div><strong>W{game.week}</strong><span>{game.opponent ? `vs ${game.opponent}` : "Opponent unavailable"}</span></div>
-              <p>{gameLogSummary(player.position, game.stats)}</p>
-              <b>{formatPoints(game.points)}<small>PTS</small></b>
+          {gameLogRows.map((row) => row.kind === "gap" ? (
+            <article key={`gap-${row.season}-${row.week}`} className="is-gap">
+              <div><strong>W{row.week}</strong></div>
+              <p>No game</p>
+            </article>
+          ) : (
+            <article key={`${row.game.season}-${row.game.week}`} style={{ "--share": row.share } as CSSProperties}>
+              <div><strong>W{row.game.week}</strong><span>{row.game.opponent ? `vs ${row.game.opponent}` : "Opponent unavailable"}</span></div>
+              <p>{gameLogSummary(player.position, row.game.stats)}</p>
+              <b>{formatPoints(row.game.points)}</b>
             </article>
           ))}
         </div>
