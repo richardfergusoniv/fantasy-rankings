@@ -434,6 +434,7 @@ export const matchupStatConfigs: ReadonlyArray<MatchupStatConfig> = [
   { label: "Yds/Play", offKey: "yds_per_play", defKey: "yds_per_play", format: (value) => formatDecimal(value, 2), offHigher: true, defHigher: false },
   { label: "Success%", offKey: "success_pct", defKey: "success_pct", format: (value) => formatPercent(value), offHigher: true, defHigher: false },
   { label: "Expl%", offKey: "expl_pct", defKey: "expl_pct", format: (value) => formatPercent(value), offHigher: true, defHigher: false },
+  { label: "SOS", offKey: "sos", defKey: "sos", format: (value) => formatDecimal(value, 2), offHigher: true, defHigher: true },
 ];
 
 export function matchupGrade(table: PfnTable | null, row: PfnRow | undefined, key = "grade", higherIsBetter = true): MatchupGrade {
@@ -503,17 +504,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
     offense: findRow(offense, opponentCode),
     defense: findRow(defense, opponentCode),
   };
-  const teamOffSos = pfnNumber(teamRows.offense, "sos");
-  const teamDefSos = pfnNumber(teamRows.defense, "sos");
-  const oppOffSos = pfnNumber(opponentRows.offense, "sos");
-  const oppDefSos = pfnNumber(opponentRows.defense, "sos");
-  const teamOffSosRank = pfnRankForRow(offense, teamRows.offense, "sos");
-  const teamDefSosRank = pfnRankForRow(defense, teamRows.defense, "sos");
-  const oppOffSosRank = pfnRankForRow(offense, opponentRows.offense, "sos");
-  const oppDefSosRank = pfnRankForRow(defense, opponentRows.defense, "sos");
-  const sosBadgeClass = (rank: number | null): string => (
-    rank !== null && rank <= 10 ? " sos-tough" : rank !== null && rank >= 23 ? " sos-soft" : ""
-  );
   const matchupPairings = [
     {
       id: "team-offense",
@@ -584,8 +574,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                           <span className="matchup-reference-arrow" aria-hidden="true">›</span>
                         </button>
                       ) : <strong>{matchup.team}</strong>}
-                      <span className={`matchup-reference-tag${sosBadgeClass(teamOffSosRank)}`}>OFF SOS: {teamOffSos === null ? "—" : formatDecimal(teamOffSos, 2)}</span>
-                      <span className={`matchup-reference-tag${sosBadgeClass(teamDefSosRank)}`}>DEF SOS: {teamDefSos === null ? "—" : formatDecimal(teamDefSos, 2)}</span>
                     </div>
                     <div className="matchup-stat-team">
                       {onOpenTeam ? (
@@ -594,14 +582,12 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                           <span className="matchup-reference-arrow" aria-hidden="true">›</span>
                         </button>
                       ) : <strong>{matchup.opponent}</strong>}
-                      <span className={`matchup-reference-tag${sosBadgeClass(oppOffSosRank)}`}>OFF SOS: {oppOffSos === null ? "—" : formatDecimal(oppOffSos, 2)}</span>
-                      <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : formatDecimal(oppDefSos, 2)}</span>
                     </div>
                   </div>
                   <Tabs value={pairingTab} onValueChange={(value) => setPairingTab(value as "team-offense" | "team-defense")} className="matchup-pairing-tabs">
                     <TabsList aria-label="Matchup side">
-                      <TabsTrigger id="matchup-team-offense-tab" value="team-offense" aria-controls="matchup-team-offense-panel">{matchupPairings[0].leftLabel} vs {matchupPairings[0].rightLabel} <span className={`matchup-reference-tag${sosBadgeClass(teamOffSosRank)}`}>OFF SOS: {teamOffSos === null ? "—" : formatDecimal(teamOffSos, 2)}</span> <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : formatDecimal(oppDefSos, 2)}</span></TabsTrigger>
-                      <TabsTrigger id="matchup-team-defense-tab" value="team-defense" aria-controls="matchup-team-defense-panel">{matchupPairings[1].leftLabel} vs {matchupPairings[1].rightLabel} <span className={`matchup-reference-tag${sosBadgeClass(teamDefSosRank)}`}>DEF SOS: {teamDefSos === null ? "—" : formatDecimal(teamDefSos, 2)}</span> <span className={`matchup-reference-tag${sosBadgeClass(oppOffSosRank)}`}>OFF SOS: {oppOffSos === null ? "—" : formatDecimal(oppOffSos, 2)}</span></TabsTrigger>
+                      <TabsTrigger id="matchup-team-offense-tab" value="team-offense" aria-controls="matchup-team-offense-panel">{matchupPairings[0].leftLabel} vs {matchupPairings[0].rightLabel}</TabsTrigger>
+                      <TabsTrigger id="matchup-team-defense-tab" value="team-defense" aria-controls="matchup-team-defense-panel">{matchupPairings[1].leftLabel} vs {matchupPairings[1].rightLabel}</TabsTrigger>
                     </TabsList>
                   </Tabs>
                   {matchupPairings.filter((pairing) => pairing.id === pairingTab).map((pairing) => (
