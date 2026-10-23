@@ -409,7 +409,7 @@ function findRosterPlayer(
   return null;
 }
 
-function resolvePlayerIdentity(
+export function resolvePlayerIdentity(
   dashboard: Dashboard,
   args: { playerId?: string; playerName?: string },
 ): { playerId: string; nameHint: string | null } | { error: string } {

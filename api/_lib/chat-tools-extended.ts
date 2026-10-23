@@ -23,7 +23,7 @@ import {
   leagueAssets,
   loadBoomBustSummary,
   loadDashboard,
-  normalizeName,
+  resolvePlayerIdentity,
   waiverAdjustments,
   type ChatToolContext,
   type OpenAiToolDefinition,
@@ -180,20 +180,15 @@ function requireLeague(dashboard: Dashboard, leagueId: string) {
   return league;
 }
 
-function resolvePlayerId(
+function resolveOptionalPlayerId(
   dashboard: Dashboard,
   args: { playerId?: string; playerName?: string },
-): string | null {
-  const trimmed = args.playerId?.trim() || "";
-  if (trimmed) return trimmed;
-  const needle = args.playerName ? normalizeName(args.playerName) : "";
-  if (!needle) return null;
-  const hit =
-    dashboard.rankings.find((row) => normalizeName(row.name).includes(needle))
-    ?? dashboard.seasonLongRankings.find(
-      (row) => row.position !== "PICK" && normalizeName(row.name).includes(needle),
-    );
-  return hit?.playerId ?? null;
+): { playerId: string | null; error?: string } {
+  const hasArg = Boolean(args.playerId?.trim() || args.playerName?.trim());
+  if (!hasArg) return { playerId: null };
+  const resolved = resolvePlayerIdentity(dashboard, args);
+  if ("error" in resolved) return { playerId: null, error: resolved.error };
+  return { playerId: resolved.playerId };
 }
 
 function scopePlayerIds(
@@ -238,7 +233,9 @@ export async function toolGetPlayerNews(
   },
 ) {
   const dashboard = await loadDashboard(ctx);
-  const playerId = resolvePlayerId(dashboard, args);
+  const resolved = resolveOptionalPlayerId(dashboard, args);
+  if (resolved.error) return { ok: false as const, error: resolved.error };
+  const playerId = resolved.playerId;
   const league = args.leagueId ? requireLeague(dashboard, args.leagueId) : dashboard.leagues[0] ?? null;
   const scope =
     args.scope
@@ -291,10 +288,11 @@ export async function toolGetPlayerNews(
       ),
     )
     .orderBy(desc(sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`))
-    .limit(limit);
+    .limit(Math.max(limit * 2, 16));
 
   const items = shared
     .filter((row) => !isSleeperTimestampOnlyNews(row))
+    .slice(0, limit)
     .map((row) => ({
       playerId: row.playerId,
       player: row.player,
@@ -365,8 +363,9 @@ export async function toolGetPlayerAdvanced(
   args: { playerId?: string; playerName?: string; leagueId?: string },
 ) {
   const dashboard = await loadDashboard(ctx);
-  const playerId = resolvePlayerId(dashboard, args);
-  if (!playerId) return { ok: false as const, error: "Provide playerId or playerName." };
+  const resolved = resolvePlayerIdentity(dashboard, args);
+  if ("error" in resolved) return { ok: false as const, error: resolved.error };
+  const playerId = resolved.playerId;
 
   const league =
     (args.leagueId ? requireLeague(dashboard, args.leagueId) : null)
@@ -465,7 +464,11 @@ export async function toolGetProjections(
   if (!league) return { ok: false as const, error: "League not found for this user." };
 
   const scope = args.scope ?? (args.playerId || args.playerName ? "player" : "roster");
-  const playerId = resolvePlayerId(dashboard, args);
+  const resolved = resolveOptionalPlayerId(dashboard, args);
+  if (scope === "player" && resolved.error) {
+    return { ok: false as const, error: resolved.error };
+  }
+  const playerId = resolved.playerId;
   const ids =
     scope === "player"
       ? (playerId ? [playerId] : [])
@@ -582,8 +585,9 @@ export async function toolGetValueHistory(
   },
 ) {
   const dashboard = await loadDashboard(ctx);
-  const playerId = resolvePlayerId(dashboard, args);
-  if (!playerId) return { ok: false as const, error: "Provide playerId or playerName." };
+  const resolved = resolvePlayerIdentity(dashboard, args);
+  if ("error" in resolved) return { ok: false as const, error: resolved.error };
+  const playerId = resolved.playerId;
 
   const league = args.leagueId
     ? requireLeague(dashboard, args.leagueId)
@@ -895,8 +899,13 @@ export async function toolSuggestTrades(
       adjustedGet,
       margin: adjustedGet - adjustedGive,
       reason:
-        `You are lighter at ${myNeeds[0]} (power ${myPower?.positionValues[myNeeds[0]] ?? "n/a"}); `
-        + `${partner.teamName} can use ${best.give.position}. Values ${giveTotal} for ${getTotal}.`,
+        `You are lighter at ${best.get.position} (power ${
+          myPower?.positionValues[best.get.position as (typeof skillPositions)[number]] ?? "n/a"
+        }); `
+        + (best.give.position === partnerNeeds[0]
+          ? `${partner.teamName} can use ${best.give.position}. `
+          : `You have surplus at ${best.give.position}. `)
+        + `Values ${giveTotal} for ${getTotal}.`,
     });
   }
 
