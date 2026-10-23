@@ -143,7 +143,7 @@ export function LeagueTeamCard({
     const metricLabel = scope === "week" ? "PROJ" : "VALUE";
     const slotChip = scope === "week" && player.isStarter ? starterSlotChip(player) : null;
     const isSelected = selectedPlayerId === player.playerId;
-    const depthMove = depthChange(dashboard.playerInsights?.depth[player.playerId], dashboard.playerInsights?.depthPrevious[player.playerId]);
+    const depthMove = depthChange(dashboard.playerInsights?.depth[player.playerId], dashboard.playerInsights?.depthPrevious?.[player.playerId]);
     const openMatchup = player.team && player.opponent && onOpenMatchup
       ? (event: MouseEvent<HTMLButtonElement>) => {
           event.stopPropagation();
@@ -217,7 +217,9 @@ export function LeagueTeamCard({
           </div>
           <div className="power-team-card-positions" role="list" aria-label={`${team.teamName} position values`}>
             {positions.map((position) => {
-              const rank = leagueRank(powerRankings.map((candidate) => candidate.positionValues[position]), team.positionValues[position]);
+              const values = powerRankings.map((candidate) => candidate.positionValues[position]);
+              // A position nobody has any value at has no meaningful rank.
+              const rank = values.some((value) => value !== 0) ? leagueRank(values, team.positionValues[position]) : null;
               return (
                 <div key={position} role="listitem">
                   <span>{positionLabel(position)}</span>

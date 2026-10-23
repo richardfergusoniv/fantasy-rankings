@@ -463,7 +463,7 @@ function MatchupStatRow({ stat, pairing, left, right }: { stat: MatchupStatConfi
         <RankStrip
           first={{ label: `${pairing.leftUnit} #${leftRank} · ${leftValue}`, rank: leftRank }}
           second={{ label: `${pairing.rightUnit} #${rightRank} · ${rightValue}`, rank: rightRank }}
-          ariaLabel={`${stat.label}: ${pairing.leftLabel} ranks ${leftRank}, ${pairing.rightLabel} ranks ${rightRank}${gap > 0 ? `, ${leftLeads ? pairing.leftLabel : pairing.rightLabel} has the edge by ${gap} ranks` : ""}`}
+          ariaLabel={`${stat.label}: ${pairing.leftLabel} ranks ${leftRank} (${leftValue}), ${pairing.rightLabel} ranks ${rightRank} (${rightValue})${gap > 0 ? `, ${leftLeads ? pairing.leftLabel : pairing.rightLabel} has the edge by ${gap} ranks` : ""}`}
         />
       ) : (
         <div className="matchup-stat-unranked">{pairing.leftUnit} {leftValue} · {pairing.rightUnit} {rightValue}</div>

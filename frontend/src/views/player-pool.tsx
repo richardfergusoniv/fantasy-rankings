@@ -130,7 +130,7 @@ export function SeasonTeamPill({ team, lineRank, onOpen }: { team: string | null
   );
 }
 
-const OUT_INJURY_CODES = new Set(["O", "IR", "PUP", "SUS", "NFI"]);
+const OUT_INJURY_CODES = new Set(["O", "IR", "PUP", "SUS", "NFI", "INA"]);
 
 /** "⚠ Q" for a questionable or doubtful player, "Out" and the like in the negative tone. */
 function DepthGridStatus({ status }: { status: string }) {
