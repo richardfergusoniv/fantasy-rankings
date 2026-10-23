@@ -538,7 +538,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
       rightSide: "offense" as const,
     },
   ];
-  const fetchedAt = offensiveLine?.fetched_at ?? offense?.fetched_at ?? defense?.fetched_at ?? null;
   const score = scoreQuery.data;
 
   return (
@@ -548,7 +547,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
           <div className="matchup-data-header">
             <div>
               <h2 id="matchup-card-title">{matchup.team} {matchup.isAway ? "@" : "vs"} {matchup.opponent}</h2>
-              <span>{fetchedAt ? `PFN grades · ${pfnDateLabel(fetchedAt)}` : "PFN matchup grades"}</span>
+              <span>PFN grades</span>
             </div>
             <button type="button" onClick={onClose} aria-label="Close matchup data">×</button>
           </div>

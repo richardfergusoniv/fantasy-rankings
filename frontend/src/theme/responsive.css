@@ -219,19 +219,13 @@
 .matchup-pairing { padding: 10px 0 4px; border-bottom: 1px solid var(--hairline); }
 .matchup-pairing:last-child { border-bottom: 0; }
 .matchup-pairing h4 { margin: 0 0 4px; color: var(--text); font-size: var(--type-body); font-weight: 700; }
+.matchup-pairing-tabs { margin: 0 0 10px; }
 .matchup-stat-row { padding: 6px 0 2px; }
 .matchup-stat-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: var(--type-control); }
 .matchup-stat-gap { font-size: var(--type-caption); font-variant-numeric: tabular-nums lining-nums; }
 .matchup-stat-gap.is-for { color: var(--positive); }
 .matchup-stat-gap.is-against { color: var(--negative); }
 .matchup-stat-unranked { padding: 6px 0 10px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
-.matchup-your-players { margin-top: 16px; }
-.matchup-your-players h3 { margin: 0 0 4px; font-size: var(--type-section); font-weight: 700; }
-.matchup-your-player { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--hairline); }
-.matchup-your-player > span:first-child { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: var(--type-body); }
-.matchup-your-player small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.matchup-your-player-points { color: var(--dim); font-size: var(--type-control); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
-.matchup-your-player.is-starter .matchup-your-player-points { color: var(--roster-highlight); }
 .matchup-grade-table { border-top: 1px solid var(--hairline); border-bottom: 0; }
 .matchup-grade-row { min-height: 38px; gap: 8px; }
 .matchup-grade-row.header { min-height: 32px; font-size: var(--type-caption); }
