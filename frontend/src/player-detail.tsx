@@ -32,7 +32,7 @@ import {
 import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
-import { MatchupTag, ModalPortal, SegmentedControl, positionalSosRank, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { MatchupTag, ModalPortal, SegmentedControl, positionalSosRank, rankAgainst, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
 
@@ -189,7 +189,6 @@ export function PlayerTeamContext({
     <section className="player-team-context" aria-label={`${player.name} team and matchup context`}>
       <div className="section-heading">
         <h3>Team context</h3>
-        <span>PFN</span>
       </div>
       {query.isPending && sosRank === null ? (
         <div className="player-team-context-state" role="status">Loading team context…</div>
@@ -295,7 +294,7 @@ export function normalizePlayerIdentity(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export function PlayerAdvancedPanel({ player, analytics, isLoading = false, children }: { player: PlayerSearchResult; analytics: Dashboard["analytics"]; isLoading?: boolean; children: ReactNode }) {
+export function PlayerAdvancedPanel({ player, analytics, isLoading = false, leading = null, children }: { player: PlayerSearchResult; analytics: Dashboard["analytics"]; isLoading?: boolean; leading?: ReactNode; children: ReactNode }) {
   const position = (["QB", "RB", "WR", "TE", "K", "DEF"] as string[]).includes(player.position) ? player.position as BasePosition : null;
   const normalizedPlayerName = normalizePlayerIdentity(player.name);
   const playerTeam = canonicalNflTeam(player.team);
@@ -306,21 +305,39 @@ export function PlayerAdvancedPanel({ player, analytics, isLoading = false, chil
     ))
     : undefined;
   const values = entity?.season ?? {};
-  const metrics = (position ? detailAdvancedMetrics[position] ?? [] : []).flatMap((metric) => {
-    const metricValue = metric.derived ? metric.derived(values) : values[metric.key];
-    return typeof metricValue === "number" && Number.isFinite(metricValue) ? [{ ...metric, value: metricValue }] : [];
+  // Every metric for the position is listed, so a gap in the data shows as "—" instead of a missing tile.
+  const metrics = (position ? detailAdvancedMetrics[position] ?? [] : []).map((metric) => {
+    const read = (season: Record<string, number>): number | null => {
+      const metricValue = metric.derived ? metric.derived(season) : season[metric.key];
+      return typeof metricValue === "number" && Number.isFinite(metricValue) ? metricValue : null;
+    };
+    const value = entity ? read(values) : null;
+    const peers = analytics.entities.flatMap((candidate) => {
+      const peerValue = candidate.position === position ? read(candidate.season) : null;
+      return peerValue === null ? [] : [peerValue];
+    });
+    return { ...metric, value, rank: value === null ? null : rankAgainst(peers, value) };
   });
+  const hasMetrics = metrics.some((metric) => metric.value !== null);
 
   return (
     <div className="player-advanced-panel">
+      {leading}
       <section aria-labelledby="player-advanced-metrics-heading">
-        <div className="section-heading"><h3 id="player-advanced-metrics-heading">Efficiency &amp; usage</h3><span>{entity ? `${entity.seasonGames} games` : null}</span></div>
-        {metrics.length > 0 ? (
+        <div className="section-heading"><h3 id="player-advanced-metrics-heading">Efficiency &amp; usage</h3></div>
+        {hasMetrics ? (
           <div className="player-advanced-grid">
-            {metrics.map((metric) => <div key={metric.key}><span>{metric.label}</span><strong>{metric.unit === "%" ? formatPercent(metric.value) : `${formatDecimal(metric.value, metric.digits ?? 2)}${metric.unit ?? ""}`}</strong></div>)}
+            {metrics.map((metric) => (
+              <div key={metric.key}>
+                <span>{metric.label}</span>
+                <b className="player-metric-value">
+                  <strong className={metric.rank === null ? undefined : rankToneClassName(metric.rank)}>{metric.value === null ? "—" : metric.unit === "%" ? formatPercent(metric.value) : `${formatDecimal(metric.value, metric.digits ?? 2)}${metric.unit ?? ""}`}</strong>
+                  {metric.rank === null ? null : <small>#{metric.rank}</small>}
+                </b>
+              </div>
+            ))}
           </div>
         ) : isLoading ? <div className="player-tab-empty compact" role="status"><strong>Loading advanced metrics…</strong></div> : <div className="player-tab-empty compact"><strong>No advanced metrics yet</strong></div>}
-        {entity && analytics.throughWeek !== null ? <p className="player-tab-source">Through Week {analytics.throughWeek} · nflverse weekly player stats</p> : null}
       </section>
       <PlayerExpectedPoints entity={entity} />
       <PlayerNextGen entity={entity} />
@@ -797,11 +814,15 @@ export function PlayerDetailSheet({
         ) : null}
         {activeTab === "advanced" ? (
           <div id="player-detail-advanced-panel" role="tabpanel" aria-labelledby="player-detail-advanced-tab">
-            <PlayerAdvancedPanel player={player} analytics={analytics} isLoading={analyticsLoading}>
-              <PlayerTeamContext player={player} sosEntry={sosEntry} />
-              {supportsBoomBust ? (
+            <PlayerAdvancedPanel
+              player={player}
+              analytics={analytics}
+              isLoading={analyticsLoading}
+              leading={supportsBoomBust ? (
                 <BoomBustPanel name={player.name} view={boomBustView} onViewChange={setBoomBustView} history={boomBustQuery.data} isLoading={boomBustQuery.isPending} />
               ) : null}
+            >
+              <PlayerTeamContext player={player} sosEntry={sosEntry} />
             </PlayerAdvancedPanel>
           </div>
         ) : null}
@@ -883,7 +904,6 @@ export function BoomBustPanel({
               <div
                 className="boom-bust-iqr"
                 style={{ left: `${markerPosition(firstQuartile)}%`, width: `${markerPosition(thirdQuartile) - markerPosition(firstQuartile)}%` }}
-                title={`Middle 50%: ${formatPoints(firstQuartile)}–${formatPoints(thirdQuartile)} points`}
               />
             ) : null}
             {weeklyScores.map((score, index) => (
@@ -908,7 +928,6 @@ export function BoomBustPanel({
       ) : (
         <div className="boom-bust-empty">{isLoading ? "Loading weekly results…" : history?.status === "unavailable" ? "No scoring history yet. Try again after the next data refresh." : view === "last3" ? "No games in the last 3 seasons" : "No games yet this season"}</div>
       )}
-      {view === "last3" && history?.coverageNote ? <p className="boom-bust-note">{history.coverageNote}</p> : null}
     </section>
   );
 }

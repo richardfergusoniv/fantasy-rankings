@@ -124,11 +124,11 @@ export function PlayerExpectedPoints({ entity }: { entity: AnalyticsEntity | und
   const scaleMax = Math.max(1, ...weeks.flatMap((point) => [point.expected, point.actual]));
   return (
     <section className="player-expected-section" aria-labelledby="player-expected-heading">
-      <div className="section-heading"><h3 id="player-expected-heading">Expected points</h3><span>{weeks.length} games · PPR</span></div>
+      <div className="section-heading"><h3 id="player-expected-heading">Expected points</h3></div>
       <div className="player-advanced-grid">
         <div><span>Expected / game</span><strong>{formatPoints(expected)}</strong></div>
         <div><span>Actual / game</span><strong>{formatPoints(expected + over)}</strong></div>
-        <div><span>Difference</span><strong>{formatPoints(over, { sign: "exceptZero" })}</strong></div>
+        <div><span>Difference</span><strong className={over > 0 ? "is-up" : over < 0 ? "is-down" : undefined}>{formatPoints(over, { sign: "exceptZero" })}</strong></div>
       </div>
       {weeks.length > 0 ? (
         <>
@@ -153,7 +153,6 @@ export function PlayerExpectedPoints({ entity }: { entity: AnalyticsEntity | und
           </div>
         </>
       ) : null}
-      <p className="player-tab-source">ffverse expected fantasy points</p>
     </section>
   );
 }
@@ -177,11 +176,10 @@ export function PlayerNextGen({ entity }: { entity: AnalyticsEntity | undefined 
   if (fields.length === 0) return null;
   return (
     <section className="player-nextgen-section" aria-labelledby="player-nextgen-heading">
-      <div className="section-heading"><h3 id="player-nextgen-heading">Next Gen Stats</h3><span>Season</span></div>
+      <div className="section-heading"><h3 id="player-nextgen-heading">Next Gen Stats</h3></div>
       <div className="player-advanced-grid">
         {fields.map((field) => <div key={field.key}><span>{field.label}</span><strong>{field.format(values[field.key] as number)}</strong></div>)}
       </div>
-      <p className="player-tab-source">NFL Next Gen Stats via nflverse</p>
     </section>
   );
 }
