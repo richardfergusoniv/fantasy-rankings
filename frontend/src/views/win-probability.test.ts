@@ -46,6 +46,13 @@ describe("teamOutlook and winProbability", () => {
     expect(winProbability(mine, mine)).toBeCloseTo(0.5, 6);
   });
 
+  it("keeps uncertainty for a live player with no projection", () => {
+    const live = { ...base, playerId: "1", position: "WR", projection: null, gamePhase: "live" as const, actual: 6, gamePeriod: 2, gameClockSeconds: 450 };
+    const final = { ...base, playerId: "2", position: "WR", projection: 10, gamePhase: "final" as const, actual: 10 };
+    expect(teamOutlook([live])?.sd).toBeGreaterThan(0);
+    expect(winProbability(teamOutlook([live])!, teamOutlook([final])!)).toBeLessThan(1);
+  });
+
   it("is certain once every game is final", () => {
     const done = (actual: number) => ({ ...base, playerId: "1", position: "WR", projection: 10, gamePhase: "final" as const, actual });
     expect(winProbability(teamOutlook([done(20)])!, teamOutlook([done(10)])!)).toBe(1);
