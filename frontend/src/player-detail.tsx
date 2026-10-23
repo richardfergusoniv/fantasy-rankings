@@ -600,6 +600,9 @@ export function PlayerDetailSheet({
   const supportsBoomBust = boomBustPosition !== null;
   const [boomBustView, setBoomBustView] = useState<"season" | "last3">("season");
   useEffect(() => setBoomBustView("season"), [player.playerId]);
+  // Which player's news was expanded; another player starts collapsed with no reset step.
+  const [newsExpandedFor, setNewsExpandedFor] = useState<string | null>(null);
+  const showAllNews = newsExpandedFor === player.playerId;
   const boomBustQuery = useQuery({
     queryKey: ["boom-bust-history", leagueId, player.playerId, boomBustView],
     queryFn: () => {
@@ -657,19 +660,20 @@ export function PlayerDetailSheet({
             <div className="player-detail-title-line">
               <h2 id="player-detail-name">{player.name}</h2>
             </div>
-            <p><span>{positionLabel}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} /></p>
+            <p><span>{positionLabel}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} />{player.injuryStatus ? <span className="player-detail-injury">{player.injuryStatus}</span> : null}<PlayerRosterBadge
+              playerName={player.name}
+              rosterTeamName={rosterTeamName}
+              rosterLabel={rosterLabel}
+              onOpenRosterTeam={onOpenRosterTeam}
+              waiversHref={waiversHref}
+              onOpenWaivers={onOpenWaivers}
+            /></p>
           </div>
           <div className="player-detail-actions">
             {canGoBack ? <button type="button" onClick={navigateBack} aria-label="Previous player">←</button> : null}
             <button type="button" onClick={onClose} aria-label="Close player details">×</button>
           </div>
         </div>
-        {trending && (trending.adds !== null || trending.drops !== null) ? (
-          <div className="player-trending" aria-label="Sleeper adds and drops">
-            <div><span>Adds</span><strong>{trending.adds === null ? "—" : formatCompactCount(trending.adds)}</strong></div>
-            <div><span>Drops</span><strong>{trending.drops === null ? "—" : formatCompactCount(trending.drops)}</strong></div>
-          </div>
-        ) : null}
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as PlayerDetailTab)} className="player-detail-tabs">
           <TabsList aria-label={`${player.name} details`}>
             <TabsTrigger id="player-detail-overview-tab" value="overview" aria-controls="player-detail-overview-panel">Overview</TabsTrigger>
@@ -706,43 +710,40 @@ export function PlayerDetailSheet({
               <span>Season-long value</span>
               <div className="player-detail-value-row">
                 <strong>{player.seasonValue === null ? "—" : formatWhole(player.seasonValue)}</strong>
+                {player.seasonValue !== null && player.movement30Day !== null ? <span className={`player-detail-delta ${player.movement30Day < 0 ? "is-down" : player.movement30Day > 0 ? "is-up" : ""}`} title={movementLabel(player.movement30Day)}>{player.movement30Day < 0 ? "▼" : player.movement30Day > 0 ? "▲" : ""} {Number.isFinite(player.movement30Day) ? formatPercent(Math.abs(player.movement30Day)) : "from 0"}</span> : player.seasonValue !== null ? <span className="player-detail-delta">{movementLabel(null)}</span> : null}
                 <small>{player.seasonRank === null ? "No season rank" : <>{positionLabel} <span className={rankToneClassName(player.seasonRank)}>#{player.seasonRank}</span></>}</small>
               </div>
             </div>
           </div>
         )}
-        <div className="player-detail-meta">
-          <PlayerRosterBadge
-            playerName={player.name}
-            rosterTeamName={rosterTeamName}
-            rosterLabel={rosterLabel}
-            onOpenRosterTeam={onOpenRosterTeam}
-            waiversHref={waiversHref}
-            onOpenWaivers={onOpenWaivers}
-          />
-          {player.injuryStatus ? <span className="player-detail-injury">Injury status: {player.injuryStatus}</span> : null}
-          {player.seasonValue !== null ? <span className="player-detail-movement">{movementLabel(player.movement30Day)}</span> : null}
-        </div>
-        {toolLinks ? <ToolLinks ariaLabel={`Open ${player.name} in a tool`} links={toolLinks} /> : null}
-        {player.waiverTrends && (player.waiverTrends.adds || player.waiverTrends.drops) ? (
-          <section className="player-detail-waiver-trends" aria-label={`${player.name} waiver activity`}>
-            <div className="section-heading"><h3>Waiver activity</h3><span>Last 24 hours</span></div>
-            <div className="player-detail-waiver-trend-list">
-              {player.waiverTrends.adds ? (
-                <div>
-                  <span className="trending-add">+{player.waiverTrends.adds.rank} TREND</span>
-                  <strong>{formatWhole(player.waiverTrends.adds.count)} adds</strong>
-                </div>
-              ) : null}
-              {player.waiverTrends.drops ? (
-                <div>
-                  <span className="trending-drop">−{player.waiverTrends.drops.rank} DROP</span>
-                  <strong>{formatWhole(player.waiverTrends.drops.count)} drops</strong>
-                </div>
-              ) : null}
-            </div>
-          </section>
+        {trending && (trending.adds !== null || trending.drops !== null) ? (
+          <div className="player-trending" aria-label="Sleeper adds and drops">
+            <div><span>Adds</span><strong className="is-up">{trending.adds === null ? "—" : `+${formatCompactCount(trending.adds)}`}</strong></div>
+            <div><span>Drops</span><strong className="is-down">{trending.drops === null ? "—" : `−${formatCompactCount(trending.drops)}`}</strong></div>
+          </div>
         ) : null}
+        {toolLinks ? <ToolLinks ariaLabel={`Open ${player.name} in a tool`} links={toolLinks} /> : null}
+        <section className="player-news-section" aria-label={`${player.name} news`}>
+          <div className="section-heading"><h3>Latest news</h3></div>
+          {newsError && onRetryNews ? (
+            <SectionError title="News didn’t load." onRetry={onRetryNews} compact />
+          ) : newsLoading ? (
+            <div className="empty-inline compact">Loading news…</div>
+          ) : newsItems.length > 0 ? (
+            <>
+              {newsItems.slice(0, showAllNews ? 8 : 3).map((item) => (
+                <article className="player-news-item" key={item.id}>
+                  <div><span className={`news-severity ${item.newsType}`}>{item.newsType === "headline" ? "League news" : item.newsType === "waiver" ? "Waiver signal" : "Roster update"}</span><time>{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel} · {item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent"}</time></div>
+                  <a className="player-news-headline" href={item.sourceUrl} target="_blank" rel="noreferrer"><strong>{item.change}</strong><span className="sr-only"> (opens in a new tab)</span></a>
+                  <p>{item.roleContext}</p>
+                </article>
+              ))}
+              {!showAllNews && newsItems.length > 3 ? (
+                <button type="button" className="player-news-more" onClick={() => setNewsExpandedFor(player.playerId)}>Show {Math.min(newsItems.length, 8) - 3} more</button>
+              ) : null}
+            </>
+          ) : <div className="empty-inline compact">No recent news for this player.</div>}
+        </section>
         {player.position !== "DEF" && player.gamePhase !== "final" && projectionComponents.length > 0 ? (
           <section className="dst-breakdown" aria-label={`${player.name} projection components`}>
             <div className="section-heading"><h3>Projection components</h3></div>
@@ -769,21 +770,6 @@ export function PlayerDetailSheet({
             </div>
           </section>
         ) : null}
-        <section className="player-news-section" aria-label={`${player.name} news`}>
-          <div className="section-heading"><h3>Latest news</h3><span>{newsItems.length > 0 ? newsItems.length : null}</span></div>
-          {newsError && onRetryNews ? (
-            <SectionError title="News didn’t load." onRetry={onRetryNews} compact />
-          ) : newsLoading ? (
-            <div className="empty-inline compact">Loading news…</div>
-          ) : newsItems.length > 0 ? newsItems.slice(0, 8).map((item) => (
-            <article className="player-news-item" key={item.id}>
-              <div><span className={`news-severity ${item.newsType}`}>{item.newsType === "headline" ? "League news" : item.newsType === "waiver" ? "Waiver signal" : "Roster update"}</span><time>{item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent"}</time></div>
-              <strong>{item.change}</strong>
-              <p>{item.roleContext}</p>
-              <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel}<span className="sr-only"> (opens in a new tab)</span></a>
-            </article>
-          )) : <div className="empty-inline compact">No recent news for this player.</div>}
-        </section>
         </div> : null}
         {activeTab === "season" ? (
           <div id="player-detail-season-panel" role="tabpanel" aria-labelledby="player-detail-season-tab">

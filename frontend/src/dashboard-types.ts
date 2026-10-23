@@ -67,10 +67,6 @@ export type PlayerSearchResult = {
   gamePhase?: "pregame" | "live" | "final" | null;
   defenseComponents?: Dashboard["defenses"][number]["components"];
   projectionComponents?: Dashboard["rankings"][number]["projectionComponents"];
-  waiverTrends?: {
-    adds: { rank: number; count: number } | null;
-    drops: { rank: number; count: number } | null;
-  };
 };
 export type PlayerDetailTab = "overview" | "season" | "advanced" | "props";
 export type AnalyticsEntity = Dashboard["analytics"]["entities"][number];

@@ -140,6 +140,8 @@
 .integration-actions a,
 .chart-research-note a,
 .player-news-item a { display: inline-flex; min-height: 44px; align-items: center; }
+.player-news-item a.player-news-headline { min-height: 0; color: inherit; text-decoration: none; }
+.player-news-more { min-height: 44px; padding: 0 2px; border: 0; background: none; color: var(--link); font: inherit; font-size: var(--type-control); font-weight: 600; cursor: pointer; }
 
 /* Projection chart treatments */
 .tier-cliff-list { display: grid; margin: 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }

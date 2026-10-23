@@ -186,12 +186,17 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-title-line { display: flex; min-width: 0; align-items: center; gap: 7px; }
 .player-detail-title-line h2 { margin: 0; font-size: var(--type-display); line-height: 1.1; letter-spacing: -.02em; }
 .player-detail-header p { margin: 5px 0 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.player-trending { display: flex; gap: 22px; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
-.player-trending span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-transform: uppercase; letter-spacing: .07em; }
-.player-trending strong { display: block; margin-top: 2px; font-size: var(--type-section); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
+.player-trending { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; border-block: 1px solid var(--hairline); }
+.player-trending > div { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 8px; padding: 10px 2px; }
+.player-trending > div + div { padding-left: 10px; border-left: 1px solid var(--hairline); }
+.player-trending span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.player-trending strong { font-size: var(--type-section); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
+.player-trending .is-up, .player-detail-delta.is-up { color: var(--positive); }
+.player-trending .is-down, .player-detail-delta.is-down { color: var(--negative); }
+.player-detail-delta { color: var(--dim); font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
 .player-detail-actions { display: flex; flex: none; align-items: center; gap: 6px; }
 .player-detail-actions button { flex: none; display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface-2); color: var(--dim); font-size: var(--type-section); line-height: 1; cursor: pointer; }
-.player-detail-tabs { margin-top: 12px; }
+.player-detail-tabs { position: sticky; top: 0; z-index: 2; margin: 0 -18px; padding: 12px 18px 0; background: var(--surface); }
 .player-detail-tabs [data-slot="tabs-list"] {
   min-height: var(--sub-tab-height);
   height: var(--sub-tab-height);
@@ -246,10 +251,9 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-values strong { display: block; margin: 5px 0 3px; font-size: var(--type-section); line-height: 1; font-weight: 700; letter-spacing: -.02em; }
 .rank-tone.sos-soft { color: var(--stat-strength-readable); }
 .rank-tone.sos-tough { color: var(--stat-weakness-readable); }
-.player-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px 2px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.player-detail-meta .player-roster-badge { min-width: 44px; max-width: 100%; flex: none; justify-content: center; color: var(--text); text-decoration: none; }
-.player-detail-meta .player-roster-badge:hover,
-.player-detail-meta .player-roster-badge:active { color: var(--text); }
+.player-detail-header .player-roster-badge { min-width: 44px; max-width: 100%; flex: none; justify-content: center; color: var(--text); text-decoration: none; }
+.player-detail-header .player-roster-badge:hover,
+.player-detail-header .player-roster-badge:active { color: var(--text); }
 .tool-player-link-row { margin: 0; padding: 6px 2px 0; font-size: var(--type-control); font-weight: 600; }
 a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); }
 .tool-player-link-row a.tool-player-link[href] { display: inline-flex; min-height: 44px; align-items: center; color: var(--link); }
@@ -261,21 +265,8 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .tool-links-label { color: var(--dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .tool-links a.tool-link[href] { display: inline-flex; min-height: 44px; align-items: center; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--link); font-size: var(--type-tab); font-weight: 600; text-decoration: none; }
 .tool-links a.tool-link[href]:hover { color: var(--link-hover); }
-.player-detail-meta .player-roster-badge .matchup-reference-button-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.player-detail-header .player-roster-badge .matchup-reference-button-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .player-detail-injury { padding: 2px 6px; border-radius: var(--radius-xs); background: var(--stat-weakness-soft); color: var(--negative); font-weight: 700; }
-.player-detail-movement { display: inline-flex; align-items: center; gap: 5px; }
-.player-detail-waiver-trends { margin-top: 14px; }
-.player-detail-waiver-trends .section-heading { min-height: 32px; padding: 5px 2px; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
-.player-detail-waiver-trends .section-heading h3 { margin: 0; font-size: var(--type-section); }
-.player-detail-waiver-trend-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-block: 1px solid var(--hairline); }
-.player-detail-waiver-trend-list > div { display: grid; min-width: 0; gap: 5px; padding: 10px 2px; }
-.player-detail-waiver-trend-list > div + div { padding-left: 10px; border-left: 1px solid var(--hairline); }
-.player-detail-waiver-trend-list > div:only-child { grid-column: 1 / -1; }
-.player-detail-waiver-trend-list .trending-add,
-.player-detail-waiver-trend-list .trending-drop { width: fit-content; padding: 2px 6px; border-radius: var(--radius-xs); }
-.player-detail-waiver-trend-list .trending-add { background: var(--surface-2); color: var(--text); }
-.player-detail-waiver-trend-list .trending-drop { background: var(--stat-weakness-soft); color: var(--negative); }
-.player-detail-waiver-trend-list strong { color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
 .player-team-context { margin-top: 16px; }
 .player-team-context .section-heading { position: static; min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .player-team-context .section-heading h3 { margin: 0; font-size: var(--type-section); }

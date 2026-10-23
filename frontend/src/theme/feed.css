@@ -104,6 +104,9 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .player-detail-sheet.is-docked {
     width: 100%;
     max-height: none;
+    /* Not a scroll container here: the inspector frame scrolls, so the sticky tab bar sticks to it. */
+    overflow-x: clip;
+    overflow-y: visible;
     border: 0;
     border-radius: 0;
     box-shadow: none;
