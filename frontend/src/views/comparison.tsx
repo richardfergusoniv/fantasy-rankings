@@ -508,6 +508,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
   }, [advancedEntities, projectionEntities]);
 
   const [selectedPlayers, setSelectedPlayers] = useState<[PlayerSelection | null, PlayerSelection | null]>([null, null]);
+  const [sectionTab, setSectionTab] = useState<"projections" | "advanced">("projections");
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const initialSeedKey = useRef<number | null>(null);
 
@@ -640,12 +641,20 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
       ) : left && right ? (
         <section className="comparison-board" aria-label={`${left.name} and ${right.name} comparison`}>
           <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} depth={dashboard.playerInsights?.depth ?? {}} depthPrevious={dashboard.playerInsights?.depthPrevious ?? {}} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
-          {sections.map((section) => (
-            <section className="comparison-section" key={section.dataset} aria-labelledby={`comparison-section-${section.dataset}`}>
-              <header className="comparison-section-head">
-                <h3 id={`comparison-section-${section.dataset}`}>{section.dataset === "projections" ? "This week" : "Season so far"}</h3>
-                {section.dataset === "advanced" ? <SegmentedControl className="comparison-window-toggle" value={window} onChange={onWindowChange} label="Season stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17" }]} /> : null}
-              </header>
+          <SegmentedControl
+            className="comparison-section-tabs"
+            value={sectionTab}
+            onChange={setSectionTab}
+            label="Comparison data"
+            options={[{ value: "projections", label: `Week ${dashboard.week}` }, { value: "advanced", label: "Season" }]}
+          />
+          {sections.filter((section) => section.dataset === sectionTab).map((section) => (
+            <section className="comparison-section" key={section.dataset} aria-label={section.dataset === "projections" ? `Week ${dashboard.week}` : "Season"}>
+              {section.dataset === "advanced" ? (
+                <header className="comparison-section-head">
+                  <SegmentedControl className="comparison-window-toggle" value={window} onChange={onWindowChange} label="Season stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17" }]} />
+                </header>
+              ) : null}
               {section.headline ? <ComparisonMetricRow row={section.headline} leftName={left.name} rightName={right.name} headline /> : null}
               {section.groups.map(({ group, rows: groupRows }) => (
                 <section className="comparison-group" key={group} aria-label={group}>
