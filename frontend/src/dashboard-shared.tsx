@@ -600,13 +600,12 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                   </div>
                   <Tabs value={pairingTab} onValueChange={(value) => setPairingTab(value as "team-offense" | "team-defense")} className="matchup-pairing-tabs">
                     <TabsList aria-label="Matchup side">
-                      <TabsTrigger id="matchup-team-offense-tab" value="team-offense" aria-controls="matchup-team-offense-panel">Team Offense</TabsTrigger>
-                      <TabsTrigger id="matchup-team-defense-tab" value="team-defense" aria-controls="matchup-team-defense-panel">Team Defense</TabsTrigger>
+                      <TabsTrigger id="matchup-team-offense-tab" value="team-offense" aria-controls="matchup-team-offense-panel">{matchupPairings[0].leftLabel} vs {matchupPairings[0].rightLabel} <span className={`matchup-reference-tag${sosBadgeClass(teamOffSosRank)}`}>OFF SOS: {teamOffSos === null ? "—" : formatDecimal(teamOffSos, 2)}</span> <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : formatDecimal(oppDefSos, 2)}</span></TabsTrigger>
+                      <TabsTrigger id="matchup-team-defense-tab" value="team-defense" aria-controls="matchup-team-defense-panel">{matchupPairings[1].leftLabel} vs {matchupPairings[1].rightLabel} <span className={`matchup-reference-tag${sosBadgeClass(teamDefSosRank)}`}>DEF SOS: {teamDefSos === null ? "—" : formatDecimal(teamDefSos, 2)}</span> <span className={`matchup-reference-tag${sosBadgeClass(oppOffSosRank)}`}>OFF SOS: {oppOffSos === null ? "—" : formatDecimal(oppOffSos, 2)}</span></TabsTrigger>
                     </TabsList>
                   </Tabs>
                   {matchupPairings.filter((pairing) => pairing.id === pairingTab).map((pairing) => (
                     <section className="matchup-pairing" key={pairing.id} id={`matchup-${pairing.id}-panel`} role="tabpanel" aria-labelledby={`matchup-${pairing.id}-tab`}>
-                      <h4>{pairing.leftLabel} vs {pairing.rightLabel}</h4>
                       {matchupStatConfigs.map((stat) => (
                         <MatchupStatRow
                           key={stat.label}
