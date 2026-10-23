@@ -36,6 +36,7 @@ import {
 } from "./dashboard-shared";
 import { formatDecimal, formatPoints } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
+import { withStreamedAnalytics } from "./dashboard-analytics";
 import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
 import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, waiversSearchPreservingContext } from "./dashboard-url";
 import { createPlayerResolver, type DashboardPlayerRow, type PlayerLinkResolver } from "./tool-player-link";
@@ -761,8 +762,10 @@ export function App() {
     tradeWaiverQuery.isPending,
   ]);
   // Every section is projected from the same saved dashboard snapshot; no
-  // render-time source refresh or projection merge occurs.
-  const dashboard = freshestDashboard(dashboardQuery.data, streamedDashboard, browserDashboard);
+  // render-time source refresh occurs. The one merge: a cache/refresh
+  // dashboard whose analytics section is empty for this snapshot must not
+  // shadow the streamed analytics section (see dashboard-analytics.ts).
+  const dashboard = withStreamedAnalytics(freshestDashboard(dashboardQuery.data, streamedDashboard, browserDashboard), streamedDashboard);
 
   const league = dashboard?.leagues.find((item) => item.id === selectedLeagueId) ?? dashboard?.leagues[0];
   const selectedLeagueRosterIds = useMemo(
