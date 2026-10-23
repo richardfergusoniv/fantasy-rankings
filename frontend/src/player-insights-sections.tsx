@@ -25,14 +25,15 @@ function formatOdds(odds: number | null): string {
 /** This week's consensus prop lines for one player, with each prior game against the line. */
 export function PlayerPropsSection({ player, season, week }: { player: PlayerSearchResult; season: number; week: number }) {
   const pfnQuery = useQuery({
-    queryKey: ["pfn-tables"],
-    queryFn: () => api.getPfnTables({}),
+    // Ask for the card's own week; the server's default is the NFL week, which can differ.
+    queryKey: ["pfn-tables", season, week],
+    queryFn: () => api.getPfnTables({ season, week }),
     staleTime: 60 * 60 * 1000,
-    retry: false,
+    retry: 1,
   });
   const propLines = pfnQuery.data?.propLines;
   const lines = useMemo(() => {
-    // A cached response from before the weekly rollover holds last week's lines.
+    // A degraded response carries no lines and season/week 0.
     if (!propLines || propLines.season !== season || propLines.week !== week) return [];
     return propLines.lines.filter((line) => (
       line.playerId === player.playerId
@@ -57,7 +58,11 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
   // The five most recent weeks, oldest first.
   const recentWeeks = useMemo(() => Array.from({ length: Math.min(5, Math.max(0, week - 1)) }, (_, index) => week - Math.min(5, week - 1) + index), [week]);
 
-  if (lines.length === 0) return null;
+  if (lines.length === 0) {
+    if (pfnQuery.isPending) return <div className="player-tab-empty"><strong>Loading props…</strong></div>;
+    if (pfnQuery.isError) return <div className="player-tab-empty"><strong>Props didn’t load</strong><span>Try again in a minute.</span></div>;
+    return <div className="player-tab-empty"><strong>No props posted</strong><span>{player.name} has no lines for week {week} yet.</span></div>;
+  }
   return (
     <section className="player-props-section" aria-label={`${player.name} props`}>
       <div className="section-heading"><h3>Props</h3><span>Week {week}</span></div>
