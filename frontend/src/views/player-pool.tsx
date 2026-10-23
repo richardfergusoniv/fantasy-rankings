@@ -615,6 +615,13 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
     return map;
   }, [league]);
   const leagueRankings = useMemo(() => dashboard.rankings.filter((row) => row.leagueId === league.id), [dashboard.rankings, league.id]);
+  const selectedTeamDepthChart = useMemo(() => selectedTeam ? buildTeamDepthChart({
+    team: selectedTeam.team,
+    players: leagueRankings,
+    depth: dashboard.playerInsights?.depth ?? {},
+    depthPrevious: dashboard.playerInsights?.depthPrevious ?? {},
+    canonical: canonicalNflTeam,
+  }) : [], [dashboard.playerInsights, leagueRankings, selectedTeam]);
   const leagueDefenses = useMemo(() => dashboard.defenses.filter((row) => row.leagueId === league.id), [dashboard.defenses, league.id]);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
 
@@ -1097,6 +1104,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
       {selectedTeam ? (
         <TeamDataModal
           selection={selectedTeam}
+          depthChart={selectedTeamDepthChart}
           offensiveLine={offensiveLine}
           defense={defense}
           offense={offense}
