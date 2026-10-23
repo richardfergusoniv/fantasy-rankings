@@ -495,6 +495,8 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   const defense = tables?.defense ?? null;
   const teamCode = canonicalNflTeam(matchup.team);
   const opponentCode = canonicalNflTeam(matchup.opponent);
+  const teamCodeLabel = teamCode && teamCode.length <= 4 ? teamCode : matchup.team;
+  const opponentCodeLabel = opponentCode && opponentCode.length <= 4 ? opponentCode : matchup.opponent;
   const findRow = (table: PfnTable | null, code: string | null) => table?.rows.find((row) => canonicalNflTeam(row.team) === code);
   const teamRows = {
     offense: findRow(offense, teamCode),
@@ -586,8 +588,8 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                   </div>
                   <Tabs value={pairingTab} onValueChange={(value) => setPairingTab(value as "team-offense" | "team-defense")} className="matchup-pairing-tabs">
                     <TabsList aria-label="Matchup side">
-                      <TabsTrigger id="matchup-team-offense-tab" value="team-offense" aria-controls="matchup-team-offense-panel">{matchupPairings[0].leftLabel} vs {matchupPairings[0].rightLabel}</TabsTrigger>
-                      <TabsTrigger id="matchup-team-defense-tab" value="team-defense" aria-controls="matchup-team-defense-panel">{matchupPairings[1].leftLabel} vs {matchupPairings[1].rightLabel}</TabsTrigger>
+                      <TabsTrigger id="matchup-team-offense-tab" value="team-offense" aria-controls="matchup-team-offense-panel">{teamCodeLabel} {matchupPairings[0].leftUnit} vs {opponentCodeLabel} {matchupPairings[0].rightUnit}</TabsTrigger>
+                      <TabsTrigger id="matchup-team-defense-tab" value="team-defense" aria-controls="matchup-team-defense-panel">{teamCodeLabel} {matchupPairings[1].leftUnit} vs {opponentCodeLabel} {matchupPairings[1].rightUnit}</TabsTrigger>
                     </TabsList>
                   </Tabs>
                   {matchupPairings.filter((pairing) => pairing.id === pairingTab).map((pairing) => (
