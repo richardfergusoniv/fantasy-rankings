@@ -3,6 +3,7 @@ import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { displayedMatchupPoints } from "../../api/_lib/lineup-optimizer";
@@ -25,7 +26,7 @@ import type {
 } from "./dashboard-types";
 import { RankStrip } from "./components/rank-strip";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
-import { ModalPortal, SegmentedControl, useDialogFocusTrap } from "./shared";
+import { ModalPortal, useDialogFocusTrap } from "./shared";
 import {
   TRADE_REMOVE_TOAST_ID,
   UNDO_DURATION_MS,
@@ -491,7 +492,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   const tables = tablesQuery.data?.tables;
   const offense = tables?.offense ?? null;
   const defense = tables?.defense ?? null;
-  const offensiveLine = tables?.["offensive-line"] ?? null;
   const teamCode = canonicalNflTeam(matchup.team);
   const opponentCode = canonicalNflTeam(matchup.opponent);
   const findRow = (table: PfnTable | null, code: string | null) => table?.rows.find((row) => canonicalNflTeam(row.team) === code);
@@ -598,15 +598,14 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                       <span className={`matchup-reference-tag${sosBadgeClass(oppDefSosRank)}`}>DEF SOS: {oppDefSos === null ? "—" : formatDecimal(oppDefSos, 2)}</span>
                     </div>
                   </div>
-                  <SegmentedControl
-                    className="matchup-pairing-tabs"
-                    value={pairingTab}
-                    onChange={setPairingTab}
-                    label="Matchup side"
-                    options={[{ value: "team-offense", label: "Team Offense" }, { value: "team-defense", label: "Team Defense" }]}
-                  />
+                  <Tabs value={pairingTab} onValueChange={(value) => setPairingTab(value as "team-offense" | "team-defense")} className="matchup-pairing-tabs">
+                    <TabsList aria-label="Matchup side">
+                      <TabsTrigger id="matchup-team-offense-tab" value="team-offense" aria-controls="matchup-team-offense-panel">Team Offense</TabsTrigger>
+                      <TabsTrigger id="matchup-team-defense-tab" value="team-defense" aria-controls="matchup-team-defense-panel">Team Defense</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                   {matchupPairings.filter((pairing) => pairing.id === pairingTab).map((pairing) => (
-                    <section className="matchup-pairing" key={pairing.id} aria-label={`${pairing.leftLabel} versus ${pairing.rightLabel}`}>
+                    <section className="matchup-pairing" key={pairing.id} id={`matchup-${pairing.id}-panel`} role="tabpanel" aria-labelledby={`matchup-${pairing.id}-tab`}>
                       <h4>{pairing.leftLabel} vs {pairing.rightLabel}</h4>
                       {matchupStatConfigs.map((stat) => (
                         <MatchupStatRow
