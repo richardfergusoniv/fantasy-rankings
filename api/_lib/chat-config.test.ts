@@ -59,7 +59,7 @@ describe("chat-config free models", () => {
             text: async () => {
               throw abortErr;
             },
-          }) as Response,
+          }) as unknown as Response,
       }),
     ).rejects.toBeInstanceOf(ChatAgentTimeoutError);
   });
