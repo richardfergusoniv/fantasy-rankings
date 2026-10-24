@@ -74,7 +74,10 @@ jobs:
         run: npx drizzle-kit migrate --config=drizzle.config.ts
       - name: Smoke check migrated schema
         run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          # Every journal entry must have been applied by the standard command.
+          expected_migrations=$(node -p 'require("./drizzle-pg/meta/_journal.json").entries.length')
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v expected_migrations="$expected_migrations" <<'SQL'
+          SELECT set_config('ci.expected_migrations', :'expected_migrations', false);
           DO $$
           DECLARE
             expected_tables text[] := ARRAY[
@@ -118,8 +121,10 @@ jobs:
                 (SELECT count(*) FROM pg_policies);
             END IF;
 
-            IF (SELECT count(*) FROM drizzle.__drizzle_migrations) <> 10 THEN
-              RAISE EXCEPTION 'expected 10 applied migrations, found %',
+            IF (SELECT count(*) FROM drizzle.__drizzle_migrations)
+                <> current_setting('ci.expected_migrations')::int THEN
+              RAISE EXCEPTION 'expected % applied migrations, found %',
+                current_setting('ci.expected_migrations'),
                 (SELECT count(*) FROM drizzle.__drizzle_migrations);
             END IF;
           END $$;
