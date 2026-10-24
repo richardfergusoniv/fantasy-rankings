@@ -66,6 +66,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+        queryClient.removeQueries({ queryKey: ["auth-user-id"] });
         queryClient.removeQueries({ queryKey: ["chat-list"] });
         queryClient.removeQueries({ queryKey: ["chat-availability"] });
       }
