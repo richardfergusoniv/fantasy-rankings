@@ -34,7 +34,7 @@ export const DASHBOARD_VIEW_LIVE_TTL_SECONDS = 150;
 const RUNTIME_CACHE_MAX_BYTES = 1_800_000;
 /** Cap a poisoned or corrupt gzip entry. A dashboard view is well under this. */
 const RUNTIME_CACHE_MAX_JSON_BYTES = 8_000_000;
-const CACHE_NAMESPACE = "fr-dashboard-v1";
+const CACHE_NAMESPACE = "fr-dashboard-v2";
 const VERSION_MAX_LENGTH = 64;
 
 export type DashboardResponseView = DashboardCacheSection | "full";
