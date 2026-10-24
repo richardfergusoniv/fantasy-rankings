@@ -74,6 +74,36 @@ export class ChatAgentTimeoutError extends Error {
 }
 
 /**
+ * Log-safe summary of an OpenRouter error body. Guardrail and moderation
+ * responses can echo the user's prompt (e.g. `metadata.flagged_input`), so
+ * only the diagnostic fields are kept: error code, message, moderation
+ * reasons and provider. A non-JSON body is reported by length only.
+ */
+export function summarizeOpenRouterErrorBody(body: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return `non-JSON body (${body.length} chars)`;
+  }
+  const error = parsed && typeof parsed === "object" && "error" in parsed
+    ? (parsed as { error?: unknown }).error
+    : undefined;
+  if (!error || typeof error !== "object") return `JSON body without error (${body.length} chars)`;
+  const { code, message, metadata } = error as { code?: unknown; message?: unknown; metadata?: unknown };
+  const meta = metadata && typeof metadata === "object"
+    ? (metadata as { reasons?: unknown; provider_name?: unknown })
+    : {};
+  const safe = {
+    code,
+    message: typeof message === "string" ? message.slice(0, 200) : undefined,
+    reasons: meta.reasons,
+    provider: meta.provider_name,
+  };
+  return maskOpenRouterLogText(JSON.stringify(safe));
+}
+
+/**
  * Mask key-like tokens before writing upstream bodies to logs: bearer tokens,
  * OpenRouter keys, and other `sk-…` provider keys an upstream may echo.
  */
@@ -210,7 +240,7 @@ export async function callOpenRouterWithFallback(args: {
       "[chat] primary model failed; trying fallback",
       err.status,
       primary,
-      maskOpenRouterLogText(err.body).slice(0, 300),
+      summarizeOpenRouterErrorBody(err.body),
     );
     const response = await callOpenRouterChat({
       apiKey: args.apiKey,

@@ -114,7 +114,7 @@ describe("runChatAgent", () => {
       "[chat] primary model failed; trying fallback",
       status,
       DEFAULT_OPENROUTER_MODEL,
-      "blocked or missing",
+      "non-JSON body (18 chars)",
     );
     consoleSpy.mockRestore();
   });

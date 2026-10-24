@@ -28,8 +28,8 @@ import {
 } from "./_lib/chat-config.js";
 import {
   ChatAgentTimeoutError,
-  maskOpenRouterLogText,
   OpenRouterError,
+  summarizeOpenRouterErrorBody,
 } from "./_lib/chat-openrouter.js";
 import {
   appendChatPreferences,
@@ -189,12 +189,11 @@ export async function POST(req: Request): Promise<Response> {
   } catch (err) {
     if (err instanceof OpenRouterError || err instanceof ChatAgentTimeoutError) {
       if (err instanceof OpenRouterError) {
-        const bodyPreview = maskOpenRouterLogText(err.body).slice(0, 300);
         console.error(
           "[chat POST] upstream",
           err.status,
           err.model ?? "unknown-model",
-          bodyPreview,
+          summarizeOpenRouterErrorBody(err.body),
         );
         const denied = upstreamDeniedMessage(err.status);
         if (denied) {

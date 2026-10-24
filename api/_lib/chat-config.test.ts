@@ -12,6 +12,7 @@ import {
   ChatAgentTimeoutError,
   maskOpenRouterLogText,
   shouldFallback,
+  summarizeOpenRouterErrorBody,
 } from "./chat-openrouter.js";
 
 describe("chat-config free models", () => {
@@ -94,5 +95,28 @@ describe("chat-config free models", () => {
           }) as unknown as Response,
       }),
     ).rejects.toBeInstanceOf(ChatAgentTimeoutError);
+  });
+});
+
+describe("summarizeOpenRouterErrorBody", () => {
+  it("keeps diagnostic fields and drops prompt text echoed by a guardrail", () => {
+    const body = JSON.stringify({
+      error: {
+        code: 403,
+        message: "Input was flagged",
+        metadata: { reasons: ["harassment"], flagged_input: "the user's private prompt", provider_name: "Inkling" },
+      },
+    });
+    const summary = summarizeOpenRouterErrorBody(body);
+    expect(summary).toContain("Input was flagged");
+    expect(summary).toContain("harassment");
+    expect(summary).toContain("Inkling");
+    expect(summary).not.toContain("private prompt");
+  });
+
+  it("reports a non-JSON body by length only and masks keys in messages", () => {
+    expect(summarizeOpenRouterErrorBody("<html>prompt text</html>")).toBe("non-JSON body (24 chars)");
+    expect(summarizeOpenRouterErrorBody(JSON.stringify({ error: { message: "bad key sk-or-v1-abc123" } })))
+      .toContain("sk-or-***");
   });
 });
