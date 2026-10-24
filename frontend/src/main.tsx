@@ -1,11 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { StrictMode } from "react";
+import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { Toaster } from "@/components/ui/sonner";
-import { App } from "./App";
 import { AuthGate } from "./Auth";
+import { FeatureErrorBoundary } from "./error-boundary";
 import { initPostHog } from "./posthog";
 import "./theme.css";
+
+// The app is loaded on demand so the signed-out auth/bootstrap path doesn't
+// pay for the full dashboard bundle up front.
+const LazyApp = lazy(() => import("./App").then((module) => ({ default: module.App })));
 
 initPostHog();
 
@@ -31,7 +35,18 @@ createRoot(rootEl).render(
     <QueryClientProvider client={queryClient}>
       <div className="hatch-space-root" data-hatch-space-root>
         <AuthGate>
-          <App />
+          {/* Above Suspense so a failed App chunk load lands here; reload fetches it again. */}
+          <FeatureErrorBoundary title="Fantasy Rankings didn’t load." onRetry={() => window.location.reload()}>
+            <Suspense
+              fallback={
+                <div className="flex min-h-dvh items-center justify-center bg-background px-4 text-sm text-muted-foreground">
+                  <p>Loading…</p>
+                </div>
+              }
+            >
+              <LazyApp />
+            </Suspense>
+          </FeatureErrorBoundary>
         </AuthGate>
         <Toaster />
       </div>

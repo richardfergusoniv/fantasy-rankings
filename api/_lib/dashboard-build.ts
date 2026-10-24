@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { and, desc, eq, inArray, like } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "./db.js";
@@ -68,7 +69,6 @@ import {
   seasonLongFormatForLeague,
   settingValue,
   weeklyAvailabilityStatus,
-  withDeadline,
   type FantasyCalcRow,
   type SeasonLongFormat,
   type SleeperLeague,
@@ -98,6 +98,13 @@ import {
 } from "./chart-metric-transforms.js";
 import { loadChartExtrasSnapshot, type ChartExtrasSnapshot } from "./nflverse-chart-extras.js";
 import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./player-insights.js";
+import {
+  dashboardBuildLeaseResource,
+  drizzleBuildLeaseStore,
+  runWithBuildLease,
+} from "./build-lease.js";
+import { createDashboardBuildTracker, type DashboardBuildState } from "./dashboard-build-status.js";
+import { captureServerError } from "./posthog.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -125,6 +132,8 @@ export const USER_DASHBOARD_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 /** Shorter cache while any rostered game is live so lineup totals can refresh. */
 export const LIVE_DASHBOARD_CACHE_MS = 150 * 1000;
 export const BUILD_DEADLINE_MS = 55_000; // stay inside the 60s function budget
+/** Lease TTL: longer than the deadline so a build always releases or expires. */
+export const BUILD_LEASE_TTL_MS = 90_000;
 
 const NFLVERSE_PLAYER_STATS_2026_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.csv";
 const NFLVERSE_PLAYER_STATS_2025_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2025.csv";
@@ -1620,7 +1629,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       gameTimeByTeam,
       sleeperDefenseProjections,
     );
-    const defenseRankByTeam = new Map(leagueDefenses.flatMap((row) => row.rank === null ? [] : [[row.team, row.rank] as const]));
     const mergedRankings = mergePlayerProjections(
       league.league_id,
       rankingField,
@@ -1630,7 +1638,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       useVegasPrimary,
       sleeperProjectionsByPlayerId,
       league.scoring_settings,
-      defenseRankByTeam,
     );
     rankingsByLeagueId.set(league.league_id, mergedRankings);
     defensesByLeagueId.set(league.league_id, leagueDefenses);
@@ -2122,7 +2129,6 @@ export async function loadOrBuildUserDashboard(
   sleeperUserId: string,
   force = false,
 ): Promise<{ dashboard: Dashboard; fetchedAtMs: number }> {
-  const cacheKey = userDashboardCacheKey(sleeperUserId);
   const cached = await readUserDashboardCache(sleeperUserId);
   const cachedDashboard = cached?.dashboard ?? null;
   if (!force && cachedDashboard && cached?.fresh) {
@@ -2133,12 +2139,7 @@ export async function loadOrBuildUserDashboard(
   }
 
   try {
-    const buildPromise = buildUserDashboard(sleeperUserId, force);
-    // If the deadline wins the race, the build keeps running detached; guard
-    // against an unhandled rejection when it eventually settles.
-    buildPromise.catch(() => undefined);
-    const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
-    await writeUserDashboardCache(cacheKey, dashboard);
+    const dashboard = await buildUserDashboardUnderLease(sleeperUserId, force, cached?.fetchedAtMs ?? 0);
     return {
       dashboard,
       fetchedAtMs: responseCacheFetchedAtMs("built", Date.now()),
@@ -2416,31 +2417,143 @@ export async function readUserDashboardSection<S extends DashboardCacheSection>(
   });
 }
 
-// Single-flight guard so concurrent section reads (and dashboard reads) for
-// the same user share one background build per function instance.
-const inFlightBuilds = new Map<string, Promise<void>>();
+// Single-flight guards. The tracker dedupes within one function instance and
+// records each build's outcome so section responses can report a structured
+// status instead of silently dropping background failures; the DB lease
+// (`build_leases`) dedupes across instances so a burst of cold starts still
+// produces one build per user.
+const buildTracker = createDashboardBuildTracker();
+
+/** Structured status of the user's latest background build, if any ran here. */
+export function userDashboardBuildStatus(sleeperUserId: string): DashboardBuildState | null {
+  return buildTracker.status(sleeperUserId);
+}
+
+/**
+ * Build the dashboard under the deployment-wide lease. When another instance
+ * already holds the lease this waits for that build's cache write instead of
+ * starting a second build; a lease that expires without a fresh cache row
+ * surfaces as an error so the caller falls back to its stale data.
+ */
+async function buildUserDashboardUnderLease(
+  sleeperUserId: string,
+  force: boolean,
+  cachedFetchedAtMs: number,
+): Promise<Dashboard> {
+  const resource = dashboardBuildLeaseResource(sleeperUserId);
+  const outcome = await runWithBuildLease(
+    drizzleBuildLeaseStore,
+    resource,
+    crypto.randomUUID(),
+    BUILD_LEASE_TTL_MS,
+    async () => {
+      const dashboard = await buildUserDashboard(sleeperUserId, force);
+      // Publish inside the lease: a joiner polls for this row, so the lease
+      // must still be held when it lands (CodeRabbit, PR #282).
+      await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
+      return dashboard;
+    },
+    // On timeout the build keeps the lease until it settles, so a retry
+    // can't start a second build alongside it.
+    { deadlineMs: BUILD_DEADLINE_MS },
+  );
+  if (outcome.status === "built") return outcome.result;
+  if (outcome.status === "failed") {
+    waitUntil(outcome.released);
+    throw outcome.error;
+  }
+  // "joined": another instance is building. Wait for its cache write (it
+  // already lands in the cache, so this caller must not rewrite it).
+  const dashboard = await waitForFreshDashboardCache(
+    sleeperUserId,
+    cachedFetchedAtMs,
+    BUILD_DEADLINE_MS,
+    resource,
+  );
+  if (!dashboard) {
+    throw new Error("dashboard build in progress elsewhere");
+  }
+  return dashboard;
+}
+
+/**
+ * Poll for a cache row newer than `sinceMs` until the deadline elapses.
+ * Returns early when the lease holder finishes without producing a fresh
+ * row (a failed build should not stall the caller for the whole deadline).
+ */
+async function waitForFreshDashboardCache(
+  sleeperUserId: string,
+  sinceMs: number,
+  deadlineMs: number,
+  resource: string,
+): Promise<Dashboard | null> {
+  const deadlineAt = Date.now() + deadlineMs;
+  while (Date.now() < deadlineAt) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    try {
+      const cached = await readUserDashboardCache(sleeperUserId);
+      if (cached?.fresh && cached.fetchedAtMs > sinceMs) {
+        return cached.dashboard;
+      }
+      const lease = await drizzleBuildLeaseStore.read(resource);
+      if (!lease || lease.status !== "running") {
+        // The holder writes the cache, then releases: re-read once so a
+        // build that landed between the two reads above isn't missed.
+        const final = await readUserDashboardCache(sleeperUserId);
+        return final?.fresh && final.fetchedAtMs > sinceMs ? final.dashboard : null;
+      }
+    } catch {
+      // Transient read failure; keep polling until the deadline.
+    }
+  }
+  return null;
+}
 
 /**
  * Start (or join) a background build for this user that caches its result
  * when done. Never rejects — pair with `waitUntil` at the route so Vercel
  * keeps the function alive until the cache write lands. Section reads use
  * this so a cold cache answers immediately with "no data yet" while the
- * first build (~30s) runs behind the response.
+ * first build (~30s) runs behind the response. A failure is recorded on the
+ * tracker (read it back via `userDashboardBuildStatus`) and reported to
+ * server telemetry instead of being discarded; it is not rebuilt until it
+ * expires or the caller passes `retryFailed` (the client's explicit retry).
+ *
+ * The DB lease means a request landing on a different instance does not
+ * start a duplicate build; another instance's build in progress counts as
+ * no failure here.
  */
-export function kickUserDashboardBuild(sleeperUserId: string): Promise<void> {
-  const existing = inFlightBuilds.get(sleeperUserId);
-  if (existing) return existing;
-  const build = (async () => {
-    try {
-      const dashboard = await buildUserDashboard(sleeperUserId);
-      await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
-    } catch {
-      // Background build failed; the next read retries. The client keeps
-      // polling and eventually surfaces its error state.
-    } finally {
-      inFlightBuilds.delete(sleeperUserId);
-    }
-  })();
-  inFlightBuilds.set(sleeperUserId, build);
-  return build;
+export function kickUserDashboardBuild(
+  sleeperUserId: string,
+  options?: { retryFailed?: boolean },
+): Promise<void> {
+  return buildTracker.kick(
+    sleeperUserId,
+    async () => {
+      const outcome = await runWithBuildLease(
+        drizzleBuildLeaseStore,
+        dashboardBuildLeaseResource(sleeperUserId),
+        crypto.randomUUID(),
+        BUILD_LEASE_TTL_MS,
+        async () => {
+          const dashboard = await buildUserDashboard(sleeperUserId);
+          // Publish inside the lease (see buildUserDashboardUnderLease).
+          await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
+          return dashboard;
+        },
+        { deadlineMs: BUILD_DEADLINE_MS },
+      );
+      if (outcome.status === "failed") {
+        // Stay in flight (and inside the route's waitUntil) until a timed-out
+        // build really stops, so this instance doesn't start another one.
+        await outcome.released;
+        throw outcome.error;
+      }
+    },
+    (error, jobId) => {
+      console.error("[dashboard-build] background build failed", { jobId, sleeperUserId, error });
+      void captureServerError(error, { route: "dashboard-build", job: "user-dashboard", jobId });
+    },
+    { retryFailed: options?.retryFailed },
+  );
 }
