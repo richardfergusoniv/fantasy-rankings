@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { CHAT_MAX_HISTORY_MESSAGES, CHAT_MAX_INPUT_CHARS } from "../../../api/_lib/chat-config";
@@ -26,6 +26,11 @@ function historyForRequest(messages: ChatMessage[]): Array<{ role: ChatRole; con
     .filter((item) => item.content.length > 0);
 }
 
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined"
+    && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 export function ChatPanel() {
   const listId = useId();
   const inputId = useId();
@@ -35,6 +40,11 @@ export function ChatPanel() {
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLFormElement | null>(null);
+  const composerFirstRectRef = useRef<DOMRect | null>(null);
+  const hadMessagesRef = useRef(false);
+
+  const hasMessages = messages.length > 0;
 
   const availability = useQuery({
     queryKey: ["chat-availability"],
@@ -48,8 +58,41 @@ export function ChatPanel() {
   }, [availability.data]);
 
   useEffect(() => {
+    if (!hasMessages) return;
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages, sending]);
+  }, [messages, sending, hasMessages]);
+
+  useLayoutEffect(() => {
+    const flipped = hasMessages !== hadMessagesRef.current;
+    hadMessagesRef.current = hasMessages;
+    const first = composerFirstRectRef.current;
+    composerFirstRectRef.current = null;
+    const el = composerRef.current;
+    if (!flipped || !first || !el || prefersReducedMotion()) return;
+    const last = el.getBoundingClientRect();
+    const dy = first.top - last.top;
+    if (Math.abs(dy) < 1) return;
+    el.style.transition = "none";
+    el.style.transform = `translateY(${dy}px)`;
+    void el.offsetHeight;
+    el.style.transition = "transform 280ms cubic-bezier(.2, .7, .2, 1)";
+    el.style.transform = "";
+    const clear = (event?: TransitionEvent) => {
+      if (event && (event.target !== el || event.propertyName !== "transform")) return;
+      el.style.transition = "";
+      el.style.transform = "";
+      if (event) el.removeEventListener("transitionend", clear);
+    };
+    el.addEventListener("transitionend", clear);
+    return () => {
+      el.removeEventListener("transitionend", clear);
+      clear();
+    };
+  }, [hasMessages]);
+
+  function captureComposerRect() {
+    composerFirstRectRef.current = composerRef.current?.getBoundingClientRect() ?? null;
+  }
 
   async function send() {
     const text = draft.trim().slice(0, CHAT_MAX_INPUT_CHARS);
@@ -58,6 +101,7 @@ export function ChatPanel() {
     setDraft("");
     const userMessage: ChatMessage = { id: newId(), role: "user", content: text };
     const history = historyForRequest(messages);
+    if (!hasMessages) captureComposerRect();
     setMessages((prev) => [...prev, userMessage]);
     setSending(true);
     try {
@@ -67,6 +111,7 @@ export function ChatPanel() {
         { id: newId(), role: "assistant", content: result.reply },
       ]);
     } catch (err) {
+      captureComposerRect();
       setMessages((prev) => prev.filter((item) => item.id !== userMessage.id));
       const code = err && typeof err === "object" && "code" in err
         ? String((err as { code?: string }).code ?? "")
@@ -101,7 +146,10 @@ export function ChatPanel() {
   }
 
   return (
-    <section className="chat-panel" aria-label="Chat">
+    <section
+      className={`chat-panel${hasMessages ? " is-active" : " is-empty"}`}
+      aria-label="Chat"
+    >
       <div className="chat-thread" id={listId} role="log" aria-live="polite" aria-relevant="additions">
         {messages.map((message) => (
           <div
@@ -116,6 +164,7 @@ export function ChatPanel() {
         <div ref={bottomRef} />
       </div>
       <form
+        ref={composerRef}
         className="chat-composer"
         onSubmit={(event) => {
           event.preventDefault();
@@ -128,7 +177,6 @@ export function ChatPanel() {
           className="chat-input"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Ask about your league"
           maxLength={CHAT_MAX_INPUT_CHARS}
           disabled={sending}
           autoComplete="off"
