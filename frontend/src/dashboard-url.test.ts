@@ -43,7 +43,7 @@ describe("dashboard URL state", () => {
   });
 
   it("round-trips older tab values including matchup", () => {
-    for (const tab of ["team", "rankings", "waivers", "power", "draft", "trade", "comparison", "monitor", "team-stats", "analytics", "chat"] as const) {
+    for (const tab of ["team", "rankings", "waivers", "power", "draft", "trade", "comparison", "monitor", "team-stats", "analytics"] as const) {
       const original = state({ tab });
       expect(parseDashboardSearch(serializeDashboardSearch(original))).toEqual(original);
     }

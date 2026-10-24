@@ -48,9 +48,14 @@ function prefersReducedMotion(): boolean {
 
 export function ChatPanel({
   horizon = null,
+  variant = "page",
+  suggestions = CHAT_SUGGESTIONS,
 }: {
   /** Ranking horizon the user is viewing — chat explains that window's scores. */
   horizon?: "week" | "ros" | "dynasty" | null;
+  /** "sheet" keeps past chats behind a History toggle so the thread has the room. */
+  variant?: "page" | "sheet";
+  suggestions?: readonly string[];
 }) {
   const listId = useId();
   const inputId = useId();
@@ -69,6 +74,8 @@ export function ChatPanel({
 
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const isSheet = variant === "sheet";
   const hasMessages = messages.length > 0;
 
   const viewerId = useQuery({
@@ -259,16 +266,26 @@ export function ChatPanel({
   const chats: ChatListItem[] = chatsQuery.data?.chats ?? [];
 
   return (
-    <section className="chat-panel" aria-label="Chat">
+    <section className={`chat-panel${isSheet ? " is-sheet" : ""}`} aria-label="Chat">
       <div className="chat-sidebar">
         <button
           type="button"
           className="chat-new"
-          onClick={startNewChat}
+          onClick={() => { startNewChat(); setHistoryOpen(false); }}
           disabled={sending || loadingChat}
         >
           <span aria-hidden="true">+</span> New chat
         </button>
+        {isSheet ? (
+          <button
+            type="button"
+            className="chat-new"
+            aria-expanded={historyOpen}
+            onClick={() => setHistoryOpen((open) => !open)}
+          >
+            History
+          </button>
+        ) : null}
         {chatsQuery.isError ? (
           <div className="chat-history-status" role="alert">
             <p className="chat-error">Could not load chats.</p>
@@ -281,7 +298,7 @@ export function ChatPanel({
               Retry
             </Button>
           </div>
-        ) : (
+        ) : isSheet && !historyOpen ? null : (
           <ul className="chat-history" aria-label="Past chats">
             {chats.map((chat) => {
               const active = chat.id === chatId;
@@ -290,7 +307,7 @@ export function ChatPanel({
                   <button
                     type="button"
                     className="chat-history-open"
-                    onClick={() => void openChat(chat.id)}
+                    onClick={() => { void openChat(chat.id); setHistoryOpen(false); }}
                     disabled={sending || loadingChat}
                     aria-current={active ? "true" : undefined}
                   >
@@ -359,7 +376,7 @@ export function ChatPanel({
         </form>
         {hasMessages ? null : (
           <ul className="chat-suggestions" aria-label="Suggested questions">
-            {CHAT_SUGGESTIONS.map((text) => (
+            {suggestions.map((text) => (
               <li key={text}>
                 <button type="button" disabled={sending || loadingChat} onClick={() => applySuggestion(text)}>{text}</button>
               </li>

@@ -1338,3 +1338,73 @@
     background: var(--surface-2);
   }
 }
+
+/* Ask sheet: chat over the current page. Bottom sheet on a phone, right-hand panel from 760px. */
+[data-slot="dialog-content"].ask-sheet {
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  width: 100%;
+  max-width: none;
+  height: min(86dvh, 640px);
+  max-height: none;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 var(--space-4, 16px) env(safe-area-inset-bottom, 0px);
+  transform: none;
+  translate: none;
+  border-width: 1px 0 0;
+  border-radius: 16px 16px 0 0;
+  background: var(--card);
+}
+.ask-sheet-grabber {
+  width: 36px;
+  height: 4px;
+  flex: none;
+  margin: 8px auto 0;
+  border-radius: 2px;
+  background: var(--border);
+}
+.ask-sheet-head {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 48px;
+  padding-right: 48px;
+  align-items: center;
+}
+.ask-sheet-head h2 { margin: 0; font-size: var(--type-body); font-weight: 600; }
+.ask-sheet-context { color: var(--dim); font-size: var(--type-caption); }
+.chat-panel.is-sheet {
+  display: flex;
+  min-height: 0;
+  max-width: none;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+.chat-panel.is-sheet .chat-sidebar { flex-wrap: wrap; border: 0; padding: 0; }
+.chat-panel.is-sheet .chat-new { justify-content: center; }
+.chat-panel.is-sheet .chat-history { max-height: 160px; flex-direction: column; flex: 1 1 100%; overflow-y: auto; }
+.chat-panel.is-sheet .chat-intro { padding-top: 8px; }
+.chat-panel.is-sheet .chat-intro h2 { font-size: var(--type-section); }
+.chat-panel.is-sheet .chat-thread { max-height: none; }
+.chat-panel.is-sheet .chat-main.is-active { min-height: 0; flex: 1 1 auto; }
+@media (min-width: 760px) {
+  [data-slot="dialog-content"].ask-sheet {
+    top: 0;
+    left: auto;
+    width: 400px;
+    height: 100dvh;
+    border-width: 0 0 0 1px;
+    border-radius: 0;
+  }
+  .ask-sheet-grabber { display: none; }
+  .chat-panel.is-sheet { display: flex; }
+  .chat-panel.is-sheet .chat-sidebar { flex-direction: row; align-items: center; }
+}

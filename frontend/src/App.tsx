@@ -50,6 +50,8 @@ import { CommandBar } from "./shell/command-bar";
 import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "./shell/command-palette";
 import { InspectorFrame, useInspectorDockViewport } from "./shell/inspector-frame";
 import { ShortcutsDialog } from "./shell/shortcuts-dialog";
+import { AskButton } from "./shell/ask-button";
+import { askContextForTab } from "./lib/ask-context";
 import { ThemeToggle } from "./shell/theme-toggle";
 import { Explorer, isExplorerMode } from "./views/explorer";
 import { GameLinesPanel } from "./views/game-lines-panel";
@@ -68,7 +70,7 @@ const LazyConnectedTeamCard = lazy(() => import("./views/player-pool").then((mod
 const LazyDraftCenter = lazy(() => import("./views/draft-center").then((module) => ({ default: module.DraftCenter })));
 const LazyTradeCalculator = lazy(() => import("./views/trade-calculator").then((module) => ({ default: module.TradeCalculator })));
 const LazyChartsTool = lazy(() => import("./AnalyticsViews").then((module) => ({ default: module.ChartsTool })));
-const LazyChatPanel = lazy(() => import("./views/chat-panel").then((module) => ({ default: module.ChatPanel })));
+const LazyAskSheet = lazy(() => import("./views/ask-sheet").then((module) => ({ default: module.AskSheet })));
 
 function SafeAreaTopScrim({ backgroundColor }: { backgroundColor?: string }) {
   return (
@@ -112,7 +114,7 @@ function primaryPageForTab(tab: Tab): PrimaryPage {
   if (tab === "rankings" || tab === "waivers" || tab === "comparison") return "players";
   if (tab === "power" || tab === "trade") return "league";
   if (tab === "draft") return "draft";
-  if (tab === "monitor" || tab === "team-stats" || tab === "analytics" || tab === "chat") return "tools";
+  if (tab === "monitor" || tab === "team-stats" || tab === "analytics") return "tools";
   const unreachable: never = tab;
   return unreachable;
 }
@@ -540,12 +542,18 @@ export function App() {
       monitor: "Game lines",
       "team-stats": "Team stats",
       analytics: "Analytics",
-      chat: "Chat",
     };
     document.title = `${titles[tab]} · Fantasy Rankings`;
   }, [tab]);
   const playerHistory = usePlayerCardHistory();
   const [tickerNews, setTickerNews] = useState<PlayerNewsItem | null>(null);
+  const [askOpen, setAskOpen] = useState(false);
+  const askButtonRef = useRef<HTMLButtonElement | null>(null);
+  // The sheet is mounted only while open, so Radix has no trigger to hand focus back to.
+  const changeAskOpen = useCallback((open: boolean) => {
+    setAskOpen(open);
+    if (!open) requestAnimationFrame(() => askButtonRef.current?.focus());
+  }, []);
   // The matchup dialog lives in the URL (`mu`), so opening it is a history step and Back from a tool brings it back.
   const selectedMatchup = dashboardUrl.state.matchup;
   const { commit: commitDashboardUrl, closeMatchup } = dashboardUrl;
@@ -1167,6 +1175,11 @@ export function App() {
     <div className={`app-shell${primaryPage === "team" ? " matchup-page" : ""}${inspectorDocked ? " is-inspector-docked" : ""}`}>
       <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
+      {askOpen ? (
+        <Suspense fallback={null}>
+          <LazyAskSheet open={askOpen} onOpenChange={changeAskOpen} context={askContextForTab(tab)} horizon={dashboardUrl.state.horizon} />
+        </Suspense>
+      ) : null}
       <div role="region" aria-label="League and week" className="league-sticky">
           <TickerStrip
             data={draftQuery.data}
@@ -1180,6 +1193,7 @@ export function App() {
           <div className="week-line">
             <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
             <div className="week-actions">
+            <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />
             <ThemeToggle />
             <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label={tab === "draft" ? "Refresh draft data" : "Refresh scores and rankings"}><RefreshIcon spinning={isRefreshing} /></button>
             </div>
@@ -1234,7 +1248,6 @@ export function App() {
               <TabsTrigger value="monitor">Game lines</TabsTrigger>
               <TabsTrigger value="team-stats">Team stats</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
-              <TabsTrigger value="chat">Chat</TabsTrigger>
             </TabsList>
           </Tabs>
         ) : null}
@@ -1253,7 +1266,6 @@ export function App() {
             monitor: "Game lines",
             "team-stats": "Team stats",
             analytics: "Analytics",
-            chat: "Chat",
           } satisfies Record<Tab, string>)[tab]}</h1>
           {currentSectionLoading ? <SectionLoading label={`Loading ${({ team: "Matchup", players: "Players", league: "League", draft: "Draft", tools: "Tools" } as const)[primaryPage]}…`} />
             : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
@@ -1289,11 +1301,6 @@ export function App() {
                   playerLink={toolPlayerLink}
                   focusPlayer={analyticsFocusPlayer}
                 />
-              </Suspense>
-            )
-            : tab === "chat" ? (
-              <Suspense fallback={<SectionLoading label="Loading chat…" />}>
-                <LazyChatPanel horizon={dashboardUrl.state.horizon} />
               </Suspense>
             )
             : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={(rosterId) => setRosterCardRosterId(rosterId)} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
