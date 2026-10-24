@@ -71,6 +71,13 @@
       "when": 1762200000000,
       "tag": "0010_chat_messages_owner_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1762400000000,
+      "tag": "0011_build_leases_rate_limits",
+      "breakpoints": true
     }
   ]
 }

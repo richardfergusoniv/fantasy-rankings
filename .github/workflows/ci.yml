@@ -86,12 +86,13 @@ jobs:
               'projection_accuracy', 'saved_chart_views', 'player_news_runs',
               'player_news_items', 'sleeper_connections', 'shared_player_news',
               'prop_line_snapshots', 'scoring_weights', 'scoring_snapshots',
-              'chat_conversations', 'chat_messages', 'chat_preferences'
+              'chat_conversations', 'chat_messages', 'chat_preferences',
+              'build_leases', 'rate_limit_buckets'
             ];
             expected_rls text[] := ARRAY[
               'sleeper_connections', 'prop_line_snapshots', 'scoring_weights',
               'scoring_snapshots', 'chat_conversations', 'chat_messages',
-              'chat_preferences'
+              'chat_preferences', 'build_leases', 'rate_limit_buckets'
             ];
             missing text;
           BEGIN

@@ -204,10 +204,14 @@ export async function loadTeamWeekStats(season: number): Promise<TeamWeekStats> 
       });
       // Persist only complete payloads so a transient upstream failure can't
       // pin a partial dataset in place for the full window.
+      // Awaited: a serverless instance can freeze once the response is
+      // sent, dropping an unawaited write.
       if (complete) {
-        writeStoredTeamWeekStats(payload).catch((error) => {
+        try {
+          await writeStoredTeamWeekStats(payload);
+        } catch (error) {
           console.error("[pfn-tables] team-week stats cache write failed", error instanceof Error ? error.message : error);
-        });
+        }
       }
       return payload;
     } catch (error) {

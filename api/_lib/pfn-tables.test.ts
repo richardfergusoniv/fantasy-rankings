@@ -113,10 +113,16 @@ describe("loadTeamWeekStats", () => {
     fetchTextMock.mockImplementation(async (url: string) =>
       url.includes("snap_counts") ? snapsCsv() : statsCsv());
 
+    let writeLanded = false;
+    insertConflictMock.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      writeLanded = true;
+    });
+
     const result = await loadTeamWeekStats(SEASON);
     expect(result.stats.length).toBeGreaterThan(0);
-    // The write is fire-and-forget; flush microtasks before asserting.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(insertConflictMock).toHaveBeenCalled();
+    // Awaited, not fire-and-forget: the row has landed before the load
+    // resolves, so a frozen serverless instance can't drop it.
+    expect(writeLanded).toBe(true);
   });
 });

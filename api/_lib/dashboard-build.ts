@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import { and, desc, eq, inArray, like } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "./db.js";
@@ -68,7 +69,6 @@ import {
   seasonLongFormatForLeague,
   settingValue,
   weeklyAvailabilityStatus,
-  withDeadline,
   type FantasyCalcRow,
   type SeasonLongFormat,
   type SleeperLeague,
@@ -2440,19 +2440,21 @@ async function buildUserDashboardUnderLease(
     crypto.randomUUID(),
     BUILD_LEASE_TTL_MS,
     async () => {
-      const buildPromise = buildUserDashboard(sleeperUserId, force);
-      // If the deadline wins the race, the build keeps running detached; guard
-      // against an unhandled rejection when it eventually settles.
-      buildPromise.catch(() => undefined);
-      const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
+      const dashboard = await buildUserDashboard(sleeperUserId, force);
       // Publish inside the lease: a joiner polls for this row, so the lease
       // must still be held when it lands (CodeRabbit, PR #282).
       await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
       return dashboard;
     },
+    // On timeout the build keeps the lease until it settles, so a retry
+    // can't start a second build alongside it.
+    { deadlineMs: BUILD_DEADLINE_MS },
   );
   if (outcome.status === "built") return outcome.result;
-  if (outcome.status === "failed") throw outcome.error;
+  if (outcome.status === "failed") {
+    waitUntil(outcome.released);
+    throw outcome.error;
+  }
   // "joined": another instance is building. Wait for its cache write (it
   // already lands in the cache, so this caller must not rewrite it).
   const dashboard = await waitForFreshDashboardCache(
@@ -2517,15 +2519,17 @@ export function kickUserDashboardBuild(sleeperUserId: string): Promise<void> {
         crypto.randomUUID(),
         BUILD_LEASE_TTL_MS,
         async () => {
-          const buildPromise = buildUserDashboard(sleeperUserId);
-          buildPromise.catch(() => undefined);
-          const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
+          const dashboard = await buildUserDashboard(sleeperUserId);
           // Publish inside the lease (see buildUserDashboardUnderLease).
           await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
           return dashboard;
         },
+        { deadlineMs: BUILD_DEADLINE_MS },
       );
       if (outcome.status === "failed") {
+        // Stay in flight (and inside the route's waitUntil) until a timed-out
+        // build really stops, so this instance doesn't start another one.
+        await outcome.released;
         console.error(
           "[dashboard-build] background build failed",
           outcome.error instanceof Error ? outcome.error.message : outcome.error,

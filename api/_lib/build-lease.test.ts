@@ -106,3 +106,37 @@ describe("runWithBuildLease", () => {
     expect(outcome.status).toBe("built");
   });
 });
+
+describe("runWithBuildLease deadline", () => {
+  it("keeps the lease after a timeout until the build actually settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const { store } = createFakeStore();
+      let finishBuild!: () => void;
+      const slow = () => new Promise<string>((resolve) => { finishBuild = () => resolve("late"); });
+      const pending = runWithBuildLease(store, "r", "holder-a", 90_000, slow, { deadlineMs: 55_000 });
+      await vi.advanceTimersByTimeAsync(55_000);
+      const outcome = await pending;
+      expect(outcome.status).toBe("failed");
+      // The timed-out build is still running: nobody else may claim yet.
+      const second = vi.fn(async () => "second");
+      expect((await runWithBuildLease(store, "r", "holder-b", 90_000, second)).status).toBe("joined");
+      expect(second).not.toHaveBeenCalled();
+      expect((await store.read("r"))?.status).toBe("running");
+
+      finishBuild();
+      if (outcome.status === "failed") await outcome.released;
+      expect(await store.read("r")).toMatchObject({ status: "failed", lastError: "build exceeded its 55000ms deadline" });
+      expect((await runWithBuildLease(store, "r", "holder-b", 90_000, second)).status).toBe("built");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns the result and releases normally when the build beats the deadline", async () => {
+    const { store } = createFakeStore();
+    const outcome = await runWithBuildLease(store, "r", "holder-a", 90_000, async () => "ok", { deadlineMs: 55_000 });
+    expect(outcome).toEqual({ status: "built", result: "ok" });
+    expect((await store.read("r"))?.status).toBe("done");
+  });
+});
