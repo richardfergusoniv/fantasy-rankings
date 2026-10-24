@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { Toaster } from "@/components/ui/sonner";
 import { App } from "./App";
 import { AuthGate } from "./Auth";
+import { FeatureErrorBoundary } from "./error-boundary";
 import { initPostHog } from "./posthog";
 import "./theme.css";
 
@@ -31,7 +32,9 @@ createRoot(rootEl).render(
     <QueryClientProvider client={queryClient}>
       <div className="hatch-space-root" data-hatch-space-root>
         <AuthGate>
-          <App />
+          <FeatureErrorBoundary title="Fantasy Rankings didn’t load." onRetry={() => window.location.reload()}>
+            <App />
+          </FeatureErrorBoundary>
         </AuthGate>
         <Toaster />
       </div>

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import { api } from "./api";
 import type {
   BasePosition,
   BoomBustPosition,
+  Dashboard,
   MatchupGrade,
   MatchupSelection,
   MatchupStatConfig,
@@ -25,6 +26,7 @@ import type {
   TradeAsset,
 } from "./dashboard-types";
 import { RankStrip } from "./components/rank-strip";
+import { dashboardFreshness, PROJECTION_ESTIMATE_MARK } from "./dashboard-freshness";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { ModalPortal, useDialogFocusTrap } from "./shared";
 import {
@@ -152,8 +154,13 @@ export function shortLeagueName(name: string): string {
     .replace("Hoe Ass Dynasty League", "Hoe Ass Dynasty");
 }
 
-export function formatProjectionPoints(value: number | null, _source?: PlayerSearchResult["projectionSource"]): string {
-  return formatPoints(value);
+/**
+ * Fallback ("estimated") projections are marked with *; the header freshness
+ * strip carries the "* est" legend whenever the dashboard contains one.
+ */
+export function formatProjectionPoints(value: number | null, source?: PlayerSearchResult["projectionSource"]): string {
+  const formatted = formatPoints(value);
+  return value !== null && source === "fallback" ? `${formatted}*` : formatted;
 }
 
 export const projectionComponentFields: Partial<Record<BasePosition, ReadonlyArray<{ key: string; label: string }>>> = {
@@ -375,6 +382,32 @@ export function movementLabel(percent: number | null): string {
   if (percent === null) return "No 30-day history";
   if (!Number.isFinite(percent)) return "Up from zero over 30 days";
   return `${formatPercent(percent, { sign: "exceptZero" })} over 30 days`;
+}
+
+/**
+ * Compact freshness/status strip for the dashboard header: our build time
+ * ("Updated …"), the underlying source times (rankings / market values), the
+ * "* est" legend for fallback projections, and — when the build was partial —
+ * an expandable list naming exactly what is unavailable.
+ */
+export function DashboardFreshness({ dashboard }: { dashboard: Dashboard }) {
+  const info = useMemo(() => dashboardFreshness(dashboard, Date.now()), [dashboard]);
+  if (!info.updatedLabel && !info.partial) return null;
+  return (
+    <>
+      <span className="data-freshness">
+        {info.updatedLabel ? <span className="data-updated">{info.updatedLabel}</span> : null}
+        {info.sourceLabels.length > 0 ? <span className="data-source-times">{info.sourceLabels.join(" · ")}</span> : null}
+        {info.hasEstimates ? <span className="data-estimate-note" title={`${PROJECTION_ESTIMATE_MARK} marks an estimated projection`}>* est</span> : null}
+      </span>
+      {info.partial ? (
+        <details className="data-notes">
+          <summary>Part of this view is unavailable</summary>
+          <ul>{info.notes.map((note) => <li key={note}>{note}</li>)}</ul>
+        </details>
+      ) : null}
+    </>
+  );
 }
 
 export function SectionError({ title, onRetry, retrying = false, compact = false }: { title: string; onRetry: () => void; retrying?: boolean; compact?: boolean }) {
