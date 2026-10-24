@@ -347,8 +347,13 @@
   font-weight: 700;
 }
 @media (max-width: 759px) {
+  /* Team and Stat pair on one row; the position buttons take the row below. */
+  .monitor-team-stats-controls .monitor-value-chart-field {
+    flex: 1 1 140px;
+  }
   .monitor-team-stats-group {
     flex: 1 1 100%;
+    order: 1;
   }
   .team-usage th,
   .team-usage td {
