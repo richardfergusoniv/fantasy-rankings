@@ -287,3 +287,13 @@ export function DepthChangeMark({ change, compact = false }: { change: NonNullab
     </span>
   );
 }
+
+/** The floor/ceiling word and handcuff note that sit beside a player's tier chip. */
+export function ProfileChips({ profile, handcuffTo }: { profile: string | null; handcuffTo: string | null }) {
+  return (
+    <>
+      {profile ? <span className="depth-chart-tag" title="From this player's weekly scores this season">{profile}</span> : null}
+      {handcuffTo ? <span className="depth-chart-tag" title="Backup running back on the depth chart">Handcuff · {handcuffTo}</span> : null}
+    </>
+  );
+}

@@ -55,6 +55,7 @@ import { InspectorFrame, useInspectorDockViewport } from "./shell/inspector-fram
 import { ShortcutsDialog } from "./shell/shortcuts-dialog";
 import { AskButton } from "./shell/ask-button";
 import { askContextForTab } from "./lib/ask-context";
+import { handcuffStarter } from "./lib/handcuff";
 import { AccountMenu } from "./shell/account-menu";
 import { ThemeToggle } from "./shell/theme-toggle";
 import { Explorer, isExplorerMode } from "./views/explorer";
@@ -1203,6 +1204,18 @@ export function App() {
     || (!analyticsQuery.isError
       && analyticsQuery.data?.section === "analytics"
       && analyticsQuery.data.data == null);
+  const sheetPlayer = playerHistory.current;
+  const sheetHandcuffTo = sheetPlayer
+    ? handcuffStarter({
+        playerId: sheetPlayer.playerId,
+        position: sheetPlayer.position,
+        team: sheetPlayer.team,
+        weeklyRank: sheetPlayer.weeklyRank,
+        leagueSize: league.seasonLongFormat.numTeams,
+        depth: dashboard.playerInsights?.depth ?? {},
+        playerLists: [dashboard.rankings, dashboard.seasonLongRankings],
+      })
+    : null;
   const playerSheet = playerHistory.current ? (
     <PlayerDetailSheet
       player={playerHistory.current}
@@ -1210,6 +1223,7 @@ export function App() {
       leagueId={league.id}
       formatKey={league.seasonLongFormat.key}
       leagueSize={league.seasonLongFormat.numTeams}
+      handcuffTo={sheetHandcuffTo}
       mode="details"
       analytics={dashboard.analytics}
       analyticsLoading={analyticsLoading}
