@@ -76,8 +76,9 @@ export class ChatAgentTimeoutError extends Error {
 /**
  * Log-safe summary of an OpenRouter error body. Guardrail and moderation
  * responses can echo the user's prompt (e.g. `metadata.flagged_input`), so
- * only the diagnostic fields are kept: error code, message, moderation
- * reasons and provider. A non-JSON body is reported by length only.
+ * only the diagnostic fields are kept: error code, message, provider, and
+ * how many moderation reasons there were (the reasons themselves are
+ * free-form and may quote the prompt). A non-JSON body is reported by length only.
  */
 export function summarizeOpenRouterErrorBody(body: string): string {
   let parsed: unknown;
@@ -97,7 +98,7 @@ export function summarizeOpenRouterErrorBody(body: string): string {
   const safe = {
     code,
     message: typeof message === "string" ? message.slice(0, 200) : undefined,
-    reasons: meta.reasons,
+    reasonCount: Array.isArray(meta.reasons) ? meta.reasons.length : undefined,
     provider: meta.provider_name,
   };
   return maskOpenRouterLogText(JSON.stringify(safe));

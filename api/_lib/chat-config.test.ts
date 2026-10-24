@@ -104,12 +104,12 @@ describe("summarizeOpenRouterErrorBody", () => {
       error: {
         code: 403,
         message: "Input was flagged",
-        metadata: { reasons: ["harassment"], flagged_input: "the user's private prompt", provider_name: "Inkling" },
+        metadata: { reasons: ["quotes: the user's private prompt"], flagged_input: "the user's private prompt", provider_name: "Inkling" },
       },
     });
     const summary = summarizeOpenRouterErrorBody(body);
     expect(summary).toContain("Input was flagged");
-    expect(summary).toContain("harassment");
+    expect(summary).toContain('"reasonCount":1');
     expect(summary).toContain("Inkling");
     expect(summary).not.toContain("private prompt");
   });
