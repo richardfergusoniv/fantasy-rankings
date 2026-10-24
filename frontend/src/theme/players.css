@@ -197,24 +197,6 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-actions { display: flex; flex: none; align-items: center; gap: 6px; }
 .player-detail-actions button { flex: none; display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface-2); color: var(--dim); font-size: var(--type-section); line-height: 1; cursor: pointer; }
 .player-detail-tabs { position: sticky; top: 0; z-index: 2; margin: 0 -18px; padding: 12px 18px 0; background: var(--surface); }
-.player-detail-tabs [data-slot="tabs-list"] {
-  min-height: var(--sub-tab-height);
-  height: var(--sub-tab-height);
-  gap: var(--tab-gap);
-  padding: var(--tab-track-padding);
-  border-radius: var(--radius);
-  background: var(--segment-track);
-  font-family: var(--font-ui);
-}
-.player-detail-tabs [data-slot="tabs-trigger"] {
-  min-height: var(--sub-tab-button-height);
-  height: var(--sub-tab-button-height);
-  padding: 0 var(--tab-button-padding-inline);
-  border-radius: calc(var(--radius) - 2px);
-  font-family: inherit;
-  font-size: var(--sub-tab-font-size);
-  font-weight: var(--sub-tab-font-weight);
-}
 .player-detail-mode-toggle { margin-top: 14px; }
 .player-season-panel, .player-advanced-panel { display: grid; gap: 18px; padding-top: 14px; }
 .player-season-panel .section-heading, .player-advanced-panel .section-heading { min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }

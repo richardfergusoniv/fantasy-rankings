@@ -909,7 +909,7 @@ export function BoomBustPanel({
           label="Boom Bust history range"
           options={[
             { value: "season", label: "2026" },
-            { value: "last3", label: "Last 3 Years" },
+            { value: "last3", label: "Last 3 years" },
           ]}
         />
       </div>

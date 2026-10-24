@@ -26,7 +26,7 @@ export function PlayerValueTrend({ name, history, isLoading }: { name: string; h
       ) : points.length ? (
         <div className="player-value-trend-chart" role="img" aria-label={`${name} FantasyCalc value from ${first?.date ?? "first snapshot"} to ${last?.date ?? "latest snapshot"}`}>
           <ChartContainer config={{ value: { label: "Value", color: "var(--chart-1)" } }} className="aspect-auto h-full">
-            <LineChart data={points} margin={{ top: 8, right: 8, bottom: 18, left: 0 }}>
+            <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
               <XAxis dataKey="date" tickFormatter={formatDateTick} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={18} />
               <YAxis domain={["dataMin", "dataMax"]} width={42} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} tickLine={false} axisLine={false} />

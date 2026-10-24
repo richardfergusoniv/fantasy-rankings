@@ -105,8 +105,8 @@ export function PowerRankings({
       }}
       label="Power ranking horizon"
       options={isDynastyLeague
-        ? [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
-        : [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season Long" }]}
+        ? [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season long" }, { value: "dynasty", label: "Dynasty" }]
+        : [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season long" }]}
     />
   );
 
