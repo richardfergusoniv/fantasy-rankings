@@ -17,6 +17,29 @@ import {
   SCORING_WEIGHTS,
 } from "./move-scoring.js";
 
+describe("win-chance role ranks", () => {
+  it("treats explicit null WR/RB ranks as OTHER, not WR1/RB1", () => {
+    const mine = [
+      { playerId: "qb", position: "QB", team: "KC", pStar: 20, opponentTeam: "LV" },
+      { playerId: "wr3", position: "WR", team: "KC", pStar: 8, opponentTeam: "LV", wrRankOnTeam: null as 1 | 2 | null },
+    ];
+    const theirs = [
+      { playerId: "oqb", position: "QB", team: "LV", pStar: 18, opponentTeam: "KC" },
+      { playerId: "ow", position: "WR", team: "LV", pStar: 12, opponentTeam: "KC", wrRankOnTeam: 1 as const },
+    ];
+    // QB + WR3 same team should use default ρ=0, not QB-WR1 0.35.
+    const withDepth = correlatedWinProbability(mine, theirs);
+    const withWr1 = correlatedWinProbability(
+      [
+        mine[0]!,
+        { playerId: "wr1", position: "WR", team: "KC", pStar: 8, opponentTeam: "LV", wrRankOnTeam: 1 as const },
+      ],
+      theirs,
+    );
+    expect(withDepth).not.toBe(withWr1);
+  });
+});
+
 describe("start/sit EXAMPLE (FLEX half-PPR WR A vs WR B)", () => {
   it("matches the spec walkthrough numbers", () => {
     // V 13.2 / 12.8; U 13.5 / 9.9; WR w_v = 0.25

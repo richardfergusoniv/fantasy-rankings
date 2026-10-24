@@ -315,11 +315,15 @@ describe("dispatchChatTool", () => {
       waiverAdjustment: { give: number; get: number };
       verdict: string;
       primaryLabel: string;
+      scoringWindow: string;
     };
     expect(result.ok).toBe(true);
     expect(result.giveTotal).toBe(8000);
-    expect(result.getTotal).toBe(10_000);
-    expect(result.waiverAdjustment.give).toBeGreaterThan(0);
+    // Season Long in dynasty: pick has no redraft twin → 0 (do not mix dynasty pick value).
+    expect(result.getTotal).toBe(6_000);
+    // Pick at 0 means the "extra piece" waiver credit is also 0.
+    expect(result.waiverAdjustment).toEqual({ give: 0, get: 0 });
+    expect(result.scoringWindow).toBe("season_long");
     expect(result.primaryLabel).toMatch(/Accept|Lean accept|Decline/);
     expect(result.verdict.length).toBeGreaterThan(0);
   });

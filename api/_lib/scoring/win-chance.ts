@@ -42,10 +42,13 @@ function roleOf(player: WinChancePlayer): Role {
   if (pos === "TE") return player.isTe1 === false ? "OTHER" : "TE1";
   if (pos === "WR") {
     if (player.wrRankOnTeam === 2) return "WR2";
+    // Explicit null = WR3+ (assignWrRanksByTargetShare); undefined keeps WR1 default.
+    if (player.wrRankOnTeam === null) return "OTHER";
     return "WR1";
   }
   if (pos === "RB") {
     if (player.rbRankOnTeam === 2) return "RB2";
+    if (player.rbRankOnTeam === null) return "OTHER";
     return "RB1";
   }
   return "OTHER";
