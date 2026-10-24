@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
-import { newsForTicker, PROMINENT_OVERALL_RANK_LIMIT } from "./ticker-news";
+import { newsForTicker, PROMINENT_OVERALL_RANK_LIMIT, tickerItemKind } from "./ticker-news";
 import type {
   Dashboard,
   DashboardSection,
@@ -24,6 +24,8 @@ import type {
 export type { League, MatchupSelection } from "./dashboard-types";
 import {
   BROWSER_DASHBOARD_CACHE_KEY,
+  DashboardFreshness,
+  DashboardPartialNotes,
   MatchupDataModal,
   NewsCardModal,
   RefreshIcon,
@@ -37,7 +39,8 @@ import {
 import { formatDecimal, formatPoints } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
 import { withStreamedAnalytics } from "./dashboard-analytics";
-import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
+import { isSectionWaiting, sectionBuildFailed, shouldShowProgressiveShell } from "./dashboard-loading";
+import { FeatureErrorBoundary } from "./error-boundary";
 import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, waiversSearchPreservingContext } from "./dashboard-url";
 import { createPlayerResolver, type DashboardPlayerRow, type PlayerLinkResolver } from "./tool-player-link";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
@@ -45,6 +48,7 @@ import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
+import { personalQueryKey, snapshotViewer, useViewerIdentity } from "./viewer-scope";
 import { useDashboardUrl } from "./use-dashboard-url";
 import { CommandBar } from "./shell/command-bar";
 import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "./shell/command-palette";
@@ -52,6 +56,7 @@ import { InspectorFrame, useInspectorDockViewport } from "./shell/inspector-fram
 import { ShortcutsDialog } from "./shell/shortcuts-dialog";
 import { AskButton } from "./shell/ask-button";
 import { askContextForTab } from "./lib/ask-context";
+import { AccountMenu } from "./shell/account-menu";
 import { ThemeToggle } from "./shell/theme-toggle";
 import { Explorer, isExplorerMode } from "./views/explorer";
 import { GameLinesPanel } from "./views/game-lines-panel";
@@ -246,28 +251,33 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
         <div className={`ticker-track${isStatic ? " is-static" : ""}`}>
           {repeatedItems.map((item, index) => {
             const isCopy = index >= visibleItems.length;
-            return item.newsItem ? (
+            const kind = tickerItemKind(item);
+            const className = `ticker-item${isCopy ? " ticker-copy" : ""}`;
+            const key = `${item.key}:${index}`;
+            // Items render their full visible text, so the accessible name always
+            // matches the label; extra hints go on aria-description instead.
+            return kind === "news" ? (
               <button
                 type="button"
-                className={`ticker-item${isCopy ? " ticker-copy" : ""}`}
-                key={`${item.key}:${index}`}
+                className={className}
+                key={key}
                 onClick={() => item.newsItem ? onNews(item.newsItem) : undefined}
-                aria-label={isCopy ? undefined : `${item.source}: ${item.label}`}
                 aria-hidden={isCopy || undefined}
                 tabIndex={isCopy ? -1 : undefined}
               >{content(item)}</button>
-            ) : item.href ? (
-              <a href={item.href} target="_blank" rel="noreferrer" className={`ticker-item${isCopy ? " ticker-copy" : ""}`} key={`${item.key}:${index}`} aria-label={isCopy ? undefined : `${item.source}: ${item.label} (opens in a new tab)`} aria-hidden={isCopy || undefined} tabIndex={isCopy ? -1 : undefined}>{content(item)}</a>
-            ) : (
+            ) : kind === "link" ? (
+              <a href={item.href} target="_blank" rel="noreferrer" className={className} key={key} aria-description={isCopy ? undefined : "Opens in a new tab"} aria-hidden={isCopy || undefined} tabIndex={isCopy ? -1 : undefined}>{content(item)}</a>
+            ) : kind === "player" ? (
               <button
                 type="button"
-                className={`ticker-item${isCopy ? " ticker-copy" : ""}`}
-                key={`${item.key}:${index}`}
+                className={className}
+                key={key}
                 onClick={() => item.playerId ? onPlayer(item.playerId) : undefined}
-                aria-label={isCopy ? undefined : `${item.source}: ${item.label}`}
                 aria-hidden={isCopy || undefined}
                 tabIndex={isCopy ? -1 : undefined}
               >{content(item)}</button>
+            ) : (
+              <span className={className} key={key} aria-hidden={isCopy || undefined}>{content(item)}</span>
             );
           })}
         </div>
@@ -284,8 +294,11 @@ const DASHBOARD_DEADLINE_MS = 58_000;
 const SECTION_BUILD_POLL_MS = 4_000;
 const LIVE_LINEUP_REFETCH_MS = 150_000;
 function pollWhileSectionBuilding(query: { state: { data?: unknown } }): number | false {
-  const data = query.state.data as { data?: unknown } | undefined;
-  return data !== undefined && data.data == null ? SECTION_BUILD_POLL_MS : false;
+  const data = query.state.data as { data?: unknown; build?: { status?: string } } | undefined;
+  if (data === undefined || data.data != null) return false;
+  // A failed background build stops the poll — the view shows its error state
+  // and retry kicks a new build instead of waiting forever.
+  return data.build?.status === "failed" ? false : SECTION_BUILD_POLL_MS;
 }
 
 function teamSectionHasLiveGame(data: unknown): boolean {
@@ -333,7 +346,7 @@ function dropUnsignedBrowserDashboard(): void {
   }
 }
 
-function readBrowserDashboard(userId: string | null): Dashboard | undefined {
+function readBrowserDashboard(userId: string | null, accountId: string | null): Dashboard | undefined {
   if (!userId) {
     dropUnsignedBrowserDashboard();
     return undefined;
@@ -341,7 +354,9 @@ function readBrowserDashboard(userId: string | null): Dashboard | undefined {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(BROWSER_DASHBOARD_CACHE_KEY) ?? "null");
     if (!parsed || typeof parsed !== "object" || !("dashboard" in parsed) || !("userId" in parsed)) return undefined;
-    if (parsed.userId !== userId) return undefined;
+    // Keyed by user and connected Sleeper account: switching accounts on the
+    // same login must not show the previous account's leagues.
+    if (parsed.userId !== userId || !("accountId" in parsed) || parsed.accountId !== accountId) return undefined;
     const dashboard = parsed.dashboard;
     if (!dashboard || typeof dashboard !== "object" || !("leagues" in dashboard) || !Array.isArray(dashboard.leagues) || !("asOf" in dashboard) || typeof dashboard.asOf !== "string") return undefined;
     if (!dashboard.leagues.every((league) => league && typeof league === "object" && "tradeValuation" in league)) {
@@ -360,10 +375,10 @@ function readBrowserDashboard(userId: string | null): Dashboard | undefined {
   }
 }
 
-function saveBrowserDashboard(userId: string | null, dashboard: Dashboard): void {
+function saveBrowserDashboard(userId: string | null, accountId: string | null, dashboard: Dashboard): void {
   if (!userId) return;
   try {
-    localStorage.setItem(BROWSER_DASHBOARD_CACHE_KEY, JSON.stringify({ userId, dashboard }));
+    localStorage.setItem(BROWSER_DASHBOARD_CACHE_KEY, JSON.stringify({ userId, accountId, dashboard }));
   } catch {
     // A full storage bucket must never block rendering fresh data.
   }
@@ -511,6 +526,14 @@ function parsePartnerRosterId(value: string | null): number | null {
 
 export function App() {
   const queryClient = useQueryClient();
+  // Per-viewer scope for every personal query key: AuthGate only renders the
+  // app once a session and Sleeper connection are verified, and clears these
+  // caches on sign-out, so no other viewer can read this data back.
+  const viewer = useViewerIdentity();
+  // Latest identity for async work that outlives the render that started it.
+  const viewerRef = useRef(viewer);
+  viewerRef.current = viewer;
+  const readViewer = useCallback(async () => ({ sessionUserId: await currentViewerId(), identity: viewerRef.current }), []);
   const dashboardUrl = useDashboardUrl();
   const tab = dashboardUrl.state.tab;
   const setTab = useCallback((next: Tab) => {
@@ -573,15 +596,26 @@ export function App() {
     void currentViewerId().then((userId) => {
       if (cancelled) return;
       setBrowserViewerId(userId);
-      setBrowserDashboard(readBrowserDashboard(userId));
+      setBrowserDashboard(readBrowserDashboard(userId, viewer.accountId));
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [viewer.accountId]);
+  // Sections whose next fetch should restart a failed background build. Polls
+  // never set this, so a failure stays visible until the user hits Retry.
+  const retryBuildSections = useRef(new Set<DashboardSection["section"]>());
+  const loadDashboardSection = (section: DashboardSection["section"], deadlineMs: number) => {
+    const retryBuild = retryBuildSections.current.delete(section) || undefined;
+    return withSignIn(withClientDeadline(api.getDashboardSection({ section, retryBuild }), deadlineMs));
+  };
+  const retrySection = (query: { data?: unknown; refetch: () => Promise<unknown> }, section: DashboardSection["section"]) => {
+    if (sectionBuildFailed(query.data)) retryBuildSections.current.add(section);
+    void query.refetch();
+  };
   const metaQuery = useQuery({
-    queryKey: ["dashboard-section", "meta"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "meta" }), 20_000)),
+    queryKey: personalQueryKey(viewer, "dashboard-section", "meta"),
+    queryFn: () => loadDashboardSection("meta", 20_000),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
     refetchOnMount: true,
@@ -590,8 +624,8 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const teamQuery = useQuery({
-    queryKey: ["dashboard-section", "team"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "team" }), 20_000)),
+    queryKey: personalQueryKey(viewer, "dashboard-section", "team"),
+    queryFn: () => loadDashboardSection("team", 20_000),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
     refetchOnMount: true,
@@ -604,8 +638,8 @@ export function App() {
   // The Tools market views reuse the same players + analytics section queries as the chart builder (no per-panel fetches).
   const playerSectionActive = MARKET_TOOL_TABS.has(tab) || tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "comparison";
   const playersQuery = useQuery({
-    queryKey: ["dashboard-section", "players"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "players" }), 8_000)),
+    queryKey: personalQueryKey(viewer, "dashboard-section", "players"),
+    queryFn: () => loadDashboardSection("players", 8_000),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -613,8 +647,8 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const leagueQuery = useQuery({
-    queryKey: ["dashboard-section", "league"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "league" }), 8_000)),
+    queryKey: personalQueryKey(viewer, "dashboard-section", "league"),
+    queryFn: () => loadDashboardSection("league", 8_000),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -624,8 +658,8 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const analyticsQuery = useQuery({
-    queryKey: ["dashboard-section", "analytics"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "analytics" }), 8_000)),
+    queryKey: personalQueryKey(viewer, "dashboard-section", "analytics"),
+    queryFn: () => loadDashboardSection("analytics", 8_000),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -640,8 +674,8 @@ export function App() {
   // Waiver pool is only consumed by League-adjusted trade (not Market/History).
   const tradeWaiverActive = tab === "trade" && tradeMode === "league";
   const tradeQuery = useQuery({
-    queryKey: ["dashboard-section", "trade"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "trade" }), 20_000)),
+    queryKey: personalQueryKey(viewer, "dashboard-section", "trade"),
+    queryFn: () => loadDashboardSection("trade", 20_000),
     // Errors must not stick for the session: stale immediately so tab switch /
     // remount / manual refresh retries instead of serving a failed empty cache.
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
@@ -653,8 +687,8 @@ export function App() {
     refetchInterval: (query) => pollTradeSectionWhileLive(query, teamQuery.data),
   });
   const tradeWaiverQuery = useQuery({
-    queryKey: ["dashboard-section", "trade-waiver"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "trade-waiver" }), 20_000)),
+    queryKey: personalQueryKey(viewer, "dashboard-section", "trade-waiver"),
+    queryFn: () => loadDashboardSection("trade-waiver", 20_000),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
     refetchOnMount: true,
@@ -664,7 +698,7 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const dashboardQuery = useQuery({
-    queryKey: ["fantasy-dashboard"],
+    queryKey: personalQueryKey(viewer, "fantasy-dashboard"),
     queryFn: () => withSignIn(withClientDeadline(api.getDashboard({ force: false }), DASHBOARD_DEADLINE_MS)),
     staleTime: 90_000,
     initialData: browserDashboard,
@@ -673,6 +707,8 @@ export function App() {
     enabled: false,
   });
   const refresh = useMutation({
+    // Whoever started the refresh owns its result; see snapshotViewer.
+    onMutate: () => snapshotViewer(readViewer),
     mutationFn: async () => {
       if (supabase) {
         const { data } = await supabase.auth.getSession();
@@ -680,17 +716,21 @@ export function App() {
       }
       return withClientDeadline(api.getDashboard({ force: true }), DASHBOARD_DEADLINE_MS);
     },
-    onSuccess: (data) => {
-      void currentViewerId().then((userId) => saveBrowserDashboard(userId, data));
-      queryClient.setQueryData(["fantasy-dashboard"], data);
-      queryClient.invalidateQueries({ queryKey: ["dashboard-section"] });
+    onSuccess: async (data, _variables, owner) => {
+      if (!owner || !(await owner.stillCurrent())) return;
+      const { sessionUserId, identity } = owner.startedBy;
+      saveBrowserDashboard(sessionUserId, identity.accountId, data);
+      queryClient.setQueryData(personalQueryKey(identity, "fantasy-dashboard"), data);
+      queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "dashboard-section") });
     },
-    onError: (error: unknown) => {
+    onError: async (error: unknown, _variables, owner) => {
+      // A stale 401 from the previous viewer's token must not sign out the new one.
+      if (owner && !(await owner.stillCurrent())) return;
       signOutForPersonalData(error);
     },
   });
   const newsQuery = useQuery({
-    queryKey: ["player-news"],
+    queryKey: personalQueryKey(viewer, "player-news"),
     queryFn: async () => {
       try {
         return await withClientDeadline(api.getPlayerNews({}), 8_000);
@@ -703,7 +743,7 @@ export function App() {
     retry: false,
   });
   const draftQuery = useQuery({
-    queryKey: ["draft-center"],
+    queryKey: personalQueryKey(viewer, "draft-center"),
     queryFn: async () => {
       try {
         return await withClientDeadline(api.getDraftCenter({ force: false }), 24_000);
@@ -717,15 +757,16 @@ export function App() {
     retry: false,
   });
   const draftRefresh = useMutation({
-    mutationFn: async () => {
-      try {
-        return await withClientDeadline(api.getDraftCenter({ force: true }), 24_000);
-      } catch (error) {
-        signOutForPersonalData(error);
-        throw error;
-      }
+    onMutate: () => snapshotViewer(readViewer),
+    mutationFn: () => withClientDeadline(api.getDraftCenter({ force: true }), 24_000),
+    onSuccess: async (data, _variables, owner) => {
+      if (!owner || !(await owner.stillCurrent())) return;
+      queryClient.setQueryData(personalQueryKey(owner.startedBy.identity, "draft-center"), data);
     },
-    onSuccess: (data) => queryClient.setQueryData(["draft-center"], data),
+    onError: async (error: unknown, _variables, owner) => {
+      if (owner && !(await owner.stillCurrent())) return;
+      signOutForPersonalData(error);
+    },
   });
   const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(newsQuery.data), [newsQuery.data]);
   const tickerPlayerNews = playerHistory.current ? newsItemsByPlayer.get(playerHistory.current.playerId) ?? [] : [];
@@ -818,7 +859,7 @@ export function App() {
 
   useEffect(() => {
     if (!dashboard || !browserViewerId) return;
-    saveBrowserDashboard(browserViewerId, dashboard);
+    saveBrowserDashboard(browserViewerId, viewer.accountId, dashboard);
     if (document.documentElement.dataset.fantasyFirstContentMs) return;
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const elapsed = Math.round(performance.now());
@@ -989,13 +1030,21 @@ export function App() {
     if (tab === "draft") draftRefresh.mutate();
     else {
       refresh.mutate();
-      queryClient.invalidateQueries({ queryKey: ["player-news"] });
+      queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "player-news") });
     }
   };
 
   const hasCompleteDashboard = Boolean(dashboardQuery.data || browserDashboard);
-  const hasPlayerSectionData = hasCompleteDashboard || playersQuery.data?.section === "players";
-  const playerSectionError = !hasPlayerSectionData && playersQuery.isError;
+  const hasPlayerSectionData = hasCompleteDashboard
+    || (playersQuery.data?.section === "players" && playersQuery.data.data != null);
+  const playerSectionError = !hasPlayerSectionData && (playersQuery.isError || sectionBuildFailed(playersQuery.data));
+  const teamSectionError = !hasCompleteDashboard && sectionBuildFailed(teamQuery.data);
+  const leagueSectionError = !hasCompleteDashboard && sectionBuildFailed(leagueQuery.data);
+  const analyticsSectionError = !hasCompleteDashboard && sectionBuildFailed(analyticsQuery.data);
+  // League-adjusted trade also needs the waiver pool; a failed one must not
+  // silently render as an empty pool.
+  const tradeWaiverError = tradeWaiverActive && (tradeWaiverQuery.isError || sectionBuildFailed(tradeWaiverQuery.data));
+  const tradeSectionError = !hasCompleteDashboard && (tradeQuery.isError || sectionBuildFailed(tradeQuery.data) || tradeWaiverError);
   const draftSectionError = draftQuery.isError && !draftQuery.data;
   const newsLoading = newsQuery.isPending && !newsQuery.data;
   const newsError = newsQuery.isError && !newsQuery.data;
@@ -1034,7 +1083,9 @@ export function App() {
   const waitingForFirstBuild =
     metaQuery.isSuccess
     && metaQuery.data?.section === "meta"
-    && metaQuery.data.data == null;
+    && metaQuery.data.data == null
+    // A failed background build is an error state, not "still building".
+    && !sectionBuildFailed(metaQuery.data);
   const [firstBuildTimedOut, setFirstBuildTimedOut] = useState(false);
   useEffect(() => {
     if (!waitingForFirstBuild || dashboard) {
@@ -1075,14 +1126,21 @@ export function App() {
 
   if (!dashboard || !league) {
     const noLeagues = Boolean(dashboard);
+    // A failed first build gets its own message; Try again forces a rebuild.
+    const firstBuildFailed = !noLeagues && sectionBuildFailed(metaQuery.data);
     return (
-      <main id="main-content" tabIndex={-1} className="empty-state">
-        <SafeAreaTopScrim backgroundColor="var(--bg)" />
-        <div className="empty-mark">4TH</div>
-        <h1>{noLeagues ? "No leagues for this season." : "Data didn’t make it through."}</h1>
-        <p>{noLeagues ? "This Sleeper account isn’t in any NFL league for the current season. Join or create a league on Sleeper, then refresh." : "Fantasy data didn’t load. Try again."}</p>
+      <>
+        <div className="fixed right-2 top-[max(0.5rem,env(safe-area-inset-top))] z-10">
+          {supabase ? <AccountMenu /> : null}
+        </div>
+        <main id="main-content" tabIndex={-1} className="empty-state">
+          <SafeAreaTopScrim backgroundColor="var(--bg)" />
+          <div className="empty-mark">4TH</div>
+        <h1>{noLeagues ? "No leagues for this season." : firstBuildFailed ? "Your dashboard didn’t build." : "Data didn’t make it through."}</h1>
+        <p>{noLeagues ? "This Sleeper account isn’t in any NFL league for the current season. Join or create a league on Sleeper, then refresh." : firstBuildFailed ? "Building your leagues failed on our side. Try again to rebuild it." : "Fantasy data didn’t load. Try again."}</p>
         <Button type="button" onClick={() => refresh.mutate()} disabled={refresh.isPending}><RefreshIcon spinning={refresh.isPending} /> {noLeagues ? "Refresh" : "Try again"}</Button>
-      </main>
+        </main>
+      </>
     );
   }
 
@@ -1191,13 +1249,15 @@ export function App() {
             onNews={setTickerNews}
           />
           <div className="week-line">
-            <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
+            <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}<DashboardFreshness dashboard={dashboard} /></div>
             <div className="week-actions">
             <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />
+            {supabase ? <AccountMenu /> : null}
             <ThemeToggle />
             <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label={tab === "draft" ? "Refresh draft data" : "Refresh scores and rankings"}><RefreshIcon spinning={isRefreshing} /></button>
             </div>
           </div>
+          <DashboardPartialNotes dashboard={dashboard} />
           <label className="league-picker">
             <span className="sr-only">Choose league</span>
             <select value={league.id} onChange={(event) => chooseLeague(event.target.value)}>
@@ -1267,8 +1327,14 @@ export function App() {
             "team-stats": "Team stats",
             analytics: "Analytics",
           } satisfies Record<Tab, string>)[tab]}</h1>
+          <FeatureErrorBoundary title="This section didn’t load." resetKeys={[tab]}>
           {currentSectionLoading ? <SectionLoading label={`Loading ${({ team: "Matchup", players: "Players", league: "League", draft: "Draft", tools: "Tools" } as const)[primaryPage]}…`} />
-            : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
+            : (tab === "rankings" || tab === "waivers" || tab === "comparison") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : tab === "waivers" ? "Waiver wire didn’t load." : "Comparison didn’t load."} onRetry={() => { retrySection(playersQuery, "players"); }} retrying={playersQuery.isFetching} />
+            : tab === "comparison" && analyticsSectionError ? <SectionError title="Comparison didn’t load." onRetry={() => { retrySection(analyticsQuery, "analytics"); }} retrying={analyticsQuery.isFetching} />
+            : tab === "team" && teamSectionError ? <SectionError title="Matchup didn’t load." onRetry={() => { retrySection(teamQuery, "team"); }} retrying={teamQuery.isFetching} />
+            : tab === "power" && leagueSectionError ? <SectionError title="Power rankings didn’t load." onRetry={() => { retrySection(leagueQuery, "league"); }} retrying={leagueQuery.isFetching} />
+            : tab === "trade" && tradeSectionError ? <SectionError title="Trade data didn’t load." onRetry={() => { retrySection(tradeQuery, "trade"); if (tradeWaiverError) retrySection(tradeWaiverQuery, "trade-waiver"); }} retrying={tradeQuery.isFetching || tradeWaiverQuery.isFetching} />
+            : tab === "analytics" && (playerSectionError || analyticsSectionError) ? <SectionError title="Analytics didn’t load." onRetry={() => { retrySection(playersQuery, "players"); retrySection(analyticsQuery, "analytics"); }} retrying={playersQuery.isFetching || analyticsQuery.isFetching} />
             : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
             : tab === "monitor" ? (
               <GameLinesPanel
@@ -1336,6 +1402,7 @@ export function App() {
                 comparePlayerId={tab === "comparison" ? dashboardUrl.state.comparePlayerId : null}
               />
             ) : null}
+          </FeatureErrorBoundary>
         </main>
         {inspectorDocked ? <InspectorFrame>{playerSheet}</InspectorFrame> : null}
       </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
+import { isSectionWaiting, sectionBuildFailed, shouldShowProgressiveShell } from "./dashboard-loading";
 
 describe("shouldShowProgressiveShell", () => {
   const base = {
@@ -124,5 +124,15 @@ describe("isSectionWaiting", () => {
         dataUndefined: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("sectionBuildFailed", () => {
+  it("detects the failed build marker the route attaches to data:null responses", () => {
+    expect(sectionBuildFailed({ section: "meta", data: null, build: { status: "failed", jobId: "j1" } })).toBe(true);
+    expect(sectionBuildFailed({ section: "meta", data: null, build: { status: "building" } })).toBe(false);
+    expect(sectionBuildFailed({ section: "meta", data: null })).toBe(false);
+    expect(sectionBuildFailed(undefined)).toBe(false);
+    expect(sectionBuildFailed({ section: "meta", data: { leagues: [] } })).toBe(false);
   });
 });

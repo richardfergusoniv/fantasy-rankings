@@ -2,10 +2,12 @@
  * /api/user
  * GET: Returns user profile and Sleeper connection status
  * POST: Connect Sleeper account by username { username: string }
+ * DELETE: Unlink the Sleeper connection
  */
 import { eq } from "drizzle-orm";
 import { getAuthUser } from "./_lib/auth.js";
 import { getDb, schema } from "./_lib/db.js";
+import { BodyTooLargeError, readJsonBody } from "./_lib/api-utils.js";
 
 export async function GET(req: Request): Promise<Response> {
   try {
@@ -48,7 +50,15 @@ export async function POST(req: Request): Promise<Response> {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json().catch(() => null);
+    let body: { username?: unknown } | null;
+    try {
+      body = (await readJsonBody(req)) as { username?: unknown } | null;
+    } catch (err) {
+      if (err instanceof BodyTooLargeError) {
+        return Response.json({ error: "Request body too large" }, { status: 413 });
+      }
+      body = null;
+    }
     const username = typeof body?.username === "string" ? body.username.trim() : "";
     if (!username) {
       return Response.json({ error: "Username required" }, { status: 400 });
@@ -104,6 +114,25 @@ export async function POST(req: Request): Promise<Response> {
     });
   } catch (err) {
     console.error("[user POST] Error:", err);
+    return Response.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request): Promise<Response> {
+  try {
+    const user = await getAuthUser(req);
+    if (!user) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const db = getDb();
+    await db
+      .delete(schema.sleeperConnections)
+      .where(eq(schema.sleeperConnections.userId, user.id));
+
+    return Response.json({ ok: true });
+  } catch (err) {
+    console.error("[user DELETE] Error:", err);
     return Response.json({ error: "Internal error" }, { status: 500 });
   }
 }
