@@ -334,6 +334,30 @@ describe("optimizeTradeRoster", () => {
     expect(graded.starters.map((starter) => starter.playerId)).toEqual(["locked-wr"]);
     expect(graded.score).toBe(5_000);
   });
+
+  it("ranks a high-value bye-week player as a Season Long starter", () => {
+    const byeStar = player({
+      playerId: "bye-wr",
+      position: "WR",
+      isStarter: false,
+      projection: 0,
+      isBye: true,
+    });
+    const active = player({
+      playerId: "active-wr",
+      position: "WR",
+      isStarter: false,
+      projection: 15,
+      isBye: false,
+    });
+    const values = new Map([
+      ["bye-wr", 9_000],
+      ["active-wr", 2_000],
+    ]);
+    const graded = optimizeValueTradeRoster([byeStar, active], ["WR"], values, now);
+    expect(graded.starters.map((starter) => starter.playerId)).toEqual(["bye-wr"]);
+    expect(graded.score).toBe(9_000);
+  });
 });
 
 describe("liveForecastPoints", () => {

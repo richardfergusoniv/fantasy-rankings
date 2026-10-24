@@ -864,10 +864,19 @@ async function toolEvaluateTrade(
     weights,
   });
 
-  // Match suggest_trades: primary label is a value window. Week N stays in scoring.week.
-  const windowKey: "season_long" | "dynasty" =
-    ctx.scoringWindow === "dynasty" && move.dynasty ? "dynasty" : "season_long";
-  const primary = windowKey === "dynasty" && move.dynasty ? move.dynasty : move.seasonLong;
+  // Primary follows the chat scoring window (default Week N).
+  const windowKey: "week" | "season_long" | "dynasty" =
+    ctx.scoringWindow === "week"
+      ? "week"
+      : ctx.scoringWindow === "dynasty" && move.dynasty
+        ? "dynasty"
+        : "season_long";
+  const primary =
+    windowKey === "week"
+      ? move.week
+      : windowKey === "dynasty" && move.dynasty
+        ? move.dynasty
+        : move.seasonLong;
 
   return {
     ok: true as const,

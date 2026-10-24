@@ -598,6 +598,8 @@ export function optimizeValueTradeRoster<T extends OptimizablePlayer>(
       projection: value,
       // Locked path in tradePoints uses actual — contribute window value.
       actual: value,
+      // Value windows ignore this week's bye; liveForecastPoints would rank bye as 0.
+      isBye: false,
     };
   });
   return optimizeTradeRoster(ranked, slots, now);
