@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
-import { newsForTicker, PROMINENT_OVERALL_RANK_LIMIT } from "./ticker-news";
+import { newsForTicker, PROMINENT_OVERALL_RANK_LIMIT, tickerItemKind } from "./ticker-news";
 import type {
   Dashboard,
   DashboardSection,
@@ -246,28 +246,33 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
         <div className={`ticker-track${isStatic ? " is-static" : ""}`}>
           {repeatedItems.map((item, index) => {
             const isCopy = index >= visibleItems.length;
-            return item.newsItem ? (
+            const kind = tickerItemKind(item);
+            const className = `ticker-item${isCopy ? " ticker-copy" : ""}`;
+            const key = `${item.key}:${index}`;
+            // Items render their full visible text, so the accessible name always
+            // matches the label; extra hints go on aria-description instead.
+            return kind === "news" ? (
               <button
                 type="button"
-                className={`ticker-item${isCopy ? " ticker-copy" : ""}`}
-                key={`${item.key}:${index}`}
+                className={className}
+                key={key}
                 onClick={() => item.newsItem ? onNews(item.newsItem) : undefined}
-                aria-label={isCopy ? undefined : `${item.source}: ${item.label}`}
                 aria-hidden={isCopy || undefined}
                 tabIndex={isCopy ? -1 : undefined}
               >{content(item)}</button>
-            ) : item.href ? (
-              <a href={item.href} target="_blank" rel="noreferrer" className={`ticker-item${isCopy ? " ticker-copy" : ""}`} key={`${item.key}:${index}`} aria-label={isCopy ? undefined : `${item.source}: ${item.label} (opens in a new tab)`} aria-hidden={isCopy || undefined} tabIndex={isCopy ? -1 : undefined}>{content(item)}</a>
-            ) : (
+            ) : kind === "link" ? (
+              <a href={item.href} target="_blank" rel="noreferrer" className={className} key={key} aria-description={isCopy ? undefined : "Opens in a new tab"} aria-hidden={isCopy || undefined} tabIndex={isCopy ? -1 : undefined}>{content(item)}</a>
+            ) : kind === "player" ? (
               <button
                 type="button"
-                className={`ticker-item${isCopy ? " ticker-copy" : ""}`}
-                key={`${item.key}:${index}`}
+                className={className}
+                key={key}
                 onClick={() => item.playerId ? onPlayer(item.playerId) : undefined}
-                aria-label={isCopy ? undefined : `${item.source}: ${item.label}`}
                 aria-hidden={isCopy || undefined}
                 tabIndex={isCopy ? -1 : undefined}
               >{content(item)}</button>
+            ) : (
+              <span className={className} key={key} aria-hidden={isCopy || undefined}>{content(item)}</span>
             );
           })}
         </div>
