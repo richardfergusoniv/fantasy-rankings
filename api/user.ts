@@ -2,6 +2,7 @@
  * /api/user
  * GET: Returns user profile and Sleeper connection status
  * POST: Connect Sleeper account by username { username: string }
+ * DELETE: Unlink the Sleeper connection
  */
 import { eq } from "drizzle-orm";
 import {
@@ -147,6 +148,25 @@ export async function POST(req: Request): Promise<Response> {
     });
   } catch (err) {
     console.error("[user POST] Error:", err);
+    return Response.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request): Promise<Response> {
+  try {
+    const user = await getAuthUser(req);
+    if (!user) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const db = getDb();
+    await db
+      .delete(schema.sleeperConnections)
+      .where(eq(schema.sleeperConnections.userId, user.id));
+
+    return Response.json({ ok: true });
+  } catch (err) {
+    console.error("[user DELETE] Error:", err);
     return Response.json({ error: "Internal error" }, { status: 500 });
   }
 }

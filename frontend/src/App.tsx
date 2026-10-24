@@ -56,6 +56,7 @@ import { InspectorFrame, useInspectorDockViewport } from "./shell/inspector-fram
 import { ShortcutsDialog } from "./shell/shortcuts-dialog";
 import { AskButton } from "./shell/ask-button";
 import { askContextForTab } from "./lib/ask-context";
+import { AccountMenu } from "./shell/account-menu";
 import { ThemeToggle } from "./shell/theme-toggle";
 import { Explorer, isExplorerMode } from "./views/explorer";
 import { GameLinesPanel } from "./views/game-lines-panel";
@@ -1128,13 +1129,18 @@ export function App() {
     // A failed first build gets its own message; Try again forces a rebuild.
     const firstBuildFailed = !noLeagues && sectionBuildFailed(metaQuery.data);
     return (
-      <main id="main-content" tabIndex={-1} className="empty-state">
-        <SafeAreaTopScrim backgroundColor="var(--bg)" />
-        <div className="empty-mark">4TH</div>
+      <>
+        <div className="fixed right-2 top-[max(0.5rem,env(safe-area-inset-top))] z-10">
+          {supabase ? <AccountMenu /> : null}
+        </div>
+        <main id="main-content" tabIndex={-1} className="empty-state">
+          <SafeAreaTopScrim backgroundColor="var(--bg)" />
+          <div className="empty-mark">4TH</div>
         <h1>{noLeagues ? "No leagues for this season." : firstBuildFailed ? "Your dashboard didn’t build." : "Data didn’t make it through."}</h1>
         <p>{noLeagues ? "This Sleeper account isn’t in any NFL league for the current season. Join or create a league on Sleeper, then refresh." : firstBuildFailed ? "Building your leagues failed on our side. Try again to rebuild it." : "Fantasy data didn’t load. Try again."}</p>
         <Button type="button" onClick={() => refresh.mutate()} disabled={refresh.isPending}><RefreshIcon spinning={refresh.isPending} /> {noLeagues ? "Refresh" : "Try again"}</Button>
-      </main>
+        </main>
+      </>
     );
   }
 
@@ -1246,6 +1252,7 @@ export function App() {
             <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}<DashboardFreshness dashboard={dashboard} /></div>
             <div className="week-actions">
             <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />
+            {supabase ? <AccountMenu /> : null}
             <ThemeToggle />
             <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label={tab === "draft" ? "Refresh draft data" : "Refresh scores and rankings"}><RefreshIcon spinning={isRefreshing} /></button>
             </div>
