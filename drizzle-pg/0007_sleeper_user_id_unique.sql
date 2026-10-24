@@ -1,5 +1,5 @@
--- Hand-applied (not a drizzle-kit journal entry). See MIGRATION-STATUS.md.
--- Do not assume `npm run db:migrate` applies this file.
+-- Originally hand-applied; now journal entry 0007, applied by `npm run db:migrate`.
+-- See MIGRATION-STATUS.md.
 -- Whole-file rerun-safe: unique index uses IF NOT EXISTS; preflight is read-only.
 -- Data preservation: if duplicate sleeper_user_id rows exist, this script aborts
 -- without deleting or rewriting links. Resolve duplicates manually (decide which
@@ -18,5 +18,6 @@ BEGIN
   END IF;
 END $$;
 
+--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "sleeper_connections_sleeper_user_id_uidx"
   ON "sleeper_connections" ("sleeper_user_id");
