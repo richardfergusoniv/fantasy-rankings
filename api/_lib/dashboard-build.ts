@@ -1382,12 +1382,13 @@ async function saveProjectionAccuracy(dashboard: Dashboard): Promise<void> {
             },
           });
         } else if (!locked && dashboard.week !== 3) {
+          // Never clear a stored final actual with null when schedule/phase
+          // lookup briefly treats a finished game as unlocked.
           await insert.onConflictDoUpdate({
             target: schema.projectionAccuracy.id,
             set: {
               scoring: dbRow.scoring,
               vegasProjection: dbRow.vegasProjection,
-              actualScore: dbRow.actualScore,
               capturedAt: dbRow.capturedAt,
             },
           });

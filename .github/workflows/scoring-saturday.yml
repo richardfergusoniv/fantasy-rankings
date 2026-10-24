@@ -1,8 +1,9 @@
 name: Scoring Saturday snapshot
 
-# Decision-time scoring snapshot before Sunday kickoffs. Thursday players
-# are covered by an optional manual dispatch earlier in the week; this
-# scheduled run catches the main slate. Uses the existing cron endpoint.
+# Decision-time scoring snapshot before Sunday kickoffs. Skips players whose
+# games are already live/final so a Thursday manual dispatch and this
+# Saturday run each freeze only not-yet-started games. Uses the existing
+# cron endpoint.
 
 on:
   schedule:

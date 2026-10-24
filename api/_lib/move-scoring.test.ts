@@ -3,7 +3,9 @@ import {
   assertLabelsNotRefit,
   blendProjection,
   correlatedWinProbability,
+  lineupVariance,
   outscoreChance,
+  pairCorrelation,
   projectionSigma,
   scoreStartSit,
   scoreTrade,
@@ -216,39 +218,28 @@ describe("trades EXAMPLE fair-trade z-score", () => {
 
 describe("correlated win chance", () => {
   it("raises variance for QB+WR1 stack on the same team", () => {
-    const stacked = correlatedWinProbability(
-      [
-        { playerId: "qb", position: "QB", team: "KC", pStar: 20, opponentTeam: "LV" },
-        { playerId: "wr", position: "WR", team: "KC", pStar: 15, opponentTeam: "LV", wrRankOnTeam: 1 },
-      ],
-      [
-        { playerId: "oq", position: "QB", team: "BUF", pStar: 20, opponentTeam: "MIA" },
-        { playerId: "ow", position: "WR", team: "MIA", pStar: 15, opponentTeam: "BUF", wrRankOnTeam: 1 },
-      ],
+    const stackedYours = [
+      { playerId: "qb", position: "QB", team: "KC", pStar: 20, opponentTeam: "LV" },
+      { playerId: "wr", position: "WR", team: "KC", pStar: 15, opponentTeam: "LV", wrRankOnTeam: 1 as const },
+    ];
+    const unstackedYours = [
+      stackedYours[0]!,
+      { ...stackedYours[1]!, team: "SF", opponentTeam: "LAR" },
+    ];
+    expect(pairCorrelation(stackedYours[0]!, stackedYours[1]!)).toBeCloseTo(0.35, 5);
+    expect(lineupVariance(stackedYours).variance).toBeGreaterThan(
+      lineupVariance(unstackedYours).variance,
     );
-    const unstacked = correlatedWinProbability(
-      [
-        { playerId: "qb", position: "QB", team: "KC", pStar: 20, opponentTeam: "LV" },
-        { playerId: "wr", position: "WR", team: "SF", pStar: 15, opponentTeam: "LAR", wrRankOnTeam: 1 },
-      ],
-      [
-        { playerId: "oq", position: "QB", team: "BUF", pStar: 20, opponentTeam: "MIA" },
-        { playerId: "ow", position: "WR", team: "MIA", pStar: 15, opponentTeam: "BUF", wrRankOnTeam: 1 },
-      ],
-    );
-    // Equal means → near 50 either way; just assert a finite probability.
-    expect(stacked).toBeGreaterThan(0);
-    expect(stacked).toBeLessThan(1);
-    expect(unstacked).toBeGreaterThan(0);
   });
 
   it("applies DST vs opposing QB negative correlation", () => {
-    const p = correlatedWinProbability(
-      [{ playerId: "dst", position: "DST", team: "BAL", pStar: 8, opponentTeam: "CIN" }],
-      [{ playerId: "qb", position: "QB", team: "CIN", pStar: 22, opponentTeam: "BAL" }],
-    );
+    const dst = { playerId: "dst", position: "DST", team: "BAL", pStar: 12, opponentTeam: "CIN" };
+    const qb = { playerId: "qb", position: "QB", team: "CIN", pStar: 18, opponentTeam: "BAL" };
+    expect(pairCorrelation(dst, qb)).toBeLessThan(0);
+    // Unequal means so Φ(μ/σ) can move when ρ changes (equal means → Φ(0)=0.5).
+    const p = correlatedWinProbability([dst], [qb]);
     expect(p).toBeGreaterThan(0);
-    expect(p).toBeLessThan(1);
+    expect(p).toBeLessThan(0.5);
   });
 });
 

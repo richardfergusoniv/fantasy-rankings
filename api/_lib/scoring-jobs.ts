@@ -260,6 +260,11 @@ export async function runScoringDecisionSnapshot(
   const dashboard = await readGlobalDashboardSnapshot();
   const season = opts.season ?? dashboard?.season ?? state.season;
   const week = opts.week ?? dashboard?.week ?? state.week;
+  // Immutable snapshots must target the live NFL week unless the caller
+  // overrides week explicitly (manual backfill).
+  if (opts.week == null && dashboard && dashboard.week !== state.week) {
+    return { ok: false, season, week, rows: 0 };
+  }
   const weights = await loadActiveScoringWeights();
   const version = weights.version;
 
@@ -357,6 +362,9 @@ export async function runScoringDecisionSnapshot(
     }
 
     for (const player of limited) {
+      // Skip games already underway/final so an early manual run cannot freeze
+      // Sunday players, and a Saturday run cannot overwrite Thursday outcomes.
+      if (player.gamePhase === "live" || player.gamePhase === "final") continue;
       const scored = toScored(player);
       const blend = blendProjection(scored, { weights });
       const startSit = startSitById.get(player.playerId) ?? null;
@@ -412,8 +420,12 @@ export async function runScoringDecisionSnapshot(
   for (let index = 0; index < toInsert.length; index += 50) {
     const chunk = toInsert.slice(index, index + 50);
     if (chunk.length === 0) continue;
-    await db.insert(schema.scoringSnapshots).values(chunk).onConflictDoNothing();
-    wrote += chunk.length;
+    const inserted = await db
+      .insert(schema.scoringSnapshots)
+      .values(chunk)
+      .onConflictDoNothing()
+      .returning({ id: schema.scoringSnapshots.id });
+    wrote += inserted.length;
   }
 
   return { ok: true, season, week, rows: wrote };
@@ -623,14 +635,16 @@ export async function runScoringWeightsRefit(): Promise<{
     return { ok: true, promoted: false, reason: decision.reason, version };
   }
 
-  await db
-    .update(schema.scoringWeights)
-    .set({ status: "retired" })
-    .where(eq(schema.scoringWeights.status, "active"));
-  await db
-    .update(schema.scoringWeights)
-    .set({ status: "active", promotedAt: new Date() })
-    .where(eq(schema.scoringWeights.version, version));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.scoringWeights)
+      .set({ status: "retired" })
+      .where(eq(schema.scoringWeights.status, "active"));
+    await tx
+      .update(schema.scoringWeights)
+      .set({ status: "active", promotedAt: new Date() })
+      .where(eq(schema.scoringWeights.version, version));
+  });
   clearActiveWeightsCache();
 
   return { ok: true, promoted: true, reason: decision.reason, version };
