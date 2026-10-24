@@ -379,7 +379,7 @@ export function mergePlayerProjections(
   for (const position of ["QB", "RB", "WR", "TE", "K"] as const) {
     const group = merged
       .filter((row) => row.position === position)
-      .sort((a, b) => (b.leagueProjection ?? -1) - (a.leagueProjection ?? -1) || a.name.localeCompare(b.name));
+      .sort((a, b) => (b.leagueProjection ?? -Infinity) - (a.leagueProjection ?? -Infinity) || a.name.localeCompare(b.name));
     group.forEach((row, index) => {
       row.leagueRank = index + 1;
       if (rankingField === "ppr") row.pprRank = index + 1;

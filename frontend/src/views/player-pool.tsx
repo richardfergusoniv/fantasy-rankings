@@ -829,7 +829,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             movement30Day: null,
           };
         })
-        .sort((a, b) => (b.projection ?? -1) - (a.projection ?? -1)
+        .sort((a, b) => (b.projection ?? Number.NEGATIVE_INFINITY) - (a.projection ?? Number.NEGATIVE_INFINITY)
           || (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER)
           || a.name.localeCompare(b.name));
     }
