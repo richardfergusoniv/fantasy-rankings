@@ -46,9 +46,12 @@ export function mergeTrendingLists(addsPayload: unknown, dropsPayload: unknown):
 
 const TRENDING_LIMIT = 100;
 const TRENDING_LOOKBACK_HOURS = 24;
+/** Weekly snapshot depth (spec: lookback 168h, limit 200). */
+const TRENDING_WEEKLY_LIMIT = 200;
+const TRENDING_WEEKLY_LOOKBACK_HOURS = 168;
 
-export async function loadSleeperTrending(): Promise<PlayerTrendingMap> {
-  const query = `lookback_hours=${TRENDING_LOOKBACK_HOURS}&limit=${TRENDING_LIMIT}`;
+async function loadTrendingLists(lookbackHours: number, limit: number): Promise<PlayerTrendingMap> {
+  const query = `lookback_hours=${lookbackHours}&limit=${limit}`;
   // Settled, not all: one failed list must not discard the other's counts.
   const [adds, drops] = await Promise.allSettled([
     fetchJson<unknown>(`${SLEEPER_BASE}/players/nfl/trending/add?${query}`),
@@ -58,4 +61,13 @@ export async function loadSleeperTrending(): Promise<PlayerTrendingMap> {
     adds.status === "fulfilled" ? adds.value : [],
     drops.status === "fulfilled" ? drops.value : [],
   );
+}
+
+export async function loadSleeperTrending(): Promise<PlayerTrendingMap> {
+  return loadTrendingLists(TRENDING_LOOKBACK_HOURS, TRENDING_LIMIT);
+}
+
+/** Weekly calibration snapshot: 7-day adds/drops, deeper list. */
+export async function loadSleeperTrendingWeekly(): Promise<PlayerTrendingMap> {
+  return loadTrendingLists(TRENDING_WEEKLY_LOOKBACK_HOURS, TRENDING_WEEKLY_LIMIT);
 }

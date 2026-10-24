@@ -25,9 +25,15 @@ import { withDeadline } from "../_lib/sleeper.js";
 import { refreshTeamSituationalSnapshot } from "../_lib/team-situational.js";
 import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
 import { refreshPlayerInsightsSnapshot } from "../_lib/player-insights.js";
+import { finalizeProjectionAccuracy } from "../_lib/finalize-accuracy.js";
+import {
+  runScoringDecisionSnapshot,
+  runScoringWeightsRefit,
+  snapshotSleeperTrendingWeekly,
+} from "../_lib/scoring-jobs.js";
 
 /**
- * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-player-insights | refresh-nfl-players | backfill-value-history | backfill-pick-value-history
+ * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-player-insights | refresh-nfl-players | backfill-value-history | backfill-pick-value-history | finalize-accuracy | snapshot-sleeper-trending | scoring-decision-snapshot | scoring-weights-refit
  *
  * One function for the scheduled jobs (Vercel's 12-function budget).
  * Vercel Cron invokes with GET; auth is `Authorization: Bearer <CRON_SECRET>`
@@ -66,6 +72,12 @@ import { refreshPlayerInsightsSnapshot } from "../_lib/player-insights.js";
  *   dynasty presets only; batched upserts with no full-table verification
  *   reads. Invoke manually until `done` — do not schedule against production
  *   without pacing.
+ * - finalize-accuracy: Tuesday refill of last week's projection_accuracy
+ *   actuals from Sleeper weekly stats (PPR for the PPFD league).
+ * - snapshot-sleeper-trending: weekly Sleeper adds/drops into source_cache
+ *   keyed sleeper-trending:{season}-w{week} (168h lookback).
+ * - scoring-decision-snapshot: Saturday decision-time marker / snapshot hook.
+ * - scoring-weights-refit: Tuesday-night candidate weights + promote guardrails.
  */
 
 async function handleRebuildDashboard(): Promise<Response> {
@@ -151,6 +163,33 @@ async function handleBackfillPickValueHistory(url: URL): Promise<Response> {
   return json({ ok: true, ...result });
 }
 
+async function handleFinalizeAccuracy(url: URL): Promise<Response> {
+  const seasonRaw = url.searchParams.get("season");
+  const weekRaw = url.searchParams.get("week");
+  const season = seasonRaw ? parseNonNegativeInt(seasonRaw, NaN) : undefined;
+  const week = weekRaw ? parseNonNegativeInt(weekRaw, NaN) : undefined;
+  const result = await finalizeProjectionAccuracy({
+    season: Number.isFinite(season) ? season : undefined,
+    week: Number.isFinite(week) ? week : undefined,
+  });
+  return json(result);
+}
+
+async function handleSnapshotSleeperTrending(): Promise<Response> {
+  const result = await snapshotSleeperTrendingWeekly();
+  return json({ job: "snapshot-sleeper-trending", ...result });
+}
+
+async function handleScoringDecisionSnapshot(): Promise<Response> {
+  const result = await runScoringDecisionSnapshot();
+  return json({ job: "scoring-decision-snapshot", ...result });
+}
+
+async function handleScoringWeightsRefit(): Promise<Response> {
+  const result = await runScoringWeightsRefit();
+  return json({ job: "scoring-weights-refit", ...result });
+}
+
 export async function GET(req: Request): Promise<Response> {
   if (!hasCronSecret(req)) return forbidden("Invalid or missing cron secret.");
   const url = new URL(req.url, "https://localhost");
@@ -165,8 +204,12 @@ export async function GET(req: Request): Promise<Response> {
     if (job === "refresh-nfl-players") return await handleRefreshNflPlayers();
     if (job === "backfill-value-history") return await handleBackfillValueHistory(url);
     if (job === "backfill-pick-value-history") return await handleBackfillPickValueHistory(url);
+    if (job === "finalize-accuracy") return await handleFinalizeAccuracy(url);
+    if (job === "snapshot-sleeper-trending") return await handleSnapshotSleeperTrending();
+    if (job === "scoring-decision-snapshot") return await handleScoringDecisionSnapshot();
+    if (job === "scoring-weights-refit") return await handleScoringWeightsRefit();
     return badRequest(
-      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, refresh-player-insights, refresh-nfl-players, backfill-value-history, or backfill-pick-value-history.",
+      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, refresh-player-insights, refresh-nfl-players, backfill-value-history, backfill-pick-value-history, finalize-accuracy, snapshot-sleeper-trending, scoring-decision-snapshot, or scoring-weights-refit.",
     );
   } catch (err) {
     await captureServerError(err, { route: "cron/jobs", job: job ?? "unknown" });

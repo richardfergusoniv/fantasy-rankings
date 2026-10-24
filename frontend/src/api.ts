@@ -146,6 +146,7 @@ export const api = {
   postChat: async (args: {
     message: string;
     history?: Array<{ role: "user" | "assistant"; content: string }>;
+    horizon?: "week" | "ecr" | "ros" | "dynasty" | null;
   }): Promise<{ ok: true; reply: string; model: string; toolSteps: number }> => {
     const token = await getAccessToken();
     const headers = new Headers({ "content-type": "application/json" });
@@ -156,6 +157,7 @@ export const api = {
       body: JSON.stringify({
         message: args.message,
         history: args.history ?? [],
+        horizon: args.horizon ?? "week",
       }),
     });
     const bodyText = await res.text().catch(() => "");

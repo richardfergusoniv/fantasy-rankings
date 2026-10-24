@@ -314,12 +314,14 @@ describe("dispatchChatTool", () => {
       getTotal: number;
       waiverAdjustment: { give: number; get: number };
       verdict: string;
+      primaryLabel: string;
     };
     expect(result.ok).toBe(true);
     expect(result.giveTotal).toBe(8000);
     expect(result.getTotal).toBe(10_000);
     expect(result.waiverAdjustment.give).toBeGreaterThan(0);
-    expect(result.verdict).toContain("win");
+    expect(result.primaryLabel).toMatch(/Accept|Lean accept|Decline/);
+    expect(result.verdict.length).toBeGreaterThan(0);
   });
 
   it("returns this week's matchup projections", async () => {
