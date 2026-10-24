@@ -999,7 +999,8 @@ export function App() {
   };
 
   const hasCompleteDashboard = Boolean(dashboardQuery.data || browserDashboard);
-  const hasPlayerSectionData = hasCompleteDashboard || playersQuery.data?.section === "players";
+  const hasPlayerSectionData = hasCompleteDashboard
+    || (playersQuery.data?.section === "players" && playersQuery.data.data != null);
   const playerSectionError = !hasPlayerSectionData && (playersQuery.isError || sectionBuildFailed(playersQuery.data));
   const teamSectionError = !hasCompleteDashboard && sectionBuildFailed(teamQuery.data);
   const leagueSectionError = !hasCompleteDashboard && sectionBuildFailed(leagueQuery.data);

@@ -29,6 +29,7 @@
 }
 .week-line { display: flex; align-items: center; justify-content: space-between; min-height: 44px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .week-line > div { white-space: nowrap; }
+.week-line > div:has(.data-notes) { white-space: normal; min-width: 0; }
 .data-freshness { display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; font-weight: 500; }
 .data-freshness .data-source-times { opacity: .7; }
 .data-estimate-note { opacity: .7; cursor: help; }
