@@ -146,30 +146,70 @@ export async function persistChatTurn(args: {
   assistantMessage: string;
 }): Promise<{ chatId: string; title: string }> {
   const userContent = args.userMessage.trim().slice(0, CHAT_MAX_INPUT_CHARS);
-  const assistantContent = args.assistantMessage.trim().slice(0, CHAT_MAX_INPUT_CHARS);
+  const assistantContent = args.assistantMessage.trim();
   const now = new Date();
 
-  if (args.conversationId) {
-    const [existing] = await db
-      .select({
-        id: schema.chatConversations.id,
-        title: schema.chatConversations.title,
-      })
-      .from(schema.chatConversations)
-      .where(
-        and(
-          eq(schema.chatConversations.id, args.conversationId),
-          eq(schema.chatConversations.userId, args.userId),
-        ),
-      )
-      .limit(1);
-    if (!existing) {
-      throw new ChatStoreError("Chat not found.", "chat_not_found");
+  return db.transaction(async (tx) => {
+    if (args.conversationId) {
+      const [existing] = await tx
+        .select({
+          id: schema.chatConversations.id,
+          title: schema.chatConversations.title,
+        })
+        .from(schema.chatConversations)
+        .where(
+          and(
+            eq(schema.chatConversations.id, args.conversationId),
+            eq(schema.chatConversations.userId, args.userId),
+          ),
+        )
+        .limit(1);
+      if (!existing) {
+        throw new ChatStoreError("Chat not found.", "chat_not_found");
+      }
+      await tx.insert(schema.chatMessages).values([
+        {
+          id: crypto.randomUUID(),
+          conversationId: existing.id,
+          userId: args.userId,
+          role: "user",
+          content: userContent,
+          createdAt: now,
+        },
+        {
+          id: crypto.randomUUID(),
+          conversationId: existing.id,
+          userId: args.userId,
+          role: "assistant",
+          content: assistantContent,
+          createdAt: new Date(now.getTime() + 1),
+        },
+      ]);
+      await tx
+        .update(schema.chatConversations)
+        .set({ updatedAt: now })
+        .where(
+          and(
+            eq(schema.chatConversations.id, existing.id),
+            eq(schema.chatConversations.userId, args.userId),
+          ),
+        );
+      return { chatId: existing.id, title: existing.title };
     }
-    await db.insert(schema.chatMessages).values([
+
+    const chatId = crypto.randomUUID();
+    const title = titleFromFirstMessage(userContent);
+    await tx.insert(schema.chatConversations).values({
+      id: chatId,
+      userId: args.userId,
+      title,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await tx.insert(schema.chatMessages).values([
       {
         id: crypto.randomUUID(),
-        conversationId: existing.id,
+        conversationId: chatId,
         userId: args.userId,
         role: "user",
         content: userContent,
@@ -177,53 +217,15 @@ export async function persistChatTurn(args: {
       },
       {
         id: crypto.randomUUID(),
-        conversationId: existing.id,
+        conversationId: chatId,
         userId: args.userId,
         role: "assistant",
         content: assistantContent,
         createdAt: new Date(now.getTime() + 1),
       },
     ]);
-    await db
-      .update(schema.chatConversations)
-      .set({ updatedAt: now })
-      .where(
-        and(
-          eq(schema.chatConversations.id, existing.id),
-          eq(schema.chatConversations.userId, args.userId),
-        ),
-      );
-    return { chatId: existing.id, title: existing.title };
-  }
-
-  const chatId = crypto.randomUUID();
-  const title = titleFromFirstMessage(userContent);
-  await db.insert(schema.chatConversations).values({
-    id: chatId,
-    userId: args.userId,
-    title,
-    createdAt: now,
-    updatedAt: now,
+    return { chatId, title };
   });
-  await db.insert(schema.chatMessages).values([
-    {
-      id: crypto.randomUUID(),
-      conversationId: chatId,
-      userId: args.userId,
-      role: "user",
-      content: userContent,
-      createdAt: now,
-    },
-    {
-      id: crypto.randomUUID(),
-      conversationId: chatId,
-      userId: args.userId,
-      role: "assistant",
-      content: assistantContent,
-      createdAt: new Date(now.getTime() + 1),
-    },
-  ]);
-  return { chatId, title };
 }
 
 export class ChatStoreError extends Error {

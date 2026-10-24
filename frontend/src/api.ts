@@ -146,7 +146,7 @@ export const api = {
   listChats: (): Promise<{
     ok: true;
     chats: Array<{ id: string; title: string; updatedAt: string }>;
-  }> => request(`/api/chat${buildQuery({ chats: 1 })}`),
+  }> => request(`/api/chat${buildQuery({ chats: 1 })}`, { cache: "no-store" }),
 
   getChat: (args: { id: string }): Promise<{
     ok: true;
@@ -156,7 +156,7 @@ export const api = {
       updatedAt: string;
       messages: Array<{ id: string; role: "user" | "assistant"; content: string; createdAt: string }>;
     };
-  }> => request(`/api/chat${buildQuery({ id: args.id })}`),
+  }> => request(`/api/chat${buildQuery({ id: args.id })}`, { cache: "no-store" }),
 
   deleteChat: async (args: { id: string }): Promise<{ ok: true; deleted: boolean }> => {
     const token = await getAccessToken();

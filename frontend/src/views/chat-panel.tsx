@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { CHAT_MAX_HISTORY_MESSAGES, CHAT_MAX_INPUT_CHARS } from "../../../api/_lib/chat-config";
 import { api } from "../api";
+import { getSessionUserId } from "../supabase";
 
 type ChatRole = "user" | "assistant";
 
@@ -55,19 +56,31 @@ export function ChatPanel() {
 
   const hasMessages = messages.length > 0;
 
-  const availability = useQuery({
-    queryKey: ["chat-availability"],
-    queryFn: () => api.getChatAvailability(),
+  const viewerId = useQuery({
+    queryKey: ["auth-user-id"],
+    queryFn: getSessionUserId,
     staleTime: 60_000,
     retry: false,
   });
 
+  const availability = useQuery({
+    queryKey: ["chat-availability", viewerId.data ?? "anon"],
+    queryFn: () => api.getChatAvailability(),
+    staleTime: 60_000,
+    retry: false,
+    enabled: Boolean(viewerId.data),
+  });
+
   const chatsQuery = useQuery({
-    queryKey: ["chat-list"],
+    queryKey: ["chat-list", viewerId.data ?? "anon"],
     queryFn: () => api.listChats(),
     staleTime: 30_000,
     retry: false,
-    enabled: availability.isSuccess && availability.data.available !== false && !unavailable,
+    enabled:
+      Boolean(viewerId.data)
+      && availability.isSuccess
+      && availability.data.available !== false
+      && !unavailable,
   });
 
   const deleteMutation = useMutation({
@@ -186,6 +199,12 @@ export function ChatPanel() {
       const status = err && typeof err === "object" && "status" in err
         ? Number((err as { status?: number }).status)
         : 0;
+      if (code === "chat_not_found") {
+        setChatId(null);
+        void queryClient.invalidateQueries({ queryKey: ["chat-list"] });
+        setError("This chat no longer exists.");
+        return;
+      }
       if (code === "chat_unavailable") {
         setUnavailable(true);
         return;

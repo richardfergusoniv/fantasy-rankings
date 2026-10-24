@@ -92,11 +92,19 @@ export async function listChatPreferences(userId: string): Promise<ChatPreferenc
   }));
 }
 
+/** Collapse control/newline characters so preferences cannot forge prompt lines. */
+export function normalizePreferenceText(value: string): string {
+  return value.replace(/[\u0000-\u001F\u007F]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
 export function appendChatPreferences(systemPrompt: string, preferences: ChatPreference[]): string {
   const lines = preferences.map((pref) => {
-    const scope = pref.leagueId ? ` league=${pref.leagueId}` : "";
-    return `- id=${pref.id}${scope}: ${pref.content}`;
-  });
+    const content = normalizePreferenceText(pref.content);
+    const leagueId = pref.leagueId ? normalizePreferenceText(pref.leagueId) : "";
+    if (!content) return null;
+    const scope = leagueId ? ` league=${leagueId}` : "";
+    return `- id=${pref.id}${scope}: ${content}`;
+  }).filter((line): line is string => Boolean(line));
   const block = [
     "Standing preferences (honor these). Call remember_preference only when the user clearly states a lasting preference; forget_preference to remove by id.",
     lines.length > 0 ? lines.join("\n") : "(none)",
@@ -112,6 +120,11 @@ export async function toolRememberPreference(
   if (!parsed.success) {
     return { ok: false, error: "Invalid arguments.", issues: parsed.error.issues };
   }
+  const content = normalizePreferenceText(parsed.data.content).slice(0, CHAT_MAX_PREFERENCE_CHARS);
+  if (!content) return { ok: false, error: "Invalid arguments." };
+  const leagueId = parsed.data.leagueId
+    ? normalizePreferenceText(parsed.data.leagueId).slice(0, 80) || null
+    : null;
   const existing = await listChatPreferences(userId);
   if (existing.length >= CHAT_MAX_PREFERENCES) {
     return {
@@ -119,11 +132,10 @@ export async function toolRememberPreference(
       error: `Preference cap (${CHAT_MAX_PREFERENCES}) reached. Forget one first.`,
     };
   }
-  const content = parsed.data.content.trim().slice(0, CHAT_MAX_PREFERENCE_CHARS);
   const duplicate = existing.find(
     (item) =>
       item.content.toLowerCase() === content.toLowerCase()
-      && (item.leagueId ?? null) === (parsed.data.leagueId ?? null),
+      && (item.leagueId ?? null) === leagueId,
   );
   if (duplicate) {
     return { ok: true, preference: duplicate, alreadySaved: true };
@@ -133,14 +145,14 @@ export async function toolRememberPreference(
   await db.insert(schema.chatPreferences).values({
     id,
     userId,
-    leagueId: parsed.data.leagueId ?? null,
+    leagueId,
     content,
     createdAt: now,
     updatedAt: now,
   });
   return {
     ok: true,
-    preference: { id, content, leagueId: parsed.data.leagueId ?? null },
+    preference: { id, content, leagueId },
   };
 }
 
