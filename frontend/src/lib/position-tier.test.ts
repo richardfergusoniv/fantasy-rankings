@@ -19,7 +19,8 @@ describe("positionTierLabel", () => {
   it("scales the bands to the league size", () => {
     expect(positionTierLabel("RB", 10, 10)).toBe("Low-end RB1");
     expect(positionTierLabel("RB", 11, 10)).toBe("High-end RB2");
-    expect(positionTierLabel("RB", 14, 15)).toBe("Mid RB1");
+    expect(positionTierLabel("RB", 7, 15)).toBe("Mid RB1");
+    expect(positionTierLabel("RB", 14, 15)).toBe("Low-end RB1");
   });
 
   it("returns null past RB3, for unranked players and for K/DEF", () => {
