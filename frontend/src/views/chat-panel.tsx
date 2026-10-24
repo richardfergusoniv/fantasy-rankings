@@ -19,6 +19,14 @@ type ChatListItem = {
   updatedAt: string;
 };
 
+/** One-tap starters for an empty chat; they fill the box so the user can edit before sending. */
+const CHAT_SUGGESTIONS = [
+  "Who should I start at flex this week?",
+  "Is this trade fair for me?",
+  "Which waiver pickups help my roster most?",
+  "How does my team stack up against my opponent?",
+] as const;
+
 function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -58,6 +66,8 @@ export function ChatPanel({
   const composerRef = useRef<HTMLFormElement | null>(null);
   const composerFirstRectRef = useRef<DOMRect | null>(null);
   const hadMessagesRef = useRef(false);
+
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const hasMessages = messages.length > 0;
 
@@ -143,6 +153,11 @@ export function ChatPanel({
 
   function captureComposerRect() {
     composerFirstRectRef.current = composerRef.current?.getBoundingClientRect() ?? null;
+  }
+
+  function applySuggestion(text: string) {
+    setDraft(text.slice(0, CHAT_MAX_INPUT_CHARS));
+    inputRef.current?.focus();
   }
 
   function startNewChat() {
@@ -246,15 +261,14 @@ export function ChatPanel({
   return (
     <section className="chat-panel" aria-label="Chat">
       <div className="chat-sidebar">
-        <Button
+        <button
           type="button"
-          variant="secondary"
           className="chat-new"
           onClick={startNewChat}
           disabled={sending || loadingChat}
         >
-          New
-        </Button>
+          <span aria-hidden="true">+</span> New chat
+        </button>
         {chatsQuery.isError ? (
           <div className="chat-history-status" role="alert">
             <p className="chat-error">Could not load chats.</p>
@@ -298,6 +312,12 @@ export function ChatPanel({
         )}
       </div>
       <div className={`chat-main${hasMessages ? " is-active" : " is-empty"}`}>
+        {hasMessages ? null : (
+          <div className="chat-intro">
+            <h2>Ask about your league</h2>
+            <p>Lineups, trades, waivers and matchups, answered from your leagues’ data.</p>
+          </div>
+        )}
         <div className="chat-thread" id={listId} role="log" aria-live="polite" aria-relevant="additions">
           {messages.map((message) => (
             <div
@@ -322,7 +342,9 @@ export function ChatPanel({
           <label className="sr-only" htmlFor={inputId}>Message</label>
           <input
             id={inputId}
+            ref={inputRef}
             className="chat-input"
+            placeholder="Ask about your team…"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             maxLength={CHAT_MAX_INPUT_CHARS}
@@ -335,6 +357,15 @@ export function ChatPanel({
             Send
           </Button>
         </form>
+        {hasMessages ? null : (
+          <ul className="chat-suggestions" aria-label="Suggested questions">
+            {CHAT_SUGGESTIONS.map((text) => (
+              <li key={text}>
+                <button type="button" disabled={sending || loadingChat} onClick={() => applySuggestion(text)}>{text}</button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );
