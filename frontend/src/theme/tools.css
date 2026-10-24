@@ -1347,8 +1347,10 @@
   flex-direction: column;
   gap: 0;
   padding: 0 var(--space-4, 16px) env(safe-area-inset-bottom, 0px);
-  transform: none;
-  translate: none;
+  /* Cancel the centering translate from the dialog's utility classes. Zeroing its variables
+     survives minification; the `translate: none` shorthand was being dropped. */
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
   border-width: 1px 0 0;
   border-radius: 16px 16px 0 0;
   background: var(--card);
