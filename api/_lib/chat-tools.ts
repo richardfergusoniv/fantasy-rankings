@@ -17,7 +17,11 @@ import {
   scoreProjectedPlayerStats,
   sleeperActualStats,
 } from "./sleeper.js";
-import { optimizeTradeRoster, type OptimizablePlayer } from "./lineup-optimizer.js";
+import {
+  optimizeTradeRoster,
+  optimizeValueTradeRoster,
+  type OptimizablePlayer,
+} from "./lineup-optimizer.js";
 import { scoreTrade } from "./move-scoring.js";
 import { redraftTwinFormat } from "./season-long-format.js";
 import { loadActiveScoringWeights } from "./scoring-jobs.js";
@@ -246,9 +250,8 @@ export function leagueSeasonLongAssets(dashboard: Dashboard, leagueId: string) {
   if (!league) return [];
   if (!league.seasonLongFormat.isDynasty) return leagueAssets(dashboard, leagueId);
   const twinKey = redraftTwinFormat(league.seasonLongFormat).key;
-  const twinRows = dashboard.seasonLongRankings.filter((row) => row.formatKey === twinKey);
-  // Fall back to the dynasty board when the twin preset was not loaded.
-  return twinRows.length > 0 ? twinRows : leagueAssets(dashboard, leagueId);
+  // Never fall back to dynasty values — an empty twin board means zeros.
+  return dashboard.seasonLongRankings.filter((row) => row.formatKey === twinKey);
 }
 
 function rosterPlayerSummary(
@@ -762,9 +765,10 @@ async function toolEvaluateTrade(
     giveIds,
     incoming,
   });
-  // Reuse the same optimized boards for Season Long / Dynasty starter totals.
-  const before = lineup.beforeRoster;
-  const after = lineup.afterRoster;
+  const afterPlayers = [
+    ...myPlayers.filter((p) => !giveIds.has(p.playerId)),
+    ...incoming,
+  ];
 
   const seasonLongAssets = leagueSeasonLongAssets(dashboard, league.id);
   const dynastyAssets = league.seasonLongFormat.isDynasty
@@ -789,14 +793,9 @@ async function toolEvaluateTrade(
     const giveTotal = giveRows.reduce((sum, row) => sum + row.value, 0);
     const getTotal = getRows.reduce((sum, row) => sum + row.value, 0);
     const adjustment = waiverAdjustments(giveRows, getRows);
-    const starterBefore = before.starters.reduce(
-      (sum, player) => sum + (valueMap.get(player.playerId) ?? 0),
-      0,
-    );
-    const starterAfter = after.starters.reduce(
-      (sum, player) => sum + (valueMap.get(player.playerId) ?? 0),
-      0,
-    );
+    // Spec: StarterValue fills slots by value (not Week N projections).
+    const valueBefore = optimizeValueTradeRoster(myPlayers, slots, valueMap);
+    const valueAfter = optimizeValueTradeRoster(afterPlayers, slots, valueMap);
     return {
       giveRows,
       getRows,
@@ -805,8 +804,8 @@ async function toolEvaluateTrade(
       adjustment,
       giveAdjusted: giveTotal + adjustment.give,
       getAdjusted: getTotal + adjustment.get,
-      starterBefore: Math.max(1, starterBefore),
-      starterAfter,
+      starterBefore: Math.max(1, valueBefore.score),
+      starterAfter: valueAfter.score,
     };
   };
   // Season Long in dynasty leagues must not fall back to dynasty board values.

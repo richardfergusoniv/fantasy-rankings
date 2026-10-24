@@ -18,6 +18,7 @@ import {
   normalizeGamePhase,
   optimizeLineup,
   optimizeTradeRoster,
+  optimizeValueTradeRoster,
   powerRankingPoints,
   sumLiveForecast,
   type OptimizablePlayer,
@@ -289,6 +290,49 @@ describe("optimizeTradeRoster", () => {
     expect(graded.starters.map((starter) => starter.playerId)).toEqual(["locked-wr"]);
     expect(graded.bench.map((reserve) => reserve.playerId)).toEqual(["fresh-wr", "bench-boom"]);
     expect(graded.score).toBe(2);
+  });
+
+  it("fills Season Long starters by board value, not weekly projection", () => {
+    const highProj = player({
+      playerId: "boom",
+      position: "WR",
+      isStarter: false,
+      projection: 20,
+    });
+    const highValue = player({
+      playerId: "hold",
+      position: "WR",
+      isStarter: false,
+      projection: 8,
+    });
+    const values = new Map([
+      ["boom", 1_000],
+      ["hold", 8_000],
+    ]);
+    const graded = optimizeValueTradeRoster([highProj, highValue], ["WR"], values, now);
+    expect(graded.starters.map((starter) => starter.playerId)).toEqual(["hold"]);
+    expect(graded.score).toBe(8_000);
+  });
+
+  it("keeps locked starters pinned but scores them by window value", () => {
+    const locked = player({
+      playerId: "locked-wr",
+      position: "WR",
+      lineupSlot: "WR",
+      isStarter: true,
+      projection: 18,
+      actual: 2,
+      gamePhase: "final",
+      gameTime: "2026-10-11T17:00:00.000Z",
+    });
+    const bench = player({ playerId: "bench-wr", position: "WR", projection: 14 });
+    const values = new Map([
+      ["locked-wr", 5_000],
+      ["bench-wr", 9_000],
+    ]);
+    const graded = optimizeValueTradeRoster([locked, bench], ["WR"], values, now);
+    expect(graded.starters.map((starter) => starter.playerId)).toEqual(["locked-wr"]);
+    expect(graded.score).toBe(5_000);
   });
 });
 

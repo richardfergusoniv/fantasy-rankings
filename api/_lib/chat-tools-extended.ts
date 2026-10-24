@@ -6,7 +6,12 @@ import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Dashboard } from "./dashboard-schemas.js";
 import { db, schema } from "./db.js";
-import { optimizeLineup, optimizeTradeRoster, eligibleForSlot } from "./lineup-optimizer.js";
+import {
+  optimizeLineup,
+  optimizeTradeRoster,
+  optimizeValueTradeRoster,
+  eligibleForSlot,
+} from "./lineup-optimizer.js";
 import {
   positionalNeed,
   scoreStartSit,
@@ -807,6 +812,10 @@ export async function toolSuggestWaivers(
   const rosterPlayers = [...league.starters, ...league.bench].map((p) => ({ ...p }));
   const baseline = optimizeTradeRoster(rosterPlayers, slots);
   const baselineScore = baseline.score;
+  const baselineSl = optimizeValueTradeRoster(rosterPlayers, slots, seasonLongValueById);
+  const baselineDy = league.seasonLongFormat.isDynasty
+    ? optimizeValueTradeRoster(rosterPlayers, slots, dynastyValueById)
+    : null;
 
   // Drop candidate: lowest-value bench player not in this week's best lineup.
   const bestIds = new Set(baseline.starters.map((p) => p.playerId));
@@ -855,25 +864,17 @@ export async function toolSuggestWaivers(
       },
     ];
     const after = optimizeTradeRoster(withAdd, slots);
+    const afterSl = optimizeValueTradeRoster(withAdd, slots, seasonLongValueById);
+    const afterDy = baselineDy
+      ? optimizeValueTradeRoster(withAdd, slots, dynastyValueById)
+      : null;
     const need = myPower
       ? positionalNeed(myPower.positionValues[position as "QB" | "RB" | "WR" | "TE"] ?? 0, medians[position] ?? 0)
       : 0;
     const sumValues = (
       players: ReadonlyArray<{ playerId: string }>,
       map: Map<string, number>,
-      addId: string,
-      addVal: number,
-    ) => players.reduce((sum, p) => sum + (map.get(p.playerId) ?? (p.playerId === addId ? addVal : 0)), 0);
-    const slAdd = seasonLongValueById.get(player.playerId) ?? value;
-    const dyAdd = dynastyValueById.get(player.playerId) ?? value;
-    const starterBeforeSl = sumValues(baseline.starters, seasonLongValueById, "", 0);
-    const starterAfterSl = sumValues(after.starters, seasonLongValueById, player.playerId, slAdd);
-    const benchBeforeSl = sumValues(baseline.bench, seasonLongValueById, "", 0);
-    const benchAfterSl = sumValues(after.bench, seasonLongValueById, player.playerId, slAdd);
-    const starterBeforeDy = sumValues(baseline.starters, dynastyValueById, "", 0);
-    const starterAfterDy = sumValues(after.starters, dynastyValueById, player.playerId, dyAdd);
-    const benchBeforeDy = sumValues(baseline.bench, dynastyValueById, "", 0);
-    const benchAfterDy = sumValues(after.bench, dynastyValueById, player.playerId, dyAdd);
+    ) => players.reduce((sum, p) => sum + (map.get(p.playerId) ?? 0), 0);
 
     const move = scoreWaiver({
       addName: weekly?.name ?? player.name,
@@ -883,17 +884,17 @@ export async function toolSuggestWaivers(
       isDynasty: league.seasonLongFormat.isDynasty,
       week: { lineupBefore: baselineScore, lineupAfter: after.score },
       seasonLong: {
-        starterValueBefore: Math.max(1, starterBeforeSl),
-        starterValueAfter: starterAfterSl,
-        benchValueBefore: benchBeforeSl,
-        benchValueAfter: benchAfterSl,
+        starterValueBefore: Math.max(1, baselineSl.score),
+        starterValueAfter: afterSl.score,
+        benchValueBefore: sumValues(baselineSl.bench, seasonLongValueById),
+        benchValueAfter: sumValues(afterSl.bench, seasonLongValueById),
       },
-      dynasty: league.seasonLongFormat.isDynasty
+      dynasty: baselineDy && afterDy
         ? {
-          starterValueBefore: Math.max(1, starterBeforeDy),
-          starterValueAfter: starterAfterDy,
-          benchValueBefore: benchBeforeDy,
-          benchValueAfter: benchAfterDy,
+          starterValueBefore: Math.max(1, baselineDy.score),
+          starterValueAfter: afterDy.score,
+          benchValueBefore: sumValues(baselineDy.bench, dynastyValueById),
+          benchValueAfter: sumValues(afterDy.bench, dynastyValueById),
         }
         : undefined,
       weights,
@@ -1100,16 +1101,7 @@ export async function toolSuggestTrades(
     const adjustedGet = seasonLongTotals.adjustedGet;
     const margin = adjustedGet - adjustedGive;
     const myRank = myPower?.rank ?? 1;
-    const starterValueSum = (playerIds: Iterable<string>, map: Map<string, number>) =>
-      [...playerIds].reduce((sum, id) => sum + (map.get(id) ?? 0), 0);
-    const myStarterIds = new Set(
-      me.players.filter((player) => player.isStarter).map((player) => player.playerId),
-    );
     const giveIds = new Set(give.map((row) => row.playerId));
-    const getIds = get.map((row) => row.playerId);
-    const afterStarterIds = new Set(
-      [...myStarterIds].filter((id) => !giveIds.has(id)).concat(getIds),
-    );
     const fillsHole = best.get.position === myNeeds[0];
     const projectionById = new Map(
       dashboard.rankings
@@ -1133,20 +1125,33 @@ export async function toolSuggestTrades(
       projection: player.projection ?? projectionById.get(player.playerId) ?? null,
       actual: player.actual,
     }));
+    const incoming = get.map((asset) => ({
+      playerId: asset.playerId,
+      name: asset.name,
+      position: asset.position,
+      lineupSlot: null as string | null,
+      isStarter: false,
+      projection: projectionById.get(asset.playerId) ?? null,
+      actual: null as number | null,
+    }));
     const lineup = tradeLineupBeforeAfter({
       roster: rosterPlayers,
       slots,
       giveIds,
-      incoming: get.map((asset) => ({
-        playerId: asset.playerId,
-        name: asset.name,
-        position: asset.position,
-        lineupSlot: null as string | null,
-        isStarter: false,
-        projection: projectionById.get(asset.playerId) ?? null,
-        actual: null as number | null,
-      })),
+      incoming,
     });
+    const afterPlayers = [
+      ...rosterPlayers.filter((player) => !giveIds.has(player.playerId)),
+      ...incoming,
+    ];
+    const slBefore = optimizeValueTradeRoster(rosterPlayers, slots, seasonLongValueById);
+    const slAfter = optimizeValueTradeRoster(afterPlayers, slots, seasonLongValueById);
+    const dyBefore = dynastyTotals
+      ? optimizeValueTradeRoster(rosterPlayers, slots, dynastyValueById)
+      : null;
+    const dyAfter = dynastyTotals
+      ? optimizeValueTradeRoster(afterPlayers, slots, dynastyValueById)
+      : null;
     const move = scoreTrade({
       week: {
         yourLineupBefore: lineup.before,
@@ -1155,18 +1160,18 @@ export async function toolSuggestTrades(
       seasonLong: {
         give: seasonLongTotals.giveRows,
         get: seasonLongTotals.getRows,
-        yourStarterValueBefore: Math.max(1, starterValueSum(myStarterIds, seasonLongValueById)),
-        yourStarterValueAfter: starterValueSum(afterStarterIds, seasonLongValueById),
+        yourStarterValueBefore: Math.max(1, slBefore.score),
+        yourStarterValueAfter: slAfter.score,
         yourPowerRankBefore: myRank,
         yourPowerRankAfter: margin >= 0 ? Math.max(1, myRank - 1) : myRank + 1,
         fillsHole,
       },
-      dynasty: dynastyTotals
+      dynasty: dynastyTotals && dyBefore && dyAfter
         ? {
           give: dynastyTotals.giveRows,
           get: dynastyTotals.getRows,
-          yourStarterValueBefore: Math.max(1, starterValueSum(myStarterIds, dynastyValueById)),
-          yourStarterValueAfter: starterValueSum(afterStarterIds, dynastyValueById),
+          yourStarterValueBefore: Math.max(1, dyBefore.score),
+          yourStarterValueAfter: dyAfter.score,
           yourPowerRankBefore: myRank,
           yourPowerRankAfter: (dynastyTotals.adjustedGet - dynastyTotals.adjustedGive) >= 0
             ? Math.max(1, myRank - 1)
