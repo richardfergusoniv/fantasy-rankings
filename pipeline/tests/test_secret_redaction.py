@@ -124,3 +124,36 @@ def test_retry_after_parsing():
     assert _parse_retry_after("99999") == 60.0
     assert _parse_retry_after("garbage") == 5.0
     assert _parse_retry_after("-5") == 0.0
+    assert _parse_retry_after("nan") == 5.0
+    assert _parse_retry_after("inf") == 5.0
+    # HTTP-date form is honored (capped) rather than falling back to default
+    from email.utils import format_datetime
+    from datetime import datetime, timedelta, timezone
+    future = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=30))
+    assert _parse_retry_after(future) <= 30.0
+    assert _parse_retry_after(future) > 20.0
+    past = format_datetime(datetime.now(timezone.utc) - timedelta(seconds=30))
+    assert _parse_retry_after(past) == 0.0
+
+
+def test_non_json_error_drops_cause_chain(monkeypatch):
+    """A response body echoing the key must not survive via __cause__/.doc."""
+    provider = TheOddsAPIProvider(api_key=SENTINEL)
+    body = f'not-json?apiKey={SENTINEL}&more=1'
+
+    class Resp:
+        ok = True
+        status_code = 200
+        text = body
+
+        def json(self):
+            import json as _json
+            return _json.loads(body)  # raises with .doc = body
+
+    monkeypatch.setattr(provider.session, "get", lambda *a, **k: Resp())
+    with pytest.raises(ProviderError) as excinfo:
+        provider._get("https://x.test/odds", retries=0)
+    err = excinfo.value
+    assert SENTINEL not in str(err)
+    assert err.__cause__ is None
+    assert err.__context__ is None

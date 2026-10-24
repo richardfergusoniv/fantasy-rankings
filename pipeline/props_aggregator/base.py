@@ -1,9 +1,12 @@
 """Shared HTTP plumbing and provider base class."""
 from __future__ import annotations
 
+import math
 import os
 import re
 import time
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -24,12 +27,21 @@ MAX_RETRY_AFTER = 60.0
 
 
 def _parse_retry_after(value: str | None, default: float = 5.0) -> float:
-    """Bound Retry-After so a huge or malformed header can't stall the pull."""
+    """Bound Retry-After so a huge or malformed header can't stall the pull.
+    Accepts numeric seconds or an HTTP-date (RFC 9110)."""
     if not value:
         return default
     try:
         seconds = float(value)
     except (TypeError, ValueError):
+        try:
+            dt = parsedate_to_datetime(value)
+        except (TypeError, ValueError):
+            return default
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        seconds = (dt - datetime.now(timezone.utc)).total_seconds()
+    if not math.isfinite(seconds):
         return default
     return max(0.0, min(seconds, MAX_RETRY_AFTER))
 
@@ -92,9 +104,9 @@ class BaseProvider:
                 break
             else:
                 if resp.status_code == 429:
-                    retry_after = resp.headers.get("Retry-After")
-                    time.sleep(_parse_retry_after(retry_after))
                     if attempt < retries:
+                        retry_after = resp.headers.get("Retry-After")
+                        time.sleep(_parse_retry_after(retry_after))
                         continue
                     raise ProviderError("rate limited (429) after retries")
                 if resp.status_code in (401, 403):
@@ -105,9 +117,12 @@ class BaseProvider:
                         f"HTTP {resp.status_code}: {self._scrub(resp.text[:200])}")
                 try:
                     return resp.json()
-                except ValueError as exc:
-                    raise ProviderError(
-                        f"non-JSON response: {self._scrub(resp.text[:200])}") from exc
+                except ValueError:
+                    # decode errors can carry the response body; raise below so
+                    # nothing unsanitized rides along on __context__/__cause__
+                    self.last_error = (
+                        f"non-JSON response: {self._scrub(resp.text[:200])}")
+                    break
         raise ProviderError(self.last_error or "unreachable") from None
 
     # -- interface ------------------------------------------------------

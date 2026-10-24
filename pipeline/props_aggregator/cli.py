@@ -124,7 +124,9 @@ def cmd_pull(args) -> int:
                    "built_at": utcnow_iso(), "consensus": consensus}, f, indent=1)
     print(f"wrote {props_path} ({len(all_records)} records)")
     print(f"wrote {consensus_path} ({len(consensus)} consensus rows)")
-    pruned = _prune_old_pull_files(args.data_dir, args.season, args.week)
+    # don't delete good history behind a failed pull
+    pruned = 0 if outcome == "failed" else _prune_old_pull_files(
+        args.data_dir, args.season, args.week)
     if pruned:
         print(f"pruned {pruned} pull artifact(s) from earlier weeks")
     print(f"pull outcome: {outcome} "
