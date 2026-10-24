@@ -188,10 +188,8 @@ export function scoreTrade(input: ScoreTradeInput): TradeResult {
   };
 
   const season = seasonWindow(input.seasonLong, "season_long", phase, weights, extras);
-  // Season Long / Dynasty close call also considers Week N Δ within ±1.
-  if (week.closeCall && season.score.closeCall) {
-    season.score.closeCall = true;
-  }
+  // Season Long / Dynasty close call requires Fair band AND Week N Δ within ±1.
+  season.score.closeCall = week.closeCall && season.score.closeCall ? true : undefined;
 
   const result: TradeResult = {
     week,
@@ -201,6 +199,7 @@ export function scoreTrade(input: ScoreTradeInput): TradeResult {
 
   if (input.isDynasty && input.dynasty) {
     const dynasty = seasonWindow(input.dynasty, "dynasty", phase, weights, extras);
+    dynasty.score.closeCall = week.closeCall && dynasty.score.closeCall ? true : undefined;
     result.dynasty = dynasty.score;
   }
 

@@ -19,6 +19,8 @@ import {
 } from "./sleeper.js";
 import { optimizeTradeRoster } from "./lineup-optimizer.js";
 import { scoreTrade } from "./move-scoring.js";
+import { redraftTwinFormat } from "./season-long-format.js";
+import { loadActiveScoringWeights } from "./scoring-jobs.js";
 import { loadHistoricalTrades } from "./trades.js";
 import {
   dispatchExtendedChatTool,
@@ -215,6 +217,17 @@ export function leagueAssets(dashboard: Dashboard, leagueId: string) {
   if (!league) return [];
   const formatKey = league.seasonLongFormat.key;
   return dashboard.seasonLongRankings.filter((row) => row.formatKey === formatKey);
+}
+
+/** Season Long values: redraft twin in dynasty leagues, else the league format. */
+export function leagueSeasonLongAssets(dashboard: Dashboard, leagueId: string) {
+  const league = findLeague(dashboard, leagueId);
+  if (!league) return [];
+  if (!league.seasonLongFormat.isDynasty) return leagueAssets(dashboard, leagueId);
+  const twinKey = redraftTwinFormat(league.seasonLongFormat).key;
+  const twinRows = dashboard.seasonLongRankings.filter((row) => row.formatKey === twinKey);
+  // Fall back to the dynasty board when the twin preset was not loaded.
+  return twinRows.length > 0 ? twinRows : leagueAssets(dashboard, leagueId);
 }
 
 function rosterPlayerSummary(
@@ -702,30 +715,23 @@ async function toolEvaluateTrade(
   const slots = league.tradeStarterSlots.length > 0
     ? league.tradeStarterSlots
     : league.starters.map((p) => p.lineupSlot ?? p.position);
-  const me = league.tradeTeams.find((team) => team.isUser);
   const giveIds = new Set(args.givePlayerIds);
-  const rosterSource = me
-    ? me.players.map((p) => ({
-      playerId: p.playerId,
-      name: p.name,
-      position: p.position,
-      lineupSlot: null as string | null,
-      isStarter: false,
-      projection: null as number | null,
-      actual: null as number | null,
-    }))
-    : [...league.starters, ...league.bench].map((p) => ({
-      playerId: p.playerId,
-      name: p.name,
-      position: p.position,
-      lineupSlot: p.lineupSlot,
-      isStarter: p.isStarter,
-      projection: p.projection,
-      actual: p.actual,
-    }));
-  const myPlayers = rosterSource.map((p) => ({
-    ...p,
-    isStarter: league.starters.some((s) => s.playerId === p.playerId),
+  const projectionById = new Map(
+    dashboard.rankings
+      .filter((row) => row.leagueId === league.id)
+      .map((row) => [row.playerId, row.leagueProjection]),
+  );
+  for (const player of [...league.starters, ...league.bench]) {
+    if (!projectionById.has(player.playerId)) projectionById.set(player.playerId, player.projection);
+  }
+  const myPlayers = [...league.starters, ...league.bench].map((p) => ({
+    playerId: p.playerId,
+    name: p.name,
+    position: p.position,
+    lineupSlot: p.lineupSlot,
+    isStarter: p.isStarter,
+    projection: p.projection ?? projectionById.get(p.playerId) ?? null,
+    actual: p.actual,
   }));
   const before = optimizeTradeRoster(myPlayers, slots);
   const afterPlayers = [
@@ -736,19 +742,35 @@ async function toolEvaluateTrade(
       position: asset.position,
       lineupSlot: null as string | null,
       isStarter: false,
-      projection: null as number | null,
+      projection: projectionById.get(asset.playerId) ?? null,
       actual: null as number | null,
     })),
   ];
   const after = optimizeTradeRoster(afterPlayers, slots);
+
+  const seasonLongAssets = leagueSeasonLongAssets(dashboard, league.id);
+  const dynastyAssets = league.seasonLongFormat.isDynasty
+    ? leagueAssets(dashboard, league.id)
+    : [];
+  const seasonLongValue = new Map(seasonLongAssets.map((row) => [row.playerId, row.value]));
+  const dynastyValue = new Map(dynastyAssets.map((row) => [row.playerId, row.value]));
+  const toWindowAssets = (
+    rows: typeof give.resolved,
+    valueMap: Map<string, number>,
+  ) => rows.map((row) => ({
+    playerId: row.playerId,
+    name: row.name,
+    position: row.position,
+    value: valueMap.get(row.playerId) ?? row.value,
+  }));
 
   const power = league.powerRankingsSeasonLong.length > 0
     ? league.powerRankingsSeasonLong
     : league.powerRankingsWeek;
   const myPower = power.find((row) => row.isUser);
   const myRankBefore = myPower?.rank ?? 1;
-  // Approximate post-trade rank from value margin only (full re-rank is in trade-power).
   const myRankAfter = margin >= 0 ? Math.max(1, myRankBefore - 1) : myRankBefore + 1;
+  const weights = await loadActiveScoringWeights();
 
   const move = scoreTrade({
     week: {
@@ -756,8 +778,8 @@ async function toolEvaluateTrade(
       yourLineupAfter: after.score,
     },
     seasonLong: {
-      give: give.resolved,
-      get: get.resolved,
+      give: toWindowAssets(give.resolved, seasonLongValue),
+      get: toWindowAssets(get.resolved, seasonLongValue),
       yourStarterValueBefore: giveAdjusted,
       yourStarterValueAfter: getAdjusted,
       yourPowerRankBefore: myRankBefore,
@@ -766,8 +788,8 @@ async function toolEvaluateTrade(
     },
     dynasty: league.seasonLongFormat.isDynasty
       ? {
-        give: give.resolved,
-        get: get.resolved,
+        give: toWindowAssets(give.resolved, dynastyValue),
+        get: toWindowAssets(get.resolved, dynastyValue),
         yourStarterValueBefore: giveAdjusted,
         yourStarterValueAfter: getAdjusted,
         yourPowerRankBefore: myRankBefore,
@@ -776,18 +798,21 @@ async function toolEvaluateTrade(
       }
       : undefined,
     isDynasty: league.seasonLongFormat.isDynasty,
+    weights,
   });
 
+  // Prefer the viewed window; default evaluate_trade to Season Long (values),
+  // not Week N, when the client did not send a horizon.
   const windowKey = ctx.scoringWindow === "dynasty" && move.dynasty
     ? "dynasty"
-    : ctx.scoringWindow === "season_long"
-      ? "season_long"
-      : "week";
+    : ctx.scoringWindow === "week"
+      ? "week"
+      : "season_long";
   const primary = windowKey === "dynasty" && move.dynasty
     ? move.dynasty
-    : windowKey === "season_long"
-      ? move.seasonLong
-      : move.week;
+    : windowKey === "week"
+      ? move.week
+      : move.seasonLong;
 
   return {
     ok: true as const,

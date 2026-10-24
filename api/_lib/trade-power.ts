@@ -43,16 +43,20 @@ export function powerRankingsAfterTrade(
     partnerRosterId: number;
     give: readonly { position: string; value: number }[];
     get: readonly { position: string; value: number }[];
+    /** True only when `rows` are Dynasty totals, which already include future pick value. */
+    includePickValueInTotal: boolean;
   },
 ): PowerShiftRow[] {
   const myPlayerDelta = countedPlayerValue(change.get) - countedPlayerValue(change.give);
   const myPickDelta = countedPickValue(change.get) - countedPickValue(change.give);
-  const myDelta = myPlayerDelta + myPickDelta;
+  const myTotalDelta = change.includePickValueInTotal
+    ? myPlayerDelta + myPickDelta
+    : myPlayerDelta;
   const adjusted = rows.map((row) => {
     const delta = row.rosterId === change.myRosterId
-      ? myDelta
+      ? myTotalDelta
       : row.rosterId === change.partnerRosterId
-        ? -myDelta
+        ? -myTotalDelta
         : 0;
     const pickDelta = row.rosterId === change.myRosterId
       ? myPickDelta

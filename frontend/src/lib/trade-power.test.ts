@@ -20,6 +20,7 @@ describe("powerRankingsAfterTrade", () => {
       partnerRosterId: 3,
       give: [{ position: "WR", value: 2800 }],
       get: [{ position: "WR", value: 3100 }, { position: "RB", value: 900 }],
+      includePickValueInTotal: false,
     });
     // Mine: 11500 - 2800 + 4000 = 12700 (rank 1); Partner: 11400 + 2800 - 4000 = 10200 (rank 4).
     expect(after.map((r) => [r.teamName, r.totalValue, r.previousRank, r.rank])).toEqual([
@@ -32,16 +33,26 @@ describe("powerRankingsAfterTrade", () => {
     expect(after.find((r) => r.teamName === "Mine")?.isParty).toBe(true);
   });
 
-  it("ignores K and DEF, but counts picks toward futurePickValue / total", () => {
-    const after = powerRankingsAfterTrade(rows, {
+  it("ignores K and DEF; picks move futurePickValue and total only in Dynasty", () => {
+    const seasonLong = powerRankingsAfterTrade(rows, {
       myRosterId: 2,
       partnerRosterId: 3,
       give: [{ position: "K", value: 500 }, { position: "PICK", value: 1500 }],
       get: [{ position: "DEF", value: 700 }],
+      includePickValueInTotal: false,
     });
-    // Player positions unchanged; Mine loses 1500 pick value, Partner gains it.
-    const mine = after.find((r) => r.teamName === "Mine");
-    const partner = after.find((r) => r.teamName === "Partner");
+    expect(seasonLong.find((r) => r.teamName === "Mine")?.totalValue).toBe(11500);
+    expect(seasonLong.find((r) => r.teamName === "Mine")?.futurePickValue).toBe(0);
+
+    const dynasty = powerRankingsAfterTrade(rows, {
+      myRosterId: 2,
+      partnerRosterId: 3,
+      give: [{ position: "K", value: 500 }, { position: "PICK", value: 1500 }],
+      get: [{ position: "DEF", value: 700 }],
+      includePickValueInTotal: true,
+    });
+    const mine = dynasty.find((r) => r.teamName === "Mine");
+    const partner = dynasty.find((r) => r.teamName === "Partner");
     expect(mine?.totalValue).toBe(10000);
     expect(mine?.futurePickValue).toBe(0);
     expect(partner?.totalValue).toBe(12900);
@@ -54,6 +65,7 @@ describe("powerRankingsAfterTrade", () => {
       partnerRosterId: 3,
       give: [{ position: "TE", value: 50 }],
       get: [],
+      includePickValueInTotal: false,
     });
     // Mine drops to 11450 and Partner rises to 11450; "Mine" sorts before "Partner".
     const mine = after.find((r) => r.teamName === "Mine");

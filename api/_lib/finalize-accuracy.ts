@@ -139,7 +139,8 @@ export async function finalizeProjectionAccuracy(
   }
 
   return {
-    ok: true,
+    // Fail the job when every scanned row errored (e.g. Sleeper outage).
+    ok: rows.length === 0 || errors < rows.length,
     job: "finalize-accuracy",
     season,
     week,
