@@ -40,7 +40,7 @@
 
 ### 🔲 Todo (after unblocked)
 
-- [ ] Schema changes follow [Database migrations](#database-migrations). `npm run db:migrate` applies `0001_baseline` only. Do not run it against production.
+- [ ] Schema changes follow [Database migrations](#database-migrations). `npm run db:migrate` applies `0001`–`0010` on a fresh database. Do not run it against production.
 - [ ] `npm install` + `npm run typecheck` (validate the scaffold compiles)
 - [ ] `npm run build` (validate Vite build works)
 - [ ] Push to GitHub
@@ -86,8 +86,8 @@ Early plans named separate files (`dashboard/section.ts`, `boom-bust/ranges.ts`,
 - [x] `GET /api/cron/jobs?job=rebuild-dashboard` and `?job=refresh-fantasycalc` — `api/cron/jobs.ts`
 - [x] `GET` / `POST /api/player-news` — `api/player-news.ts` (refresh when the caller sends `CRON_SECRET`)
 - [x] `POST /api/ingest/projections`, `/api/ingest/matchup-grades`, `/api/ingest/pfn-tables`, `/api/ingest/player-news-x` — `api/ingest/[target].ts`
-- [x] `shared_player_news` table — `drizzle-pg/0005_shared_player_news.sql` (hand-apply)
-- [x] `scoring_weights` + `scoring_snapshots` — `drizzle-pg/0008_scoring_calibration.sql` (hand-apply; RLS on, no anon policies)
+- [x] `shared_player_news` table — `drizzle-pg/0005_shared_player_news.sql` (originally hand-applied; now a journal entry)
+- [x] `scoring_weights` + `scoring_snapshots` — `drizzle-pg/0008_scoring_calibration.sql` (originally hand-applied; now a journal entry; RLS on, no anon policies)
 - [x] `GET` / `POST /api/user` — `api/user.ts`
 - [x] GitHub Actions in `.github/workflows/` call those routes on a schedule
 
@@ -137,15 +137,37 @@ Scripts in `package.json`:
 | `npm run db:migrate` | `drizzle-kit migrate --config=drizzle.config.ts` |
 | `npm run db:push` | `drizzle-kit push --config=drizzle.config.ts` |
 
-`db:migrate` applies only entries in `drizzle-pg/meta/_journal.json`. That journal lists `0001_baseline` and nothing else.
+`db:migrate` applies the entries in `drizzle-pg/meta/_journal.json`, which lists
+all ten migrations, `0001_baseline` through `0010_chat_messages_owner_rls`, in
+apply order. `0002`–`0010` were originally
+hand-written and applied to production through the Supabase SQL editor; they are
+now journal entries (with `--> statement-breakpoint` separators) so
+`npm run db:migrate` reproduces the full schema — tables, indexes, RLS policies,
+and grants/revokes — on a fresh database. CI (`db-migrations` in
+`.github/workflows/ci.yml`) proves this on every PR: a disposable Postgres gets
+a minimal `auth` schema shim (`auth.users`, `auth.uid()`, `anon`,
+`authenticated`), runs `drizzle-kit migrate`, and smoke-checks the result.
 
-`drizzle-pg/0002_chart_views_user_id.sql`, `drizzle-pg/0003_phase2_users.sql`, and `drizzle-pg/0004_db_hardening.sql` are hand-written. They are not journal entries, so `db:migrate` does not run them. Production already has `0001` through `0004` applied by hand (Supabase SQL editor). `0004_db_hardening.sql` was applied on 2026-10-07. Drizzle has never run `db:migrate` on production: there is no `drizzle.__drizzle_migrations` table.
+Do not run `npm run db:migrate` against production. Production has `0001`–`0010`
+applied by hand but no `drizzle.__drizzle_migrations` table, so Drizzle would
+try to replay `0001`, which is not idempotent (`saved_chart_views_owner_idx`
+on columns `0002` dropped). To adopt tracked migrations on production later,
+create the `drizzle` schema and `__drizzle_migrations` table and insert one row
+per already-applied migration, rather than replaying history. The migrator only
+compares `created_at` to each journal entry's `when`, so each seeded row must
+carry `hash` = SHA-256 of the SQL file's contents and `created_at` = that
+entry's exact `when` value in `meta/_journal.json`. Wrong `created_at` values
+make the next `db:migrate` replay non-idempotent files (`0001`, `0003`).
 
-Do not run `npm run db:migrate` against production. `0001_baseline` creates `saved_chart_views_owner_idx` on `owner_source` and `owner_key`. `0002` dropped those columns and that index. Running `0001` again fails on that `CREATE INDEX`, and Drizzle rolls the migration back.
+`0002` is safe to re-run (`IF EXISTS` / `IF NOT EXISTS`). `0003` is not — its
+`CREATE POLICY` statements have no existence check. Known parity quirk: `0004`
+creates the `saved_chart_views` owner policy but never enables RLS on that
+table; that matches production. Enabling it is a deliberate follow-up, not part
+of the from-scratch reconciliation.
 
-`0002` is safe to re-run (`IF EXISTS` / `IF NOT EXISTS`). `0003` is not. Its `CREATE POLICY` statements have no `IF NOT EXISTS`, so a second run fails because those policies already exist. `0004` was applied by hand on 2026-10-07; it adds the hot-path indexes (including `player_value_snapshots` on `snapshot_date DESC`), the `saved_chart_views` unique `(user_id, dataset, name)` index, owner RLS, the `auth.uid()` initplan fix, and `REVOKE TRUNCATE`.
-
-`sleeper_connections` is declared in `api/_lib/schema.ts`. `db:push` diffs that file against the database. Production already has this table plus the `0004` indexes and policies. Do not run `db:push` or `db:migrate` against production.
+`sleeper_connections` is declared in `api/_lib/schema.ts`. `db:push` diffs that
+file against the database. Do not run `db:push` or `db:migrate` against
+production.
 
 `npm run typecheck` runs `tsc --noEmit -p frontend/tsconfig.json`. It typechecks `frontend/` only.
 
