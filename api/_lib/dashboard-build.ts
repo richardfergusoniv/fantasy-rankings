@@ -103,6 +103,8 @@ import {
   drizzleBuildLeaseStore,
   runWithBuildLease,
 } from "./build-lease.js";
+import { createDashboardBuildTracker, type DashboardBuildState } from "./dashboard-build-status.js";
+import { captureServerError } from "./posthog.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -1627,7 +1629,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       gameTimeByTeam,
       sleeperDefenseProjections,
     );
-    const defenseRankByTeam = new Map(leagueDefenses.flatMap((row) => row.rank === null ? [] : [[row.team, row.rank] as const]));
     const mergedRankings = mergePlayerProjections(
       league.league_id,
       rankingField,
@@ -1637,7 +1638,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       useVegasPrimary,
       sleeperProjectionsByPlayerId,
       league.scoring_settings,
-      defenseRankByTeam,
     );
     rankingsByLeagueId.set(league.league_id, mergedRankings);
     defensesByLeagueId.set(league.league_id, leagueDefenses);
@@ -2417,10 +2417,17 @@ export async function readUserDashboardSection<S extends DashboardCacheSection>(
   });
 }
 
-// Single-flight guards. The in-process map dedupes within one function
-// instance; the DB lease (`build_leases`) dedupes across instances so a
-// burst of cold starts still produces one build per user.
-const inFlightBuilds = new Map<string, Promise<void>>();
+// Single-flight guards. The tracker dedupes within one function instance and
+// records each build's outcome so section responses can report a structured
+// status instead of silently dropping background failures; the DB lease
+// (`build_leases`) dedupes across instances so a burst of cold starts still
+// produces one build per user.
+const buildTracker = createDashboardBuildTracker();
+
+/** Structured status of the user's latest background build, if any ran here. */
+export function userDashboardBuildStatus(sleeperUserId: string): DashboardBuildState | null {
+  return buildTracker.status(sleeperUserId);
+}
 
 /**
  * Build the dashboard under the deployment-wide lease. When another instance
@@ -2507,17 +2514,22 @@ async function waitForFreshDashboardCache(
  * when done. Never rejects — pair with `waitUntil` at the route so Vercel
  * keeps the function alive until the cache write lands. Section reads use
  * this so a cold cache answers immediately with "no data yet" while the
- * first build (~30s) runs behind the response.
+ * first build (~30s) runs behind the response. A failure is recorded on the
+ * tracker (read it back via `userDashboardBuildStatus`) and reported to
+ * server telemetry instead of being discarded; it is not rebuilt until it
+ * expires or the caller passes `retryFailed` (the client's explicit retry).
  *
  * The DB lease means a request landing on a different instance does not
- * start a duplicate build, and failures are recorded on the lease row
- * (`status='failed'`, `last_error`) instead of being silently swallowed.
+ * start a duplicate build; another instance's build in progress counts as
+ * no failure here.
  */
-export function kickUserDashboardBuild(sleeperUserId: string): Promise<void> {
-  const existing = inFlightBuilds.get(sleeperUserId);
-  if (existing) return existing;
-  const build = (async () => {
-    try {
+export function kickUserDashboardBuild(
+  sleeperUserId: string,
+  options?: { retryFailed?: boolean },
+): Promise<void> {
+  return buildTracker.kick(
+    sleeperUserId,
+    async () => {
       const outcome = await runWithBuildLease(
         drizzleBuildLeaseStore,
         dashboardBuildLeaseResource(sleeperUserId),
@@ -2535,17 +2547,13 @@ export function kickUserDashboardBuild(sleeperUserId: string): Promise<void> {
         // Stay in flight (and inside the route's waitUntil) until a timed-out
         // build really stops, so this instance doesn't start another one.
         await outcome.released;
-        console.error(
-          "[dashboard-build] background build failed",
-          outcome.error instanceof Error ? outcome.error.message : outcome.error,
-        );
+        throw outcome.error;
       }
-    } catch (error) {
-      console.error("[dashboard-build] background build error", error);
-    } finally {
-      inFlightBuilds.delete(sleeperUserId);
-    }
-  })();
-  inFlightBuilds.set(sleeperUserId, build);
-  return build;
+    },
+    (error, jobId) => {
+      console.error("[dashboard-build] background build failed", { jobId, sleeperUserId, error });
+      void captureServerError(error, { route: "dashboard-build", job: "user-dashboard", jobId });
+    },
+    { retryFailed: options?.retryFailed },
+  );
 }

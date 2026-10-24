@@ -76,7 +76,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.guard.outputs.go == 'true'
         with:
-          node-version: "20"
+          node-version-file: .nvmrc
 
       # props_daily_guard.py treats a success of this exact step as today's pull.
       - name: Pull providers and build projections

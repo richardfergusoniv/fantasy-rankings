@@ -3,11 +3,14 @@ import { db, schema } from "../_lib/db.js";
 import { captureServerError } from "../_lib/posthog.js";
 import {
   badRequest,
+  BodyTooLargeError,
   forbidden,
   hasCronSecret,
   internalError,
   json,
   methodNotAllowed,
+  payloadTooLarge,
+  readJsonBody,
 } from "../_lib/api-utils.js";
 import {
   expireDashboardCaches,
@@ -39,6 +42,10 @@ import {
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/source-cache-payload.js";
 import { writePfnWeeklyCopies } from "../_lib/scoring-jobs.js";
 import { readNflState } from "../_lib/user-leagues.js";
+
+// Ingest payloads are batched provider dumps — cap at 8 MB (the api-utils
+// default of 1 MB covers the user-facing routes).
+const MAX_INGEST_BODY_BYTES = 8 * 1024 * 1024;
 
 /**
  * POST /api/ingest/:target
@@ -77,8 +84,9 @@ import { readNflState } from "../_lib/user-leagues.js";
 async function handleProjections(req: Request): Promise<Response> {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBody(req, MAX_INGEST_BODY_BYTES);
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) return payloadTooLarge();
     return badRequest("Request body must be valid JSON.");
   }
 
@@ -148,8 +156,9 @@ const STRENGTH_OF_SCHEDULE_CACHE_PREFIX = "strength-of-schedule-v1";
 async function handleMatchupGrades(req: Request): Promise<Response> {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBody(req, MAX_INGEST_BODY_BYTES);
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) return payloadTooLarge();
     return badRequest("Request body must be valid JSON.");
   }
 
@@ -221,8 +230,9 @@ async function handleMatchupGrades(req: Request): Promise<Response> {
 async function handlePfnTables(req: Request): Promise<Response> {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBody(req, MAX_INGEST_BODY_BYTES);
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) return payloadTooLarge();
     return badRequest("Request body must be valid JSON.");
   }
 
@@ -314,8 +324,9 @@ async function loadPlayerNameIndex(): Promise<{
 async function handlePlayerNewsX(req: Request): Promise<Response> {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBody(req, MAX_INGEST_BODY_BYTES);
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) return payloadTooLarge();
     return badRequest("Request body must be valid JSON.");
   }
 
@@ -420,8 +431,9 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
 async function handlePropLineSnapshots(req: Request): Promise<Response> {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBody(req, MAX_INGEST_BODY_BYTES);
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) return payloadTooLarge();
     return badRequest("Request body must be valid JSON.");
   }
 
@@ -473,8 +485,9 @@ async function handlePropLineSnapshots(req: Request): Promise<Response> {
 async function handleSleeperPicks(req: Request): Promise<Response> {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBody(req, MAX_INGEST_BODY_BYTES);
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) return payloadTooLarge();
     return badRequest("Request body must be valid JSON.");
   }
 

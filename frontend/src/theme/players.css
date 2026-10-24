@@ -3,7 +3,6 @@
 .position-filter-row .position-tabs {
   overflow-x: hidden;
 }
-.rankings-note { display: flex; justify-content: flex-end; gap: 10px; margin: 10px 2px 6px; color: var(--dim); font-size: var(--type-caption); }
 .ranking-row { display: grid; width: 100%; grid-template-columns: minmax(0,1fr) 62px; gap: 8px; min-height: 52px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--row-divider); background: var(--surface); color: var(--text); text-align: left; }
 .ranking-row-button { cursor: pointer; touch-action: pan-y; }
 .ranking-row-button:active { background: var(--surface-2); }
