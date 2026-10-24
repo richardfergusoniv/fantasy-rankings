@@ -50,9 +50,18 @@
     overflow: hidden auto;
     padding: 8px 12px max(12px, env(safe-area-inset-bottom));
   }
-  /* Full-screen popup: sit the summary and table in the middle, not pinned under the header. */
-  .team-stats-table-dialog .team-stats-dialog {
-    margin-block: auto;
+  /* Team stats popup stays a card on a phone (the other chart popups go full screen). */
+  .chart-result-backdrop:has(.team-stats-table-dialog) {
+    align-items: center;
+    justify-content: center;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  }
+  .chart-result-card.team-stats-table-dialog {
+    width: 100%;
+    height: auto;
+    max-height: min(88dvh, 720px);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-xl);
   }
   .monitor-chart-expand-card .monitor-expanded-chart {
     display: grid;
