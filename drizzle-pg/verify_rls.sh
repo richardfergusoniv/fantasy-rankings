@@ -39,12 +39,20 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
     "$IMAGE" >/dev/null
   trap 'docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true' EXIT
   DATABASE_URL="postgres://postgres:postgres@127.0.0.1:$PORT/postgres"
-  for _ in $(seq 1 30); do
-    if docker exec "$DB_CONTAINER" pg_isready -U postgres >/dev/null 2>&1; then
+  # Probe over TCP: the image's first-run init server listens only on the
+  # Unix socket, so a socket probe can pass before the real server is up.
+  ready=false
+  for _ in $(seq 1 60); do
+    if docker exec "$DB_CONTAINER" pg_isready -h 127.0.0.1 -U postgres >/dev/null 2>&1; then
+      ready=true
       break
     fi
     sleep 1
   done
+  if [[ "$ready" != true ]]; then
+    echo "disposable Postgres did not become ready" >&2
+    exit 1
+  fi
 fi
 
 export DATABASE_URL
@@ -118,7 +126,8 @@ END $$;
 -- Two users for cross-tenant checks.
 INSERT INTO auth.users (id, email) VALUES
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'a@example.com'),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'b@example.com');
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'b@example.com')
+ON CONFLICT (id) DO NOTHING;
 
 -- Server-only tables: authenticated can neither read nor write.
 SET ROLE authenticated;
@@ -154,6 +163,10 @@ DO $$
 DECLARE
   stmt text;
 BEGIN
+  IF NOT has_table_privilege('authenticated', 'public.sleeper_connections', 'SELECT') THEN
+    RAISE EXCEPTION 'RLS CHECK FAILED: authenticated lost SELECT on sleeper_connections';
+  END IF;
+  RAISE NOTICE 'ok: authenticated can read sleeper_connections';
   FOREACH stmt IN ARRAY ARRAY[
     $q$INSERT INTO public.sleeper_connections (user_id, sleeper_user_id, sleeper_username) VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'x', 'x')$q$,
     $q$UPDATE public.sleeper_connections SET sleeper_user_id = 'x'$q$,
@@ -193,7 +206,8 @@ INSERT INTO public.saved_chart_views
   (id, user_id, name, dataset, position, x_metric, y_metric, "window", plot_limit, created_at, updated_at)
 VALUES
   ('view-a', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'A view', 'advanced', 'QB', 'x', 'y', 'season', '24', now(), now()),
-  ('view-b', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'B view', 'advanced', 'QB', 'x', 'y', 'season', '24', now(), now());
+  ('view-b', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'B view', 'advanced', 'QB', 'x', 'y', 'season', '24', now(), now())
+ON CONFLICT (id) DO NOTHING;
 
 -- As authenticated user A: sees only own rows; cannot read, write, update,
 -- or delete user B's rows.
