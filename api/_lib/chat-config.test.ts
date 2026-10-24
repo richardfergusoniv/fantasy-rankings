@@ -24,9 +24,9 @@ describe("chat-config free models", () => {
     expect(isFreeOpenRouterModel("openai/gpt-4o")).toBe(false);
   });
 
-  it("defaults to nemotron primary with inkling fallback", () => {
-    expect(DEFAULT_OPENROUTER_MODEL).toBe("nvidia/nemotron-3-ultra-550b-a55b:free");
-    expect(FALLBACK_OPENROUTER_MODEL).toBe("thinkingmachines/inkling:free");
+  it("defaults to inkling primary with nemotron fallback", () => {
+    expect(DEFAULT_OPENROUTER_MODEL).toBe("thinkingmachines/inkling:free");
+    expect(FALLBACK_OPENROUTER_MODEL).toBe("nvidia/nemotron-3-ultra-550b-a55b:free");
     expect(DEFAULT_OPENROUTER_MODEL.endsWith(":free")).toBe(true);
     expect(FALLBACK_OPENROUTER_MODEL.endsWith(":free")).toBe(true);
   });
@@ -56,6 +56,9 @@ describe("chat-config free models", () => {
     expect(maskOpenRouterLogText("Authorization: Bearer sk-or-v1-abc")).toBe(
       "Authorization: Bearer ***",
     );
+    expect(maskOpenRouterLogText("Authorization: Bearer: abc.def")).toBe("Authorization: Bearer ***");
+    // Other provider keys an upstream may echo back.
+    expect(maskOpenRouterLogText("api_key: sk-proj-AbC123xyz789")).toBe("api_key: sk-***");
   });
 
   it("refuses to call a paid model id", async () => {

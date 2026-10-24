@@ -45,8 +45,16 @@ import {
   persistChatTurn,
 } from "./_lib/chat-store.js";
 
-function isUpstreamAccessDenied(status: number): boolean {
-  return status === 401 || status === 402 || status === 403;
+/**
+ * Upstream failures that retrying won't fix (key, credits, refusal, missing
+ * model), with what to tell the user. Anything else is reported as busy.
+ */
+function upstreamDeniedMessage(status: number): string | null {
+  if (status === 401) return "OpenRouter rejected the chat API key. Check the key settings.";
+  if (status === 402) return "The OpenRouter account is out of credits or over its limit.";
+  if (status === 403) return "The chat model refused this request.";
+  if (status === 404) return "The chat model isn’t available on OpenRouter right now.";
+  return null;
 }
 
 const historyMessageSchema = z.object({
@@ -188,15 +196,10 @@ export async function POST(req: Request): Promise<Response> {
           err.model ?? "unknown-model",
           bodyPreview,
         );
-        if (isUpstreamAccessDenied(err.status)) {
-          return json(
-            {
-              ok: false,
-              error: "Chat model access was denied. Check the OpenRouter key settings.",
-              code: "chat_upstream_denied",
-            },
-            503,
-          );
+        const denied = upstreamDeniedMessage(err.status);
+        if (denied) {
+          // 502, not 503: these don't clear on retry.
+          return json({ ok: false, error: denied, code: "chat_upstream_denied" }, 502);
         }
       } else {
         console.error("[chat POST] upstream", "timeout");

@@ -213,10 +213,14 @@ export const api = {
       const err = new Error(`API ${res.status} /api/chat: ${bodyText.slice(0, 200)}`) as Error & {
         status?: number;
         code?: string;
+        serverMessage?: string;
       };
       err.status = res.status;
       if (body && typeof body === "object" && "code" in body && typeof (body as { code: unknown }).code === "string") {
         err.code = (body as { code: string }).code;
+      }
+      if (body && typeof body === "object" && "error" in body && typeof (body as { error: unknown }).error === "string") {
+        err.serverMessage = (body as { error: string }).error;
       }
       throw err;
     }

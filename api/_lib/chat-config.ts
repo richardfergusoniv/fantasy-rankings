@@ -9,8 +9,8 @@ import {
   type MoveScoringWindowKey,
 } from "./move-scoring.js";
 
-export const DEFAULT_OPENROUTER_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
-export const FALLBACK_OPENROUTER_MODEL = "thinkingmachines/inkling:free";
+export const DEFAULT_OPENROUTER_MODEL = "thinkingmachines/inkling:free";
+export const FALLBACK_OPENROUTER_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
 
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 

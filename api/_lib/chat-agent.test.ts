@@ -81,6 +81,7 @@ describe("runChatAgent", () => {
   });
 
   it.each([403, 404])("falls back to the free backup model on %s", async (status) => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     let calls = 0;
     const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
       calls += 1;
@@ -108,6 +109,14 @@ describe("runChatAgent", () => {
     expect(result.reply).toBe("Fallback after block.");
     expect(result.model).toBe(FALLBACK_OPENROUTER_MODEL);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+    // The primary's failure is logged even though the fallback answered.
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "[chat] primary model failed; trying fallback",
+      status,
+      DEFAULT_OPENROUTER_MODEL,
+      "blocked or missing",
+    );
+    consoleSpy.mockRestore();
   });
 
   it("omits tool_choice from the OpenRouter payload", async () => {

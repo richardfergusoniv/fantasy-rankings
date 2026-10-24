@@ -242,7 +242,11 @@ export function ChatPanel({
         return;
       }
       if (code === "chat_upstream_denied") {
-        setError("Chat model access was denied. Check the OpenRouter key settings.");
+        // The server names the cause (key, credits, refusal, missing model).
+        const serverMessage = err && typeof err === "object" && "serverMessage" in err
+          ? String((err as { serverMessage?: string }).serverMessage ?? "")
+          : "";
+        setError(serverMessage || "The chat model couldn’t answer this request.");
         return;
       }
       if (code === "chat_upstream_unavailable") {

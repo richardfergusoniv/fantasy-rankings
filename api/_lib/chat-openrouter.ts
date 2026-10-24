@@ -44,7 +44,6 @@ export type OpenRouterRequest = {
   model: string;
   messages: ChatCompletionMessage[];
   tools?: OpenAiToolDefinition[];
-  tool_choice?: "auto" | "none";
   temperature?: number;
 };
 
@@ -74,11 +73,15 @@ export class ChatAgentTimeoutError extends Error {
   }
 }
 
-/** Mask key-like tokens before writing OpenRouter bodies to logs. Never log the API key. */
+/**
+ * Mask key-like tokens before writing upstream bodies to logs: bearer tokens,
+ * OpenRouter keys, and other `sk-…` provider keys an upstream may echo.
+ */
 export function maskOpenRouterLogText(text: string): string {
   return text
-    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer ***")
-    .replace(/sk-or-[A-Za-z0-9_-]+/g, "sk-or-***");
+    .replace(/Bearer:?\s+[A-Za-z0-9._-]+/gi, "Bearer ***")
+    .replace(/sk-or-[A-Za-z0-9_-]+/g, "sk-or-***")
+    .replace(/\bsk-(?!or-\*\*\*)[A-Za-z0-9_-]{8,}/g, "sk-***");
 }
 
 function assertFreeModel(model: string): void {
@@ -104,17 +107,15 @@ export async function callOpenRouterChat(
   assertFreeModel(args.body.model);
   if (args.signal?.aborted) throw new ChatAgentTimeoutError();
   const fetchImpl = args.fetchImpl ?? fetch;
-  // Omit undefined fields (e.g. unused tool_choice) so providers that reject
-  // unsupported params are not forced through require_parameters.
   const payload: Record<string, unknown> = {
     model: args.body.model,
     messages: args.body.messages,
     temperature: args.body.temperature,
   };
   if (args.body.tools) payload.tools = args.body.tools;
-  if (args.body.tool_choice !== undefined) payload.tool_choice = args.body.tool_choice;
-  // require_parameters: only route to providers that support every sent param.
-  // Callers should only send params every configured free model supports (tools).
+  // require_parameters: only route to providers that support every sent param,
+  // so send only what every configured free model supports. Never add
+  // tool_choice back: inkling rejects it.
   payload.provider = { require_parameters: true };
 
   let response: Response;
@@ -203,6 +204,14 @@ export async function callOpenRouterWithFallback(args: {
     if (err instanceof ChatAgentTimeoutError) throw err;
     if (!(err instanceof OpenRouterError) || !shouldFallback(err.status)) throw err;
     if (fallback === primary) throw err;
+    // Log the primary's failure: if the fallback fails too, only its error
+    // reaches the route, and a persistent primary problem would stay invisible.
+    console.error(
+      "[chat] primary model failed; trying fallback",
+      err.status,
+      primary,
+      maskOpenRouterLogText(err.body).slice(0, 300),
+    );
     const response = await callOpenRouterChat({
       apiKey: args.apiKey,
       body: { ...bodyBase, model: fallback },
