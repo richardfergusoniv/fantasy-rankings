@@ -29,6 +29,8 @@ describe("updatedAgoLabel", () => {
     expect(updatedAgoLabel("2026-10-24T15:00:00Z", NOW)).toBe("Updated 3h ago");
     expect(updatedAgoLabel("2026-10-20T17:00:00Z", NOW)).toBe("Updated Oct 20");
     expect(updatedAgoLabel("not-a-date", NOW)).toBeNull();
+    // A prior-year snapshot shows its year so old data is recognizable.
+    expect(updatedAgoLabel("2025-10-24T17:00:00Z", NOW)).toBe("Updated Oct 24, 2025");
   });
 });
 

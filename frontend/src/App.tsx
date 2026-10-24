@@ -1017,7 +1017,10 @@ export function App() {
   const teamSectionError = !hasCompleteDashboard && sectionBuildFailed(teamQuery.data);
   const leagueSectionError = !hasCompleteDashboard && sectionBuildFailed(leagueQuery.data);
   const analyticsSectionError = !hasCompleteDashboard && sectionBuildFailed(analyticsQuery.data);
-  const tradeSectionError = !hasCompleteDashboard && (tradeQuery.isError || sectionBuildFailed(tradeQuery.data));
+  // League-adjusted trade also needs the waiver pool; a failed one must not
+  // silently render as an empty pool.
+  const tradeWaiverError = tradeWaiverActive && (tradeWaiverQuery.isError || sectionBuildFailed(tradeWaiverQuery.data));
+  const tradeSectionError = !hasCompleteDashboard && (tradeQuery.isError || sectionBuildFailed(tradeQuery.data) || tradeWaiverError);
   const draftSectionError = draftQuery.isError && !draftQuery.data;
   const newsLoading = newsQuery.isPending && !newsQuery.data;
   const newsError = newsQuery.isError && !newsQuery.data;
@@ -1099,12 +1102,14 @@ export function App() {
 
   if (!dashboard || !league) {
     const noLeagues = Boolean(dashboard);
+    // A failed first build gets its own message; Try again forces a rebuild.
+    const firstBuildFailed = !noLeagues && sectionBuildFailed(metaQuery.data);
     return (
       <main id="main-content" tabIndex={-1} className="empty-state">
         <SafeAreaTopScrim backgroundColor="var(--bg)" />
         <div className="empty-mark">4TH</div>
-        <h1>{noLeagues ? "No leagues for this season." : "Data didn’t make it through."}</h1>
-        <p>{noLeagues ? "This Sleeper account isn’t in any NFL league for the current season. Join or create a league on Sleeper, then refresh." : "Fantasy data didn’t load. Try again."}</p>
+        <h1>{noLeagues ? "No leagues for this season." : firstBuildFailed ? "Your dashboard didn’t build." : "Data didn’t make it through."}</h1>
+        <p>{noLeagues ? "This Sleeper account isn’t in any NFL league for the current season. Join or create a league on Sleeper, then refresh." : firstBuildFailed ? "Building your leagues failed on our side. Try again to rebuild it." : "Fantasy data didn’t load. Try again."}</p>
         <Button type="button" onClick={() => refresh.mutate()} disabled={refresh.isPending}><RefreshIcon spinning={refresh.isPending} /> {noLeagues ? "Refresh" : "Try again"}</Button>
       </main>
     );
@@ -1298,7 +1303,7 @@ export function App() {
             : tab === "comparison" && analyticsSectionError ? <SectionError title="Comparison didn’t load." onRetry={() => { retrySection(analyticsQuery, "analytics"); }} retrying={analyticsQuery.isFetching} />
             : tab === "team" && teamSectionError ? <SectionError title="Matchup didn’t load." onRetry={() => { retrySection(teamQuery, "team"); }} retrying={teamQuery.isFetching} />
             : tab === "power" && leagueSectionError ? <SectionError title="Power rankings didn’t load." onRetry={() => { retrySection(leagueQuery, "league"); }} retrying={leagueQuery.isFetching} />
-            : tab === "trade" && tradeSectionError ? <SectionError title="Trade data didn’t load." onRetry={() => { retrySection(tradeQuery, "trade"); }} retrying={tradeQuery.isFetching} />
+            : tab === "trade" && tradeSectionError ? <SectionError title="Trade data didn’t load." onRetry={() => { retrySection(tradeQuery, "trade"); if (tradeWaiverError) retrySection(tradeWaiverQuery, "trade-waiver"); }} retrying={tradeQuery.isFetching || tradeWaiverQuery.isFetching} />
             : tab === "analytics" && (playerSectionError || analyticsSectionError) ? <SectionError title="Analytics didn’t load." onRetry={() => { retrySection(playersQuery, "players"); retrySection(analyticsQuery, "analytics"); }} retrying={playersQuery.isFetching || analyticsQuery.isFetching} />
             : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
             : tab === "monitor" ? (

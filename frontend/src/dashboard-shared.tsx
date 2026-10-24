@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -390,8 +390,19 @@ export function movementLabel(percent: number | null): string {
  * "* est" legend for fallback projections, and — when the build was partial —
  * an expandable list naming exactly what is unavailable.
  */
+/** Wall clock that ticks once a minute, so relative labels age while a view stays open. */
+function useMinuteClock(): number {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  return nowMs;
+}
+
 export function DashboardFreshness({ dashboard }: { dashboard: Dashboard }) {
-  const info = useMemo(() => dashboardFreshness(dashboard, Date.now()), [dashboard]);
+  const nowMs = useMinuteClock();
+  const info = useMemo(() => dashboardFreshness(dashboard, nowMs), [dashboard, nowMs]);
   if (!info.updatedLabel && !info.partial) return null;
   return (
     <span className="data-freshness">

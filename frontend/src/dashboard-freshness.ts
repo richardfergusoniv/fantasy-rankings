@@ -48,10 +48,14 @@ export type DashboardFreshness = {
   hasEstimates: boolean;
 };
 
-function shortDate(value: string): string | null {
+/** "Oct 24", or "Oct 24, 2025" when it isn't the current year (old data must look old). */
+function shortDate(value: string, nowMs: number): string | null {
   const time = new Date(value).getTime();
   if (!Number.isFinite(time)) return null;
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(time);
+  const sameYear = new Date(time).getFullYear() === new Date(nowMs).getFullYear();
+  return new Intl.DateTimeFormat(undefined, sameYear
+    ? { month: "short", day: "numeric" }
+    : { month: "short", day: "numeric", year: "numeric" }).format(time);
 }
 
 /** "Updated just now" / "Updated Nm ago" / "Updated Nh ago" / "Updated Oct 24". */
@@ -64,7 +68,7 @@ export function updatedAgoLabel(asOf: string, nowMs: number): string | null {
   if (minutes < 60) return `Updated ${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `Updated ${hours}h ago`;
-  const when = shortDate(asOf);
+  const when = shortDate(asOf, nowMs);
   return when ? `Updated ${when}` : null;
 }
 
@@ -91,8 +95,8 @@ export function dashboardHasEstimatedProjections(input: Pick<FreshnessInput, "ra
 
 export function dashboardFreshness(input: FreshnessInput, nowMs: number): DashboardFreshness {
   const sourceLabels: string[] = [];
-  const rankingsWhen = input.rankingsAsOf ? shortDate(input.rankingsAsOf) : null;
-  const calcWhen = input.fantasyCalcAsOf ? shortDate(input.fantasyCalcAsOf) : null;
+  const rankingsWhen = input.rankingsAsOf ? shortDate(input.rankingsAsOf, nowMs) : null;
+  const calcWhen = input.fantasyCalcAsOf ? shortDate(input.fantasyCalcAsOf, nowMs) : null;
   if (rankingsWhen) sourceLabels.push(`Rankings ${rankingsWhen}`);
   if (calcWhen) sourceLabels.push(`Values ${calcWhen}`);
   return {
