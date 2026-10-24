@@ -3,7 +3,7 @@
  * Pure module — no database or network imports. Numbers come from
  * api/_lib/scoring/constants.json (built-in fallback for scoring_weights).
  *
- * Spec: docs/scoring/SCORING_SPEC.md
+ * Spec: docs/scoring/SCORING_SPEC.md (constants: api/_lib/scoring/constants.json).
  */
 
 export { SCORING_WEIGHTS, BUILTIN_SCORING_WEIGHTS, SCORING_CONSTANTS } from "./scoring/weights.js";
