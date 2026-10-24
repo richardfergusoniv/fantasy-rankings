@@ -373,3 +373,33 @@ export const scoringSnapshots = pgTable(
     ),
   ],
 );
+
+/**
+ * Deployment-wide lease for expensive background work (dashboard rebuilds).
+ * One row per resource; a live lease (`status = 'running'` and
+ * `expires_at > now()`) means exactly one function instance owns the build.
+ * Finished rows keep `status`/`last_error` as structured failure state.
+ */
+export const buildLeases = pgTable("build_leases", {
+  resource: text("resource").primaryKey(),
+  holder: text("holder").notNull(),
+  status: text("status", { enum: ["running", "done", "failed"] }).notNull(),
+  lastError: text("last_error"),
+  acquiredAt: timestamp("acquired_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
+
+/**
+ * Shared fixed-window rate-limit counters. Replaces per-process counters so
+ * limits hold across serverless instances. Rows age out with their window.
+ */
+export const rateLimitBuckets = pgTable(
+  "rate_limit_buckets",
+  {
+    subject: text("subject").notNull(),
+    windowStart: timestamp("window_start", { withTimezone: true, mode: "date" }).notNull(),
+    count: integer("count").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.subject, table.windowStart] })],
+);

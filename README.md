@@ -6,13 +6,13 @@ Fantasy football rankings app with Vegas projections, Sleeper integration, and a
 
 - `frontend/` — Vite + React app
 - `api/` — Vercel serverless routes (see `api/README.md`)
-- `drizzle-pg/` — Postgres SQL for Supabase. The drizzle-kit journal is `0001_baseline` only; `0002`–`0004` were applied by hand (see `MIGRATION-STATUS.md`)
+- `drizzle-pg/` — Postgres SQL for Supabase. All migrations are drizzle-kit journal entries (`drizzle-pg/meta/_journal.json`); `npm run db:migrate` reproduces the full schema on a fresh database (see `MIGRATION-STATUS.md`)
 - `docs/` — notes from the original Hatch app (its source was removed after the migration)
 - `pipeline/` — Props aggregator: pulls from 6 providers, builds consensus projections
 
 ## Status
 
-🚧 **Migration in progress** — Moving from Hatch artifact runtime to Vercel + Supabase.
+Running on Vercel + Supabase. Database migrations are tracked in `drizzle-pg/` and verified from scratch in CI (see `MIGRATION-STATUS.md`).
 
 ## License
 

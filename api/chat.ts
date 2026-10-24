@@ -89,7 +89,7 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    const rate = checkChatRateLimit(viewer.userId);
+    const rate = await checkChatRateLimit(viewer.userId);
     if (!rate.ok) {
       return json(
         {

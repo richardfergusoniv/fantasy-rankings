@@ -1,7 +1,9 @@
 import { z } from "zod";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db, schema } from "./db.js";
 import { badRequest, internalError, json } from "./api-utils.js";
+import { encodeSourceCachePayload } from "./source-cache-payload.js";
+import { fetchText } from "./sleeper.js";
 import {
   readTeamSituationalSnapshot,
   type TeamSituationalSnapshot,
@@ -91,22 +93,58 @@ export type TeamWeekStats = {
 // dataset in place for the full window (CodeRabbit, PR #126).
 const TEAM_WEEK_STATS_DEGRADED_TTL_MS = 5 * 60 * 1000;
 const teamWeekStatsCache = new Map<number, { fetchedAtMs: number; ttlMs: number; payload: TeamWeekStats }>();
+// Single-flight guard so concurrent requests on this instance share one
+// upstream fetch + parse; the source_cache row below shares the parsed
+// payload across instances (audit finding #9).
+const teamWeekStatsInFlight = new Map<number, Promise<TeamWeekStats>>();
 
-async function fetchNflverseCsv(url: string): Promise<string> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`nflverse team-week stats HTTP ${response.status}`);
-  return response.text();
+const storedTeamWeekStatsSchema = z.object({
+  season: z.number().int(),
+  stats: z.array(z.record(z.string(), z.unknown())),
+  snaps: z.array(z.record(z.string(), z.unknown())),
+});
+
+function teamWeekStatsCacheKey(season: number): string {
+  return `team-week-stats:${season}`;
 }
 
-async function loadTeamWeekStats(season: number): Promise<TeamWeekStats> {
-  const now = Date.now();
-  const cached = teamWeekStatsCache.get(season);
-  if (cached && now - cached.fetchedAtMs < cached.ttlMs) {
-    return cached.payload;
-  }
+/** Parsed payload shared by every instance via source_cache. */
+async function readStoredTeamWeekStats(season: number): Promise<{ payload: TeamWeekStats; fetchedAtMs: number } | null> {
+  const rows = await db
+    .select()
+    .from(schema.sourceCache)
+    .where(eq(schema.sourceCache.cacheKey, teamWeekStatsCacheKey(season)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  const parsed = storedTeamWeekStatsSchema.safeParse(decodeSourceCachePayload(row.payload));
+  if (!parsed.success || parsed.data.season !== season) return null;
+  return {
+    payload: parsed.data as unknown as TeamWeekStats,
+    fetchedAtMs: row.fetchedAt.getTime(),
+  };
+}
+
+async function writeStoredTeamWeekStats(payload: TeamWeekStats): Promise<void> {
+  await db
+    .insert(schema.sourceCache)
+    .values({
+      cacheKey: teamWeekStatsCacheKey(payload.season),
+      payload: encodeSourceCachePayload(payload),
+      fetchedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: schema.sourceCache.cacheKey,
+      set: { payload: encodeSourceCachePayload(payload), fetchedAt: new Date() },
+    });
+}
+
+// fetchText bounds the upstream request (SOURCE_TIMEOUT_MS abort) so a hung
+// nflverse download cannot hold the route open.
+async function fetchAndParseTeamWeekStats(season: number): Promise<TeamWeekStats> {
   const [statsResult, snapsResult] = await Promise.allSettled([
-    fetchNflverseCsv(nflversePlayerWeekStatsUrl(season)),
-    fetchNflverseCsv(nflverseSnapCountsUrl(season)),
+    fetchText(nflversePlayerWeekStatsUrl(season)),
+    fetchText(nflverseSnapCountsUrl(season)),
   ]);
   const stats = statsResult.status === "fulfilled"
     ? parsePlayerWeekStatsCsv(statsResult.value)
@@ -117,14 +155,76 @@ async function loadTeamWeekStats(season: number): Promise<TeamWeekStats> {
   if (stats.length === 0 && snaps.length === 0) {
     throw new Error("nflverse team-week stats unavailable");
   }
-  const payload: TeamWeekStats = { season, stats, snaps };
-  const complete = stats.length > 0 && snaps.length > 0;
-  teamWeekStatsCache.set(season, {
-    fetchedAtMs: now,
-    ttlMs: complete ? TEAM_WEEK_STATS_STALE_MS : TEAM_WEEK_STATS_DEGRADED_TTL_MS,
-    payload,
-  });
-  return payload;
+  return { season, stats, snaps };
+}
+
+/** Test helper: clear in-memory caches and in-flight guards. */
+export function resetTeamWeekStatsCaches(): void {
+  teamWeekStatsCache.clear();
+  teamWeekStatsInFlight.clear();
+}
+
+export async function loadTeamWeekStats(season: number): Promise<TeamWeekStats> {
+  const now = Date.now();
+  const cached = teamWeekStatsCache.get(season);
+  if (cached && now - cached.fetchedAtMs < cached.ttlMs) {
+    return cached.payload;
+  }
+  // Shared cache: a payload another instance parsed recently wins without
+  // touching the upstream at all.
+  let staleStored: TeamWeekStats | null = null;
+  try {
+    const stored = await readStoredTeamWeekStats(season);
+    if (stored) {
+      if (now - stored.fetchedAtMs < TEAM_WEEK_STATS_STALE_MS) {
+        teamWeekStatsCache.set(season, {
+          fetchedAtMs: stored.fetchedAtMs,
+          ttlMs: TEAM_WEEK_STATS_STALE_MS,
+          payload: stored.payload,
+        });
+        return stored.payload;
+      }
+      staleStored = stored.payload;
+    }
+  } catch (error) {
+    console.error("[pfn-tables] team-week stats cache read failed", error instanceof Error ? error.message : error);
+  }
+
+  const inFlight = teamWeekStatsInFlight.get(season);
+  if (inFlight) return inFlight;
+
+  const load = (async () => {
+    try {
+      const payload = await fetchAndParseTeamWeekStats(season);
+      const complete = payload.stats.length > 0 && payload.snaps.length > 0;
+      teamWeekStatsCache.set(season, {
+        fetchedAtMs: Date.now(),
+        ttlMs: complete ? TEAM_WEEK_STATS_STALE_MS : TEAM_WEEK_STATS_DEGRADED_TTL_MS,
+        payload,
+      });
+      // Persist only complete payloads so a transient upstream failure can't
+      // pin a partial dataset in place for the full window.
+      // Awaited: a serverless instance can freeze once the response is
+      // sent, dropping an unawaited write.
+      if (complete) {
+        try {
+          await writeStoredTeamWeekStats(payload);
+        } catch (error) {
+          console.error("[pfn-tables] team-week stats cache write failed", error instanceof Error ? error.message : error);
+        }
+      }
+      return payload;
+    } catch (error) {
+      // Controlled response on upstream failure: serve the last good stored
+      // payload when one exists, however stale.
+      if (staleStored) return staleStored;
+      throw error;
+    } finally {
+      teamWeekStatsInFlight.delete(season);
+    }
+  })();
+  teamWeekStatsInFlight.set(season, load);
+  return load;
 }
 
 const teamWeekStatsSeasonSchema = z.number().int().min(2020).max(2100);
