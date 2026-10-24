@@ -31,7 +31,12 @@ function prefersReducedMotion(): boolean {
     && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export function ChatPanel() {
+export function ChatPanel({
+  horizon = null,
+}: {
+  /** Ranking horizon the user is viewing — chat explains that window's scores. */
+  horizon?: "week" | "ecr" | "ros" | "dynasty" | null;
+}) {
   const listId = useId();
   const inputId = useId();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -105,7 +110,7 @@ export function ChatPanel() {
     setMessages((prev) => [...prev, userMessage]);
     setSending(true);
     try {
-      const result = await api.postChat({ message: text, history });
+      const result = await api.postChat({ message: text, history, horizon });
       setMessages((prev) => [
         ...prev,
         { id: newId(), role: "assistant", content: result.reply },

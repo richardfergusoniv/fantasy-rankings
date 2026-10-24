@@ -1,7 +1,12 @@
 /**
  * Tool-calling agent loop over OpenRouter chat completions.
  */
-import { CHAT_AGENT_DEADLINE_MS, CHAT_MAX_TOOL_STEPS } from "./chat-config.js";
+import {
+  buildChatSystemPrompt,
+  CHAT_AGENT_DEADLINE_MS,
+  CHAT_MAX_TOOL_STEPS,
+  type MoveScoringWindowKey,
+} from "./chat-config.js";
 import {
   buildInitialMessages,
   callOpenRouterWithFallback,
@@ -23,6 +28,7 @@ export type RunChatAgentArgs = {
   userMessage: string;
   history?: AgentHistoryMessage[];
   ctx: ChatToolContext;
+  scoringWindow?: MoveScoringWindowKey;
   fetchImpl?: OpenRouterFetch;
   maxToolSteps?: number;
   primaryModel?: string;
@@ -70,7 +76,13 @@ function awaitWithAgentDeadline<T>(operation: Promise<T>, signal: AbortSignal): 
 export async function runChatAgent(args: RunChatAgentArgs): Promise<RunChatAgentResult> {
   const maxSteps = args.maxToolSteps ?? CHAT_MAX_TOOL_STEPS;
   const dispatch = args.dispatchTool ?? dispatchChatTool;
-  const messages = buildInitialMessages(args.history ?? [], args.userMessage);
+  const scoringWindow = args.scoringWindow ?? args.ctx.scoringWindow ?? "week";
+  args.ctx.scoringWindow = scoringWindow;
+  const messages = buildInitialMessages(
+    args.history ?? [],
+    args.userMessage,
+    buildChatSystemPrompt(scoringWindow),
+  );
   const deadlineMs = args.deadlineMs ?? CHAT_AGENT_DEADLINE_MS;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), deadlineMs);

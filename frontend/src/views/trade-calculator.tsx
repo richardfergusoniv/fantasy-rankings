@@ -537,11 +537,18 @@ export function LeagueAdjustedTrade({
   );
   const selectedGive = useMemo(() => new Set(giveIds), [giveIds]);
   const selectedGet = useMemo(() => new Set(getIds), [getIds]);
+  const includePickValueInTotal = formatKey.startsWith("dynasty");
   const powerRankingsAfter = useMemo(
     () => theirs && powerRankings.length > 0
-      ? powerRankingsAfterTrade(powerRankings, { myRosterId: mine.rosterId, partnerRosterId: theirs.rosterId, give, get })
+      ? powerRankingsAfterTrade(powerRankings, {
+        myRosterId: mine.rosterId,
+        partnerRosterId: theirs.rosterId,
+        give,
+        get,
+        includePickValueInTotal,
+      })
       : undefined,
-    [theirs, powerRankings, mine.rosterId, give, get],
+    [theirs, powerRankings, mine.rosterId, give, get, includePickValueInTotal],
   );
 
   return (
@@ -848,9 +855,10 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
         partnerRosterId: counterpart.rosterId,
         give: perspective.give.valued,
         get: perspective.get.valued,
+        includePickValueInTotal: league.seasonLongFormat.isDynasty,
       })
       : undefined,
-    [counterpart, perspective, powerRankings, selectedTeam],
+    [counterpart, perspective, powerRankings, selectedTeam, league.seasonLongFormat.isDynasty],
   );
   const grouped = useMemo(() => {
     const groups = new Map<number, HistoricalTrade[]>();

@@ -579,3 +579,28 @@ export function optimizeTradeRoster<T extends OptimizablePlayer>(players: T[], s
     .map((player) => ({ ...player, isStarter: false, lineupSlot: null }));
   return { starters, bench, score: Number(score.toFixed(2)) };
 }
+
+/**
+ * Season Long / Dynasty StarterValue: same slot optimizer as Week N, ranking by
+ * board value instead of weekly projection. Locked starters keep their slots
+ * but contribute window value (not week actuals).
+ */
+export function optimizeValueTradeRoster<T extends OptimizablePlayer>(
+  players: T[],
+  slots: string[],
+  valueById: ReadonlyMap<string, number>,
+  now = Date.now(),
+): OptimizedTradeRoster<T> {
+  const ranked = players.map((player) => {
+    const value = valueById.get(player.playerId) ?? 0;
+    return {
+      ...player,
+      projection: value,
+      // Locked path in tradePoints uses actual — contribute window value.
+      actual: value,
+      // Value windows ignore this week's bye; liveForecastPoints would rank bye as 0.
+      isBye: false,
+    };
+  });
+  return optimizeTradeRoster(ranked, slots, now);
+}

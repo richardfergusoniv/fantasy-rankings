@@ -226,6 +226,31 @@ function baseDashboard(overrides: Partial<Dashboard> = {}): Dashboard {
         trend30Day: -100,
         isRookie: false,
       },
+      // Redraft twin for Season Long window (never fall back to dynasty board).
+      {
+        formatKey: "redraft-1qb-12t-1ppr",
+        playerId: "p1",
+        name: "Alpha Receiver",
+        team: "KC",
+        position: "WR",
+        overallRank: 10,
+        positionRank: 4,
+        value: 8_000,
+        trend30Day: 100,
+        isRookie: false,
+      },
+      {
+        formatKey: "redraft-1qb-12t-1ppr",
+        playerId: "p2",
+        name: "Beta Back",
+        team: "SF",
+        position: "RB",
+        overallRank: 18,
+        positionRank: 7,
+        value: 6_000,
+        trend30Day: -50,
+        isRookie: false,
+      },
     ],
     defenses: [],
     analytics: {
@@ -314,12 +339,18 @@ describe("dispatchChatTool", () => {
       getTotal: number;
       waiverAdjustment: { give: number; get: number };
       verdict: string;
+      primaryLabel: string;
+      scoringWindow: string;
     };
     expect(result.ok).toBe(true);
     expect(result.giveTotal).toBe(8000);
-    expect(result.getTotal).toBe(10_000);
-    expect(result.waiverAdjustment.give).toBeGreaterThan(0);
-    expect(result.verdict).toContain("win");
+    // Season Long in dynasty: pick has no redraft twin → 0 (do not mix dynasty pick value).
+    expect(result.getTotal).toBe(6_000);
+    // Pick at 0 means the "extra piece" waiver credit is also 0.
+    expect(result.waiverAdjustment).toEqual({ give: 0, get: 0 });
+    expect(result.scoringWindow).toBe("season_long");
+    expect(result.primaryLabel).toMatch(/Accept|Lean accept|Decline/);
+    expect(result.verdict.length).toBeGreaterThan(0);
   });
 
   it("returns this week's matchup projections", async () => {

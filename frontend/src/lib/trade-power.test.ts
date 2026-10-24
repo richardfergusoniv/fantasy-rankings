@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import { powerRankingsAfterTrade } from "./trade-power";
 import type { PowerRankingRow } from "./trade-power";
 
-function row(rosterId: number, teamName: string, totalValue: number, rank: number, isUser = false): PowerRankingRow {
-  return { rosterId, teamName, totalValue, rank, isUser };
+function row(rosterId: number, teamName: string, totalValue: number, rank: number, isUser = false, futurePickValue = 0): PowerRankingRow {
+  return { rosterId, teamName, totalValue, rank, isUser, futurePickValue };
 }
 
 const rows: PowerRankingRow[] = [
   row(1, "Alpha", 12000, 1),
-  row(2, "Mine", 11500, 2, true),
-  row(3, "Partner", 11400, 3),
+  row(2, "Mine", 11500, 2, true, 1500),
+  row(3, "Partner", 11400, 3, false, 800),
   row(4, "Delta", 10900, 4),
 ];
 
@@ -20,6 +20,7 @@ describe("powerRankingsAfterTrade", () => {
       partnerRosterId: 3,
       give: [{ position: "WR", value: 2800 }],
       get: [{ position: "WR", value: 3100 }, { position: "RB", value: 900 }],
+      includePickValueInTotal: false,
     });
     // Mine: 11500 - 2800 + 4000 = 12700 (rank 1); Partner: 11400 + 2800 - 4000 = 10200 (rank 4).
     expect(after.map((r) => [r.teamName, r.totalValue, r.previousRank, r.rank])).toEqual([
@@ -32,15 +33,30 @@ describe("powerRankingsAfterTrade", () => {
     expect(after.find((r) => r.teamName === "Mine")?.isParty).toBe(true);
   });
 
-  it("ignores K, DEF, and picks, mirroring the server total", () => {
-    const after = powerRankingsAfterTrade(rows, {
+  it("ignores K and DEF; picks move futurePickValue and total only in Dynasty", () => {
+    const seasonLong = powerRankingsAfterTrade(rows, {
       myRosterId: 2,
       partnerRosterId: 3,
       give: [{ position: "K", value: 500 }, { position: "PICK", value: 1500 }],
       get: [{ position: "DEF", value: 700 }],
+      includePickValueInTotal: false,
     });
-    expect(after.map((r) => r.totalValue)).toEqual([12000, 11500, 11400, 10900]);
-    expect(after.map((r) => r.rank)).toEqual([1, 2, 3, 4]);
+    expect(seasonLong.find((r) => r.teamName === "Mine")?.totalValue).toBe(11500);
+    expect(seasonLong.find((r) => r.teamName === "Mine")?.futurePickValue).toBe(0);
+
+    const dynasty = powerRankingsAfterTrade(rows, {
+      myRosterId: 2,
+      partnerRosterId: 3,
+      give: [{ position: "K", value: 500 }, { position: "PICK", value: 1500 }],
+      get: [{ position: "DEF", value: 700 }],
+      includePickValueInTotal: true,
+    });
+    const mine = dynasty.find((r) => r.teamName === "Mine");
+    const partner = dynasty.find((r) => r.teamName === "Partner");
+    expect(mine?.totalValue).toBe(10000);
+    expect(mine?.futurePickValue).toBe(0);
+    expect(partner?.totalValue).toBe(12900);
+    expect(partner?.futurePickValue).toBe(2300);
   });
 
   it("breaks total ties by team name, like the server builder", () => {
@@ -49,6 +65,7 @@ describe("powerRankingsAfterTrade", () => {
       partnerRosterId: 3,
       give: [{ position: "TE", value: 50 }],
       get: [],
+      includePickValueInTotal: false,
     });
     // Mine drops to 11450 and Partner rises to 11450; "Mine" sorts before "Partner".
     const mine = after.find((r) => r.teamName === "Mine");
