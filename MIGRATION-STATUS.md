@@ -40,7 +40,7 @@
 
 ### 🔲 Todo (after unblocked)
 
-- [ ] Schema changes follow [Database migrations](#database-migrations). `npm run db:migrate` applies `0001_baseline` only. Do not run it against production.
+- [ ] Schema changes follow [Database migrations](#database-migrations). `npm run db:migrate` applies `0001`–`0010` on a fresh database. Do not run it against production.
 - [ ] `npm install` + `npm run typecheck` (validate the scaffold compiles)
 - [ ] `npm run build` (validate Vite build works)
 - [ ] Push to GitHub
@@ -86,8 +86,8 @@ Early plans named separate files (`dashboard/section.ts`, `boom-bust/ranges.ts`,
 - [x] `GET /api/cron/jobs?job=rebuild-dashboard` and `?job=refresh-fantasycalc` — `api/cron/jobs.ts`
 - [x] `GET` / `POST /api/player-news` — `api/player-news.ts` (refresh when the caller sends `CRON_SECRET`)
 - [x] `POST /api/ingest/projections`, `/api/ingest/matchup-grades`, `/api/ingest/pfn-tables`, `/api/ingest/player-news-x` — `api/ingest/[target].ts`
-- [x] `shared_player_news` table — `drizzle-pg/0005_shared_player_news.sql` (hand-apply)
-- [x] `scoring_weights` + `scoring_snapshots` — `drizzle-pg/0008_scoring_calibration.sql` (hand-apply; RLS on, no anon policies)
+- [x] `shared_player_news` table — `drizzle-pg/0005_shared_player_news.sql` (originally hand-applied; now a journal entry)
+- [x] `scoring_weights` + `scoring_snapshots` — `drizzle-pg/0008_scoring_calibration.sql` (originally hand-applied; now a journal entry; RLS on, no anon policies)
 - [x] `GET` / `POST /api/user` — `api/user.ts`
 - [x] GitHub Actions in `.github/workflows/` call those routes on a schedule
 
@@ -153,8 +153,11 @@ applied by hand but no `drizzle.__drizzle_migrations` table, so Drizzle would
 try to replay `0001`, which is not idempotent (`saved_chart_views_owner_idx`
 on columns `0002` dropped). To adopt tracked migrations on production later,
 create the `drizzle` schema and `__drizzle_migrations` table and insert one row
-per already-applied migration (see the drizzle-kit `migrations` table format),
-rather than replaying history.
+per already-applied migration, rather than replaying history. The migrator only
+compares `created_at` to each journal entry's `when`, so each seeded row must
+carry `hash` = SHA-256 of the SQL file's contents and `created_at` = that
+entry's exact `when` value in `meta/_journal.json`. Wrong `created_at` values
+make the next `db:migrate` replay non-idempotent files (`0001`, `0003`).
 
 `0002` is safe to re-run (`IF EXISTS` / `IF NOT EXISTS`). `0003` is not — its
 `CREATE POLICY` statements have no existence check. Known parity quirk: `0004`
