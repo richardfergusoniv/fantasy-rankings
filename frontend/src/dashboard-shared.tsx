@@ -565,10 +565,9 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
             <SectionError title="PFN matchup data didn’t load." onRetry={() => { void tablesQuery.refetch(); }} retrying={tablesQuery.isFetching} compact />
           ) : (
             <>
-              <section className="matchup-grade-section" aria-labelledby="offense-defense-heading">
-                <h3 id="offense-defense-heading">Matchups</h3>
+              <section className="matchup-grade-section" aria-label="Matchups">
                 <div className="matchup-stat-groups" aria-label={`${matchup.team} and ${matchup.opponent} PFN offense versus defense matchups`}>
-                  <div className="matchup-stat-columns" aria-label={`Left column ${matchup.team}; right column ${matchup.opponent}`}>
+                  <div className="matchup-stat-columns" aria-label={`${matchup.team} versus ${matchup.opponent}`}>
                     <div className="matchup-stat-team">
                       {onOpenTeam ? (
                         <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.team} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.team)}>
@@ -577,6 +576,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                         </button>
                       ) : <strong>{matchup.team}</strong>}
                     </div>
+                    <span className="matchup-versus" aria-hidden="true">vs</span>
                     <div className="matchup-stat-team">
                       {onOpenTeam ? (
                         <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.opponent} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.opponent)}>
