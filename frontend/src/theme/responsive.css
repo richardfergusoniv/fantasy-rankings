@@ -50,6 +50,10 @@
     overflow: hidden auto;
     padding: 8px 12px max(12px, env(safe-area-inset-bottom));
   }
+  /* Full-screen popup: sit the summary and table in the middle, not pinned under the header. */
+  .team-stats-table-dialog .team-stats-dialog {
+    margin-block: auto;
+  }
   .monitor-chart-expand-card .monitor-expanded-chart {
     display: grid;
     grid-template-rows: minmax(0, 1fr) auto;
