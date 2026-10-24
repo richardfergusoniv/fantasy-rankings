@@ -474,13 +474,13 @@ export function TeamStatsPanel({
   const leader = gridRows[0];
   const summary: TeamStatsSummaryItem[] = isSnaps
     ? [
-      { label: "Top snap share", value: leader ? displayTeamStatsPercent(leader.average) : "—", detail: leader ? shortPlayerName(leader.row.name) : undefined },
+      { label: "Top snap share", value: leader && completedWeeks.length > 0 ? displayTeamStatsPercent(leader.average) : "—", detail: leader && completedWeeks.length > 0 ? shortPlayerName(leader.row.name) : undefined },
       { label: "Players", value: formatWhole(gridRows.length) },
       { label: "Games", value: formatWhole(completedWeeks.length) },
     ]
     : [
       { label: "Leader", value: leader ? shareLabel(leader.completedTotal) : "—", detail: leader ? shortPlayerName(leader.row.name) : undefined },
-      { label: "Team per game", value: groupTotal === 0 ? "—" : statId === "fantasy_points" ? formatPoints(groupTotal / playedWeeks) : formatTeamStatsAverage(groupTotal / playedWeeks) },
+      { label: "Team per game", value: completedWeeks.length === 0 ? "—" : formatTeamStatsAverage(groupTotal / playedWeeks) },
       { label: "Games", value: formatWhole(completedWeeks.length) },
     ];
   const dialogNote = isSnaps
