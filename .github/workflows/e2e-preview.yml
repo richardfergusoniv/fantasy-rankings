@@ -34,7 +34,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          # Literal version, not node-version-file: this job intentionally
+          # checks out the default branch, where .nvmrc may not exist yet.
+          # Keep in sync with .nvmrc (Node 22.23.4).
+          node-version: "22.23.4"
           cache: npm
       - run: npm ci
       - run: npx playwright-core install --with-deps chromium
