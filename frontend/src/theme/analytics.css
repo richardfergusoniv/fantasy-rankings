@@ -1,6 +1,6 @@
 /* Analytics: saved views, charts, scatter plots and the FPA heatmap. */
-.analytics-window-toggle { margin-bottom: 12px; }
-.analytics-position-tabs { margin-bottom: 16px; }
+.analytics-window-toggle { margin-bottom: 10px; }
+.analytics-position-tabs { margin-bottom: 10px; }
 .weekly-page-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 2px 2px 12px; }
 .weekly-page-intro h2, .tool-section-heading h2 { margin: 0; font-size: var(--type-display); line-height: 1.05; font-weight: 700; letter-spacing: -.02em; }
 .weekly-page-intro span, .tool-section-heading span { color: var(--dim); text-align: right; font-size: var(--type-caption); font-weight: 600; }
@@ -56,7 +56,7 @@
   font-weight: 600;
 }
 .chart-advanced-dialog .segmented-control {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .chart-advanced-dialog .analytics-selectors { gap: 6px; padding-top: 6px; }
 .chart-advanced-dialog .analytics-selectors label > span,

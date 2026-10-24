@@ -161,26 +161,53 @@
   font-size: var(--page-tab-font-size);
   font-weight: var(--page-tab-font-weight);
 }
-/* Players / Tools subview rows share page-tab tokens + segmented track chrome. */
-.subview-tabs [data-slot="tabs-list"] {
-  min-height: var(--page-tab-height);
-  height: var(--page-tab-height);
+/* Every Radix tab row (card tabs, comparison, matchup, team card) uses the same
+   track, buttons and active state as the SegmentedControl, at sub-tab size. */
+[data-slot="tabs-list"] {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  min-height: var(--sub-tab-height);
+  height: var(--sub-tab-height);
   gap: var(--tab-gap);
   padding: var(--tab-track-padding);
   border-radius: var(--radius);
   background: var(--segment-track);
   font-family: var(--font-ui);
 }
+[data-slot="tabs-trigger"] {
+  min-width: 0;
+  min-height: var(--sub-tab-button-height);
+  height: var(--sub-tab-button-height);
+  padding: 0 var(--tab-button-padding-inline);
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: var(--sub-tab-font-size);
+  font-weight: var(--sub-tab-font-weight);
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+[data-slot="tabs-trigger"][data-state="active"] {
+  border-color: var(--border);
+  background: var(--hairline);
+  box-shadow: var(--shadow-control);
+  color: var(--link);
+}
+/* Players / Tools / League subview rows are page-level: page-tab size. */
+.subview-tabs [data-slot="tabs-list"] {
+  min-height: var(--page-tab-height);
+  height: var(--page-tab-height);
+}
 .subview-tabs [data-slot="tabs-trigger"] {
   min-height: var(--page-tab-button-height);
   height: var(--page-tab-button-height);
-  padding: 0 var(--tab-button-padding-inline);
-  border-radius: calc(var(--radius) - 2px);
-  font-family: inherit;
   font-size: var(--page-tab-font-size);
   font-weight: var(--page-tab-font-weight);
 }
-[data-slot="tabs-trigger"] { font-size: var(--page-tab-font-size); font-weight: var(--page-tab-font-weight); }
 main { padding: 12px 16px 0; }
 
 .monitor-section {

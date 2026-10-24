@@ -10,7 +10,7 @@ function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimi
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
-      className={cn("inline-flex h-auto w-full items-center justify-center rounded-[var(--radius)] bg-[var(--segment-track)] p-[var(--tab-track-padding)] text-muted-foreground", className)}
+      className={cn("inline-flex w-full items-center justify-center text-muted-foreground", className)}
       {...props}
     />
   );
@@ -22,7 +22,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
       data-slot="tabs-trigger"
       aria-controls={undefined}
       className={cn(
-        "inline-flex flex-1 items-center justify-center gap-1.5 rounded-[calc(var(--radius)-2px)] px-[var(--tab-button-padding-inline)] whitespace-nowrap text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+        "inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
         className,
       )}
       {...props}

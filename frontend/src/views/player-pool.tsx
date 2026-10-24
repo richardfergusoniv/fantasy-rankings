@@ -858,11 +858,11 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   const hasSearch = query.trim().length > 0;
   const rankingHorizonOptions: Array<SegmentOption<RankingHorizon>> = availableOnly
     ? league.seasonLongFormat.isDynasty
-      ? [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
-      : [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season Long" }]
+      ? [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season long" }, { value: "dynasty", label: "Dynasty" }]
+      : [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season long" }]
     : league.seasonLongFormat.isDynasty
-      ? [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
-      : [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season Long" }];
+      ? [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season long" }, { value: "dynasty", label: "Dynasty" }]
+      : [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season long" }];
   const prefetchPlayerPanels = (player: PlayerSearchResult) => {
     const position = isBoomBustPosition(player.position) ? player.position : null;
     if (position !== null) {
@@ -963,7 +963,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
       ) : (
         <>
           <SegmentedControl
-            className="lineup-mode-toggle rankings-mode-toggle"
+            className="lineup-mode-toggle rankings-mode-toggle page-tab-control"
             value={effectiveHorizon}
             onChange={(value) => publishRankingFilters({ horizon: value })}
             label={availableOnly ? "Waiver ranking horizon" : "Ranking horizon"}

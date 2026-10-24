@@ -50,9 +50,11 @@
 .trade-grade-grid.single-perspective > div:last-child { border-right: 0; }
 .trade-valuation-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 10px; margin-bottom: 16px; }
 .trade-valuation-toggle {
-  width: min(100%, 420px);
+  width: 100%;
   flex: none;
 }
+/* Secondary switch under the page-level Trade mode row. */
+.trade-valuation-toggle.trade-basis-toggle { width: min(100%, 260px); }
 .trade-pick-note { color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: right; }
 .trade-adjustments { margin: 0 2px 10px; }
 .trade-adjustment-chips { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -149,7 +151,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-trade-dialog-subtitle { display: block; margin-top: 3px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .league-trade-dialog-body { display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; gap: 12px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .league-trade-dialog-body > * { flex-shrink: 0; }
-.trade-value-panel-tabs { flex: none; width: 100%; max-width: 320px; margin: 0 auto; }
+.trade-value-panel-tabs { flex: none; width: 100%; margin: 0 0 10px; }
 .league-trade-chart { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: end; }
 .league-trade-side { display: flex; min-width: 0; flex-direction: column; align-items: stretch; justify-content: flex-end; }
 .league-trade-column { display: flex; flex: none; min-width: 0; align-items: flex-start; gap: 4px; }
@@ -267,6 +269,9 @@ button.league-partner-change:active { color: var(--link-active); }
 .boom-bust-panel .boom-bust-heading, .player-value-trend .trade-stock-heading { font-size: var(--type-section); }
 .player-value-trend .trade-stock-heading > span { color: var(--text); font-weight: 700; }
 .player-value-trend .trade-stock-heading strong { font-size: var(--type-caption); }
+/* Same heading box as the Season tab's section headings so the left edges line up. */
+.player-value-trend { margin-bottom: 4px; }
+.player-value-trend .trade-stock-heading { min-height: 32px; padding: 5px 2px; }
 .boom-bust-heading-copy { display: grid; gap: 2px; min-width: 0; }
 .boom-bust-heading-copy > span { color: var(--text); font-weight: 700; }
 .boom-bust-heading-copy strong { color: var(--dim); font-size: var(--type-caption); font-variant-numeric: tabular-nums; font-weight: 600; }
@@ -301,8 +306,8 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-stock-heading .up { color: var(--stat-strength-readable); }
 .trade-stock-heading .down { color: var(--stat-weakness); }
 .trade-stock-heading .flat { color: var(--dim); }
-.player-value-trend-chart { height: 112px; margin-top: 3px; }
-.player-value-trend-loading { height: 112px; margin-top: 3px; border-radius: var(--radius-md); }
+.player-value-trend-chart { height: 156px; margin-top: 6px; }
+.player-value-trend-loading { height: 156px; margin-top: 6px; border-radius: var(--radius-md); }
 .player-value-trend-empty, .trade-stock-empty { min-height: 42px; display: flex; align-items: center; color: var(--dim); font-size: var(--type-caption); }
 .trade-asset-main { display: grid; min-width: 0; align-content: center; row-gap: 1px; }
 .trade-asset-name { display: flex; min-width: 0; height: auto; min-height: 0; align-items: center; gap: 3px; }

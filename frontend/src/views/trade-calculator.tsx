@@ -465,9 +465,9 @@ export function TradeValueDialog({
             onChange={setPanel}
             label="Trade value view"
             options={[
-              { value: "bars", label: "Bars" },
-              { value: "line", label: "Line" },
-              { value: "table", label: "Table" },
+              { value: "bars", label: "Value" },
+              { value: "line", label: "Trend" },
+              { value: "table", label: "Power" },
             ]}
           />
           {panelBody}
@@ -1100,7 +1100,7 @@ export function TradeCalculator({
           ]}
           onChange={onTradeModeChange}
           label="Trade mode"
-          className="trade-valuation-toggle"
+          className="trade-valuation-toggle page-tab-control"
         />
         {tradeMode === "market" && isDynastyLeague ? (
           <SegmentedControl
@@ -1111,7 +1111,7 @@ export function TradeCalculator({
             ]}
             onChange={setMarketBasis}
             label="Market basis"
-            className="trade-valuation-toggle"
+            className="trade-valuation-toggle trade-basis-toggle"
           />
         ) : null}
       </div>
