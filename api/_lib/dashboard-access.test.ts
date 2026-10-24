@@ -37,7 +37,9 @@ describe("isScheduledOwner", () => {
     );
   });
 
-  it("falls back to Sleeper id match when OWNER_USER_ID is unset", () => {
+  it("never grants owner rights on a Sleeper id match alone", () => {
+    // The linked Sleeper id is caller-chosen and unverified, so nobody is
+    // the owner when OWNER_USER_ID is unset — even on a matching id.
     assert.equal(
       isScheduledOwner({
         sleeperUserId: "owner-sleeper",
@@ -45,7 +47,7 @@ describe("isScheduledOwner", () => {
         ownerSleeperUserId: "owner-sleeper",
         ownerUserId: null,
       }),
-      true,
+      false,
     );
     assert.equal(
       isScheduledOwner({
@@ -132,7 +134,9 @@ describe("dashboardForViewer", () => {
   it("lets the signed-in owner fall back to the stored snapshot", async () => {
     const result = await dashboardForViewer<Dash>({
       sleeperUserId: "owner",
+      viewerUserId: "real-owner",
       ownerSleeperUserId: "owner",
+      ownerUserId: "real-owner",
       force: false,
       loadFreshOwn: async () => null,
       loadOwnerSnapshot: async () => ownerSnapshot,
@@ -152,6 +156,29 @@ describe("dashboardForViewer", () => {
       viewerUserId: "attacker",
       ownerSleeperUserId: "owner-sleeper",
       ownerUserId: "real-owner",
+      force: false,
+      loadFreshOwn: async () => null,
+      loadOwnerSnapshot: async () => {
+        snapshotReads += 1;
+        return ownerSnapshot;
+      },
+      buildOwn: async (id) => ({ owner: id, leagues: ["league-stolen"] }),
+    });
+    assert.equal(snapshotReads, 0);
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.equal(result.source, "built");
+      assert.deepEqual(result.dashboard.leagues, ["league-stolen"]);
+    }
+  });
+
+  it("does not grant the owner snapshot on a Sleeper id match alone", async () => {
+    let snapshotReads = 0;
+    const result = await dashboardForViewer<Dash>({
+      sleeperUserId: "owner-sleeper",
+      viewerUserId: "attacker",
+      ownerSleeperUserId: "owner-sleeper",
+      ownerUserId: null,
       force: false,
       loadFreshOwn: async () => null,
       loadOwnerSnapshot: async () => {
