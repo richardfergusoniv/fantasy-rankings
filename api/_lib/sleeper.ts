@@ -240,13 +240,19 @@ export type SleeperWeeklyStatRow = Record<string, unknown>;
 export async function loadSleeperPlayerWeeklySeason(
   playerId: string,
   season: number,
+  opts: { fresh?: boolean } = {},
 ): Promise<SleeperWeeklyStatRow[]> {
   const cacheKey = `sleeper-player-weekly-stats-v1:${playerId}:${season}`;
   const cachedRows = await db.select().from(schema.sourceCache)
     .where(eq(schema.sourceCache.cacheKey, cacheKey))
     .limit(1);
   const cached = cachedRows[0];
-  const maxAge = season === 2026 ? SLEEPER_WEEKLY_STATS_CURRENT_CACHE_MS : SLEEPER_WEEKLY_STATS_ARCHIVE_CACHE_MS;
+  // Tuesday finalize bypasses the 30-minute cache so post-correction stats win.
+  const maxAge = opts.fresh
+    ? 0
+    : season === 2026
+      ? SLEEPER_WEEKLY_STATS_CURRENT_CACHE_MS
+      : SLEEPER_WEEKLY_STATS_ARCHIVE_CACHE_MS;
   if (cached && Date.now() - cached.fetchedAt.getTime() < maxAge) {
     const parsed: unknown = decodeSourceCachePayload(cached.payload);
     return normalizeSleeperWeeklyRows(parsed);

@@ -17,10 +17,11 @@ import {
 import { resolveViewer } from "./_lib/auth.js";
 import { runChatAgent } from "./_lib/chat-agent.js";
 import {
+  buildChatSystemPrompt,
   CHAT_MAX_HISTORY_MESSAGES,
   CHAT_MAX_INPUT_CHARS,
-  CHAT_SYSTEM_PROMPT,
   readOpenRouterApiKey,
+  scoringWindowFromHorizon,
 } from "./_lib/chat-config.js";
 import { ChatAgentTimeoutError, OpenRouterError } from "./_lib/chat-openrouter.js";
 import {
@@ -46,6 +47,9 @@ const postBodySchema = z.object({
   message: z.string().min(1).max(CHAT_MAX_INPUT_CHARS),
   history: z.array(historyMessageSchema).max(CHAT_MAX_HISTORY_MESSAGES).optional().default([]),
   chatId: z.string().trim().min(1).max(80).optional(),
+  /** Ranking horizon the user is viewing (ECR removed). */
+  horizon: z.enum(["week", "ros", "dynasty", "season_long"]).optional(),
+  scoringWindow: z.enum(["week", "season_long", "dynasty"]).optional(),
 });
 
 export async function GET(req: Request): Promise<Response> {
@@ -112,8 +116,13 @@ export async function POST(req: Request): Promise<Response> {
       }
     }
 
+    const scoringWindow = parsed.data.scoringWindow
+      ?? scoringWindowFromHorizon(parsed.data.horizon);
     const preferences = await listChatPreferences(viewer.userId);
-    const systemPrompt = appendChatPreferences(CHAT_SYSTEM_PROMPT, preferences);
+    const systemPrompt = appendChatPreferences(
+      buildChatSystemPrompt(scoringWindow),
+      preferences,
+    );
     const history = parsed.data.history.slice(-CHAT_MAX_HISTORY_MESSAGES);
 
     const result = await runChatAgent({
@@ -121,7 +130,12 @@ export async function POST(req: Request): Promise<Response> {
       userMessage: parsed.data.message.trim(),
       history,
       systemPrompt,
-      ctx: { userId: viewer.userId, sleeperUserId: viewer.sleeperUserId },
+      scoringWindow,
+      ctx: {
+        userId: viewer.userId,
+        sleeperUserId: viewer.sleeperUserId,
+        scoringWindow,
+      },
     });
 
     let saved: { chatId: string; title: string };

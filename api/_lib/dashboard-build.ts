@@ -1341,6 +1341,15 @@ async function saveProjectionAccuracy(dashboard: Dashboard): Promise<void> {
       if (!vegas) return [];
       const vegasProjection = vegas.projectionSource === "vegas" ? vegas.leagueProjection : null;
       if (vegasProjection === null) return [];
+      const gamePhase = player.gamePhase;
+      const locked = gamePhase === "live" || gamePhase === "final";
+      // Actuals only when the game is final. Mid-game writes ran 2–3.5 pts low.
+      // PPFD league actuals are filled from box-score components in PPR by the
+      // Tuesday finalize-accuracy job (Sleeper players_points are PPFD).
+      const actualScore =
+        !isPpfdLeague && gamePhase === "final" && player.actual !== null
+          ? Math.round(player.actual * 100)
+          : null;
       return [{
         id: `${dashboard.season}:${dashboard.week}:${league.id}:${player.playerId}`,
         season: dashboard.season,
@@ -1351,40 +1360,42 @@ async function saveProjectionAccuracy(dashboard: Dashboard): Promise<void> {
         playerName: player.name,
         position: player.position,
         vegasProjection: Math.round(vegasProjection * 100),
-        // Dynastical's projections are disclosed PPR proxies, while Sleeper's
-        // actuals are PPFD. Keep the proxy snapshot, but exclude that mismatched
-        // pair from MAE by leaving the actual leg empty. Sleeper reports zeroes
-        // before kickoff, so keep pregame actuals null until play begins.
-        actualScore: isPpfdLeague || player.gamePhase === "pregame" || player.actual === null
-          ? null
-          : Math.round(player.actual * 100),
+        actualScore,
         capturedAt: new Date(dashboard.asOf),
+        // Used only for conflict-update branching below (not a DB column).
+        _locked: locked,
       }];
     });
     for (let index = 0; index < values.length; index += 100) {
       const chunk = values.slice(index, index + 100);
       if (!chunk.length) continue;
       for (const row of chunk) {
-        const insert = db.insert(schema.projectionAccuracy).values(row);
-        if (dashboard.week === 3) {
-          // Week 3 is the pre-calibration baseline. Keep its identity and Vegas
-          // projection frozen while allowing the outcome leg to fill in.
+        const { _locked: locked, ...dbRow } = row;
+        const insert = db.insert(schema.projectionAccuracy).values(dbRow);
+        if (dbRow.actualScore !== null && (dashboard.week === 3 || locked)) {
+          // Freeze Vegas projection after lock (and keep week-3 baseline frozen).
+          // Only write the outcome leg when the game is final.
           await insert.onConflictDoUpdate({
             target: schema.projectionAccuracy.id,
             set: {
-              actualScore: row.actualScore,
+              actualScore: dbRow.actualScore,
+            },
+          });
+        } else if (!locked && dashboard.week !== 3) {
+          // Never clear a stored final actual with null when schedule/phase
+          // lookup briefly treats a finished game as unlocked.
+          await insert.onConflictDoUpdate({
+            target: schema.projectionAccuracy.id,
+            set: {
+              scoring: dbRow.scoring,
+              vegasProjection: dbRow.vegasProjection,
+              capturedAt: dbRow.capturedAt,
             },
           });
         } else {
-          await insert.onConflictDoUpdate({
-            target: schema.projectionAccuracy.id,
-            set: {
-              scoring: row.scoring,
-              vegasProjection: row.vegasProjection,
-              actualScore: row.actualScore,
-              capturedAt: row.capturedAt,
-            },
-          });
+          // Locked (or week-3) with no final actual yet: insert once, never
+          // overwrite vegas_projection or clear a later actual with null.
+          await insert.onConflictDoNothing();
         }
       }
     }

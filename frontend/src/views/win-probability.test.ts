@@ -34,9 +34,10 @@ describe("teamOutlook and winProbability", () => {
   it("sums projections and spreads by position", () => {
     const outlook = teamOutlook(lineup([["QB", 20], ["WR", 10]]));
     expect(outlook?.mean).toBe(30);
-    // sqrt((0.4*20)^2 + (0.55*10)^2) = sqrt(64 + 30.25)
-    expect(outlook?.sd).toBeCloseTo(Math.sqrt(94.25), 6);
-    expect(outlook?.low).toBeCloseTo(30 - 1.2816 * Math.sqrt(94.25), 6);
+    // σ = a + b·P*: QB 5.9+0.13·20=8.5; WR 3.0+0.39·10=6.9
+    const expectedSd = Math.sqrt(8.5 ** 2 + 6.9 ** 2);
+    expect(outlook?.sd).toBeCloseTo(expectedSd, 6);
+    expect(outlook?.low).toBeCloseTo(30 - 1.2816 * expectedSd, 6);
   });
 
   it("favors the higher projection and is even for equal teams", () => {
