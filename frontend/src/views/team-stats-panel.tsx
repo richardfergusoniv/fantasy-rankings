@@ -99,6 +99,7 @@ function TeamStatsLineChart({
   }), [series, weeks]);
 
   return (
+    <>
     <div className="scatter-frame team-stats-line-chart" role="img" aria-label={ariaLabel}>
       <ChartContainer
         config={Object.fromEntries(series.map((item) => [item.id, { label: item.label, color: item.color }]))}
@@ -154,6 +155,15 @@ function TeamStatsLineChart({
         </LineChart>
       </ChartContainer>
     </div>
+    <ul className="team-stats-legend" aria-label="Chart legend">
+      {series.map((item) => (
+        <li key={item.id} className={item.rostered ? "is-rostered" : undefined}>
+          <i style={{ background: item.color, opacity: item.rostered ? 1 : 0.6 }} aria-hidden="true" />
+          {item.label}
+        </li>
+      ))}
+    </ul>
+    </>
   );
 }
 

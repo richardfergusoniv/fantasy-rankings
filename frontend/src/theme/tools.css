@@ -228,6 +228,35 @@
   border-radius: 0;
   height: min(52dvh, 420px);
 }
+.team-stats-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 8px 12px 10px;
+  list-style: none;
+  color: var(--dim);
+  font-size: var(--type-caption);
+}
+.team-stats-legend li {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+.team-stats-legend li.is-rostered {
+  color: var(--text);
+  font-weight: 700;
+}
+.team-stats-legend i {
+  flex: none;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+.team-stats-legend .is-rostered i {
+  height: 4px;
+}
 .team-stats-table-dialog .chart-result-body {
   overflow: auto;
 }
