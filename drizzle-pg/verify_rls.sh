@@ -7,8 +7,10 @@
 #   ./drizzle-pg/verify_rls.sh                 # spins up a disposable postgres container
 #   DATABASE_URL=postgres://... ./drizzle-pg/verify_rls.sh   # existing disposable DB
 #
-# Requires docker (for the disposable DB and/or a psql client) or a local
-# psql when DATABASE_URL is set. Point it ONLY at a throwaway database:
+# Requires node with `npm ci` done (migrations are applied with the standard
+# `drizzle-kit migrate`, so a file missing from drizzle-pg/meta/_journal.json
+# fails here exactly as it would in a real deploy), plus docker (for the
+# disposable DB and/or a psql client) or a local psql when DATABASE_URL is set. Point it ONLY at a throwaway database:
 # the script creates an `auth` schema and `anon`/`authenticated` roles to
 # mimic Supabase, and wipes nothing — but it is not meant for production.
 
@@ -82,11 +84,19 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT ALL ON TABLES TO anon, authenticated;
 SQL
 
-echo "== applying migrations"
-for f in "$SCRIPT_DIR"/0*.sql; do
-  echo "-- $(basename "$f")"
-  psql_run -f - <"$f" >/dev/null
-done
+echo "== applying migrations (npx drizzle-kit migrate)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+(cd "$REPO_DIR" && npx drizzle-kit migrate --config=drizzle.config.ts)
+
+# Every checked-in migration must be journaled and applied; otherwise the
+# assertions below would be checking a schema no deploy produces.
+sql_files=$(find "$SCRIPT_DIR" -maxdepth 1 -name '0*.sql' | wc -l | tr -d ' ')
+applied=$(psql_run -Atc 'SELECT count(*) FROM drizzle.__drizzle_migrations')
+if [[ "$sql_files" != "$applied" ]]; then
+  echo "RLS CHECK FAILED: $sql_files migration files but $applied applied (missing journal entry?)" >&2
+  exit 1
+fi
+echo "ok: all $applied migrations applied by drizzle-kit migrate"
 
 echo "== running RLS/grant assertions"
 psql_run <<'SQL'
@@ -121,7 +131,8 @@ BEGIN
     'vegas_projection_upload_chunks', 'player_value_snapshots',
     'projection_accuracy', 'player_news_runs', 'player_news_items',
     'shared_player_news', 'prop_line_snapshots',
-    'scoring_weights', 'scoring_snapshots'
+    'scoring_weights', 'scoring_snapshots',
+    'build_leases', 'rate_limit_buckets'
   ] LOOP
     BEGIN
       EXECUTE format('SELECT 1 FROM public.%I', t);
@@ -134,6 +145,25 @@ BEGIN
       RAISE EXCEPTION 'RLS CHECK FAILED: authenticated can write %', t;
     EXCEPTION WHEN insufficient_privilege THEN
       RAISE NOTICE 'ok: authenticated cannot write %', t;
+    END;
+  END LOOP;
+END $$;
+
+-- sleeper_connections is read-only for clients: writes go through the API (0012).
+DO $$
+DECLARE
+  stmt text;
+BEGIN
+  FOREACH stmt IN ARRAY ARRAY[
+    $q$INSERT INTO public.sleeper_connections (user_id, sleeper_user_id, sleeper_username) VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'x', 'x')$q$,
+    $q$UPDATE public.sleeper_connections SET sleeper_user_id = 'x'$q$,
+    $q$DELETE FROM public.sleeper_connections$q$
+  ] LOOP
+    BEGIN
+      EXECUTE stmt;
+      RAISE EXCEPTION 'RLS CHECK FAILED: authenticated can run: %', stmt;
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE NOTICE 'ok: authenticated cannot % sleeper_connections', split_part(stmt, ' ', 1);
     END;
   END LOOP;
 END $$;
