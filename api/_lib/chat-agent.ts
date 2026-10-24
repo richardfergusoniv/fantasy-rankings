@@ -23,6 +23,8 @@ export type RunChatAgentArgs = {
   userMessage: string;
   history?: AgentHistoryMessage[];
   ctx: ChatToolContext;
+  /** Full system prompt (base + preferences / scoring window). */
+  systemPrompt?: string;
   fetchImpl?: OpenRouterFetch;
   maxToolSteps?: number;
   primaryModel?: string;
@@ -70,7 +72,11 @@ function awaitWithAgentDeadline<T>(operation: Promise<T>, signal: AbortSignal): 
 export async function runChatAgent(args: RunChatAgentArgs): Promise<RunChatAgentResult> {
   const maxSteps = args.maxToolSteps ?? CHAT_MAX_TOOL_STEPS;
   const dispatch = args.dispatchTool ?? dispatchChatTool;
-  const messages = buildInitialMessages(args.history ?? [], args.userMessage);
+  const messages = buildInitialMessages(
+    args.history ?? [],
+    args.userMessage,
+    args.systemPrompt,
+  );
   const deadlineMs = args.deadlineMs ?? CHAT_AGENT_DEADLINE_MS;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), deadlineMs);

@@ -269,3 +269,49 @@ export const propLineSnapshots = pgTable(
     index("prop_line_snapshots_season_week_idx").on(table.season, table.week),
   ],
 );
+
+/** Tools Chat conversation metadata (titles only in list queries). */
+export const chatConversations = pgTable(
+  "chat_conversations",
+  {
+    id: text("id").primaryKey(),
+    userId: uuid("user_id").notNull(),
+    title: text("title").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("chat_conversations_user_updated_idx").on(table.userId, table.updatedAt),
+  ],
+);
+
+/** Tools Chat messages. Load only when a conversation is opened. */
+export const chatMessages = pgTable(
+  "chat_messages",
+  {
+    id: text("id").primaryKey(),
+    conversationId: text("conversation_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    role: text("role", { enum: ["user", "assistant"] }).notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("chat_messages_conversation_created_idx").on(table.conversationId, table.createdAt),
+    index("chat_messages_user_id_idx").on(table.userId),
+  ],
+);
+
+/** Standing chat preferences (short; injected into the system prompt). */
+export const chatPreferences = pgTable(
+  "chat_preferences",
+  {
+    id: text("id").primaryKey(),
+    userId: uuid("user_id").notNull(),
+    leagueId: text("league_id"),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [index("chat_preferences_user_id_idx").on(table.userId)],
+);

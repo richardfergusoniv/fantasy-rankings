@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,7 @@ async function fetchConnection(): Promise<SleeperConnection> {
 }
 
 export function AuthGate({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [connection, setConnection] = useState<SleeperConnection>(null);
@@ -62,7 +64,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setSession(data.session);
       setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+        queryClient.removeQueries({ queryKey: ["auth-user-id"] });
+        queryClient.removeQueries({ queryKey: ["chat-list"] });
+        queryClient.removeQueries({ queryKey: ["chat-availability"] });
+      }
       setSession(next);
       setLoading(false);
     });
@@ -139,7 +146,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return <Fragment key={session.user.id}>{children}</Fragment>;
 }
 
 function AuthScreen() {

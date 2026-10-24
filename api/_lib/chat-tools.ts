@@ -1,6 +1,7 @@
 /**
- * Read-only chat tools. Prefer the signed-in user's dashboard cache and
- * existing source_cache / shared news tables — no new Supabase tables.
+ * Chat tools. Prefer the signed-in user's dashboard cache and
+ * existing source_cache / shared news tables. Preference tools write
+ * only to chat_preferences (see chat-preferences.ts).
  */
 import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -18,6 +19,10 @@ import {
   sleeperActualStats,
 } from "./sleeper.js";
 import { loadHistoricalTrades } from "./trades.js";
+import {
+  dispatchPreferenceChatTool,
+  PREFERENCE_CHAT_TOOL_DEFINITIONS,
+} from "./chat-preferences.js";
 import {
   dispatchExtendedChatTool,
   EXTENDED_CHAT_TOOL_DEFINITIONS,
@@ -155,6 +160,7 @@ export const CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     },
   },
   ...EXTENDED_CHAT_TOOL_DEFINITIONS,
+  ...PREFERENCE_CHAT_TOOL_DEFINITIONS,
 ];
 
 export const CHAT_TOOL_NAMES = CHAT_TOOL_DEFINITIONS.map((tool) => tool.function.name);
@@ -812,6 +818,8 @@ export async function dispatchChatTool(
       return toolGetWeekMatchup(ctx, parsed.data);
     }
     default: {
+      const preference = await dispatchPreferenceChatTool(name, args, ctx.userId);
+      if (preference !== null) return preference;
       const extended = await dispatchExtendedChatTool(name, args, ctx);
       if (extended !== null) return extended;
       return { ok: false, error: `Unknown tool: ${name}` };
