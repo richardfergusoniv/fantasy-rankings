@@ -968,10 +968,12 @@ export async function toolSuggestTrades(
   const me = league.tradeTeams.find((team) => team.isUser);
   if (!me) return { ok: false as const, error: "User roster not found in this league." };
 
-  const tradeWindowKey: "season_long" | "dynasty" =
-    ctx.scoringWindow === "dynasty" && league.seasonLongFormat.isDynasty
-      ? "dynasty"
-      : "season_long";
+  const tradeWindowKey: "week" | "season_long" | "dynasty" =
+    ctx.scoringWindow === "week"
+      ? "week"
+      : ctx.scoringWindow === "dynasty" && league.seasonLongFormat.isDynasty
+        ? "dynasty"
+        : "season_long";
 
   const power = league.powerRankingsSeasonLong.length > 0
     ? league.powerRankingsSeasonLong
@@ -1182,7 +1184,12 @@ export async function toolSuggestTrades(
       isDynasty: league.seasonLongFormat.isDynasty,
       weights,
     });
-    const primary = tradeWindowKey === "dynasty" && move.dynasty ? move.dynasty : move.seasonLong;
+    const primary =
+      tradeWindowKey === "week"
+        ? move.week
+        : tradeWindowKey === "dynasty" && move.dynasty
+          ? move.dynasty
+          : move.seasonLong;
     ideas.push({
       partner: partner.teamName,
       give,
