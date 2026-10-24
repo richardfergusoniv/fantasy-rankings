@@ -567,7 +567,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
             <>
               <section className="matchup-grade-section" aria-label="Matchups">
                 <div className="matchup-stat-groups" aria-label={`${matchup.team} and ${matchup.opponent} PFN offense versus defense matchups`}>
-                  <div className="matchup-stat-columns" aria-label={`${matchup.team} versus ${matchup.opponent}`}>
+                  <div className="matchup-stat-columns" role="group" aria-label={`${matchup.team} versus ${matchup.opponent}`}>
                     <div className="matchup-stat-team">
                       {onOpenTeam ? (
                         <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.team} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.team)}>
