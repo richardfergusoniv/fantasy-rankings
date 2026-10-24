@@ -157,6 +157,20 @@ function TeamStatsLineChart({
   );
 }
 
+/** Outside the chart's button wrapper so assistive tech can read the player names. */
+function TeamStatsLegend({ series }: { series: readonly TeamStatsChartSeries[] }) {
+  return (
+    <ul className="team-stats-legend" aria-label="Chart legend">
+      {series.map((item) => (
+        <li key={item.id} className={item.rostered ? "is-rostered" : undefined}>
+          <i style={{ background: item.color, opacity: item.rostered ? 1 : 0.6 }} aria-hidden="true" />
+          {item.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function TeamStatsWeekTable({
   gridRows,
   gridWeeks,
@@ -408,6 +422,16 @@ export function TeamStatsPanel({
       </header>
 
       <div className="monitor-value-chart-controls monitor-team-stats-controls">
+        <SegmentedControl
+          className="monitor-team-stats-group"
+          value={selectedGroup}
+          onChange={(value) => {
+            setUserGroup(value);
+            onSelectionChange?.({ teamStatsGroup: value });
+          }}
+          label="Position"
+          options={TEAM_STATS_GROUPS.map((group) => ({ value: group.id, label: group.label }))}
+        />
         <label className="monitor-value-chart-field">
           <span>Team</span>
           <select
@@ -424,16 +448,6 @@ export function TeamStatsPanel({
             ))}
           </select>
         </label>
-        <SegmentedControl
-          className="monitor-team-stats-group"
-          value={selectedGroup}
-          onChange={(value) => {
-            setUserGroup(value);
-            onSelectionChange?.({ teamStatsGroup: value });
-          }}
-          label="Position"
-          options={TEAM_STATS_GROUPS.map((group) => ({ value: group.id, label: group.label }))}
-        />
         <label className="monitor-value-chart-field">
           <span>Stat</span>
           <select
@@ -466,27 +480,30 @@ export function TeamStatsPanel({
         <p className="monitor-empty">No players</p>
       ) : (
         <>
-          <div
-            className="team-stats-chart-open"
-            role="button"
-            tabIndex={0}
-            aria-label={`Open ${statLabel} week-by-week table`}
-            onClick={() => setTableOpen(true)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                setTableOpen(true);
-              }
-            }}
-          >
-            <TeamStatsLineChart
-              series={chartSeries}
-              weeks={gridWeeks.map((stack) => stack.week)}
-              statId={statId}
-              statLabel={statLabel}
-              isSnaps={isSnaps}
-              ariaLabel={`${selectedTeam} ${statLabel} by week`}
-            />
+          <div className="team-stats-chart-card">
+            <div
+              className="team-stats-chart-open"
+              role="button"
+              tabIndex={0}
+              aria-label={`Open ${statLabel} week-by-week table`}
+              onClick={() => setTableOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setTableOpen(true);
+                }
+              }}
+            >
+              <TeamStatsLineChart
+                series={chartSeries}
+                weeks={gridWeeks.map((stack) => stack.week)}
+                statId={statId}
+                statLabel={statLabel}
+                isSnaps={isSnaps}
+                ariaLabel={`${selectedTeam} ${statLabel} by week`}
+              />
+            </div>
+            <TeamStatsLegend series={chartSeries} />
           </div>
           <ChartDialog
             isOpen={tableOpen}

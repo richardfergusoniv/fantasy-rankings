@@ -52,7 +52,7 @@ import {
 import { formatRecord } from "../league-team-card";
 import { leaguePowerTeamForPlayer } from "../league-roster";
 import { WindowVirtualList } from "../virtual-list";
-import { currentExpertRanks } from "../expert-ranks";
+import { leagueExpertRanks } from "../expert-ranks";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
 
@@ -63,14 +63,19 @@ function rosterBadgeForPlayer(
   playerId: string,
   rosterTeamByPlayer: ReadonlyMap<string, { teamName: string; isUser: boolean }>,
   powerTeamByPlayerId: ReadonlyMap<string, { rosterId: number; teamName: string; rank: number; record: { wins: number; losses: number; ties: number } }>,
+  rosterIdByPlayerId: ReadonlyMap<string, number>,
 ): { rosterTeamName: string | null; rosterIsUser: boolean; rosterId: number | null; rosterLabel: string | null } {
   const assignment = rosterTeamByPlayer.get(playerId);
   const powerTeam = powerTeamByPlayerId.get(playerId);
   return {
     rosterTeamName: assignment?.teamName ?? null,
     rosterIsUser: assignment?.isUser ?? false,
-    rosterId: powerTeam?.rosterId ?? null,
-    rosterLabel: powerTeam ? `Open ${powerTeam.teamName}, ${formatRecord(powerTeam.record)} record, rank ${powerTeam.rank}` : null,
+    rosterId: powerTeam?.rosterId ?? rosterIdByPlayerId.get(playerId) ?? null,
+    rosterLabel: powerTeam
+      ? `Open ${powerTeam.teamName}, ${formatRecord(powerTeam.record)} record, rank ${powerTeam.rank}`
+      : assignment
+        ? `Open ${assignment.teamName}`
+        : null,
   };
 }
 
@@ -134,11 +139,11 @@ export function SeasonTeamPill({ team, lineRank, onOpen }: { team: string | null
 
 const OUT_INJURY_CODES = new Set(["O", "IR", "PUP", "SUS", "NFI", "INA"]);
 
-/** "⚠ Q" for a questionable or doubtful player, "Out" and the like in the negative tone. */
+/** "Q" for a questionable or doubtful player, "Out" and the like in the negative tone. */
 function DepthGridStatus({ status }: { status: string }) {
   const code = sleeperInjuryTag(status);
   const out = OUT_INJURY_CODES.has(code);
-  return <span className={`depth-grid-status ${out ? "is-out" : "is-questionable"}`} title={status}>{out ? (code === "O" ? "Out" : code) : `⚠ ${code}`}</span>;
+  return <span className={`depth-grid-status ${out ? "is-out" : "is-questionable"}`} title={status}>{out ? (code === "O" ? "Out" : code) : code}</span>;
 }
 
 export function TeamDataModal({
@@ -556,7 +561,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   const queryClient = useQueryClient();
   const isSeasonLong = effectiveHorizon === "ros" || effectiveHorizon === "dynasty";
   // This week's FantasyPros consensus (weekly horizons only: the Vegas and ECR tabs).
-  const expertRanks = isSeasonLong ? null : currentExpertRanks(dashboard);
+  const expertRanks = isSeasonLong ? null : leagueExpertRanks(dashboard, league);
   const pfnTablesQuery = useQuery({
     queryKey: ["pfn-tables"],
     queryFn: () => api.getPfnTables({}),
@@ -597,6 +602,13 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
     () => new Map((league.rosterAssignments ?? []).map((assignment) => [assignment.playerId, assignment])),
     [league.rosterAssignments],
   );
+  const rosterIdByPlayerId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const team of league.tradeTeams) {
+      for (const player of team.players) map.set(player.playerId, team.rosterId);
+    }
+    return map;
+  }, [league.tradeTeams]);
   const powerTeamByPlayerId = useMemo(() => {
     const rosterAssignments = league.rosterAssignments ?? [];
     const lookupLeague = {
@@ -784,7 +796,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
               isAway: weeklyContext?.isAway ?? null,
               isBye: weeklyContext?.isBye ?? false,
             },
-            ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId),
+            ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId, rosterIdByPlayerId),
             projection: row.value,
             projectionLabel: "VALUE",
             projectionSource: null,
@@ -814,7 +826,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
               name: `${row.team} Defense`,
               meta: matchupLabel(row.opponent, row.isAway),
               teamContext: null,
-              ...rosterBadgeForPlayer(row.team, rosterTeamByPlayer, powerTeamByPlayerId),
+              ...rosterBadgeForPlayer(row.team, rosterTeamByPlayer, powerTeamByPlayerId, rosterIdByPlayerId),
               projection: expert.projection,
               projectionLabel: "PROJ",
               projectionSource: null,
@@ -838,7 +850,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             name: row.name,
             meta: `${row.position} · ${row.team}${row.opponent ? ` · ${matchupLabel(row.opponent, row.isAway)}` : ""}`,
             teamContext: null,
-            ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId),
+            ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId, rosterIdByPlayerId),
             projection: expert.projection,
             projectionLabel: "PROJ",
             projectionSource: null,
@@ -863,7 +875,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             name: `${row.team} Defense`,
             meta: matchupLabel(row.opponent, row.isAway),
             teamContext: null,
-            ...rosterBadgeForPlayer(row.team, rosterTeamByPlayer, powerTeamByPlayerId),
+            ...rosterBadgeForPlayer(row.team, rosterTeamByPlayer, powerTeamByPlayerId, rosterIdByPlayerId),
             projection: row.displayProjection,
             projectionLabel: row.gamePhase === "final" ? "PTS" : "PROJ",
             projectionSource: row.projectionSource,
@@ -884,7 +896,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
           name: row.name,
           meta: `${row.position} · ${row.team}${row.opponent ? ` · ${matchupLabel(row.opponent, row.isAway)}` : ""}`,
           teamContext: null,
-          ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId),
+          ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId, rosterIdByPlayerId),
           projection: league.rankingField === "ppr" ? row.ppr : row.halfPpr,
           projectionLabel: "PROJ",
           projectionSource: row.projectionSource,

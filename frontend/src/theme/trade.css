@@ -263,6 +263,10 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-asset-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; column-gap: 4px; align-items: center; box-sizing: border-box; height: var(--league-roster-row-height); min-height: var(--league-roster-row-height); max-height: var(--league-roster-row-height); padding: 0 0 0 6px; border-bottom: 0; }
 .boom-bust-panel, .player-value-trend { margin-top: 14px; padding-top: 11px; border-top: 1px solid var(--hairline); }
 .boom-bust-heading, .trade-stock-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+/* On the player card these two headings match the section-heading size (Per game, Game log). */
+.boom-bust-panel .boom-bust-heading, .player-value-trend .trade-stock-heading { font-size: var(--type-section); }
+.player-value-trend .trade-stock-heading > span { color: var(--text); font-weight: 700; }
+.player-value-trend .trade-stock-heading strong { font-size: var(--type-caption); }
 .boom-bust-heading-copy { display: grid; gap: 2px; min-width: 0; }
 .boom-bust-heading-copy > span { color: var(--text); font-weight: 700; }
 .boom-bust-heading-copy strong { color: var(--dim); font-size: var(--type-caption); font-variant-numeric: tabular-nums; font-weight: 600; }

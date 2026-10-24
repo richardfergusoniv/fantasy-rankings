@@ -5,10 +5,11 @@ import type { MatchupSelection } from "../dashboard-types";
 import { GapBar } from "../components/gap-bar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RankStrip } from "../components/rank-strip";
+import { positionTierLabel } from "../lib/position-tier";
 import { formatCompactCount } from "../lib/format-number";
-import { DepthChangeMark, depthChange, depthLabel, MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
+import { DepthChangeMark, depthChange, MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 import { isHiddenHalfPointPropStat, propStatDef } from "../../../api/_lib/prop-line-reads";
-import { currentExpertRanks } from "../expert-ranks";
+import { leagueExpertRanks } from "../expert-ranks";
 import {
   analyticsMetricsForLeague,
   basePositionOrder,
@@ -258,13 +259,13 @@ function comparisonPickMeta(player: ComparisonEntity): string {
   return player.opponent ? `${position} · ${player.team} ${player.isAway ? "@" : "vs"} ${player.opponent}` : `${position} · ${player.team}`;
 }
 
-function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trending, depth, depthPrevious, sosEntry, onOpenPlayer, onOpenMatchup }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"]; depth: Dashboard["playerInsights"]["depth"]; depthPrevious: Dashboard["playerInsights"]["depthPrevious"]; sosEntry?: StrengthOfScheduleEntryLike; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
+function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trending, depth, depthPrevious, leagueSize, sosEntry, onOpenPlayer, onOpenMatchup }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"]; depth: Dashboard["playerInsights"]["depth"]; depthPrevious: Dashboard["playerInsights"]["depthPrevious"]; leagueSize: number; sosEntry?: StrengthOfScheduleEntryLike; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
   return (
     <header className="comparison-board-head" aria-label={`${left.name} versus ${right.name}`}>
       {[{ player: left, playerId: leftPlayerId }, { player: right, playerId: rightPlayerId }].map(({ player, playerId }, index) => {
         const trend = playerId ? trending?.[playerId] : undefined;
-        const depthRank = playerId ? depth[playerId] : undefined;
-        const depthMove = depthChange(depthRank, playerId ? depthPrevious[playerId] : undefined);
+        const depthMove = depthChange(playerId ? depth[playerId] : undefined, playerId ? depthPrevious[playerId] : undefined);
+        const tier = positionTierLabel(player.position, player.values.leaguePositionRank, leagueSize);
         return (
           <div className={`comparison-board-player${index === 0 ? " is-left" : " is-right"}`} key={player.id}>
             {playerId && onOpenPlayer
@@ -275,7 +276,7 @@ function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trend
                 ? <MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} />
                 : <span>{player.team || "Team TBD"} · {comparisonMatchupLabel(player)}</span>}
               {player.gameTime ? <time>{gameTimeLabel(player.gameTime)}</time> : null}
-              {depthRank ? <span className="depth-chart-tag" title="Depth chart">{depthLabel(depthRank)}</span> : null}
+              {tier ? <span className="depth-chart-tag" title="Where this week's rank falls at the position">{tier}</span> : null}
               {depthMove ? <DepthChangeMark change={depthMove} /> : null}
             </span>
             {trend && (trend.adds !== null || trend.drops !== null) ? (
@@ -571,14 +572,14 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     retry: false,
   });
   const makeRowValue = (value: number | null | undefined): ComparisonMetricValue | null => typeof value === "number" && Number.isFinite(value) ? { value } : null;
-  // This week's FantasyPros expert consensus (PPR) for each pick.
+  // This week's FantasyPros expert consensus for each pick, projections in the league's scoring.
   const expertRows = (() => {
-    const experts = currentExpertRanks(dashboard) ?? {};
+    const experts = leagueExpertRanks(dashboard, league) ?? {};
     const leftExpert = leftPlayerId ? experts[leftPlayerId] : undefined;
     const rightExpert = rightPlayerId ? experts[rightPlayerId] : undefined;
     if (!leftExpert && !rightExpert) return [];
     const rows: ComparisonRow[] = [
-      { metric: { key: "expertProjection", label: "Expert projection (PPR)", short: "Expert pts", unit: " pts" }, leftValue: makeRowValue(leftExpert?.projection), rightValue: makeRowValue(rightExpert?.projection) },
+      { metric: { key: "expertProjection", label: `Expert projection (${league.rankingField === "ppr" ? "PPR" : "half PPR"})`, short: "Expert pts", unit: " pts" }, leftValue: makeRowValue(leftExpert?.projection), rightValue: makeRowValue(rightExpert?.projection) },
       { metric: { key: "expertPositionRank", label: "Expert rank", short: "ECR", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.positionRank), rightValue: makeRowValue(rightExpert?.positionRank) },
     ];
     return rows.filter((row) => row.leftValue || row.rightValue);
@@ -641,7 +642,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
         <div className="analytics-empty"><strong>No player data yet.</strong><span>Refresh to check the latest Vegas lines and nflverse data.</span></div>
       ) : left && right ? (
         <section className="comparison-board" aria-label={`${left.name} and ${right.name} comparison`}>
-          <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} depth={dashboard.playerInsights?.depth ?? {}} depthPrevious={dashboard.playerInsights?.depthPrevious ?? {}} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
+          <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} depth={dashboard.playerInsights?.depth ?? {}} depthPrevious={dashboard.playerInsights?.depthPrevious ?? {}} leagueSize={league.seasonLongFormat.numTeams} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
           <Tabs value={sectionTab} onValueChange={(value) => setSectionTab(value as "projections" | "advanced")} className="comparison-section-tabs">
             <TabsList aria-label="Comparison data">
               <TabsTrigger id="comparison-projections-tab" value="projections" aria-controls="comparison-projections-panel">Week {dashboard.week}</TabsTrigger>

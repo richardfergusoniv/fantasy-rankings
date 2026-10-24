@@ -1138,6 +1138,7 @@ export function App() {
       week={dashboard.week}
       leagueId={league.id}
       formatKey={league.seasonLongFormat.key}
+      leagueSize={league.seasonLongFormat.numTeams}
       mode="details"
       analytics={dashboard.analytics}
       analyticsLoading={analyticsLoading}

@@ -30,6 +30,7 @@ import {
 } from "./dashboard-shared";
 import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { buildGameLogRows } from "./lib/game-log-rows";
+import { positionTierLabel } from "./lib/position-tier";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
 import { ModalPortal, SegmentedControl, positionalSosRank, rankAgainst, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
@@ -423,6 +424,7 @@ export function PlayerDetailSheet({
   week,
   leagueId,
   formatKey,
+  leagueSize,
   mode,
   analytics,
   analyticsLoading = false,
@@ -451,6 +453,8 @@ export function PlayerDetailSheet({
   week: number;
   leagueId: string;
   formatKey: string;
+  /** Teams in the league; sets how wide an RB1/RB2/RB3 band is. */
+  leagueSize?: number;
   mode: "details" | "chart";
   analytics: Dashboard["analytics"];
   analyticsLoading?: boolean;
@@ -669,6 +673,7 @@ export function PlayerDetailSheet({
   const weeklyWidth = player.weeklyProjection === null ? 0 : Math.min(100, Math.max(4, player.weeklyProjection / 30 * 100));
   const valueWidth = player.seasonValue === null ? 0 : Math.min(100, Math.max(4, player.seasonValue / 10_000 * 100));
   const positionLabel = player.position === "DEF" ? "DST" : player.position;
+  const tierLabel = positionTierLabel(player.position, player.weeklyRank, leagueSize);
   const projectionComponents = projectionComponentsForPlayer(player);
   const defenseProjectionComponents = player.defenseComponents
     ? Object.entries(defenseComponentLabels).flatMap(([key, label]) => {
@@ -705,7 +710,7 @@ export function PlayerDetailSheet({
             <div className="player-detail-title-line">
               <h2 id="player-detail-name">{player.name}</h2>
             </div>
-            <p><span>{positionLabel}</span><PlayerTeamBadge team={player.team} onOpen={player.team && onOpenTeam ? () => onOpenTeam(player.team ?? "") : undefined} />{player.injuryStatus ? <span className="player-detail-injury">{player.injuryStatus}</span> : null}<PlayerRosterBadge
+            <p><span>{positionLabel}</span><PlayerTeamBadge team={player.team} onOpen={player.team && onOpenTeam ? () => onOpenTeam(player.team ?? "") : undefined} />{tierLabel ? <span className="depth-chart-tag" title="Where this week's rank falls at the position">{tierLabel}</span> : null}{player.injuryStatus ? <span className="player-detail-injury">{player.injuryStatus}</span> : null}<PlayerRosterBadge
               playerName={player.name}
               rosterTeamName={rosterTeamName}
               rosterLabel={rosterLabel}
