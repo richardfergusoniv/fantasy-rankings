@@ -548,6 +548,12 @@ export function App() {
   const playerHistory = usePlayerCardHistory();
   const [tickerNews, setTickerNews] = useState<PlayerNewsItem | null>(null);
   const [askOpen, setAskOpen] = useState(false);
+  const askButtonRef = useRef<HTMLButtonElement | null>(null);
+  // The sheet is mounted only while open, so Radix has no trigger to hand focus back to.
+  const changeAskOpen = useCallback((open: boolean) => {
+    setAskOpen(open);
+    if (!open) requestAnimationFrame(() => askButtonRef.current?.focus());
+  }, []);
   // The matchup dialog lives in the URL (`mu`), so opening it is a history step and Back from a tool brings it back.
   const selectedMatchup = dashboardUrl.state.matchup;
   const { commit: commitDashboardUrl, closeMatchup } = dashboardUrl;
@@ -1171,7 +1177,7 @@ export function App() {
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       {askOpen ? (
         <Suspense fallback={null}>
-          <LazyAskSheet open={askOpen} onOpenChange={setAskOpen} context={askContextForTab(tab)} horizon={dashboardUrl.state.horizon} />
+          <LazyAskSheet open={askOpen} onOpenChange={changeAskOpen} context={askContextForTab(tab)} horizon={dashboardUrl.state.horizon} />
         </Suspense>
       ) : null}
       <div role="region" aria-label="League and week" className="league-sticky">
@@ -1187,7 +1193,7 @@ export function App() {
           <div className="week-line">
             <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
             <div className="week-actions">
-            <AskButton onClick={() => setAskOpen(true)} />
+            <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />
             <ThemeToggle />
             <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label={tab === "draft" ? "Refresh draft data" : "Refresh scores and rankings"}><RefreshIcon spinning={isRefreshing} /></button>
             </div>
