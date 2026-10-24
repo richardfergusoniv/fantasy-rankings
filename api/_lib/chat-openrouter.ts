@@ -205,6 +205,19 @@ export function shouldFallback(status: number): boolean {
  * Call OpenRouter with the configured free primary model; on 403/404/429/5xx retry
  * once with the free fallback model. Aborts / deadlines are not retried.
  */
+/**
+ * After the primary fails with a fallback-eligible status, go straight to the
+ * fallback for this long (per instance), instead of paying a failed primary
+ * round-trip on every call while it is down.
+ */
+export const PRIMARY_COOLDOWN_MS = 5 * 60_000;
+const primaryCooldownUntil = new Map<string, number>();
+
+/** Test helper: forget primary-model cooldowns. */
+export function resetPrimaryCooldowns(): void {
+  primaryCooldownUntil.clear();
+}
+
 export async function callOpenRouterWithFallback(args: {
   apiKey: string;
   messages: ChatCompletionMessage[];
@@ -227,18 +240,29 @@ export async function callOpenRouterWithFallback(args: {
     temperature: 0.2,
   };
 
-  try {
-    const response = await callOpenRouterChat({
+  const callModel = async (model: string) => ({
+    response: await callOpenRouterChat({
       apiKey: args.apiKey,
-      body: { ...bodyBase, model: primary },
+      body: { ...bodyBase, model },
       fetchImpl: args.fetchImpl,
       signal: args.signal,
-    });
-    return { response, model: primary };
+    }),
+    model,
+  });
+
+  if (fallback !== primary && (primaryCooldownUntil.get(primary) ?? 0) > Date.now()) {
+    return callModel(fallback);
+  }
+
+  try {
+    const result = await callModel(primary);
+    primaryCooldownUntil.delete(primary);
+    return result;
   } catch (err) {
     if (err instanceof ChatAgentTimeoutError) throw err;
     if (!(err instanceof OpenRouterError) || !shouldFallback(err.status)) throw err;
     if (fallback === primary) throw err;
+    primaryCooldownUntil.set(primary, Date.now() + PRIMARY_COOLDOWN_MS);
     // Log the primary's failure: if the fallback fails too, only its error
     // reaches the route, and a persistent primary problem would stay invisible.
     console.error(
@@ -247,13 +271,7 @@ export async function callOpenRouterWithFallback(args: {
       primary,
       summarizeOpenRouterErrorBody(err.body),
     );
-    const response = await callOpenRouterChat({
-      apiKey: args.apiKey,
-      body: { ...bodyBase, model: fallback },
-      fetchImpl: args.fetchImpl,
-      signal: args.signal,
-    });
-    return { response, model: fallback };
+    return callModel(fallback);
   }
 }
 

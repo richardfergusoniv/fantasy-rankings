@@ -5,6 +5,7 @@ import {
   buildChatSystemPrompt,
   CHAT_AGENT_DEADLINE_MS,
   CHAT_MAX_TOOL_STEPS,
+  resolveOpenRouterModel,
   type MoveScoringWindowKey,
 } from "./chat-config.js";
 import {
@@ -90,6 +91,9 @@ export async function runChatAgent(args: RunChatAgentArgs): Promise<RunChatAgent
   const timer = setTimeout(() => controller.abort(), deadlineMs);
   let modelUsed = "";
   let toolSteps = 0;
+  // Once a round falls back, stay on that model for the rest of this answer
+  // rather than retrying the failing primary on every tool step.
+  let stickyModel: string | undefined;
 
   try {
     for (let step = 0; step <= maxSteps; step += 1) {
@@ -100,10 +104,11 @@ export async function runChatAgent(args: RunChatAgentArgs): Promise<RunChatAgent
         messages,
         tools: CHAT_TOOL_DEFINITIONS,
         fetchImpl: args.fetchImpl,
-        primaryModel: args.primaryModel,
-        fallbackModel: args.fallbackModel,
+        primaryModel: stickyModel ?? args.primaryModel,
+        fallbackModel: stickyModel ?? args.fallbackModel,
         signal: controller.signal,
       });
+      if (!stickyModel && model !== (args.primaryModel ?? resolveOpenRouterModel())) stickyModel = model;
       modelUsed = model;
       const choice = response.choices[0];
       if (!choice) {
