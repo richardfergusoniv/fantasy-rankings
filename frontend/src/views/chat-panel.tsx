@@ -77,11 +77,13 @@ export function ChatPanel() {
     void el.offsetHeight;
     el.style.transition = "transform 280ms cubic-bezier(.2, .7, .2, 1)";
     el.style.transform = "";
-    const clear = () => {
+    const clear = (event?: TransitionEvent) => {
+      if (event && (event.target !== el || event.propertyName !== "transform")) return;
       el.style.transition = "";
       el.style.transform = "";
+      if (event) el.removeEventListener("transitionend", clear);
     };
-    el.addEventListener("transitionend", clear, { once: true });
+    el.addEventListener("transitionend", clear);
     return () => {
       el.removeEventListener("transitionend", clear);
       clear();
