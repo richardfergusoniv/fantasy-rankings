@@ -241,6 +241,14 @@ export function ChatPanel({
         setUnavailable(true);
         return;
       }
+      if (code === "chat_upstream_denied") {
+        // The server names the cause (key, credits, refusal, missing model).
+        const serverMessage = err && typeof err === "object" && "serverMessage" in err
+          ? String((err as { serverMessage?: string }).serverMessage ?? "")
+          : "";
+        setError(serverMessage || "The chat model couldn’t answer this request.");
+        return;
+      }
       if (code === "chat_upstream_unavailable") {
         setError("The chat model is busy. Try again shortly.");
         return;

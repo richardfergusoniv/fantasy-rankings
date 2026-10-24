@@ -26,7 +26,11 @@ import {
   readOpenRouterApiKey,
   scoringWindowFromHorizon,
 } from "./_lib/chat-config.js";
-import { ChatAgentTimeoutError, OpenRouterError } from "./_lib/chat-openrouter.js";
+import {
+  ChatAgentTimeoutError,
+  OpenRouterError,
+  summarizeOpenRouterErrorBody,
+} from "./_lib/chat-openrouter.js";
 import {
   appendChatPreferences,
   listChatPreferences,
@@ -40,6 +44,18 @@ import {
   listChatConversations,
   persistChatTurn,
 } from "./_lib/chat-store.js";
+
+/**
+ * Upstream failures that retrying won't fix (key, credits, refusal, missing
+ * model), with what to tell the user. Anything else is reported as busy.
+ */
+function upstreamDeniedMessage(status: number): string | null {
+  if (status === 401) return "OpenRouter rejected the chat API key. Check the key settings.";
+  if (status === 402) return "The OpenRouter account is out of credits or over its limit.";
+  if (status === 403) return "The chat model refused this request.";
+  if (status === 404) return "The chat model isn’t available on OpenRouter right now.";
+  return null;
+}
 
 const historyMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
@@ -172,7 +188,21 @@ export async function POST(req: Request): Promise<Response> {
     });
   } catch (err) {
     if (err instanceof OpenRouterError || err instanceof ChatAgentTimeoutError) {
-      console.error("[chat POST] upstream", err instanceof OpenRouterError ? err.status : "timeout");
+      if (err instanceof OpenRouterError) {
+        console.error(
+          "[chat POST] upstream",
+          err.status,
+          err.model ?? "unknown-model",
+          summarizeOpenRouterErrorBody(err.body),
+        );
+        const denied = upstreamDeniedMessage(err.status);
+        if (denied) {
+          // 502, not 503: these don't clear on retry.
+          return json({ ok: false, error: denied, code: "chat_upstream_denied" }, 502);
+        }
+      } else {
+        console.error("[chat POST] upstream", "timeout");
+      }
       return json(
         {
           ok: false,

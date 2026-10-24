@@ -1,6 +1,6 @@
 /**
  * OpenRouter OpenAI-compatible chat completions client.
- * Paid models are refused; on 429/5xx the free fallback model is tried once.
+ * Paid models are refused; on 403/404/429/5xx the free fallback model is tried once.
  * Client-side aborts / deadlines are not retried as upstream failures.
  */
 import {
@@ -44,7 +44,6 @@ export type OpenRouterRequest = {
   model: string;
   messages: ChatCompletionMessage[];
   tools?: OpenAiToolDefinition[];
-  tool_choice?: "auto" | "none";
   temperature?: number;
 };
 
@@ -56,12 +55,14 @@ export type OpenRouterFetch = (
 export class OpenRouterError extends Error {
   readonly status: number;
   readonly body: string;
+  readonly model: string | undefined;
 
-  constructor(status: number, body: string) {
+  constructor(status: number, body: string, model?: string) {
     super(`OpenRouter request failed (${status})`);
     this.name = "OpenRouterError";
     this.status = status;
     this.body = body;
+    this.model = model;
   }
 }
 
@@ -71,6 +72,50 @@ export class ChatAgentTimeoutError extends Error {
     this.name = "ChatAgentTimeoutError";
   }
 }
+
+/**
+ * Log-safe summary of an OpenRouter error body. Guardrail and moderation
+ * responses can echo the user's prompt (e.g. `metadata.flagged_input`), so
+ * only the diagnostic fields are kept: error code, message, provider, and
+ * how many moderation reasons there were (the reasons themselves are
+ * free-form and may quote the prompt). A non-JSON body is reported by length only.
+ */
+export function summarizeOpenRouterErrorBody(body: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return `non-JSON body (${body.length} chars)`;
+  }
+  const error = parsed && typeof parsed === "object" && "error" in parsed
+    ? (parsed as { error?: unknown }).error
+    : undefined;
+  if (!error || typeof error !== "object") return `JSON body without error (${body.length} chars)`;
+  const { code, message, metadata } = error as { code?: unknown; message?: unknown; metadata?: unknown };
+  const meta = metadata && typeof metadata === "object"
+    ? (metadata as { reasons?: unknown; provider_name?: unknown })
+    : {};
+  const safe = {
+    code,
+    message: typeof message === "string" ? message.slice(0, 200) : undefined,
+    reasonCount: Array.isArray(meta.reasons) ? meta.reasons.length : undefined,
+    provider: meta.provider_name,
+  };
+  return maskOpenRouterLogText(JSON.stringify(safe));
+}
+
+/**
+ * Mask key-like tokens before writing upstream bodies to logs: bearer tokens,
+ * OpenRouter keys, and other `sk-…` provider keys an upstream may echo.
+ */
+export function maskOpenRouterLogText(text: string): string {
+  return text
+    .replace(/Bearer:?\s+[A-Za-z0-9._-]+/gi, "Bearer ***")
+    .replace(/sk-or-[A-Za-z0-9_-]+/g, "sk-or-***")
+    .replace(/\bsk-(?!or-\*\*\*)[A-Za-z0-9_-]{8,}/g, "sk-***");
+}
+
+const MAX_ERROR_BODY_CHARS = 16_000;
 
 function assertFreeModel(model: string): void {
   if (!isFreeOpenRouterModel(model)) {
@@ -95,6 +140,17 @@ export async function callOpenRouterChat(
   assertFreeModel(args.body.model);
   if (args.signal?.aborted) throw new ChatAgentTimeoutError();
   const fetchImpl = args.fetchImpl ?? fetch;
+  const payload: Record<string, unknown> = {
+    model: args.body.model,
+    messages: args.body.messages,
+    temperature: args.body.temperature,
+  };
+  if (args.body.tools) payload.tools = args.body.tools;
+  // require_parameters: only route to providers that support every sent param,
+  // so send only what every configured free model supports. Never add
+  // tool_choice back: inkling rejects it.
+  payload.provider = { require_parameters: true };
+
   let response: Response;
   try {
     response = await fetchImpl(`${OPENROUTER_BASE_URL}/chat/completions`, {
@@ -104,11 +160,7 @@ export async function callOpenRouterChat(
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({
-        ...args.body,
-        // Keep free: never let OpenRouter fall through to paid models.
-        provider: { require_parameters: true },
-      }),
+      body: JSON.stringify(payload),
       signal: args.signal,
     });
   } catch (err) {
@@ -124,26 +176,33 @@ export async function callOpenRouterChat(
     throw err;
   }
   if (!response.ok) {
-    throw new OpenRouterError(response.status, text.slice(0, 500));
+    // Keep enough of the body for summarizeOpenRouterErrorBody to parse it as
+    // JSON (a 500-char cut broke longer guardrail errors); it bounds what is logged.
+    throw new OpenRouterError(response.status, text.slice(0, MAX_ERROR_BODY_CHARS), args.body.model);
   }
   let parsed: ChatCompletionResponse;
   try {
     parsed = JSON.parse(text) as ChatCompletionResponse;
   } catch {
-    throw new OpenRouterError(502, "Invalid JSON from OpenRouter");
+    throw new OpenRouterError(502, "Invalid JSON from OpenRouter", args.body.model);
   }
   if (!parsed.choices?.length) {
-    throw new OpenRouterError(502, parsed.error?.message ?? "Empty OpenRouter choices");
+    throw new OpenRouterError(
+      502,
+      parsed.error?.message ?? "Empty OpenRouter choices",
+      args.body.model,
+    );
   }
   return parsed;
 }
 
-function shouldFallback(status: number): boolean {
-  return status === 429 || status >= 500;
+/** Retry once on the fallback model for block/mismatch, rate limit, or upstream outage. */
+export function shouldFallback(status: number): boolean {
+  return status === 403 || status === 404 || status === 429 || status >= 500;
 }
 
 /**
- * Call OpenRouter with the configured free primary model; on 429/5xx retry
+ * Call OpenRouter with the configured free primary model; on 403/404/429/5xx retry
  * once with the free fallback model. Aborts / deadlines are not retried.
  */
 export async function callOpenRouterWithFallback(args: {
@@ -160,10 +219,11 @@ export async function callOpenRouterWithFallback(args: {
   assertFreeModel(primary);
   assertFreeModel(fallback);
 
+  // Do not send tool_choice: "auto" is the default when tools are present, and
+  // some free endpoints (e.g. inkling) reject the explicit tool_choice param.
   const bodyBase: Omit<OpenRouterRequest, "model"> = {
     messages: args.messages,
     tools: args.tools,
-    tool_choice: "auto",
     temperature: 0.2,
   };
 
@@ -179,6 +239,14 @@ export async function callOpenRouterWithFallback(args: {
     if (err instanceof ChatAgentTimeoutError) throw err;
     if (!(err instanceof OpenRouterError) || !shouldFallback(err.status)) throw err;
     if (fallback === primary) throw err;
+    // Log the primary's failure: if the fallback fails too, only its error
+    // reaches the route, and a persistent primary problem would stay invisible.
+    console.error(
+      "[chat] primary model failed; trying fallback",
+      err.status,
+      primary,
+      summarizeOpenRouterErrorBody(err.body),
+    );
     const response = await callOpenRouterChat({
       apiKey: args.apiKey,
       body: { ...bodyBase, model: fallback },

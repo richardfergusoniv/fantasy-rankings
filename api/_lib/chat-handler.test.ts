@@ -187,7 +187,7 @@ describe("api/chat handler", () => {
     expect(runChatAgentMock).not.toHaveBeenCalled();
   });
 
-  it("POST maps OpenRouter failures to a retryable 503 without persisting", async () => {
+  it("POST maps OpenRouter 429/5xx to a retryable busy 503 without persisting", async () => {
     process.env.OPENROUTER_API_KEY = "sk-or-test";
     resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
     const { OpenRouterError } = await import("./chat-openrouter.js");
@@ -197,9 +197,60 @@ describe("api/chat handler", () => {
     expect(res.status).toBe(503);
     expect(await res.json()).toMatchObject({
       ok: false,
+      error: "The chat model is busy. Try again shortly.",
       code: "chat_upstream_unavailable",
     });
     expect(persistMock).not.toHaveBeenCalled();
+  });
+
+  it("POST maps OpenRouter 403 to a non-retryable chat_upstream_denied and masks the log", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    const { OpenRouterError } = await import("./chat-openrouter.js");
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    runChatAgentMock.mockRejectedValue(
+      new OpenRouterError(
+        403,
+        JSON.stringify({ error: { message: "key sk-or-v1-secretkey123 denied" } }),
+        "thinkingmachines/inkling:free",
+      ),
+    );
+
+    const res = await POST(authReq("POST", { message: "Hi" }));
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "The chat model refused this request.",
+      code: "chat_upstream_denied",
+    });
+    expect(persistMock).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "[chat POST] upstream",
+      403,
+      "thinkingmachines/inkling:free",
+      expect.stringContaining("sk-or-***"),
+    );
+    expect(consoleSpy.mock.calls.some((call) =>
+      call.some((arg) => typeof arg === "string" && arg.includes("sk-or-v1-secretkey123")),
+    )).toBe(false);
+    consoleSpy.mockRestore();
+  });
+
+  it.each([
+    [401, "OpenRouter rejected the chat API key. Check the key settings."],
+    [402, "The OpenRouter account is out of credits or over its limit."],
+    [404, "The chat model isn’t available on OpenRouter right now."],
+  ])("POST maps OpenRouter %s to chat_upstream_denied with its own message", async (status, message) => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    const { OpenRouterError } = await import("./chat-openrouter.js");
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    runChatAgentMock.mockRejectedValue(new OpenRouterError(status, "nope", "thinkingmachines/inkling:free"));
+
+    const res = await POST(authReq("POST", { message: "Hi" }));
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ ok: false, error: message, code: "chat_upstream_denied" });
+    consoleSpy.mockRestore();
   });
 
   it("DELETE removes a conversation for the viewer", async () => {
