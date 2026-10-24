@@ -13,6 +13,7 @@ import {
   sleeperIdLinkedToOtherUser,
 } from "./_lib/auth.js";
 import { getDb, schema } from "./_lib/db.js";
+import { BodyTooLargeError, readJsonBody } from "./_lib/api-utils.js";
 
 const SLEEPER_LINK_CONFLICT = "This Sleeper account is already linked to another user";
 
@@ -57,7 +58,15 @@ export async function POST(req: Request): Promise<Response> {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json().catch(() => null);
+    let body: { username?: unknown } | null;
+    try {
+      body = (await readJsonBody(req)) as { username?: unknown } | null;
+    } catch (err) {
+      if (err instanceof BodyTooLargeError) {
+        return Response.json({ error: "Request body too large" }, { status: 413 });
+      }
+      body = null;
+    }
     const username = typeof body?.username === "string" ? body.username.trim() : "";
     if (!username) {
       return Response.json({ error: "Username required" }, { status: 400 });
