@@ -23,6 +23,16 @@ describe("scoreWeeklyActual", () => {
     expect(points).toBe(14.5);
   });
 
+  it("accepts full league scoring_settings records", () => {
+    const points = scoreWeeklyActual(
+      "TE",
+      { rec: 4, rec_yd: 40, rec_td: 1 },
+      { ...PPFD_ACTUAL_PPR_SCORING, rec: 1, bonus_rec_te: 0.5 },
+    );
+    // 4*1 + 4*0.5 + 40*0.1 + 1*6 = 16
+    expect(points).toBe(16);
+  });
+
   it("returns null for empty stats", () => {
     expect(scoreWeeklyActual("RB", {}, "ppr")).toBeNull();
   });

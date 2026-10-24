@@ -705,13 +705,6 @@ async function toolEvaluateTrade(
     return { ok: false as const, error: "Both sides need at least one valued asset." };
   }
 
-  const giveTotal = give.resolved.reduce((sum, row) => sum + row.value, 0);
-  const getTotal = get.resolved.reduce((sum, row) => sum + row.value, 0);
-  const adjustment = waiverAdjustments(give.resolved, get.resolved);
-  const giveAdjusted = giveTotal + adjustment.give;
-  const getAdjusted = getTotal + adjustment.get;
-  const margin = getAdjusted - giveAdjusted;
-
   const slots = league.tradeStarterSlots.length > 0
     ? league.tradeStarterSlots
     : league.starters.map((p) => p.lineupSlot ?? p.position);
@@ -763,6 +756,42 @@ async function toolEvaluateTrade(
     position: row.position,
     value: valueMap.get(row.playerId) ?? row.value,
   }));
+  const windowSide = (valueMap: Map<string, number>) => {
+    const giveRows = toWindowAssets(give.resolved, valueMap);
+    const getRows = toWindowAssets(get.resolved, valueMap);
+    const giveTotal = giveRows.reduce((sum, row) => sum + row.value, 0);
+    const getTotal = getRows.reduce((sum, row) => sum + row.value, 0);
+    const adjustment = waiverAdjustments(giveRows, getRows);
+    const starterBefore = before.starters.reduce(
+      (sum, player) => sum + (valueMap.get(player.playerId) ?? 0),
+      0,
+    );
+    const starterAfter = after.starters.reduce(
+      (sum, player) => sum + (valueMap.get(player.playerId) ?? 0),
+      0,
+    );
+    return {
+      giveRows,
+      getRows,
+      giveTotal,
+      getTotal,
+      adjustment,
+      giveAdjusted: giveTotal + adjustment.give,
+      getAdjusted: getTotal + adjustment.get,
+      starterBefore: Math.max(1, starterBefore),
+      starterAfter,
+    };
+  };
+  const seasonLongSide = windowSide(seasonLongValue);
+  const dynastySide = league.seasonLongFormat.isDynasty ? windowSide(dynastyValue) : null;
+
+  // Display totals use Season Long (redraft twin) values.
+  const giveTotal = seasonLongSide.giveTotal;
+  const getTotal = seasonLongSide.getTotal;
+  const adjustment = seasonLongSide.adjustment;
+  const giveAdjusted = seasonLongSide.giveAdjusted;
+  const getAdjusted = seasonLongSide.getAdjusted;
+  const margin = getAdjusted - giveAdjusted;
 
   const power = league.powerRankingsSeasonLong.length > 0
     ? league.powerRankingsSeasonLong
@@ -771,6 +800,13 @@ async function toolEvaluateTrade(
   const myRankBefore = myPower?.rank ?? 1;
   const myRankAfter = margin >= 0 ? Math.max(1, myRankBefore - 1) : myRankBefore + 1;
   const weights = await loadActiveScoringWeights();
+  const weakPos = myPower
+    ? (["QB", "RB", "WR", "TE"] as const)
+      .slice()
+      .sort((a, b) => myPower.positionValues[a] - myPower.positionValues[b])[0]
+    : null;
+  const fillsHole = weakPos != null
+    && get.resolved.some((asset) => asset.position === weakPos);
 
   const move = scoreTrade({
     week: {
@@ -778,23 +814,25 @@ async function toolEvaluateTrade(
       yourLineupAfter: after.score,
     },
     seasonLong: {
-      give: toWindowAssets(give.resolved, seasonLongValue),
-      get: toWindowAssets(get.resolved, seasonLongValue),
-      yourStarterValueBefore: giveAdjusted,
-      yourStarterValueAfter: getAdjusted,
+      give: seasonLongSide.giveRows,
+      get: seasonLongSide.getRows,
+      yourStarterValueBefore: seasonLongSide.starterBefore,
+      yourStarterValueAfter: seasonLongSide.starterAfter,
       yourPowerRankBefore: myRankBefore,
       yourPowerRankAfter: myRankAfter,
-      fillsHole: false,
+      fillsHole,
     },
-    dynasty: league.seasonLongFormat.isDynasty
+    dynasty: dynastySide
       ? {
-        give: toWindowAssets(give.resolved, dynastyValue),
-        get: toWindowAssets(get.resolved, dynastyValue),
-        yourStarterValueBefore: giveAdjusted,
-        yourStarterValueAfter: getAdjusted,
+        give: dynastySide.giveRows,
+        get: dynastySide.getRows,
+        yourStarterValueBefore: dynastySide.starterBefore,
+        yourStarterValueAfter: dynastySide.starterAfter,
         yourPowerRankBefore: myRankBefore,
-        yourPowerRankAfter: myRankAfter,
-        fillsHole: false,
+        yourPowerRankAfter: (dynastySide.getAdjusted - dynastySide.giveAdjusted) >= 0
+          ? Math.max(1, myRankBefore - 1)
+          : myRankBefore + 1,
+        fillsHole,
       }
       : undefined,
     isDynasty: league.seasonLongFormat.isDynasty,
