@@ -1,0 +1,45 @@
+name: Scoring Saturday snapshot
+
+# Decision-time scoring snapshot before Sunday kickoffs. Thursday players
+# are covered by an optional manual dispatch earlier in the week; this
+# scheduled run catches the main slate. Uses the existing cron endpoint.
+
+on:
+  schedule:
+    # ~10:00 Pacific Saturday (PDT); drifts with DST
+    - cron: "0 17 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scoring-saturday
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-ten.vercel.app' }}
+    steps:
+      - name: Decision-time scoring snapshot
+        run: |
+          curl -sS --fail-with-body --max-time 300 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/cron/jobs?job=scoring-decision-snapshot" | tee /tmp/snapshot.json
+          python3 - <<'EOF'
+          import json
+          result = json.load(open('/tmp/snapshot.json'))
+          assert result.get('ok') is True, f"scoring-decision-snapshot failed: {result}"
+          print(f"snapshot: week {result.get('week')}")
+          EOF
+
+      - name: Snapshot Sleeper trending (weekly)
+        continue-on-error: true
+        run: |
+          curl -sS --fail-with-body --max-time 120 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/cron/jobs?job=snapshot-sleeper-trending"

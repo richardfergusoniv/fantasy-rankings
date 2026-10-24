@@ -26,21 +26,17 @@ function historyForRequest(messages: ChatMessage[]): Array<{ role: ChatRole; con
     .filter((item) => item.content.length > 0);
 }
 
-<<<<<<< HEAD
 function prefersReducedMotion(): boolean {
   return typeof window !== "undefined"
     && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export function ChatPanel() {
-=======
 export function ChatPanel({
   horizon = null,
 }: {
   /** Ranking horizon the user is viewing — chat explains that window's scores. */
   horizon?: "week" | "ecr" | "ros" | "dynasty" | null;
 }) {
->>>>>>> cursor/move-scoring-system-ci-30d6
   const listId = useId();
   const inputId = useId();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
