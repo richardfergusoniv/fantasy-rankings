@@ -99,7 +99,6 @@ function TeamStatsLineChart({
   }), [series, weeks]);
 
   return (
-    <>
     <div className="scatter-frame team-stats-line-chart" role="img" aria-label={ariaLabel}>
       <ChartContainer
         config={Object.fromEntries(series.map((item) => [item.id, { label: item.label, color: item.color }]))}
@@ -155,6 +154,12 @@ function TeamStatsLineChart({
         </LineChart>
       </ChartContainer>
     </div>
+  );
+}
+
+/** Outside the chart's button wrapper so assistive tech can read the player names. */
+function TeamStatsLegend({ series }: { series: readonly TeamStatsChartSeries[] }) {
+  return (
     <ul className="team-stats-legend" aria-label="Chart legend">
       {series.map((item) => (
         <li key={item.id} className={item.rostered ? "is-rostered" : undefined}>
@@ -163,7 +168,6 @@ function TeamStatsLineChart({
         </li>
       ))}
     </ul>
-    </>
   );
 }
 
@@ -476,27 +480,30 @@ export function TeamStatsPanel({
         <p className="monitor-empty">No players</p>
       ) : (
         <>
-          <div
-            className="team-stats-chart-open"
-            role="button"
-            tabIndex={0}
-            aria-label={`Open ${statLabel} week-by-week table`}
-            onClick={() => setTableOpen(true)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                setTableOpen(true);
-              }
-            }}
-          >
-            <TeamStatsLineChart
-              series={chartSeries}
-              weeks={gridWeeks.map((stack) => stack.week)}
-              statId={statId}
-              statLabel={statLabel}
-              isSnaps={isSnaps}
-              ariaLabel={`${selectedTeam} ${statLabel} by week`}
-            />
+          <div className="team-stats-chart-card">
+            <div
+              className="team-stats-chart-open"
+              role="button"
+              tabIndex={0}
+              aria-label={`Open ${statLabel} week-by-week table`}
+              onClick={() => setTableOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setTableOpen(true);
+                }
+              }}
+            >
+              <TeamStatsLineChart
+                series={chartSeries}
+                weeks={gridWeeks.map((stack) => stack.week)}
+                statId={statId}
+                statLabel={statLabel}
+                isSnaps={isSnaps}
+                ariaLabel={`${selectedTeam} ${statLabel} by week`}
+              />
+            </div>
+            <TeamStatsLegend series={chartSeries} />
           </div>
           <ChartDialog
             isOpen={tableOpen}

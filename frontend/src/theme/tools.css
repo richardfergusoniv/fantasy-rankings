@@ -208,14 +208,18 @@
 }
 /* Team stats: a usage grid. Rows are players (sorted by average), columns are
    weeks; each cell's blue tint is that player's share of the work that week. */
+.team-stats-chart-card {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
 .team-stats-chart-open {
   width: 100%;
   min-width: 0;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  background: var(--surface);
   cursor: pointer;
 }
 .team-stats-chart-open:focus-visible {
