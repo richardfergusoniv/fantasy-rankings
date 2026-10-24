@@ -24,6 +24,8 @@ import type {
 export type { League, MatchupSelection } from "./dashboard-types";
 import {
   BROWSER_DASHBOARD_CACHE_KEY,
+  DashboardFreshness,
+  DashboardPartialNotes,
   MatchupDataModal,
   NewsCardModal,
   RefreshIcon,
@@ -37,7 +39,8 @@ import {
 import { formatDecimal, formatPoints } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
 import { withStreamedAnalytics } from "./dashboard-analytics";
-import { isSectionWaiting, shouldShowProgressiveShell } from "./dashboard-loading";
+import { isSectionWaiting, sectionBuildFailed, shouldShowProgressiveShell } from "./dashboard-loading";
+import { FeatureErrorBoundary } from "./error-boundary";
 import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, waiversSearchPreservingContext } from "./dashboard-url";
 import { createPlayerResolver, type DashboardPlayerRow, type PlayerLinkResolver } from "./tool-player-link";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
@@ -289,8 +292,11 @@ const DASHBOARD_DEADLINE_MS = 58_000;
 const SECTION_BUILD_POLL_MS = 4_000;
 const LIVE_LINEUP_REFETCH_MS = 150_000;
 function pollWhileSectionBuilding(query: { state: { data?: unknown } }): number | false {
-  const data = query.state.data as { data?: unknown } | undefined;
-  return data !== undefined && data.data == null ? SECTION_BUILD_POLL_MS : false;
+  const data = query.state.data as { data?: unknown; build?: { status?: string } } | undefined;
+  if (data === undefined || data.data != null) return false;
+  // A failed background build stops the poll — the view shows its error state
+  // and retry kicks a new build instead of waiting forever.
+  return data.build?.status === "failed" ? false : SECTION_BUILD_POLL_MS;
 }
 
 function teamSectionHasLiveGame(data: unknown): boolean {
@@ -584,9 +590,20 @@ export function App() {
       cancelled = true;
     };
   }, []);
+  // Sections whose next fetch should restart a failed background build. Polls
+  // never set this, so a failure stays visible until the user hits Retry.
+  const retryBuildSections = useRef(new Set<DashboardSection["section"]>());
+  const loadDashboardSection = (section: DashboardSection["section"], deadlineMs: number) => {
+    const retryBuild = retryBuildSections.current.delete(section) || undefined;
+    return withSignIn(withClientDeadline(api.getDashboardSection({ section, retryBuild }), deadlineMs));
+  };
+  const retrySection = (query: { data?: unknown; refetch: () => Promise<unknown> }, section: DashboardSection["section"]) => {
+    if (sectionBuildFailed(query.data)) retryBuildSections.current.add(section);
+    void query.refetch();
+  };
   const metaQuery = useQuery({
     queryKey: ["dashboard-section", "meta"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "meta" }), 20_000)),
+    queryFn: () => loadDashboardSection("meta", 20_000),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
     refetchOnMount: true,
@@ -596,7 +613,7 @@ export function App() {
   });
   const teamQuery = useQuery({
     queryKey: ["dashboard-section", "team"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "team" }), 20_000)),
+    queryFn: () => loadDashboardSection("team", 20_000),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
     refetchOnMount: true,
@@ -610,7 +627,7 @@ export function App() {
   const playerSectionActive = MARKET_TOOL_TABS.has(tab) || tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "comparison";
   const playersQuery = useQuery({
     queryKey: ["dashboard-section", "players"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "players" }), 8_000)),
+    queryFn: () => loadDashboardSection("players", 8_000),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -619,7 +636,7 @@ export function App() {
   });
   const leagueQuery = useQuery({
     queryKey: ["dashboard-section", "league"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "league" }), 8_000)),
+    queryFn: () => loadDashboardSection("league", 8_000),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -630,7 +647,7 @@ export function App() {
   });
   const analyticsQuery = useQuery({
     queryKey: ["dashboard-section", "analytics"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "analytics" }), 8_000)),
+    queryFn: () => loadDashboardSection("analytics", 8_000),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
     retry: false,
@@ -646,7 +663,7 @@ export function App() {
   const tradeWaiverActive = tab === "trade" && tradeMode === "league";
   const tradeQuery = useQuery({
     queryKey: ["dashboard-section", "trade"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "trade" }), 20_000)),
+    queryFn: () => loadDashboardSection("trade", 20_000),
     // Errors must not stick for the session: stale immediately so tab switch /
     // remount / manual refresh retries instead of serving a failed empty cache.
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
@@ -659,7 +676,7 @@ export function App() {
   });
   const tradeWaiverQuery = useQuery({
     queryKey: ["dashboard-section", "trade-waiver"],
-    queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "trade-waiver" }), 20_000)),
+    queryFn: () => loadDashboardSection("trade-waiver", 20_000),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
     refetchOnMount: true,
@@ -999,8 +1016,16 @@ export function App() {
   };
 
   const hasCompleteDashboard = Boolean(dashboardQuery.data || browserDashboard);
-  const hasPlayerSectionData = hasCompleteDashboard || playersQuery.data?.section === "players";
-  const playerSectionError = !hasPlayerSectionData && playersQuery.isError;
+  const hasPlayerSectionData = hasCompleteDashboard
+    || (playersQuery.data?.section === "players" && playersQuery.data.data != null);
+  const playerSectionError = !hasPlayerSectionData && (playersQuery.isError || sectionBuildFailed(playersQuery.data));
+  const teamSectionError = !hasCompleteDashboard && sectionBuildFailed(teamQuery.data);
+  const leagueSectionError = !hasCompleteDashboard && sectionBuildFailed(leagueQuery.data);
+  const analyticsSectionError = !hasCompleteDashboard && sectionBuildFailed(analyticsQuery.data);
+  // League-adjusted trade also needs the waiver pool; a failed one must not
+  // silently render as an empty pool.
+  const tradeWaiverError = tradeWaiverActive && (tradeWaiverQuery.isError || sectionBuildFailed(tradeWaiverQuery.data));
+  const tradeSectionError = !hasCompleteDashboard && (tradeQuery.isError || sectionBuildFailed(tradeQuery.data) || tradeWaiverError);
   const draftSectionError = draftQuery.isError && !draftQuery.data;
   const newsLoading = newsQuery.isPending && !newsQuery.data;
   const newsError = newsQuery.isError && !newsQuery.data;
@@ -1039,7 +1064,9 @@ export function App() {
   const waitingForFirstBuild =
     metaQuery.isSuccess
     && metaQuery.data?.section === "meta"
-    && metaQuery.data.data == null;
+    && metaQuery.data.data == null
+    // A failed background build is an error state, not "still building".
+    && !sectionBuildFailed(metaQuery.data);
   const [firstBuildTimedOut, setFirstBuildTimedOut] = useState(false);
   useEffect(() => {
     if (!waitingForFirstBuild || dashboard) {
@@ -1080,12 +1107,14 @@ export function App() {
 
   if (!dashboard || !league) {
     const noLeagues = Boolean(dashboard);
+    // A failed first build gets its own message; Try again forces a rebuild.
+    const firstBuildFailed = !noLeagues && sectionBuildFailed(metaQuery.data);
     return (
       <main id="main-content" tabIndex={-1} className="empty-state">
         <SafeAreaTopScrim backgroundColor="var(--bg)" />
         <div className="empty-mark">4TH</div>
-        <h1>{noLeagues ? "No leagues for this season." : "Data didn’t make it through."}</h1>
-        <p>{noLeagues ? "This Sleeper account isn’t in any NFL league for the current season. Join or create a league on Sleeper, then refresh." : "Fantasy data didn’t load. Try again."}</p>
+        <h1>{noLeagues ? "No leagues for this season." : firstBuildFailed ? "Your dashboard didn’t build." : "Data didn’t make it through."}</h1>
+        <p>{noLeagues ? "This Sleeper account isn’t in any NFL league for the current season. Join or create a league on Sleeper, then refresh." : firstBuildFailed ? "Building your leagues failed on our side. Try again to rebuild it." : "Fantasy data didn’t load. Try again."}</p>
         <Button type="button" onClick={() => refresh.mutate()} disabled={refresh.isPending}><RefreshIcon spinning={refresh.isPending} /> {noLeagues ? "Refresh" : "Try again"}</Button>
       </main>
     );
@@ -1196,13 +1225,14 @@ export function App() {
             onNews={setTickerNews}
           />
           <div className="week-line">
-            <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
+            <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}<DashboardFreshness dashboard={dashboard} /></div>
             <div className="week-actions">
             <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />
             <ThemeToggle />
             <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label={tab === "draft" ? "Refresh draft data" : "Refresh scores and rankings"}><RefreshIcon spinning={isRefreshing} /></button>
             </div>
           </div>
+          <DashboardPartialNotes dashboard={dashboard} />
           <label className="league-picker">
             <span className="sr-only">Choose league</span>
             <select value={league.id} onChange={(event) => chooseLeague(event.target.value)}>
@@ -1272,8 +1302,14 @@ export function App() {
             "team-stats": "Team stats",
             analytics: "Analytics",
           } satisfies Record<Tab, string>)[tab]}</h1>
+          <FeatureErrorBoundary title="This section didn’t load." resetKeys={[tab]}>
           {currentSectionLoading ? <SectionLoading label={`Loading ${({ team: "Matchup", players: "Players", league: "League", draft: "Draft", tools: "Tools" } as const)[primaryPage]}…`} />
-            : (tab === "rankings" || tab === "waivers") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { void playersQuery.refetch(); }} retrying={playersQuery.isFetching} />
+            : (tab === "rankings" || tab === "waivers" || tab === "comparison") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : tab === "waivers" ? "Waiver wire didn’t load." : "Comparison didn’t load."} onRetry={() => { retrySection(playersQuery, "players"); }} retrying={playersQuery.isFetching} />
+            : tab === "comparison" && analyticsSectionError ? <SectionError title="Comparison didn’t load." onRetry={() => { retrySection(analyticsQuery, "analytics"); }} retrying={analyticsQuery.isFetching} />
+            : tab === "team" && teamSectionError ? <SectionError title="Matchup didn’t load." onRetry={() => { retrySection(teamQuery, "team"); }} retrying={teamQuery.isFetching} />
+            : tab === "power" && leagueSectionError ? <SectionError title="Power rankings didn’t load." onRetry={() => { retrySection(leagueQuery, "league"); }} retrying={leagueQuery.isFetching} />
+            : tab === "trade" && tradeSectionError ? <SectionError title="Trade data didn’t load." onRetry={() => { retrySection(tradeQuery, "trade"); if (tradeWaiverError) retrySection(tradeWaiverQuery, "trade-waiver"); }} retrying={tradeQuery.isFetching || tradeWaiverQuery.isFetching} />
+            : tab === "analytics" && (playerSectionError || analyticsSectionError) ? <SectionError title="Analytics didn’t load." onRetry={() => { retrySection(playersQuery, "players"); retrySection(analyticsQuery, "analytics"); }} retrying={playersQuery.isFetching || analyticsQuery.isFetching} />
             : tab === "draft" && draftSectionError ? <SectionError title="Draft data didn’t load." onRetry={() => { void draftQuery.refetch(); }} retrying={draftQuery.isFetching} />
             : tab === "monitor" ? (
               <GameLinesPanel
@@ -1341,6 +1377,7 @@ export function App() {
                 comparePlayerId={tab === "comparison" ? dashboardUrl.state.comparePlayerId : null}
               />
             ) : null}
+          </FeatureErrorBoundary>
         </main>
         {inspectorDocked ? <InspectorFrame>{playerSheet}</InspectorFrame> : null}
       </div>

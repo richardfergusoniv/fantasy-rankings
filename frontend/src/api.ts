@@ -67,6 +67,8 @@ export const api = {
 
   getDashboardSection: (args: {
     section: DashboardSection["section"];
+    /** Restart a failed background build instead of reporting the failure again. */
+    retryBuild?: boolean;
   }): Promise<DashboardSection> => request(
     `/api/dashboard/section${buildQuery(args)}`,
     { cache: "no-store" },

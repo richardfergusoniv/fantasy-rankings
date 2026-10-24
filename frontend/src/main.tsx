@@ -3,6 +3,7 @@ import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthGate } from "./Auth";
+import { FeatureErrorBoundary } from "./error-boundary";
 import { initPostHog } from "./posthog";
 import "./theme.css";
 
@@ -34,15 +35,18 @@ createRoot(rootEl).render(
     <QueryClientProvider client={queryClient}>
       <div className="hatch-space-root" data-hatch-space-root>
         <AuthGate>
-          <Suspense
-            fallback={
-              <div className="flex min-h-dvh items-center justify-center bg-background px-4 text-sm text-muted-foreground">
-                <p>Loading…</p>
-              </div>
-            }
-          >
-            <LazyApp />
-          </Suspense>
+          {/* Above Suspense so a failed App chunk load lands here; reload fetches it again. */}
+          <FeatureErrorBoundary title="Fantasy Rankings didn’t load." onRetry={() => window.location.reload()}>
+            <Suspense
+              fallback={
+                <div className="flex min-h-dvh items-center justify-center bg-background px-4 text-sm text-muted-foreground">
+                  <p>Loading…</p>
+                </div>
+              }
+            >
+              <LazyApp />
+            </Suspense>
+          </FeatureErrorBoundary>
         </AuthGate>
         <Toaster />
       </div>

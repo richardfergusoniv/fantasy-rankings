@@ -1,16 +1,16 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { displayedMatchupPoints } from "../../api/_lib/lineup-optimizer";
 import { api } from "./api";
 import type {
   BasePosition,
   BoomBustPosition,
+  Dashboard,
   MatchupGrade,
   MatchupSelection,
   MatchupStatConfig,
@@ -25,6 +25,8 @@ import type {
   TradeAsset,
 } from "./dashboard-types";
 import { RankStrip } from "./components/rank-strip";
+import { RefreshIcon, SectionError } from "./section-error";
+import { dashboardFreshness, PROJECTION_ESTIMATE_MARK } from "./dashboard-freshness";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { ModalPortal, useDialogFocusTrap } from "./shared";
 import {
@@ -53,6 +55,7 @@ export function tradeTotal(assets: TradeAsset[]): number {
 }
 
 export { waiverAdjustments } from "./lib/trade-adjustment";
+export { RefreshIcon, SectionError };
 
 export function showUndoToast(message: string, onUndo: () => void) {
   toast(message, {
@@ -152,8 +155,13 @@ export function shortLeagueName(name: string): string {
     .replace("Hoe Ass Dynasty League", "Hoe Ass Dynasty");
 }
 
-export function formatProjectionPoints(value: number | null, _source?: PlayerSearchResult["projectionSource"]): string {
-  return formatPoints(value);
+/**
+ * Fallback ("estimated") projections are marked with *; the header freshness
+ * strip carries the "* est" legend whenever the dashboard contains one.
+ */
+export function formatProjectionPoints(value: number | null, source?: PlayerSearchResult["projectionSource"]): string {
+  const formatted = formatPoints(value);
+  return value !== null && source === "fallback" ? `${formatted}*` : formatted;
 }
 
 export const projectionComponentFields: Partial<Record<BasePosition, ReadonlyArray<{ key: string; label: string }>>> = {
@@ -355,15 +363,6 @@ export function groupNewsItemsByPlayer(news: PlayerNews | undefined): Map<string
 }
 
 
-export function RefreshIcon({ spinning = false }: { spinning?: boolean }) {
-  return (
-    <svg className={spinning ? "spin" : ""} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M18.3 9A7 7 0 0 0 6.5 6.5L4 9m16 6-2.5 2.5A7 7 0 0 1 5.7 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export function movementPercent(value: number, change: number | null): number | null {
   if (change === null) return null;
   const priorValue = value - change;
@@ -377,14 +376,45 @@ export function movementLabel(percent: number | null): string {
   return `${formatPercent(percent, { sign: "exceptZero" })} over 30 days`;
 }
 
-export function SectionError({ title, onRetry, retrying = false, compact = false }: { title: string; onRetry: () => void; retrying?: boolean; compact?: boolean }) {
+/**
+ * Compact freshness/status strip for the dashboard header: our build time
+ * ("Updated …"), the underlying source times (rankings / market values), the
+ * "* est" legend for fallback projections, and — when the build was partial —
+ * an expandable list naming exactly what is unavailable.
+ */
+/** Wall clock that ticks once a minute, so relative labels age while a view stays open. */
+function useMinuteClock(): number {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  return nowMs;
+}
+
+export function DashboardFreshness({ dashboard }: { dashboard: Dashboard }) {
+  const nowMs = useMinuteClock();
+  const info = useMemo(() => dashboardFreshness(dashboard, nowMs), [dashboard, nowMs]);
+  if (!info.updatedLabel && !info.partial) return null;
   return (
-    <div className={`section-error${compact ? " compact" : ""}`} role="alert">
-      <strong>{title}</strong>
-      <Button type="button" variant="outline" onClick={onRetry} disabled={retrying}>
-        <RefreshIcon spinning={retrying} /> Retry
-      </Button>
-    </div>
+    <span className="data-freshness">
+      {info.updatedLabel ? <span className="data-updated">{info.updatedLabel}</span> : null}
+      {info.sourceLabels.length > 0 ? <span className="data-source-times">{info.sourceLabels.join(" · ")}</span> : null}
+      {info.hasEstimates ? <span className="data-estimate-note" title={`${PROJECTION_ESTIMATE_MARK} marks an estimated projection`}>* est</span> : null}
+    </span>
+  );
+}
+
+/* Expandable "what's unavailable" list rendered as its own block under the week
+ * line so it never competes for width inside the flex header. */
+export function DashboardPartialNotes({ dashboard }: { dashboard: Dashboard }) {
+  const info = useMemo(() => dashboardFreshness(dashboard, Date.now()), [dashboard]);
+  if (!info.partial) return null;
+  return (
+    <details className="data-notes">
+      <summary>Part of this view is unavailable</summary>
+      <ul>{info.notes.map((note) => <li key={note}>{note}</li>)}</ul>
+    </details>
   );
 }
 
