@@ -49,7 +49,7 @@ export function teamOutlook(players: readonly LiveForecastPlayer[], now = Date.n
     counted += 1;
     mean += forecast;
     const spread = SCORE_SPREAD_BY_POSITION[player.position] ?? DEFAULT_SCORE_SPREAD;
-    // A player with no projection (unranked in Experts mode) but a live game still
+    // A player with no projection but a live game still
     // carries uncertainty, even while still scoreless.
     const basis = player.projection ?? Math.max(forecast, UNPROJECTED_SPREAD_BASIS);
     const sd = spread * Math.max(0, basis) * remainingShare(player);

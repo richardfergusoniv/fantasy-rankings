@@ -143,7 +143,6 @@ const draftCenterResponse = z.object({
     polymarket: z.boolean(),
     kalshi: z.boolean(),
     actionNetwork: z.boolean(),
-    fantasyProsLive: z.boolean(),
   }),
   sourceErrors: z.array(z.string()),
 });
@@ -180,7 +179,6 @@ async function fetchDraftMarketSnapshot(
     polymarket: false,
     kalshi: false,
     actionNetwork: false,
-    fantasyProsLive: false,
   };
   const nameToSleeper = new Map<string, string[]>();
   for (const [playerId, player] of Object.entries(players)) {
@@ -322,7 +320,7 @@ async function loadDraftMarketSnapshot(
       trendingDrops: [],
       markets: [],
       vegasLines: [],
-      sourceStatus: { ffc: false, mfl: false, sleeperTrending: false, sleeperTrendingDrops: false, polymarket: false, kalshi: false, actionNetwork: false, fantasyProsLive: false },
+      sourceStatus: { ffc: false, mfl: false, sleeperTrending: false, sleeperTrendingDrops: false, polymarket: false, kalshi: false, actionNetwork: false },
       sourceErrors: ["Draft and market sources are temporarily unavailable."],
     };
   }

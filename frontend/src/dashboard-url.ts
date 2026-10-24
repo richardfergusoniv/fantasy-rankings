@@ -22,7 +22,7 @@ export type DashboardTab = (typeof DASHBOARD_TABS)[number];
 export const RANKING_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DEF", "ALL", "FLEX", "SUPER", "ROOKIES"] as const;
 export type RankingPosition = (typeof RANKING_POSITIONS)[number];
 
-export const RANKING_HORIZONS = ["week", "ecr", "ros", "dynasty"] as const;
+export const RANKING_HORIZONS = ["week", "ros", "dynasty"] as const;
 export type RankingHorizon = (typeof RANKING_HORIZONS)[number];
 
 export const DRAFT_POSITIONS = ["ALL", "QB", "RB", "WR", "TE", "K", "DEF", "ROOKIES"] as const;

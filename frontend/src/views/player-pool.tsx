@@ -52,7 +52,6 @@ import {
 import { formatRecord } from "../league-team-card";
 import { leaguePowerTeamForPlayer } from "../league-roster";
 import { WindowVirtualList } from "../virtual-list";
-import { leagueExpertRanks } from "../expert-ranks";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
 
@@ -554,14 +553,12 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   const [position, setPosition] = useState<PositionFilter>(rankingPosition ?? "QB");
   const [query, setQuery] = useState(rankingQuery ?? "");
   const [rankingMode, setRankingMode] = useState<RankingHorizon>(rankingHorizon ?? "week");
-  const horizonOptions = league.seasonLongFormat.isDynasty ? ["week", "ecr", "ros", "dynasty"] as const : ["week", "ecr", "ros"] as const;
-  const effectiveHorizon: RankingHorizon = (horizonOptions as readonly string[]).includes(rankingMode) && !(availableOnly && rankingMode === "ecr") ? rankingMode : "week";
+  const horizonOptions = league.seasonLongFormat.isDynasty ? ["week", "ros", "dynasty"] as const : ["week", "ros"] as const;
+  const effectiveHorizon: RankingHorizon = (horizonOptions as readonly string[]).includes(rankingMode) ? rankingMode : "week";
   const [visibleRowCount, setVisibleRowCount] = useState(120);
   const [selectedTeam, setSelectedTeam] = useState<TeamCardSelection | null>(null);
   const queryClient = useQueryClient();
   const isSeasonLong = effectiveHorizon === "ros" || effectiveHorizon === "dynasty";
-  // This week's FantasyPros consensus (weekly horizons only: the Vegas and ECR tabs).
-  const expertRanks = isSeasonLong ? null : leagueExpertRanks(dashboard, league);
   const pfnTablesQuery = useQuery({
     queryKey: ["pfn-tables"],
     queryFn: () => api.getPfnTables({}),
@@ -812,59 +809,6 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             ? a.rank - b.rank
             : a.sortRank - b.sortRank);
     }
-    if (effectiveHorizon === "ecr") {
-      const experts = expertRanks ?? {};
-      if (effectivePosition === "DEF") {
-        return leagueDefenses
-          .filter((row) => !availableOnly || !rostered.has(row.team))
-          .flatMap((row) => {
-            const expert = experts[row.team];
-            if (!expert) return [];
-            return [{
-              key: row.team,
-              rank: expert.positionRank ?? Number.MAX_SAFE_INTEGER,
-              name: `${row.team} Defense`,
-              meta: matchupLabel(row.opponent, row.isAway),
-              teamContext: null,
-              ...rosterBadgeForPlayer(row.team, rosterTeamByPlayer, powerTeamByPlayerId, rosterIdByPlayerId),
-              projection: expert.projection,
-              projectionLabel: "PROJ",
-              projectionSource: null,
-              position: "DEF",
-              isRookie: false,
-              injuryStatus: null,
-              movement30Day: null,
-            }];
-          })
-          .sort((a, b) => a.rank - b.rank);
-      }
-      return leagueRankings
-        .filter((row) => includedPositions.includes(row.position))
-        .filter((row) => !availableOnly || !rostered.has(row.playerId))
-        .flatMap((row) => {
-          const expert = experts[row.playerId];
-          if (!expert) return [];
-          return [{
-            key: row.playerId,
-            rank: expert.positionRank ?? Number.MAX_SAFE_INTEGER,
-            name: row.name,
-            meta: `${row.position} · ${row.team}${row.opponent ? ` · ${matchupLabel(row.opponent, row.isAway)}` : ""}`,
-            teamContext: null,
-            ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId, rosterIdByPlayerId),
-            projection: expert.projection,
-            projectionLabel: "PROJ",
-            projectionSource: null,
-            position: row.position,
-            isRookie: rookiePlayerIds.has(row.playerId),
-            injuryStatus: row.injuryStatus,
-            movement30Day: null,
-            expertEcr: expert.ecr,
-          }];
-        })
-        .sort((a, b) => effectivePosition === "FLEX" || effectivePosition === "SUPER"
-          ? a.expertEcr - b.expertEcr || a.rank - b.rank
-          : a.rank - b.rank);
-    }
     if (effectivePosition === "DEF") {
       return leagueDefenses
         .filter((row) => !availableOnly || !rostered.has(row.team))
@@ -909,7 +853,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
       .sort((a, b) => effectivePosition === "FLEX" || effectivePosition === "SUPER"
         ? (b.projection ?? -1) - (a.projection ?? -1) || a.rank - b.rank
         : a.rank - b.rank);
-  }, [availableOnly, dashboard.seasonLongRankings, effectiveHorizon, effectivePosition, expertRanks, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, leagueDefenses, leagueRankings, powerTeamByPlayerId, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
+  }, [availableOnly, dashboard.seasonLongRankings, effectiveHorizon, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, leagueDefenses, leagueRankings, powerTeamByPlayerId, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
   const visibleRows = rows.slice(0, visibleRowCount);
   const hasSearch = query.trim().length > 0;
   const rankingHorizonOptions: Array<SegmentOption<RankingHorizon>> = availableOnly
@@ -917,8 +861,8 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
       ? [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
       : [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season Long" }]
     : league.seasonLongFormat.isDynasty
-      ? [{ value: "week", label: "Vegas" }, { value: "ecr", label: "ECR" }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
-      : [{ value: "week", label: "Vegas" }, { value: "ecr", label: "ECR" }, { value: "ros", label: "Season Long" }];
+      ? [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
+      : [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season Long" }];
   const prefetchPlayerPanels = (player: PlayerSearchResult) => {
     const position = isBoomBustPosition(player.position) ? player.position : null;
     if (position !== null) {
@@ -1135,12 +1079,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
           </div>
           {rows.length === 0 ? (
             <div className="empty-inline empty-stack">
-              {effectiveHorizon === "ecr" && !expertRanks ? (
-                <>
-                  <strong>Expert ranks are not in yet</strong>
-                  <span>Check back after FantasyPros publishes this week's consensus ranks.</span>
-                </>
-              ) : !isSeasonLong && leagueRankings.length === 0 ? (
+              {!isSeasonLong && leagueRankings.length === 0 ? (
                 <>
                   <strong>{`Week ${dashboard.week} rankings are not in yet`}</strong>
                   <button

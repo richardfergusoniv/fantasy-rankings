@@ -9,7 +9,6 @@ import { positionTierLabel } from "../lib/position-tier";
 import { formatCompactCount } from "../lib/format-number";
 import { DepthChangeMark, depthChange, MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 import { isHiddenHalfPointPropStat, propStatDef } from "../../../api/_lib/prop-line-reads";
-import { leagueExpertRanks } from "../expert-ranks";
 import {
   analyticsMetricsForLeague,
   basePositionOrder,
@@ -160,7 +159,7 @@ const hiddenComparisonKeys = new Set([
 // The card's lead number: league fantasy points (advanced) or the league projection.
 const comparisonHeadlineKeys = new Set(["fantasy_league", "league", "projection"]);
 
-type ComparisonGroup = "Projection" | "Experts" | "Props" | "Stat line" | "Team context" | "Market" | "Production" | "Expected points" | "Usage" | "Efficiency" | "Next Gen";
+type ComparisonGroup = "Projection" | "Props" | "Stat line" | "Team context" | "Market" | "Production" | "Expected points" | "Usage" | "Efficiency" | "Next Gen";
 
 const comparisonUsageKeys = new Set([
   "touches", "carries", "targets", "pass_attempts", "opportunity_share", "snap_share",
@@ -183,7 +182,6 @@ function comparisonGroup(dataset: ToolDataset, key: string): ComparisonGroup {
     if (comparisonNextGenKeys.has(key)) return "Next Gen";
     return comparisonUsageKeys.has(key) ? "Usage" : comparisonEfficiencyKeys.has(key) ? "Efficiency" : "Production";
   }
-  if (key.startsWith("expert")) return "Experts";
   if (key.startsWith("prop_")) return "Props";
   if (key.startsWith("stat_")) return "Stat line";
   if (comparisonTeamContextKeys.has(key)) return "Team context";
@@ -192,7 +190,7 @@ function comparisonGroup(dataset: ToolDataset, key: string): ComparisonGroup {
 }
 
 const comparisonGroupOrder: Record<ToolDataset, ComparisonGroup[]> = {
-  projections: ["Projection", "Experts", "Props", "Stat line", "Team context", "Market"],
+  projections: ["Projection", "Props", "Stat line", "Team context", "Market"],
   advanced: ["Production", "Expected points", "Usage", "Efficiency", "Next Gen"],
 };
 
@@ -572,18 +570,6 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     retry: false,
   });
   const makeRowValue = (value: number | null | undefined): ComparisonMetricValue | null => typeof value === "number" && Number.isFinite(value) ? { value } : null;
-  // This week's FantasyPros expert consensus for each pick, projections in the league's scoring.
-  const expertRows = (() => {
-    const experts = leagueExpertRanks(dashboard, league) ?? {};
-    const leftExpert = leftPlayerId ? experts[leftPlayerId] : undefined;
-    const rightExpert = rightPlayerId ? experts[rightPlayerId] : undefined;
-    if (!leftExpert && !rightExpert) return [];
-    const rows: ComparisonRow[] = [
-      { metric: { key: "expertProjection", label: `Expert projection (${league.rankingField === "ppr" ? "PPR" : "half PPR"})`, short: "Expert pts", unit: " pts" }, leftValue: makeRowValue(leftExpert?.projection), rightValue: makeRowValue(rightExpert?.projection) },
-      { metric: { key: "expertPositionRank", label: "Expert rank", short: "ECR", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.positionRank), rightValue: makeRowValue(rightExpert?.positionRank) },
-    ];
-    return rows.filter((row) => row.leftValue || row.rightValue);
-  })();
   // Consensus prop lines, one row per stat either player has.
   const propRows = (() => {
     const propLines = pfnQuery.data?.propLines;
@@ -623,7 +609,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     return rangeRows.filter((row) => row.leftValue || row.rightValue);
   })();
   const sections = left && right && position ? [
-    comparisonSection("projections", position, league, resolved[0]?.projection, resolved[1]?.projection, [...boomBustRows, ...expertRows, ...propRows]),
+    comparisonSection("projections", position, league, resolved[0]?.projection, resolved[1]?.projection, [...boomBustRows, ...propRows]),
     comparisonSection("advanced", position, league, resolved[0]?.advanced, resolved[1]?.advanced),
   ] : [];
   const selectionStateClass = left && right ? " is-ready" : left || right ? " has-selection" : " is-empty";
