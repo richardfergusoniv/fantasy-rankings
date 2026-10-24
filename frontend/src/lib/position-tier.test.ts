@@ -16,6 +16,13 @@ describe("positionTierLabel", () => {
     expect(positionTierLabel("QB", 36)).toBe("Low-end QB3");
   });
 
+  it("writes the third band of backs and receivers as the flex range", () => {
+    expect(positionTierLabel("RB", 25)).toBe("High-end RB3/Flex");
+    expect(positionTierLabel("RB", 30)).toBe("Mid RB3/Flex");
+    expect(positionTierLabel("WR", 36)).toBe("Low-end WR3/Flex");
+    expect(positionTierLabel("RB", 24)).toBe("Low-end RB2");
+  });
+
   it("scales the bands to the league size", () => {
     expect(positionTierLabel("RB", 10, 10)).toBe("Low-end RB1");
     expect(positionTierLabel("RB", 11, 10)).toBe("High-end RB2");
