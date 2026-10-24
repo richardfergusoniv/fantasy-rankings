@@ -134,11 +134,11 @@ export function SeasonTeamPill({ team, lineRank, onOpen }: { team: string | null
 
 const OUT_INJURY_CODES = new Set(["O", "IR", "PUP", "SUS", "NFI", "INA"]);
 
-/** "⚠ Q" for a questionable or doubtful player, "Out" and the like in the negative tone. */
+/** "Q" for a questionable or doubtful player, "Out" and the like in the negative tone. */
 function DepthGridStatus({ status }: { status: string }) {
   const code = sleeperInjuryTag(status);
   const out = OUT_INJURY_CODES.has(code);
-  return <span className={`depth-grid-status ${out ? "is-out" : "is-questionable"}`} title={status}>{out ? (code === "O" ? "Out" : code) : `⚠ ${code}`}</span>;
+  return <span className={`depth-grid-status ${out ? "is-out" : "is-questionable"}`} title={status}>{out ? (code === "O" ? "Out" : code) : code}</span>;
 }
 
 export function TeamDataModal({
