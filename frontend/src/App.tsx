@@ -25,6 +25,7 @@ export type { League, MatchupSelection } from "./dashboard-types";
 import {
   BROWSER_DASHBOARD_CACHE_KEY,
   DashboardFreshness,
+  DashboardPartialNotes,
   MatchupDataModal,
   NewsCardModal,
   RefreshIcon,
@@ -1210,6 +1211,7 @@ export function App() {
             <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label={tab === "draft" ? "Refresh draft data" : "Refresh scores and rankings"}><RefreshIcon spinning={isRefreshing} /></button>
             </div>
           </div>
+          <DashboardPartialNotes dashboard={dashboard} />
           <label className="league-picker">
             <span className="sr-only">Choose league</span>
             <select value={league.id} onChange={(event) => chooseLeague(event.target.value)}>

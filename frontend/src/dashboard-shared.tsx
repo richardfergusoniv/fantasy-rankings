@@ -394,19 +394,24 @@ export function DashboardFreshness({ dashboard }: { dashboard: Dashboard }) {
   const info = useMemo(() => dashboardFreshness(dashboard, Date.now()), [dashboard]);
   if (!info.updatedLabel && !info.partial) return null;
   return (
-    <>
-      <span className="data-freshness">
-        {info.updatedLabel ? <span className="data-updated">{info.updatedLabel}</span> : null}
-        {info.sourceLabels.length > 0 ? <span className="data-source-times">{info.sourceLabels.join(" · ")}</span> : null}
-        {info.hasEstimates ? <span className="data-estimate-note" title={`${PROJECTION_ESTIMATE_MARK} marks an estimated projection`}>* est</span> : null}
-      </span>
-      {info.partial ? (
-        <details className="data-notes">
-          <summary>Part of this view is unavailable</summary>
-          <ul>{info.notes.map((note) => <li key={note}>{note}</li>)}</ul>
-        </details>
-      ) : null}
-    </>
+    <span className="data-freshness">
+      {info.updatedLabel ? <span className="data-updated">{info.updatedLabel}</span> : null}
+      {info.sourceLabels.length > 0 ? <span className="data-source-times">{info.sourceLabels.join(" · ")}</span> : null}
+      {info.hasEstimates ? <span className="data-estimate-note" title={`${PROJECTION_ESTIMATE_MARK} marks an estimated projection`}>* est</span> : null}
+    </span>
+  );
+}
+
+/* Expandable "what's unavailable" list rendered as its own block under the week
+ * line so it never competes for width inside the flex header. */
+export function DashboardPartialNotes({ dashboard }: { dashboard: Dashboard }) {
+  const info = useMemo(() => dashboardFreshness(dashboard, Date.now()), [dashboard]);
+  if (!info.partial) return null;
+  return (
+    <details className="data-notes">
+      <summary>Part of this view is unavailable</summary>
+      <ul>{info.notes.map((note) => <li key={note}>{note}</li>)}</ul>
+    </details>
   );
 }
 
