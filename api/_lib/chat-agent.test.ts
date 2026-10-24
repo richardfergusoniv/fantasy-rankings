@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runChatAgent } from "./chat-agent.js";
 import { DEFAULT_OPENROUTER_MODEL, FALLBACK_OPENROUTER_MODEL } from "./chat-config.js";
-import { ChatAgentTimeoutError, OpenRouterError } from "./chat-openrouter.js";
+import { ChatAgentTimeoutError, OpenRouterError, resetPrimaryCooldowns } from "./chat-openrouter.js";
+
+beforeEach(() => {
+  resetPrimaryCooldowns();
+});
 
 describe("runChatAgent", () => {
   it("runs a tool-calling loop with OpenRouter mocked", async () => {
@@ -284,5 +288,64 @@ describe("runChatAgent", () => {
         dispatchTool: () => new Promise(() => undefined),
       }),
     ).rejects.toBeInstanceOf(ChatAgentTimeoutError);
+  });
+});
+
+describe("runChatAgent fallback stickiness", () => {
+  const toolCallThenAnswer = () => {
+    const models: string[] = [];
+    let fallbackCalls = 0;
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { model: string };
+      models.push(body.model);
+      if (body.model === DEFAULT_OPENROUTER_MODEL) return new Response("primary down", { status: 503 });
+      fallbackCalls += 1;
+      const message = fallbackCalls === 1
+        ? { role: "assistant", content: "", tool_calls: [{ id: "t1", type: "function", function: { name: "get_my_leagues", arguments: "{}" } }] }
+        : { role: "assistant", content: "Start KC." };
+      return new Response(JSON.stringify({ choices: [{ message }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    return { fetchImpl, models };
+  };
+
+  it("stays on the fallback for later tool steps once the primary fails", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { fetchImpl, models } = toolCallThenAnswer();
+    const result = await runChatAgent({
+      apiKey: "sk-or-test",
+      userMessage: "KC or TEN DST?",
+      ctx: { userId: "u1", sleeperUserId: "s1" },
+      fetchImpl,
+      dispatchTool: async () => ({ leagues: [] }),
+    });
+    expect(result.reply).toBe("Start KC.");
+    // primary once, then the fallback for both rounds: no second primary attempt
+    expect(models).toEqual([DEFAULT_OPENROUTER_MODEL, FALLBACK_OPENROUTER_MODEL, FALLBACK_OPENROUTER_MODEL]);
+    consoleSpy.mockRestore();
+  });
+
+  it("skips a recently failed primary on the next question", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const first = toolCallThenAnswer();
+    await runChatAgent({
+      apiKey: "sk-or-test",
+      userMessage: "KC or TEN DST?",
+      ctx: { userId: "u1", sleeperUserId: "s1" },
+      fetchImpl: first.fetchImpl,
+      dispatchTool: async () => ({ leagues: [] }),
+    });
+    const second = toolCallThenAnswer();
+    await runChatAgent({
+      apiKey: "sk-or-test",
+      userMessage: "And at flex?",
+      ctx: { userId: "u1", sleeperUserId: "s1" },
+      fetchImpl: second.fetchImpl,
+      dispatchTool: async () => ({ leagues: [] }),
+    });
+    expect(second.models).not.toContain(DEFAULT_OPENROUTER_MODEL);
+    consoleSpy.mockRestore();
   });
 });
