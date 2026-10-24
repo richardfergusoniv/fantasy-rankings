@@ -19,22 +19,6 @@ import {
 } from "./sleeper.js";
 import { optimizeTradeRoster, type OptimizablePlayer } from "./lineup-optimizer.js";
 import { scoreTrade } from "./move-scoring.js";
-
-/** Week N lineup scores before/after a trade — shared by evaluate_trade and suggest_trades. */
-export function tradeLineupBeforeAfter<T extends OptimizablePlayer>(args: {
-  roster: T[];
-  slots: string[];
-  giveIds: ReadonlySet<string>;
-  incoming: ReadonlyArray<T>;
-}): { before: number; after: number } {
-  const before = optimizeTradeRoster(args.roster, args.slots);
-  const afterPlayers = [
-    ...args.roster.filter((player) => !args.giveIds.has(player.playerId)),
-    ...args.incoming,
-  ];
-  const after = optimizeTradeRoster(afterPlayers, args.slots);
-  return { before: before.score, after: after.score };
-}
 import { redraftTwinFormat } from "./season-long-format.js";
 import { loadActiveScoringWeights } from "./scoring-jobs.js";
 import { loadHistoricalTrades } from "./trades.js";
@@ -42,6 +26,27 @@ import {
   dispatchExtendedChatTool,
   EXTENDED_CHAT_TOOL_DEFINITIONS,
 } from "./chat-tools-extended.js";
+
+/** Week N lineup scores + optimized boards before/after a trade. */
+export function tradeLineupBeforeAfter<T extends OptimizablePlayer>(args: {
+  roster: T[];
+  slots: string[];
+  giveIds: ReadonlySet<string>;
+  incoming: ReadonlyArray<T>;
+}) {
+  const beforeRoster = optimizeTradeRoster(args.roster, args.slots);
+  const afterPlayers = [
+    ...args.roster.filter((player) => !args.giveIds.has(player.playerId)),
+    ...args.incoming,
+  ];
+  const afterRoster = optimizeTradeRoster(afterPlayers, args.slots);
+  return {
+    before: beforeRoster.score,
+    after: afterRoster.score,
+    beforeRoster,
+    afterRoster,
+  };
+}
 
 export type ChatToolContext = {
   userId: string;
@@ -757,12 +762,9 @@ async function toolEvaluateTrade(
     giveIds,
     incoming,
   });
-  // Keep starter boards for Season Long / Dynasty starter-value totals.
-  const before = optimizeTradeRoster(myPlayers, slots);
-  const after = optimizeTradeRoster(
-    [...myPlayers.filter((p) => !giveIds.has(p.playerId)), ...incoming],
-    slots,
-  );
+  // Reuse the same optimized boards for Season Long / Dynasty starter totals.
+  const before = lineup.beforeRoster;
+  const after = lineup.afterRoster;
 
   const seasonLongAssets = leagueSeasonLongAssets(dashboard, league.id);
   const dynastyAssets = league.seasonLongFormat.isDynasty

@@ -164,7 +164,6 @@ export async function finalizeProjectionAccuracy(
       weeklyByPlayer.set(playerId, weekly);
     } catch {
       weeklyByPlayer.set(playerId, null);
-      errors += 1;
     }
     return null;
   });
@@ -185,12 +184,9 @@ export async function finalizeProjectionAccuracy(
 
       const weekly = weeklyByPlayer.get(row.playerId);
       if (weekly == null) {
-        // Fetch failed earlier — already counted in errors when the map entry is null.
-        if (weeklyByPlayer.has(row.playerId) && weeklyByPlayer.get(row.playerId) === null) {
-          skipped += 1;
-        } else {
-          errors += 1;
-        }
+        // Prefetch failed for this player — count one error per affected row so
+        // a full Sleeper outage fails the job (errors === rows.length).
+        errors += 1;
         continue;
       }
       const weekRow = weekly.find((candidate) => Number(candidate.week) === week);
