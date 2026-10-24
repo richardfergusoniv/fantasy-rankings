@@ -29,3 +29,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+
+  db-rls:
+    # Applies drizzle-pg/*.sql to a disposable Postgres and verifies the
+    # RLS/grant rules in 0011_rls_and_grants.sql (see drizzle-pg/verify_rls.sh).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify RLS and grants
+        run: ./drizzle-pg/verify_rls.sh
