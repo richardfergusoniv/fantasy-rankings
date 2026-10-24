@@ -126,12 +126,6 @@ export async function toolRememberPreference(
     ? normalizePreferenceText(parsed.data.leagueId).slice(0, 80) || null
     : null;
   const existing = await listChatPreferences(userId);
-  if (existing.length >= CHAT_MAX_PREFERENCES) {
-    return {
-      ok: false,
-      error: `Preference cap (${CHAT_MAX_PREFERENCES}) reached. Forget one first.`,
-    };
-  }
   const duplicate = existing.find(
     (item) =>
       item.content.toLowerCase() === content.toLowerCase()
@@ -139,6 +133,12 @@ export async function toolRememberPreference(
   );
   if (duplicate) {
     return { ok: true, preference: duplicate, alreadySaved: true };
+  }
+  if (existing.length >= CHAT_MAX_PREFERENCES) {
+    return {
+      ok: false,
+      error: `Preference cap (${CHAT_MAX_PREFERENCES}) reached. Forget one first.`,
+    };
   }
   const id = crypto.randomUUID();
   const now = new Date();

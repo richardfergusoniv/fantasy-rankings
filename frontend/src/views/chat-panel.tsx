@@ -94,6 +94,9 @@ export function ChatPanel() {
         setError(null);
       }
     },
+    onError: () => {
+      setError("Could not delete chat.");
+    },
   });
 
   useEffect(() => {
@@ -201,6 +204,7 @@ export function ChatPanel() {
         : 0;
       if (code === "chat_not_found") {
         setChatId(null);
+        setMessages([]);
         void queryClient.invalidateQueries({ queryKey: ["chat-list"] });
         setError("This chat no longer exists.");
         return;
@@ -245,33 +249,47 @@ export function ChatPanel() {
         >
           New
         </Button>
-        <ul className="chat-history" aria-label="Past chats">
-          {chats.map((chat) => {
-            const active = chat.id === chatId;
-            return (
-              <li key={chat.id} className={`chat-history-item${active ? " is-active" : ""}`}>
-                <button
-                  type="button"
-                  className="chat-history-open"
-                  onClick={() => void openChat(chat.id)}
-                  disabled={sending || loadingChat}
-                  aria-current={active ? "true" : undefined}
-                >
-                  {chat.title}
-                </button>
-                <button
-                  type="button"
-                  className="chat-history-delete"
-                  aria-label={`Delete ${chat.title}`}
-                  disabled={sending || loadingChat || deleteMutation.isPending}
-                  onClick={() => deleteMutation.mutate(chat.id)}
-                >
-                  ×
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        {chatsQuery.isError ? (
+          <div className="chat-history-status" role="alert">
+            <p className="chat-error">Could not load chats.</p>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={chatsQuery.isFetching}
+              onClick={() => void chatsQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <ul className="chat-history" aria-label="Past chats">
+            {chats.map((chat) => {
+              const active = chat.id === chatId;
+              return (
+                <li key={chat.id} className={`chat-history-item${active ? " is-active" : ""}`}>
+                  <button
+                    type="button"
+                    className="chat-history-open"
+                    onClick={() => void openChat(chat.id)}
+                    disabled={sending || loadingChat}
+                    aria-current={active ? "true" : undefined}
+                  >
+                    {chat.title}
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-history-delete"
+                    aria-label={`Delete ${chat.title}`}
+                    disabled={sending || loadingChat || deleteMutation.isPending}
+                    onClick={() => deleteMutation.mutate(chat.id)}
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
       <div className={`chat-main${hasMessages ? " is-active" : " is-empty"}`}>
         <div className="chat-thread" id={listId} role="log" aria-live="polite" aria-relevant="additions">
