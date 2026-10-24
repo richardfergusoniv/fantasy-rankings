@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -26,7 +26,7 @@ import type {
 } from "./dashboard-types";
 import { RankStrip } from "./components/rank-strip";
 import { RefreshIcon, SectionError } from "./section-error";
-import { dashboardFreshness, PROJECTION_ESTIMATE_MARK } from "./dashboard-freshness";
+import { dashboardFreshness } from "./dashboard-freshness";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { ModalPortal, useDialogFocusTrap } from "./shared";
 import {
@@ -382,29 +382,6 @@ export function movementLabel(percent: number | null): string {
  * "* est" legend for fallback projections, and — when the build was partial —
  * an expandable list naming exactly what is unavailable.
  */
-/** Wall clock that ticks once a minute, so relative labels age while a view stays open. */
-function useMinuteClock(): number {
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 60_000);
-    return () => clearInterval(timer);
-  }, []);
-  return nowMs;
-}
-
-export function DashboardFreshness({ dashboard }: { dashboard: Dashboard }) {
-  const nowMs = useMinuteClock();
-  const info = useMemo(() => dashboardFreshness(dashboard, nowMs), [dashboard, nowMs]);
-  if (!info.updatedLabel && !info.partial) return null;
-  return (
-    <span className="data-freshness">
-      {info.updatedLabel ? <span className="data-updated">{info.updatedLabel}</span> : null}
-      {info.sourceLabels.length > 0 ? <span className="data-source-times">{info.sourceLabels.join(" · ")}</span> : null}
-      {info.hasEstimates ? <span className="data-estimate-note" title={`${PROJECTION_ESTIMATE_MARK} marks an estimated projection`}>* est</span> : null}
-    </span>
-  );
-}
-
 /* Expandable "what's unavailable" list rendered as its own block under the week
  * line so it never competes for width inside the flex header. */
 export function DashboardPartialNotes({ dashboard }: { dashboard: Dashboard }) {

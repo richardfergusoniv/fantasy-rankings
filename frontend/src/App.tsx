@@ -24,7 +24,6 @@ import type {
 export type { League, MatchupSelection } from "./dashboard-types";
 import {
   BROWSER_DASHBOARD_CACHE_KEY,
-  DashboardFreshness,
   DashboardPartialNotes,
   MatchupDataModal,
   NewsCardModal,
@@ -1255,7 +1254,7 @@ export function App() {
             onNews={setTickerNews}
           />
           <div className="week-line">
-            <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}<DashboardFreshness dashboard={dashboard} /></div>
+            <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
             <div className="week-actions">
             <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />
             {supabase ? <AccountMenu /> : null}
