@@ -9,7 +9,7 @@ import { positionTierLabel } from "../lib/position-tier";
 import { formatCompactCount } from "../lib/format-number";
 import { DepthChangeMark, depthChange, MatchupTag, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 import { isHiddenHalfPointPropStat, propStatDef } from "../../../api/_lib/prop-line-reads";
-import { currentExpertRanks } from "../expert-ranks";
+import { leagueExpertRanks } from "../expert-ranks";
 import {
   analyticsMetricsForLeague,
   basePositionOrder,
@@ -572,14 +572,14 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     retry: false,
   });
   const makeRowValue = (value: number | null | undefined): ComparisonMetricValue | null => typeof value === "number" && Number.isFinite(value) ? { value } : null;
-  // This week's FantasyPros expert consensus (PPR) for each pick.
+  // This week's FantasyPros expert consensus for each pick, projections in the league's scoring.
   const expertRows = (() => {
-    const experts = currentExpertRanks(dashboard) ?? {};
+    const experts = leagueExpertRanks(dashboard, league) ?? {};
     const leftExpert = leftPlayerId ? experts[leftPlayerId] : undefined;
     const rightExpert = rightPlayerId ? experts[rightPlayerId] : undefined;
     if (!leftExpert && !rightExpert) return [];
     const rows: ComparisonRow[] = [
-      { metric: { key: "expertProjection", label: "Expert projection (PPR)", short: "Expert pts", unit: " pts" }, leftValue: makeRowValue(leftExpert?.projection), rightValue: makeRowValue(rightExpert?.projection) },
+      { metric: { key: "expertProjection", label: `Expert projection (${league.rankingField === "ppr" ? "PPR" : "half PPR"})`, short: "Expert pts", unit: " pts" }, leftValue: makeRowValue(leftExpert?.projection), rightValue: makeRowValue(rightExpert?.projection) },
       { metric: { key: "expertPositionRank", label: "Expert rank", short: "ECR", lowerIsBetter: true }, leftValue: makeRowValue(leftExpert?.positionRank), rightValue: makeRowValue(rightExpert?.positionRank) },
     ];
     return rows.filter((row) => row.leftValue || row.rightValue);

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import type { api, ApiResponse } from "./api";
 import type { MatchupSelection } from "./dashboard-types";
-import { currentExpertRanks } from "./expert-ranks";
+import { leagueExpertRanks } from "./expert-ranks";
 import { formatRecord, LeagueTeamCard, positionLabel } from "./league-team-card";
 import { buildEcrPowerRankings } from "./lib/ecr-power-rankings";
 import { weeklyOpponentRosterId } from "./power-opponent";
@@ -35,7 +35,7 @@ export function PowerRankings({
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const isDynastyLeague = league.seasonLongFormat.isDynasty;
   const activeMode = isDynastyLeague ? mode : "seasonLong";
-  const experts = useMemo(() => currentExpertRanks(dashboard), [dashboard]);
+  const experts = useMemo(() => leagueExpertRanks(dashboard, league), [dashboard, league]);
   const ecrTeams = useMemo(() => (experts ? buildEcrPowerRankings(league, experts) : []), [experts, league]);
   const isWeekly = scope !== "restOfSeason";
   const powerRankings = scope === "week"
