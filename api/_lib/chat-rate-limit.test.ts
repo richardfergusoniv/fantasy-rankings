@@ -67,3 +67,17 @@ describe("checkChatRateLimit fallback after shared checks", () => {
     expect((await checkChatRateLimit("u1", now, 2, 60_000)).ok).toBe(false);
   });
 });
+
+describe("checkChatRateLimit fallback window", () => {
+  it("rolls over with the database's fixed window", async () => {
+    let count = 0;
+    executeMock.mockImplementation(async () => [{ count: ++count }]);
+    const windowMs = 60_000;
+    const lastSecond = Math.floor(Date.now() / windowMs) * windowMs + 59_000;
+    await checkChatRateLimit("u1", lastSecond, 2, windowMs);
+    await checkChatRateLimit("u1", lastSecond, 2, windowMs);
+    // Next window: the DB would start a fresh count, so the fallback must too.
+    executeMock.mockRejectedValue(new Error("db down"));
+    expect(await checkChatRateLimit("u1", lastSecond + 1_000, 2, windowMs)).toEqual({ ok: true, remaining: 1 });
+  });
+});

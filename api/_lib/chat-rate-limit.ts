@@ -14,7 +14,9 @@ import { db } from "./db.js";
 import { withDeadline } from "./sleeper.js";
 import { CHAT_RATE_LIMIT_MAX, CHAT_RATE_LIMIT_WINDOW_MS } from "./chat-config.js";
 
-type Bucket = { timestamps: number[] };
+// Fixed windows aligned with the shared DB bucket, so the fallback never
+// rejects a request the database window would accept (or vice versa).
+type Bucket = { windowStartMs: number; count: number };
 
 const localBuckets = new Map<string, Bucket>();
 
@@ -28,17 +30,14 @@ function checkLocalRateLimit(
   max: number,
   windowMs: number,
 ): RateLimitResult {
-  const bucket = localBuckets.get(userId) ?? { timestamps: [] };
-  const cutoff = now - windowMs;
-  const recent = bucket.timestamps.filter((ts) => ts > cutoff);
-  if (recent.length >= max) {
-    const oldest = recent[0] ?? now;
-    localBuckets.set(userId, { timestamps: recent });
-    return { ok: false, retryAfterMs: Math.max(0, oldest + windowMs - now) };
+  const windowStartMs = Math.floor(now / windowMs) * windowMs;
+  const existing = localBuckets.get(userId);
+  const count = existing?.windowStartMs === windowStartMs ? existing.count : 0;
+  if (count >= max) {
+    return { ok: false, retryAfterMs: Math.max(0, windowStartMs + windowMs - now) };
   }
-  recent.push(now);
-  localBuckets.set(userId, { timestamps: recent });
-  return { ok: true, remaining: max - recent.length };
+  localBuckets.set(userId, { windowStartMs, count: count + 1 });
+  return { ok: true, remaining: max - count - 1 };
 }
 
 /** Atomically increment the subject's window bucket; returns the new count. */
