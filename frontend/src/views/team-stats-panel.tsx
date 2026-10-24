@@ -418,6 +418,16 @@ export function TeamStatsPanel({
       </header>
 
       <div className="monitor-value-chart-controls monitor-team-stats-controls">
+        <SegmentedControl
+          className="monitor-team-stats-group"
+          value={selectedGroup}
+          onChange={(value) => {
+            setUserGroup(value);
+            onSelectionChange?.({ teamStatsGroup: value });
+          }}
+          label="Position"
+          options={TEAM_STATS_GROUPS.map((group) => ({ value: group.id, label: group.label }))}
+        />
         <label className="monitor-value-chart-field">
           <span>Team</span>
           <select
@@ -434,16 +444,6 @@ export function TeamStatsPanel({
             ))}
           </select>
         </label>
-        <SegmentedControl
-          className="monitor-team-stats-group"
-          value={selectedGroup}
-          onChange={(value) => {
-            setUserGroup(value);
-            onSelectionChange?.({ teamStatsGroup: value });
-          }}
-          label="Position"
-          options={TEAM_STATS_GROUPS.map((group) => ({ value: group.id, label: group.label }))}
-        />
         <label className="monitor-value-chart-field">
           <span>Stat</span>
           <select
