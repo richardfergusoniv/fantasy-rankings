@@ -50,7 +50,7 @@ import { refreshPlayerInsightsSnapshot } from "../_lib/player-insights.js";
  * - refresh-chart-extras: rebuilds compact nflverse snap / red-zone / PROE
  *   metrics for Charts presets into `nflverse-chart-extras-2026-v1`.
  * - refresh-player-insights: rebuilds expected points, Next Gen Stats,
- *   depth-chart ranks and FantasyPros weekly expert ranks into
+ *   and depth-chart ranks into
  *   `player-insights-2026-v1`. Keeps the last snapshot when a pull is thin.
  * - refresh-nfl-players: pulls Sleeper `/players/nfl`, stores a compact
  *   team/status roster map in `nfl-players-roster-v1` (not the full dump),

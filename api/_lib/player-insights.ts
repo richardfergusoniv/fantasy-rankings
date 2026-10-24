@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "./db.js";
 import { splitCsvLine } from "./chart-metric-transforms.js";
-import { canonicalTeam, SOURCE_TIMEOUT_MS } from "./sleeper.js";
+import { SOURCE_TIMEOUT_MS } from "./sleeper.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
 
 /**
@@ -16,11 +16,9 @@ import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cac
  *   expected, rush yards over expected, time to throw, aggressiveness.
  * - Depth charts (nflverse, ESPN-sourced): each player's rank at his
  *   position on the latest daily chart.
- * - FantasyPros weekly expert consensus (DynastyProcess mirror): rank, the
- *   best and worst expert rank, and the consensus PPR projection.
  *
  * Expected points and Next Gen rows are keyed by gsis id (the analytics
- * entity id); depth and expert rows by Sleeper player id (team code for DST).
+ * entity id); depth rows by Sleeper player id.
  */
 
 export const FF_OPPORTUNITY_2026_URL =
@@ -32,8 +30,6 @@ export const NGS_URLS = {
 } as const;
 export const DEPTH_CHARTS_2026_URL =
   "https://github.com/nflverse/nflverse-data/releases/download/depth_charts/depth_charts_2026.csv";
-export const FANTASYPROS_WEEKLY_URL =
-  "https://raw.githubusercontent.com/dynastyprocess/data/master/files/fp_latest_weekly.csv";
 export const PLAYER_IDS_URL =
   "https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv";
 
@@ -56,15 +52,6 @@ const depthSchema = z.object({
   rank: z.number().int(),
 });
 
-const expertSchema = z.object({
-  ecr: z.number(),
-  best: z.number().int(),
-  worst: z.number().int(),
-  positionRank: z.number().int().nullable(),
-  /** FantasyPros consensus projection, PPR. */
-  projection: z.number().nullable(),
-});
-
 export const playerInsightsSnapshotSchema = z.object({
   fetchedAt: z.string(),
   season: z.literal(SEASON),
@@ -74,16 +61,11 @@ export const playerInsightsSnapshotSchema = z.object({
   depthAsOf: z.string().nullable(),
   /** The same ranks from the oldest chart in the past week, to show who moved. */
   depthPrevious: z.record(z.string(), depthSchema).default({}),
-  experts: z.record(z.string(), expertSchema),
-  expertsAsOf: z.string().nullable(),
-  /** Last kickoff of the slate the expert ranks cover; identifies their week. */
-  expertsLastKickoff: z.string().nullable().default(null),
 });
 
 export type PlayerInsightsSnapshot = z.infer<typeof playerInsightsSnapshotSchema>;
 export type PlayerOpportunity = z.infer<typeof opportunitySchema>;
 export type PlayerDepth = z.infer<typeof depthSchema>;
-export type PlayerExpertRank = z.infer<typeof expertSchema>;
 
 // ---------------------------------------------------------------------------
 // Parsing (pure)
@@ -196,19 +178,16 @@ export function parseNgs(
 
 export type PlayerIdMaps = {
   sleeperByGsis: Map<string, string>;
-  sleeperByFantasyPros: Map<string, string>;
 };
 
 export function parsePlayerIds(csv: string): PlayerIdMaps {
   const sleeperByGsis = new Map<string, string>();
-  const sleeperByFantasyPros = new Map<string, string>();
   for (const row of csvObjects(csv)) {
     const sleeper = row.sleeper_id;
     if (!sleeper || sleeper === "NA") continue;
     if (row.gsis_id && row.gsis_id !== "NA") sleeperByGsis.set(row.gsis_id, sleeper);
-    if (row.fantasypros_id && row.fantasypros_id !== "NA") sleeperByFantasyPros.set(row.fantasypros_id, sleeper);
   }
-  return { sleeperByGsis, sleeperByFantasyPros };
+  return { sleeperByGsis };
 }
 
 const DEPTH_POSITIONS = new Set(["QB", "RB", "WR", "TE"]);
@@ -248,38 +227,6 @@ export function previousDepthFromRows(
   const previousDt = dates.length > 1 ? dates[0] : null;
   if (!previousDt) return {};
   return depthFromRows(list.filter((row) => row.dt === previousDt), sleeperByGsis).depth;
-}
-
-const EXPERT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DST"]);
-
-export function parseExperts(
-  csv: string,
-  sleeperByFantasyPros: Map<string, string>,
-): { experts: Record<string, PlayerExpertRank>; asOf: string | null; lastKickoff: string | null } {
-  const experts: Record<string, PlayerExpertRank> = {};
-  let asOf: string | null = null;
-  let lastKickoffSeconds: number | null = null;
-  for (const row of csvObjects(csv)) {
-    if (!EXPERT_POSITIONS.has(row.pos)) continue;
-    const id = row.pos === "DST" ? canonicalTeam(row.team) : sleeperByFantasyPros.get(row.fantasypros_id);
-    const ecr = num(row.ecr);
-    const best = num(row.best);
-    const worst = num(row.worst);
-    if (!id || ecr === null || best === null || worst === null) continue;
-    const positionRank = num((row.pos_rank ?? "").replace(/^[A-Z]+/, ""));
-    experts[id] = {
-      ecr: round2(ecr),
-      best: Math.round(best),
-      worst: Math.round(worst),
-      positionRank: positionRank === null ? null : Math.round(positionRank),
-      projection: num(row.r2p_pts),
-    };
-    if (row.scrape_date && (!asOf || row.scrape_date > asOf)) asOf = row.scrape_date;
-    const kickoff = num(row.player_game_kickoff_ts);
-    if (kickoff !== null && (lastKickoffSeconds === null || kickoff > lastKickoffSeconds)) lastKickoffSeconds = kickoff;
-  }
-  const lastKickoff = lastKickoffSeconds === null ? null : new Date(lastKickoffSeconds * 1000).toISOString();
-  return { experts, asOf, lastKickoff };
 }
 
 // ---------------------------------------------------------------------------
@@ -356,13 +303,12 @@ async function fetchRecentDepthRows(url: string): Promise<Record<string, string>
 }
 
 export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnapshot> {
-  const [opportunityCsv, receivingCsv, rushingCsv, passingCsv, idsCsv, expertsCsv, depthRows] = await Promise.all([
+  const [opportunityCsv, receivingCsv, rushingCsv, passingCsv, idsCsv, depthRows] = await Promise.all([
     fetchCsv(FF_OPPORTUNITY_2026_URL),
     fetchCsv(NGS_URLS.receiving),
     fetchCsv(NGS_URLS.rushing),
     fetchCsv(NGS_URLS.passing),
     fetchCsv(PLAYER_IDS_URL),
-    fetchCsv(FANTASYPROS_WEEKLY_URL),
     fetchRecentDepthRows(DEPTH_CHARTS_2026_URL).catch(() => []),
   ]);
   const ids = parsePlayerIds(idsCsv);
@@ -373,7 +319,6 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
   ]);
   const { depth, asOf: depthAsOf } = depthFromRows(depthRows, ids.sleeperByGsis);
   const depthPrevious = previousDepthFromRows(depthRows, ids.sleeperByGsis);
-  const { experts, asOf: expertsAsOf, lastKickoff: expertsLastKickoff } = parseExperts(expertsCsv, ids.sleeperByFantasyPros);
   return {
     fetchedAt: new Date().toISOString(),
     season: SEASON,
@@ -382,15 +327,12 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
     depth,
     depthAsOf,
     depthPrevious,
-    experts,
-    expertsAsOf,
-    expertsLastKickoff,
   };
 }
 
 /** A fetch that came back mostly empty keeps the previous snapshot. */
 function looksComplete(snapshot: PlayerInsightsSnapshot): boolean {
-  return Object.keys(snapshot.opportunity).length >= 100 && Object.keys(snapshot.experts).length >= 100;
+  return Object.keys(snapshot.opportunity).length >= 100;
 }
 
 // ---------------------------------------------------------------------------
@@ -453,7 +395,6 @@ export type PlayerInsightsRefreshResult = {
   opportunity: number;
   ngs: number;
   depth: number;
-  experts: number;
   fetchedAt: string | null;
 };
 
@@ -465,7 +406,6 @@ function refreshResult(status: PlayerInsightsRefreshResult["status"], snapshot: 
     opportunity: snapshot ? Object.keys(snapshot.opportunity).length : 0,
     ngs: snapshot ? Object.keys(snapshot.ngs).length : 0,
     depth: snapshot ? Object.keys(snapshot.depth).length : 0,
-    experts: snapshot ? Object.keys(snapshot.experts).length : 0,
     fetchedAt: snapshot?.fetchedAt ?? null,
   };
 }

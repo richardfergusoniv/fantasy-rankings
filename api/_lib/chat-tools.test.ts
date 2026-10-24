@@ -38,9 +38,6 @@ function baseDashboard(overrides: Partial<Dashboard> = {}): Dashboard {
       depth: {},
       depthAsOf: null,
       depthPrevious: {},
-      experts: {},
-      expertsAsOf: null,
-      expertsLastKickoff: null,
     },
     leagues: [
       {

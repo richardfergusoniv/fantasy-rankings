@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Refresh player insights
-        # Expected points, Next Gen Stats, depth charts and expert ranks.
+        # Expected points, Next Gen Stats, and depth charts.
         # Best effort: the rebuild keeps the last snapshot if this fails.
         continue-on-error: true
         env:

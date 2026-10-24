@@ -24,7 +24,6 @@ import {
   matchupProjectionClassName,
   optimizedTotalProjectionClassName,
 } from "./lineup-projection";
-import { leagueExpertRanks } from "../expert-ranks";
 import { formatPercent } from "../lib/format-number";
 import { teamOutlook, winPercent, winProbability } from "./win-probability";
 
@@ -110,11 +109,6 @@ export function MatchupPlayer({
   );
 }
 
-/** The same player on this week's FantasyPros consensus projection (null when unranked). */
-export function expertProjected(player: RosterPlayer, experts: Dashboard["playerInsights"]["experts"] | undefined): RosterPlayer {
-  return { ...player, projection: experts?.[player.playerId]?.projection ?? null, projectionSource: "sleeper" };
-}
-
 export function forecastTotal(players: RosterPlayer[], now = Date.now()): number | null {
   return sumLiveForecast(players, now);
 }
@@ -132,7 +126,7 @@ export function Lineup({
   onOpenMatchup: (matchup: MatchupSelection) => void;
   onOpenLeagueTeam?: (rosterId: number) => void;
 } & PlayerLink) {
-  const [mode, setMode] = useState<"current" | "optimized" | "experts">("current");
+  const [mode, setMode] = useState<"current" | "optimized">("current");
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), LOCK_TICK_MS);
@@ -147,25 +141,11 @@ export function Lineup({
     () => optimizeLineup(league.starters, league.bench, nowMs),
     [league.starters, league.bench, nowMs],
   );
-  // Experts: the same players on this week's FantasyPros consensus projections, in the league's scoring.
-  const experts = leagueExpertRanks(dashboard, league) ?? undefined;
-  const hasExperts = experts !== undefined;
-  const activeMode = mode === "experts" && !hasExperts ? "current" : mode;
-  const withExpertProjection = (player: RosterPlayer): RosterPlayer => expertProjected(player, experts);
-  const expertLineup = useMemo(
-    () => optimizeLineup(
-      league.starters.map((player) => expertProjected(player, experts)),
-      league.bench.map((player) => expertProjected(player, experts)),
-      nowMs,
-    ),
-    [league.starters, league.bench, experts, nowMs],
-  );
-  const mine = activeMode === "optimized" ? optimized.starters : activeMode === "experts" ? expertLineup.starters : league.starters;
-  const myBench = sortPlayersByFantasyPosition(activeMode === "optimized" ? optimized.bench : activeMode === "experts" ? expertLineup.bench : league.bench);
-  const theirs = activeMode === "experts" ? opponent?.starters.map(withExpertProjection) : opponent?.starters;
-  const theirBench = opponent?.bench
-    ? sortPlayersByFantasyPosition(activeMode === "experts" ? opponent.bench.map(withExpertProjection) : opponent.bench)
-    : undefined;
+  const activeMode = mode;
+  const mine = activeMode === "optimized" ? optimized.starters : league.starters;
+  const myBench = sortPlayersByFantasyPosition(activeMode === "optimized" ? optimized.bench : league.bench);
+  const theirs = opponent?.starters;
+  const theirBench = opponent?.bench ? sortPlayersByFantasyPosition(opponent.bench) : undefined;
   const isReordered = activeMode !== "current";
   const currentForecast = useMemo(() => forecastTotal(league.starters, nowMs), [league.starters, nowMs]);
   const optimizedForecast = useMemo(() => forecastTotal(optimized.starters, nowMs), [optimized.starters, nowMs]);
@@ -173,13 +153,8 @@ export function Lineup({
     () => forecastTotal(opponent?.starters ?? [], nowMs),
     [opponent?.starters, nowMs],
   );
-  const expertForecast = useMemo(() => forecastTotal(expertLineup.starters, nowMs), [expertLineup.starters, nowMs]);
-  const opponentExpertForecast = useMemo(
-    () => forecastTotal((opponent?.starters ?? []).map((player) => expertProjected(player, experts)), nowMs),
-    [opponent?.starters, experts, nowMs],
-  );
-  const myForecast = activeMode === "optimized" ? optimizedForecast : activeMode === "experts" ? expertForecast : currentForecast;
-  const theirForecast = activeMode === "experts" ? opponentExpertForecast : opponentForecast;
+  const myForecast = activeMode === "optimized" ? optimizedForecast : currentForecast;
+  const theirForecast = opponentForecast;
   const myOutlook = useMemo(() => teamOutlook(mine, nowMs), [mine, nowMs]);
   const theirOutlook = useMemo(() => (theirs ? teamOutlook(theirs, nowMs) : null), [theirs, nowMs]);
   const myWinPercent = myOutlook && theirOutlook ? winPercent(winProbability(myOutlook, theirOutlook)) : null;
@@ -227,9 +202,7 @@ export function Lineup({
         value={activeMode}
         onChange={setMode}
         label="Your lineup version"
-        options={hasExperts
-          ? [{ value: "current", label: "Current" }, { value: "optimized", label: "Optimized" }, { value: "experts", label: "Experts" }]
-          : [{ value: "current", label: "Current lineup" }, { value: "optimized", label: "Optimized lineup" }]}
+        options={[{ value: "current", label: "Current lineup" }, { value: "optimized", label: "Optimized lineup" }]}
       />
 
       <Card className="matchup-score gap-0 py-0 shadow-sm" aria-label="Head-to-head score">
@@ -251,7 +224,7 @@ export function Lineup({
             <strong>{formatProjectionPoints(league.teamActual)}</strong>
             <small className={myTotalProjectionClassName}>
               {forecastPoints(myForecast, mine)}
-              <span className="sr-only">{activeMode === "experts" ? " expert projected points" : " projected points"}{optimizedTotalDescription}</span>
+              <span className="sr-only">{" projected points"}{optimizedTotalDescription}</span>
             </small>
           </div>
         </div>
@@ -270,7 +243,7 @@ export function Lineup({
           ) : (
             <span>{opponentTeamName}</span>
           )}
-          <div className="score-line"><strong>{formatProjectionPoints(opponent?.teamActual ?? null)}</strong><small>{forecastPoints(theirForecast, theirs ?? [])}<span className="sr-only">{activeMode === "experts" ? " expert projected points" : " projected points"}</span></small></div>
+          <div className="score-line"><strong>{formatProjectionPoints(opponent?.teamActual ?? null)}</strong><small>{forecastPoints(theirForecast, theirs ?? [])}<span className="sr-only">{" projected points"}</span></small></div>
         </div>
         {myWinPercent !== null && myOutlook && theirOutlook ? (
           <div className="matchup-win-probability">
