@@ -126,6 +126,10 @@ async function finishQuietly(store: BuildLeaseStore, resource: string, holder: s
  * stays `running` until the build actually settles (or `ttlMs` expires on a
  * frozen instance). Releasing at the deadline would let a second build start
  * next to the one still running.
+ *
+ * Lease bookkeeping is best-effort: if the store can't be reached to claim,
+ * the build runs unleased (as before leases existed) rather than failing, and
+ * a failed release never turns a finished build into a failure.
  */
 export async function runWithBuildLease<T>(
   store: BuildLeaseStore,
@@ -135,8 +139,14 @@ export async function runWithBuildLease<T>(
   build: () => Promise<T>,
   options?: { deadlineMs?: number },
 ): Promise<BuildLeaseOutcome<T>> {
-  const claimed = await store.claim(resource, holder, ttlMs);
-  if (!claimed) return { status: "joined" };
+  let leased = true;
+  try {
+    if (!(await store.claim(resource, holder, ttlMs))) return { status: "joined" };
+  } catch (claimError) {
+    console.error("[build-lease] claim failed; building without a lease", claimError);
+    leased = false;
+  }
+  const release = (error: string | null) => (leased ? finishQuietly(store, resource, holder, error) : Promise.resolve());
   const work = Promise.resolve().then(build);
   const settled = work.then(
     () => null,
@@ -152,14 +162,14 @@ export async function runWithBuildLease<T>(
     const error = new BuildDeadlineError(options!.deadlineMs!);
     // Hold the lease while the build is still running; a late success was
     // not delivered to anyone, so it still records as a timeout.
-    const released = settled.then((late) => finishQuietly(store, resource, holder, late ?? error.message));
+    const released = settled.then((late) => release(late ?? error.message));
     return { status: "failed", error, released };
   }
   if (first === null) {
-    await store.finish(resource, holder, null);
+    await release(null);
     return { status: "built", result: await work };
   }
   const error = await work.then(() => undefined, (e: unknown) => e);
-  await finishQuietly(store, resource, holder, first);
+  await release(first);
   return { status: "failed", error, released: Promise.resolve() };
 }

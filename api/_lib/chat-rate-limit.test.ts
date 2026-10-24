@@ -54,3 +54,16 @@ describe("checkChatRateLimit (shared bucket)", () => {
     errorSpy.mockRestore();
   });
 });
+
+describe("checkChatRateLimit fallback after shared checks", () => {
+  it("keeps the quota already used when the database fails mid-window", async () => {
+    let count = 0;
+    executeMock.mockImplementation(async () => [{ count: ++count }]);
+    const now = Date.now();
+    await checkChatRateLimit("u1", now, 2, 60_000);
+    await checkChatRateLimit("u1", now, 2, 60_000);
+    executeMock.mockRejectedValue(new Error("db down"));
+    // Both requests were already counted; the fallback must not grant two more.
+    expect((await checkChatRateLimit("u1", now, 2, 60_000)).ok).toBe(false);
+  });
+});

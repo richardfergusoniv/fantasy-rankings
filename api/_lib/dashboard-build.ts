@@ -2493,7 +2493,12 @@ async function waitForFreshDashboardCache(
         return cached.dashboard;
       }
       const lease = await drizzleBuildLeaseStore.read(resource);
-      if (!lease || lease.status !== "running") return null;
+      if (!lease || lease.status !== "running") {
+        // The holder writes the cache, then releases: re-read once so a
+        // build that landed between the two reads above isn't missed.
+        const final = await readUserDashboardCache(sleeperUserId);
+        return final?.fresh && final.fetchedAtMs > sinceMs ? final.dashboard : null;
+      }
     } catch {
       // Transient read failure; keep polling until the deadline.
     }
