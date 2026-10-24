@@ -175,10 +175,10 @@ would emit duplicates of migrations that already exist. Don't use it; write
 the next numbered SQL file and journal entry instead.
 
 `0002` is safe to re-run (`IF EXISTS` / `IF NOT EXISTS`). `0003` is not — its
-`CREATE POLICY` statements have no existence check. Known parity quirk: `0004`
-creates the `saved_chart_views` owner policy but never enables RLS on that
-table; that matches production. Enabling it is a deliberate follow-up, not part
-of the from-scratch reconciliation.
+`CREATE POLICY` statements have no existence check. `0004` creates the
+`saved_chart_views` owner policy but never enables RLS on that table; `0013`
+enables RLS on it (and every other public table). Production gets that
+protection only once `0013` is applied there.
 
 `sleeper_connections` is declared in `api/_lib/schema.ts`. `db:push` diffs that
 file against the database. Do not run `db:push` or `db:migrate` against

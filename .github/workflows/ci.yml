@@ -148,3 +148,18 @@ jobs:
             END IF;
           END $$;
           SQL
+
+  db-rls:
+    # Applies the journaled migrations with the standard `drizzle-kit migrate`
+    # to a disposable Postgres and verifies the RLS/grant rules in
+    # 0013_rls_and_grants.sql (see drizzle-pg/verify_rls.sh).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Verify RLS and grants
+        run: ./drizzle-pg/verify_rls.sh
