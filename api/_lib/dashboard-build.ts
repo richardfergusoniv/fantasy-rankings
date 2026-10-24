@@ -2436,9 +2436,13 @@ export function userDashboardBuildStatus(sleeperUserId: string): DashboardBuildS
  * this so a cold cache answers immediately with "no data yet" while the
  * first build (~30s) runs behind the response. A failure is recorded on the
  * tracker (read it back via `userDashboardBuildStatus`) and reported to
- * server telemetry instead of being discarded.
+ * server telemetry instead of being discarded; it is not rebuilt until it
+ * expires or the caller passes `retryFailed` (the client's explicit retry).
  */
-export function kickUserDashboardBuild(sleeperUserId: string): Promise<void> {
+export function kickUserDashboardBuild(
+  sleeperUserId: string,
+  options?: { retryFailed?: boolean },
+): Promise<void> {
   return buildTracker.kick(
     sleeperUserId,
     async () => {
@@ -2449,5 +2453,6 @@ export function kickUserDashboardBuild(sleeperUserId: string): Promise<void> {
       console.error("[dashboard-build] background build failed", { jobId, sleeperUserId, error });
       void captureServerError(error, { route: "dashboard-build", job: "user-dashboard", jobId });
     },
+    { retryFailed: options?.retryFailed },
   );
 }

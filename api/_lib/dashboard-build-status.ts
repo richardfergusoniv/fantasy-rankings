@@ -12,7 +12,10 @@
  * polling one deployment instance.
  *
  * A failure stays visible for FAILED_BUILD_STATUS_TTL_MS so the client can
- * surface it, then expires so later reads kick a fresh build cleanly.
+ * surface it, then expires so later reads kick a fresh build cleanly. While
+ * it is visible, `kick` leaves it in place unless the caller passes
+ * `retryFailed` — otherwise the next poll would start another build and
+ * replace "failed" with "building" before any client read the failure.
  */
 
 export type DashboardBuildState =
@@ -50,16 +53,21 @@ export function createDashboardBuildTracker(options?: { failedTtlMs?: number; ne
   }
 
   /**
-   * Join the in-flight build for this user, or start one. The returned
+   * Join the in-flight build for this user, or start one. A recent failure
+   * is kept (no new build) unless `retryFailed` is set. The returned
    * promise never rejects — failures are recorded on the tracker instead.
    */
   function kick(
     sleeperUserId: string,
     run: () => Promise<void>,
     onFailure?: (error: unknown, jobId: string) => void,
+    options?: { retryFailed?: boolean; nowMs?: number },
   ): Promise<void> {
     const existing = records.get(sleeperUserId);
     if (existing?.status === "building") return existing.promise;
+    if (!options?.retryFailed && status(sleeperUserId, options?.nowMs)?.status === "failed") {
+      return Promise.resolve();
+    }
     const jobId = newJobId();
     const promise = (async () => {
       try {

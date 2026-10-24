@@ -150,6 +150,8 @@ async function handleSection(
     return badRequest("Invalid or missing `section` query param.", parsed.error.issues);
   }
   const section = parsed.data as DashboardCacheSection;
+  // Set by the client's Retry on a failed build; plain polls never restart one.
+  const retryBuild = queryBool(url, "retryBuild", false);
 
   const loaded = await loadCachedDashboardView<{ section: DashboardCacheSection; data: unknown }>({
     sleeperUserId: viewer.sleeperUserId,
@@ -166,7 +168,7 @@ async function handleSection(
           // transport failure look like "no data yet".
           const hit = await readUserDashboardSection(id, section);
           if (!hit || !hit.fresh) {
-            waitUntil(kickUserDashboardBuild(id));
+            waitUntil(kickUserDashboardBuild(id, { retryFailed: retryBuild }));
           }
           if (!hit) return null;
           return {

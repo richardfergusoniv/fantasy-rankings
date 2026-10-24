@@ -37,14 +37,33 @@ describe("createDashboardBuildTracker", () => {
     expect(tracker.status("user-1", Date.now() + 2_000)).toBeNull();
   });
 
-  it("joins an in-flight build for the same user and starts a new one after failure", async () => {
+  it("joins an in-flight build for the same user and starts a new one on an explicit retry", async () => {
     const tracker = createDashboardBuildTracker();
     let runs = 0;
     const first = tracker.kick("user-1", () => { runs += 1; return Promise.reject(new Error("x")); });
     const joined = tracker.kick("user-1", () => { runs += 1; return Promise.resolve(); });
     expect(joined).toBe(first);
     await first;
-    await tracker.kick("user-1", () => { runs += 1; return Promise.resolve(); });
+    await tracker.kick("user-1", () => { runs += 1; return Promise.resolve(); }, undefined, { retryFailed: true });
     expect(runs).toBe(2);
+    expect(tracker.status("user-1")).toBeNull();
+  });
+
+  it("keeps a recent failure readable across polls that would kick again", async () => {
+    const tracker = createDashboardBuildTracker({ newJobId: () => "job-7" });
+    await tracker.kick("user-1", () => Promise.reject(new Error("boom")));
+    let runs = 0;
+    // A section poll kicks before it reads the status; the failure must survive.
+    await tracker.kick("user-1", () => { runs += 1; return Promise.resolve(); });
+    expect(runs).toBe(0);
+    expect(tracker.status("user-1")).toMatchObject({ status: "failed", jobId: "job-7" });
+  });
+
+  it("kicks a fresh build without retryFailed once the failure has expired", async () => {
+    const tracker = createDashboardBuildTracker({ failedTtlMs: 1_000 });
+    await tracker.kick("user-1", () => Promise.reject(new Error("boom")));
+    let runs = 0;
+    await tracker.kick("user-1", () => { runs += 1; return Promise.resolve(); }, undefined, { nowMs: Date.now() + 2_000 });
+    expect(runs).toBe(1);
   });
 });
