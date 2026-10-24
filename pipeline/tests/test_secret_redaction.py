@@ -83,7 +83,9 @@ def test_pull_partial_outcome_exit_zero(monkeypatch, tmp_path):
         if name == "propline":
             return [], "network error: redacted"
         from props_aggregator.schema import PropRecord
-        return [], None  # empty success still counts as reachable
+        return [PropRecord(provider=name, book="dk", player="Patrick Mahomes",
+                           stat="pass_yards", line=285.5, over_odds=-110,
+                           under_odds=-110, week=week, season=season)], None
 
     monkeypatch.setattr(cli, "_pull_provider", fake_pull)
 
@@ -157,3 +159,35 @@ def test_non_json_error_drops_cause_chain(monkeypatch):
     assert SENTINEL not in str(err)
     assert err.__cause__ is None
     assert err.__context__ is None
+
+
+def _write_old_week(tmp_path):
+    old = tmp_path / "props_2026_w3.json"
+    old.write_text("{}")
+    (tmp_path / "consensus_2026_w3.json").write_text("{}")
+    return old
+
+
+@pytest.mark.parametrize("min_providers", [0, 1])
+def test_empty_pull_is_failed_and_keeps_history(monkeypatch, tmp_path, min_providers):
+    """Zero records with no error is not a successful pull: it must not count
+    toward --min-providers or trigger pruning of earlier weeks."""
+    from props_aggregator import cli
+    monkeypatch.setattr(cli, "_pull_provider", lambda *a: ([], None))
+    old = _write_old_week(tmp_path)
+
+    class Args:
+        all = False
+        provider = ["statpick", "propline"]
+        week = 4
+        season = 2026
+        data_dir = str(tmp_path)
+
+    Args.min_providers = min_providers
+    rc = cli.cmd_pull(Args())
+    payload = json.loads((tmp_path / "props_2026_w4.json").read_text())
+    if min_providers == 1:
+        assert payload["outcome"] == "failed"
+        assert rc == 1
+    assert old.exists()
+    assert (tmp_path / "consensus_2026_w3.json").exists()

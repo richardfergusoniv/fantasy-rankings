@@ -101,8 +101,11 @@ def cmd_pull(args) -> int:
             print(f"[{name}] {len(records)} records")
             per_provider[name] = {"records": [r.to_dict() for r in records], "error": None}
             all_records.extend(records)
-    succeeded = [n for n, p in per_provider.items() if not p["error"]]
-    failed = [n for n, p in per_provider.items() if p["error"]]
+    # a provider that answered with zero records is not a usable pull: it
+    # mustn't satisfy --min-providers or license pruning older weeks
+    succeeded = [n for n, p in per_provider.items()
+                 if not p["error"] and p["records"]]
+    failed = [n for n in per_provider if n not in succeeded]
     if len(succeeded) < args.min_providers:
         outcome = "failed"
     elif failed:
@@ -124,8 +127,8 @@ def cmd_pull(args) -> int:
                    "built_at": utcnow_iso(), "consensus": consensus}, f, indent=1)
     print(f"wrote {props_path} ({len(all_records)} records)")
     print(f"wrote {consensus_path} ({len(consensus)} consensus rows)")
-    # don't delete good history behind a failed pull
-    pruned = 0 if outcome == "failed" else _prune_old_pull_files(
+    # don't delete good history behind a failed or empty pull
+    pruned = 0 if outcome == "failed" or not succeeded else _prune_old_pull_files(
         args.data_dir, args.season, args.week)
     if pruned:
         print(f"pruned {pruned} pull artifact(s) from earlier weeks")
@@ -208,7 +211,7 @@ def main(argv=None) -> int:
     pull.add_argument("--season", type=int, default=2026)
     pull.add_argument("--min-providers", type=int, default=1, metavar="N",
                       help="exit nonzero unless at least N providers return "
-                           "data (default 1)")
+                           "records (default 1)")
 
     cov = sub.add_parser("coverage", help="report markets/players/books by provider")
     cov.add_argument("--week", type=int, required=True)
