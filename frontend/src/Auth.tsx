@@ -68,16 +68,22 @@ export function AuthGate({ children }: { children: ReactNode }) {
       return;
     }
     let active = true;
+    // Supabase also emits SIGNED_IN for the session already in use (e.g. on
+    // tab refocus); only a different user should wipe personal queries.
+    let viewerUserId: string | null | undefined;
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
+      viewerUserId ??= data.session?.user.id ?? null;
       setSession(data.session);
       setLoading(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+        const nextUserId = next?.user.id ?? null;
         // Identity changed: drop every per-viewer query so the previous
         // viewer's leagues, news, draft and saved views cannot be read back.
-        void clearPersonalQueries(queryClient);
+        if (nextUserId !== viewerUserId) void clearPersonalQueries(queryClient);
+        viewerUserId = nextUserId;
         queryClient.removeQueries({ queryKey: ["auth-user-id"] });
         queryClient.removeQueries({ queryKey: ["chat-list"] });
         queryClient.removeQueries({ queryKey: ["chat-availability"] });

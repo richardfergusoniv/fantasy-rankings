@@ -39,17 +39,28 @@ export async function clearPersonalQueries(client: QueryClient): Promise<void> {
   client.removeQueries({ queryKey: [PERSONAL_QUERY_PREFIX] });
 }
 
+/** The signed-in session user plus the identity personal data is keyed by. */
+export type ViewerSnapshot = { sessionUserId: string | null; identity: ViewerIdentity };
+
+function sameViewer(a: ViewerSnapshot, b: ViewerSnapshot): boolean {
+  return a.sessionUserId === b.sessionUserId
+    && a.identity.userId === b.identity.userId
+    && a.identity.accountId === b.identity.accountId;
+}
+
 /**
- * Snapshot who is signed in when personal async work starts. Clearing
- * queries on sign-in doesn't reach mutations, so a refresh user A started
- * can resolve after B signs in; check `stillCurrent()` before saving or
- * applying its result (or signing out on its error) so A's data is never
- * stored under B's identity.
+ * Snapshot who is signed in, and which Sleeper account is connected, when
+ * personal async work starts. Clearing queries on sign-in doesn't reach
+ * mutations, so a refresh user A started can resolve after B signs in (or
+ * after A connects a different Sleeper account); check `stillCurrent()`
+ * before saving or applying its result (or signing out on its error), and
+ * key what you store by `startedBy`, so it is never stored under someone
+ * else's identity.
  */
-export async function snapshotViewer(readViewerId: () => Promise<string | null>): Promise<{
-  startedBy: string | null;
+export async function snapshotViewer(readViewer: () => Promise<ViewerSnapshot>): Promise<{
+  startedBy: ViewerSnapshot;
   stillCurrent: () => Promise<boolean>;
 }> {
-  const startedBy = await readViewerId();
-  return { startedBy, stillCurrent: async () => (await readViewerId()) === startedBy };
+  const startedBy = await readViewer();
+  return { startedBy, stillCurrent: async () => sameViewer(await readViewer(), startedBy) };
 }

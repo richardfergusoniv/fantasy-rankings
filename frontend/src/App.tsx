@@ -334,7 +334,7 @@ function dropUnsignedBrowserDashboard(): void {
   }
 }
 
-function readBrowserDashboard(userId: string | null): Dashboard | undefined {
+function readBrowserDashboard(userId: string | null, accountId: string | null): Dashboard | undefined {
   if (!userId) {
     dropUnsignedBrowserDashboard();
     return undefined;
@@ -342,7 +342,9 @@ function readBrowserDashboard(userId: string | null): Dashboard | undefined {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(BROWSER_DASHBOARD_CACHE_KEY) ?? "null");
     if (!parsed || typeof parsed !== "object" || !("dashboard" in parsed) || !("userId" in parsed)) return undefined;
-    if (parsed.userId !== userId) return undefined;
+    // Keyed by user and connected Sleeper account: switching accounts on the
+    // same login must not show the previous account's leagues.
+    if (parsed.userId !== userId || !("accountId" in parsed) || parsed.accountId !== accountId) return undefined;
     const dashboard = parsed.dashboard;
     if (!dashboard || typeof dashboard !== "object" || !("leagues" in dashboard) || !Array.isArray(dashboard.leagues) || !("asOf" in dashboard) || typeof dashboard.asOf !== "string") return undefined;
     if (!dashboard.leagues.every((league) => league && typeof league === "object" && "tradeValuation" in league)) {
@@ -361,10 +363,10 @@ function readBrowserDashboard(userId: string | null): Dashboard | undefined {
   }
 }
 
-function saveBrowserDashboard(userId: string | null, dashboard: Dashboard): void {
+function saveBrowserDashboard(userId: string | null, accountId: string | null, dashboard: Dashboard): void {
   if (!userId) return;
   try {
-    localStorage.setItem(BROWSER_DASHBOARD_CACHE_KEY, JSON.stringify({ userId, dashboard }));
+    localStorage.setItem(BROWSER_DASHBOARD_CACHE_KEY, JSON.stringify({ userId, accountId, dashboard }));
   } catch {
     // A full storage bucket must never block rendering fresh data.
   }
@@ -516,6 +518,10 @@ export function App() {
   // app once a session and Sleeper connection are verified, and clears these
   // caches on sign-out, so no other viewer can read this data back.
   const viewer = useViewerIdentity();
+  // Latest identity for async work that outlives the render that started it.
+  const viewerRef = useRef(viewer);
+  viewerRef.current = viewer;
+  const readViewer = useCallback(async () => ({ sessionUserId: await currentViewerId(), identity: viewerRef.current }), []);
   const dashboardUrl = useDashboardUrl();
   const tab = dashboardUrl.state.tab;
   const setTab = useCallback((next: Tab) => {
@@ -578,12 +584,12 @@ export function App() {
     void currentViewerId().then((userId) => {
       if (cancelled) return;
       setBrowserViewerId(userId);
-      setBrowserDashboard(readBrowserDashboard(userId));
+      setBrowserDashboard(readBrowserDashboard(userId, viewer.accountId));
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [viewer.accountId]);
   const metaQuery = useQuery({
     queryKey: personalQueryKey(viewer, "dashboard-section", "meta"),
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "meta" }), 20_000)),
@@ -679,7 +685,7 @@ export function App() {
   });
   const refresh = useMutation({
     // Whoever started the refresh owns its result; see snapshotViewer.
-    onMutate: () => snapshotViewer(currentViewerId),
+    onMutate: () => snapshotViewer(readViewer),
     mutationFn: async () => {
       if (supabase) {
         const { data } = await supabase.auth.getSession();
@@ -689,9 +695,10 @@ export function App() {
     },
     onSuccess: async (data, _variables, owner) => {
       if (!owner || !(await owner.stillCurrent())) return;
-      saveBrowserDashboard(owner.startedBy, data);
-      queryClient.setQueryData(personalQueryKey(viewer, "fantasy-dashboard"), data);
-      queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "dashboard-section") });
+      const { sessionUserId, identity } = owner.startedBy;
+      saveBrowserDashboard(sessionUserId, identity.accountId, data);
+      queryClient.setQueryData(personalQueryKey(identity, "fantasy-dashboard"), data);
+      queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "dashboard-section") });
     },
     onError: async (error: unknown, _variables, owner) => {
       // A stale 401 from the previous viewer's token must not sign out the new one.
@@ -727,11 +734,11 @@ export function App() {
     retry: false,
   });
   const draftRefresh = useMutation({
-    onMutate: () => snapshotViewer(currentViewerId),
+    onMutate: () => snapshotViewer(readViewer),
     mutationFn: () => withClientDeadline(api.getDraftCenter({ force: true }), 24_000),
     onSuccess: async (data, _variables, owner) => {
       if (!owner || !(await owner.stillCurrent())) return;
-      queryClient.setQueryData(personalQueryKey(viewer, "draft-center"), data);
+      queryClient.setQueryData(personalQueryKey(owner.startedBy.identity, "draft-center"), data);
     },
     onError: async (error: unknown, _variables, owner) => {
       if (owner && !(await owner.stillCurrent())) return;
@@ -829,7 +836,7 @@ export function App() {
 
   useEffect(() => {
     if (!dashboard || !browserViewerId) return;
-    saveBrowserDashboard(browserViewerId, dashboard);
+    saveBrowserDashboard(browserViewerId, viewer.accountId, dashboard);
     if (document.documentElement.dataset.fantasyFirstContentMs) return;
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const elapsed = Math.round(performance.now());

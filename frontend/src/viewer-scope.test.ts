@@ -57,14 +57,18 @@ describe("viewer-scoped personal query keys", () => {
 });
 
 describe("snapshotViewer", () => {
-  it("reports a viewer switch mid-flight so A's late result isn't saved as B's", async () => {
-    let signedIn: string | null = "user-a";
-    const owner = await snapshotViewer(async () => signedIn);
-    expect(owner.startedBy).toBe("user-a");
+  it("reports a viewer or Sleeper-account switch mid-flight so a late result isn't saved as someone else's", async () => {
+    let current = { sessionUserId: "user-a" as string | null, identity: viewerA };
+    const owner = await snapshotViewer(async () => current);
+    expect(owner.startedBy).toEqual({ sessionUserId: "user-a", identity: viewerA });
     expect(await owner.stillCurrent()).toBe(true);
-    signedIn = "user-b"; // B signs in while A's refresh is still running
+    // Same Supabase user, different connected Sleeper account.
+    current = { sessionUserId: "user-a", identity: { userId: "user-a", accountId: "sleeper-other" } };
     expect(await owner.stillCurrent()).toBe(false);
-    signedIn = null;
+    // B signs in while A's refresh is still running.
+    current = { sessionUserId: "user-b", identity: viewerB };
+    expect(await owner.stillCurrent()).toBe(false);
+    current = { sessionUserId: null, identity: viewerB };
     expect(await owner.stillCurrent()).toBe(false);
   });
 });
