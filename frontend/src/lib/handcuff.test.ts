@@ -11,7 +11,7 @@ const depth = {
   backup: { position: "RB", rank: 2 },
   other: { position: "RB", rank: 1 },
 };
-const base = { playerId: "backup", position: "RB", team: "DET", weeklyRank: 40, leagueSize: 12, depth, players };
+const base = { playerId: "backup", position: "RB", team: "DET", weeklyRank: 40, leagueSize: 12, depth, playerLists: [players] };
 
 describe("handcuffStarter", () => {
   it("names the starter of the RB2 on the same team", () => {
@@ -23,6 +23,10 @@ describe("handcuffStarter", () => {
     expect(handcuffStarter({ ...base, playerId: "starter" })).toBeNull();
     expect(handcuffStarter({ ...base, position: "WR" })).toBeNull();
     expect(handcuffStarter({ ...base, weeklyRank: 20 })).toBeNull();
+  });
+
+  it("finds a starter that is missing from the first list", () => {
+    expect(handcuffStarter({ ...base, playerLists: [[players[1]!], players] })).toBe("Jahmyr Gibbs");
   });
 
   it("returns null when the team has no listed RB1", () => {

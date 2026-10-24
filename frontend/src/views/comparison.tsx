@@ -260,13 +260,13 @@ function comparisonPickMeta(player: ComparisonEntity): string {
 }
 
 /** Floor/ceiling and handcuff chips for one player in the comparison header. */
-function ComparisonPlayerChips({ leagueId, playerId, position, team, weeklyRank, leagueSize, depth, players }: { leagueId: string; playerId?: string; position: string; team: string | null; weeklyRank: number | null; leagueSize: number; depth: Dashboard["playerInsights"]["depth"]; players: Dashboard["rankings"] }) {
+function ComparisonPlayerChips({ leagueId, playerId, position, team, weeklyRank, leagueSize, depth, playerLists }: { leagueId: string; playerId?: string; position: string; team: string | null; weeklyRank: number | null; leagueSize: number; depth: Dashboard["playerInsights"]["depth"]; playerLists: ReadonlyArray<ReadonlyArray<{ playerId: string; name: string; team: string | null }>> }) {
   const profile = useProfileTag(leagueId, playerId, position);
-  const handcuffTo = playerId ? handcuffStarter({ playerId, position, team, weeklyRank, leagueSize, depth, players }) : null;
+  const handcuffTo = playerId ? handcuffStarter({ playerId, position, team, weeklyRank, leagueSize, depth, playerLists }) : null;
   return <ProfileChips profile={profile} handcuffTo={handcuffTo} />;
 }
 
-function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trending, depth, depthPrevious, leagueSize, leagueId, players, sosEntry, onOpenPlayer, onOpenMatchup }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"]; depth: Dashboard["playerInsights"]["depth"]; depthPrevious: Dashboard["playerInsights"]["depthPrevious"]; leagueSize: number; leagueId: string; players: Dashboard["rankings"]; sosEntry?: StrengthOfScheduleEntryLike; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
+function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trending, depth, depthPrevious, leagueSize, leagueId, playerLists, sosEntry, onOpenPlayer, onOpenMatchup }: { left: ComparisonEntity; right: ComparisonEntity; leftPlayerId?: string; rightPlayerId?: string; trending: Dashboard["playerTrending"]; depth: Dashboard["playerInsights"]["depth"]; depthPrevious: Dashboard["playerInsights"]["depthPrevious"]; leagueSize: number; leagueId: string; playerLists: ReadonlyArray<ReadonlyArray<{ playerId: string; name: string; team: string | null }>>; sosEntry?: StrengthOfScheduleEntryLike; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
   return (
     <header className="comparison-board-head" aria-label={`${left.name} versus ${right.name}`}>
       {[{ player: left, playerId: leftPlayerId }, { player: right, playerId: rightPlayerId }].map(({ player, playerId }, index) => {
@@ -284,7 +284,7 @@ function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trend
                 : <span>{player.team || "Team TBD"} · {comparisonMatchupLabel(player)}</span>}
               {player.gameTime ? <time>{gameTimeLabel(player.gameTime)}</time> : null}
               {tier ? <span className="depth-chart-tag" title="Where this week's rank falls at the position">{tier}</span> : null}
-              <ComparisonPlayerChips leagueId={leagueId} playerId={playerId} position={player.position} team={player.team} weeklyRank={player.values.leaguePositionRank} leagueSize={leagueSize} depth={depth} players={players} />
+              <ComparisonPlayerChips leagueId={leagueId} playerId={playerId} position={player.position} team={player.team} weeklyRank={player.values.leaguePositionRank} leagueSize={leagueSize} depth={depth} playerLists={playerLists} />
               {depthMove ? <DepthChangeMark change={depthMove} /> : null}
             </span>
             {trend && (trend.adds !== null || trend.drops !== null) ? (
@@ -638,7 +638,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
         <div className="analytics-empty"><strong>No player data yet.</strong><span>Refresh to check the latest Vegas lines and nflverse data.</span></div>
       ) : left && right ? (
         <section className="comparison-board" aria-label={`${left.name} and ${right.name} comparison`}>
-          <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} depth={dashboard.playerInsights?.depth ?? {}} depthPrevious={dashboard.playerInsights?.depthPrevious ?? {}} leagueSize={league.seasonLongFormat.numTeams} leagueId={league.id} players={dashboard.rankings} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
+          <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} depth={dashboard.playerInsights?.depth ?? {}} depthPrevious={dashboard.playerInsights?.depthPrevious ?? {}} leagueSize={league.seasonLongFormat.numTeams} leagueId={league.id} playerLists={[dashboard.rankings, dashboard.seasonLongRankings]} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
           <Tabs value={sectionTab} onValueChange={(value) => setSectionTab(value as "projections" | "advanced")} className="comparison-section-tabs">
             <TabsList aria-label="Comparison data">
               <TabsTrigger id="comparison-projections-tab" value="projections" aria-controls="comparison-projections-panel">Week {dashboard.week}</TabsTrigger>

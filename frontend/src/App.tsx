@@ -1214,7 +1214,7 @@ export function App() {
         weeklyRank: sheetPlayer.weeklyRank,
         leagueSize: league.seasonLongFormat.numTeams,
         depth: dashboard.playerInsights?.depth ?? {},
-        players: dashboard.rankings,
+        playerLists: [dashboard.rankings, dashboard.seasonLongRankings],
       })
     : null;
   const playerSheet = playerHistory.current ? (
