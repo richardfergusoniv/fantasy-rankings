@@ -828,7 +828,10 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             injuryStatus: null,
             movement30Day: null,
           };
-        });
+        })
+        .sort((a, b) => (b.projection ?? -1) - (a.projection ?? -1)
+          || (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER)
+          || a.name.localeCompare(b.name));
     }
     return leagueRankings
       .filter((row) => includedPositions.includes(row.position))
@@ -969,13 +972,6 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             label={availableOnly ? "Waiver ranking horizon" : "Ranking horizon"}
             options={rankingHorizonOptions}
           />
-          {effectiveHorizon === "week" && (effectivePosition === "DEF" || effectivePosition === "K") ? (
-            <div className="rankings-note">
-              {effectivePosition === "DEF"
-                ? <span>Actual shown after final</span>
-                : <span>Rank follows opposing DST, worst first</span>}
-            </div>
-          ) : null}
           <div className="ranking-list">
             <WindowVirtualList count={visibleRows.length} estimateSize={RANKINGS_ROW_HEIGHT} getKey={(index) => visibleRows[index]?.key ?? index}>
             {(index) => {

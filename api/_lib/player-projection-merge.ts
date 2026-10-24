@@ -202,7 +202,6 @@ export function mergePlayerProjections(
   usePrimaryBoard: boolean,
   sleeperProjectionsByPlayerId: Map<string, SleeperProjection>,
   scoringSettings: Record<string, number> | undefined,
-  defenseRankByTeam: Map<string, number>,
 ): Ranking[] {
   const { feedByPlayer, feedByNamePosition } = buildProjectionFeedMaps(snapshot);
   const fallbackMaps = fallbackSnapshot ? buildProjectionFeedMaps(fallbackSnapshot) : null;
@@ -380,16 +379,7 @@ export function mergePlayerProjections(
   for (const position of ["QB", "RB", "WR", "TE", "K"] as const) {
     const group = merged
       .filter((row) => row.position === position)
-      .sort((a, b) => {
-        if (position === "K") {
-          const aOpponentDefenseRank = a.opponent ? defenseRankByTeam.get(canonicalTeam(a.opponent)) : undefined;
-          const bOpponentDefenseRank = b.opponent ? defenseRankByTeam.get(canonicalTeam(b.opponent)) : undefined;
-          if (aOpponentDefenseRank !== bOpponentDefenseRank) {
-            return (bOpponentDefenseRank ?? -1) - (aOpponentDefenseRank ?? -1);
-          }
-        }
-        return (b.leagueProjection ?? -1) - (a.leagueProjection ?? -1) || a.name.localeCompare(b.name);
-      });
+      .sort((a, b) => (b.leagueProjection ?? -1) - (a.leagueProjection ?? -1) || a.name.localeCompare(b.name));
     group.forEach((row, index) => {
       row.leagueRank = index + 1;
       if (rankingField === "ppr") row.pprRank = index + 1;
