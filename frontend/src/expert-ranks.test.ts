@@ -31,26 +31,32 @@ describe("currentExpertRanks", () => {
 });
 
 const expert = (projection: number | null) => ({ ecr: 1, best: 1, worst: 1, positionRank: 1, projection });
-const row = (playerId: string, position: string, ppr: number | null, halfPpr: number | null) => ({ playerId, position, ppr, halfPpr });
+const row = (playerId: string, position: string, vegasProjection: number | null, rec: number | null) => ({
+  playerId,
+  position,
+  vegasProjection,
+  projectionComponents: rec === null ? null : { rec },
+});
 
 describe("scaleExpertsToScoring", () => {
-  const rows = [row("a", "RB", 20, 18), row("b", "RB", 10, 9), row("c", "RB", null, null), row("d", "QB", 20, 20)];
+  // a: 20 PPR points with 6 catches -> 17 half-PPR; b: 10 with 2 -> 9; c: no Vegas line; d: QB, no catches.
+  const rows = [row("a", "RB", 20, 6), row("b", "RB", 10, 2), row("c", "RB", null, null), row("d", "QB", 20, 0)];
   const experts = { a: expert(25), b: expert(12), c: expert(8), d: expert(22), e: expert(5), f: expert(null) };
 
   it("leaves PPR leagues untouched", () => {
     expect(scaleExpertsToScoring(experts, rows, "ppr")).toBe(experts);
   });
 
-  it("scales each projection by that player's half-PPR share", () => {
+  it("takes half a point per projected reception off each projection", () => {
     const scaled = scaleExpertsToScoring(experts, rows, "halfPpr");
-    expect(scaled.a?.projection).toBe(22.5);
+    expect(scaled.a?.projection).toBe(21.25);
     expect(scaled.b?.projection).toBe(10.8);
     expect(scaled.d?.projection).toBe(22);
   });
 
-  it("uses the position median when a player has no projections, and skips unknown players", () => {
-    const scaled = scaleExpertsToScoring({ ...experts, f: expert(null) }, rows, "halfPpr");
-    expect(scaled.c?.projection).toBe(7.2);
+  it("uses the position median when a player has no Vegas line, and skips unknown players", () => {
+    const scaled = scaleExpertsToScoring(experts, rows, "halfPpr");
+    expect(scaled.c?.projection).toBe(7);
     expect(scaled.e?.projection).toBe(5);
     expect(scaled.f?.projection).toBeNull();
   });
@@ -63,7 +69,7 @@ describe("scaleExpertsToScoring", () => {
 describe("leagueExpertRanks", () => {
   const dashboard = {
     playerInsights: insights("2026-10-27T00:15:00.000Z", { "9493": { ...experts["9493"], projection: 20 } }),
-    rankings: [{ ...row("9493", "RB", 20, 16), leagueId: "L1", gameTime: "2026-10-27T00:15Z" }, { ...row("9493", "RB", 20, 10), leagueId: "L2", gameTime: null }],
+    rankings: [{ ...row("9493", "RB", 20, 8), leagueId: "L1", gameTime: "2026-10-27T00:15Z" }, { ...row("9493", "RB", 20, 0), leagueId: "L2", gameTime: null }],
   };
 
   it("scales with the rows of the requested league only", () => {

@@ -27,12 +27,23 @@ export function currentExpertRanks(
   return Math.abs(expertsLast - dashboardLast) <= SAME_WEEK_TOLERANCE_MS ? experts : null;
 }
 
-type ScoringRow = { playerId: string; position: string; ppr: number | null; halfPpr: number | null };
+type ScoringRow = {
+  playerId: string;
+  position: string;
+  /** The Vegas stat line scored in canonical PPR, independent of the league's scoring. */
+  vegasProjection: number | null;
+  projectionComponents: Record<string, number> | null;
+};
 
-/** Half-PPR points as a share of PPR points; real backs and receivers land between about 0.7 and 1. */
+/**
+ * Half-PPR points as a share of PPR points: PPR minus half a point per projected
+ * reception, over PPR. The league's own points are not used because they mix in
+ * its other settings (bonuses, a first-down proxy) and so are not a PPR base.
+ */
 function halfPprShare(row: ScoringRow): number | null {
-  if (row.ppr === null || row.halfPpr === null || row.ppr <= 0 || row.halfPpr <= 0) return null;
-  return Math.min(1, Math.max(0.5, row.halfPpr / row.ppr));
+  const receptions = row.projectionComponents?.rec;
+  if (row.vegasProjection === null || row.vegasProjection <= 0 || typeof receptions !== "number" || !Number.isFinite(receptions)) return null;
+  return Math.min(1, Math.max(0.5, 1 - (0.5 * receptions) / row.vegasProjection));
 }
 
 function median(values: number[]): number {
@@ -43,10 +54,10 @@ function median(values: number[]): number {
 
 /**
  * FantasyPros' weekly projections come from the PPR list. For a half-PPR league
- * each projection is scaled by that player's half-PPR share from the league's own
- * projections (a player without one gets the median for the position). Players
- * missing from `rows`, such as defenses, keep their projection, and ranks stay
- * the PPR ones.
+ * each projection loses half a point per projected reception (see halfPprShare);
+ * a player without a Vegas stat line gets the median share for the position.
+ * Players missing from `rows`, such as defenses, keep their projection, and
+ * ranks stay the PPR ones.
  */
 export function scaleExpertsToScoring(
   experts: PlayerInsights["experts"],
