@@ -45,6 +45,7 @@ import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
+import { personalQueryKey, useViewerIdentity } from "./viewer-scope";
 import { useDashboardUrl } from "./use-dashboard-url";
 import { CommandBar } from "./shell/command-bar";
 import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "./shell/command-palette";
@@ -511,6 +512,10 @@ function parsePartnerRosterId(value: string | null): number | null {
 
 export function App() {
   const queryClient = useQueryClient();
+  // Per-viewer scope for every personal query key: AuthGate only renders the
+  // app once a session and Sleeper connection are verified, and clears these
+  // caches on sign-out, so no other viewer can read this data back.
+  const viewer = useViewerIdentity();
   const dashboardUrl = useDashboardUrl();
   const tab = dashboardUrl.state.tab;
   const setTab = useCallback((next: Tab) => {
@@ -580,7 +585,7 @@ export function App() {
     };
   }, []);
   const metaQuery = useQuery({
-    queryKey: ["dashboard-section", "meta"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "meta"),
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "meta" }), 20_000)),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
@@ -590,7 +595,7 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const teamQuery = useQuery({
-    queryKey: ["dashboard-section", "team"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "team"),
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "team" }), 20_000)),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
@@ -604,7 +609,7 @@ export function App() {
   // The Tools market views reuse the same players + analytics section queries as the chart builder (no per-panel fetches).
   const playerSectionActive = MARKET_TOOL_TABS.has(tab) || tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "comparison";
   const playersQuery = useQuery({
-    queryKey: ["dashboard-section", "players"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "players"),
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "players" }), 8_000)),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
@@ -613,7 +618,7 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const leagueQuery = useQuery({
-    queryKey: ["dashboard-section", "league"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "league"),
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "league" }), 8_000)),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
@@ -624,7 +629,7 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const analyticsQuery = useQuery({
-    queryKey: ["dashboard-section", "analytics"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "analytics"),
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "analytics" }), 8_000)),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
@@ -640,7 +645,7 @@ export function App() {
   // Waiver pool is only consumed by League-adjusted trade (not Market/History).
   const tradeWaiverActive = tab === "trade" && tradeMode === "league";
   const tradeQuery = useQuery({
-    queryKey: ["dashboard-section", "trade"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "trade"),
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "trade" }), 20_000)),
     // Errors must not stick for the session: stale immediately so tab switch /
     // remount / manual refresh retries instead of serving a failed empty cache.
@@ -653,7 +658,7 @@ export function App() {
     refetchInterval: (query) => pollTradeSectionWhileLive(query, teamQuery.data),
   });
   const tradeWaiverQuery = useQuery({
-    queryKey: ["dashboard-section", "trade-waiver"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "trade-waiver"),
     queryFn: () => withSignIn(withClientDeadline(api.getDashboardSection({ section: "trade-waiver" }), 20_000)),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
@@ -664,7 +669,7 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const dashboardQuery = useQuery({
-    queryKey: ["fantasy-dashboard"],
+    queryKey: personalQueryKey(viewer, "fantasy-dashboard"),
     queryFn: () => withSignIn(withClientDeadline(api.getDashboard({ force: false }), DASHBOARD_DEADLINE_MS)),
     staleTime: 90_000,
     initialData: browserDashboard,
@@ -682,15 +687,15 @@ export function App() {
     },
     onSuccess: (data) => {
       void currentViewerId().then((userId) => saveBrowserDashboard(userId, data));
-      queryClient.setQueryData(["fantasy-dashboard"], data);
-      queryClient.invalidateQueries({ queryKey: ["dashboard-section"] });
+      queryClient.setQueryData(personalQueryKey(viewer, "fantasy-dashboard"), data);
+      queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "dashboard-section") });
     },
     onError: (error: unknown) => {
       signOutForPersonalData(error);
     },
   });
   const newsQuery = useQuery({
-    queryKey: ["player-news"],
+    queryKey: personalQueryKey(viewer, "player-news"),
     queryFn: async () => {
       try {
         return await withClientDeadline(api.getPlayerNews({}), 8_000);
@@ -703,7 +708,7 @@ export function App() {
     retry: false,
   });
   const draftQuery = useQuery({
-    queryKey: ["draft-center"],
+    queryKey: personalQueryKey(viewer, "draft-center"),
     queryFn: async () => {
       try {
         return await withClientDeadline(api.getDraftCenter({ force: false }), 24_000);
@@ -725,7 +730,7 @@ export function App() {
         throw error;
       }
     },
-    onSuccess: (data) => queryClient.setQueryData(["draft-center"], data),
+    onSuccess: (data) => queryClient.setQueryData(personalQueryKey(viewer, "draft-center"), data),
   });
   const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(newsQuery.data), [newsQuery.data]);
   const tickerPlayerNews = playerHistory.current ? newsItemsByPlayer.get(playerHistory.current.playerId) ?? [] : [];
@@ -989,7 +994,7 @@ export function App() {
     if (tab === "draft") draftRefresh.mutate();
     else {
       refresh.mutate();
-      queryClient.invalidateQueries({ queryKey: ["player-news"] });
+      queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "player-news") });
     }
   };
 
