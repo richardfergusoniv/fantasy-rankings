@@ -9,13 +9,14 @@ import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogFoot
 import { api, type ApiResponse } from "./api";
 import type { MatchupSelection } from "./dashboard-types";
 import {
-  SAVED_CHART_VIEWS_QUERY_KEY,
   applySavedChartViewMutation,
   optimisticRemoveSavedChartView,
   optimisticUpsertSavedChartView,
   rollbackSavedChartViewMutation,
+  savedChartViewsQueryKey,
   settleSavedChartViewMutation,
 } from "./chart-view-cache";
+import { useViewerIdentity } from "./viewer-scope";
 import { formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { ChartDialog } from "./chart-dialog";
 import { MatchupTag, SegmentedControl, shortLeagueName } from "./shared";
@@ -561,8 +562,9 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
   const [pendingDelete, setPendingDelete] = useState<SavedChartView | null>(null);
   useUnsavedLeaveWarning(shouldWarnBeforeLeave({ tradeAssetCount: 0, savedViewNaming: isNaming, savedViewName: name }));
   const nameRef = useRef<HTMLInputElement>(null);
+  const viewsKey = savedChartViewsQueryKey(useViewerIdentity());
   const viewsQuery = useQuery({
-    queryKey: SAVED_CHART_VIEWS_QUERY_KEY,
+    queryKey: viewsKey,
     queryFn: () => api.listSavedChartViews({}),
     staleTime: 60_000,
     retry: false,
@@ -584,7 +586,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
   const saveMutation = useMutation({
     mutationFn: (viewName: string) => api.saveChartView({ name: viewName, ...config }),
     onMutate: async (viewName) => {
-      await queryClient.cancelQueries({ queryKey: SAVED_CHART_VIEWS_QUERY_KEY });
+      await queryClient.cancelQueries({ queryKey: viewsKey });
       const optimisticView: SavedChartView = {
         ...config,
         id: `optimistic:${config.dataset}:${viewName}`,
@@ -592,7 +594,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      const previous = applySavedChartViewMutation<SavedChartView>(queryClient, (current) => optimisticUpsertSavedChartView(current, optimisticView));
+      const previous = applySavedChartViewMutation<SavedChartView>(queryClient, viewsKey, (current) => optimisticUpsertSavedChartView(current, optimisticView));
       const previousSelected = selectedSavedViewId;
       onSelectedSavedViewIdChange(optimisticView.id);
       setName("");
@@ -602,7 +604,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
       return { previous, previousSelected, optimisticId: optimisticView.id };
     },
     onSuccess: ({ view }, _viewName, context) => {
-      applySavedChartViewMutation<SavedChartView>(queryClient, (current) => optimisticUpsertSavedChartView(
+      applySavedChartViewMutation<SavedChartView>(queryClient, viewsKey, (current) => optimisticUpsertSavedChartView(
         { views: (current?.views ?? []).filter((item) => item.id !== context?.optimisticId) },
         view,
       ));
@@ -613,7 +615,7 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
       setMessage(`Saved “${view.name}”.`);
     },
     onError: (_error, viewName, context) => {
-      rollbackSavedChartViewMutation(queryClient, context?.previous);
+      rollbackSavedChartViewMutation(queryClient, viewsKey, context?.previous);
       onSelectedSavedViewIdChange(context?.previousSelected ?? null);
       setIsNaming(true);
       setName(viewName);
@@ -621,14 +623,14 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
       setMessage("Couldn’t save this view. Try again.");
     },
     onSettled: () => {
-      void settleSavedChartViewMutation(queryClient);
+      void settleSavedChartViewMutation(queryClient, viewsKey);
     },
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteChartView({ id }),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: SAVED_CHART_VIEWS_QUERY_KEY });
-      const previous = applySavedChartViewMutation<SavedChartView>(queryClient, (current) => optimisticRemoveSavedChartView(current, id));
+      await queryClient.cancelQueries({ queryKey: viewsKey });
+      const previous = applySavedChartViewMutation<SavedChartView>(queryClient, viewsKey, (current) => optimisticRemoveSavedChartView(current, id));
       const previousSelected = selectedSavedViewId;
       onSelectedSavedViewIdChange(null);
       setMessageIsError(false);
@@ -640,13 +642,13 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
       setMessage("Saved view deleted.");
     },
     onError: (_error, _id, context) => {
-      rollbackSavedChartViewMutation(queryClient, context?.previous);
+      rollbackSavedChartViewMutation(queryClient, viewsKey, context?.previous);
       onSelectedSavedViewIdChange(context?.previousSelected ?? null);
       setMessageIsError(true);
       setMessage("Couldn’t delete this view. Try again.");
     },
     onSettled: () => {
-      void settleSavedChartViewMutation(queryClient);
+      void settleSavedChartViewMutation(queryClient, viewsKey);
     },
   });
 

@@ -9,9 +9,12 @@
 import { z } from "zod";
 import {
   badRequest,
+  BodyTooLargeError,
   internalError,
   json,
   methodNotAllowed,
+  payloadTooLarge,
+  readJsonBody,
   unauthorized,
 } from "./_lib/api-utils.js";
 import { resolveViewer } from "./_lib/auth.js";
@@ -97,7 +100,7 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    const rate = checkChatRateLimit(viewer.userId);
+    const rate = await checkChatRateLimit(viewer.userId);
     if (!rate.ok) {
       return json(
         {
@@ -111,7 +114,13 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    const body = await req.json().catch(() => null);
+    let body: unknown;
+    try {
+      body = await readJsonBody(req);
+    } catch (err) {
+      if (err instanceof BodyTooLargeError) return payloadTooLarge();
+      body = null;
+    }
     const parsed = postBodySchema.safeParse(body);
     if (!parsed.success) {
       return badRequest("Invalid chat payload.", parsed.error.issues);

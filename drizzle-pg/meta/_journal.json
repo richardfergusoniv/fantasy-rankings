@@ -1,1 +1,97 @@
-{"dialect":"postgresql","entries":[{"breakpoints":true,"idx":0,"tag":"0001_baseline","version":"7","when":1759274400000}],"version":"7"}
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1759274400000,
+      "tag": "0001_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1759701600000,
+      "tag": "0002_chart_views_user_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1759788000000,
+      "tag": "0003_phase2_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1759874400000,
+      "tag": "0004_db_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1760000000000,
+      "tag": "0005_shared_player_news",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1760500000000,
+      "tag": "0006_prop_line_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1761000000000,
+      "tag": "0007_sleeper_user_id_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1761500000000,
+      "tag": "0008_scoring_calibration",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1762000000000,
+      "tag": "0009_chat_persistence",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1762200000000,
+      "tag": "0010_chat_messages_owner_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1762400000000,
+      "tag": "0011_build_leases_rate_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1762600000000,
+      "tag": "0012_sleeper_connections_follow",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1762800000000,
+      "tag": "0013_rls_and_grants",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 -- Shared, user-agnostic player news (one row per source URL / post id).
--- Hand-apply like 0002–0004. Not a drizzle-kit journal entry yet.
--- See PR C / MIGRATION-STATUS.md. Do not run db:migrate against production blindly.
+-- Originally hand-applied like 0002–0004; now journal entry 0005.
+-- See MIGRATION-STATUS.md. Do not run db:migrate against production.
 
 CREATE TABLE IF NOT EXISTS "shared_player_news" (
   "id" text PRIMARY KEY NOT NULL,
@@ -25,15 +25,19 @@ CREATE TABLE IF NOT EXISTS "shared_player_news" (
     CHECK ("source" IN ('sleeper', 'x', 'nflverse'))
 );
 
+--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "shared_player_news_source_url_uidx"
   ON "shared_player_news" ("source_url");
 
 -- Dedupes X post_id (and other external ids). Multiple NULLs are allowed.
+--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "shared_player_news_source_external_uidx"
   ON "shared_player_news" ("source", "external_id");
 
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "shared_player_news_player_id_idx"
   ON "shared_player_news" ("player_id");
 
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "shared_player_news_published_at_idx"
   ON "shared_player_news" ("published_at");

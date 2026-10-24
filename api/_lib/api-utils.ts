@@ -37,6 +37,51 @@ export function forbidden(message = "Forbidden"): Response {
   return json({ ok: false, error: message }, 403);
 }
 
+export function payloadTooLarge(): Response {
+  return json({ ok: false, error: "Request body too large" }, 413);
+}
+
+export class BodyTooLargeError extends Error {
+  constructor() {
+    super("Request body too large");
+    this.name = "BodyTooLargeError";
+  }
+}
+
+export const DEFAULT_MAX_BODY_BYTES = 1 * 1024 * 1024; // 1 MB
+
+/**
+ * Read and parse a JSON request body with a byte cap independent of schema
+ * validation. Throws BodyTooLargeError when the body exceeds maxBytes;
+ * propagates JSON parse errors like `req.json()` would.
+ */
+export async function readJsonBody(req: Request, maxBytes = DEFAULT_MAX_BODY_BYTES): Promise<unknown> {
+  const declared = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) throw new BodyTooLargeError();
+  const reader = req.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new BodyTooLargeError();
+    }
+    chunks.push(value);
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const text = new TextDecoder().decode(merged);
+  return text ? JSON.parse(text) : null;
+}
+
 export function methodNotAllowed(allowed: string[]): Response {
   return new Response(JSON.stringify({ ok: false, error: `Method not allowed. Use ${allowed.join(", ")}.` }), {
     status: 405,

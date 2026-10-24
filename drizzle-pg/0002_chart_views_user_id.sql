@@ -11,5 +11,7 @@ ALTER TABLE "saved_chart_views"
   DROP COLUMN IF EXISTS "owner_key",
   ADD COLUMN IF NOT EXISTS "user_id" uuid NOT NULL REFERENCES auth.users("id") ON DELETE CASCADE;
 
+--> statement-breakpoint
 DROP INDEX IF EXISTS "saved_chart_views_owner_idx";
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "saved_chart_views_user_id_idx" ON "saved_chart_views" ("user_id");
