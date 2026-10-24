@@ -74,6 +74,9 @@ jobs:
         run: npx drizzle-kit migrate --config=drizzle.config.ts
       - name: Smoke check migrated schema
         run: |
+          # Journal `when` values must strictly increase: the migrator skips an
+          # entry whose `when` isn't newer than the last applied one.
+          node -e 'const w = require("./drizzle-pg/meta/_journal.json").entries.map((e) => e.when); w.forEach((v, i) => { if (i && v <= w[i - 1]) { console.error(`journal entry ${i} when ${v} <= ${w[i - 1]}`); process.exit(1); } })'
           # Every journal entry must have been applied by the standard command.
           expected_migrations=$(node -p 'require("./drizzle-pg/meta/_journal.json").entries.length')
           psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v expected_migrations="$expected_migrations" <<'SQL'
