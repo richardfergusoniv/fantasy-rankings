@@ -1620,7 +1620,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       gameTimeByTeam,
       sleeperDefenseProjections,
     );
-    const defenseRankByTeam = new Map(leagueDefenses.flatMap((row) => row.rank === null ? [] : [[row.team, row.rank] as const]));
     const mergedRankings = mergePlayerProjections(
       league.league_id,
       rankingField,
@@ -1630,7 +1629,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       useVegasPrimary,
       sleeperProjectionsByPlayerId,
       league.scoring_settings,
-      defenseRankByTeam,
     );
     rankingsByLeagueId.set(league.league_id, mergedRankings);
     defensesByLeagueId.set(league.league_id, leagueDefenses);
