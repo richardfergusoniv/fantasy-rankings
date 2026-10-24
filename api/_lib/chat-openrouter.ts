@@ -114,6 +114,8 @@ export function maskOpenRouterLogText(text: string): string {
     .replace(/\bsk-(?!or-\*\*\*)[A-Za-z0-9_-]{8,}/g, "sk-***");
 }
 
+const MAX_ERROR_BODY_CHARS = 16_000;
+
 function assertFreeModel(model: string): void {
   if (!isFreeOpenRouterModel(model)) {
     throw new Error(`Refusing non-free OpenRouter model: ${model}`);
@@ -173,7 +175,9 @@ export async function callOpenRouterChat(
     throw err;
   }
   if (!response.ok) {
-    throw new OpenRouterError(response.status, text.slice(0, 500), args.body.model);
+    // Keep enough of the body for summarizeOpenRouterErrorBody to parse it as
+    // JSON (a 500-char cut broke longer guardrail errors); it bounds what is logged.
+    throw new OpenRouterError(response.status, text.slice(0, MAX_ERROR_BODY_CHARS), args.body.model);
   }
   let parsed: ChatCompletionResponse;
   try {

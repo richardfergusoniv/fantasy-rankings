@@ -114,6 +114,21 @@ describe("summarizeOpenRouterErrorBody", () => {
     expect(summary).not.toContain("private prompt");
   });
 
+  it("still summarizes a long JSON error body returned by OpenRouter", async () => {
+    const longBody = JSON.stringify({
+      error: { code: 403, message: "Blocked by guardrail", metadata: { flagged_input: "x".repeat(2_000) } },
+    });
+    const fetchImpl = async () => new Response(longBody, { status: 403 });
+    const err = await callOpenRouterChat({
+      apiKey: "sk-or-test",
+      body: { model: "thinkingmachines/inkling:free", messages: [{ role: "user", content: "hi" }], temperature: 0 },
+      fetchImpl,
+    }).catch((e: unknown) => e);
+    const summary = summarizeOpenRouterErrorBody((err as { body: string }).body);
+    expect(summary).toContain("Blocked by guardrail");
+    expect(summary).not.toContain("xxxx");
+  });
+
   it("reports a non-JSON body by length only and masks keys in messages", () => {
     expect(summarizeOpenRouterErrorBody("<html>prompt text</html>")).toBe("non-JSON body (24 chars)");
     expect(summarizeOpenRouterErrorBody(JSON.stringify({ error: { message: "bad key sk-or-v1-abc123" } })))
