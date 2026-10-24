@@ -21,6 +21,7 @@ import {
   VALUE_HISTORY_BACKFILL_DEFAULT_LIMIT,
 } from "../_lib/player-value-history.js";
 import { refreshNflPlayersCache } from "../_lib/nfl-players-cache.js";
+import { pruneRateLimitBuckets } from "../_lib/chat-rate-limit.js";
 import { withDeadline } from "../_lib/sleeper.js";
 import { refreshTeamSituationalSnapshot } from "../_lib/team-situational.js";
 import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
@@ -106,8 +107,17 @@ async function handleRebuildDashboard(): Promise<Response> {
 }
 
 async function handleRefreshFantasyCalc(): Promise<Response> {
+  // Daily piggyback: prune expired chat rate-limit buckets so the shared
+  // quota table doesn't grow unbounded (audit finding #9). Runs first and is
+  // best-effort, so neither a failed prune nor a failed refresh skips the other.
+  let rateLimitBucketsPruned = 0;
+  try {
+    rateLimitBucketsPruned = await pruneRateLimitBuckets();
+  } catch (err) {
+    console.error("[cron] rate-limit bucket prune failed", err instanceof Error ? err.message : err);
+  }
   const result = await refreshFantasyCalcCache();
-  return json({ ok: true, job: "refresh-fantasycalc", ...result });
+  return json({ ok: true, job: "refresh-fantasycalc", rateLimitBucketsPruned, ...result });
 }
 
 async function handleReadDashboardSnapshot(): Promise<Response> {

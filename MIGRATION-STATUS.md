@@ -163,6 +163,17 @@ carry `hash` = SHA-256 of the SQL file's contents and `created_at` = that
 entry's exact `when` value in `meta/_journal.json`. Wrong `created_at` values
 make the next `db:migrate` replay non-idempotent files (`0001`, `0003`).
 
+Until production is baselined that way, apply each new migration to
+production by hand (Supabase SQL editor), in journal order — for example
+`0011_build_leases_rate_limits.sql` before any later file — before or with the
+deploy that needs it. If production has been baselined, seed the matching
+`__drizzle_migrations` row for each hand-applied file the same way.
+
+Migrations are written by hand. `meta/0009_snapshot.json` is not kept in sync
+with `api/_lib/schema.ts` (it predates `0010` onward), so `npm run db:generate`
+would emit duplicates of migrations that already exist. Don't use it; write
+the next numbered SQL file and journal entry instead.
+
 `0002` is safe to re-run (`IF EXISTS` / `IF NOT EXISTS`). `0003` is not — its
 `CREATE POLICY` statements have no existence check. Known parity quirk: `0004`
 creates the `saved_chart_views` owner policy but never enables RLS on that
