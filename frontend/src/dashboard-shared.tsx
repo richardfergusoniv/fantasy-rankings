@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { displayedMatchupPoints } from "../../api/_lib/lineup-optimizer";
 import { api } from "./api";
@@ -26,6 +25,7 @@ import type {
   TradeAsset,
 } from "./dashboard-types";
 import { RankStrip } from "./components/rank-strip";
+import { RefreshIcon, SectionError } from "./section-error";
 import { dashboardFreshness, PROJECTION_ESTIMATE_MARK } from "./dashboard-freshness";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { ModalPortal, useDialogFocusTrap } from "./shared";
@@ -55,6 +55,7 @@ export function tradeTotal(assets: TradeAsset[]): number {
 }
 
 export { waiverAdjustments } from "./lib/trade-adjustment";
+export { RefreshIcon, SectionError };
 
 export function showUndoToast(message: string, onUndo: () => void) {
   toast(message, {
@@ -362,15 +363,6 @@ export function groupNewsItemsByPlayer(news: PlayerNews | undefined): Map<string
 }
 
 
-export function RefreshIcon({ spinning = false }: { spinning?: boolean }) {
-  return (
-    <svg className={spinning ? "spin" : ""} width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M18.3 9A7 7 0 0 0 6.5 6.5L4 9m16 6-2.5 2.5A7 7 0 0 1 5.7 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export function movementPercent(value: number, change: number | null): number | null {
   if (change === null) return null;
   const priorValue = value - change;
@@ -423,17 +415,6 @@ export function DashboardPartialNotes({ dashboard }: { dashboard: Dashboard }) {
       <summary>Part of this view is unavailable</summary>
       <ul>{info.notes.map((note) => <li key={note}>{note}</li>)}</ul>
     </details>
-  );
-}
-
-export function SectionError({ title, onRetry, retrying = false, compact = false }: { title: string; onRetry: () => void; retrying?: boolean; compact?: boolean }) {
-  return (
-    <div className={`section-error${compact ? " compact" : ""}`} role="alert">
-      <strong>{title}</strong>
-      <Button type="button" variant="outline" onClick={onRetry} disabled={retrying}>
-        <RefreshIcon spinning={retrying} /> Retry
-      </Button>
-    </div>
   );
 }
 

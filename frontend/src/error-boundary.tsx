@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from "react";
-import { SectionError } from "./dashboard-shared";
+import { SectionError } from "./section-error";
 
 type FeatureErrorBoundaryProps = {
   children: ReactNode;
