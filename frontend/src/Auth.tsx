@@ -72,6 +72,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [connLoading, setConnLoading] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
+  // Generation counter: a connection lookup only applies its result while it
+  // is still the latest request, so a slow response from a signed-out session
+  // cannot overwrite (or sign out) the session that replaced it.
+  const connRequestId = useRef(0);
 
   const signOut = useCallback(() => {
     localStorage.removeItem("fantasy-rankings-dashboard-v7");
@@ -80,9 +84,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshConnection = useCallback(async () => {
+    const requestId = ++connRequestId.current;
     setConnLoading(true);
     try {
       const result = await fetchConnection();
+      if (requestId !== connRequestId.current) return;
       if (result.ok) {
         setConnState(
           result.connection
@@ -96,7 +102,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
         setConnState({ status: "error" });
       }
     } finally {
-      setConnLoading(false);
+      if (requestId === connRequestId.current) {
+        setConnLoading(false);
+      }
     }
   }, [signOut]);
 
@@ -133,11 +141,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Invalidate any in-flight lookup from a previous session.
+    connRequestId.current += 1;
     if (session) {
       setConnState({ status: "loading" });
       void refreshConnection();
     } else {
       setConnState({ status: "none" });
+      setConnLoading(false);
     }
   }, [session, refreshConnection]);
 

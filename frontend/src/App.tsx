@@ -1077,13 +1077,18 @@ export function App() {
   if (!dashboard || !league) {
     const noLeagues = Boolean(dashboard);
     return (
-      <main id="main-content" tabIndex={-1} className="empty-state">
-        <SafeAreaTopScrim backgroundColor="var(--bg)" />
-        <div className="empty-mark">4TH</div>
+      <>
+        <div className="fixed right-2 top-[max(0.5rem,env(safe-area-inset-top))] z-10">
+          {supabase ? <AccountMenu /> : null}
+        </div>
+        <main id="main-content" tabIndex={-1} className="empty-state">
+          <SafeAreaTopScrim backgroundColor="var(--bg)" />
+          <div className="empty-mark">4TH</div>
         <h1>{noLeagues ? "No leagues for this season." : "Data didn’t make it through."}</h1>
         <p>{noLeagues ? "This Sleeper account isn’t in any NFL league for the current season. Join or create a league on Sleeper, then refresh." : "Fantasy data didn’t load. Try again."}</p>
         <Button type="button" onClick={() => refresh.mutate()} disabled={refresh.isPending}><RefreshIcon spinning={refresh.isPending} /> {noLeagues ? "Refresh" : "Try again"}</Button>
-      </main>
+        </main>
+      </>
     );
   }
 
