@@ -142,7 +142,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "suggest_waivers",
       description:
-        "Best available free agents in my league. Returns deterministic move-scoring labels (Must add / Add / Watch / Pass) per window — explain them, never change them. Pass is hidden from lists unless asked.",
+        "Best available free agents in my league, plus the user's waiver status (FAAB budget remaining, waiver position). Returns deterministic move-scoring labels (Must add / Add / Watch / Pass) per window — explain them, never change them. Pass is hidden from lists unless asked.",
       parameters: {
         type: "object",
         properties: {
@@ -940,6 +940,8 @@ export async function toolSuggestWaivers(
     leagueId: league.id,
     week: dashboard.week,
     scoringWindow: waiverWindowKey,
+    // FAAB budget / waiver priority, so bids and timing can be advised.
+    waivers: league.waivers ?? null,
     note: "Labels and scores are from move-scoring. Explain them; do not re-rank. Pass adds are omitted from lists unless nothing stronger is available or the user asks.",
     weakPositions,
     suggestions: visible,

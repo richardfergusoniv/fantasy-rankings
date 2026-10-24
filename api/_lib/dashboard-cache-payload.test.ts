@@ -80,6 +80,9 @@ const sampleDashboard: Dashboard = {
       tradeStarterSlots: [],
       powerRankingsWeek: [],
       powerRankingsSeasonLong: [],
+      standings: [],
+      playoffs: { teams: null, weekStart: null },
+      waivers: null,
       powerRankingsDynasty: [],
     },
   ],
@@ -95,6 +98,7 @@ const sampleDashboard: Dashboard = {
     teamUsage: [],
     teamRecords: [],
   },
+  gameLines: [],
   strengthOfSchedule: [],
   sourceErrors: [],
 };

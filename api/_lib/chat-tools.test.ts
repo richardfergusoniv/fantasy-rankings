@@ -148,6 +148,9 @@ function baseDashboard(overrides: Partial<Dashboard> = {}): Dashboard {
           },
         ],
         powerRankingsSeasonLong: [],
+        standings: [],
+        playoffs: { teams: null, weekStart: null },
+        waivers: null,
         powerRankingsDynasty: [
           {
             rosterId: 1,
@@ -258,6 +261,7 @@ function baseDashboard(overrides: Partial<Dashboard> = {}): Dashboard {
       teamUsage: [],
       teamRecords: [],
     },
+    gameLines: [],
     strengthOfSchedule: [],
     sourceErrors: [],
     ...overrides,
@@ -363,6 +367,37 @@ describe("dispatchChatTool", () => {
     expect(result.ok).toBe(true);
     expect(result.teamProjection).toBe(120.5);
     expect(result.opponent?.name).toBe("Rival");
+  });
+
+  it("adds game lines, standings and waiver status for the matchup and league tools", async () => {
+    const base = baseDashboard();
+    const dashboard = {
+      ...base,
+      gameLines: [{ team: "KC", opponent: "LV", isHome: true, spread: -6.5, total: 45.5, impliedPoints: 26 }],
+      leagues: base.leagues.map((league) => ({
+        ...league,
+        standings: [
+          { rosterId: 1, teamName: "Mine", isUser: true, rank: 3, wins: 4, losses: 2, ties: 0, pointsFor: 801.2, pointsAgainst: 720.4, playoffSeed: 3, gamesOutOfPlayoffs: null },
+          { rosterId: 2, teamName: "Rival", isUser: false, rank: 7, wins: 3, losses: 3, ties: 0, pointsFor: 760, pointsAgainst: 770, playoffSeed: null, gamesOutOfPlayoffs: 1 },
+        ],
+        playoffs: { teams: 6, weekStart: 15 },
+        waivers: { type: "faab" as const, budget: 100, remaining: 63, position: 4, teams: 12 },
+      })),
+    };
+    const matchup = await dispatchChatTool("get_week_matchup", { leagueId: "lg1" }, ctxWithDashboard(dashboard)) as {
+      starters: Array<{ game: unknown }>;
+      standing: { rank: number; playoffSeed: number | null } | null;
+      opponent: { standing: { gamesOutOfPlayoffs: number | null } | null } | null;
+    };
+    expect(matchup.starters[0]?.game).toEqual({ opponent: "LV", isHome: true, spread: -6.5, total: 45.5, impliedPoints: 26 });
+    expect(matchup.standing).toMatchObject({ rank: 3, playoffSeed: 3, playoffTeams: 6 });
+    expect(matchup.opponent?.standing).toMatchObject({ rank: 7, gamesOutOfPlayoffs: 1 });
+
+    const leagues = await dispatchChatTool("get_my_leagues", {}, ctxWithDashboard(dashboard)) as {
+      leagues: Array<{ waivers: unknown; standing: { pointsFor: number } | null }>;
+    };
+    expect(leagues.leagues[0]?.waivers).toMatchObject({ type: "faab", remaining: 63, position: 4 });
+    expect(leagues.leagues[0]?.standing?.pointsFor).toBe(801.2);
   });
 
   it("builds a player card from rankings and values", async () => {

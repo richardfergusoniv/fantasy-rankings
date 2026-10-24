@@ -5,6 +5,7 @@ import type { MatchupSelection } from "./dashboard-types";
 import { formatRecord, LeagueTeamCard, positionLabel } from "./league-team-card";
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { SegmentedControl, points, shortLeagueName } from "./shared";
+import { StandingsTable } from "./standings-table";
 import { formatPercent, formatWhole } from "./lib/format-number";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
@@ -113,6 +114,7 @@ export function PowerRankings({
   if (!mine || powerRankings.length === 0) {
     return (
       <section className="power-view">
+        <StandingsTable league={league} opponentName={league.opponentTeam?.name} />
         {scopeToggle}
         <div className="analytics-empty">
           <strong>{scope === "week" ? "No weekly power rankings yet." : activeMode === "dynasty" ? "No dynasty power rankings for this league." : "No rest-of-season power rankings for this league."}</strong>
@@ -124,6 +126,7 @@ export function PowerRankings({
 
   return (
     <section className="power-view">
+      <StandingsTable league={league} opponentName={league.opponentTeam?.name} />
       {scopeToggle}
       <Card className="power-hero gap-0 py-0 shadow-sm">
         <div>

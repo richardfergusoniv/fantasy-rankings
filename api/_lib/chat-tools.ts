@@ -81,7 +81,7 @@ export const CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "get_my_leagues",
       description:
-        "List the signed-in user's leagues with roster players, FantasyCalc values, and this week's projections.",
+        "List the signed-in user's leagues with roster players, FantasyCalc values, this week's projections, the user's standing (rank, points for/against, playoff seed or games out) and waiver status (FAAB budget remaining, waiver position).",
       parameters: {
         type: "object",
         properties: {
@@ -116,7 +116,7 @@ export const CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "get_power_rankings",
       description:
-        "Power rankings for a league (weekly, season-long, or dynasty), including league-average totals.",
+        "Power rankings for a league (weekly, season-long, or dynasty), including league-average totals, plus the actual league standings (record, points for/against, playoff seeds, games out) and playoff settings.",
       parameters: {
         type: "object",
         properties: {
@@ -179,7 +179,7 @@ export const CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     type: "function",
     function: {
       name: "get_week_matchup",
-      description: "This week's projections and matchup for the user's team in a league (starters, bench, opponent).",
+      description: "This week's projections and matchup for the user's team in a league (starters, bench, opponent), with each player's game line (spread, over/under, implied team points) and both teams' standings.",
       parameters: {
         type: "object",
         properties: {
@@ -237,6 +237,31 @@ export async function loadDashboard(ctx: ChatToolContext): Promise<Dashboard> {
 
 export function findLeague(dashboard: Dashboard, leagueId: string) {
   return dashboard.leagues.find((league) => league.id === leagueId) ?? null;
+}
+
+/** This week's spread / total / implied points for an NFL team, or null. */
+export function gameLineForTeam(dashboard: Dashboard, team: string | null) {
+  if (!team) return null;
+  const line = (dashboard.gameLines ?? []).find((row) => row.team === team);
+  return line
+    ? { opponent: line.opponent, isHome: line.isHome, spread: line.spread, total: line.total, impliedPoints: line.impliedPoints }
+    : null;
+}
+
+/** A team's row in the league table (rank, PF/PA, playoff position). */
+function standingFor(league: Dashboard["leagues"][number], match: (row: Dashboard["leagues"][number]["standings"][number]) => boolean) {
+  const row = (league.standings ?? []).find(match);
+  if (!row) return null;
+  return {
+    rank: row.rank,
+    teams: league.standings.length,
+    record: { wins: row.wins, losses: row.losses, ties: row.ties },
+    pointsFor: row.pointsFor,
+    pointsAgainst: row.pointsAgainst,
+    playoffSeed: row.playoffSeed,
+    gamesOutOfPlayoffs: row.gamesOutOfPlayoffs,
+    playoffTeams: league.playoffs?.teams ?? null,
+  };
 }
 
 export function normalizeName(value: string): string {
@@ -315,6 +340,8 @@ async function toolGetMyLeagues(ctx: ChatToolContext, args: { leagueId?: string 
         scoringLabel: league.scoringLabel,
         isDynasty: league.seasonLongFormat.isDynasty,
         record: league.record,
+        standing: standingFor(league, (row) => row.isUser),
+        waivers: league.waivers ?? null,
         teamProjection: league.teamProjection,
         teamActual: league.teamActual,
         roster,
@@ -615,6 +642,8 @@ async function toolGetPowerRankings(
       horizon,
       teams: [],
       leagueAverage: null,
+      standings: league.standings ?? [],
+      playoffs: league.playoffs ?? null,
       note: "No power rankings available for this horizon.",
     };
   }
@@ -635,6 +664,9 @@ async function toolGetPowerRankings(
         isUser: row.isUser,
       })),
     leagueAverage: powerAverage(rows),
+    // The actual league table (record + points), distinct from value-based power rankings.
+    standings: league.standings ?? [],
+    playoffs: league.playoffs ?? null,
   };
 }
 
@@ -912,14 +944,16 @@ async function toolGetWeekMatchup(ctx: ChatToolContext, args: { leagueId: string
     leagueId: league.id,
     name: league.name,
     record: league.record,
+    standing: standingFor(league, (row) => row.isUser),
     teamProjection: league.teamProjection,
     teamActual: league.teamActual,
     suggestion: league.suggestion,
-    starters: league.starters.map((player) => rosterPlayerSummary(player, valueById)),
-    bench: league.bench.map((player) => rosterPlayerSummary(player, valueById)),
+    starters: league.starters.map((player) => ({ ...rosterPlayerSummary(player, valueById), game: gameLineForTeam(dashboard, player.team) })),
+    bench: league.bench.map((player) => ({ ...rosterPlayerSummary(player, valueById), game: gameLineForTeam(dashboard, player.team) })),
     opponent: league.opponentTeam
       ? {
         name: league.opponentTeam.name,
+        standing: standingFor(league, (row) => !row.isUser && row.teamName === league.opponentTeam?.name),
         teamProjection: league.opponentTeam.teamProjection,
         teamActual: league.opponentTeam.teamActual,
         starters: league.opponentTeam.starters.map((player) => ({
@@ -928,9 +962,11 @@ async function toolGetWeekMatchup(ctx: ChatToolContext, args: { leagueId: string
           position: player.position,
           projection: player.projection,
           actual: player.actual,
+          game: gameLineForTeam(dashboard, player.team),
         })),
       }
       : null,
+    gameLineNote: "game: this week's line for the player's NFL team. spread < 0 means favored; impliedPoints is what the line expects that team to score.",
   };
 }
 
