@@ -117,9 +117,20 @@ jobs:
               RAISE EXCEPTION 'tables without RLS enabled: %', missing;
             END IF;
 
-            IF (SELECT count(*) FROM pg_policies) < 8 THEN
-              RAISE EXCEPTION 'expected at least 8 RLS policies, found %',
+            -- 0012 drops the three sleeper_connections write policies.
+            IF (SELECT count(*) FROM pg_policies) < 5 THEN
+              RAISE EXCEPTION 'expected at least 5 RLS policies, found %',
                 (SELECT count(*) FROM pg_policies);
+            END IF;
+
+            IF to_regclass('public.sleeper_connections_sleeper_user_id_uidx') IS NOT NULL THEN
+              RAISE EXCEPTION 'sleeper_connections still has a unique sleeper_user_id index';
+            END IF;
+            IF EXISTS (
+              SELECT 1 FROM pg_policies
+              WHERE tablename = 'sleeper_connections' AND cmd IN ('INSERT', 'UPDATE', 'DELETE', 'ALL')
+            ) OR has_table_privilege('authenticated', 'public.sleeper_connections', 'INSERT, UPDATE, DELETE') THEN
+              RAISE EXCEPTION 'sleeper_connections still allows direct client writes';
             END IF;
 
             IF (SELECT count(*) FROM drizzle.__drizzle_migrations)

@@ -75,9 +75,9 @@ describe("POST /api/user connect", () => {
   });
 });
 
-describe("sleeper_connections migration 0011", () => {
+describe("sleeper_connections migration 0012", () => {
   const sql = readFileSync(
-    path.resolve(process.cwd(), "drizzle-pg", "0011_sleeper_connections_follow.sql"),
+    path.resolve(process.cwd(), "drizzle-pg", "0012_sleeper_connections_follow.sql"),
     "utf8",
   );
 
