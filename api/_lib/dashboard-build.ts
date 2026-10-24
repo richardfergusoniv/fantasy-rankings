@@ -2140,12 +2140,9 @@ export async function loadOrBuildUserDashboard(
   }
 
   try {
-    const built = await buildUserDashboardUnderLease(sleeperUserId, force, cached?.fetchedAtMs ?? 0);
-    if (!built.cacheWritePending) {
-      await writeUserDashboardCache(cacheKey, built.dashboard);
-    }
+    const dashboard = await buildUserDashboardUnderLease(sleeperUserId, force, cached?.fetchedAtMs ?? 0);
     return {
-      dashboard: built.dashboard,
+      dashboard,
       fetchedAtMs: responseCacheFetchedAtMs("built", Date.now()),
     };
   } catch (error) {
@@ -2436,7 +2433,7 @@ async function buildUserDashboardUnderLease(
   sleeperUserId: string,
   force: boolean,
   cachedFetchedAtMs: number,
-): Promise<{ dashboard: Dashboard; cacheWritePending: boolean }> {
+): Promise<Dashboard> {
   const resource = dashboardBuildLeaseResource(sleeperUserId);
   const outcome = await runWithBuildLease(
     drizzleBuildLeaseStore,
@@ -2448,10 +2445,14 @@ async function buildUserDashboardUnderLease(
       // If the deadline wins the race, the build keeps running detached; guard
       // against an unhandled rejection when it eventually settles.
       buildPromise.catch(() => undefined);
-      return await withDeadline(buildPromise, BUILD_DEADLINE_MS);
+      const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
+      // Publish inside the lease: a joiner polls for this row, so the lease
+      // must still be held when it lands (CodeRabbit, PR #282).
+      await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
+      return dashboard;
     },
   );
-  if (outcome.status === "built") return { dashboard: outcome.result, cacheWritePending: false };
+  if (outcome.status === "built") return outcome.result;
   if (outcome.status === "failed") throw outcome.error;
   // "joined": another instance is building. Wait for its cache write (it
   // already lands in the cache, so this caller must not rewrite it).
@@ -2464,7 +2465,7 @@ async function buildUserDashboardUnderLease(
   if (!dashboard) {
     throw new Error("dashboard build in progress elsewhere");
   }
-  return { dashboard, cacheWritePending: true };
+  return dashboard;
 }
 
 /**
@@ -2519,12 +2520,13 @@ export function kickUserDashboardBuild(sleeperUserId: string): Promise<void> {
         async () => {
           const buildPromise = buildUserDashboard(sleeperUserId);
           buildPromise.catch(() => undefined);
-          return await withDeadline(buildPromise, BUILD_DEADLINE_MS);
+          const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
+          // Publish inside the lease (see buildUserDashboardUnderLease).
+          await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
+          return dashboard;
         },
       );
-      if (outcome.status === "built") {
-        await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), outcome.result);
-      } else if (outcome.status === "failed") {
+      if (outcome.status === "failed") {
         console.error(
           "[dashboard-build] background build failed",
           outcome.error instanceof Error ? outcome.error.message : outcome.error,

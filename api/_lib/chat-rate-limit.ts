@@ -11,6 +11,7 @@
 
 import { sql } from "drizzle-orm";
 import { db } from "./db.js";
+import { withDeadline } from "./sleeper.js";
 import { CHAT_RATE_LIMIT_MAX, CHAT_RATE_LIMIT_WINDOW_MS } from "./chat-config.js";
 
 type Bucket = { timestamps: number[] };
@@ -55,6 +56,9 @@ export async function incrementRateLimitBucket(
   return Number(rows[0]?.count ?? 1);
 }
 
+/** Bound the shared-counter call so a stalled DB cannot delay chat turns. */
+const RATE_LIMIT_DB_TIMEOUT_MS = 2_000;
+
 export async function checkChatRateLimit(
   userId: string,
   now = Date.now(),
@@ -63,7 +67,10 @@ export async function checkChatRateLimit(
 ): Promise<RateLimitResult> {
   const windowStartMs = Math.floor(now / windowMs) * windowMs;
   try {
-    const count = await incrementRateLimitBucket(`chat:${userId}`, windowStartMs);
+    const bucketPromise = incrementRateLimitBucket(`chat:${userId}`, windowStartMs);
+    // If the deadline wins, the late settlement must not be an unhandled rejection.
+    bucketPromise.catch(() => undefined);
+    const count = await withDeadline(bucketPromise, RATE_LIMIT_DB_TIMEOUT_MS);
     if (count > max) {
       return { ok: false, retryAfterMs: Math.max(0, windowStartMs + windowMs - now) };
     }
@@ -75,6 +82,15 @@ export async function checkChatRateLimit(
     );
     return checkLocalRateLimit(userId, now, max, windowMs);
   }
+}
+
+/** Delete buckets whose window closed more than `retainMs` ago. */
+export async function pruneRateLimitBuckets(retainMs = 24 * 60 * 60 * 1000): Promise<number> {
+  const result = (await db.execute(sql`
+    DELETE FROM rate_limit_buckets
+    WHERE window_start < now() - (${retainMs} || ' milliseconds')::interval
+  `)) as unknown as { count?: number };
+  return Number(result.count ?? 0);
 }
 
 /** Test helper: clear all in-memory fallback buckets. */
