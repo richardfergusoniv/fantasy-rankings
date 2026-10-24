@@ -1,6 +1,13 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { personalQueryKey, type ViewerIdentity } from "./viewer-scope";
 
-export const SAVED_CHART_VIEWS_QUERY_KEY = ["saved-chart-views"] as const;
+/** Shared prefix so cancel/invalidate fan out across every viewer's key. */
+export const SAVED_CHART_VIEWS_QUERY_PREFIX = "saved-chart-views";
+
+/** Saved views are per-viewer data: the key carries the verified identity. */
+export function savedChartViewsQueryKey(viewer: ViewerIdentity): readonly unknown[] {
+  return personalQueryKey(viewer, SAVED_CHART_VIEWS_QUERY_PREFIX);
+}
 
 export type SavedChartViewList<T> = { views: T[] };
 
@@ -28,25 +35,27 @@ export function optimisticRemoveSavedChartView<T extends { id: string }>(
 
 export function applySavedChartViewMutation<T>(
   client: QueryClient,
+  queryKey: readonly unknown[],
   recipe: (current: SavedChartViewList<T> | undefined) => SavedChartViewList<T>,
 ): SavedChartViewList<T> | undefined {
-  const current = client.getQueryData<SavedChartViewList<T>>(SAVED_CHART_VIEWS_QUERY_KEY);
+  const current = client.getQueryData<SavedChartViewList<T>>(queryKey);
   const previous = current ? { views: [...current.views] } : undefined;
-  client.setQueryData(SAVED_CHART_VIEWS_QUERY_KEY, recipe(previous));
+  client.setQueryData(queryKey, recipe(previous));
   return previous;
 }
 
 export function rollbackSavedChartViewMutation<T>(
   client: QueryClient,
+  queryKey: readonly unknown[],
   previous: SavedChartViewList<T> | undefined,
 ): void {
   if (previous === undefined) {
-    client.removeQueries({ queryKey: SAVED_CHART_VIEWS_QUERY_KEY });
+    client.removeQueries({ queryKey });
     return;
   }
-  client.setQueryData(SAVED_CHART_VIEWS_QUERY_KEY, previous);
+  client.setQueryData(queryKey, previous);
 }
 
-export function settleSavedChartViewMutation(client: QueryClient): Promise<void> {
-  return client.invalidateQueries({ queryKey: SAVED_CHART_VIEWS_QUERY_KEY });
+export function settleSavedChartViewMutation(client: QueryClient, queryKey: readonly unknown[]): Promise<void> {
+  return client.invalidateQueries({ queryKey });
 }

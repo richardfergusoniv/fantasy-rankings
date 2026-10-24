@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 
@@ -67,6 +68,24 @@ def _pull_provider(name: str, week: int, season: int):
     return records, None
 
 
+_PULL_FILE_RE = re.compile(
+    r"^(?:props|consensus|projections|projections_firstdown)_(\d+)_w(\d+)\.json$")
+
+
+def _prune_old_pull_files(data_dir: str, season: int, week: int) -> int:
+    """Drop pull artifacts from weeks before (season, week) so data_dir
+    doesn't grow one fileset per week forever."""
+    removed = 0
+    for fname in os.listdir(data_dir):
+        m = _PULL_FILE_RE.match(fname)
+        if not m:
+            continue
+        if (int(m.group(1)), int(m.group(2))) < (season, week):
+            os.remove(os.path.join(data_dir, fname))
+            removed += 1
+    return removed
+
+
 def cmd_pull(args) -> int:
     names = _parse_providers(args)
     os.makedirs(args.data_dir, exist_ok=True)
@@ -82,11 +101,23 @@ def cmd_pull(args) -> int:
             print(f"[{name}] {len(records)} records")
             per_provider[name] = {"records": [r.to_dict() for r in records], "error": None}
             all_records.extend(records)
+    # a provider that answered with zero records is not a usable pull: it
+    # mustn't satisfy --min-providers or license pruning older weeks
+    succeeded = [n for n, p in per_provider.items()
+                 if not p["error"] and p["records"]]
+    failed = [n for n in per_provider if n not in succeeded]
+    if len(succeeded) < args.min_providers:
+        outcome = "failed"
+    elif failed:
+        outcome = "partial"
+    else:
+        outcome = "ok"
     props_path = os.path.join(args.data_dir, f"props_{args.season}_w{args.week}.json")
     with open(props_path, "w") as f:
         json.dump({
             "season": args.season, "week": args.week,
-            "fetched_at": utcnow_iso(), "providers": per_provider,
+            "fetched_at": utcnow_iso(), "outcome": outcome,
+            "providers": per_provider,
             "records": [r.to_dict() for r in all_records],
         }, f, indent=1)
     consensus = build_consensus(all_records)
@@ -96,7 +127,15 @@ def cmd_pull(args) -> int:
                    "built_at": utcnow_iso(), "consensus": consensus}, f, indent=1)
     print(f"wrote {props_path} ({len(all_records)} records)")
     print(f"wrote {consensus_path} ({len(consensus)} consensus rows)")
-    return 0
+    # don't delete good history behind a failed or empty pull
+    pruned = 0 if outcome == "failed" or not succeeded else _prune_old_pull_files(
+        args.data_dir, args.season, args.week)
+    if pruned:
+        print(f"pruned {pruned} pull artifact(s) from earlier weeks")
+    print(f"pull outcome: {outcome} "
+          f"({len(succeeded)}/{len(names)} providers ok, "
+          f"min required {args.min_providers})")
+    return 0 if outcome != "failed" else 1
 
 
 def cmd_coverage(args) -> int:
@@ -170,6 +209,9 @@ def main(argv=None) -> int:
     pull.add_argument("--all", action="store_true", help="pull all providers")
     pull.add_argument("--week", type=int, required=True)
     pull.add_argument("--season", type=int, default=2026)
+    pull.add_argument("--min-providers", type=int, default=1, metavar="N",
+                      help="exit nonzero unless at least N providers return "
+                           "records (default 1)")
 
     cov = sub.add_parser("coverage", help="report markets/players/books by provider")
     cov.add_argument("--week", type=int, required=True)

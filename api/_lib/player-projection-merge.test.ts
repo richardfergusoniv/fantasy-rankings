@@ -134,7 +134,6 @@ describe("mergePlayerProjections", () => {
       true,
       sleeper,
       PPR,
-      new Map(),
     );
 
     const warrenRow = merged.find((row) => row.playerId === "warren");
@@ -165,7 +164,6 @@ describe("mergePlayerProjections", () => {
       true,
       sleeper,
       PPR,
-      new Map(),
     );
 
     const judkinsRow = merged.find((row) => row.playerId === "judkins");
@@ -188,12 +186,38 @@ describe("mergePlayerProjections", () => {
       false,
       sleeper,
       PPR,
-      new Map(),
     );
 
     expect(merged).toHaveLength(1);
     expect(merged[0]?.leagueProjection).toBe(0);
     expect(merged[0]?.projectionSource).toBe("fallback");
     expect(merged[0]?.sleeperProjection).toBeNull();
+  });
+
+  it("ranks kickers by projection, not by opposing defense", () => {
+    const lowKicker = baseRow({ playerId: "k-low", name: "Low Kicker", position: "K", team: "MIA", opponent: "CLE" });
+    const highKicker = baseRow({ playerId: "k-high", name: "High Kicker", position: "K", team: "DAL", opponent: "BUF" });
+    const sleeper = new Map<string, SleeperProjection>([
+      ["k-low", { player_id: "k-low", stats: { fgm: 2, xpm: 1 } }],
+      ["k-high", { player_id: "k-high", stats: { fgm: 3, xpm: 2 } }],
+    ]);
+
+    const merged = mergePlayerProjections(
+      LEAGUE_ID,
+      "ppr",
+      [lowKicker, highKicker],
+      snapshot("vegas-consensus", []),
+      null,
+      false,
+      sleeper,
+      { fgm: 3, xpm: 1 },
+    );
+
+    const highRow = merged.find((row) => row.playerId === "k-high");
+    const lowRow = merged.find((row) => row.playerId === "k-low");
+    expect(highRow?.leagueProjection).toBe(11);
+    expect(lowRow?.leagueProjection).toBe(7);
+    expect(highRow?.pprRank).toBe(1);
+    expect(lowRow?.pprRank).toBe(2);
   });
 });

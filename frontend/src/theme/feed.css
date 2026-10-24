@@ -113,9 +113,12 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
     animation: none;
     will-change: auto;
   }
-  .league-sticky { display: grid; grid-template-columns: 170px minmax(0, 680px); align-items: center; padding: 10px 32px 8px; }
+  /* First column sizes to the week text plus the Ask/theme/refresh controls so
+     the league picker can never overlap them at any width or zoom level. */
+  .league-sticky { display: grid; grid-template-columns: max-content minmax(0, 680px); column-gap: 24px; align-items: center; padding: 10px 32px 8px; }
   .ticker-strip { grid-column: 1 / -1; margin: -10px -32px 4px; }
   .week-line { min-height: 44px; padding-right: 18px; }
+  .data-notes { grid-column: 1 / -1; }
   .league-picker { max-width: 680px; }
   .control-deck { padding-bottom: 0; }
   .primary-tabs { position: static; width: 860px; margin: 6px 32px 0; padding: 0; overflow-x: visible; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; }
