@@ -208,14 +208,18 @@
 }
 /* Team stats: a usage grid. Rows are players (sorted by average), columns are
    weeks; each cell's blue tint is that player's share of the work that week. */
+.team-stats-chart-card {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
 .team-stats-chart-open {
   width: 100%;
   min-width: 0;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  background: var(--surface);
   cursor: pointer;
 }
 .team-stats-chart-open:focus-visible {
@@ -227,6 +231,35 @@
   border: 0;
   border-radius: 0;
   height: min(52dvh, 420px);
+}
+.team-stats-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 8px 12px 10px;
+  list-style: none;
+  color: var(--dim);
+  font-size: var(--type-caption);
+}
+.team-stats-legend li {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+.team-stats-legend li.is-rostered {
+  color: var(--text);
+  font-weight: 700;
+}
+.team-stats-legend i {
+  flex: none;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+.team-stats-legend .is-rostered i {
+  height: 4px;
 }
 .team-stats-table-dialog .chart-result-body {
   overflow: auto;
@@ -318,6 +351,10 @@
   font-weight: 700;
 }
 @media (max-width: 759px) {
+  /* Position buttons take the first row; Team and Stat pair on the row below. */
+  .monitor-team-stats-controls .monitor-value-chart-field {
+    flex: 1 1 140px;
+  }
   .monitor-team-stats-group {
     flex: 1 1 100%;
   }
