@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   dashboardFreshness,
-  dashboardHasEstimatedProjections,
   updatedAgoLabel,
   type FreshnessInput,
 } from "./dashboard-freshness";
@@ -15,9 +14,6 @@ function fixture(overrides: Partial<FreshnessInput> = {}): FreshnessInput {
     rankingsAsOf: null,
     fantasyCalcAsOf: null,
     sourceErrors: [],
-    rankings: [],
-    defenses: [],
-    leagues: [],
     ...overrides,
   };
 }
@@ -56,19 +52,12 @@ describe("dashboardFreshness", () => {
         "nflverse advanced stats are temporarily unavailable.",
         "FantasyCalc season-long rankings are unavailable for one or more league formats.",
       ],
-      rankings: [{ projectionSource: "vegas" }, { projectionSource: "fallback" }],
-      leagues: [{
-        starters: [{ projectionSource: "vegas" }],
-        bench: [],
-        tradeTeams: [{ players: [{ projectionSource: "fallback" }] }],
-      }],
     }), NOW);
     expect(info.partial).toBe(true);
     expect(info.notes).toHaveLength(3);
     expect(info.notes.join(" ")).toMatch(/Sleeper/);
     expect(info.notes.join(" ")).toMatch(/nflverse/);
     expect(info.notes.join(" ")).toMatch(/FantasyCalc/);
-    expect(info.hasEstimates).toBe(true);
     // Cached data retained: build time still reported, not an error screen.
     expect(info.updatedLabel).toBe("Updated 5m ago");
   });
@@ -80,25 +69,5 @@ describe("dashboardFreshness", () => {
     }), NOW);
     expect(info.partial).toBe(true);
     expect(info.notes).toHaveLength(1);
-  });
-});
-
-describe("dashboardHasEstimatedProjections", () => {
-  it("detects fallback projections across rankings, defenses, and league rosters", () => {
-    expect(dashboardHasEstimatedProjections({
-      rankings: [{ projectionSource: "vegas" }],
-      defenses: [{ projectionSource: "sleeper" }],
-      leagues: [{
-        starters: [{ projectionSource: "sleeper" }],
-        bench: [{ projectionSource: null }],
-        opponentTeam: { starters: [{ projectionSource: "fallback" }] },
-      }],
-    })).toBe(true);
-
-    expect(dashboardHasEstimatedProjections({
-      rankings: [{ projectionSource: "vegas" }],
-      defenses: [{ projectionSource: "sleeper" }],
-      leagues: [{ starters: [{ projectionSource: "sleeper" }] }],
-    })).toBe(false);
   });
 });

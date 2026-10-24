@@ -155,13 +155,8 @@ export function shortLeagueName(name: string): string {
     .replace("Hoe Ass Dynasty League", "Hoe Ass Dynasty");
 }
 
-/**
- * Fallback ("estimated") projections are marked with *; the header freshness
- * strip carries the "* est" legend whenever the dashboard contains one.
- */
-export function formatProjectionPoints(value: number | null, source?: PlayerSearchResult["projectionSource"]): string {
-  const formatted = formatPoints(value);
-  return value !== null && source === "fallback" ? `${formatted}*` : formatted;
+export function formatProjectionPoints(value: number | null, _source?: PlayerSearchResult["projectionSource"]): string {
+  return formatPoints(value);
 }
 
 export const projectionComponentFields: Partial<Record<BasePosition, ReadonlyArray<{ key: string; label: string }>>> = {
