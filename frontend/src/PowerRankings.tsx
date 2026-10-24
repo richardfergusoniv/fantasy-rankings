@@ -2,9 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import type { api, ApiResponse } from "./api";
 import type { MatchupSelection } from "./dashboard-types";
-import { leagueExpertRanks } from "./expert-ranks";
 import { formatRecord, LeagueTeamCard, positionLabel } from "./league-team-card";
-import { buildEcrPowerRankings } from "./lib/ecr-power-rankings";
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { SegmentedControl, points, shortLeagueName } from "./shared";
 import { formatPercent, formatWhole } from "./lib/format-number";
@@ -30,17 +28,14 @@ export function PowerRankings({
   playerCardOpen: boolean;
   selectedPlayerId?: string | null;
 }) {
-  const [scope, setScope] = useState<"week" | "ecr" | "restOfSeason">("week");
+  const [scope, setScope] = useState<"week" | "restOfSeason">("week");
   const [mode, setMode] = useState<"seasonLong" | "dynasty">("seasonLong");
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
   const isDynastyLeague = league.seasonLongFormat.isDynasty;
   const activeMode = isDynastyLeague ? mode : "seasonLong";
-  const experts = useMemo(() => leagueExpertRanks(dashboard, league), [dashboard, league]);
-  const ecrTeams = useMemo(() => (experts ? buildEcrPowerRankings(league, experts) : []), [experts, league]);
   const isWeekly = scope !== "restOfSeason";
   const powerRankings = scope === "week"
     ? league.powerRankingsWeek
-    : scope === "ecr" ? ecrTeams.map((entry) => entry.team)
     : activeMode === "dynasty" ? league.powerRankingsDynasty : league.powerRankingsSeasonLong;
   const mine = powerRankings.find((team) => team.isUser);
   const positions: PowerPosition[] = isWeekly
@@ -96,10 +91,10 @@ export function PowerRankings({
   const scopeToggle = (
     <SegmentedControl
       className="lineup-mode-toggle power-scope-toggle page-tab-control"
-      value={scope === "week" ? "week" : scope === "ecr" ? "ecr" : activeMode === "dynasty" ? "dynasty" : "ros"}
+      value={scope === "week" ? "week" : activeMode === "dynasty" ? "dynasty" : "ros"}
       onChange={(value) => {
-        if (value === "week" || value === "ecr") {
-          setScope(value);
+        if (value === "week") {
+          setScope("week");
         } else if (value === "ros") {
           setScope("restOfSeason");
           setMode("seasonLong");
@@ -110,8 +105,8 @@ export function PowerRankings({
       }}
       label="Power ranking horizon"
       options={isDynastyLeague
-        ? [{ value: "week", label: "Vegas" }, { value: "ecr", label: "ECR" }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
-        : [{ value: "week", label: "Vegas" }, { value: "ecr", label: "ECR" }, { value: "ros", label: "Season Long" }]}
+        ? [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season Long" }, { value: "dynasty", label: "Dynasty" }]
+        : [{ value: "week", label: "Vegas" }, { value: "ros", label: "Season Long" }]}
     />
   );
 
@@ -120,8 +115,8 @@ export function PowerRankings({
       <section className="power-view">
         {scopeToggle}
         <div className="analytics-empty">
-          <strong>{scope === "ecr" ? "No ECR power rankings yet." : scope === "week" ? "No weekly power rankings yet." : activeMode === "dynasty" ? "No dynasty power rankings for this league." : "No rest-of-season power rankings for this league."}</strong>
-          <span>{scope === "ecr" ? "FantasyPros projections for this week haven’t loaded." : scope === "week" ? "Refresh to check the latest Vegas lines and nflverse usage data." : "Refresh after FantasyCalc publishes values for this league format."}</span>
+          <strong>{scope === "week" ? "No weekly power rankings yet." : activeMode === "dynasty" ? "No dynasty power rankings for this league." : "No rest-of-season power rankings for this league."}</strong>
+          <span>{scope === "week" ? "Refresh to check the latest Vegas lines and nflverse usage data." : "Refresh after FantasyCalc publishes values for this league format."}</span>
         </div>
       </section>
     );
@@ -205,7 +200,6 @@ export function PowerRankings({
           league={league}
           dashboard={dashboard}
           scope={isWeekly ? "week" : "restOfSeason"}
-          ecr={scope === "ecr" ? ecrTeams.find((entry) => entry.team.rosterId === selectedTeam.rosterId) ?? null : null}
           mode={activeMode}
           powerRankings={powerRankings}
           playerCardOpen={playerCardOpen}

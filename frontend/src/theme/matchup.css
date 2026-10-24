@@ -155,5 +155,3 @@
 .matchup-win-labels span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .matchup-win-bar { display: flex; height: 8px; overflow: hidden; border-radius: var(--radius-xs); background: var(--border); }
 .matchup-win-bar .is-mine { background: var(--roster-highlight); }
-/* Experts lineup: FantasyPros position rank under the projected points. */
-.matchup-player-score .matchup-expert-rank { color: var(--dim); font-size: var(--type-caption); font-weight: 700; line-height: 1; }

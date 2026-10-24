@@ -3,7 +3,6 @@ import type { Dashboard, League, MatchupSelection } from "./dashboard-types";
 import { compareByFantasyPosition } from "./fantasy-position-order";
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { DepthChangeMark, MatchupTag, ModalPortal, depthChange, leagueRank, points, useDialogFocusTrap } from "./shared";
-import type { EcrTeam } from "./lib/ecr-power-rankings";
 import { formatWhole } from "./lib/format-number";
 
 type RosterPlayer = League["tradeTeams"][number]["players"][number];
@@ -37,7 +36,6 @@ export function LeagueTeamCard({
   league,
   dashboard,
   scope,
-  ecr = null,
   mode,
   powerRankings,
   playerCardOpen,
@@ -52,8 +50,6 @@ export function LeagueTeamCard({
   league: League;
   dashboard: Dashboard;
   scope: PowerScope;
-  /** Show this team's FantasyPros lineup and projections in place of the Vegas ones. */
-  ecr?: EcrTeam | null;
   mode: PowerMode;
   /** Every team in the table this card was opened from, to rank each position. */
   powerRankings: readonly PowerTeam[];
@@ -94,19 +90,10 @@ export function LeagueTeamCard({
       .filter((row) => row.formatKey === activeFormatKey && row.position !== "PICK")
       .map((row) => [row.playerId, row]),
   ), [activeFormatKey, dashboard.seasonLongRankings]);
-  const roster = useMemo(() => {
-    const found = league.tradeTeams.find((candidate) => candidate.rosterId === team.rosterId) ?? null;
-    if (!found || !ecr) return found;
-    return {
-      ...found,
-      players: found.players.map((player) => ({
-        ...player,
-        projection: ecr.projections.get(player.playerId) ?? null,
-        isStarter: ecr.starterIds.has(player.playerId),
-        lineupSlot: ecr.slotByPlayerId.get(player.playerId) ?? null,
-      })),
-    };
-  }, [ecr, league.tradeTeams, team.rosterId]);
+  const roster = useMemo(
+    () => league.tradeTeams.find((candidate) => candidate.rosterId === team.rosterId) ?? null,
+    [league.tradeTeams, team.rosterId],
+  );
   const matchupSlotOrder = useMemo(
     () => league.starters.map((player) => player.lineupSlot ?? player.position),
     [league.starters],

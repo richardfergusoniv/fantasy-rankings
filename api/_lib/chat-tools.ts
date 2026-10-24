@@ -475,7 +475,6 @@ async function toolGetPlayerCard(
     (row) => row.playerId === playerId && row.position !== "PICK",
   );
   const roster = findRosterPlayer(dashboard, playerId);
-  const insights = dashboard.playerInsights.experts[playerId] ?? null;
   const trending = dashboard.playerTrending[playerId] ?? null;
 
   const position = (weekly?.position ?? seasonRows[0]?.position ?? roster?.position ?? null) as
@@ -522,13 +521,6 @@ async function toolGetPlayerCard(
       positionRank: row.positionRank,
       trend30Day: row.trend30Day,
     })),
-    expertConsensus: insights
-      ? {
-        projection: insights.projection,
-        ecr: insights.ecr,
-        positionRank: insights.positionRank,
-      }
-      : null,
     trending,
     boomBust,
     news,

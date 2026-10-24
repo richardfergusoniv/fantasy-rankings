@@ -105,9 +105,6 @@ function baseDashboard(): Dashboard {
       depth: { p1: { position: "WR", rank: 1 } },
       depthAsOf: null,
       depthPrevious: { p1: { position: "WR", rank: 2 } },
-      experts: { p1: { ecr: 8, best: 4, worst: 14, positionRank: 5, projection: 16.2 } },
-      expertsAsOf: null,
-      expertsLastKickoff: null,
     },
     leagues: [
       {
@@ -550,12 +547,10 @@ describe("extended chat tools", () => {
       ok: boolean;
       analytics: { seasonGames: number } | null;
       depth: { rank: number } | null;
-      experts: { projection: number | null } | null;
     };
     expect(result.ok).toBe(true);
     expect(result.analytics?.seasonGames).toBe(6);
     expect(result.depth?.rank).toBe(1);
-    expect(result.experts?.projection).toBe(16.2);
   });
 
   it("get_projections returns week and ROS for roster", async () => {

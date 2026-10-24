@@ -261,34 +261,18 @@ export const playerTrendingEntrySchema = z.object({
   drops: z.number().int().nullable(),
 });
 
-/**
- * Depth-chart rank and this week's FantasyPros expert consensus, keyed by
- * Sleeper player id (team code for defenses).
- */
+/** Depth-chart rank, keyed by Sleeper player id. */
 export const playerInsightsSchema = z.object({
   depth: z.record(z.string(), z.object({ position: z.string(), rank: z.number().int() })),
   depthAsOf: z.string().nullable(),
   /** Ranks from the oldest chart in the past week; a different rank means he moved. */
   depthPrevious: z.record(z.string(), z.object({ position: z.string(), rank: z.number().int() })).default({}),
-  experts: z.record(z.string(), z.object({
-    ecr: z.number(),
-    best: z.number().int(),
-    worst: z.number().int(),
-    positionRank: z.number().int().nullable(),
-    projection: z.number().nullable(),
-  })),
-  expertsAsOf: z.string().nullable(),
-  /** Last kickoff of the slate the expert ranks cover; identifies their week. */
-  expertsLastKickoff: z.string().nullable().default(null),
 });
 
 export const emptyPlayerInsights: z.infer<typeof playerInsightsSchema> = {
   depth: {},
   depthAsOf: null,
   depthPrevious: {},
-  experts: {},
-  expertsAsOf: null,
-  expertsLastKickoff: null,
 };
 
 export const dashboardResponse = z.object({

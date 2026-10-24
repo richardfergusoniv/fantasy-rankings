@@ -58,7 +58,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "get_player_advanced",
       description:
-        "Advanced/usage stats and insights for a player (season/rolling analytics, depth, experts, chart extras, Boom/Bust, SOS).",
+        "Advanced/usage stats and insights for a player (season/rolling analytics, depth, chart extras, Boom/Bust, SOS).",
       parameters: {
         type: "object",
         properties: {
@@ -377,7 +377,6 @@ export async function toolGetPlayerAdvanced(
   const insights = dashboard.playerInsights;
   const depth = insights.depth[playerId] ?? null;
   const depthPrevious = insights.depthPrevious[playerId] ?? null;
-  const experts = insights.experts[playerId] ?? null;
   const sos = league
     ? dashboard.strengthOfSchedule.find((row) => row.leagueId === league.id) ?? null
     : null;
@@ -439,7 +438,6 @@ export async function toolGetPlayerAdvanced(
       : null,
     depth,
     depthPrevious,
-    experts,
     chartExtras,
     strengthOfSchedule: sosForTeam,
     boomBust,
