@@ -1,5 +1,6 @@
 /**
- * Freshness/status model for the dashboard header strip.
+ * Freshness/status model for the dashboard (the partial-data notes under the
+ * header use it).
  *
  * The API already records `status: "partial"`, `sourceErrors`, `asOf` (our
  * build time), `rankingsAsOf` (projection snapshot time), and
@@ -8,8 +9,6 @@
  * an explanation. Kept free of React so vitest can cover the source-failure
  * cases without mounting the app.
  */
-
-export const PROJECTION_ESTIMATE_MARK = "*";
 
 /** Minimal shape — anything with these fields works (Dashboard satisfies it). */
 export type FreshnessInput = {
@@ -22,17 +21,6 @@ export type FreshnessInput = {
   fantasyCalcAsOf: string | null;
   /** Backend explanations of what is unavailable or fell back. */
   sourceErrors: string[];
-  rankings?: ReadonlyArray<{ projectionSource?: string | null }>;
-  defenses?: ReadonlyArray<{ projectionSource?: string | null }>;
-  leagues?: ReadonlyArray<{
-    starters?: ReadonlyArray<{ projectionSource?: string | null }>;
-    bench?: ReadonlyArray<{ projectionSource?: string | null }>;
-    opponentTeam?: {
-      starters?: ReadonlyArray<{ projectionSource?: string | null }>;
-      bench?: ReadonlyArray<{ projectionSource?: string | null }>;
-    } | null;
-    tradeTeams?: ReadonlyArray<{ players?: ReadonlyArray<{ projectionSource?: string | null }> }>;
-  }>;
 };
 
 export type DashboardFreshness = {
@@ -44,8 +32,6 @@ export type DashboardFreshness = {
   partial: boolean;
   /** What is unavailable / fell back, straight from the build. */
   notes: string[];
-  /** True when any visible projection is a fallback estimate (marked *). */
-  hasEstimates: boolean;
 };
 
 /** "Oct 24", or "Oct 24, 2025" when it isn't the current year (old data must look old). */
@@ -72,27 +58,6 @@ export function updatedAgoLabel(asOf: string, nowMs: number): string | null {
   return when ? `Updated ${when}` : null;
 }
 
-function rowIsEstimate(row: { projectionSource?: string | null }): boolean {
-  // "fallback" is the builder's marker for a computed estimate; "sleeper" and
-  // "vegas"/"first_down" are real source projections and stay unmarked.
-  return row.projectionSource === "fallback";
-}
-
-export function dashboardHasEstimatedProjections(input: Pick<FreshnessInput, "rankings" | "defenses" | "leagues">): boolean {
-  if ((input.rankings ?? []).some(rowIsEstimate)) return true;
-  if ((input.defenses ?? []).some(rowIsEstimate)) return true;
-  return (input.leagues ?? []).some((league) => {
-    const pools: ReadonlyArray<ReadonlyArray<{ projectionSource?: string | null }>> = [
-      league.starters ?? [],
-      league.bench ?? [],
-      league.opponentTeam?.starters ?? [],
-      league.opponentTeam?.bench ?? [],
-      (league.tradeTeams ?? []).flatMap((team) => team.players ?? []),
-    ];
-    return pools.some((rows) => rows.some(rowIsEstimate));
-  });
-}
-
 export function dashboardFreshness(input: FreshnessInput, nowMs: number): DashboardFreshness {
   const sourceLabels: string[] = [];
   const rankingsWhen = input.rankingsAsOf ? shortDate(input.rankingsAsOf, nowMs) : null;
@@ -104,6 +69,5 @@ export function dashboardFreshness(input: FreshnessInput, nowMs: number): Dashbo
     sourceLabels,
     partial: input.status === "partial" || input.sourceErrors.length > 0,
     notes: input.sourceErrors,
-    hasEstimates: dashboardHasEstimatedProjections(input),
   };
 }

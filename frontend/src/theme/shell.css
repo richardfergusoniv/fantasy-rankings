@@ -31,9 +31,6 @@ span.ticker-item:active { background: transparent; }
 }
 .week-line { display: flex; align-items: center; justify-content: space-between; min-height: 44px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .week-line > div { white-space: nowrap; }
-.data-freshness { display: inline-flex; align-items: center; gap: 8px; margin-left: 10px; font-weight: 500; }
-.data-freshness .data-source-times { opacity: .7; }
-.data-estimate-note { opacity: .7; cursor: help; }
 .data-notes { margin: -2px 0 6px; font-size: var(--type-caption); font-weight: 500; white-space: normal; }
 .data-notes summary { color: var(--warning); cursor: pointer; }
 .data-notes ul { margin: 6px 0 4px; padding-left: 18px; font-weight: 400; }
