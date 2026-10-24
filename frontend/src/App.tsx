@@ -45,7 +45,7 @@ import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
-import { personalQueryKey, useViewerIdentity } from "./viewer-scope";
+import { personalQueryKey, snapshotViewer, useViewerIdentity } from "./viewer-scope";
 import { useDashboardUrl } from "./use-dashboard-url";
 import { CommandBar } from "./shell/command-bar";
 import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "./shell/command-palette";
@@ -678,6 +678,8 @@ export function App() {
     enabled: false,
   });
   const refresh = useMutation({
+    // Whoever started the refresh owns its result; see snapshotViewer.
+    onMutate: () => snapshotViewer(currentViewerId),
     mutationFn: async () => {
       if (supabase) {
         const { data } = await supabase.auth.getSession();
@@ -685,12 +687,15 @@ export function App() {
       }
       return withClientDeadline(api.getDashboard({ force: true }), DASHBOARD_DEADLINE_MS);
     },
-    onSuccess: (data) => {
-      void currentViewerId().then((userId) => saveBrowserDashboard(userId, data));
+    onSuccess: async (data, _variables, owner) => {
+      if (!owner || !(await owner.stillCurrent())) return;
+      saveBrowserDashboard(owner.startedBy, data);
       queryClient.setQueryData(personalQueryKey(viewer, "fantasy-dashboard"), data);
       queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "dashboard-section") });
     },
-    onError: (error: unknown) => {
+    onError: async (error: unknown, _variables, owner) => {
+      // A stale 401 from the previous viewer's token must not sign out the new one.
+      if (owner && !(await owner.stillCurrent())) return;
       signOutForPersonalData(error);
     },
   });
@@ -722,15 +727,16 @@ export function App() {
     retry: false,
   });
   const draftRefresh = useMutation({
-    mutationFn: async () => {
-      try {
-        return await withClientDeadline(api.getDraftCenter({ force: true }), 24_000);
-      } catch (error) {
-        signOutForPersonalData(error);
-        throw error;
-      }
+    onMutate: () => snapshotViewer(currentViewerId),
+    mutationFn: () => withClientDeadline(api.getDraftCenter({ force: true }), 24_000),
+    onSuccess: async (data, _variables, owner) => {
+      if (!owner || !(await owner.stillCurrent())) return;
+      queryClient.setQueryData(personalQueryKey(viewer, "draft-center"), data);
     },
-    onSuccess: (data) => queryClient.setQueryData(personalQueryKey(viewer, "draft-center"), data),
+    onError: async (error: unknown, _variables, owner) => {
+      if (owner && !(await owner.stillCurrent())) return;
+      signOutForPersonalData(error);
+    },
   });
   const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(newsQuery.data), [newsQuery.data]);
   const tickerPlayerNews = playerHistory.current ? newsItemsByPlayer.get(playerHistory.current.playerId) ?? [] : [];

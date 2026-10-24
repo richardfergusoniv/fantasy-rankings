@@ -38,3 +38,18 @@ export async function clearPersonalQueries(client: QueryClient): Promise<void> {
   await client.cancelQueries({ queryKey: [PERSONAL_QUERY_PREFIX] });
   client.removeQueries({ queryKey: [PERSONAL_QUERY_PREFIX] });
 }
+
+/**
+ * Snapshot who is signed in when personal async work starts. Clearing
+ * queries on sign-in doesn't reach mutations, so a refresh user A started
+ * can resolve after B signs in; check `stillCurrent()` before saving or
+ * applying its result (or signing out on its error) so A's data is never
+ * stored under B's identity.
+ */
+export async function snapshotViewer(readViewerId: () => Promise<string | null>): Promise<{
+  startedBy: string | null;
+  stillCurrent: () => Promise<boolean>;
+}> {
+  const startedBy = await readViewerId();
+  return { startedBy, stillCurrent: async () => (await readViewerId()) === startedBy };
+}

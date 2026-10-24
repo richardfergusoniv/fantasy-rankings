@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   clearPersonalQueries,
   personalQueryKey,
+  snapshotViewer,
   type ViewerIdentity,
 } from "./viewer-scope";
 
@@ -52,5 +53,18 @@ describe("viewer-scoped personal query keys", () => {
     for (const section of SECTIONS) expect(client.getQueryData(personalQueryKey(viewerA, "dashboard-section", section))).toBeUndefined();
     // Non-personal data is untouched.
     expect(client.getQueryData(["shared-static"])).toEqual({ from: "shared" });
+  });
+});
+
+describe("snapshotViewer", () => {
+  it("reports a viewer switch mid-flight so A's late result isn't saved as B's", async () => {
+    let signedIn: string | null = "user-a";
+    const owner = await snapshotViewer(async () => signedIn);
+    expect(owner.startedBy).toBe("user-a");
+    expect(await owner.stillCurrent()).toBe(true);
+    signedIn = "user-b"; // B signs in while A's refresh is still running
+    expect(await owner.stillCurrent()).toBe(false);
+    signedIn = null;
+    expect(await owner.stillCurrent()).toBe(false);
   });
 });
