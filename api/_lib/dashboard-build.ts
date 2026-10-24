@@ -2056,6 +2056,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       starters,
       bench,
       opponentTeam: opponentRoster ? {
+        rosterId: opponentRoster.roster_id,
         name: opponentName,
         teamActual: typeof opponentMatchup?.points === "number" ? opponentMatchup.points : null,
         teamProjection: sumActualsAndRemainingProjections(opponentStarters),

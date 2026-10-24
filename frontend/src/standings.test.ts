@@ -12,9 +12,11 @@ describe("standings labels", () => {
   });
 
   it("formats points and the playoff caption", () => {
-    expect(pointsLine(row)).toBe("PF 801.2 · PA 760.0");
+    expect(pointsLine(row)).toBe("PF 801.23 · PA 760.00");
     expect(playoffsCaption({ teams: 6, weekStart: 15 })).toBe("Top 6 make the playoffs · starts Week 15");
     expect(playoffsCaption({ teams: 6, weekStart: null })).toBe("Top 6 make the playoffs");
+    expect(playoffsCaption({ teams: 6, weekStart: 15, positionKnown: false })).toBe("6 playoff teams · division seeding unavailable · starts Week 15");
+    expect(pointsLine({ ...row, pointsFor: 801.24 })).not.toBe(pointsLine({ ...row, pointsFor: 801.23 }));
     expect(playoffsCaption({ teams: null, weekStart: 15 })).toBeNull();
   });
 });

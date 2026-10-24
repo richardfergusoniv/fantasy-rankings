@@ -178,12 +178,13 @@ describe("per-section dashboard cache", () => {
       ...sampleDashboard,
       gameLines,
       leagues: sampleDashboard.leagues.map((league) => ({
-        ...league, standings, playoffs: { teams: 6, weekStart: 15 }, waivers,
+        ...league, standings, playoffs: { teams: 6, weekStart: 15, positionKnown: false }, waivers,
+        opponentTeam: { rosterId: 2, name: "Rival", teamActual: null, teamProjection: null, starters: [], bench: [] },
       })),
     };
     const assembled = assembleDashboardFromSections(splitDashboardIntoSections(withExtras));
     expect(assembled!.gameLines).toEqual(gameLines);
-    expect(assembled!.leagues[0]).toMatchObject({ standings, playoffs: { teams: 6, weekStart: 15 }, waivers });
+    expect(assembled!.leagues[0]).toMatchObject({ standings, playoffs: { teams: 6, weekStart: 15, positionKnown: false }, waivers, opponentTeam: { rosterId: 2 } });
   });
 
   it("still parses a dashboard cached before standings, waivers and game lines existed", () => {

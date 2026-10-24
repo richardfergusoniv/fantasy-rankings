@@ -56,7 +56,7 @@ export function PowerRankings({
     [powerRankings],
   );
   const opponentRosterId = isWeekly
-    ? weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams)
+    ? weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams, league.opponentTeam?.rosterId)
     : null;
   const isDynastyView = scope === "restOfSeason" && activeMode === "dynasty";
   const leagueAveragePicks = isDynastyView && powerRankings.length > 0

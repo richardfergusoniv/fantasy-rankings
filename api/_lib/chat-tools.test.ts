@@ -400,6 +400,19 @@ describe("dispatchChatTool", () => {
     expect(leagues.leagues[0]?.standing?.pointsFor).toBe(801.2);
   });
 
+  it.each([3, null])("handles duplicate opponent names using roster ID %s", async (rosterId) => {
+    const dashboard = baseDashboard();
+    const league = dashboard.leagues[0]!;
+    league.opponentTeam = { ...league.opponentTeam!, rosterId, name: "Rival" };
+    const row = { teamName: "Rival", isUser: false, wins: 3, losses: 3, ties: 0, pointsFor: 760, pointsAgainst: 770, playoffSeed: null, gamesOutOfPlayoffs: 1 };
+    league.standings = [{ ...row, rosterId: 2, rank: 2 }, { ...row, rosterId: 3, rank: 7 }];
+    const matchup = await dispatchChatTool("get_week_matchup", { leagueId: "lg1" }, ctxWithDashboard(dashboard)) as {
+      opponent: { standing: { rank: number } | null };
+    };
+    if (rosterId === null) expect(matchup.opponent.standing).toBeNull();
+    else expect(matchup.opponent.standing?.rank).toBe(7);
+  });
+
   it("builds a player card from rankings and values", async () => {
     const result = await dispatchChatTool(
       "get_player_card",

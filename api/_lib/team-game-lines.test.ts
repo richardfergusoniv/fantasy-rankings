@@ -48,9 +48,26 @@ describe("teamGameLinesForWeek", () => {
 });
 
 describe("loadTeamGameLines", () => {
+  it("rejects malformed responses without poisoning the cache", async () => {
+    resetTeamGameLinesCache();
+    const fetchCsv = vi.fn()
+      .mockResolvedValueOnce("<html>upstream unavailable</html>")
+      .mockResolvedValueOnce("game_id,season,game_type,week,away_team,home_team,spread_line,total_line\n");
+    await expect(loadTeamGameLines(2026, 8, fetchCsv)).rejects.toThrow("missing required headers");
+    await expect(loadTeamGameLines(2026, 8, fetchCsv)).resolves.toEqual([]);
+    await expect(loadTeamGameLines(2026, 8, fetchCsv)).resolves.toEqual([]);
+    expect(fetchCsv).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects CSVs missing betting line columns", async () => {
+    resetTeamGameLinesCache();
+    await expect(loadTeamGameLines(2026, 8, async () => "game_id,season,game_type,week,away_team,home_team\n"))
+      .rejects.toThrow("missing required headers");
+  });
+
   it("fetches the games file once per cache window", async () => {
     resetTeamGameLinesCache();
-    const fetchCsv = vi.fn(async () => "game_id,season\n");
+    const fetchCsv = vi.fn(async () => "game_id,season,game_type,week,away_team,home_team,spread_line,total_line\n");
     await loadTeamGameLines(2026, 8, fetchCsv);
     await loadTeamGameLines(2026, 8, fetchCsv);
     expect(fetchCsv).toHaveBeenCalledTimes(1);

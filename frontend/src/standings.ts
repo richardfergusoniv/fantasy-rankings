@@ -23,11 +23,12 @@ export function playoffStatusLabel(row: StandingsRowLike): string {
 }
 
 export function pointsLine(row: StandingsRowLike): string {
-  return `PF ${row.pointsFor.toFixed(1)} · PA ${row.pointsAgainst.toFixed(1)}`;
+  return `PF ${row.pointsFor.toFixed(2)} · PA ${row.pointsAgainst.toFixed(2)}`;
 }
 
 /** e.g. "Top 6 make the playoffs · starts Week 15". */
-export function playoffsCaption(playoffs: { teams: number | null; weekStart: number | null } | null | undefined): string | null {
+export function playoffsCaption(playoffs: { teams: number | null; weekStart: number | null; positionKnown?: boolean } | null | undefined): string | null {
   if (!playoffs?.teams) return null;
+  if (playoffs.positionKnown === false) return `${playoffs.teams} playoff teams · division seeding unavailable${playoffs.weekStart ? ` · starts Week ${playoffs.weekStart}` : ""}`;
   return `Top ${playoffs.teams} make the playoffs${playoffs.weekStart ? ` · starts Week ${playoffs.weekStart}` : ""}`;
 }

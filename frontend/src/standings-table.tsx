@@ -1,4 +1,5 @@
 import type { api, ApiResponse } from "./api";
+import { weeklyOpponentRosterId } from "./power-opponent";
 import { formatRecord } from "./league-team-card";
 import { playoffsCaption, playoffStatusLabel, pointsLine } from "./standings";
 
@@ -9,7 +10,8 @@ export function StandingsTable({ league, opponentName }: { league: League; oppon
   const rows = league.standings ?? [];
   if (rows.length === 0) return null;
   const caption = playoffsCaption(league.playoffs);
-  const cutoff = league.playoffs?.teams ?? null;
+  const cutoff = league.playoffs?.positionKnown === false ? null : league.playoffs?.teams ?? null;
+  const opponentId = weeklyOpponentRosterId(opponentName, rows, league.opponentTeam?.rosterId);
   return (
     <section className="power-table-section standings-section" aria-labelledby="league-standings-heading">
       <div className="section-heading power-section-heading">
@@ -18,7 +20,7 @@ export function StandingsTable({ league, opponentName }: { league: League; oppon
       </div>
       <div className="power-table" role="list">
         {rows.map((row) => {
-          const isOpponent = !row.isUser && opponentName != null && row.teamName === opponentName;
+          const isOpponent = row.rosterId === opponentId;
           return (
             <div className="power-list-item" role="listitem" key={row.rosterId}>
               <div

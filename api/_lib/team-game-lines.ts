@@ -11,6 +11,7 @@ import {
   parseGamesCsv,
   type NflverseGameRow,
 } from "./nflverse-game-lines.js";
+import { splitCsvLine } from "./chart-metric-transforms.js";
 import { canonicalTeam, fetchText } from "./sleeper.js";
 
 export type TeamGameLine = {
@@ -70,7 +71,11 @@ export function resetTeamGameLinesCache(): void {
 /** Lines for the week; the games file is cached per instance for GAME_LINES_STALE_MS. */
 export async function loadTeamGameLines(season: number, week: number, fetchCsv: (url: string) => Promise<string> = fetchText): Promise<TeamGameLine[]> {
   if (!cachedRows || Date.now() - cachedRows.fetchedAtMs > GAME_LINES_STALE_MS) {
-    cachedRows = { fetchedAtMs: Date.now(), rows: parseGamesCsv(await fetchCsv(NFLVERSE_GAMES_CSV_URL)) };
+    const csv = await fetchCsv(NFLVERSE_GAMES_CSV_URL);
+    const headers = new Set(splitCsvLine(csv.split(/\r?\n/, 1)[0] ?? ""));
+    const required = ["game_id", "season", "game_type", "week", "away_team", "home_team", "spread_line", "total_line"];
+    if (required.some((header) => !headers.has(header))) throw new Error("Invalid nflverse games CSV: missing required headers");
+    cachedRows = { fetchedAtMs: Date.now(), rows: parseGamesCsv(csv) };
   }
   return teamGameLinesForWeek(cachedRows.rows, season, week);
 }

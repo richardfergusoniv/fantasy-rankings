@@ -19,6 +19,14 @@ describe("weeklyOpponentRosterId", () => {
     expect(weeklyOpponentRosterId("Ghost", teams)).toBeNull();
   });
 
+  it("uses the roster ID despite duplicate or mismatched display names", () => {
+    const duplicateNames = [...teams, { rosterId: 4, teamName: "Rival", isUser: false }];
+    expect(weeklyOpponentRosterId("Rival", duplicateNames, 4)).toBe(4);
+    expect(weeklyOpponentRosterId("Opponent", teams, 2)).toBe(2);
+    expect(weeklyOpponentRosterId("Rival", teams, 99)).toBeNull();
+    expect(weeklyOpponentRosterId("Rival", teams, 1)).toBeNull();
+  });
+
   it("does not highlight the user or an ambiguous name", () => {
     expect(weeklyOpponentRosterId("My Team", teams)).toBeNull();
     expect(weeklyOpponentRosterId("Rival", [...teams, { rosterId: 4, teamName: "Rival", isUser: false }])).toBeNull();

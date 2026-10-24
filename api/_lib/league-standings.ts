@@ -7,6 +7,7 @@
 export type SleeperStandingsRoster = {
   roster_id: number;
   settings?: {
+    division?: number;
     wins?: number;
     losses?: number;
     ties?: number;
@@ -20,6 +21,7 @@ export type SleeperStandingsRoster = {
 };
 
 export type SleeperLeagueSettings = {
+  divisions?: number;
   playoff_teams?: number;
   playoff_week_start?: number;
   waiver_type?: number;
@@ -45,6 +47,7 @@ export type StandingsRow = {
 export type LeaguePlayoffs = {
   teams: number | null;
   weekStart: number | null;
+  positionKnown?: boolean;
 };
 
 export type WaiverStatus = {
@@ -68,7 +71,7 @@ function winPct(row: Pick<StandingsRow, "wins" | "losses" | "ties">): number {
 
 /**
  * Ranked by win percentage, then points for (Sleeper's default tiebreak).
- * Divisions aren't modeled: seeds are overall rank.
+ * Division qualification is not modeled; leave playoff position unknown in those leagues.
  */
 export function buildStandings(
   rosters: readonly SleeperStandingsRoster[],
@@ -77,6 +80,8 @@ export function buildStandings(
   settings: SleeperLeagueSettings | undefined,
 ): { standings: StandingsRow[]; playoffs: LeaguePlayoffs } {
   const playoffTeams = settings?.playoff_teams && settings.playoff_teams > 0 ? settings.playoff_teams : null;
+  const positionKnown = !(settings?.divisions && settings.divisions > 0)
+    && !rosters.some((roster) => (roster.settings?.division ?? 0) > 0);
   const rows = rosters
     .map((roster) => ({
       rosterId: roster.roster_id,
@@ -95,7 +100,7 @@ export function buildStandings(
     .map((row, index) => ({ ...row, rank: index + 1 }));
   const cutoff = playoffTeams ? rows[playoffTeams - 1] : undefined;
   for (const row of rows) {
-    if (!playoffTeams || !cutoff) continue;
+    if (!positionKnown || !playoffTeams || !cutoff) continue;
     if (row.rank <= playoffTeams) {
       row.playoffSeed = row.rank;
     } else {
@@ -106,6 +111,7 @@ export function buildStandings(
     standings: rows,
     playoffs: {
       teams: playoffTeams,
+      positionKnown,
       weekStart: settings?.playoff_week_start && settings.playoff_week_start > 0 ? settings.playoff_week_start : null,
     },
   };

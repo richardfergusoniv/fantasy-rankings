@@ -5,6 +5,7 @@
  */
 import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
+import { weeklyOpponentRosterId } from "./opponent-roster.js";
 import type { Dashboard } from "./dashboard-schemas.js";
 import { loadOrBuildUserDashboard, readUserDashboardCache } from "./dashboard-build.js";
 import { db, schema } from "./db.js";
@@ -261,6 +262,7 @@ function standingFor(league: Dashboard["leagues"][number], match: (row: Dashboar
     playoffSeed: row.playoffSeed,
     gamesOutOfPlayoffs: row.gamesOutOfPlayoffs,
     playoffTeams: league.playoffs?.teams ?? null,
+    playoffPositionKnown: league.playoffs?.positionKnown ?? true,
   };
 }
 
@@ -937,6 +939,7 @@ async function toolGetWeekMatchup(ctx: ChatToolContext, args: { leagueId: string
   const league = findLeague(dashboard, args.leagueId);
   if (!league) return { ok: false as const, error: "League not found for this user." };
   const valueById = new Map(leagueAssets(dashboard, league.id).map((row) => [row.playerId, row.value]));
+  const opponentRosterId = weeklyOpponentRosterId(league.opponentTeam?.name, league.standings ?? [], league.opponentTeam?.rosterId);
   return {
     ok: true as const,
     season: dashboard.season,
@@ -953,7 +956,7 @@ async function toolGetWeekMatchup(ctx: ChatToolContext, args: { leagueId: string
     opponent: league.opponentTeam
       ? {
         name: league.opponentTeam.name,
-        standing: standingFor(league, (row) => !row.isUser && row.teamName === league.opponentTeam?.name),
+        standing: standingFor(league, (row) => row.rosterId === opponentRosterId),
         teamProjection: league.opponentTeam.teamProjection,
         teamActual: league.opponentTeam.teamActual,
         starters: league.opponentTeam.starters.map((player) => ({

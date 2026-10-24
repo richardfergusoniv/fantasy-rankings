@@ -125,6 +125,7 @@ export const suggestionSchema = z.object({
 }).nullable();
 
 export const matchupTeamSchema = z.object({
+  rosterId: z.number().int().nullable().optional(),
   name: z.string(),
   teamActual: z.number().nullable(),
   teamProjection: z.number().nullable(),
@@ -174,6 +175,7 @@ export const standingsRowSchema = z.object({
 });
 
 export const leaguePlayoffsSchema = z.object({
+  positionKnown: z.boolean().optional(),
   teams: z.number().int().nullable(),
   weekStart: z.number().int().nullable(),
 });

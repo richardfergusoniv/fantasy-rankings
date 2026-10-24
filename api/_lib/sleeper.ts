@@ -57,6 +57,7 @@ export type SleeperLeague = {
     reserve_slots?: number;
     taxi_slots?: number;
     draft_rounds?: number;
+    divisions?: number;
     playoff_teams?: number;
     playoff_week_start?: number;
     /** 0 rolling, 1 reverse standings, 2 FAAB. */
@@ -74,6 +75,7 @@ export type SleeperRoster = {
   reserve?: string[];
   taxi?: string[];
   settings?: {
+    division?: number;
     wins?: number;
     losses?: number;
     ties?: number;
