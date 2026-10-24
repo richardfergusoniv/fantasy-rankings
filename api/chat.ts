@@ -23,7 +23,11 @@ import {
   readOpenRouterApiKey,
   scoringWindowFromHorizon,
 } from "./_lib/chat-config.js";
-import { ChatAgentTimeoutError, OpenRouterError } from "./_lib/chat-openrouter.js";
+import {
+  ChatAgentTimeoutError,
+  maskOpenRouterLogText,
+  OpenRouterError,
+} from "./_lib/chat-openrouter.js";
 import {
   appendChatPreferences,
   listChatPreferences,
@@ -37,6 +41,10 @@ import {
   listChatConversations,
   persistChatTurn,
 } from "./_lib/chat-store.js";
+
+function isUpstreamAccessDenied(status: number): boolean {
+  return status === 401 || status === 402 || status === 403;
+}
 
 const historyMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
@@ -163,7 +171,27 @@ export async function POST(req: Request): Promise<Response> {
     });
   } catch (err) {
     if (err instanceof OpenRouterError || err instanceof ChatAgentTimeoutError) {
-      console.error("[chat POST] upstream", err instanceof OpenRouterError ? err.status : "timeout");
+      if (err instanceof OpenRouterError) {
+        const bodyPreview = maskOpenRouterLogText(err.body).slice(0, 300);
+        console.error(
+          "[chat POST] upstream",
+          err.status,
+          err.model ?? "unknown-model",
+          bodyPreview,
+        );
+        if (isUpstreamAccessDenied(err.status)) {
+          return json(
+            {
+              ok: false,
+              error: "Chat model access was denied. Check the OpenRouter key settings.",
+              code: "chat_upstream_denied",
+            },
+            503,
+          );
+        }
+      } else {
+        console.error("[chat POST] upstream", "timeout");
+      }
       return json(
         {
           ok: false,

@@ -241,6 +241,10 @@ export function ChatPanel({
         setUnavailable(true);
         return;
       }
+      if (code === "chat_upstream_denied") {
+        setError("Chat model access was denied. Check the OpenRouter key settings.");
+        return;
+      }
       if (code === "chat_upstream_unavailable") {
         setError("The chat model is busy. Try again shortly.");
         return;

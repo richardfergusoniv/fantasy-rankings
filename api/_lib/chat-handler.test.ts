@@ -146,7 +146,7 @@ describe("api/chat handler", () => {
     resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
     runChatAgentMock.mockResolvedValue({
       reply: "Your WR1 projects 18.20.",
-      model: "thinkingmachines/inkling:free",
+      model: "nvidia/nemotron-3-ultra-550b-a55b:free",
       toolSteps: 1,
     });
     persistMock.mockResolvedValue({ chatId: "c1", title: "Who is my WR1?" });
@@ -156,7 +156,7 @@ describe("api/chat handler", () => {
     expect(await res.json()).toEqual({
       ok: true,
       reply: "Your WR1 projects 18.20.",
-      model: "thinkingmachines/inkling:free",
+      model: "nvidia/nemotron-3-ultra-550b-a55b:free",
       toolSteps: 1,
       chatId: "c1",
       title: "Who is my WR1?",
@@ -187,7 +187,7 @@ describe("api/chat handler", () => {
     expect(runChatAgentMock).not.toHaveBeenCalled();
   });
 
-  it("POST maps OpenRouter failures to a retryable 503 without persisting", async () => {
+  it("POST maps OpenRouter 429/5xx to a retryable busy 503 without persisting", async () => {
     process.env.OPENROUTER_API_KEY = "sk-or-test";
     resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
     const { OpenRouterError } = await import("./chat-openrouter.js");
@@ -197,9 +197,43 @@ describe("api/chat handler", () => {
     expect(res.status).toBe(503);
     expect(await res.json()).toMatchObject({
       ok: false,
+      error: "The chat model is busy. Try again shortly.",
       code: "chat_upstream_unavailable",
     });
     expect(persistMock).not.toHaveBeenCalled();
+  });
+
+  it("POST maps OpenRouter 401/402/403 to chat_upstream_denied", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    const { OpenRouterError } = await import("./chat-openrouter.js");
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    runChatAgentMock.mockRejectedValue(
+      new OpenRouterError(
+        403,
+        JSON.stringify({ error: { message: "key sk-or-v1-secretkey123 denied" } }),
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+      ),
+    );
+
+    const res = await POST(authReq("POST", { message: "Hi" }));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({
+      ok: false,
+      error: "Chat model access was denied. Check the OpenRouter key settings.",
+      code: "chat_upstream_denied",
+    });
+    expect(persistMock).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      "[chat POST] upstream",
+      403,
+      "nvidia/nemotron-3-ultra-550b-a55b:free",
+      expect.stringContaining("sk-or-***"),
+    );
+    expect(consoleSpy.mock.calls.some((call) =>
+      call.some((arg) => typeof arg === "string" && arg.includes("sk-or-v1-secretkey123")),
+    )).toBe(false);
+    consoleSpy.mockRestore();
   });
 
   it("DELETE removes a conversation for the viewer", async () => {

@@ -7,7 +7,12 @@ import {
   resolveOpenRouterFallbackModel,
   resolveOpenRouterModel,
 } from "./chat-config.js";
-import { callOpenRouterChat, ChatAgentTimeoutError } from "./chat-openrouter.js";
+import {
+  callOpenRouterChat,
+  ChatAgentTimeoutError,
+  maskOpenRouterLogText,
+  shouldFallback,
+} from "./chat-openrouter.js";
 
 describe("chat-config free models", () => {
   it("allows up to eight tool steps under the 60s deadline", () => {
@@ -19,6 +24,13 @@ describe("chat-config free models", () => {
     expect(isFreeOpenRouterModel("openai/gpt-4o")).toBe(false);
   });
 
+  it("defaults to nemotron primary with inkling fallback", () => {
+    expect(DEFAULT_OPENROUTER_MODEL).toBe("nvidia/nemotron-3-ultra-550b-a55b:free");
+    expect(FALLBACK_OPENROUTER_MODEL).toBe("thinkingmachines/inkling:free");
+    expect(DEFAULT_OPENROUTER_MODEL.endsWith(":free")).toBe(true);
+    expect(FALLBACK_OPENROUTER_MODEL.endsWith(":free")).toBe(true);
+  });
+
   it("ignores non-free OPENROUTER_MODEL overrides", () => {
     expect(resolveOpenRouterModel("openai/gpt-4o")).toBe(DEFAULT_OPENROUTER_MODEL);
     expect(resolveOpenRouterModel("thinkingmachines/inkling:free")).toBe("thinkingmachines/inkling:free");
@@ -26,7 +38,24 @@ describe("chat-config free models", () => {
       "nvidia/nemotron-3-ultra-550b-a55b:free",
     );
     expect(resolveOpenRouterFallbackModel()).toBe(FALLBACK_OPENROUTER_MODEL);
-    expect(FALLBACK_OPENROUTER_MODEL.endsWith(":free")).toBe(true);
+  });
+
+  it("falls back on 403/404 as well as 429/5xx", () => {
+    expect(shouldFallback(403)).toBe(true);
+    expect(shouldFallback(404)).toBe(true);
+    expect(shouldFallback(429)).toBe(true);
+    expect(shouldFallback(500)).toBe(true);
+    expect(shouldFallback(401)).toBe(false);
+    expect(shouldFallback(400)).toBe(false);
+  });
+
+  it("masks OpenRouter key-like tokens in log text", () => {
+    expect(maskOpenRouterLogText('denied for sk-or-v1-abcDEF123_key')).toBe(
+      "denied for sk-or-***",
+    );
+    expect(maskOpenRouterLogText("Authorization: Bearer sk-or-v1-abc")).toBe(
+      "Authorization: Bearer ***",
+    );
   });
 
   it("refuses to call a paid model id", async () => {

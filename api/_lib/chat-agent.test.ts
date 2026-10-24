@@ -80,6 +80,61 @@ describe("runChatAgent", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it.each([403, 404])("falls back to the free backup model on %s", async (status) => {
+    let calls = 0;
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      calls += 1;
+      const body = JSON.parse(String(init?.body ?? "{}")) as { model: string };
+      if (calls === 1) {
+        expect(body.model).toBe(DEFAULT_OPENROUTER_MODEL);
+        return new Response("blocked or missing", { status });
+      }
+      expect(body.model).toBe(FALLBACK_OPENROUTER_MODEL);
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { role: "assistant", content: "Fallback after block." } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const result = await runChatAgent({
+      apiKey: "sk-or-test",
+      userMessage: "Hi",
+      ctx: { userId: "u1", sleeperUserId: "s1" },
+      fetchImpl,
+    });
+
+    expect(result.reply).toBe("Fallback after block.");
+    expect(result.model).toBe(FALLBACK_OPENROUTER_MODEL);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("omits tool_choice from the OpenRouter payload", async () => {
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      expect(body).not.toHaveProperty("tool_choice");
+      expect(body.tools).toBeDefined();
+      expect(body.provider).toEqual({ require_parameters: true });
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { role: "assistant", content: "No tool_choice." } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    });
+
+    const result = await runChatAgent({
+      apiKey: "sk-or-test",
+      userMessage: "Hi",
+      ctx: { userId: "u1", sleeperUserId: "s1" },
+      fetchImpl,
+    });
+
+    expect(result.reply).toBe("No tool_choice.");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses a paid primary model before networking", async () => {
     await expect(
       runChatAgent({
