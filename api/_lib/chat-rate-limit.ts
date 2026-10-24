@@ -71,6 +71,9 @@ export async function checkChatRateLimit(
     // If the deadline wins, the late settlement must not be an unhandled rejection.
     bucketPromise.catch(() => undefined);
     const count = await withDeadline(bucketPromise, RATE_LIMIT_DB_TIMEOUT_MS);
+    // Mirror the request locally so a later DB failure falls back to the
+    // quota already used on this instance, not a fresh allowance.
+    checkLocalRateLimit(userId, now, max, windowMs);
     if (count > max) {
       return { ok: false, retryAfterMs: Math.max(0, windowStartMs + windowMs - now) };
     }

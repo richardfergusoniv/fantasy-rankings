@@ -97,6 +97,22 @@ describe("loadTeamWeekStats", () => {
     expect(result).toEqual(stale);
   });
 
+  it("prefers a complete stale payload over a fresh partial one, and caches the fallback", async () => {
+    const stale = { season: SEASON, stats: [{ player_id: "old" }], snaps: [{ pfr_player_id: "p1" }] };
+    selectLimitMock.mockResolvedValue([storedRow(SEASON, new Date(Date.now() - 24 * 60 * 60 * 1000), stale)]);
+    fetchTextMock.mockImplementation(async (url: string) => {
+      if (url.includes("snap_counts")) throw new Error("snaps down");
+      return statsCsv();
+    });
+
+    expect(await loadTeamWeekStats(SEASON)).toEqual(stale);
+    fetchTextMock.mockClear();
+    // Within the degraded TTL the fallback comes from memory, not the upstream.
+    expect(await loadTeamWeekStats(SEASON)).toEqual(stale);
+    expect(fetchTextMock).not.toHaveBeenCalled();
+    expect(insertConflictMock).not.toHaveBeenCalled();
+  });
+
   it("returns a controlled 500 when upstream fails and nothing is cached", async () => {
     selectLimitMock.mockResolvedValue([]);
     fetchTextMock.mockRejectedValue(new Error("upstream down"));

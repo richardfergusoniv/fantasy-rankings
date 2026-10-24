@@ -140,3 +140,19 @@ describe("runWithBuildLease deadline", () => {
     expect((await store.read("r"))?.status).toBe("done");
   });
 });
+
+describe("runWithBuildLease bookkeeping failures", () => {
+  it("builds without a lease when the claim itself fails", async () => {
+    const { store } = createFakeStore();
+    store.claim = async () => { throw new Error("db down"); };
+    const finish = vi.spyOn(store, "finish");
+    expect(await runWithBuildLease(store, "r", "h", 90_000, async () => "ok")).toEqual({ status: "built", result: "ok" });
+    expect(finish).not.toHaveBeenCalled();
+  });
+
+  it("keeps a finished build when releasing the lease fails", async () => {
+    const { store } = createFakeStore();
+    store.finish = async () => { throw new Error("db blip"); };
+    expect(await runWithBuildLease(store, "r", "h", 90_000, async () => "ok")).toEqual({ status: "built", result: "ok" });
+  });
+});

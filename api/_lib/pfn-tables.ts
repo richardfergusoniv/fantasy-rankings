@@ -193,10 +193,19 @@ export async function loadTeamWeekStats(season: number): Promise<TeamWeekStats> 
   const inFlight = teamWeekStatsInFlight.get(season);
   if (inFlight) return inFlight;
 
+  // Upstream degraded: serve the last complete stored payload for the short
+  // degraded TTL instead of hitting the upstream again on every request.
+  const serveStale = (stale: TeamWeekStats): TeamWeekStats => {
+    teamWeekStatsCache.set(season, { fetchedAtMs: Date.now(), ttlMs: TEAM_WEEK_STATS_DEGRADED_TTL_MS, payload: stale });
+    return stale;
+  };
+
   const load = (async () => {
     try {
       const payload = await fetchAndParseTeamWeekStats(season);
       const complete = payload.stats.length > 0 && payload.snaps.length > 0;
+      // One CSV failed: a complete stored payload beats a fresh partial one.
+      if (!complete && staleStored) return serveStale(staleStored);
       teamWeekStatsCache.set(season, {
         fetchedAtMs: Date.now(),
         ttlMs: complete ? TEAM_WEEK_STATS_STALE_MS : TEAM_WEEK_STATS_DEGRADED_TTL_MS,
@@ -217,7 +226,7 @@ export async function loadTeamWeekStats(season: number): Promise<TeamWeekStats> 
     } catch (error) {
       // Controlled response on upstream failure: serve the last good stored
       // payload when one exists, however stale.
-      if (staleStored) return staleStored;
+      if (staleStored) return serveStale(staleStored);
       throw error;
     } finally {
       teamWeekStatsInFlight.delete(season);
