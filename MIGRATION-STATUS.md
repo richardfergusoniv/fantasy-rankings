@@ -87,6 +87,7 @@ Early plans named separate files (`dashboard/section.ts`, `boom-bust/ranges.ts`,
 - [x] `GET` / `POST /api/player-news` — `api/player-news.ts` (refresh when the caller sends `CRON_SECRET`)
 - [x] `POST /api/ingest/projections`, `/api/ingest/matchup-grades`, `/api/ingest/pfn-tables`, `/api/ingest/player-news-x` — `api/ingest/[target].ts`
 - [x] `shared_player_news` table — `drizzle-pg/0005_shared_player_news.sql` (hand-apply)
+- [x] `scoring_weights` + `scoring_snapshots` — `drizzle-pg/0008_scoring_calibration.sql` (hand-apply; RLS on, no anon policies)
 - [x] `GET` / `POST /api/user` — `api/user.ts`
 - [x] GitHub Actions in `.github/workflows/` call those routes on a schedule
 

@@ -102,6 +102,10 @@ export async function loadActiveScoringWeights(): Promise<ScoringWeightsParams> 
   if (cachedActiveWeights && Date.now() - cachedActiveWeights.loadedAt < WEIGHTS_CACHE_MS) {
     return cachedActiveWeights.params;
   }
+  if (!process.env.DATABASE_URL) {
+    cachedActiveWeights = { params: BUILTIN_SCORING_WEIGHTS, loadedAt: Date.now() };
+    return BUILTIN_SCORING_WEIGHTS;
+  }
   try {
     const rows = await db
       .select()
