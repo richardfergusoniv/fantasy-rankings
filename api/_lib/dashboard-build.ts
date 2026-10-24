@@ -2129,7 +2129,6 @@ export async function loadOrBuildUserDashboard(
   sleeperUserId: string,
   force = false,
 ): Promise<{ dashboard: Dashboard; fetchedAtMs: number }> {
-  const cacheKey = userDashboardCacheKey(sleeperUserId);
   const cached = await readUserDashboardCache(sleeperUserId);
   const cachedDashboard = cached?.dashboard ?? null;
   if (!force && cachedDashboard && cached?.fresh) {
