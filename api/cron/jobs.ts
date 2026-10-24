@@ -106,17 +106,25 @@ async function handleRebuildDashboard(): Promise<Response> {
   });
 }
 
+/** How long the FantasyCalc job waits on the rate-limit prune after its refresh. */
+const RATE_LIMIT_PRUNE_WAIT_MS = 5_000;
+
 async function handleRefreshFantasyCalc(): Promise<Response> {
   // Daily piggyback: prune expired chat rate-limit buckets so the shared
-  // quota table doesn't grow unbounded (audit finding #9). Runs first and is
-  // best-effort, so neither a failed prune nor a failed refresh skips the other.
-  let rateLimitBucketsPruned = 0;
-  try {
-    rateLimitBucketsPruned = await pruneRateLimitBuckets();
-  } catch (err) {
+  // quota table doesn't grow unbounded (audit finding #9). Best-effort and
+  // run alongside the refresh, so neither a failed or stalled prune nor a
+  // failed refresh holds up or skips the other.
+  const prune = pruneRateLimitBuckets().catch((err: unknown) => {
     console.error("[cron] rate-limit bucket prune failed", err instanceof Error ? err.message : err);
+    return 0;
+  });
+  let rateLimitBucketsPruned = 0;
+  let result: Awaited<ReturnType<typeof refreshFantasyCalcCache>>;
+  try {
+    result = await refreshFantasyCalcCache();
+  } finally {
+    rateLimitBucketsPruned = await withDeadline(prune, RATE_LIMIT_PRUNE_WAIT_MS).catch(() => 0);
   }
-  const result = await refreshFantasyCalcCache();
   return json({ ok: true, job: "refresh-fantasycalc", rateLimitBucketsPruned, ...result });
 }
 

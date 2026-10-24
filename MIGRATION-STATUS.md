@@ -165,8 +165,9 @@ make the next `db:migrate` replay non-idempotent files (`0001`, `0003`).
 
 Until production is baselined that way, apply each new migration to
 production by hand (Supabase SQL editor), in journal order — for example
-`0011_build_leases_rate_limits.sql` before any later file — before or with the
-deploy that needs it. If production has been baselined, seed the matching
+`0011_build_leases_rate_limits.sql` before any later file — and confirm each
+applied cleanly before the deploy that needs it goes live (code shipped ahead
+of its schema queries tables that don't exist yet). If production has been baselined, seed the matching
 `__drizzle_migrations` row for each hand-applied file the same way.
 
 Migrations are written by hand. `meta/0009_snapshot.json` is not kept in sync

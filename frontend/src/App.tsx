@@ -590,13 +590,19 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
   const [browserViewerId, setBrowserViewerId] = useState<string | null | undefined>(undefined);
-  const [browserDashboard, setBrowserDashboard] = useState<Dashboard | undefined>(undefined);
+  // Tagged with the Sleeper account it was read for: after an account switch
+  // the stale entry is ignored in the very render the switch lands in, before
+  // the effect below re-reads storage, so it can't seed the new account's query.
+  const [browserDashboardEntry, setBrowserDashboard] = useState<{ accountId: string | null; dashboard: Dashboard | undefined }>(
+    { accountId: null, dashboard: undefined },
+  );
+  const browserDashboard = browserDashboardEntry.accountId === viewer.accountId ? browserDashboardEntry.dashboard : undefined;
   useEffect(() => {
     let cancelled = false;
     void currentViewerId().then((userId) => {
       if (cancelled) return;
       setBrowserViewerId(userId);
-      setBrowserDashboard(readBrowserDashboard(userId, viewer.accountId));
+      setBrowserDashboard({ accountId: viewer.accountId, dashboard: readBrowserDashboard(userId, viewer.accountId) });
     });
     return () => {
       cancelled = true;
