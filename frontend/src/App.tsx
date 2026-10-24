@@ -52,6 +52,7 @@ import { InspectorFrame, useInspectorDockViewport } from "./shell/inspector-fram
 import { ShortcutsDialog } from "./shell/shortcuts-dialog";
 import { AskButton } from "./shell/ask-button";
 import { askContextForTab } from "./lib/ask-context";
+import { AccountMenu } from "./shell/account-menu";
 import { ThemeToggle } from "./shell/theme-toggle";
 import { Explorer, isExplorerMode } from "./views/explorer";
 import { GameLinesPanel } from "./views/game-lines-panel";
@@ -1194,6 +1195,7 @@ export function App() {
             <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
             <div className="week-actions">
             <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />
+            {supabase ? <AccountMenu /> : null}
             <ThemeToggle />
             <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label={tab === "draft" ? "Refresh draft data" : "Refresh scores and rankings"}><RefreshIcon spinning={isRefreshing} /></button>
             </div>

@@ -38,6 +38,10 @@
 .theme-toggle:hover { color: var(--foreground); }
 .theme-toggle:active { background: var(--accent-soft); }
 .theme-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.account-button { display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; border-radius: var(--radius); background: transparent; color: var(--dim); cursor: pointer; }
+.account-button:hover { color: var(--foreground); }
+.account-button:active { background: var(--accent-soft); }
+.account-button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 .spin { animation: refreshPulse 1s ease-in-out infinite; }
 @keyframes refreshPulse { 50% { opacity: .25; } }
 
