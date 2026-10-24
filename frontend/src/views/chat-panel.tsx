@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { CHAT_MAX_HISTORY_MESSAGES, CHAT_MAX_INPUT_CHARS } from "../../../api/_lib/chat-config";
 import { api } from "../api";
@@ -10,6 +10,12 @@ type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
+};
+
+type ChatListItem = {
+  id: string;
+  title: string;
+  updatedAt: string;
 };
 
 function newId(): string {
@@ -34,11 +40,14 @@ function prefersReducedMotion(): boolean {
 export function ChatPanel() {
   const listId = useId();
   const inputId = useId();
+  const queryClient = useQueryClient();
+  const [chatId, setChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingChat, setLoadingChat] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLFormElement | null>(null);
   const composerFirstRectRef = useRef<DOMRect | null>(null);
@@ -51,6 +60,27 @@ export function ChatPanel() {
     queryFn: () => api.getChatAvailability(),
     staleTime: 60_000,
     retry: false,
+  });
+
+  const chatsQuery = useQuery({
+    queryKey: ["chat-list"],
+    queryFn: () => api.listChats(),
+    staleTime: 30_000,
+    retry: false,
+    enabled: availability.isSuccess && availability.data.available !== false && !unavailable,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteChat({ id }),
+    onSuccess: (_data, id) => {
+      void queryClient.invalidateQueries({ queryKey: ["chat-list"] });
+      if (chatId === id) {
+        captureComposerRect();
+        setChatId(null);
+        setMessages([]);
+        setError(null);
+      }
+    },
   });
 
   useEffect(() => {
@@ -94,9 +124,40 @@ export function ChatPanel() {
     composerFirstRectRef.current = composerRef.current?.getBoundingClientRect() ?? null;
   }
 
+  function startNewChat() {
+    if (hasMessages) captureComposerRect();
+    setChatId(null);
+    setMessages([]);
+    setError(null);
+    setDraft("");
+  }
+
+  async function openChat(id: string) {
+    if (loadingChat || sending || id === chatId) return;
+    setLoadingChat(true);
+    setError(null);
+    try {
+      const result = await api.getChat({ id });
+      if (!hasMessages && result.chat.messages.length > 0) captureComposerRect();
+      if (hasMessages && result.chat.messages.length === 0) captureComposerRect();
+      setChatId(result.chat.id);
+      setMessages(
+        result.chat.messages.map((item) => ({
+          id: item.id,
+          role: item.role,
+          content: item.content,
+        })),
+      );
+    } catch {
+      setError("Could not open chat.");
+    } finally {
+      setLoadingChat(false);
+    }
+  }
+
   async function send() {
     const text = draft.trim().slice(0, CHAT_MAX_INPUT_CHARS);
-    if (!text || sending || unavailable) return;
+    if (!text || sending || unavailable || loadingChat) return;
     setError(null);
     setDraft("");
     const userMessage: ChatMessage = { id: newId(), role: "user", content: text };
@@ -105,11 +166,17 @@ export function ChatPanel() {
     setMessages((prev) => [...prev, userMessage]);
     setSending(true);
     try {
-      const result = await api.postChat({ message: text, history });
+      const result = await api.postChat({
+        message: text,
+        history,
+        chatId: chatId ?? undefined,
+      });
+      setChatId(result.chatId);
       setMessages((prev) => [
         ...prev,
         { id: newId(), role: "assistant", content: result.reply },
       ]);
+      void queryClient.invalidateQueries({ queryKey: ["chat-list"] });
     } catch (err) {
       captureComposerRect();
       setMessages((prev) => prev.filter((item) => item.id !== userMessage.id));
@@ -145,48 +212,87 @@ export function ChatPanel() {
     );
   }
 
+  const chats: ChatListItem[] = chatsQuery.data?.chats ?? [];
+
   return (
-    <section
-      className={`chat-panel${hasMessages ? " is-active" : " is-empty"}`}
-      aria-label="Chat"
-    >
-      <div className="chat-thread" id={listId} role="log" aria-live="polite" aria-relevant="additions">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`chat-bubble chat-bubble-${message.role}`}
-          >
-            <p>{message.content}</p>
-          </div>
-        ))}
-        {sending ? <p className="chat-status">Thinking…</p> : null}
-        {error ? <p className="chat-error" role="alert">{error}</p> : null}
-        <div ref={bottomRef} />
-      </div>
-      <form
-        ref={composerRef}
-        className="chat-composer"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void send();
-        }}
-      >
-        <label className="sr-only" htmlFor={inputId}>Message</label>
-        <input
-          id={inputId}
-          className="chat-input"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          maxLength={CHAT_MAX_INPUT_CHARS}
-          disabled={sending}
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-        />
-        <Button type="submit" disabled={sending || !draft.trim()} aria-label="Send">
-          Send
+    <section className="chat-panel" aria-label="Chat">
+      <div className="chat-sidebar">
+        <Button
+          type="button"
+          variant="secondary"
+          className="chat-new"
+          onClick={startNewChat}
+          disabled={sending || loadingChat}
+        >
+          New
         </Button>
-      </form>
+        <ul className="chat-history" aria-label="Past chats">
+          {chats.map((chat) => {
+            const active = chat.id === chatId;
+            return (
+              <li key={chat.id} className={`chat-history-item${active ? " is-active" : ""}`}>
+                <button
+                  type="button"
+                  className="chat-history-open"
+                  onClick={() => void openChat(chat.id)}
+                  disabled={sending || loadingChat}
+                  aria-current={active ? "true" : undefined}
+                >
+                  {chat.title}
+                </button>
+                <button
+                  type="button"
+                  className="chat-history-delete"
+                  aria-label={`Delete ${chat.title}`}
+                  disabled={sending || loadingChat || deleteMutation.isPending}
+                  onClick={() => deleteMutation.mutate(chat.id)}
+                >
+                  ×
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      <div className={`chat-main${hasMessages ? " is-active" : " is-empty"}`}>
+        <div className="chat-thread" id={listId} role="log" aria-live="polite" aria-relevant="additions">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`chat-bubble chat-bubble-${message.role}`}
+            >
+              <p>{message.content}</p>
+            </div>
+          ))}
+          {sending ? <p className="chat-status">Thinking…</p> : null}
+          {error ? <p className="chat-error" role="alert">{error}</p> : null}
+          <div ref={bottomRef} />
+        </div>
+        <form
+          ref={composerRef}
+          className="chat-composer"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void send();
+          }}
+        >
+          <label className="sr-only" htmlFor={inputId}>Message</label>
+          <input
+            id={inputId}
+            className="chat-input"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            maxLength={CHAT_MAX_INPUT_CHARS}
+            disabled={sending || loadingChat}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <Button type="submit" disabled={sending || loadingChat || !draft.trim()} aria-label="Send">
+            Send
+          </Button>
+        </form>
+      </div>
     </section>
   );
 }

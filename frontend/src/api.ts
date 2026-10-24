@@ -143,10 +143,49 @@ export const api = {
     return (await res.json()) as { available: boolean };
   },
 
+  listChats: (): Promise<{
+    ok: true;
+    chats: Array<{ id: string; title: string; updatedAt: string }>;
+  }> => request(`/api/chat${buildQuery({ chats: 1 })}`),
+
+  getChat: (args: { id: string }): Promise<{
+    ok: true;
+    chat: {
+      id: string;
+      title: string;
+      updatedAt: string;
+      messages: Array<{ id: string; role: "user" | "assistant"; content: string; createdAt: string }>;
+    };
+  }> => request(`/api/chat${buildQuery({ id: args.id })}`),
+
+  deleteChat: async (args: { id: string }): Promise<{ ok: true; deleted: boolean }> => {
+    const token = await getAccessToken();
+    const headers = new Headers({ "content-type": "application/json" });
+    if (token) headers.set("authorization", `Bearer ${token}`);
+    const res = await fetch(`/api/chat${buildQuery({ id: args.id })}`, {
+      method: "DELETE",
+      headers,
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`API ${res.status} /api/chat: ${body.slice(0, 200)}`);
+    }
+    return (await res.json()) as { ok: true; deleted: boolean };
+  },
+
   postChat: async (args: {
     message: string;
     history?: Array<{ role: "user" | "assistant"; content: string }>;
-  }): Promise<{ ok: true; reply: string; model: string; toolSteps: number }> => {
+    chatId?: string;
+  }): Promise<{
+    ok: true;
+    reply: string;
+    model: string;
+    toolSteps: number;
+    chatId: string;
+    title: string;
+  }> => {
     const token = await getAccessToken();
     const headers = new Headers({ "content-type": "application/json" });
     if (token) headers.set("authorization", `Bearer ${token}`);
@@ -156,6 +195,7 @@ export const api = {
       body: JSON.stringify({
         message: args.message,
         history: args.history ?? [],
+        chatId: args.chatId,
       }),
     });
     const bodyText = await res.text().catch(() => "");
@@ -176,6 +216,13 @@ export const api = {
       }
       throw err;
     }
-    return body as { ok: true; reply: string; model: string; toolSteps: number };
+    return body as {
+      ok: true;
+      reply: string;
+      model: string;
+      toolSteps: number;
+      chatId: string;
+      title: string;
+    };
   },
 };
