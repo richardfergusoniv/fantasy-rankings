@@ -98,6 +98,8 @@ import {
 } from "./chart-metric-transforms.js";
 import { loadChartExtrasSnapshot, type ChartExtrasSnapshot } from "./nflverse-chart-extras.js";
 import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./player-insights.js";
+import { buildStandings, waiverStatus } from "./league-standings.js";
+import { loadTeamGameLines, type TeamGameLine } from "./team-game-lines.js";
 import {
   dashboardBuildLeaseResource,
   drizzleBuildLeaseStore,
@@ -1440,6 +1442,14 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const vegasProjectionSnapshot = projectionSnapshots.primary;
   const firstDownProjectionSnapshot = projectionSnapshots.firstDownFallback;
 
+  // Started alongside the other sources; a missing games file only drops the lines.
+  const gameLinesPromise: Promise<TeamGameLine[]> = attachWeekContext
+    ? loadTeamGameLines(season, week).catch((err: unknown) => {
+      console.error("[dashboard] game lines unavailable", err instanceof Error ? err.message : err);
+      sourceErrors.push("Game lines (spreads and totals) are temporarily unavailable.");
+      return [];
+    })
+    : Promise.resolve([]);
   const [leagueResult, playersResult, sleeperProjectionResult, scheduleResult, currentStatsResult, previousStatsResult, kickoffResult, trendingResult] = await Promise.allSettled([
     readUserLeagues(sleeperUserId, fresh),
     // Compact daily cache (cron refresh-nfl-players) — not the full Sleeper dump in Supabase.
@@ -2046,6 +2056,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       starters,
       bench,
       opponentTeam: opponentRoster ? {
+        rosterId: opponentRoster.roster_id,
         name: opponentName,
         teamActual: typeof opponentMatchup?.points === "number" ? opponentMatchup.points : null,
         teamProjection: sumActualsAndRemainingProjections(opponentStarters),
@@ -2065,6 +2076,8 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       powerRankingsWeek,
       powerRankingsSeasonLong,
       powerRankingsDynasty,
+      ...buildStandings(rosters, ownRoster.roster_id, powerTeamName, league.settings),
+      waivers: waiverStatus(league.settings, ownRoster, rosters.length),
     };
   });
 
@@ -2077,6 +2090,8 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const leagueIds = leagues.flatMap((league) => league ? [league.id] : []);
   const strengthOfSchedule = await loadStrengthOfSchedule(leagueIds);
 
+  // Before `status` below reads sourceErrors: a failed fetch adds one.
+  const gameLines = await gameLinesPromise;
   const dashboard = dashboardResponse.parse({
     status: sourceErrors.length > 0 ? "partial" : "ok",
     season,
@@ -2095,6 +2110,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     defenses,
     analytics,
     strengthOfSchedule,
+    gameLines,
     sourceErrors: [...new Set(sourceErrors)],
   });
   // Projection-accuracy telemetry is best-effort: a failed write must not

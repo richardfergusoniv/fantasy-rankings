@@ -125,6 +125,7 @@ export const suggestionSchema = z.object({
 }).nullable();
 
 export const matchupTeamSchema = z.object({
+  rosterId: z.number().int().nullable().optional(),
   name: z.string(),
   teamActual: z.number().nullable(),
   teamProjection: z.number().nullable(),
@@ -158,6 +159,46 @@ export const tradeTeamSchema = z.object({
   }).optional(),
 });
 
+/** League table row: record, points for/against, and playoff position. */
+export const standingsRowSchema = z.object({
+  rosterId: z.number().int(),
+  teamName: z.string(),
+  isUser: z.boolean(),
+  rank: z.number().int(),
+  wins: z.number().int(),
+  losses: z.number().int(),
+  ties: z.number().int(),
+  pointsFor: z.number(),
+  pointsAgainst: z.number(),
+  playoffSeed: z.number().int().nullable(),
+  gamesOutOfPlayoffs: z.number().nullable(),
+});
+
+export const leaguePlayoffsSchema = z.object({
+  positionKnown: z.boolean().optional(),
+  teams: z.number().int().nullable(),
+  weekStart: z.number().int().nullable(),
+});
+
+/** The user's waiver standing: FAAB budget (FAAB leagues) and priority. */
+export const waiverStatusSchema = z.object({
+  type: z.enum(["faab", "rolling", "reverse_standings"]).nullable(),
+  budget: z.number().nullable(),
+  remaining: z.number().nullable(),
+  position: z.number().int().nullable(),
+  teams: z.number().int(),
+});
+
+/** One team's side of this week's game: spread, total, implied points. */
+export const teamGameLineSchema = z.object({
+  team: z.string(),
+  opponent: z.string(),
+  isHome: z.boolean(),
+  spread: z.number().nullable(),
+  total: z.number().nullable(),
+  impliedPoints: z.number().nullable(),
+});
+
 export const leagueSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -184,6 +225,10 @@ export const leagueSchema = z.object({
   powerRankingsWeek: z.array(powerRankingSchema),
   powerRankingsSeasonLong: z.array(powerRankingSchema),
   powerRankingsDynasty: z.array(powerRankingSchema),
+  // Defaults keep dashboards cached before these fields existed valid.
+  standings: z.array(standingsRowSchema).default([]),
+  playoffs: leaguePlayoffsSchema.default({ teams: null, weekStart: null }),
+  waivers: waiverStatusSchema.nullable().default(null),
 });
 
 export const weeklySnapPointSchema = z.object({
@@ -291,6 +336,7 @@ export const dashboardResponse = z.object({
   defenses: z.array(defenseSchema),
   analytics: analyticsSchema,
   strengthOfSchedule: z.array(strengthOfScheduleEntrySchema),
+  gameLines: z.array(teamGameLineSchema).default([]),
   sourceErrors: z.array(z.string()),
 });
 
@@ -310,6 +356,7 @@ export const leagueIdentitySchema = leagueSchema.pick({
   showSuperFilter: true,
   seasonLongFormat: true,
   tradeValuation: true,
+  waivers: true,
 });
 
 export const leagueTeamSchema = leagueSchema.pick({
@@ -331,6 +378,8 @@ export const leaguePowerSchema = leagueSchema.pick({
   powerRankingsWeek: true,
   powerRankingsSeasonLong: true,
   powerRankingsDynasty: true,
+  standings: true,
+  playoffs: true,
 });
 
 export const dashboardMetaSchema = dashboardResponse.pick({
@@ -351,6 +400,7 @@ export const dashboardPlayersSchema = dashboardResponse.pick({
   strengthOfSchedule: true,
   playerTrending: true,
   playerInsights: true,
+  gameLines: true,
 });
 
 /** Trade teams + starter slots (Matchup/Monitor/Power/Trade). Waiver pool is separate. */

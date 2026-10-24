@@ -119,6 +119,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
           showSuperFilter,
           seasonLongFormat,
           tradeValuation,
+          waivers,
         }) => ({
           id,
           name,
@@ -130,6 +131,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
           showSuperFilter,
           seasonLongFormat,
           tradeValuation,
+          waivers: waivers ?? null,
         }),
       ),
     },
@@ -164,14 +166,17 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
       strengthOfSchedule: dashboard.strengthOfSchedule ?? [],
       playerTrending: dashboard.playerTrending ?? {},
       playerInsights: dashboard.playerInsights ?? emptyPlayerInsights,
+      gameLines: dashboard.gameLines ?? [],
     },
     league: {
       leagues: dashboard.leagues.map(
-        ({ id, powerRankingsWeek, powerRankingsSeasonLong, powerRankingsDynasty }) => ({
+        ({ id, powerRankingsWeek, powerRankingsSeasonLong, powerRankingsDynasty, standings, playoffs }) => ({
           id,
           powerRankingsWeek,
           powerRankingsSeasonLong,
           powerRankingsDynasty,
+          standings: standings ?? [],
+          playoffs: playoffs ?? { teams: null, weekStart: null },
         }),
       ),
     },
@@ -389,6 +394,9 @@ export function assembleDashboardFromSections(
       powerRankingsWeek: leagueRow?.powerRankingsWeek ?? [],
       powerRankingsSeasonLong: leagueRow?.powerRankingsSeasonLong ?? [],
       powerRankingsDynasty: leagueRow?.powerRankingsDynasty ?? [],
+      standings: leagueRow?.standings ?? [],
+      playoffs: leagueRow?.playoffs ?? { teams: null, weekStart: null },
+      waivers: identity.waivers ?? null,
     };
   });
 
@@ -412,6 +420,7 @@ export function assembleDashboardFromSections(
     playerInsights: players.data.playerInsights ?? emptyPlayerInsights,
     analytics: analytics.data.analytics,
     strengthOfSchedule: players.data.strengthOfSchedule ?? [],
+    gameLines: players.data.gameLines ?? [],
   };
 }
 

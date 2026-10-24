@@ -438,6 +438,9 @@ function assembleStreamedDashboard(
       powerRankingsWeek: powerData?.powerRankingsWeek ?? [],
       powerRankingsSeasonLong: powerData?.powerRankingsSeasonLong ?? [],
       powerRankingsDynasty: powerData?.powerRankingsDynasty ?? [],
+      standings: powerData?.standings ?? [],
+      playoffs: powerData?.playoffs ?? { teams: null, weekStart: null },
+      waivers: identity.waivers ?? null,
     };
   });
   return {
@@ -450,6 +453,7 @@ function assembleStreamedDashboard(
     playerTrending: players?.playerTrending ?? {},
     playerInsights: players?.playerInsights ?? { depth: {}, depthAsOf: null, depthPrevious: {} },
     strengthOfSchedule: players?.strengthOfSchedule ?? [],
+    gameLines: players?.gameLines ?? [],
     analytics: analytics?.analytics ?? { asOf: null, throughWeek: null, sourceUrl: "", entities: [], teamUsage: [], teamRecords: [] },
   };
 }
@@ -1427,7 +1431,7 @@ export function App() {
       </div>
       {!inspectorDocked ? playerSheet : null}
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
-      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} suspended={teamCardTeam !== null} /> : null}
+      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} gameLines={dashboard.gameLines} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} suspended={teamCardTeam !== null} /> : null}
       {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
       {rosterCardTeam ? (
         <LeagueTeamCard

@@ -320,6 +320,9 @@ function baseDashboard(): Dashboard {
             isUser: false,
           },
         ],
+        standings: [],
+        playoffs: { teams: null, weekStart: null },
+        waivers: null,
         powerRankingsDynasty: [],
       },
     ],
@@ -505,6 +508,7 @@ function baseDashboard(): Dashboard {
       teamUsage: [],
       teamRecords: [],
     },
+    gameLines: [],
     strengthOfSchedule: [
       {
         leagueId: "lg1",

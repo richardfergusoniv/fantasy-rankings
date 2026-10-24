@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Dashboard } from "./dashboard-schemas.js";
 import {
   dispatchChatTool,
+  gameLineForTeam,
   parseToolCallArguments,
   waiverAdjustments,
   type ChatToolContext,
@@ -148,6 +149,9 @@ function baseDashboard(overrides: Partial<Dashboard> = {}): Dashboard {
           },
         ],
         powerRankingsSeasonLong: [],
+        standings: [],
+        playoffs: { teams: null, weekStart: null },
+        waivers: null,
         powerRankingsDynasty: [
           {
             rosterId: 1,
@@ -258,6 +262,7 @@ function baseDashboard(overrides: Partial<Dashboard> = {}): Dashboard {
       teamUsage: [],
       teamRecords: [],
     },
+    gameLines: [],
     strengthOfSchedule: [],
     sourceErrors: [],
     ...overrides,
@@ -365,6 +370,50 @@ describe("dispatchChatTool", () => {
     expect(result.opponent?.name).toBe("Rival");
   });
 
+  it("adds game lines, standings and waiver status for the matchup and league tools", async () => {
+    const base = baseDashboard();
+    const dashboard = {
+      ...base,
+      gameLines: [{ team: "KC", opponent: "LV", isHome: true, spread: -6.5, total: 45.5, impliedPoints: 26 }],
+      leagues: base.leagues.map((league) => ({
+        ...league,
+        standings: [
+          { rosterId: 1, teamName: "Mine", isUser: true, rank: 3, wins: 4, losses: 2, ties: 0, pointsFor: 801.2, pointsAgainst: 720.4, playoffSeed: 3, gamesOutOfPlayoffs: null },
+          { rosterId: 2, teamName: "Rival", isUser: false, rank: 7, wins: 3, losses: 3, ties: 0, pointsFor: 760, pointsAgainst: 770, playoffSeed: null, gamesOutOfPlayoffs: 1 },
+        ],
+        playoffs: { teams: 6, weekStart: 15 },
+        waivers: { type: "faab" as const, budget: 100, remaining: 63, position: 4, teams: 12 },
+      })),
+    };
+    const matchup = await dispatchChatTool("get_week_matchup", { leagueId: "lg1" }, ctxWithDashboard(dashboard)) as {
+      starters: Array<{ game: unknown }>;
+      standing: { rank: number; playoffSeed: number | null } | null;
+      opponent: { standing: { gamesOutOfPlayoffs: number | null } | null } | null;
+    };
+    expect(matchup.starters[0]?.game).toEqual({ opponent: "LV", isHome: true, spread: -6.5, total: 45.5, impliedPoints: 26 });
+    expect(matchup.standing).toMatchObject({ rank: 3, playoffSeed: 3, playoffTeams: 6 });
+    expect(matchup.opponent?.standing).toMatchObject({ rank: 7, gamesOutOfPlayoffs: 1 });
+
+    const leagues = await dispatchChatTool("get_my_leagues", {}, ctxWithDashboard(dashboard)) as {
+      leagues: Array<{ waivers: unknown; standing: { pointsFor: number } | null }>;
+    };
+    expect(leagues.leagues[0]?.waivers).toMatchObject({ type: "faab", remaining: 63, position: 4 });
+    expect(leagues.leagues[0]?.standing?.pointsFor).toBe(801.2);
+  });
+
+  it.each([3, null])("handles duplicate opponent names using roster ID %s", async (rosterId) => {
+    const dashboard = baseDashboard();
+    const league = dashboard.leagues[0]!;
+    league.opponentTeam = { ...league.opponentTeam!, rosterId, name: "Rival" };
+    const row = { teamName: "Rival", isUser: false, wins: 3, losses: 3, ties: 0, pointsFor: 760, pointsAgainst: 770, playoffSeed: null, gamesOutOfPlayoffs: 1 };
+    league.standings = [{ ...row, rosterId: 2, rank: 2 }, { ...row, rosterId: 3, rank: 7 }];
+    const matchup = await dispatchChatTool("get_week_matchup", { leagueId: "lg1" }, ctxWithDashboard(dashboard)) as {
+      opponent: { standing: { rank: number } | null };
+    };
+    if (rosterId === null) expect(matchup.opponent.standing).toBeNull();
+    else expect(matchup.opponent.standing?.rank).toBe(7);
+  });
+
   it("builds a player card from rankings and values", async () => {
     const result = await dispatchChatTool(
       "get_player_card",
@@ -418,5 +467,17 @@ describe("dispatchChatTool", () => {
     expect(result.ok).toBe(true);
     expect(result.weekly.leagueProjection).toBe(18.2);
     expect(result.weekly.leagueRank).toBe(1);
+  });
+});
+
+
+describe("gameLineForTeam", () => {
+  it("matches Sleeper team aliases to canonical game lines", () => {
+    const dashboard = baseDashboard();
+    dashboard.gameLines = [{ team: "LAR", opponent: "SEA", isHome: true, spread: -3, total: 45, impliedPoints: 24 }];
+    expect(gameLineForTeam(dashboard, "LA")).toEqual(gameLineForTeam(dashboard, "LAR"));
+    expect(gameLineForTeam(dashboard, "LA")).toMatchObject({ opponent: "SEA", spread: -3 });
+    expect(gameLineForTeam(dashboard, null)).toBeNull();
+    expect(gameLineForTeam(dashboard, "KC")).toBeNull();
   });
 });

@@ -28,6 +28,7 @@ import { RankStrip } from "./components/rank-strip";
 import { RefreshIcon, SectionError } from "./section-error";
 import { dashboardFreshness } from "./dashboard-freshness";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
+import { gameLineSummary, type TeamGameLineLike } from "./game-line-summary";
 import { ModalPortal, useDialogFocusTrap } from "./shared";
 import {
   TRADE_REMOVE_TOAST_ID,
@@ -475,7 +476,7 @@ function MatchupStatRow({ stat, pairing, left, right }: { stat: MatchupStatConfi
   );
 }
 
-export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, toolLinks, suspended = false }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; toolLinks?: ToolLinkItem[]; suspended?: boolean }) {
+export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, toolLinks, gameLines, suspended = false }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; toolLinks?: ToolLinkItem[]; gameLines?: readonly TeamGameLineLike[]; suspended?: boolean }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [pairingTab, setPairingTab] = useState<"team-offense" | "team-defense">("team-offense");
   useDialogFocusTrap(dialogRef, onClose, !suspended);
@@ -499,6 +500,9 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   const opponentCode = canonicalNflTeam(matchup.opponent);
   const teamCodeLabel = teamCode && teamCode.length <= 4 ? teamCode : matchup.team;
   const opponentCodeLabel = opponentCode && opponentCode.length <= 4 ? opponentCode : matchup.opponent;
+  const lineSummary = teamCode && opponentCode && matchup.gamePhase !== "final"
+    ? gameLineSummary(gameLines ?? [], teamCode, opponentCode)
+    : null;
   const findRow = (table: PfnTable | null, code: string | null) => table?.rows.find((row) => canonicalNflTeam(row.team) === code);
   const teamRows = {
     offense: findRow(offense, teamCode),
@@ -546,6 +550,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
             <button type="button" onClick={onClose} aria-label="Close matchup data">×</button>
           </div>
           {toolLinks ? <ToolLinks ariaLabel={`Open ${matchup.team} and ${matchup.opponent} in a tool`} links={toolLinks} /> : null}
+          {lineSummary ? <p className="matchup-game-line"><span>Line</span> {lineSummary}</p> : null}
 
           {matchup.gamePhase === "final" ? (
             scoreQuery.isPending ? <div className="matchup-card-status" role="status"><RefreshIcon spinning /> Loading box score…</div>

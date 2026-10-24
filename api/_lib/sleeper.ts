@@ -52,7 +52,18 @@ export type SleeperLeague = {
   previous_league_id?: string | null;
   roster_positions?: string[];
   scoring_settings?: Record<string, number>;
-  settings?: { type?: number; reserve_slots?: number; taxi_slots?: number; draft_rounds?: number };
+  settings?: {
+    type?: number;
+    reserve_slots?: number;
+    taxi_slots?: number;
+    draft_rounds?: number;
+    divisions?: number;
+    playoff_teams?: number;
+    playoff_week_start?: number;
+    /** 0 rolling, 1 reverse standings, 2 FAAB. */
+    waiver_type?: number;
+    waiver_budget?: number;
+  };
   total_rosters?: number;
 };
 
@@ -63,7 +74,19 @@ export type SleeperRoster = {
   starters?: string[];
   reserve?: string[];
   taxi?: string[];
-  settings?: { wins?: number; losses?: number; ties?: number };
+  settings?: {
+    division?: number;
+    wins?: number;
+    losses?: number;
+    ties?: number;
+    /** Points for/against: whole points plus hundredths in the `_decimal` field. */
+    fpts?: number;
+    fpts_decimal?: number;
+    fpts_against?: number;
+    fpts_against_decimal?: number;
+    waiver_budget_used?: number;
+    waiver_position?: number;
+  };
   metadata?: { team_name?: string };
 };
 

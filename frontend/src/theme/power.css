@@ -154,3 +154,8 @@
 .power-slot-chip { flex: none; max-width: 74px; overflow: hidden; padding: 2px 4px 1px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); line-height: 1.2; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .power-roster-empty { padding: 22px 12px; color: var(--dim); text-align: center; font-size: var(--type-caption); line-height: 1.4; }
 .power-note { margin: 12px 2px 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.45; }
+.standings-caption { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.standings-points { display: block; margin-top: 2px; color: var(--dim); font-size: var(--type-caption); font-weight: 500; }
+.standings-status strong { font-size: var(--type-caption); }
+/* Last playoff spot: a heavier rule marks the cut line. */
+.power-row.standings-cut { border-bottom: 2px solid var(--link); }

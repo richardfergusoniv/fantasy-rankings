@@ -153,6 +153,8 @@
 .matchup-battle-label { display: block; margin-bottom: 5px; color: var(--text); font-size: var(--type-caption); font-weight: 700; }
 .matchup-battle > div { display: grid; grid-template-columns: minmax(0, 1fr) 88px; min-height: 24px; align-items: center; gap: 8px; }
 .matchup-battle > div > span:first-child { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.matchup-game-line { margin: 12px 0 0; color: var(--text); font-size: var(--type-caption); font-weight: 600; overflow-wrap: anywhere; }
+.matchup-game-line > span { margin-right: 6px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
 .matchup-card-status { display: flex; min-height: 44px; align-items: center; gap: 8px; margin-top: 14px; padding: 12px 0; border-block: 1px solid var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 
 @keyframes backdropIn { from { opacity: 0; } }
@@ -345,3 +347,4 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .depth-change.is-down { color: var(--negative); }
 .player-props-section .section-heading { position: static; min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .player-props-section .section-heading h3 { margin: 0; font-size: var(--type-section); }
+.waiver-status-line { margin: 0 0 10px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; overflow-wrap: anywhere; }

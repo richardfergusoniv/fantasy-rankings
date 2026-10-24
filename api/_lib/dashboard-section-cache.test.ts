@@ -115,6 +115,9 @@ const sampleDashboard: Dashboard = {
       tradeStarterSlots: ["QB", "RB", "WR", "TE", "FLEX"],
       powerRankingsWeek: [],
       powerRankingsSeasonLong: [],
+      standings: [],
+      playoffs: { teams: null, weekStart: null },
+      waivers: null,
       powerRankingsDynasty: [],
     },
   ],
@@ -130,6 +133,7 @@ const sampleDashboard: Dashboard = {
     teamUsage: [],
     teamRecords: [],
   },
+  gameLines: [],
   strengthOfSchedule: [],
   sourceErrors: [],
 };
@@ -161,6 +165,35 @@ describe("per-section dashboard cache", () => {
     expect(assembled!.rankings).toEqual(sampleDashboard.rankings);
     expect(assembled!.weeklyChartRankings).toEqual(sampleDashboard.rankings);
     expect(assembled!.asOf).toBe(sampleDashboard.asOf);
+  });
+
+  it("carries standings, waivers and game lines through the section split", () => {
+    const standings = [{
+      rosterId: 1, teamName: "Mine", isUser: true, rank: 1, wins: 5, losses: 2, ties: 0,
+      pointsFor: 812.4, pointsAgainst: 700.1, playoffSeed: 1, gamesOutOfPlayoffs: null,
+    }];
+    const waivers = { type: "faab" as const, budget: 100, remaining: 63, position: 4, teams: 12 };
+    const gameLines = [{ team: "KC", opponent: "TEN", isHome: false, spread: -7, total: 44.5, impliedPoints: 25.8 }];
+    const withExtras: Dashboard = {
+      ...sampleDashboard,
+      gameLines,
+      leagues: sampleDashboard.leagues.map((league) => ({
+        ...league, standings, playoffs: { teams: 6, weekStart: 15, positionKnown: false }, waivers,
+        opponentTeam: { rosterId: 2, name: "Rival", teamActual: null, teamProjection: null, starters: [], bench: [] },
+      })),
+    };
+    const assembled = assembleDashboardFromSections(splitDashboardIntoSections(withExtras));
+    expect(assembled!.gameLines).toEqual(gameLines);
+    expect(assembled!.leagues[0]).toMatchObject({ standings, playoffs: { teams: 6, weekStart: 15, positionKnown: false }, waivers, opponentTeam: { rosterId: 2 } });
+  });
+
+  it("still parses a dashboard cached before standings, waivers and game lines existed", () => {
+    const { gameLines: _gameLines, ...legacy } = sampleDashboard;
+    const legacyLeagues = legacy.leagues.map(({ standings: _s, playoffs: _p, waivers: _w, ...league }) => league);
+    const parsed = parseUsableDashboard(encodeSourceCachePayload({ ...legacy, leagues: legacyLeagues }));
+    expect(parsed).not.toBeNull();
+    expect(parsed!.gameLines).toEqual([]);
+    expect(parsed!.leagues[0]).toMatchObject({ standings: [], playoffs: { teams: null, weekStart: null }, waivers: null });
   });
 
   it("fills empty trade fields on team API data unless trade / waiver slices are provided", () => {

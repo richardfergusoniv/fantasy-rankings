@@ -68,7 +68,7 @@ export function LeagueTeamCard({
   useDialogFocusTrap(dialogRef, onClose, !playerCardOpen);
   const activeMode = league.seasonLongFormat.isDynasty ? mode : "seasonLong";
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
-  const isOpponent = scope === "week" && weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams) === team.rosterId;
+  const isOpponent = scope === "week" && weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams, league.opponentTeam?.rosterId) === team.rosterId;
   const positions: PowerPosition[] = scope === "week"
     ? ["QB", "RB", "WR", "TE", "FLEX"]
     : ["QB", "RB", "WR", "TE"];
