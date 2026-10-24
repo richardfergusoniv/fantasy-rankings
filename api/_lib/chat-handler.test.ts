@@ -10,16 +10,50 @@ vi.mock("./chat-agent.js", () => ({
   runChatAgent: vi.fn(),
 }));
 
+vi.mock("./chat-preferences.js", () => ({
+  appendChatPreferences: vi.fn((_base: string, _prefs: unknown[]) => "system-with-prefs"),
+  listChatPreferences: vi.fn(async () => []),
+}));
+
+vi.mock("./chat-store.js", () => ({
+  ChatStoreError: class ChatStoreError extends Error {
+    code: string;
+    constructor(message: string, code: string) {
+      super(message);
+      this.code = code;
+    }
+  },
+  chatConversationOwned: vi.fn(),
+  deleteChatConversation: vi.fn(),
+  getChatConversation: vi.fn(),
+  listChatConversations: vi.fn(),
+  persistChatTurn: vi.fn(),
+}));
+
 import { resolveViewer } from "./auth.js";
 import { runChatAgent } from "./chat-agent.js";
+import { listChatPreferences } from "./chat-preferences.js";
 import { resetChatRateLimits } from "./chat-rate-limit.js";
-import { GET, POST } from "../chat.js";
+import {
+  chatConversationOwned,
+  deleteChatConversation,
+  getChatConversation,
+  listChatConversations,
+  persistChatTurn,
+} from "./chat-store.js";
+import { DELETE, GET, POST } from "../chat.js";
 
 const resolveViewerMock = vi.mocked(resolveViewer);
 const runChatAgentMock = vi.mocked(runChatAgent);
+const listPrefsMock = vi.mocked(listChatPreferences);
+const listChatsMock = vi.mocked(listChatConversations);
+const getChatMock = vi.mocked(getChatConversation);
+const ownedMock = vi.mocked(chatConversationOwned);
+const persistMock = vi.mocked(persistChatTurn);
+const deleteMock = vi.mocked(deleteChatConversation);
 
-function authReq(method: string, body?: unknown): Request {
-  return new Request("https://example.com/api/chat", {
+function authReq(method: string, body?: unknown, url = "https://example.com/api/chat"): Request {
+  return new Request(url, {
     method,
     headers: {
       authorization: "Bearer test-token",
@@ -34,6 +68,13 @@ describe("api/chat handler", () => {
     resetChatRateLimits();
     resolveViewerMock.mockReset();
     runChatAgentMock.mockReset();
+    listPrefsMock.mockReset();
+    listChatsMock.mockReset();
+    getChatMock.mockReset();
+    ownedMock.mockReset();
+    persistMock.mockReset();
+    deleteMock.mockReset();
+    listPrefsMock.mockResolvedValue([]);
     delete process.env.OPENROUTER_API_KEY;
     delete process.env.OPENROUTER_MODEL;
   });
@@ -58,6 +99,40 @@ describe("api/chat handler", () => {
     expect(await available.json()).toEqual({ available: true });
   });
 
+  it("GET ?chats=1 returns titles only", async () => {
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    listChatsMock.mockResolvedValue([
+      { id: "c1", title: "Who is my WR1?", updatedAt: "2026-10-24T00:00:00.000Z" },
+    ]);
+    const res = await GET(authReq("GET", undefined, "https://example.com/api/chat?chats=1"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      chats: [{ id: "c1", title: "Who is my WR1?", updatedAt: "2026-10-24T00:00:00.000Z" }],
+    });
+    expect(getChatMock).not.toHaveBeenCalled();
+  });
+
+  it("GET ?id= loads one conversation with messages", async () => {
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    getChatMock.mockResolvedValue({
+      id: "c1",
+      title: "Who is my WR1?",
+      updatedAt: "2026-10-24T00:00:00.000Z",
+      messages: [
+        {
+          id: "m1",
+          role: "user",
+          content: "Who is my WR1?",
+          createdAt: "2026-10-24T00:00:00.000Z",
+        },
+      ],
+    });
+    const res = await GET(authReq("GET", undefined, "https://example.com/api/chat?id=c1"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, chat: { id: "c1" } });
+  });
+
   it("POST returns 503 when the OpenRouter key is missing", async () => {
     resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
     const res = await POST(authReq("POST", { message: "Who is my WR1?" }));
@@ -66,7 +141,7 @@ describe("api/chat handler", () => {
     expect(runChatAgentMock).not.toHaveBeenCalled();
   });
 
-  it("POST runs the agent with OpenRouter mocked via runChatAgent", async () => {
+  it("POST runs the agent, persists, and returns chatId", async () => {
     process.env.OPENROUTER_API_KEY = "sk-or-test";
     resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
     runChatAgentMock.mockResolvedValue({
@@ -74,6 +149,7 @@ describe("api/chat handler", () => {
       model: "thinkingmachines/inkling:free",
       toolSteps: 1,
     });
+    persistMock.mockResolvedValue({ chatId: "c1", title: "Who is my WR1?" });
 
     const res = await POST(authReq("POST", { message: "Who is my WR1?" }));
     expect(res.status).toBe(200);
@@ -82,12 +158,22 @@ describe("api/chat handler", () => {
       reply: "Your WR1 projects 18.20.",
       model: "thinkingmachines/inkling:free",
       toolSteps: 1,
+      chatId: "c1",
+      title: "Who is my WR1?",
     });
     expect(runChatAgentMock).toHaveBeenCalledWith(
       expect.objectContaining({
         apiKey: "sk-or-test",
         userMessage: "Who is my WR1?",
+        systemPrompt: "system-with-prefs",
         ctx: { userId: "u1", sleeperUserId: "s1" },
+      }),
+    );
+    expect(persistMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "u1",
+        userMessage: "Who is my WR1?",
+        assistantMessage: "Your WR1 projects 18.20.",
       }),
     );
   });
@@ -100,7 +186,7 @@ describe("api/chat handler", () => {
     expect(runChatAgentMock).not.toHaveBeenCalled();
   });
 
-  it("POST maps OpenRouter failures to a retryable 503", async () => {
+  it("POST maps OpenRouter failures to a retryable 503 without persisting", async () => {
     process.env.OPENROUTER_API_KEY = "sk-or-test";
     resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
     const { OpenRouterError } = await import("./chat-openrouter.js");
@@ -112,5 +198,15 @@ describe("api/chat handler", () => {
       ok: false,
       code: "chat_upstream_unavailable",
     });
+    expect(persistMock).not.toHaveBeenCalled();
+  });
+
+  it("DELETE removes a conversation for the viewer", async () => {
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    deleteMock.mockResolvedValue(true);
+    const res = await DELETE(authReq("DELETE", undefined, "https://example.com/api/chat?id=c1"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, deleted: true });
+    expect(deleteMock).toHaveBeenCalledWith("u1", "c1");
   });
 });
