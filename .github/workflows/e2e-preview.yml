@@ -44,9 +44,11 @@ jobs:
       - run: npm ci
       - run: npx playwright-core install --with-deps chromium
       # Credentials are only submitted to previews of revisions this repository owns: the deployed
-      # commit must be an ancestor of (or equal to) a branch head in this repo, so a preview built
-      # from a fork or an arbitrary commit can never see them. The preview URL must also be on the
-      # *.vercel.app origin so the deployment event can't redirect the browser elsewhere.
+      # commit must be an ancestor of (or equal to) a branch head in this repo, or the head of a
+      # pull request opened from a branch in this repo — Vercel sets deployment.ref to the SHA for
+      # PR previews, so both paths are checked. A preview built from a fork or an arbitrary commit
+      # can never see them. The preview URL must also be on the *.vercel.app origin so the
+      # deployment event can't redirect the browser elsewhere.
       - name: Check the deployed revision is trusted
         id: trust
         env:
@@ -59,14 +61,20 @@ jobs:
           branch="${DEPLOYED_REF#refs/heads/}"
           if [[ "$host" != *.vercel.app ]]; then
             reason="preview host $host is not *.vercel.app"
-          elif ! gh api "repos/${{ github.repository }}/branches/$branch" --jq .name > /dev/null 2>&1; then
-            reason="$branch is not a branch of this repository"
-          else
+          elif gh api "repos/${{ github.repository }}/branches/$branch" --jq .name > /dev/null 2>&1; then
             status="$(gh api "repos/${{ github.repository }}/compare/$DEPLOYED_SHA...$branch" --jq .status 2>/dev/null)" || status="unknown"
             if [[ "$status" == "ahead" || "$status" == "identical" ]]; then
               trusted=true
             else
               reason="$DEPLOYED_SHA is not on branch $branch (compare: $status)"
+            fi
+          else
+            nonfork_prs="$(gh api "repos/${{ github.repository }}/commits/$DEPLOYED_SHA/pulls" \
+              --jq '[.[] | select(.head.repo.fork == false)] | length' 2>/dev/null)" || nonfork_prs=0
+            if [[ "$nonfork_prs" -gt 0 ]]; then
+              trusted=true
+            else
+              reason="$DEPLOYED_SHA is not a repo branch or the head of a same-repo pull request"
             fi
           fi
           echo "$reason"
