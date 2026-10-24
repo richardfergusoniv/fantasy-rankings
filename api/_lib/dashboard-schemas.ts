@@ -378,14 +378,25 @@ export const dashboardTradeWaiverSchema = z.object({
   leagues: z.array(leagueTradeWaiverSchema),
 });
 
+/**
+ * Structured status of the background build that fills a cold section cache.
+ * Present on `data: null` responses so the client can tell "building" (keep
+ * polling) from "failed" (show an error instead of an empty view).
+ */
+export const dashboardBuildNoticeSchema = z.object({
+  status: z.enum(["building", "failed"]),
+  /** Correlates the response with server-side build telemetry. */
+  jobId: z.string().optional(),
+});
+
 export const dashboardSectionResponse = z.discriminatedUnion("section", [
-  z.object({ section: z.literal("meta"), data: dashboardMetaSchema.nullable() }),
-  z.object({ section: z.literal("team"), data: z.object({ leagues: z.array(leagueTeamSchema) }).nullable() }),
-  z.object({ section: z.literal("players"), data: dashboardPlayersSchema.nullable() }),
-  z.object({ section: z.literal("league"), data: z.object({ leagues: z.array(leaguePowerSchema) }).nullable() }),
-  z.object({ section: z.literal("analytics"), data: z.object({ analytics: analyticsSchema }).nullable() }),
-  z.object({ section: z.literal("trade"), data: dashboardTradeSchema.nullable() }),
-  z.object({ section: z.literal("trade-waiver"), data: dashboardTradeWaiverSchema.nullable() }),
+  z.object({ section: z.literal("meta"), data: dashboardMetaSchema.nullable(), build: dashboardBuildNoticeSchema.optional() }),
+  z.object({ section: z.literal("team"), data: z.object({ leagues: z.array(leagueTeamSchema) }).nullable(), build: dashboardBuildNoticeSchema.optional() }),
+  z.object({ section: z.literal("players"), data: dashboardPlayersSchema.nullable(), build: dashboardBuildNoticeSchema.optional() }),
+  z.object({ section: z.literal("league"), data: z.object({ leagues: z.array(leaguePowerSchema) }).nullable(), build: dashboardBuildNoticeSchema.optional() }),
+  z.object({ section: z.literal("analytics"), data: z.object({ analytics: analyticsSchema }).nullable(), build: dashboardBuildNoticeSchema.optional() }),
+  z.object({ section: z.literal("trade"), data: dashboardTradeSchema.nullable(), build: dashboardBuildNoticeSchema.optional() }),
+  z.object({ section: z.literal("trade-waiver"), data: dashboardTradeWaiverSchema.nullable(), build: dashboardBuildNoticeSchema.optional() }),
 ]);
 
 export type DashboardSection = z.infer<typeof dashboardSectionResponse>;

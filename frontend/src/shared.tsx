@@ -264,7 +264,7 @@ export function MatchupTag({
   const tagClassName = `matchup-reference-tag${matchupTone(entry, opponent, position)}${className ? ` ${className}` : ""}`;
   if (!onClick || !team || !opponent) return <span className={tagClassName}>{label}</span>;
   return (
-    <button type="button" className={`${tagClassName} matchup-reference-button`} onClick={(event) => onClick?.(event)} aria-label={`View ${team} ${isAway ? "at" : "versus"} ${opponent} matchup data`} aria-haspopup="dialog">
+    <button type="button" className={`${tagClassName} matchup-reference-button`} onClick={(event) => onClick?.(event)} aria-label={label} aria-description="View matchup data" aria-haspopup="dialog">
       <span className="matchup-reference-button-label">{label}</span><span className="matchup-reference-arrow" aria-hidden="true">›</span>
     </button>
   );

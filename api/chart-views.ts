@@ -3,9 +3,12 @@ import { and, asc, eq } from "drizzle-orm";
 import { db, schema } from "./_lib/db.js";
 import {
   badRequest,
+  BodyTooLargeError,
   getRequestUser,
   internalError,
   json,
+  payloadTooLarge,
+  readJsonBody,
   unauthorized,
 } from "./_lib/api-utils.js";
 
@@ -88,8 +91,9 @@ async function handlePost(req: Request): Promise<Response> {
 
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = await readJsonBody(req);
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) return payloadTooLarge();
     return badRequest("Request body must be JSON.");
   }
   const parsed = savedChartViewInputSchema.safeParse(body);

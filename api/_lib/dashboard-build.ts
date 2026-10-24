@@ -98,6 +98,8 @@ import {
 } from "./chart-metric-transforms.js";
 import { loadChartExtrasSnapshot, type ChartExtrasSnapshot } from "./nflverse-chart-extras.js";
 import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./player-insights.js";
+import { createDashboardBuildTracker, type DashboardBuildState } from "./dashboard-build-status.js";
+import { captureServerError } from "./posthog.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -1620,7 +1622,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       gameTimeByTeam,
       sleeperDefenseProjections,
     );
-    const defenseRankByTeam = new Map(leagueDefenses.flatMap((row) => row.rank === null ? [] : [[row.team, row.rank] as const]));
     const mergedRankings = mergePlayerProjections(
       league.league_id,
       rankingField,
@@ -1630,7 +1631,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       useVegasPrimary,
       sleeperProjectionsByPlayerId,
       league.scoring_settings,
-      defenseRankByTeam,
     );
     rankingsByLeagueId.set(league.league_id, mergedRankings);
     defensesByLeagueId.set(league.league_id, leagueDefenses);
@@ -2417,30 +2417,40 @@ export async function readUserDashboardSection<S extends DashboardCacheSection>(
 }
 
 // Single-flight guard so concurrent section reads (and dashboard reads) for
-// the same user share one background build per function instance.
-const inFlightBuilds = new Map<string, Promise<void>>();
+// the same user share one background build per function instance. The tracker
+// also records each build's outcome so section responses can report a
+// structured status instead of silently dropping background failures.
+const buildTracker = createDashboardBuildTracker();
+
+/** Structured status of the user's latest background build, if any ran here. */
+export function userDashboardBuildStatus(sleeperUserId: string): DashboardBuildState | null {
+  return buildTracker.status(sleeperUserId);
+}
 
 /**
  * Start (or join) a background build for this user that caches its result
  * when done. Never rejects — pair with `waitUntil` at the route so Vercel
  * keeps the function alive until the cache write lands. Section reads use
  * this so a cold cache answers immediately with "no data yet" while the
- * first build (~30s) runs behind the response.
+ * first build (~30s) runs behind the response. A failure is recorded on the
+ * tracker (read it back via `userDashboardBuildStatus`) and reported to
+ * server telemetry instead of being discarded; it is not rebuilt until it
+ * expires or the caller passes `retryFailed` (the client's explicit retry).
  */
-export function kickUserDashboardBuild(sleeperUserId: string): Promise<void> {
-  const existing = inFlightBuilds.get(sleeperUserId);
-  if (existing) return existing;
-  const build = (async () => {
-    try {
+export function kickUserDashboardBuild(
+  sleeperUserId: string,
+  options?: { retryFailed?: boolean },
+): Promise<void> {
+  return buildTracker.kick(
+    sleeperUserId,
+    async () => {
       const dashboard = await buildUserDashboard(sleeperUserId);
       await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
-    } catch {
-      // Background build failed; the next read retries. The client keeps
-      // polling and eventually surfaces its error state.
-    } finally {
-      inFlightBuilds.delete(sleeperUserId);
-    }
-  })();
-  inFlightBuilds.set(sleeperUserId, build);
-  return build;
+    },
+    (error, jobId) => {
+      console.error("[dashboard-build] background build failed", { jobId, sleeperUserId, error });
+      void captureServerError(error, { route: "dashboard-build", job: "user-dashboard", jobId });
+    },
+    { retryFailed: options?.retryFailed },
+  );
 }

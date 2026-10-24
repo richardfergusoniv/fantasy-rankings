@@ -1,6 +1,5 @@
 import {
   badRequest,
-  internalError,
   json,
   queryBool,
 } from "./_lib/api-utils.js";
@@ -13,6 +12,7 @@ import {
   readGlobalDashboardSnapshot,
   readUserDashboardCache,
   readUserDashboardSection,
+  userDashboardBuildStatus,
 } from "./_lib/dashboard-build.js";
 import {
   dashboardSnapshotIsLive,
@@ -150,6 +150,8 @@ async function handleSection(
     return badRequest("Invalid or missing `section` query param.", parsed.error.issues);
   }
   const section = parsed.data as DashboardCacheSection;
+  // Set by the client's Retry on a failed build; plain polls never restart one.
+  const retryBuild = queryBool(url, "retryBuild", false);
 
   const loaded = await loadCachedDashboardView<{ section: DashboardCacheSection; data: unknown }>({
     sleeperUserId: viewer.sleeperUserId,
@@ -162,22 +164,20 @@ async function handleSection(
         ownerSleeperUserId: readOwnerSleeperUserId(),
         ownerUserId: readOwnerUserId(),
         loadOwn: async (id) => {
-          try {
-            const hit = await readUserDashboardSection(id, section);
-            if (!hit || !hit.fresh) {
-              waitUntil(kickUserDashboardBuild(id));
-            }
-            if (!hit) return null;
-            return {
-              data: hit.data,
-              version: hit.version,
-              live: hit.live,
-              fetchedAtMs: hit.fetchedAtMs,
-              fresh: hit.fresh,
-            };
-          } catch {
-            return null;
+          // A read failure propagates to a 500 — returning null would make a
+          // transport failure look like "no data yet".
+          const hit = await readUserDashboardSection(id, section);
+          if (!hit || !hit.fresh) {
+            waitUntil(kickUserDashboardBuild(id, { retryFailed: retryBuild }));
           }
+          if (!hit) return null;
+          return {
+            data: hit.data,
+            version: hit.version,
+            live: hit.live,
+            fetchedAtMs: hit.fetchedAtMs,
+            fresh: hit.fresh,
+          };
         },
         loadOwnerSnapshot: async () => {
           const snapshot = await readGlobalDashboardSnapshot();
@@ -194,9 +194,12 @@ async function handleSection(
       if (!resolved.ok) return { kind: "deny" };
       const payload = resolved.dashboard;
       if (!payload) {
+        // Attach the background build's status so the client can tell
+        // "still building" from "build failed".
+        const build = userDashboardBuildStatus(viewer.sleeperUserId);
         return {
           kind: "value",
-          body: { section, data: null },
+          body: { section, data: null, ...(build ? { build } : {}) },
           version: "",
           live: false,
           ttlSeconds: 0,
@@ -224,6 +227,10 @@ async function handleSection(
 }
 
 export async function GET(req: Request): Promise<Response> {
+  // Correlation id for this request: honored when the client sends one so a
+  // user-reported failure can be matched to server telemetry, generated
+  // otherwise and returned on the error body.
+  const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
   try {
     const viewer = await resolveViewer(req);
     if (!viewer) return json({ ok: false, error: SIGN_IN_REQUIRED }, 401, dashboardDeniedHeaders());
@@ -235,8 +242,9 @@ export async function GET(req: Request): Promise<Response> {
     }
     return await handleDashboard(req, viewer);
   } catch (err) {
-    await captureServerError(err, { route: "dashboard" });
-    return internalError(err);
+    await captureServerError(err, { route: "dashboard", requestId });
+    console.error("[dashboard] request failed", { requestId, error: err });
+    return json({ ok: false, error: "Internal server error", requestId }, 500);
   }
 }
 

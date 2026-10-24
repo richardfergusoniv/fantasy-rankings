@@ -45,3 +45,18 @@ export function isSectionWaiting(input: SectionWaitingInput): boolean {
     || input.dataUndefined
     || (input.isFetching && !input.hasPayload);
 }
+
+/**
+ * True when a section response reports the background build failed. The route
+ * attaches `build` only to `data: null` responses; a failed build is a real
+ * error state, not "no data yet" — views must show it rather than an empty
+ * or endlessly-loading state.
+ */
+export function sectionBuildFailed(data: unknown): boolean {
+  return Boolean(
+    data
+      && typeof data === "object"
+      && "build" in data
+      && (data as { build?: { status?: string } }).build?.status === "failed",
+  );
+}

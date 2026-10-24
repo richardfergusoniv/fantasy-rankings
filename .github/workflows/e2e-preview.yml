@@ -4,9 +4,17 @@ name: E2E on preview
 # result as an "e2e / preview" commit status on the deployed commit (a deployment_status run belongs
 # to the default branch, so it would not show up on the pull request by itself).
 #
-# The theme tests need no account. The sheet-history tests run only when these are set in the repo:
+# The theme tests need no account and run on every preview. The sheet-history tests submit test-account
+# credentials through the preview's own sign-in form, so they run only when the deployed revision is
+# trusted: its commit must be on a branch of this repository (not a fork or arbitrary commit), the
+# status must come from the Vercel app, and the Vercel API must confirm the preview host is a READY
+# deployment of this project built from that commit. Untrusted previews get the anonymous tests only.
+# The credentialed tests also need these set in the repo:
 #   secrets   E2E_LOGIN, E2E_PASSWORD   a dedicated test account
+#             VERCEL_TOKEN              read access to the project's deployments
 #   variables E2E_LEAGUE_ID, E2E_PLAYER a league for that account and a player on its matchup page
+#             VERCEL_PROJECT_ID         this app's Vercel project (prj_…)
+#             VERCEL_TEAM_ID            the owning team (team_…), if the project is under a team
 
 on:
   deployment_status:
@@ -25,6 +33,7 @@ jobs:
     env:
       PREVIEW_URL: ${{ github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
       DEPLOYED_SHA: ${{ github.event.deployment.sha }}
+      DEPLOYED_REF: ${{ github.event.deployment.ref }}
     steps:
       # The tests only need a URL, so run the default branch's copy rather than the deployed commit's:
       # the secrets below must never be exposed to code from a pull request.
@@ -34,19 +43,94 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Literal version, not node-version-file: this job intentionally
+          # checks out the default branch, where .nvmrc may not exist yet.
+          # Keep in sync with .nvmrc (Node 22.23.4).
+          node-version: "22.23.4"
           cache: npm
       - run: npm ci
       - run: npx playwright-core install --with-deps chromium
-      - name: Smoke tests
-        id: smoke
+      # Credentials are only submitted to previews of revisions this repository owns: the deployed
+      # commit must be an ancestor of (or equal to) a branch head in this repo, or the head of a
+      # pull request opened from a branch in this repo — Vercel sets deployment.ref to the SHA for
+      # PR previews, so both paths are checked. A preview built from a fork or an arbitrary commit
+      # can never see them. A *.vercel.app suffix alone proves nothing (any Vercel account serves
+      # one), so the host is also looked up in the Vercel API: it must be a READY deployment of
+      # VERCEL_PROJECT_ID built from DEPLOYED_SHA. Without VERCEL_TOKEN/VERCEL_PROJECT_ID this
+      # fails closed. The tests then get the verified https origin, not the raw event URL.
+      - name: Check the deployed revision is trusted
+        id: trust
         env:
-          E2E_BASE_URL: ${{ env.PREVIEW_URL }}
+          GH_TOKEN: ${{ github.token }}
+          STATUS_CREATOR: ${{ github.event.deployment_status.creator.login }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TEAM_ID: ${{ vars.VERCEL_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          trusted=false
+          reason=""
+          host="$(node -p "const u = new URL(process.env.PREVIEW_URL || 'http://localhost'); u.protocol === 'https:' && !u.port ? u.hostname : ''")"
+          branch="${DEPLOYED_REF#refs/heads/}"
+          vercel_project="" vercel_sha="" vercel_state=""
+          if [[ -n "$host" && -n "${VERCEL_TOKEN:-}" && -n "${VERCEL_PROJECT_ID:-}" ]]; then
+            deployment="$(curl -fsS --max-time 20 -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$host${VERCEL_TEAM_ID:+?teamId=$VERCEL_TEAM_ID}" 2>/dev/null)" || deployment="{}"
+            jq -e 'type == "object"' >/dev/null 2>&1 <<<"$deployment" || deployment="{}"
+            vercel_project="$(jq -r '.projectId // ""' <<<"$deployment")"
+            vercel_sha="$(jq -r '.meta.githubCommitSha // ""' <<<"$deployment")"
+            vercel_state="$(jq -r '.readyState // ""' <<<"$deployment")"
+          fi
+          if [[ -z "$host" || "$host" != *.vercel.app ]]; then
+            reason="preview URL is not an https *.vercel.app origin"
+          elif [[ "$STATUS_CREATOR" != "vercel[bot]" ]]; then
+            reason="deployment status was posted by $STATUS_CREATOR, not vercel[bot]"
+          elif [[ -z "${VERCEL_TOKEN:-}" || -z "${VERCEL_PROJECT_ID:-}" ]]; then
+            reason="VERCEL_TOKEN / VERCEL_PROJECT_ID not configured; cannot verify $host belongs to this project"
+          elif [[ "$vercel_project" != "$VERCEL_PROJECT_ID" ]]; then
+            reason="$host is not a deployment of this Vercel project"
+          elif [[ "$vercel_sha" != "$DEPLOYED_SHA" ]]; then
+            reason="$host was built from ${vercel_sha:-an unknown commit}, not $DEPLOYED_SHA"
+          elif [[ "$vercel_state" != "READY" ]]; then
+            reason="$host is not READY (state: ${vercel_state:-unknown})"
+          elif gh api "repos/${{ github.repository }}/branches/$branch" --jq .name > /dev/null 2>&1; then
+            status="$(gh api "repos/${{ github.repository }}/compare/$DEPLOYED_SHA...$branch" --jq .status 2>/dev/null)" || status="unknown"
+            if [[ "$status" == "ahead" || "$status" == "identical" ]]; then
+              trusted=true
+            else
+              reason="$DEPLOYED_SHA is not on branch $branch (compare: $status)"
+            fi
+          else
+            # Only an open pull request from this repository whose head is exactly the deployed
+            # commit; a closed PR or one that merely contains the commit doesn't count.
+            nonfork_prs="$(gh api "repos/${{ github.repository }}/commits/$DEPLOYED_SHA/pulls" \
+              --jq "[.[] | select(.state == \"open\" and .head.sha == \"$DEPLOYED_SHA\" and .head.repo.full_name == \"${{ github.repository }}\")] | length" 2>/dev/null)" || nonfork_prs=0
+            if [[ "$nonfork_prs" -gt 0 ]]; then
+              trusted=true
+            else
+              reason="$DEPLOYED_SHA is not a repo branch or the head of a same-repo pull request"
+            fi
+          fi
+          echo "$reason"
+          echo "trusted=$trusted" >> "$GITHUB_OUTPUT"
+          if [[ "$trusted" == "true" ]]; then echo "origin=https://$host" >> "$GITHUB_OUTPUT"; fi
+      - name: Smoke tests with sign-in
+        id: smoke
+        if: steps.trust.outputs.trusted == 'true'
+        env:
+          E2E_BASE_URL: ${{ steps.trust.outputs.origin }}
           E2E_NO_SANDBOX: "1"
           LOGIN: ${{ secrets.E2E_LOGIN }}
           PASSWORD: ${{ secrets.E2E_PASSWORD }}
           E2E_LEAGUE_ID: ${{ vars.E2E_LEAGUE_ID }}
           E2E_PLAYER: ${{ vars.E2E_PLAYER }}
+        run: npm run test:e2e
+      - name: Smoke tests without sign-in
+        id: smoke-anon
+        if: steps.trust.outputs.trusted != 'true'
+        env:
+          E2E_BASE_URL: ${{ env.PREVIEW_URL }}
+          E2E_NO_SANDBOX: "1"
         run: npm run test:e2e
       - name: Report on the deployed commit
         if: always()
@@ -54,7 +138,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           state=failure
-          if [ "${{ steps.smoke.outcome }}" = "success" ]; then state=success; fi
+          if [ "${{ steps.trust.outputs.trusted }}" = "true" ]; then outcome="${{ steps.smoke.outcome }}"; else outcome="${{ steps.smoke-anon.outcome }}"; fi
+          if [ "$outcome" = "success" ]; then state=success; fi
           gh api "repos/${{ github.repository }}/statuses/$DEPLOYED_SHA" \
             -f state="$state" -f context="e2e / preview" \
             -f description="Browser smoke tests against the preview" \
