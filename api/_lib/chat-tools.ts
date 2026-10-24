@@ -17,6 +17,10 @@ import {
   scoreProjectedPlayerStats,
   sleeperActualStats,
 } from "./sleeper.js";
+import { optimizeTradeRoster } from "./lineup-optimizer.js";
+import { scoreTrade } from "./move-scoring.js";
+import { redraftTwinFormat } from "./season-long-format.js";
+import { loadActiveScoringWeights } from "./scoring-jobs.js";
 import { loadHistoricalTrades } from "./trades.js";
 import {
   dispatchExtendedChatTool,
@@ -28,6 +32,8 @@ export type ChatToolContext = {
   sleeperUserId: string;
   /** Lazy dashboard promise shared across tool calls in one question. */
   dashboardPromise?: Promise<Dashboard>;
+  /** Ranking window the user is viewing — drives which score the model explains. */
+  scoringWindow?: "week" | "season_long" | "dynasty";
 };
 
 export type OpenAiToolDefinition = {
@@ -118,7 +124,7 @@ export const CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "evaluate_trade",
       description:
-        "Evaluate a two-sided trade with the same FantasyCalc values and waiver-spot adjustment the trade calculator uses.",
+        "Evaluate a two-sided trade with deterministic move-scoring labels and fair-trade z bands. Explain the scores; never change them.",
       parameters: {
         type: "object",
         properties: {
@@ -211,6 +217,17 @@ export function leagueAssets(dashboard: Dashboard, leagueId: string) {
   if (!league) return [];
   const formatKey = league.seasonLongFormat.key;
   return dashboard.seasonLongRankings.filter((row) => row.formatKey === formatKey);
+}
+
+/** Season Long values: redraft twin in dynasty leagues, else the league format. */
+export function leagueSeasonLongAssets(dashboard: Dashboard, leagueId: string) {
+  const league = findLeague(dashboard, leagueId);
+  if (!league) return [];
+  if (!league.seasonLongFormat.isDynasty) return leagueAssets(dashboard, leagueId);
+  const twinKey = redraftTwinFormat(league.seasonLongFormat).key;
+  const twinRows = dashboard.seasonLongRankings.filter((row) => row.formatKey === twinKey);
+  // Fall back to the dynasty board when the twin preset was not loaded.
+  return twinRows.length > 0 ? twinRows : leagueAssets(dashboard, leagueId);
 }
 
 function rosterPlayerSummary(
@@ -688,23 +705,159 @@ async function toolEvaluateTrade(
     return { ok: false as const, error: "Both sides need at least one valued asset." };
   }
 
-  const giveTotal = give.resolved.reduce((sum, row) => sum + row.value, 0);
-  const getTotal = get.resolved.reduce((sum, row) => sum + row.value, 0);
-  const adjustment = waiverAdjustments(give.resolved, get.resolved);
-  const giveAdjusted = giveTotal + adjustment.give;
-  const getAdjusted = getTotal + adjustment.get;
+  const slots = league.tradeStarterSlots.length > 0
+    ? league.tradeStarterSlots
+    : league.starters.map((p) => p.lineupSlot ?? p.position);
+  const giveIds = new Set(args.givePlayerIds);
+  const projectionById = new Map(
+    dashboard.rankings
+      .filter((row) => row.leagueId === league.id)
+      .map((row) => [row.playerId, row.leagueProjection]),
+  );
+  for (const player of [...league.starters, ...league.bench]) {
+    if (!projectionById.has(player.playerId)) projectionById.set(player.playerId, player.projection);
+  }
+  const myPlayers = [...league.starters, ...league.bench].map((p) => ({
+    playerId: p.playerId,
+    name: p.name,
+    position: p.position,
+    lineupSlot: p.lineupSlot,
+    isStarter: p.isStarter,
+    projection: p.projection ?? projectionById.get(p.playerId) ?? null,
+    actual: p.actual,
+  }));
+  const before = optimizeTradeRoster(myPlayers, slots);
+  const afterPlayers = [
+    ...myPlayers.filter((p) => !giveIds.has(p.playerId)),
+    ...get.resolved.map((asset) => ({
+      playerId: asset.playerId,
+      name: asset.name,
+      position: asset.position,
+      lineupSlot: null as string | null,
+      isStarter: false,
+      projection: projectionById.get(asset.playerId) ?? null,
+      actual: null as number | null,
+    })),
+  ];
+  const after = optimizeTradeRoster(afterPlayers, slots);
+
+  const seasonLongAssets = leagueSeasonLongAssets(dashboard, league.id);
+  const dynastyAssets = league.seasonLongFormat.isDynasty
+    ? leagueAssets(dashboard, league.id)
+    : [];
+  const seasonLongValue = new Map(seasonLongAssets.map((row) => [row.playerId, row.value]));
+  const dynastyValue = new Map(dynastyAssets.map((row) => [row.playerId, row.value]));
+  const toWindowAssets = (
+    rows: typeof give.resolved,
+    valueMap: Map<string, number>,
+  ) => rows.map((row) => ({
+    playerId: row.playerId,
+    name: row.name,
+    position: row.position,
+    value: valueMap.get(row.playerId) ?? row.value,
+  }));
+  const windowSide = (valueMap: Map<string, number>) => {
+    const giveRows = toWindowAssets(give.resolved, valueMap);
+    const getRows = toWindowAssets(get.resolved, valueMap);
+    const giveTotal = giveRows.reduce((sum, row) => sum + row.value, 0);
+    const getTotal = getRows.reduce((sum, row) => sum + row.value, 0);
+    const adjustment = waiverAdjustments(giveRows, getRows);
+    const starterBefore = before.starters.reduce(
+      (sum, player) => sum + (valueMap.get(player.playerId) ?? 0),
+      0,
+    );
+    const starterAfter = after.starters.reduce(
+      (sum, player) => sum + (valueMap.get(player.playerId) ?? 0),
+      0,
+    );
+    return {
+      giveRows,
+      getRows,
+      giveTotal,
+      getTotal,
+      adjustment,
+      giveAdjusted: giveTotal + adjustment.give,
+      getAdjusted: getTotal + adjustment.get,
+      starterBefore: Math.max(1, starterBefore),
+      starterAfter,
+    };
+  };
+  const seasonLongSide = windowSide(seasonLongValue);
+  const dynastySide = league.seasonLongFormat.isDynasty ? windowSide(dynastyValue) : null;
+
+  // Display totals use Season Long (redraft twin) values.
+  const giveTotal = seasonLongSide.giveTotal;
+  const getTotal = seasonLongSide.getTotal;
+  const adjustment = seasonLongSide.adjustment;
+  const giveAdjusted = seasonLongSide.giveAdjusted;
+  const getAdjusted = seasonLongSide.getAdjusted;
   const margin = getAdjusted - giveAdjusted;
-  const verdict =
-    margin === 0
-      ? "This trade is even."
-      : margin > 0
-        ? `You win by ${margin}.`
-        : `Partner wins by ${Math.abs(margin)}.`;
+
+  const power = league.powerRankingsSeasonLong.length > 0
+    ? league.powerRankingsSeasonLong
+    : league.powerRankingsWeek;
+  const myPower = power.find((row) => row.isUser);
+  const myRankBefore = myPower?.rank ?? 1;
+  const myRankAfter = margin >= 0 ? Math.max(1, myRankBefore - 1) : myRankBefore + 1;
+  const weights = await loadActiveScoringWeights();
+  const weakPos = myPower
+    ? (["QB", "RB", "WR", "TE"] as const)
+      .slice()
+      .sort((a, b) => myPower.positionValues[a] - myPower.positionValues[b])[0]
+    : null;
+  const fillsHole = weakPos != null
+    && get.resolved.some((asset) => asset.position === weakPos);
+
+  const move = scoreTrade({
+    week: {
+      yourLineupBefore: before.score,
+      yourLineupAfter: after.score,
+    },
+    seasonLong: {
+      give: seasonLongSide.giveRows,
+      get: seasonLongSide.getRows,
+      yourStarterValueBefore: seasonLongSide.starterBefore,
+      yourStarterValueAfter: seasonLongSide.starterAfter,
+      yourPowerRankBefore: myRankBefore,
+      yourPowerRankAfter: myRankAfter,
+      fillsHole,
+    },
+    dynasty: dynastySide
+      ? {
+        give: dynastySide.giveRows,
+        get: dynastySide.getRows,
+        yourStarterValueBefore: dynastySide.starterBefore,
+        yourStarterValueAfter: dynastySide.starterAfter,
+        yourPowerRankBefore: myRankBefore,
+        yourPowerRankAfter: (dynastySide.getAdjusted - dynastySide.giveAdjusted) >= 0
+          ? Math.max(1, myRankBefore - 1)
+          : myRankBefore + 1,
+        fillsHole,
+      }
+      : undefined,
+    isDynasty: league.seasonLongFormat.isDynasty,
+    weights,
+  });
+
+  // Prefer the viewed window; default evaluate_trade to Season Long (values),
+  // not Week N, when the client did not send a horizon.
+  const windowKey = ctx.scoringWindow === "dynasty" && move.dynasty
+    ? "dynasty"
+    : ctx.scoringWindow === "week"
+      ? "week"
+      : "season_long";
+  const primary = windowKey === "dynasty" && move.dynasty
+    ? move.dynasty
+    : windowKey === "week"
+      ? move.week
+      : move.seasonLong;
 
   return {
     ok: true as const,
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
+    scoringWindow: windowKey,
+    note: "Labels and scores are from move-scoring. Explain them; do not re-rank.",
     give: give.resolved,
     get: get.resolved,
     giveTotal,
@@ -713,7 +866,10 @@ async function toolEvaluateTrade(
     giveAdjustedTotal: giveAdjusted,
     getAdjustedTotal: getAdjusted,
     margin,
-    verdict,
+    scoring: move,
+    primaryLabel: primary.label,
+    primaryScore: primary.score,
+    verdict: `${primary.label} (${primary.score}): ${primary.reasons[0]?.effect ?? ""}`,
     unsupportedSettings: league.tradeValuation.unsupportedSettings,
   };
 }

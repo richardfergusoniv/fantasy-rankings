@@ -1,0 +1,511 @@
+{
+  "version": "move-scoring-v1",
+  "source": "Scoring rules spec Page, exported 2026-10-23. Priors fitted on nflverse 2018-23, tested 2024-25 (PPR) unless noted.",
+  "positions": [
+    "QB",
+    "RB",
+    "WR",
+    "TE"
+  ],
+  "start_sit": {
+    "window": "week_only",
+    "vegas_weight_w_v": {
+      "QB": 0.8,
+      "RB": 0.5,
+      "WR": 0.25,
+      "TE": 0.2
+    },
+    "no_history_rule": {
+      "min_usage_games": 2,
+      "w_v_if_fewer": 1.0,
+      "fallback_if_no_vegas": "position-median Week N projection for players at the same FantasyCalc redraft value rank"
+    },
+    "spread_sd": {
+      "formula": "sigma = a + b * P_star",
+      "a": {
+        "QB": 5.9,
+        "RB": 4.3,
+        "WR": 3.0,
+        "TE": 3.2
+      },
+      "b": {
+        "QB": 0.13,
+        "RB": 0.25,
+        "WR": 0.39,
+        "TE": 0.37
+      }
+    },
+    "sd_table_by_projection": {
+      "projection_points": [
+        5,
+        10,
+        15,
+        20,
+        25
+      ],
+      "QB": [
+        null,
+        7.2,
+        7.8,
+        8.5,
+        9.2
+      ],
+      "RB": [
+        5.6,
+        6.9,
+        8.1,
+        9.4,
+        10.7
+      ],
+      "WR": [
+        4.9,
+        6.9,
+        8.8,
+        10.8,
+        null
+      ],
+      "TE": [
+        5.0,
+        6.9,
+        8.7,
+        null,
+        null
+      ],
+      "note": "null = outside fitted range; use the a+b formula"
+    },
+    "labels": [
+      {
+        "label": "Strong start",
+        "min": 70
+      },
+      {
+        "label": "Start",
+        "min": 55,
+        "max": 70
+      },
+      {
+        "label": "Flex",
+        "min": 45,
+        "max": 55
+      },
+      {
+        "label": "Sit",
+        "max": 45,
+        "also": "unavailable"
+      }
+    ],
+    "no_eligible_backup_label": "Strong start",
+    "close_call": {
+      "band": "Flex (45-55) for both options",
+      "lineup_win_chance_within_pts": 1.0
+    }
+  },
+  "injury": {
+    "unavailable_statuses": [
+      "Out",
+      "IR",
+      "PUP",
+      "NFI",
+      "Suspended",
+      "Inactive",
+      "Doubtful"
+    ],
+    "doubtful_played_rate": 0.012,
+    "questionable": {
+      "before_inactives": {
+        "mean": "p_play * m * P_star",
+        "variance": "p_play * sigma(P_star)^2 + p_play*(1-p_play)*(m*P_star)^2"
+      },
+      "active_at_kickoff": {
+        "mean": "m * P_star",
+        "variance": "sigma(P_star)^2"
+      },
+      "p_play": {
+        "QB": 0.5,
+        "RB": 0.71,
+        "WR": 0.76,
+        "TE": 0.77,
+        "ALL": 0.62
+      },
+      "m": {
+        "QB": 0.86,
+        "RB": 0.9,
+        "WR": 0.82,
+        "TE": 0.9,
+        "ALL": 0.88
+      },
+      "definition": "starter = 50%+ avg snap share over 2+ prior games; played = 1+ offensive snap"
+    }
+  },
+  "win_chance": {
+    "formula": "Phi((P_yours - P_opp) / sqrt(Var_yours + Var_opp - 2*Cov)); Var = sum sigma_i^2 + 2*sum_{i<j} rho_ij sigma_i sigma_j; Cov = sum_{i in yours, j in opp} rho_ij sigma_i sigma_j",
+    "wr_rank_by": "team target share",
+    "pair_correlations": {
+      "same_team": {
+        "QB-WR1": 0.35,
+        "QB-WR2": 0.33,
+        "QB-TE1": 0.27,
+        "QB-RB1": 0.06,
+        "WR1-WR2": 0.0,
+        "WR1-TE1": 0.0,
+        "RB1-RB2": 0.0,
+        "DST-RB1": 0.05,
+        "DST-QB": -0.09,
+        "DST-WR1": -0.06
+      },
+      "same_team_raw_set_to_zero": {
+        "WR1-WR2": -0.005,
+        "WR1-TE1": -0.01,
+        "RB1-RB2": -0.04
+      },
+      "opposing_in_same_game": {
+        "QB-QB": 0.21,
+        "QB-WR1": 0.09,
+        "DST-DST": -0.22
+      },
+      "dst_vs_offense_it_faces": {
+        "QB": -0.39,
+        "RB": -0.2,
+        "WR": -0.15
+      },
+      "default": 0.0,
+      "source": "nflverse 2018-25 weekly points"
+    }
+  },
+  "teammate_injury_vacated_usage": {
+    "applies": "teammates Out or Doubtful; Week N only (reason-only for waivers)",
+    "per_10pts_vacated_target_share": {
+      "QB": 0.17,
+      "RB": 0.24,
+      "WR": 0.4,
+      "TE": 0.47
+    },
+    "RB_per_vacated_carry_per_game": 0.15,
+    "unit": "fantasy points added to P_star"
+  },
+  "waivers": {
+    "bench_weight_b": {
+      "season_long": 0.25,
+      "dynasty": 0.6
+    },
+    "gain_formula": "dStarterValue + b*(1+need_pos)*dBenchValue; score = gain / current StarterValue",
+    "labels": {
+      "week": [
+        {
+          "label": "Must add",
+          "min_pts": 4.0
+        },
+        {
+          "label": "Add",
+          "min_pts": 1.5,
+          "max_pts": 4.0
+        },
+        {
+          "label": "Watch",
+          "min_pts": 0.5,
+          "max_pts": 1.5
+        },
+        {
+          "label": "Pass",
+          "max_pts": 0.5
+        }
+      ],
+      "season_long_and_dynasty_pct": [
+        {
+          "label": "Must add",
+          "min": 5.0
+        },
+        {
+          "label": "Add",
+          "min": 2.0,
+          "max": 5.0
+        },
+        {
+          "label": "Watch",
+          "min": 0.5,
+          "max": 2.0
+        },
+        {
+          "label": "Pass",
+          "max": 0.5
+        }
+      ]
+    },
+    "pass_hidden_from_lists": true,
+    "close_call": {
+      "week_pts": 0.5,
+      "pct": 0.5
+    },
+    "usage_alert_triggers": {
+      "candidate_max_season_ppg": {
+        "QB": 16,
+        "RB": 10,
+        "WR": 11,
+        "TE": 8
+      },
+      "hit_definition": "rest-of-season PPG >= candidate cutoff over 4+ more games",
+      "triggers": [
+        {
+          "pos": "QB",
+          "trigger": "pass_attempts >= 30",
+          "hit_2024_25": 0.3,
+          "hit_2018_23": 0.39,
+          "base_2024_25": 0.22
+        },
+        {
+          "pos": "RB",
+          "trigger": "snap_share >= 0.60",
+          "hit_2024_25": 0.43,
+          "hit_2018_23": 0.49,
+          "base_2024_25": 0.18
+        },
+        {
+          "pos": "RB",
+          "trigger": "carries >= 15",
+          "hit_2024_25": 0.34,
+          "hit_2018_23": 0.5,
+          "base_2024_25": 0.18
+        },
+        {
+          "pos": "WR",
+          "trigger": "snap_share >= 0.80",
+          "hit_2024_25": 0.36,
+          "hit_2018_23": 0.3,
+          "base_2024_25": 0.15
+        },
+        {
+          "pos": "WR",
+          "trigger": "target_share >= 0.20",
+          "hit_2024_25": 0.32,
+          "hit_2018_23": 0.35,
+          "base_2024_25": 0.15
+        },
+        {
+          "pos": "TE",
+          "trigger": "target_share >= 0.15",
+          "hit_2024_25": 0.36,
+          "hit_2018_23": 0.3,
+          "base_2024_25": 0.15
+        },
+        {
+          "pos": "TE",
+          "trigger": "targets >= 5",
+          "hit_2024_25": 0.35,
+          "hit_2018_23": 0.3,
+          "base_2024_25": 0.15
+        }
+      ],
+      "effect": "reason only; does not change waiver score"
+    }
+  },
+  "trades": {
+    "gap_pct": "(Get - Give) / max(Get, Give)",
+    "z": "(Get - Give) / sqrt(sum over all players and picks on both sides of sigma30(v_i)^2)",
+    "sigma30_curves": {
+      "dynasty_in_season": {
+        "a": 231,
+        "b": 0.073,
+        "from": "Aug 1"
+      },
+      "dynasty_offseason": {
+        "a": 139,
+        "b": 0.017,
+        "months": "Jan-Jul"
+      },
+      "redraft_in_season": {
+        "a": 567,
+        "b": 0.088
+      },
+      "redraft_offseason": {
+        "a": 567,
+        "b": 0.088,
+        "note": "unverifiable: redraft history starts Jul 26; uses in-season curve"
+      },
+      "formula": "sigma30 = a + b*v",
+      "picks": "same curve (untested)",
+      "refit": "monthly"
+    },
+    "z_bands": [
+      {
+        "band": "Fair",
+        "abs_z_max": 1.0,
+        "flip_rate_in_season": 0.298,
+        "flip_rate_offseason": 0.275
+      },
+      {
+        "band": "Uneven",
+        "abs_z_min": 1.0,
+        "abs_z_max": 2.0,
+        "flip_rate_in_season": 0.081,
+        "flip_rate_offseason": 0.064
+      },
+      {
+        "band": "Lopsided",
+        "abs_z_min": 2.0,
+        "flip_rate_in_season": 0.005,
+        "flip_rate_offseason": 0.002
+      }
+    ],
+    "labels": {
+      "week": {
+        "Accept": "delta >= +1.0 pts",
+        "Lean accept": "0 <= delta < +1.0",
+        "Decline": "delta < 0"
+      },
+      "season_long_and_dynasty": {
+        "Accept": "gap >= 0 AND starter value not lower AND power rank not worse",
+        "Lean accept": "z >= -1 AND (starter value up OR fills a bottom-third position)",
+        "Decline": "otherwise"
+      }
+    },
+    "close_call": {
+      "abs_z_max": 1.0,
+      "week_delta_within_pts": 1.0
+    },
+    "pick_discount": 0.0
+  },
+  "positional_need": {
+    "formula": "max(0, (league_median - yours) / league_median)",
+    "hole": "bottom third rank"
+  },
+  "season_long_tiebreak_evidence": {
+    "rookie_second_half_bump_ppg": {
+      "QB": 1.8,
+      "RB": 0.4,
+      "WR": 0.5,
+      "TE": null,
+      "veterans_range": [
+        -1.1,
+        -0.8
+      ],
+      "samples": {
+        "QB": 22,
+        "RB": 57,
+        "WR": 83,
+        "TE": 21
+      },
+      "note": "weeks 1-8 vs 10+; TE rookies did not rise"
+    },
+    "two_for_one_star_ppg": {
+      "mean": 0.93,
+      "ci95": [
+        -0.13,
+        2.0
+      ],
+      "n": 120,
+      "sd_star": 5.8,
+      "sd_depth": 2.4,
+      "significant": false
+    },
+    "wind_20mph_pts": {
+      "QB": -2.2,
+      "WR": -1.5,
+      "TE": -2.8,
+      "RB": 0.4,
+      "use": "reason only"
+    }
+  },
+  "dynasty_age_curves_keep_75pct_ppg_next_season": {
+    "RB": {
+      "<=23": 0.63,
+      "24-25": 0.6,
+      "26-27": 0.52,
+      "28+": 0.35
+    },
+    "WR": {
+      "<=24": 0.71,
+      "25-27": 0.62,
+      "28-29": 0.53,
+      "30+": 0.4
+    },
+    "TE": {
+      "band1": 0.63,
+      "band2": 0.6,
+      "band3": 0.5,
+      "band4": 0.49,
+      "note": "age band edges not recorded in the study; unverifiable"
+    },
+    "QB": {
+      "<=25": 0.78,
+      "26-29": 0.63,
+      "30-32": 0.81,
+      "33+": 0.56
+    },
+    "use": "explanation only; market value already prices age"
+  },
+  "calibration": {
+    "shrinkage": "theta_new = (n*theta_2026 + k*theta_prior)/(n+k), then cap step",
+    "params": {
+      "w_v": {
+        "k": 300,
+        "unit": "player-games",
+        "max_step": 0.05
+      },
+      "spread_a": {
+        "k": 300,
+        "max_step": 0.3
+      },
+      "spread_b": {
+        "k": 300,
+        "max_step": 0.02
+      },
+      "questionable_p_play": {
+        "k": 100,
+        "unit": "cases",
+        "max_step": 0.03
+      },
+      "questionable_m": {
+        "k": 100,
+        "max_step": 0.03
+      },
+      "sigma30": {
+        "k": 1000,
+        "unit": "player-months",
+        "max_step_frac": 0.2
+      },
+      "vacated_usage_beta": {
+        "k": 300,
+        "max_step": 0.05
+      },
+      "ridge_terms_QB_pace_PROE_TE_role_RB_age": {
+        "k": 300,
+        "max_step_frac": 0.25,
+        "prior": "2018-23 ridge fit (coefficients not on the Page)"
+      }
+    },
+    "retune": {
+      "first_after_snapshot_weeks": 3,
+      "holdout_weeks": 2,
+      "holdout_min_player_games": 300,
+      "min_rmse_improvement_pts": 0.05,
+      "brier": "must not get worse"
+    },
+    "labels_refit": false,
+    "scorecard": {
+      "strong_start_target": 0.7,
+      "strong_start_flag_below": 0.65,
+      "start_range": [
+        0.55,
+        0.7
+      ],
+      "start_flag_outside": [
+        0.5,
+        0.75
+      ],
+      "flex_range": [
+        0.45,
+        0.55
+      ],
+      "flex_flag_outside": [
+        0.4,
+        0.6
+      ],
+      "min_pairs": 50,
+      "win_chance_bin_tolerance_pts": 5,
+      "win_chance_bin_flag_pts": 8,
+      "min_pairs_per_bin": 30,
+      "tiebreak_drop_below": 0.5,
+      "tiebreak_min_cases": 50
+    }
+  }
+}

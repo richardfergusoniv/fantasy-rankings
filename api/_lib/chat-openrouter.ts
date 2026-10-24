@@ -192,9 +192,10 @@ export async function callOpenRouterWithFallback(args: {
 export function buildInitialMessages(
   history: Array<{ role: "user" | "assistant"; content: string }>,
   userMessage: string,
+  systemPrompt: string = CHAT_SYSTEM_PROMPT,
 ): ChatCompletionMessage[] {
   return [
-    { role: "system", content: CHAT_SYSTEM_PROMPT },
+    { role: "system", content: systemPrompt },
     ...history.map((item) => ({ role: item.role, content: item.content })),
     { role: "user", content: userMessage },
   ];

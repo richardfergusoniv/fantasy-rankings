@@ -16,6 +16,7 @@ import {
   CHAT_MAX_HISTORY_MESSAGES,
   CHAT_MAX_INPUT_CHARS,
   readOpenRouterApiKey,
+  scoringWindowFromHorizon,
 } from "./_lib/chat-config.js";
 import { ChatAgentTimeoutError, OpenRouterError } from "./_lib/chat-openrouter.js";
 import { checkChatRateLimit } from "./_lib/chat-rate-limit.js";
@@ -28,6 +29,9 @@ const historyMessageSchema = z.object({
 const postBodySchema = z.object({
   message: z.string().min(1).max(CHAT_MAX_INPUT_CHARS),
   history: z.array(historyMessageSchema).max(CHAT_MAX_HISTORY_MESSAGES).optional().default([]),
+  /** Ranking horizon the user is viewing: week | ecr | ros | dynasty */
+  horizon: z.enum(["week", "ecr", "ros", "dynasty", "season_long"]).optional(),
+  scoringWindow: z.enum(["week", "season_long", "dynasty"]).optional(),
 });
 
 export async function GET(req: Request): Promise<Response> {
@@ -74,11 +78,18 @@ export async function POST(req: Request): Promise<Response> {
       return badRequest("Invalid chat payload.", parsed.error.issues);
     }
 
+    const scoringWindow = parsed.data.scoringWindow
+      ?? scoringWindowFromHorizon(parsed.data.horizon);
     const result = await runChatAgent({
       apiKey,
       userMessage: parsed.data.message.trim(),
       history: parsed.data.history,
-      ctx: { userId: viewer.userId, sleeperUserId: viewer.sleeperUserId },
+      scoringWindow,
+      ctx: {
+        userId: viewer.userId,
+        sleeperUserId: viewer.sleeperUserId,
+        scoringWindow,
+      },
     });
 
     return json({

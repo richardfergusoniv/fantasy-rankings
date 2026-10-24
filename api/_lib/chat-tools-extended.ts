@@ -6,7 +6,13 @@ import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Dashboard } from "./dashboard-schemas.js";
 import { db, schema } from "./db.js";
-import { optimizeLineup } from "./lineup-optimizer.js";
+import { optimizeLineup, optimizeTradeRoster, eligibleForSlot } from "./lineup-optimizer.js";
+import {
+  positionalNeed,
+  scoreStartSit,
+  scoreTrade,
+  scoreWaiver,
+} from "./move-scoring.js";
 import { readChartExtrasSnapshot } from "./nflverse-chart-extras.js";
 import { isSleeperTimestampOnlyNews } from "./player-news-filters.js";
 import {
@@ -21,6 +27,7 @@ import { PLAYER_NEWS_SNAPSHOT_KEY } from "./sleeper.js";
 import {
   findLeague,
   leagueAssets,
+  leagueSeasonLongAssets,
   loadBoomBustSummary,
   loadDashboard,
   resolvePlayerIdentity,
@@ -28,6 +35,7 @@ import {
   type ChatToolContext,
   type OpenAiToolDefinition,
 } from "./chat-tools.js";
+import { loadActiveScoringWeights } from "./scoring-jobs.js";
 
 export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
   {
@@ -111,7 +119,8 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     type: "function",
     function: {
       name: "suggest_lineup",
-      description: "Optimal start/sit for my team this week using the app's lineup optimizer. Cites projection deltas.",
+      description:
+        "Optimal start/sit for my team this week. Returns deterministic move-scoring labels and win-the-slot chances — explain them, never change them.",
       parameters: {
         type: "object",
         properties: {
@@ -127,7 +136,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "suggest_waivers",
       description:
-        "Best available free agents in my league (not rostered), ranked by weekly projection and season value vs positional needs.",
+        "Best available free agents in my league. Returns deterministic move-scoring labels (Must add / Add / Watch / Pass) per window — explain them, never change them. Pass is hidden from lists unless asked.",
       parameters: {
         type: "object",
         properties: {
@@ -145,7 +154,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "suggest_trades",
       description:
-        "Trade ideas targeting complementary teams using league values and power rankings. Includes evaluate-style totals.",
+        "Trade ideas with deterministic move-scoring labels (Accept / Lean accept / Decline) and fair-trade z bands — explain them, never change them.",
       parameters: {
         type: "object",
         properties: {
@@ -664,37 +673,74 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
   const beforeProj = before.starters.reduce((sum, p) => sum + (p.projection ?? 0), 0);
   const afterProj = optimized.starters.reduce((sum, p) => sum + (p.projection ?? 0), 0);
 
+  const rankingById = new Map(
+    dashboard.rankings
+      .filter((row) => row.leagueId === league.id)
+      .map((row) => [row.playerId, row]),
+  );
+
+  const weights = await loadActiveScoringWeights();
+  const toScored = (player: (typeof league.starters)[number]) => {
+    const ranking = rankingById.get(player.playerId);
+    return {
+      playerId: player.playerId,
+      name: player.name,
+      position: player.position,
+      team: player.team,
+      // Spec: V is league-scored projection. Omit usage so blend uses no-history (w_v=1).
+      vegasProjection: ranking?.leagueProjection ?? player.projection,
+      injuryStatus: player.injuryStatus,
+      isBye: ranking?.isBye ?? player.isBye,
+      gamePhase: player.gamePhase,
+      actual: player.actual,
+      projection: player.projection,
+    };
+  };
+
+  const swaps = start.map((incoming, index) => {
+    const outgoing = sit[index] ?? null;
+    const slot = incoming.lineupSlot ?? incoming.position;
+    const alternative =
+      outgoing
+      ?? optimized.bench.find((bench) => eligibleForSlot(bench.position, slot))
+      ?? null;
+    const scored = scoreStartSit({
+      player: toScored(incoming),
+      alternative: alternative ? toScored(alternative) : null,
+      weights,
+    });
+    return {
+      start: {
+        playerId: incoming.playerId,
+        name: incoming.name,
+        position: incoming.position,
+        slot: incoming.lineupSlot,
+        projection: incoming.projection,
+      },
+      sit: outgoing
+        ? {
+          playerId: outgoing.playerId,
+          name: outgoing.name,
+          position: outgoing.position,
+          slot: outgoing.lineupSlot,
+          projection: outgoing.projection,
+        }
+        : null,
+      scoring: scored.week,
+      reason: `${scored.week.label} (${scored.week.score}): ${scored.week.reasons[0]?.effect ?? incoming.name}`,
+    };
+  });
+
   return {
     ok: true as const,
     leagueId: league.id,
     week: dashboard.week,
+    scoringWindow: "week" as const,
+    note: "Labels and scores are from move-scoring. Explain them; do not re-rank.",
     currentStarterProjection: Number(beforeProj.toFixed(2)),
     optimizedStarterProjection: Number(afterProj.toFixed(2)),
     projectionDelta: Number((afterProj - beforeProj).toFixed(2)),
-    swaps: start.map((incoming, index) => {
-      const outgoing = sit[index];
-      return {
-        start: {
-          playerId: incoming.playerId,
-          name: incoming.name,
-          position: incoming.position,
-          slot: incoming.lineupSlot,
-          projection: incoming.projection,
-        },
-        sit: outgoing
-          ? {
-            playerId: outgoing.playerId,
-            name: outgoing.name,
-            position: outgoing.position,
-            slot: outgoing.lineupSlot,
-            projection: outgoing.projection,
-          }
-          : null,
-        reason: outgoing
-          ? `Start ${incoming.name} (${incoming.projection ?? 0}) over ${outgoing.name} (${outgoing.projection ?? 0}).`
-          : `Start ${incoming.name} (${incoming.projection ?? 0}).`,
-      };
-    }),
+    swaps,
     optimizedStarters: optimized.starters.map((p) => ({
       playerId: p.playerId,
       name: p.name,
@@ -715,8 +761,14 @@ export async function toolSuggestWaivers(
 
   const limit = Math.min(20, Math.max(1, Math.floor(args.limit ?? 10)));
   const rostered = new Set(league.rosteredPlayerIds);
-  const assets = leagueAssets(dashboard, league.id);
-  const valueById = new Map(assets.map((row) => [row.playerId, row.value]));
+  const seasonLongAssets = leagueSeasonLongAssets(dashboard, league.id);
+  const dynastyAssets = league.seasonLongFormat.isDynasty
+    ? leagueAssets(dashboard, league.id)
+    : seasonLongAssets;
+  const seasonLongValueById = new Map(seasonLongAssets.map((row) => [row.playerId, row.value]));
+  const dynastyValueById = new Map(dynastyAssets.map((row) => [row.playerId, row.value]));
+  const valueById = seasonLongValueById;
+  const weights = await loadActiveScoringWeights();
 
   const myByPos = new Map<string, number>();
   for (const player of [...league.starters, ...league.bench]) {
@@ -748,37 +800,149 @@ export async function toolSuggestWaivers(
     .filter((player) => !rostered.has(player.playerId))
     .filter((player) => !args.position || player.position === args.position.toUpperCase());
 
-  const ranked = pool
-    .map((player) => {
-      const weekly =
-        dashboard.rankings.find((row) => row.playerId === player.playerId && row.leagueId === league.id)
-        ?? dashboard.rankings.find((row) => row.playerId === player.playerId);
-      const projection = weekly?.leagueProjection ?? player.projection ?? 0;
-      const value = valueById.get(player.playerId) ?? 0;
-      const needBoost = weakPositions.includes(player.position as "QB" | "RB" | "WR" | "TE") ? 1.15 : 1;
-      const score = projection * 10 * needBoost + value * 0.002;
-      return {
+  const slots = league.tradeStarterSlots.length > 0
+    ? league.tradeStarterSlots
+    : league.starters.map((p) => p.lineupSlot ?? p.position);
+  const rosterPlayers = [...league.starters, ...league.bench].map((p) => ({ ...p }));
+  const baseline = optimizeTradeRoster(rosterPlayers, slots);
+  const baselineScore = baseline.score;
+
+  // Drop candidate: lowest-value bench player not in this week's best lineup.
+  const bestIds = new Set(baseline.starters.map((p) => p.playerId));
+  const dropCandidate = [...league.bench]
+    .filter((p) => p.playerId !== "0" && !bestIds.has(p.playerId))
+    .map((p) => ({ player: p, value: valueById.get(p.playerId) ?? 0 }))
+    .sort((a, b) => a.value - b.value)[0] ?? null;
+
+  const powerRows = league.powerRankingsSeasonLong.length > 0
+    ? league.powerRankingsSeasonLong
+    : league.powerRankingsWeek;
+  const myPower = powerRows.find((row) => row.isUser) ?? null;
+  const medians: Record<string, number> = {};
+  for (const pos of ["QB", "RB", "WR", "TE"] as const) {
+    const values = powerRows.map((row) => row.positionValues[pos]).sort((a, b) => a - b);
+    medians[pos] = values.length ? values[Math.floor(values.length / 2)]! : 0;
+  }
+
+  // One window for every row and the response (dynasty only when the league supports it).
+  const waiverWindowKey: "week" | "season_long" | "dynasty" =
+    ctx.scoringWindow === "dynasty" && league.seasonLongFormat.isDynasty
+      ? "dynasty"
+      : ctx.scoringWindow === "season_long"
+        ? "season_long"
+        : "week";
+
+  const scored = pool.map((player) => {
+    const weekly =
+      dashboard.rankings.find((row) => row.playerId === player.playerId && row.leagueId === league.id)
+      ?? dashboard.rankings.find((row) => row.playerId === player.playerId);
+    const projection = weekly?.leagueProjection ?? player.projection ?? 0;
+    const value = valueById.get(player.playerId) ?? 0;
+    const position = weekly?.position ?? player.position;
+
+    const withAdd = [
+      ...rosterPlayers.filter((p) => !dropCandidate || p.playerId !== dropCandidate.player.playerId),
+      {
         playerId: player.playerId,
         name: weekly?.name ?? player.name,
-        position: weekly?.position ?? player.position,
-        team: weekly?.team ?? player.team,
+        position,
+        lineupSlot: null,
+        isStarter: false,
         projection,
-        value,
-        score,
-        reason: weakPositions.includes((weekly?.position ?? player.position) as "QB" | "RB" | "WR" | "TE")
-          ? `Fills a weaker ${weekly?.position ?? player.position} group (proj ${projection}, value ${value}).`
-          : `Available with proj ${projection} and value ${value}.`,
-      };
-    })
-    .sort((a, b) => b.score - a.score || b.projection - a.projection)
-    .slice(0, limit);
+        actual: null,
+        injuryStatus: player.injuryStatus ?? null,
+      },
+    ];
+    const after = optimizeTradeRoster(withAdd, slots);
+    const need = myPower
+      ? positionalNeed(myPower.positionValues[position as "QB" | "RB" | "WR" | "TE"] ?? 0, medians[position] ?? 0)
+      : 0;
+    const sumValues = (
+      players: ReadonlyArray<{ playerId: string }>,
+      map: Map<string, number>,
+      addId: string,
+      addVal: number,
+    ) => players.reduce((sum, p) => sum + (map.get(p.playerId) ?? (p.playerId === addId ? addVal : 0)), 0);
+    const slAdd = seasonLongValueById.get(player.playerId) ?? value;
+    const dyAdd = dynastyValueById.get(player.playerId) ?? value;
+    const starterBeforeSl = sumValues(baseline.starters, seasonLongValueById, "", 0);
+    const starterAfterSl = sumValues(after.starters, seasonLongValueById, player.playerId, slAdd);
+    const benchBeforeSl = sumValues(baseline.bench, seasonLongValueById, "", 0);
+    const benchAfterSl = sumValues(after.bench, seasonLongValueById, player.playerId, slAdd);
+    const starterBeforeDy = sumValues(baseline.starters, dynastyValueById, "", 0);
+    const starterAfterDy = sumValues(after.starters, dynastyValueById, player.playerId, dyAdd);
+    const benchBeforeDy = sumValues(baseline.bench, dynastyValueById, "", 0);
+    const benchAfterDy = sumValues(after.bench, dynastyValueById, player.playerId, dyAdd);
+
+    const move = scoreWaiver({
+      addName: weekly?.name ?? player.name,
+      dropName: dropCandidate?.player.name ?? null,
+      addPosition: position,
+      needPos: need,
+      isDynasty: league.seasonLongFormat.isDynasty,
+      week: { lineupBefore: baselineScore, lineupAfter: after.score },
+      seasonLong: {
+        starterValueBefore: Math.max(1, starterBeforeSl),
+        starterValueAfter: starterAfterSl,
+        benchValueBefore: benchBeforeSl,
+        benchValueAfter: benchAfterSl,
+      },
+      dynasty: league.seasonLongFormat.isDynasty
+        ? {
+          starterValueBefore: Math.max(1, starterBeforeDy),
+          starterValueAfter: starterAfterDy,
+          benchValueBefore: benchBeforeDy,
+          benchValueAfter: benchAfterDy,
+        }
+        : undefined,
+      weights,
+    });
+
+    const primary = waiverWindowKey === "dynasty" && move.dynasty
+      ? move.dynasty
+      : waiverWindowKey === "season_long"
+        ? move.seasonLong
+        : move.week;
+
+    return {
+      playerId: player.playerId,
+      name: weekly?.name ?? player.name,
+      position,
+      team: weekly?.team ?? player.team,
+      projection,
+      value,
+      dropCandidate: dropCandidate
+        ? {
+          playerId: dropCandidate.player.playerId,
+          name: dropCandidate.player.name,
+          value: valueById.get(dropCandidate.player.playerId) ?? 0,
+        }
+        : null,
+      scoring: move,
+      primaryWindow: waiverWindowKey,
+      primaryLabel: primary.label,
+      primaryScore: primary.score,
+      // Hide Pass from default lists (spec); still returned when explicitly asked later.
+      hidden: primary.label === "Pass",
+      reason: `${primary.label} (${primary.score}): ${primary.reasons[0]?.effect ?? ""}`,
+    };
+  });
+
+  const ranked = scored
+    .sort((a, b) => b.primaryScore - a.primaryScore || b.projection - a.projection);
+  // Pass is hidden from default waiver lists; keep the top Pass rows only when
+  // nothing stronger is available so the tool still has something to explain.
+  const nonPass = ranked.filter((row) => !row.hidden);
+  const visible = (nonPass.length > 0 ? nonPass : ranked).slice(0, limit);
 
   return {
     ok: true as const,
     leagueId: league.id,
     week: dashboard.week,
+    scoringWindow: waiverWindowKey,
+    note: "Labels and scores are from move-scoring. Explain them; do not re-rank. Pass adds are omitted from lists unless nothing stronger is available or the user asks.",
     weakPositions,
-    suggestions: ranked,
+    suggestions: visible,
   };
 }
 
@@ -791,10 +955,21 @@ export async function toolSuggestTrades(
   if (!league) return { ok: false as const, error: "League not found for this user." };
 
   const limit = Math.min(8, Math.max(1, Math.floor(args.limit ?? 5)));
-  const assets = leagueAssets(dashboard, league.id);
-  const valueById = new Map(assets.map((row) => [row.playerId, row]));
+  const seasonLongAssets = leagueSeasonLongAssets(dashboard, league.id);
+  const dynastyAssets = league.seasonLongFormat.isDynasty
+    ? leagueAssets(dashboard, league.id)
+    : seasonLongAssets;
+  const valueById = new Map(seasonLongAssets.map((row) => [row.playerId, row]));
+  const dynastyValueById = new Map(dynastyAssets.map((row) => [row.playerId, row.value]));
+  const seasonLongValueById = new Map(seasonLongAssets.map((row) => [row.playerId, row.value]));
+  const weights = await loadActiveScoringWeights();
   const me = league.tradeTeams.find((team) => team.isUser);
   if (!me) return { ok: false as const, error: "User roster not found in this league." };
+
+  const tradeWindowKey: "season_long" | "dynasty" =
+    ctx.scoringWindow === "dynasty" && league.seasonLongFormat.isDynasty
+      ? "dynasty"
+      : "season_long";
 
   const power = league.powerRankingsSeasonLong.length > 0
     ? league.powerRankingsSeasonLong
@@ -835,6 +1010,9 @@ export async function toolSuggestTrades(
     adjustedGive: number;
     adjustedGet: number;
     margin: number;
+    scoring: ReturnType<typeof scoreTrade>;
+    primaryLabel: string;
+    primaryScore: number;
     reason: string;
   }> = [];
 
@@ -884,11 +1062,78 @@ export async function toolSuggestTrades(
 
     const give = [best.give];
     const get = [best.get];
-    const giveTotal = give.reduce((sum, row) => sum + row.value, 0);
-    const getTotal = get.reduce((sum, row) => sum + row.value, 0);
-    const adjustment = waiverAdjustments(give, get);
-    const adjustedGive = giveTotal + adjustment.give;
-    const adjustedGet = getTotal + adjustment.get;
+    const remap = (rows: Asset[], map: Map<string, number>) => rows.map((row) => ({
+      ...row,
+      value: map.get(row.playerId) ?? row.value,
+    }));
+    const windowTotals = (map: Map<string, number>) => {
+      const giveRows = remap(give, map);
+      const getRows = remap(get, map);
+      const giveTotal = giveRows.reduce((sum, row) => sum + row.value, 0);
+      const getTotal = getRows.reduce((sum, row) => sum + row.value, 0);
+      const adjustment = waiverAdjustments(giveRows, getRows);
+      return {
+        giveRows,
+        getRows,
+        giveTotal,
+        getTotal,
+        adjustedGive: giveTotal + adjustment.give,
+        adjustedGet: getTotal + adjustment.get,
+      };
+    };
+    const seasonLongTotals = windowTotals(seasonLongValueById);
+    const dynastyTotals = league.seasonLongFormat.isDynasty
+      ? windowTotals(dynastyValueById)
+      : null;
+    // Display totals use Season Long (redraft twin) values.
+    const giveTotal = seasonLongTotals.giveTotal;
+    const getTotal = seasonLongTotals.getTotal;
+    const adjustedGive = seasonLongTotals.adjustedGive;
+    const adjustedGet = seasonLongTotals.adjustedGet;
+    const margin = adjustedGet - adjustedGive;
+    const myRank = myPower?.rank ?? 1;
+    const starterValueSum = (playerIds: Iterable<string>, map: Map<string, number>) =>
+      [...playerIds].reduce((sum, id) => sum + (map.get(id) ?? 0), 0);
+    const myStarterIds = new Set(
+      me.players.filter((player) => player.isStarter).map((player) => player.playerId),
+    );
+    const giveIds = new Set(give.map((row) => row.playerId));
+    const getIds = get.map((row) => row.playerId);
+    const afterStarterIds = new Set(
+      [...myStarterIds].filter((id) => !giveIds.has(id)).concat(getIds),
+    );
+    const fillsHole = best.get.position === myNeeds[0];
+    const move = scoreTrade({
+      week: {
+        yourLineupBefore: 0,
+        yourLineupAfter: 0,
+      },
+      seasonLong: {
+        give: seasonLongTotals.giveRows,
+        get: seasonLongTotals.getRows,
+        yourStarterValueBefore: Math.max(1, starterValueSum(myStarterIds, seasonLongValueById)),
+        yourStarterValueAfter: starterValueSum(afterStarterIds, seasonLongValueById),
+        yourPowerRankBefore: myRank,
+        yourPowerRankAfter: margin >= 0 ? Math.max(1, myRank - 1) : myRank + 1,
+        fillsHole,
+      },
+      dynasty: dynastyTotals
+        ? {
+          give: dynastyTotals.giveRows,
+          get: dynastyTotals.getRows,
+          yourStarterValueBefore: Math.max(1, starterValueSum(myStarterIds, dynastyValueById)),
+          yourStarterValueAfter: starterValueSum(afterStarterIds, dynastyValueById),
+          yourPowerRankBefore: myRank,
+          yourPowerRankAfter: (dynastyTotals.adjustedGet - dynastyTotals.adjustedGive) >= 0
+            ? Math.max(1, myRank - 1)
+            : myRank + 1,
+          fillsHole,
+        }
+        : undefined,
+      isDynasty: league.seasonLongFormat.isDynasty,
+      weights,
+    });
+    const primary = tradeWindowKey === "dynasty" && move.dynasty ? move.dynasty : move.seasonLong;
     ideas.push({
       partner: partner.teamName,
       give,
@@ -897,15 +1142,11 @@ export async function toolSuggestTrades(
       getTotal,
       adjustedGive,
       adjustedGet,
-      margin: adjustedGet - adjustedGive,
-      reason:
-        `You are lighter at ${best.get.position} (power ${
-          myPower?.positionValues[best.get.position as (typeof skillPositions)[number]] ?? "n/a"
-        }); `
-        + (best.give.position === partnerNeeds[0]
-          ? `${partner.teamName} can use ${best.give.position}. `
-          : `You have surplus at ${best.give.position}. `)
-        + `Values ${giveTotal} for ${getTotal}.`,
+      margin,
+      scoring: move,
+      primaryLabel: primary.label,
+      primaryScore: primary.score,
+      reason: `${primary.label} (${primary.score}): ${primary.reasons[0]?.effect ?? ""}`,
     });
   }
 
@@ -915,6 +1156,8 @@ export async function toolSuggestTrades(
     ok: true as const,
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
+    scoringWindow: tradeWindowKey,
+    note: "Labels and scores are from move-scoring. Explain them; do not re-rank.",
     myNeeds,
     mySurplus,
     suggestions: ideas.slice(0, limit),

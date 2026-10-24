@@ -37,6 +37,8 @@ import {
   type SleeperPicksBoard,
 } from "../_lib/sleeper-picks.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/source-cache-payload.js";
+import { writePfnWeeklyCopies } from "../_lib/scoring-jobs.js";
+import { readNflState } from "../_lib/user-leagues.js";
 
 /**
  * POST /api/ingest/:target
@@ -231,6 +233,7 @@ async function handlePfnTables(req: Request): Promise<Response> {
   const payload = parsed.data;
 
   const fetchedAt = new Date(payload.fetched_at);
+  const weeklyTables: Record<string, unknown> = {};
   for (const tableKey of pfnTableKeys) {
     const table = payload.tables[tableKey];
     const stored = {
@@ -240,6 +243,7 @@ async function handlePfnTables(req: Request): Promise<Response> {
       column_labels: table.column_labels,
       rows: table.rows,
     };
+    weeklyTables[tableKey] = stored;
     const cacheKey = `pfn:${tableKey}`;
     const encoded = encodeSourceCachePayload(stored);
     await db.insert(schema.sourceCache).values({
@@ -252,11 +256,28 @@ async function handlePfnTables(req: Request): Promise<Response> {
     });
   }
 
+  // Immutable weekly copies for calibration (never overwritten).
+  let weeklyKeys: string[] = [];
+  try {
+    const state = await readNflState(false);
+    const weekly = await writePfnWeeklyCopies({
+      season: state.season,
+      week: state.week,
+      fetchedAt,
+      tables: weeklyTables,
+      tableKeys: pfnTableKeys,
+    });
+    weeklyKeys = weekly.wrote;
+  } catch (err) {
+    console.error("[ingest/pfn-tables] weekly copy failed", err instanceof Error ? err.message : err);
+  }
+
   return json({
     ok: true,
     status: "committed",
     fetched_at: payload.fetched_at,
     tables: [...pfnTableKeys],
+    weeklyCopies: weeklyKeys,
   });
 }
 

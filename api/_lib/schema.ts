@@ -269,3 +269,59 @@ export const propLineSnapshots = pgTable(
     index("prop_line_snapshots_season_week_idx").on(table.season, table.week),
   ],
 );
+
+/**
+ * Versioned move-scoring weights. A few rows a season.
+ * status: candidate | active | retired. App reads the one active row.
+ */
+export const scoringWeights = pgTable(
+  "scoring_weights",
+  {
+    version: text("version").primaryKey(),
+    status: text("status", { enum: ["candidate", "active", "retired"] }).notNull(),
+    paramsJson: text("params_json").notNull(),
+    holdoutJson: text("holdout_json"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    promotedAt: timestamp("promoted_at", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [
+    index("scoring_weights_status_idx").on(table.status),
+  ],
+);
+
+/**
+ * Decision-time scoring snapshots for weekly calibration.
+ * Written once (Saturday / Thursday pre-kickoff); Tuesday fills final_points.
+ * Replaces projection_accuracy for calibration going forward.
+ */
+export const scoringSnapshots = pgTable(
+  "scoring_snapshots",
+  {
+    id: text("id").primaryKey(),
+    season: integer("season").notNull(),
+    week: integer("week").notNull(),
+    leagueId: text("league_id").notNull(),
+    playerId: text("player_id").notNull(),
+    weightsVersion: text("weights_version").notNull(),
+    inputsJson: text("inputs_json").notNull(),
+    scoresJson: text("scores_json").notNull(),
+    labelsJson: text("labels_json").notNull(),
+    ruleApplied: text("rule_applied"),
+    pickBefore: text("pick_before"),
+    pickAfter: text("pick_after"),
+    finalPoints: integer("final_points"),
+    capturedAt: timestamp("captured_at", { withTimezone: true, mode: "date" }).notNull(),
+    finalizedAt: timestamp("finalized_at", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [
+    index("scoring_snapshots_season_week_idx").on(table.season, table.week),
+    index("scoring_snapshots_league_week_idx").on(table.leagueId, table.season, table.week),
+    index("scoring_snapshots_player_week_idx").on(table.playerId, table.season, table.week),
+    uniqueIndex("scoring_snapshots_natural_uidx").on(
+      table.season,
+      table.week,
+      table.leagueId,
+      table.playerId,
+    ),
+  ],
+);
