@@ -222,7 +222,11 @@ export const sharedPlayerNews = pgTable(
   ],
 );
 
-/** Links a Supabase Auth user to their Sleeper account (one connection per user). */
+/**
+ * Links a Supabase Auth user to the Sleeper account they follow (one
+ * connection per user). Nonexclusive: Sleeper data is public and ownership
+ * is unverified, so several users may follow the same Sleeper id.
+ */
 export const sleeperConnections = pgTable(
   "sleeper_connections",
   {
@@ -234,8 +238,6 @@ export const sleeperConnections = pgTable(
   },
   (table) => [
     index("sleeper_connections_sleeper_user_id_idx").on(table.sleeperUserId),
-    // One Sleeper account may be linked to only one Supabase user.
-    uniqueIndex("sleeper_connections_sleeper_user_id_uidx").on(table.sleeperUserId),
   ],
 );
 
@@ -370,4 +372,34 @@ export const scoringSnapshots = pgTable(
       table.playerId,
     ),
   ],
+);
+
+/**
+ * Deployment-wide lease for expensive background work (dashboard rebuilds).
+ * One row per resource; a live lease (`status = 'running'` and
+ * `expires_at > now()`) means exactly one function instance owns the build.
+ * Finished rows keep `status`/`last_error` as structured failure state.
+ */
+export const buildLeases = pgTable("build_leases", {
+  resource: text("resource").primaryKey(),
+  holder: text("holder").notNull(),
+  status: text("status", { enum: ["running", "done", "failed"] }).notNull(),
+  lastError: text("last_error"),
+  acquiredAt: timestamp("acquired_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
+
+/**
+ * Shared fixed-window rate-limit counters. Replaces per-process counters so
+ * limits hold across serverless instances. Rows age out with their window.
+ */
+export const rateLimitBuckets = pgTable(
+  "rate_limit_buckets",
+  {
+    subject: text("subject").notNull(),
+    windowStart: timestamp("window_start", { withTimezone: true, mode: "date" }).notNull(),
+    count: integer("count").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.subject, table.windowStart] })],
 );
