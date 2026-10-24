@@ -48,6 +48,7 @@ import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
+import { personalQueryKey, snapshotViewer, useViewerIdentity } from "./viewer-scope";
 import { useDashboardUrl } from "./use-dashboard-url";
 import { CommandBar } from "./shell/command-bar";
 import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "./shell/command-palette";
@@ -344,7 +345,7 @@ function dropUnsignedBrowserDashboard(): void {
   }
 }
 
-function readBrowserDashboard(userId: string | null): Dashboard | undefined {
+function readBrowserDashboard(userId: string | null, accountId: string | null): Dashboard | undefined {
   if (!userId) {
     dropUnsignedBrowserDashboard();
     return undefined;
@@ -352,7 +353,9 @@ function readBrowserDashboard(userId: string | null): Dashboard | undefined {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(BROWSER_DASHBOARD_CACHE_KEY) ?? "null");
     if (!parsed || typeof parsed !== "object" || !("dashboard" in parsed) || !("userId" in parsed)) return undefined;
-    if (parsed.userId !== userId) return undefined;
+    // Keyed by user and connected Sleeper account: switching accounts on the
+    // same login must not show the previous account's leagues.
+    if (parsed.userId !== userId || !("accountId" in parsed) || parsed.accountId !== accountId) return undefined;
     const dashboard = parsed.dashboard;
     if (!dashboard || typeof dashboard !== "object" || !("leagues" in dashboard) || !Array.isArray(dashboard.leagues) || !("asOf" in dashboard) || typeof dashboard.asOf !== "string") return undefined;
     if (!dashboard.leagues.every((league) => league && typeof league === "object" && "tradeValuation" in league)) {
@@ -371,10 +374,10 @@ function readBrowserDashboard(userId: string | null): Dashboard | undefined {
   }
 }
 
-function saveBrowserDashboard(userId: string | null, dashboard: Dashboard): void {
+function saveBrowserDashboard(userId: string | null, accountId: string | null, dashboard: Dashboard): void {
   if (!userId) return;
   try {
-    localStorage.setItem(BROWSER_DASHBOARD_CACHE_KEY, JSON.stringify({ userId, dashboard }));
+    localStorage.setItem(BROWSER_DASHBOARD_CACHE_KEY, JSON.stringify({ userId, accountId, dashboard }));
   } catch {
     // A full storage bucket must never block rendering fresh data.
   }
@@ -522,6 +525,14 @@ function parsePartnerRosterId(value: string | null): number | null {
 
 export function App() {
   const queryClient = useQueryClient();
+  // Per-viewer scope for every personal query key: AuthGate only renders the
+  // app once a session and Sleeper connection are verified, and clears these
+  // caches on sign-out, so no other viewer can read this data back.
+  const viewer = useViewerIdentity();
+  // Latest identity for async work that outlives the render that started it.
+  const viewerRef = useRef(viewer);
+  viewerRef.current = viewer;
+  const readViewer = useCallback(async () => ({ sessionUserId: await currentViewerId(), identity: viewerRef.current }), []);
   const dashboardUrl = useDashboardUrl();
   const tab = dashboardUrl.state.tab;
   const setTab = useCallback((next: Tab) => {
@@ -584,12 +595,12 @@ export function App() {
     void currentViewerId().then((userId) => {
       if (cancelled) return;
       setBrowserViewerId(userId);
-      setBrowserDashboard(readBrowserDashboard(userId));
+      setBrowserDashboard(readBrowserDashboard(userId, viewer.accountId));
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [viewer.accountId]);
   // Sections whose next fetch should restart a failed background build. Polls
   // never set this, so a failure stays visible until the user hits Retry.
   const retryBuildSections = useRef(new Set<DashboardSection["section"]>());
@@ -602,7 +613,7 @@ export function App() {
     void query.refetch();
   };
   const metaQuery = useQuery({
-    queryKey: ["dashboard-section", "meta"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "meta"),
     queryFn: () => loadDashboardSection("meta", 20_000),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
@@ -612,7 +623,7 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const teamQuery = useQuery({
-    queryKey: ["dashboard-section", "team"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "team"),
     queryFn: () => loadDashboardSection("team", 20_000),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
@@ -626,7 +637,7 @@ export function App() {
   // The Tools market views reuse the same players + analytics section queries as the chart builder (no per-panel fetches).
   const playerSectionActive = MARKET_TOOL_TABS.has(tab) || tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "comparison";
   const playersQuery = useQuery({
-    queryKey: ["dashboard-section", "players"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "players"),
     queryFn: () => loadDashboardSection("players", 8_000),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
@@ -635,7 +646,7 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const leagueQuery = useQuery({
-    queryKey: ["dashboard-section", "league"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "league"),
     queryFn: () => loadDashboardSection("league", 8_000),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
@@ -646,7 +657,7 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const analyticsQuery = useQuery({
-    queryKey: ["dashboard-section", "analytics"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "analytics"),
     queryFn: () => loadDashboardSection("analytics", 8_000),
     staleTime: 90_000,
     refetchOnWindowFocus: false,
@@ -662,7 +673,7 @@ export function App() {
   // Waiver pool is only consumed by League-adjusted trade (not Market/History).
   const tradeWaiverActive = tab === "trade" && tradeMode === "league";
   const tradeQuery = useQuery({
-    queryKey: ["dashboard-section", "trade"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "trade"),
     queryFn: () => loadDashboardSection("trade", 20_000),
     // Errors must not stick for the session: stale immediately so tab switch /
     // remount / manual refresh retries instead of serving a failed empty cache.
@@ -675,7 +686,7 @@ export function App() {
     refetchInterval: (query) => pollTradeSectionWhileLive(query, teamQuery.data),
   });
   const tradeWaiverQuery = useQuery({
-    queryKey: ["dashboard-section", "trade-waiver"],
+    queryKey: personalQueryKey(viewer, "dashboard-section", "trade-waiver"),
     queryFn: () => loadDashboardSection("trade-waiver", 20_000),
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
@@ -686,7 +697,7 @@ export function App() {
     refetchInterval: pollWhileSectionBuilding,
   });
   const dashboardQuery = useQuery({
-    queryKey: ["fantasy-dashboard"],
+    queryKey: personalQueryKey(viewer, "fantasy-dashboard"),
     queryFn: () => withSignIn(withClientDeadline(api.getDashboard({ force: false }), DASHBOARD_DEADLINE_MS)),
     staleTime: 90_000,
     initialData: browserDashboard,
@@ -695,6 +706,8 @@ export function App() {
     enabled: false,
   });
   const refresh = useMutation({
+    // Whoever started the refresh owns its result; see snapshotViewer.
+    onMutate: () => snapshotViewer(readViewer),
     mutationFn: async () => {
       if (supabase) {
         const { data } = await supabase.auth.getSession();
@@ -702,17 +715,21 @@ export function App() {
       }
       return withClientDeadline(api.getDashboard({ force: true }), DASHBOARD_DEADLINE_MS);
     },
-    onSuccess: (data) => {
-      void currentViewerId().then((userId) => saveBrowserDashboard(userId, data));
-      queryClient.setQueryData(["fantasy-dashboard"], data);
-      queryClient.invalidateQueries({ queryKey: ["dashboard-section"] });
+    onSuccess: async (data, _variables, owner) => {
+      if (!owner || !(await owner.stillCurrent())) return;
+      const { sessionUserId, identity } = owner.startedBy;
+      saveBrowserDashboard(sessionUserId, identity.accountId, data);
+      queryClient.setQueryData(personalQueryKey(identity, "fantasy-dashboard"), data);
+      queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "dashboard-section") });
     },
-    onError: (error: unknown) => {
+    onError: async (error: unknown, _variables, owner) => {
+      // A stale 401 from the previous viewer's token must not sign out the new one.
+      if (owner && !(await owner.stillCurrent())) return;
       signOutForPersonalData(error);
     },
   });
   const newsQuery = useQuery({
-    queryKey: ["player-news"],
+    queryKey: personalQueryKey(viewer, "player-news"),
     queryFn: async () => {
       try {
         return await withClientDeadline(api.getPlayerNews({}), 8_000);
@@ -725,7 +742,7 @@ export function App() {
     retry: false,
   });
   const draftQuery = useQuery({
-    queryKey: ["draft-center"],
+    queryKey: personalQueryKey(viewer, "draft-center"),
     queryFn: async () => {
       try {
         return await withClientDeadline(api.getDraftCenter({ force: false }), 24_000);
@@ -739,15 +756,16 @@ export function App() {
     retry: false,
   });
   const draftRefresh = useMutation({
-    mutationFn: async () => {
-      try {
-        return await withClientDeadline(api.getDraftCenter({ force: true }), 24_000);
-      } catch (error) {
-        signOutForPersonalData(error);
-        throw error;
-      }
+    onMutate: () => snapshotViewer(readViewer),
+    mutationFn: () => withClientDeadline(api.getDraftCenter({ force: true }), 24_000),
+    onSuccess: async (data, _variables, owner) => {
+      if (!owner || !(await owner.stillCurrent())) return;
+      queryClient.setQueryData(personalQueryKey(owner.startedBy.identity, "draft-center"), data);
     },
-    onSuccess: (data) => queryClient.setQueryData(["draft-center"], data),
+    onError: async (error: unknown, _variables, owner) => {
+      if (owner && !(await owner.stillCurrent())) return;
+      signOutForPersonalData(error);
+    },
   });
   const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(newsQuery.data), [newsQuery.data]);
   const tickerPlayerNews = playerHistory.current ? newsItemsByPlayer.get(playerHistory.current.playerId) ?? [] : [];
@@ -840,7 +858,7 @@ export function App() {
 
   useEffect(() => {
     if (!dashboard || !browserViewerId) return;
-    saveBrowserDashboard(browserViewerId, dashboard);
+    saveBrowserDashboard(browserViewerId, viewer.accountId, dashboard);
     if (document.documentElement.dataset.fantasyFirstContentMs) return;
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const elapsed = Math.round(performance.now());
@@ -1011,7 +1029,7 @@ export function App() {
     if (tab === "draft") draftRefresh.mutate();
     else {
       refresh.mutate();
-      queryClient.invalidateQueries({ queryKey: ["player-news"] });
+      queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "player-news") });
     }
   };
 

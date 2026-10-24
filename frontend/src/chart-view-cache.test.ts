@@ -1,13 +1,17 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 import {
-  SAVED_CHART_VIEWS_QUERY_KEY,
   applySavedChartViewMutation,
   optimisticRemoveSavedChartView,
   optimisticUpsertSavedChartView,
   rollbackSavedChartViewMutation,
+  savedChartViewsQueryKey,
   settleSavedChartViewMutation,
 } from "./chart-view-cache";
+import type { ViewerIdentity } from "./viewer-scope";
+
+const TEST_VIEWER: ViewerIdentity = { userId: "user-test", accountId: "sleeper-test" };
+const SAVED_CHART_VIEWS_QUERY_KEY = savedChartViewsQueryKey(TEST_VIEWER);
 
 type View = { id: string; dataset: string; name: string; position: string };
 
@@ -30,29 +34,29 @@ describe("saved chart view optimistic cache", () => {
 
   it("rolls back a failed save to the previous list", () => {
     const client = clientWith([existing]);
-    const previous = applySavedChartViewMutation<View>(client, (current) => optimisticUpsertSavedChartView(current, added));
+    const previous = applySavedChartViewMutation<View>(client, SAVED_CHART_VIEWS_QUERY_KEY, (current) => optimisticUpsertSavedChartView(current, added));
     expect(client.getQueryData<{ views: View[] }>(SAVED_CHART_VIEWS_QUERY_KEY)?.views).toEqual([existing, added]);
-    rollbackSavedChartViewMutation(client, previous);
+    rollbackSavedChartViewMutation(client, SAVED_CHART_VIEWS_QUERY_KEY, previous);
     expect(client.getQueryData<{ views: View[] }>(SAVED_CHART_VIEWS_QUERY_KEY)?.views).toEqual([existing]);
   });
 
   it("rolls back a failed delete and restores a missing cache", () => {
     const client = clientWith([existing]);
-    const previous = applySavedChartViewMutation<View>(client, (current) => optimisticRemoveSavedChartView(current, existing.id));
+    const previous = applySavedChartViewMutation<View>(client, SAVED_CHART_VIEWS_QUERY_KEY, (current) => optimisticRemoveSavedChartView(current, existing.id));
     expect(client.getQueryData<{ views: View[] }>(SAVED_CHART_VIEWS_QUERY_KEY)?.views).toEqual([]);
-    rollbackSavedChartViewMutation(client, previous);
+    rollbackSavedChartViewMutation(client, SAVED_CHART_VIEWS_QUERY_KEY, previous);
     expect(client.getQueryData<{ views: View[] }>(SAVED_CHART_VIEWS_QUERY_KEY)?.views).toEqual([existing]);
 
     const empty = new QueryClient();
-    const missing = applySavedChartViewMutation<View>(empty, (current) => optimisticUpsertSavedChartView(current, added));
+    const missing = applySavedChartViewMutation<View>(empty, SAVED_CHART_VIEWS_QUERY_KEY, (current) => optimisticUpsertSavedChartView(current, added));
     expect(missing).toBeUndefined();
-    rollbackSavedChartViewMutation(empty, missing);
+    rollbackSavedChartViewMutation(empty, SAVED_CHART_VIEWS_QUERY_KEY, missing);
     expect(empty.getQueryData(SAVED_CHART_VIEWS_QUERY_KEY)).toBeUndefined();
   });
 
   it("invalidates the same query key on settle", async () => {
     const client = clientWith([existing]);
-    await settleSavedChartViewMutation(client);
+    await settleSavedChartViewMutation(client, SAVED_CHART_VIEWS_QUERY_KEY);
     expect(client.getQueryState(SAVED_CHART_VIEWS_QUERY_KEY)?.isInvalidated).toBe(true);
   });
 });

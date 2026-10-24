@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { SkipLink } from "./shared";
 import { ThemeToggle } from "./shell/theme-toggle";
 import { getAccessToken, isSupabaseConfigured, supabase, type Session } from "./supabase";
 import { identifyPostHogUser, resetPostHog } from "./posthog";
+import { ViewerIdentityContext, clearPersonalQueries } from "./viewer-scope";
 
 /**
  * Phase 2 auth gate.
@@ -43,6 +44,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [connLoading, setConnLoading] = useState(false);
   const [connChecked, setConnChecked] = useState(false);
 
+  const viewer = useMemo(
+    () => ({
+      userId: session?.user.id ?? "local",
+      accountId: connection?.sleeperUserId ?? null,
+    }),
+    [session?.user.id, connection?.sleeperUserId],
+  );
+
   const refreshConnection = useCallback(async () => {
     setConnLoading(true);
     try {
@@ -59,13 +68,22 @@ export function AuthGate({ children }: { children: ReactNode }) {
       return;
     }
     let active = true;
+    // Supabase also emits SIGNED_IN for the session already in use (e.g. on
+    // tab refocus); only a different user should wipe personal queries.
+    let viewerUserId: string | null | undefined;
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
+      viewerUserId ??= data.session?.user.id ?? null;
       setSession(data.session);
       setLoading(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+        const nextUserId = next?.user.id ?? null;
+        // Identity changed: drop every per-viewer query so the previous
+        // viewer's leagues, news, draft and saved views cannot be read back.
+        if (nextUserId !== viewerUserId) void clearPersonalQueries(queryClient);
+        viewerUserId = nextUserId;
         queryClient.removeQueries({ queryKey: ["auth-user-id"] });
         queryClient.removeQueries({ queryKey: ["chat-list"] });
         queryClient.removeQueries({ queryKey: ["chat-availability"] });
@@ -146,7 +164,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <Fragment key={session.user.id}>{children}</Fragment>;
+  return (
+    <ViewerIdentityContext.Provider value={viewer}>
+      <Fragment key={session.user.id}>{children}</Fragment>
+    </ViewerIdentityContext.Provider>
+  );
 }
 
 function AuthScreen() {
