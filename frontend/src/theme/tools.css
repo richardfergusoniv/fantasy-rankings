@@ -350,7 +350,7 @@
 .team-usage thead .team-usage-share {
   font-weight: 700;
 }
-/* Team stats popup: summary, then the week-by-week grid, then how to read it. */
+/* Team stats popup: summary, then the week-by-week grid. */
 .team-stats-dialog {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -426,12 +426,6 @@
   border-radius: 99px;
   background: linear-gradient(90deg, color-mix(in srgb, var(--chart-5) 4%, transparent), color-mix(in srgb, var(--chart-5) 55%, transparent));
   box-shadow: inset 0 0 0 1px var(--hairline);
-}
-.team-stats-dialog-note {
-  margin: 0 2px;
-  color: var(--dim);
-  font-size: var(--type-caption);
-  line-height: 1.4;
 }
 @media (max-width: 759px) {
   /* Position buttons take the first row; Team and Stat pair on the row below. */

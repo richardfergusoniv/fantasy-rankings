@@ -267,15 +267,13 @@ function TeamStatsSummary({ items }: { items: readonly TeamStatsSummaryItem[] })
   );
 }
 
-/** Summary first, then the week-by-week grid, then how to read it. */
+/** Summary first, then the week-by-week grid. */
 function TeamStatsDialogBody({
   summary,
-  note,
   isSnaps,
   table,
 }: {
   summary: readonly TeamStatsSummaryItem[];
-  note: string;
   isSnaps: boolean;
   table: Parameters<typeof TeamStatsWeekTable>[0];
 }) {
@@ -293,7 +291,6 @@ function TeamStatsDialogBody({
         </div>
         <TeamStatsWeekTable {...table} />
       </section>
-      <p className="team-stats-dialog-note">{note}</p>
     </div>
   );
 }
@@ -483,9 +480,7 @@ export function TeamStatsPanel({
       { label: "Team per game", value: completedWeeks.length === 0 ? "—" : formatTeamStatsAverage(groupTotal / playedWeeks) },
       { label: "Games", value: formatWhole(completedWeeks.length) },
     ];
-  const dialogNote = isSnaps
-    ? `${teamStatsLegendCaption(statId)} Shading follows each player's snap %.`
-    : `${teamStatsLegendCaption(statId)} Share is each player's slice of the group's season total; shading is their share of that week.`;
+
 
   return (
     <section className="monitor-section monitor-team-stats-panel">
@@ -586,7 +581,7 @@ export function TeamStatsPanel({
             closeLabel="Close team stats table"
             className="monitor-chart-expand-card team-stats-table-dialog"
           >
-            <TeamStatsDialogBody summary={summary} note={dialogNote} isSnaps={isSnaps} table={tableProps} />
+            <TeamStatsDialogBody summary={summary} isSnaps={isSnaps} table={tableProps} />
           </ChartDialog>
         </>
       )}
