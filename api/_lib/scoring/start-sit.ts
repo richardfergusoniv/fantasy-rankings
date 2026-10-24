@@ -80,7 +80,7 @@ export function scoreStartSit(input: StartSitInput): StartSitResult {
     },
   ];
 
-  let label = startSitLabel(chance, unavailable);
+  const label = startSitLabel(chance, unavailable);
   let closeCall = false;
   let tiebreak: TiebreakResult | undefined;
 
@@ -132,10 +132,7 @@ export function scoreStartSit(input: StartSitInput): StartSitResult {
           pickBefore: before,
           pickAfter: after,
         };
-        // Flip the reported chance/label toward the alternative when the
-        // lineup-win rule prefers them (caller still sees both scores).
-        chance = round1(100 - chance);
-        label = startSitLabel(chance, false);
+        // Keep chance/label for the scored player; preference shows via tiebreak.
         reasons.push({
           factor: "close_call_lineup_win",
           source: "win_chance",
