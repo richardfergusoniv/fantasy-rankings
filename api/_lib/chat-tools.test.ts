@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Dashboard } from "./dashboard-schemas.js";
 import {
   dispatchChatTool,
+  gameLineForTeam,
   parseToolCallArguments,
   waiverAdjustments,
   type ChatToolContext,
@@ -466,5 +467,17 @@ describe("dispatchChatTool", () => {
     expect(result.ok).toBe(true);
     expect(result.weekly.leagueProjection).toBe(18.2);
     expect(result.weekly.leagueRank).toBe(1);
+  });
+});
+
+
+describe("gameLineForTeam", () => {
+  it("matches Sleeper team aliases to canonical game lines", () => {
+    const dashboard = baseDashboard();
+    dashboard.gameLines = [{ team: "LAR", opponent: "SEA", isHome: true, spread: -3, total: 45, impliedPoints: 24 }];
+    expect(gameLineForTeam(dashboard, "LA")).toEqual(gameLineForTeam(dashboard, "LAR"));
+    expect(gameLineForTeam(dashboard, "LA")).toMatchObject({ opponent: "SEA", spread: -3 });
+    expect(gameLineForTeam(dashboard, null)).toBeNull();
+    expect(gameLineForTeam(dashboard, "KC")).toBeNull();
   });
 });

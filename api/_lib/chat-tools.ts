@@ -13,6 +13,7 @@ import { isSleeperTimestampOnlyNews } from "./player-news-filters.js";
 import { retentionCutoff } from "./player-news-shared.js";
 import {
   BOOM_BUST_SEASONS,
+  canonicalTeam,
   buildBoomBustSeries,
   hasSleeperGameParticipation,
   loadSleeperPlayerWeeklySeason,
@@ -243,7 +244,8 @@ export function findLeague(dashboard: Dashboard, leagueId: string) {
 /** This week's spread / total / implied points for an NFL team, or null. */
 export function gameLineForTeam(dashboard: Dashboard, team: string | null) {
   if (!team) return null;
-  const line = (dashboard.gameLines ?? []).find((row) => row.team === team);
+  const canonical = canonicalTeam(team);
+  const line = (dashboard.gameLines ?? []).find((row) => row.team === canonical);
   return line
     ? { opponent: line.opponent, isHome: line.isHome, spread: line.spread, total: line.total, impliedPoints: line.impliedPoints }
     : null;
