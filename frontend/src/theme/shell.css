@@ -10,6 +10,8 @@
 .ticker-strip:hover .ticker-track, .ticker-strip:focus-within .ticker-track, .ticker-strip:active .ticker-track { animation-play-state: paused; }
 .ticker-item { display: inline-flex; height: 44px; flex: none; align-items: center; gap: 6px; padding: 0 13px; border: 0; border-right: 1px solid var(--ticker-divider); background: transparent; color: var(--ticker-text); font: 600 var(--type-caption)/1 var(--font-ui); text-decoration: none; white-space: nowrap; cursor: pointer; }
 .ticker-item:active { background: var(--ticker-pressed); }
+span.ticker-item { cursor: default; }
+span.ticker-item:active { background: transparent; }
 .ticker-source { color: var(--ticker-dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .07em; }
 .ticker-source.breaking { color: var(--breaking-bright); }
 .ticker-label { max-width: 250px; overflow: hidden; text-overflow: ellipsis; }

@@ -93,3 +93,15 @@ export function newsForTicker(
 
   return out;
 }
+
+/**
+ * How a ticker item renders: interactive targets (news modal, external link,
+ * player card) get a real control; items with no target render as plain text
+ * so the ticker never shows a button that does nothing.
+ */
+export function tickerItemKind(item: { newsItem?: unknown; href?: string; playerId?: string }): "news" | "link" | "player" | "text" {
+  if (item.newsItem) return "news";
+  if (item.href) return "link";
+  if (item.playerId) return "player";
+  return "text";
+}
