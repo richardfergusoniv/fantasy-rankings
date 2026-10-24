@@ -88,7 +88,7 @@ nflverse 2018–2025, final game-week status, played = at least one offensive sn
 | Spread by position | Projection-scaled SD table below, replacing `SCORE_SPREAD_BY_POSITION` (frontend/src/views/win-probability.ts) |
 | Your win probability | `teamOutlook` + `winProbability` (same file) |
 | Lineup and slots | `league.starters`, `league.bench`, `optimizeLineup`, `eligibleForSlot` |
-| Reasons only | Prop lines and moves (`loadPropLineWeek`, table `prop_line_snapshots`), FantasyPros ECR (`playerInsights.experts`), news (`shared_player_news`) |
+| Reasons only | Prop lines and moves (`loadPropLineWeek`, table `prop_line_snapshots`), news (`shared_player_news`). FantasyPros ECR was removed from the app and is not an input. |
 
 ### Formula
 

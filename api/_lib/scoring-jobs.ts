@@ -292,7 +292,6 @@ export async function runScoringDecisionSnapshot(
     return { ok: true, season, week, rows: 0 };
   }
 
-  const experts = dashboard.playerInsights?.experts ?? {};
   const capturedAt = new Date();
   const toInsert: Array<typeof schema.scoringSnapshots.$inferInsert> = [];
 
@@ -368,7 +367,6 @@ export async function runScoringDecisionSnapshot(
       const scored = toScored(player);
       const blend = blendProjection(scored, { weights });
       const startSit = startSitById.get(player.playerId) ?? null;
-      const expert = experts[player.playerId];
       const inputs = {
         pStar: blend.pStar,
         v: blend.v,
@@ -384,8 +382,6 @@ export async function runScoringDecisionSnapshot(
         isBye: player.isBye,
         isRostered: player.isRostered,
         isWaiverPool: player.isWaiverPool,
-        ecr: expert?.ecr ?? null,
-        positionRank: expert?.positionRank ?? null,
       };
       // Never write the no-alternative placeholder (100 / Strong start).
       const scores = {
