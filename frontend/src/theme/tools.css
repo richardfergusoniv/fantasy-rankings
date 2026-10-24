@@ -713,13 +713,23 @@
   position: relative;
   height: auto;
 }
-.monitor-builder-chart-panel .monitor-value-chart .scatter-chart-shell,
-.monitor-builder-chart-panel .monitor-value-chart .scatter-frame,
 .monitor-builder-chart-panel .monitor-value-chart .fpa-heatmap,
 .monitor-builder-chart-panel .monitor-value-chart .tier-cliff-list,
 .monitor-builder-chart-panel .monitor-value-chart .boom-bust-range-list {
   flex: none;
   height: 340px;
+  max-height: none;
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+/* The scatter chart matches the team stats chart's height. */
+.monitor-builder-chart-panel .monitor-value-chart .scatter-chart-shell,
+.monitor-builder-chart-panel .monitor-value-chart .scatter-frame {
+  flex: none;
+  height: min(52dvh, 420px);
   max-height: none;
   margin: 0;
   overflow: hidden;
@@ -746,8 +756,6 @@
   margin: 0;
 }
 @media (max-width: 759px) {
-  .monitor-builder-chart-panel .monitor-value-chart .scatter-chart-shell,
-  .monitor-builder-chart-panel .monitor-value-chart .scatter-frame,
   .monitor-builder-chart-panel .monitor-value-chart .fpa-heatmap,
   .monitor-builder-chart-panel .monitor-value-chart .tier-cliff-list,
   .monitor-builder-chart-panel .monitor-value-chart .boom-bust-range-list {
