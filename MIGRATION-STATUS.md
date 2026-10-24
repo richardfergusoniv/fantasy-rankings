@@ -40,7 +40,7 @@
 
 ### 🔲 Todo (after unblocked)
 
-- [ ] Schema changes follow [Database migrations](#database-migrations). `npm run db:migrate` applies `0001`–`0010` on a fresh database. Do not run it against production.
+- [ ] Schema changes follow [Database migrations](#database-migrations). `npm run db:migrate` applies every journaled migration on a fresh database. Do not run it against production.
 - [ ] `npm install` + `npm run typecheck` (validate the scaffold compiles)
 - [ ] `npm run build` (validate Vite build works)
 - [ ] Push to GitHub
@@ -138,8 +138,12 @@ Scripts in `package.json`:
 | `npm run db:push` | `drizzle-kit push --config=drizzle.config.ts` |
 
 `db:migrate` applies the entries in `drizzle-pg/meta/_journal.json`, which lists
-all ten migrations, `0001_baseline` through `0010_chat_messages_owner_rls`, in
-apply order. `0002`–`0010` were originally
+every migration in `drizzle-pg/`, starting at `0001_baseline`, in apply
+order. A new migration must be added to the journal in the same PR: the next
+unused number, `--> statement-breakpoint` between statements, and a `when`
+later than the previous entry's (the migrator skips entries whose `when` is
+not newer than the last applied one). CI fails if the applied count differs
+from the journal. `0002`–`0010` were originally
 hand-written and applied to production through the Supabase SQL editor; they are
 now journal entries (with `--> statement-breakpoint` separators) so
 `npm run db:migrate` reproduces the full schema — tables, indexes, RLS policies,
