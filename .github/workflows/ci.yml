@@ -22,9 +22,13 @@ jobs:
           python3 -m pytest tests -q
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Audit dependencies
+        # Blocking on high/critical advisories. Document accepted
+        # dev-only exceptions in the PR that introduces them.
+        run: npm audit --audit-level=high
       - run: npm run build
       - run: npm run typecheck
       - run: npm run lint
