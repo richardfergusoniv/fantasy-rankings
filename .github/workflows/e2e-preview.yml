@@ -4,7 +4,11 @@ name: E2E on preview
 # result as an "e2e / preview" commit status on the deployed commit (a deployment_status run belongs
 # to the default branch, so it would not show up on the pull request by itself).
 #
-# The theme tests need no account. The sheet-history tests run only when these are set in the repo:
+# The theme tests need no account and run on every preview. The sheet-history tests submit test-account
+# credentials through the preview's own sign-in form, so they run only when the deployed revision is
+# trusted: its commit must be on a branch of this repository (not a fork or arbitrary commit) and the
+# preview URL must be a Vercel host. Untrusted previews get the anonymous tests only.
+# The credentialed tests also need these set in the repo:
 #   secrets   E2E_LOGIN, E2E_PASSWORD   a dedicated test account
 #   variables E2E_LEAGUE_ID, E2E_PLAYER a league for that account and a player on its matchup page
 
@@ -25,6 +29,7 @@ jobs:
     env:
       PREVIEW_URL: ${{ github.event.deployment_status.environment_url || github.event.deployment_status.target_url }}
       DEPLOYED_SHA: ${{ github.event.deployment.sha }}
+      DEPLOYED_REF: ${{ github.event.deployment.ref }}
     steps:
       # The tests only need a URL, so run the default branch's copy rather than the deployed commit's:
       # the secrets below must never be exposed to code from a pull request.
@@ -38,8 +43,37 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright-core install --with-deps chromium
-      - name: Smoke tests
+      # Credentials are only submitted to previews of revisions this repository owns: the deployed
+      # commit must be an ancestor of (or equal to) a branch head in this repo, so a preview built
+      # from a fork or an arbitrary commit can never see them. The preview URL must also be on the
+      # *.vercel.app origin so the deployment event can't redirect the browser elsewhere.
+      - name: Check the deployed revision is trusted
+        id: trust
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          trusted=false
+          reason=""
+          host="$(node -p "new URL(process.env.PREVIEW_URL || 'http://localhost').hostname")"
+          branch="${DEPLOYED_REF#refs/heads/}"
+          if [[ "$host" != *.vercel.app ]]; then
+            reason="preview host $host is not *.vercel.app"
+          elif ! gh api "repos/${{ github.repository }}/branches/$branch" --jq .name > /dev/null 2>&1; then
+            reason="$branch is not a branch of this repository"
+          else
+            status="$(gh api "repos/${{ github.repository }}/compare/$DEPLOYED_SHA...$branch" --jq .status 2>/dev/null)" || status="unknown"
+            if [[ "$status" == "ahead" || "$status" == "identical" ]]; then
+              trusted=true
+            else
+              reason="$DEPLOYED_SHA is not on branch $branch (compare: $status)"
+            fi
+          fi
+          echo "$reason"
+          echo "trusted=$trusted" >> "$GITHUB_OUTPUT"
+      - name: Smoke tests with sign-in
         id: smoke
+        if: steps.trust.outputs.trusted == 'true'
         env:
           E2E_BASE_URL: ${{ env.PREVIEW_URL }}
           E2E_NO_SANDBOX: "1"
@@ -48,13 +82,21 @@ jobs:
           E2E_LEAGUE_ID: ${{ vars.E2E_LEAGUE_ID }}
           E2E_PLAYER: ${{ vars.E2E_PLAYER }}
         run: npm run test:e2e
+      - name: Smoke tests without sign-in
+        id: smoke-anon
+        if: steps.trust.outputs.trusted != 'true'
+        env:
+          E2E_BASE_URL: ${{ env.PREVIEW_URL }}
+          E2E_NO_SANDBOX: "1"
+        run: npm run test:e2e
       - name: Report on the deployed commit
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           state=failure
-          if [ "${{ steps.smoke.outcome }}" = "success" ]; then state=success; fi
+          if [ "${{ steps.trust.outputs.trusted }}" = "true" ]; then outcome="${{ steps.smoke.outcome }}"; else outcome="${{ steps.smoke-anon.outcome }}"; fi
+          if [ "$outcome" = "success" ]; then state=success; fi
           gh api "repos/${{ github.repository }}/statuses/$DEPLOYED_SHA" \
             -f state="$state" -f context="e2e / preview" \
             -f description="Browser smoke tests against the preview" \
