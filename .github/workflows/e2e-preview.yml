@@ -98,8 +98,10 @@ jobs:
               reason="$DEPLOYED_SHA is not on branch $branch (compare: $status)"
             fi
           else
+            # Only an open pull request from this repository whose head is exactly the deployed
+            # commit; a closed PR or one that merely contains the commit doesn't count.
             nonfork_prs="$(gh api "repos/${{ github.repository }}/commits/$DEPLOYED_SHA/pulls" \
-              --jq '[.[] | select(.head.repo.fork == false)] | length' 2>/dev/null)" || nonfork_prs=0
+              --jq "[.[] | select(.state == \"open\" and .head.sha == \"$DEPLOYED_SHA\" and .head.repo.full_name == \"${{ github.repository }}\")] | length" 2>/dev/null)" || nonfork_prs=0
             if [[ "$nonfork_prs" -gt 0 ]]; then
               trusted=true
             else
