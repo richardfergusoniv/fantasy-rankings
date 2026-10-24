@@ -98,6 +98,11 @@ import {
 } from "./chart-metric-transforms.js";
 import { loadChartExtrasSnapshot, type ChartExtrasSnapshot } from "./nflverse-chart-extras.js";
 import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./player-insights.js";
+import {
+  dashboardBuildLeaseResource,
+  drizzleBuildLeaseStore,
+  runWithBuildLease,
+} from "./build-lease.js";
 
 /**
  * Per-user dashboard builder (Phase 2).
@@ -125,6 +130,8 @@ export const USER_DASHBOARD_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 /** Shorter cache while any rostered game is live so lineup totals can refresh. */
 export const LIVE_DASHBOARD_CACHE_MS = 150 * 1000;
 export const BUILD_DEADLINE_MS = 55_000; // stay inside the 60s function budget
+/** Lease TTL: longer than the deadline so a build always releases or expires. */
+export const BUILD_LEASE_TTL_MS = 90_000;
 
 const NFLVERSE_PLAYER_STATS_2026_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2026.csv";
 const NFLVERSE_PLAYER_STATS_2025_URL = "https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_2025.csv";
@@ -2133,14 +2140,12 @@ export async function loadOrBuildUserDashboard(
   }
 
   try {
-    const buildPromise = buildUserDashboard(sleeperUserId, force);
-    // If the deadline wins the race, the build keeps running detached; guard
-    // against an unhandled rejection when it eventually settles.
-    buildPromise.catch(() => undefined);
-    const dashboard = await withDeadline(buildPromise, BUILD_DEADLINE_MS);
-    await writeUserDashboardCache(cacheKey, dashboard);
+    const built = await buildUserDashboardUnderLease(sleeperUserId, force, cached?.fetchedAtMs ?? 0);
+    if (!built.cacheWritePending) {
+      await writeUserDashboardCache(cacheKey, built.dashboard);
+    }
     return {
-      dashboard,
+      dashboard: built.dashboard,
       fetchedAtMs: responseCacheFetchedAtMs("built", Date.now()),
     };
   } catch (error) {
@@ -2416,9 +2421,79 @@ export async function readUserDashboardSection<S extends DashboardCacheSection>(
   });
 }
 
-// Single-flight guard so concurrent section reads (and dashboard reads) for
-// the same user share one background build per function instance.
+// Single-flight guards. The in-process map dedupes within one function
+// instance; the DB lease (`build_leases`) dedupes across instances so a
+// burst of cold starts still produces one build per user.
 const inFlightBuilds = new Map<string, Promise<void>>();
+
+/**
+ * Build the dashboard under the deployment-wide lease. When another instance
+ * already holds the lease this waits for that build's cache write instead of
+ * starting a second build; a lease that expires without a fresh cache row
+ * surfaces as an error so the caller falls back to its stale data.
+ */
+async function buildUserDashboardUnderLease(
+  sleeperUserId: string,
+  force: boolean,
+  cachedFetchedAtMs: number,
+): Promise<{ dashboard: Dashboard; cacheWritePending: boolean }> {
+  const resource = dashboardBuildLeaseResource(sleeperUserId);
+  const outcome = await runWithBuildLease(
+    drizzleBuildLeaseStore,
+    resource,
+    crypto.randomUUID(),
+    BUILD_LEASE_TTL_MS,
+    async () => {
+      const buildPromise = buildUserDashboard(sleeperUserId, force);
+      // If the deadline wins the race, the build keeps running detached; guard
+      // against an unhandled rejection when it eventually settles.
+      buildPromise.catch(() => undefined);
+      return await withDeadline(buildPromise, BUILD_DEADLINE_MS);
+    },
+  );
+  if (outcome.status === "built") return { dashboard: outcome.result, cacheWritePending: false };
+  if (outcome.status === "failed") throw outcome.error;
+  // "joined": another instance is building. Wait for its cache write (it
+  // already lands in the cache, so this caller must not rewrite it).
+  const dashboard = await waitForFreshDashboardCache(
+    sleeperUserId,
+    cachedFetchedAtMs,
+    BUILD_DEADLINE_MS,
+    resource,
+  );
+  if (!dashboard) {
+    throw new Error("dashboard build in progress elsewhere");
+  }
+  return { dashboard, cacheWritePending: true };
+}
+
+/**
+ * Poll for a cache row newer than `sinceMs` until the deadline elapses.
+ * Returns early when the lease holder finishes without producing a fresh
+ * row (a failed build should not stall the caller for the whole deadline).
+ */
+async function waitForFreshDashboardCache(
+  sleeperUserId: string,
+  sinceMs: number,
+  deadlineMs: number,
+  resource: string,
+): Promise<Dashboard | null> {
+  const deadlineAt = Date.now() + deadlineMs;
+  while (Date.now() < deadlineAt) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    try {
+      const cached = await readUserDashboardCache(sleeperUserId);
+      if (cached?.fresh && cached.fetchedAtMs > sinceMs) {
+        return cached.dashboard;
+      }
+      const lease = await drizzleBuildLeaseStore.read(resource);
+      if (!lease || lease.status !== "running") return null;
+    } catch {
+      // Transient read failure; keep polling until the deadline.
+    }
+  }
+  return null;
+}
 
 /**
  * Start (or join) a background build for this user that caches its result
@@ -2426,17 +2501,37 @@ const inFlightBuilds = new Map<string, Promise<void>>();
  * keeps the function alive until the cache write lands. Section reads use
  * this so a cold cache answers immediately with "no data yet" while the
  * first build (~30s) runs behind the response.
+ *
+ * The DB lease means a request landing on a different instance does not
+ * start a duplicate build, and failures are recorded on the lease row
+ * (`status='failed'`, `last_error`) instead of being silently swallowed.
  */
 export function kickUserDashboardBuild(sleeperUserId: string): Promise<void> {
   const existing = inFlightBuilds.get(sleeperUserId);
   if (existing) return existing;
   const build = (async () => {
     try {
-      const dashboard = await buildUserDashboard(sleeperUserId);
-      await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
-    } catch {
-      // Background build failed; the next read retries. The client keeps
-      // polling and eventually surfaces its error state.
+      const outcome = await runWithBuildLease(
+        drizzleBuildLeaseStore,
+        dashboardBuildLeaseResource(sleeperUserId),
+        crypto.randomUUID(),
+        BUILD_LEASE_TTL_MS,
+        async () => {
+          const buildPromise = buildUserDashboard(sleeperUserId);
+          buildPromise.catch(() => undefined);
+          return await withDeadline(buildPromise, BUILD_DEADLINE_MS);
+        },
+      );
+      if (outcome.status === "built") {
+        await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), outcome.result);
+      } else if (outcome.status === "failed") {
+        console.error(
+          "[dashboard-build] background build failed",
+          outcome.error instanceof Error ? outcome.error.message : outcome.error,
+        );
+      }
+    } catch (error) {
+      console.error("[dashboard-build] background build error", error);
     } finally {
       inFlightBuilds.delete(sleeperUserId);
     }
