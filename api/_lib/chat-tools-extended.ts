@@ -31,6 +31,7 @@ import {
   loadBoomBustSummary,
   loadDashboard,
   resolvePlayerIdentity,
+  tradeLineupBeforeAfter,
   waiverAdjustments,
   type ChatToolContext,
   type OpenAiToolDefinition,
@@ -1060,13 +1061,17 @@ export async function toolSuggestTrades(
 
     const give = [best.give];
     const get = [best.get];
-    const remap = (rows: Asset[], map: Map<string, number>) => rows.map((row) => ({
+    const remap = (
+      rows: Asset[],
+      map: Map<string, number>,
+      fallbackToBoard: boolean,
+    ) => rows.map((row) => ({
       ...row,
-      value: map.get(row.playerId) ?? row.value,
+      value: map.get(row.playerId) ?? (fallbackToBoard ? row.value : 0),
     }));
-    const windowTotals = (map: Map<string, number>) => {
-      const giveRows = remap(give, map);
-      const getRows = remap(get, map);
+    const windowTotals = (map: Map<string, number>, fallbackToBoard: boolean) => {
+      const giveRows = remap(give, map, fallbackToBoard);
+      const getRows = remap(get, map, fallbackToBoard);
       const giveTotal = giveRows.reduce((sum, row) => sum + row.value, 0);
       const getTotal = getRows.reduce((sum, row) => sum + row.value, 0);
       const adjustment = waiverAdjustments(giveRows, getRows);
@@ -1079,9 +1084,12 @@ export async function toolSuggestTrades(
         adjustedGet: getTotal + adjustment.get,
       };
     };
-    const seasonLongTotals = windowTotals(seasonLongValueById);
+    const seasonLongTotals = windowTotals(
+      seasonLongValueById,
+      !league.seasonLongFormat.isDynasty,
+    );
     const dynastyTotals = league.seasonLongFormat.isDynasty
-      ? windowTotals(dynastyValueById)
+      ? windowTotals(dynastyValueById, true)
       : null;
     // Display totals use Season Long (redraft twin) values.
     const giveTotal = seasonLongTotals.giveTotal;
@@ -1101,10 +1109,46 @@ export async function toolSuggestTrades(
       [...myStarterIds].filter((id) => !giveIds.has(id)).concat(getIds),
     );
     const fillsHole = best.get.position === myNeeds[0];
+    const projectionById = new Map(
+      dashboard.rankings
+        .filter((row) => row.leagueId === league.id)
+        .map((row) => [row.playerId, row.leagueProjection]),
+    );
+    for (const player of me.players) {
+      if (!projectionById.has(player.playerId)) {
+        projectionById.set(player.playerId, player.projection);
+      }
+    }
+    const slots = league.tradeStarterSlots.length > 0
+      ? league.tradeStarterSlots
+      : league.starters.map((p) => p.lineupSlot ?? p.position);
+    const rosterPlayers = me.players.map((player) => ({
+      playerId: player.playerId,
+      name: player.name,
+      position: player.position,
+      lineupSlot: player.lineupSlot,
+      isStarter: player.isStarter,
+      projection: player.projection ?? projectionById.get(player.playerId) ?? null,
+      actual: player.actual,
+    }));
+    const lineup = tradeLineupBeforeAfter({
+      roster: rosterPlayers,
+      slots,
+      giveIds,
+      incoming: get.map((asset) => ({
+        playerId: asset.playerId,
+        name: asset.name,
+        position: asset.position,
+        lineupSlot: null as string | null,
+        isStarter: false,
+        projection: projectionById.get(asset.playerId) ?? null,
+        actual: null as number | null,
+      })),
+    });
     const move = scoreTrade({
       week: {
-        yourLineupBefore: 0,
-        yourLineupAfter: 0,
+        yourLineupBefore: lineup.before,
+        yourLineupAfter: lineup.after,
       },
       seasonLong: {
         give: seasonLongTotals.giveRows,

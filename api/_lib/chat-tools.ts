@@ -18,8 +18,24 @@ import {
   scoreProjectedPlayerStats,
   sleeperActualStats,
 } from "./sleeper.js";
-import { optimizeTradeRoster } from "./lineup-optimizer.js";
+import { optimizeTradeRoster, type OptimizablePlayer } from "./lineup-optimizer.js";
 import { scoreTrade } from "./move-scoring.js";
+
+/** Week N lineup scores before/after a trade — shared by evaluate_trade and suggest_trades. */
+export function tradeLineupBeforeAfter<T extends OptimizablePlayer>(args: {
+  roster: T[];
+  slots: string[];
+  giveIds: ReadonlySet<string>;
+  incoming: ReadonlyArray<T>;
+}): { before: number; after: number } {
+  const before = optimizeTradeRoster(args.roster, args.slots);
+  const afterPlayers = [
+    ...args.roster.filter((player) => !args.giveIds.has(player.playerId)),
+    ...args.incoming,
+  ];
+  const after = optimizeTradeRoster(afterPlayers, args.slots);
+  return { before: before.score, after: after.score };
+}
 import { redraftTwinFormat } from "./season-long-format.js";
 import { loadActiveScoringWeights } from "./scoring-jobs.js";
 import { loadHistoricalTrades } from "./trades.js";
@@ -724,20 +740,27 @@ async function toolEvaluateTrade(
     projection: p.projection ?? projectionById.get(p.playerId) ?? null,
     actual: p.actual,
   }));
+  const incoming = get.resolved.map((asset) => ({
+    playerId: asset.playerId,
+    name: asset.name,
+    position: asset.position,
+    lineupSlot: null as string | null,
+    isStarter: false,
+    projection: projectionById.get(asset.playerId) ?? null,
+    actual: null as number | null,
+  }));
+  const lineup = tradeLineupBeforeAfter({
+    roster: myPlayers,
+    slots,
+    giveIds,
+    incoming,
+  });
+  // Keep starter boards for Season Long / Dynasty starter-value totals.
   const before = optimizeTradeRoster(myPlayers, slots);
-  const afterPlayers = [
-    ...myPlayers.filter((p) => !giveIds.has(p.playerId)),
-    ...get.resolved.map((asset) => ({
-      playerId: asset.playerId,
-      name: asset.name,
-      position: asset.position,
-      lineupSlot: null as string | null,
-      isStarter: false,
-      projection: projectionById.get(asset.playerId) ?? null,
-      actual: null as number | null,
-    })),
-  ];
-  const after = optimizeTradeRoster(afterPlayers, slots);
+  const after = optimizeTradeRoster(
+    [...myPlayers.filter((p) => !giveIds.has(p.playerId)), ...incoming],
+    slots,
+  );
 
   const seasonLongAssets = leagueSeasonLongAssets(dashboard, league.id);
   const dynastyAssets = league.seasonLongFormat.isDynasty
@@ -748,15 +771,17 @@ async function toolEvaluateTrade(
   const toWindowAssets = (
     rows: typeof give.resolved,
     valueMap: Map<string, number>,
+    /** When false, missing twin-board rows (picks, deep players) are 0 — never dynasty values. */
+    fallbackToBoard: boolean,
   ) => rows.map((row) => ({
     playerId: row.playerId,
     name: row.name,
     position: row.position,
-    value: valueMap.get(row.playerId) ?? row.value,
+    value: valueMap.get(row.playerId) ?? (fallbackToBoard ? row.value : 0),
   }));
-  const windowSide = (valueMap: Map<string, number>) => {
-    const giveRows = toWindowAssets(give.resolved, valueMap);
-    const getRows = toWindowAssets(get.resolved, valueMap);
+  const windowSide = (valueMap: Map<string, number>, fallbackToBoard: boolean) => {
+    const giveRows = toWindowAssets(give.resolved, valueMap, fallbackToBoard);
+    const getRows = toWindowAssets(get.resolved, valueMap, fallbackToBoard);
     const giveTotal = giveRows.reduce((sum, row) => sum + row.value, 0);
     const getTotal = getRows.reduce((sum, row) => sum + row.value, 0);
     const adjustment = waiverAdjustments(giveRows, getRows);
@@ -780,8 +805,9 @@ async function toolEvaluateTrade(
       starterAfter,
     };
   };
-  const seasonLongSide = windowSide(seasonLongValue);
-  const dynastySide = league.seasonLongFormat.isDynasty ? windowSide(dynastyValue) : null;
+  // Season Long in dynasty leagues must not fall back to dynasty board values.
+  const seasonLongSide = windowSide(seasonLongValue, !league.seasonLongFormat.isDynasty);
+  const dynastySide = league.seasonLongFormat.isDynasty ? windowSide(dynastyValue, true) : null;
 
   // Display totals use Season Long (redraft twin) values.
   const giveTotal = seasonLongSide.giveTotal;
@@ -808,8 +834,8 @@ async function toolEvaluateTrade(
 
   const move = scoreTrade({
     week: {
-      yourLineupBefore: before.score,
-      yourLineupAfter: after.score,
+      yourLineupBefore: lineup.before,
+      yourLineupAfter: lineup.after,
     },
     seasonLong: {
       give: seasonLongSide.giveRows,
@@ -837,18 +863,10 @@ async function toolEvaluateTrade(
     weights,
   });
 
-  // Prefer the viewed window; default evaluate_trade to Season Long (values),
-  // not Week N, when the client did not send a horizon.
-  const windowKey = ctx.scoringWindow === "dynasty" && move.dynasty
-    ? "dynasty"
-    : ctx.scoringWindow === "week"
-      ? "week"
-      : "season_long";
-  const primary = windowKey === "dynasty" && move.dynasty
-    ? move.dynasty
-    : windowKey === "week"
-      ? move.week
-      : move.seasonLong;
+  // Match suggest_trades: primary label is a value window. Week N stays in scoring.week.
+  const windowKey: "season_long" | "dynasty" =
+    ctx.scoringWindow === "dynasty" && move.dynasty ? "dynasty" : "season_long";
+  const primary = windowKey === "dynasty" && move.dynasty ? move.dynasty : move.seasonLong;
 
   return {
     ok: true as const,

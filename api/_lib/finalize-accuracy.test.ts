@@ -33,6 +33,18 @@ describe("scoreWeeklyActual", () => {
     expect(points).toBe(16);
   });
 
+  it("scores two-point conversions in canonical PPR", () => {
+    const points = scoreWeeklyActual(
+      "RB",
+      { rush_yd: 10, rush_2pt: 1 },
+      "ppr",
+    );
+    // 10*0.1 + 1*2 = 3
+    expect(points).toBe(3);
+    expect(PPFD_ACTUAL_PPR_SCORING.pass_2pt).toBe(2);
+    expect(PPFD_ACTUAL_PPR_SCORING.rec_2pt).toBe(2);
+  });
+
   it("returns null for empty stats", () => {
     expect(scoreWeeklyActual("RB", {}, "ppr")).toBeNull();
   });

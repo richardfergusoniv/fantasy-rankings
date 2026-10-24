@@ -7,6 +7,7 @@ import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { readGlobalDashboardSnapshot } from "./dashboard-build.js";
 import type { Dashboard } from "./dashboard-schemas.js";
 import { db, schema } from "./db.js";
+import { eligibleForSlot, optimizeLineup } from "./lineup-optimizer.js";
 import {
   assertLabelsNotRefit,
   blendProjection,
@@ -294,21 +295,71 @@ export async function runScoringDecisionSnapshot(
     const players = collectSnapshotPlayers(dashboard, league.id);
     // Cap per league to keep egress bounded (roster + top of board).
     const limited = players.slice(0, 200);
+    const toScored = (player: SnapshotPlayerSource) => ({
+      playerId: player.playerId,
+      name: player.name,
+      position: player.position,
+      team: player.team,
+      vegasProjection: player.vegasProjection,
+      injuryStatus: player.injuryStatus,
+      isBye: player.isBye,
+      gamePhase: player.gamePhase,
+      projection: player.projection,
+      actual: player.actual,
+    });
+
+    // Pairwise start/sit scores for the owner's roster (same pattern as suggest_lineup).
+    const rostered = limited.filter((player) => player.isRostered);
+    const starters = league.starters.filter((p) => p.playerId && p.playerId !== "0");
+    const bench = league.bench.filter((p) => p.playerId && p.playerId !== "0");
+    const optimized = optimizeLineup(
+      starters.map((p) => ({ ...p })),
+      bench.map((p) => ({ ...p })),
+    );
+    const byId = new Map(rostered.map((player) => [player.playerId, player]));
+    const startSitById = new Map<string, ReturnType<typeof scoreStartSit>>();
+    for (const starter of optimized.starters) {
+      const player = byId.get(starter.playerId);
+      if (!player) continue;
+      const slot = starter.lineupSlot ?? starter.position;
+      const alternativeRow =
+        optimized.bench.find((benchPlayer) => eligibleForSlot(benchPlayer.position, slot))
+        ?? null;
+      const alternative = alternativeRow ? byId.get(alternativeRow.playerId) ?? null : null;
+      startSitById.set(
+        player.playerId,
+        scoreStartSit({
+          player: toScored(player),
+          alternative: alternative ? toScored(alternative) : null,
+          weights,
+        }),
+      );
+    }
+    for (const benchPlayer of optimized.bench) {
+      const player = byId.get(benchPlayer.playerId);
+      if (!player || startSitById.has(player.playerId)) continue;
+      const alternativeRow =
+        optimized.starters.find((starter) =>
+          eligibleForSlot(benchPlayer.position, starter.lineupSlot ?? starter.position),
+        )
+        ?? null;
+      const alternative = alternativeRow ? byId.get(alternativeRow.playerId) ?? null : null;
+      // Only persist a Week score when we have a real slot alternative.
+      if (!alternative) continue;
+      startSitById.set(
+        player.playerId,
+        scoreStartSit({
+          player: toScored(player),
+          alternative: toScored(alternative),
+          weights,
+        }),
+      );
+    }
+
     for (const player of limited) {
-      const scored = {
-        playerId: player.playerId,
-        name: player.name,
-        position: player.position,
-        team: player.team,
-        vegasProjection: player.vegasProjection,
-        injuryStatus: player.injuryStatus,
-        isBye: player.isBye,
-        gamePhase: player.gamePhase,
-        projection: player.projection,
-        actual: player.actual,
-      };
+      const scored = toScored(player);
       const blend = blendProjection(scored, { weights });
-      const startSit = scoreStartSit({ player: scored, alternative: null, weights });
+      const startSit = startSitById.get(player.playerId) ?? null;
       const expert = experts[player.playerId];
       const inputs = {
         pStar: blend.pStar,
@@ -317,6 +368,10 @@ export async function runScoringDecisionSnapshot(
         wV: blend.wV,
         projection: player.projection,
         vegasProjection: player.vegasProjection,
+        usageProjection: null,
+        vacatedTargetSharePts: null,
+        vacatedCarriesPerGame: null,
+        forecastWindMph: null,
         injuryStatus: player.injuryStatus,
         isBye: player.isBye,
         isRostered: player.isRostered,
@@ -324,14 +379,15 @@ export async function runScoringDecisionSnapshot(
         ecr: expert?.ecr ?? null,
         positionRank: expert?.positionRank ?? null,
       };
+      // Never write the no-alternative placeholder (100 / Strong start).
       const scores = {
-        week: startSit.week.score,
+        week: startSit?.week.score ?? null,
         pStar: blend.pStar,
       };
       const labels = {
-        week: startSit.week.label,
+        week: startSit?.week.label ?? "",
       };
-      const tiebreak = startSit.week.tiebreak;
+      const tiebreak = startSit?.week.tiebreak;
       toInsert.push({
         id: scoringSnapshotId(season, week, league.id, player.playerId),
         season,
@@ -539,7 +595,9 @@ export async function runScoringWeightsRefit(): Promise<{
     await db.insert(schema.scoringWeights).values({
       version,
       status: "candidate",
-      paramsJson: JSON.stringify(active),
+      // Persist the candidate version inside params so snapshots after
+      // promotion record the promoted row id, not the prior builtin string.
+      paramsJson: JSON.stringify({ ...active, version }),
       holdoutJson: JSON.stringify({
         snapshotWeekCount,
         fitWeeks,
