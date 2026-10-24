@@ -206,8 +206,8 @@ function TeamStatsWeekTable({
           <tr>
             <th scope="col" className="team-usage-player">Player</th>
             {isSnaps ? null : <th scope="col" className="team-usage-share">Share</th>}
-            {gridWeeks.map((stack) => <th scope="col" key={stack.week}>{`W${stack.week}`}</th>)}
             <th scope="col" className="team-usage-average">Avg</th>
+            {gridWeeks.map((stack) => <th scope="col" key={stack.week}>{`W${stack.week}`}</th>)}
           </tr>
         </thead>
         <tbody>
@@ -226,6 +226,7 @@ function TeamStatsWeekTable({
                 {selectedGroup === "ALL" ? <span className="team-usage-position">{row.position}</span> : null}
               </th>
               {isSnaps ? null : <td className="team-usage-share">{shareLabel(completedTotal)}</td>}
+              <td className="team-usage-average">{averageLabel}</td>
               {gridWeeks.map((stack) => {
                 const cell = cells.get(stack.week);
                 if (!cell?.hasSourceRow) {
@@ -240,11 +241,59 @@ function TeamStatsWeekTable({
                   </td>
                 );
               })}
-              <td className="team-usage-average">{averageLabel}</td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+type TeamStatsSummaryItem = { label: string; value: string; detail?: string };
+
+function TeamStatsSummary({ items }: { items: readonly TeamStatsSummaryItem[] }) {
+  return (
+    <dl className="team-stats-summary">
+      {items.map((item) => (
+        <div key={item.label}>
+          <dt>{item.label}</dt>
+          <dd>
+            <strong>{item.value}</strong>
+            {item.detail ? <small>{item.detail}</small> : null}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Summary first, then the week-by-week grid, then how to read it. */
+function TeamStatsDialogBody({
+  summary,
+  note,
+  isSnaps,
+  table,
+}: {
+  summary: readonly TeamStatsSummaryItem[];
+  note: string;
+  isSnaps: boolean;
+  table: Parameters<typeof TeamStatsWeekTable>[0];
+}) {
+  return (
+    <div className="team-stats-dialog">
+      <TeamStatsSummary items={summary} />
+      <section className="team-stats-dialog-section" aria-label="Week by week">
+        <div className="team-stats-dialog-heading">
+          <h3>Week by week</h3>
+          <span className="team-stats-shade-key" aria-hidden="true">
+            <span>{isSnaps ? "Fewer snaps" : "Smaller share"}</span>
+            <i />
+            <span>{isSnaps ? "More snaps" : "Bigger share"}</span>
+          </span>
+        </div>
+        <TeamStatsWeekTable {...table} />
+      </section>
+      <p className="team-stats-dialog-note">{note}</p>
     </div>
   );
 }
@@ -415,6 +464,29 @@ export function TeamStatsPanel({
     playerLink,
   };
 
+  const groupLabel = TEAM_STATS_GROUPS.find((group) => group.id === selectedGroup)?.label ?? selectedGroup;
+  const firstWeek = completedWeeks[0]?.week;
+  const lastWeek = completedWeeks[completedWeeks.length - 1]?.week;
+  const dialogSubtitle = [
+    groupLabel,
+    firstWeek === undefined ? null : firstWeek === lastWeek ? `Week ${firstWeek}` : `Weeks ${firstWeek}–${lastWeek}`,
+  ].filter(Boolean).join(" · ");
+  const leader = gridRows[0];
+  const summary: TeamStatsSummaryItem[] = isSnaps
+    ? [
+      { label: "Top snap share", value: leader ? displayTeamStatsPercent(leader.average) : "—", detail: leader ? shortPlayerName(leader.row.name) : undefined },
+      { label: "Players", value: formatWhole(gridRows.length) },
+      { label: "Games", value: formatWhole(completedWeeks.length) },
+    ]
+    : [
+      { label: "Leader", value: leader ? shareLabel(leader.completedTotal) : "—", detail: leader ? shortPlayerName(leader.row.name) : undefined },
+      { label: "Team per game", value: groupTotal === 0 ? "—" : statId === "fantasy_points" ? formatPoints(groupTotal / playedWeeks) : formatTeamStatsAverage(groupTotal / playedWeeks) },
+      { label: "Games", value: formatWhole(completedWeeks.length) },
+    ];
+  const dialogNote = isSnaps
+    ? `${teamStatsLegendCaption(statId)} Shading follows each player's snap %.`
+    : `${teamStatsLegendCaption(statId)} Share is each player's slice of the group's season total; shading is their share of that week.`;
+
   return (
     <section className="monitor-section monitor-team-stats-panel">
       <header className="sr-only">
@@ -509,11 +581,12 @@ export function TeamStatsPanel({
             isOpen={tableOpen}
             onClose={() => setTableOpen(false)}
             title={`${selectedTeam} · ${statLabel}`}
+            subtitle={dialogSubtitle}
             showCount={false}
             closeLabel="Close team stats table"
             className="monitor-chart-expand-card team-stats-table-dialog"
           >
-            <TeamStatsWeekTable {...tableProps} />
+            <TeamStatsDialogBody summary={summary} note={dialogNote} isSnaps={isSnaps} table={tableProps} />
           </ChartDialog>
         </>
       )}
