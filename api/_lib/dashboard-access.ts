@@ -2,8 +2,10 @@
  * Who may see a dashboard. Signed-out callers get nothing, including the
  * owner's stored snapshot. A signed-in user gets their own cache or a
  * fresh build. The stored owner snapshot is only a fallback when the
- * viewer is the scheduled owner (Supabase OWNER_USER_ID when set; otherwise
- * matching OWNER_SLEEPER_USER_ID).
+ * viewer is the scheduled owner (Supabase OWNER_USER_ID). A linked Sleeper
+ * id alone never grants owner rights — the connect flow cannot verify
+ * Sleeper ownership, so any user may point their connection at any public
+ * Sleeper account.
  */
 
 export const SIGN_IN_REQUIRED = "Sign in required.";
@@ -36,10 +38,10 @@ type ViewerLoaders<T> = {
 };
 
 /**
- * Owner privileges prefer a server-held Supabase user id. When that env is
- * unset, fall back to the configured owner Sleeper id so existing deploys
- * keep working. A caller-chosen Sleeper username alone is never enough when
- * OWNER_USER_ID is configured.
+ * Owner privileges require the server-held Supabase user id
+ * (`OWNER_USER_ID`). There is no Sleeper-id fallback: the linked Sleeper id
+ * is caller-chosen and unverified, so matching it alone must never grant
+ * owner rights. When `OWNER_USER_ID` is unset nobody is the owner.
  */
 export function isScheduledOwner(args: {
   sleeperUserId: string;
@@ -47,10 +49,8 @@ export function isScheduledOwner(args: {
   ownerSleeperUserId: string | null;
   ownerUserId?: string | null;
 }): boolean {
-  if (args.ownerUserId) {
-    return Boolean(args.viewerUserId) && args.viewerUserId === args.ownerUserId;
-  }
-  return Boolean(args.ownerSleeperUserId) && args.sleeperUserId === args.ownerSleeperUserId;
+  if (!args.ownerUserId) return false;
+  return Boolean(args.viewerUserId) && args.viewerUserId === args.ownerUserId;
 }
 
 /**

@@ -228,7 +228,7 @@ export async function loadDashboard(ctx: ChatToolContext): Promise<Dashboard> {
     ctx.dashboardPromise = (async () => {
       const cached = await readUserDashboardCache(ctx.sleeperUserId);
       if (cached?.dashboard) return cached.dashboard;
-      const built = await loadOrBuildUserDashboard(ctx.sleeperUserId, false);
+      const built = await loadOrBuildUserDashboard(ctx.sleeperUserId, false, ctx.userId);
       return built.dashboard;
     })();
   }

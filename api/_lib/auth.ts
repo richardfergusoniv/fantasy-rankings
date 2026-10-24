@@ -89,44 +89,4 @@ export function readOwnerUserId(): string | null {
   return id ? id : null;
 }
 
-/**
- * True when another Supabase user already holds this Sleeper id.
- * Same-user re-links (username refresh) are allowed.
- */
-export function sleeperIdLinkedToOtherUser(
-  existingOwnerUserId: string | null | undefined,
-  requestingUserId: string,
-): boolean {
-  return Boolean(existingOwnerUserId && existingOwnerUserId !== requestingUserId);
-}
 
-/**
- * When both owner env ids are set, only the scheduled owner Supabase user may
- * claim the configured owner Sleeper id. Blocks first-claim hijacks of that id
- * without requiring a Sleeper OAuth flow the product does not have.
- */
-export function isReservedOwnerSleeperClaim(args: {
-  sleeperUserId: string;
-  requestingUserId: string;
-  ownerSleeperUserId: string | null;
-  ownerUserId: string | null;
-}): boolean {
-  if (!args.ownerSleeperUserId || !args.ownerUserId) return false;
-  if (args.sleeperUserId !== args.ownerSleeperUserId) return false;
-  return args.requestingUserId !== args.ownerUserId;
-}
-
-/** Postgres unique_violation, including drizzle-wrapped `cause`. */
-export function isUniqueViolation(err: unknown): boolean {
-  const codes: unknown[] = [];
-  if (err && typeof err === "object" && "code" in err) {
-    codes.push((err as { code: unknown }).code);
-  }
-  if (err && typeof err === "object" && "cause" in err) {
-    const cause = (err as { cause: unknown }).cause;
-    if (cause && typeof cause === "object" && "code" in cause) {
-      codes.push((cause as { code: unknown }).code);
-    }
-  }
-  return codes.some((code) => code === "23505");
-}

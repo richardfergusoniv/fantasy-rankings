@@ -106,7 +106,7 @@ async function handleDashboard(
           };
         },
         buildOwn: async (id) => {
-          const loaded = await loadOrBuildUserDashboard(id, force);
+          const loaded = await loadOrBuildUserDashboard(id, force, viewer.userId);
           return {
             dashboard: loaded.dashboard,
             live: dashboardSnapshotIsLive(loaded.dashboard),

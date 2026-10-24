@@ -50,7 +50,7 @@ import {
   responseCacheFetchedAtMs,
   type DashboardResponseView,
 } from "./dashboard-response-cache.js";
-import { readOwnerSleeperUserId } from "./auth.js";
+import { readOwnerUserId } from "./auth.js";
 import { readNflState, readUserLeagues } from "./user-leagues.js";
 import {
   DRAFT_MARKET_CACHE_KEY,
@@ -2120,7 +2120,9 @@ export function userDashboardCacheKey(sleeperUserId: string): string {
  * otherwise build, cache, and return it. `force` bypasses the freshness
  * check. A failed/slow build falls back to the stale per-user cache when
  * one exists. The scheduled owner, and only that owner, can then fall
- * back to the stored snapshot. Any other miss propagates (→ 500 at the route).
+ * back to the stored snapshot — decided by the viewer's Supabase user id
+ * (`OWNER_USER_ID`), never by the caller-chosen linked Sleeper id. Any other
+ * miss propagates (→ 500 at the route).
  *
  * `fetchedAtMs` is 0 for those fallbacks so the response cache does not
  * store them as a fresh build. Only a finished build is timestamped now.
@@ -2128,6 +2130,7 @@ export function userDashboardCacheKey(sleeperUserId: string): string {
 export async function loadOrBuildUserDashboard(
   sleeperUserId: string,
   force = false,
+  viewerUserId: string | null = null,
 ): Promise<{ dashboard: Dashboard; fetchedAtMs: number }> {
   const cached = await readUserDashboardCache(sleeperUserId);
   const cachedDashboard = cached?.dashboard ?? null;
@@ -2148,7 +2151,8 @@ export async function loadOrBuildUserDashboard(
     if (cachedDashboard) {
       return { dashboard: cachedDashboard, fetchedAtMs: responseCacheFetchedAtMs("fallback", Date.now()) };
     }
-    if (readOwnerSleeperUserId() === sleeperUserId) {
+    const ownerUserId = readOwnerUserId();
+    if (ownerUserId && viewerUserId === ownerUserId) {
       const snapshot = await readGlobalDashboardSnapshot();
       if (snapshot) {
         return { dashboard: snapshot, fetchedAtMs: responseCacheFetchedAtMs("fallback", Date.now()) };

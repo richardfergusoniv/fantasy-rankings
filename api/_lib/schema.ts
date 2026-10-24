@@ -222,7 +222,11 @@ export const sharedPlayerNews = pgTable(
   ],
 );
 
-/** Links a Supabase Auth user to their Sleeper account (one connection per user). */
+/**
+ * Links a Supabase Auth user to the Sleeper account they follow (one
+ * connection per user). Nonexclusive: Sleeper data is public and ownership
+ * is unverified, so several users may follow the same Sleeper id.
+ */
 export const sleeperConnections = pgTable(
   "sleeper_connections",
   {
@@ -234,8 +238,6 @@ export const sleeperConnections = pgTable(
   },
   (table) => [
     index("sleeper_connections_sleeper_user_id_idx").on(table.sleeperUserId),
-    // One Sleeper account may be linked to only one Supabase user.
-    uniqueIndex("sleeper_connections_sleeper_user_id_uidx").on(table.sleeperUserId),
   ],
 );
 
