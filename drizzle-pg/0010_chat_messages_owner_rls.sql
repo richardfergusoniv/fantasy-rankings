@@ -1,9 +1,10 @@
 -- Tighten chat_messages RLS so rows must belong to a conversation owned by
--- auth.uid() (not only matching chat_messages.user_id). Hand-apply like 0002–0009.
+-- auth.uid() (not only matching chat_messages.user_id). Originally hand-applied like 0002–0009; now journal entry 0010.
 -- Does not alter table or column definitions from 0009.
 
 DROP POLICY IF EXISTS "Users manage own chat messages" ON "chat_messages";
 
+--> statement-breakpoint
 CREATE POLICY "Users manage own chat messages" ON "chat_messages"
   FOR ALL
   USING (

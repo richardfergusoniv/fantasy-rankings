@@ -33,3 +33,106 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+
+  db-migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fantasy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/fantasy_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Minimal stand-ins for the Supabase-only objects the migrations
+      # reference: auth.users and auth.uid(), plus the anon/authenticated
+      # roles used by the REVOKE statements in 0004.
+      - name: Create Supabase auth shim
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE SCHEMA IF NOT EXISTS auth;
+          CREATE TABLE IF NOT EXISTS auth.users (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+          );
+          CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+            LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          SQL
+      - name: Apply migrations from scratch
+        run: npx drizzle-kit migrate --config=drizzle.config.ts
+      - name: Smoke check migrated schema
+        run: |
+          # Journal `when` values must strictly increase: the migrator skips an
+          # entry whose `when` isn't newer than the last applied one.
+          node -e 'const w = require("./drizzle-pg/meta/_journal.json").entries.map((e) => e.when); w.forEach((v, i) => { if (i && v <= w[i - 1]) { console.error(`journal entry ${i} when ${v} <= ${w[i - 1]}`); process.exit(1); } })'
+          # Every journal entry must have been applied by the standard command.
+          expected_migrations=$(node -p 'require("./drizzle-pg/meta/_journal.json").entries.length')
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v expected_migrations="$expected_migrations" <<'SQL'
+          SELECT set_config('ci.expected_migrations', :'expected_migrations', false);
+          DO $$
+          DECLARE
+            expected_tables text[] := ARRAY[
+              'source_cache', 'historical_trades', 'vegas_projection_snapshots',
+              'vegas_projection_upload_chunks', 'player_value_snapshots',
+              'projection_accuracy', 'saved_chart_views', 'player_news_runs',
+              'player_news_items', 'sleeper_connections', 'shared_player_news',
+              'prop_line_snapshots', 'scoring_weights', 'scoring_snapshots',
+              'chat_conversations', 'chat_messages', 'chat_preferences'
+            ];
+            expected_rls text[] := ARRAY[
+              'sleeper_connections', 'prop_line_snapshots', 'scoring_weights',
+              'scoring_snapshots', 'chat_conversations', 'chat_messages',
+              'chat_preferences'
+            ];
+            missing text;
+          BEGIN
+            SELECT string_agg(t, ', ') INTO missing
+            FROM unnest(expected_tables) AS t
+            WHERE NOT EXISTS (
+              SELECT 1 FROM pg_tables
+              WHERE schemaname = 'public' AND tablename = t
+            );
+            IF missing IS NOT NULL THEN
+              RAISE EXCEPTION 'missing tables: %', missing;
+            END IF;
+
+            SELECT string_agg(t, ', ') INTO missing
+            FROM unnest(expected_rls) AS t
+            WHERE NOT EXISTS (
+              SELECT 1 FROM pg_class
+              WHERE relnamespace = 'public'::regnamespace
+                AND relkind = 'r' AND relname = t AND relrowsecurity
+            );
+            IF missing IS NOT NULL THEN
+              RAISE EXCEPTION 'tables without RLS enabled: %', missing;
+            END IF;
+
+            IF (SELECT count(*) FROM pg_policies) < 8 THEN
+              RAISE EXCEPTION 'expected at least 8 RLS policies, found %',
+                (SELECT count(*) FROM pg_policies);
+            END IF;
+
+            IF (SELECT count(*) FROM drizzle.__drizzle_migrations)
+                <> current_setting('ci.expected_migrations')::int THEN
+              RAISE EXCEPTION 'expected % applied migrations, found %',
+                current_setting('ci.expected_migrations'),
+                (SELECT count(*) FROM drizzle.__drizzle_migrations);
+            END IF;
+          END $$;
+          SQL
