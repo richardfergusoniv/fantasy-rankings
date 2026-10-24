@@ -52,7 +52,7 @@ import {
 import { formatRecord } from "../league-team-card";
 import { leaguePowerTeamForPlayer } from "../league-roster";
 import { WindowVirtualList } from "../virtual-list";
-import { currentExpertRanks } from "../expert-ranks";
+import { leagueExpertRanks } from "../expert-ranks";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
 
@@ -556,7 +556,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   const queryClient = useQueryClient();
   const isSeasonLong = effectiveHorizon === "ros" || effectiveHorizon === "dynasty";
   // This week's FantasyPros consensus (weekly horizons only: the Vegas and ECR tabs).
-  const expertRanks = isSeasonLong ? null : currentExpertRanks(dashboard);
+  const expertRanks = isSeasonLong ? null : leagueExpertRanks(dashboard, league);
   const pfnTablesQuery = useQuery({
     queryKey: ["pfn-tables"],
     queryFn: () => api.getPfnTables({}),

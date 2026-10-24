@@ -24,7 +24,7 @@ import {
   matchupProjectionClassName,
   optimizedTotalProjectionClassName,
 } from "./lineup-projection";
-import { currentExpertRanks } from "../expert-ranks";
+import { leagueExpertRanks } from "../expert-ranks";
 import { formatPercent } from "../lib/format-number";
 import { teamOutlook, winPercent, winProbability } from "./win-probability";
 
@@ -147,8 +147,8 @@ export function Lineup({
     () => optimizeLineup(league.starters, league.bench, nowMs),
     [league.starters, league.bench, nowMs],
   );
-  // Experts: the same players on this week's FantasyPros consensus projections (PPR).
-  const experts = currentExpertRanks(dashboard) ?? undefined;
+  // Experts: the same players on this week's FantasyPros consensus projections, in the league's scoring.
+  const experts = leagueExpertRanks(dashboard, league) ?? undefined;
   const hasExperts = experts !== undefined;
   const activeMode = mode === "experts" && !hasExperts ? "current" : mode;
   const withExpertProjection = (player: RosterPlayer): RosterPlayer => expertProjected(player, experts);
