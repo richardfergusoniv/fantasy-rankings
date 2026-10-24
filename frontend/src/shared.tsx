@@ -270,11 +270,6 @@ export function MatchupTag({
   );
 }
 
-/** "Depth WR1": a player's rank at his position on the latest depth chart. */
-export function depthLabel(depth: { position: string; rank: number }): string {
-  return `Depth ${depth.position}${depth.rank}`;
-}
-
 type DepthRank = { position: string; rank: number };
 
 /** How a player moved on the depth chart over the past week; null when he held his rank or was unlisted. */
