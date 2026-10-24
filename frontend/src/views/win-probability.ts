@@ -5,12 +5,17 @@ import {
   liveForecastPoints,
   type LiveForecastPlayer,
 } from "../../../api/_lib/lineup-optimizer";
+import {
+  correlatedWinProbability,
+  normalCdf,
+  projectionSigma,
+  SCORING_WEIGHTS,
+  type WinChancePlayer,
+} from "../../../api/_lib/move-scoring";
 
 /**
- * Spread of one player's weekly score as a share of his projection.
- * Calibrated against 2026 expected-vs-actual points (ffopportunity), where the
- * residual alone runs 0.31 (QB) to 0.41 (WR); rounded up because a pregame
- * projection also misses on usage, which that residual already knows.
+ * @deprecated Prefer projectionSigma(a + b·P*) from move-scoring.
+ * Kept as a fraction-of-projection fallback for K/DEF and unranked players.
  */
 export const SCORE_SPREAD_BY_POSITION: Record<string, number> = {
   QB: 0.4,
@@ -36,9 +41,20 @@ export function remainingShare(player: LiveForecastPlayer): number {
   return elapsed === null ? 0.5 : Math.max(0, 1 - elapsed);
 }
 
+function playerSigma(player: LiveForecastPlayer, forecast: number): number {
+  const pos = player.position;
+  const basis = player.projection ?? Math.max(forecast, UNPROJECTED_SPREAD_BASIS);
+  if (pos === "QB" || pos === "RB" || pos === "WR" || pos === "TE") {
+    return projectionSigma(basis, SCORING_WEIGHTS.spreadA[pos], SCORING_WEIGHTS.spreadB[pos])
+      * remainingShare(player);
+  }
+  const spread = SCORE_SPREAD_BY_POSITION[pos] ?? DEFAULT_SCORE_SPREAD;
+  return spread * Math.max(0, basis) * remainingShare(player);
+}
+
 export type TeamOutlook = { mean: number; sd: number; low: number; high: number };
 
-/** Projected final total and its spread for a lineup (players treated as independent). */
+/** Projected final total and its spread for a lineup (independent approx for the outlook card). */
 export function teamOutlook(players: readonly LiveForecastPlayer[], now = Date.now()): TeamOutlook | null {
   let mean = 0;
   let variance = 0;
@@ -48,11 +64,7 @@ export function teamOutlook(players: readonly LiveForecastPlayer[], now = Date.n
     if (forecast === null) continue;
     counted += 1;
     mean += forecast;
-    const spread = SCORE_SPREAD_BY_POSITION[player.position] ?? DEFAULT_SCORE_SPREAD;
-    // A player with no projection but a live game still
-    // carries uncertainty, even while still scoreless.
-    const basis = player.projection ?? Math.max(forecast, UNPROJECTED_SPREAD_BASIS);
-    const sd = spread * Math.max(0, basis) * remainingShare(player);
+    const sd = playerSigma(player, forecast);
     variance += sd * sd;
   }
   if (counted === 0) return null;
@@ -65,22 +77,25 @@ export function teamOutlook(players: readonly LiveForecastPlayer[], now = Date.n
   };
 }
 
-/** Standard normal CDF (Abramowitz–Stegun 7.1.26 erf, error < 1.5e-7). */
-export function normalCdf(z: number): number {
-  const x = Math.abs(z) / Math.SQRT2;
-  const t = 1 / (1 + 0.3275911 * x);
-  const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
-  const erf = 1 - poly * Math.exp(-x * x);
-  return z >= 0 ? 0.5 * (1 + erf) : 0.5 * (1 - erf);
-}
+export { normalCdf };
 
-/** Chance the first team outscores the second, from 0 to 1. */
+/** Chance the first team outscores the second, from 0 to 1 (independent fallback). */
 export function winProbability(mine: TeamOutlook, theirs: TeamOutlook): number {
   const spread = Math.sqrt(mine.sd * mine.sd + theirs.sd * theirs.sd);
   const margin = mine.mean - theirs.mean;
   if (spread === 0) return margin > 0 ? 1 : margin < 0 ? 0 : 0.5;
-  // Something is still to play, so stay off the certain endpoints even when the CDF rounds to them.
   return Math.min(1 - Number.EPSILON, Math.max(Number.EPSILON, normalCdf(margin / spread)));
+}
+
+/**
+ * Correlated lineup win chance from move-scoring pair correlations.
+ * Prefer this over independent winProbability when full player context is available.
+ */
+export function correlatedTeamWinProbability(
+  yours: readonly WinChancePlayer[],
+  opponent: readonly WinChancePlayer[],
+): number {
+  return correlatedWinProbability(yours, opponent);
 }
 
 /** Percent to the nearest tenth for display, kept off 0 and 100 until the result is certain. */

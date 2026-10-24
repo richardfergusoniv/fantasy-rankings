@@ -178,6 +178,7 @@ export const api = {
     message: string;
     history?: Array<{ role: "user" | "assistant"; content: string }>;
     chatId?: string;
+    horizon?: "week" | "ros" | "dynasty" | null;
   }): Promise<{
     ok: true;
     reply: string;
@@ -196,6 +197,7 @@ export const api = {
         message: args.message,
         history: args.history ?? [],
         chatId: args.chatId,
+        horizon: args.horizon ?? "week",
       }),
     });
     const bodyText = await res.text().catch(() => "");

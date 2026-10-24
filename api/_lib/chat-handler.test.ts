@@ -166,7 +166,8 @@ describe("api/chat handler", () => {
         apiKey: "sk-or-test",
         userMessage: "Who is my WR1?",
         systemPrompt: "system-with-prefs",
-        ctx: { userId: "u1", sleeperUserId: "s1" },
+        scoringWindow: "week",
+        ctx: expect.objectContaining({ userId: "u1", sleeperUserId: "s1", scoringWindow: "week" }),
       }),
     );
     expect(persistMock).toHaveBeenCalledWith(

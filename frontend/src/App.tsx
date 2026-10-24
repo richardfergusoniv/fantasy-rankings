@@ -1293,7 +1293,7 @@ export function App() {
             )
             : tab === "chat" ? (
               <Suspense fallback={<SectionLoading label="Loading chat…" />}>
-                <LazyChatPanel />
+                <LazyChatPanel horizon={dashboardUrl.state.horizon} />
               </Suspense>
             )
             : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={(rosterId) => setRosterCardRosterId(rosterId)} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />

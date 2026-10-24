@@ -18,6 +18,8 @@ import {
   scoreProjectedPlayerStats,
   sleeperActualStats,
 } from "./sleeper.js";
+import { optimizeTradeRoster } from "./lineup-optimizer.js";
+import { scoreTrade } from "./move-scoring.js";
 import { loadHistoricalTrades } from "./trades.js";
 import {
   dispatchPreferenceChatTool,
@@ -33,6 +35,8 @@ export type ChatToolContext = {
   sleeperUserId: string;
   /** Lazy dashboard promise shared across tool calls in one question. */
   dashboardPromise?: Promise<Dashboard>;
+  /** Ranking window the user is viewing — drives which score the model explains. */
+  scoringWindow?: "week" | "season_long" | "dynasty";
 };
 
 export type OpenAiToolDefinition = {
@@ -123,7 +127,7 @@ export const CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "evaluate_trade",
       description:
-        "Evaluate a two-sided trade with the same FantasyCalc values and waiver-spot adjustment the trade calculator uses.",
+        "Evaluate a two-sided trade with deterministic move-scoring labels and fair-trade z bands. Explain the scores; never change them.",
       parameters: {
         type: "object",
         properties: {
@@ -692,17 +696,103 @@ async function toolEvaluateTrade(
   const giveAdjusted = giveTotal + adjustment.give;
   const getAdjusted = getTotal + adjustment.get;
   const margin = getAdjusted - giveAdjusted;
-  const verdict =
-    margin === 0
-      ? "This trade is even."
-      : margin > 0
-        ? `You win by ${margin}.`
-        : `Partner wins by ${Math.abs(margin)}.`;
+
+  const slots = league.tradeStarterSlots.length > 0
+    ? league.tradeStarterSlots
+    : league.starters.map((p) => p.lineupSlot ?? p.position);
+  const me = league.tradeTeams.find((team) => team.isUser);
+  const giveIds = new Set(args.givePlayerIds);
+  const rosterSource = me
+    ? me.players.map((p) => ({
+      playerId: p.playerId,
+      name: p.name,
+      position: p.position,
+      lineupSlot: null as string | null,
+      isStarter: false,
+      projection: null as number | null,
+      actual: null as number | null,
+    }))
+    : [...league.starters, ...league.bench].map((p) => ({
+      playerId: p.playerId,
+      name: p.name,
+      position: p.position,
+      lineupSlot: p.lineupSlot,
+      isStarter: p.isStarter,
+      projection: p.projection,
+      actual: p.actual,
+    }));
+  const myPlayers = rosterSource.map((p) => ({
+    ...p,
+    isStarter: league.starters.some((s) => s.playerId === p.playerId),
+  }));
+  const before = optimizeTradeRoster(myPlayers, slots);
+  const afterPlayers = [
+    ...myPlayers.filter((p) => !giveIds.has(p.playerId)),
+    ...get.resolved.map((asset) => ({
+      playerId: asset.playerId,
+      name: asset.name,
+      position: asset.position,
+      lineupSlot: null as string | null,
+      isStarter: false,
+      projection: null as number | null,
+      actual: null as number | null,
+    })),
+  ];
+  const after = optimizeTradeRoster(afterPlayers, slots);
+
+  const power = league.powerRankingsSeasonLong.length > 0
+    ? league.powerRankingsSeasonLong
+    : league.powerRankingsWeek;
+  const myPower = power.find((row) => row.isUser);
+  const myRankBefore = myPower?.rank ?? 1;
+  // Approximate post-trade rank from value margin only (full re-rank is in trade-power).
+  const myRankAfter = margin >= 0 ? Math.max(1, myRankBefore - 1) : myRankBefore + 1;
+
+  const move = scoreTrade({
+    week: {
+      yourLineupBefore: before.score,
+      yourLineupAfter: after.score,
+    },
+    seasonLong: {
+      give: give.resolved,
+      get: get.resolved,
+      yourStarterValueBefore: giveAdjusted,
+      yourStarterValueAfter: getAdjusted,
+      yourPowerRankBefore: myRankBefore,
+      yourPowerRankAfter: myRankAfter,
+      fillsHole: false,
+    },
+    dynasty: league.seasonLongFormat.isDynasty
+      ? {
+        give: give.resolved,
+        get: get.resolved,
+        yourStarterValueBefore: giveAdjusted,
+        yourStarterValueAfter: getAdjusted,
+        yourPowerRankBefore: myRankBefore,
+        yourPowerRankAfter: myRankAfter,
+        fillsHole: false,
+      }
+      : undefined,
+    isDynasty: league.seasonLongFormat.isDynasty,
+  });
+
+  const windowKey = ctx.scoringWindow === "dynasty" && move.dynasty
+    ? "dynasty"
+    : ctx.scoringWindow === "season_long"
+      ? "season_long"
+      : "week";
+  const primary = windowKey === "dynasty" && move.dynasty
+    ? move.dynasty
+    : windowKey === "season_long"
+      ? move.seasonLong
+      : move.week;
 
   return {
     ok: true as const,
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
+    scoringWindow: windowKey,
+    note: "Labels and scores are from move-scoring. Explain them; do not re-rank.",
     give: give.resolved,
     get: get.resolved,
     giveTotal,
@@ -711,7 +801,10 @@ async function toolEvaluateTrade(
     giveAdjustedTotal: giveAdjusted,
     getAdjustedTotal: getAdjusted,
     margin,
-    verdict,
+    scoring: move,
+    primaryLabel: primary.label,
+    primaryScore: primary.score,
+    verdict: `${primary.label} (${primary.score}): ${primary.reasons[0]?.effect ?? ""}`,
     unsupportedSettings: league.tradeValuation.unsupportedSettings,
   };
 }
