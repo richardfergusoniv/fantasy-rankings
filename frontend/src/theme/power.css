@@ -58,8 +58,8 @@
 .power-team-card-summary span, .power-team-card-summary strong { display: block; }
 .power-team-card-summary span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .power-team-card-summary strong { margin-top: 3px; font-size: var(--type-display); line-height: 1; font-weight: 700; }
-.power-team-card-positions { display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr)); border-bottom: 1px solid var(--hairline); }
-.power-team-card-positions > div { min-width: 0; padding: 8px 7px; border-right: 1px solid var(--hairline); text-align: center; }
+.power-team-card-positions { display: flex; border-bottom: 1px solid var(--hairline); }
+.power-team-card-positions > div { flex: 1 1 0; min-width: 0; padding: 8px 2px; border-right: 1px solid var(--hairline); text-align: center; }
 .power-team-card-positions > div:last-child { border-right: 0; }
 .power-team-card-positions span, .power-team-card-positions strong { display: block; }
 .power-team-card-positions span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
