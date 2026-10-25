@@ -290,6 +290,47 @@ describe("propStatActual / history", () => {
       "No History",
     ]);
   });
+
+  it("keeps one-time hits below proven lines", () => {
+    const rows = [
+      { hitRate: 1, hits: 1, name: "One Timer", stat: "targets" },
+      { hitRate: 0, hits: 0, name: "Never Hit", stat: "targets" },
+      { hitRate: null, hits: 0, name: "No History", stat: "targets" },
+      { hitRate: 5 / 6, hits: 5, name: "Proven", stat: "targets" },
+      { hitRate: 0.5, hits: 2, name: "Two Hits", stat: "targets" },
+    ];
+    rows.sort(compareHitRateDesc);
+    expect(rows.map((row) => row.name)).toEqual([
+      "Proven",
+      "Two Hits",
+      "One Timer",
+      "Never Hit",
+      "No History",
+    ]);
+  });
+
+  it("breaks a proven rate tie by hit count", () => {
+    const rows = [
+      { hitRate: 1, hits: 2, name: "Two For Two", stat: "targets" },
+      { hitRate: 1, hits: 4, name: "Four For Four", stat: "targets" },
+    ];
+    rows.sort(compareHitRateDesc);
+    expect(rows.map((row) => row.name)).toEqual(["Four For Four", "Two For Two"]);
+  });
+
+  it("stays transitive when only some rows carry a hit count", () => {
+    const oneTimer = { hitRate: 1, hits: 1, name: "One Timer", stat: "targets" };
+    const noCount = { hitRate: 0.9, name: "No Count", stat: "targets" };
+    const proven = { hitRate: 0.8, hits: 5, name: "Proven", stat: "targets" };
+    // A count-less row counts as proven, so both sit above the one-timer
+    // and order between themselves by rate — no comparison cycle.
+    expect(compareHitRateDesc(noCount, proven)).toBeLessThan(0);
+    expect(compareHitRateDesc(proven, oneTimer)).toBeLessThan(0);
+    expect(compareHitRateDesc(noCount, oneTimer)).toBeLessThan(0);
+    const rows = [oneTimer, proven, noCount];
+    rows.sort(compareHitRateDesc);
+    expect(rows.map((row) => row.name)).toEqual(["No Count", "Proven", "One Timer"]);
+  });
 });
 
 describe("history indexes", () => {

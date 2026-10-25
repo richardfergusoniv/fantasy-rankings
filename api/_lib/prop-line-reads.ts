@@ -370,17 +370,32 @@ export function impliedProbability(odds: number | null): number | null {
 }
 
 /**
- * Props table order: best over hit rate first. Rows with no decided games
- * (hitRate null) sink below every rated row, including a 0% rate; ties
- * fall back to player name, then stat.
+ * Props table order: best hit rate first, with one exception — a line
+ * whose played side has hit only once (or never) has not proven anything,
+ * so one-timers rank below every line with two or more hits no matter
+ * their rate (a 1-for-1 does not sit above a 5-for-6). Within a group the
+ * higher rate wins; a rate tie goes to more hits. Rows with no decided
+ * games (hitRate null) sink below every rated row, including a 0% rate;
+ * remaining ties fall back to player name, then stat. A row that does not
+ * carry a hit count counts as proven (its rate speaks for itself). The
+ * order is a fixed key per row, so comparisons stay transitive even when
+ * a list mixes rows with and without hit counts.
  */
 export function compareHitRateDesc(
-  left: { hitRate: number | null; name: string; stat: string },
-  right: { hitRate: number | null; name: string; stat: string },
+  left: { hitRate: number | null; hits?: number; name: string; stat: string },
+  right: { hitRate: number | null; hits?: number; name: string; stat: string },
 ): number {
-  const leftRate = left.hitRate ?? -1;
-  const rightRate = right.hitRate ?? -1;
-  if (rightRate !== leftRate) return rightRate - leftRate;
+  const keyOf = (row: { hitRate: number | null; hits?: number }): [number, number, number, number] => [
+    row.hitRate === null ? 1 : 0,
+    row.hits !== undefined && row.hits < 2 ? 1 : 0,
+    -(row.hitRate ?? -1),
+    -(row.hits ?? -1),
+  ];
+  const leftKey = keyOf(left);
+  const rightKey = keyOf(right);
+  for (let index = 0; index < leftKey.length; index += 1) {
+    if (leftKey[index] !== rightKey[index]) return leftKey[index] - rightKey[index];
+  }
   return left.name.localeCompare(right.name) || left.stat.localeCompare(right.stat);
 }
 
