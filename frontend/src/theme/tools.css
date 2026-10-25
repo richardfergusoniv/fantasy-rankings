@@ -841,22 +841,15 @@
 }
 /* Game lines: the week's slate as a rail of tiles, then the picked game's board. */
 .game-slate {
-  position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   gap: 8px;
   padding: 2px 2px 6px;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  scroll-padding-inline: 16px;
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
 }
 .game-slate-tile {
   display: grid;
-  flex: 0 0 auto;
   align-content: center;
   gap: 2px;
-  min-width: 128px;
   min-height: 68px;
   padding: 8px 12px;
   border: 1px solid var(--hairline);
@@ -865,11 +858,7 @@
   color: var(--text);
   font: inherit;
   text-align: left;
-  scroll-snap-align: start;
   cursor: pointer;
-}
-.game-slate-tile.is-all {
-  min-width: 96px;
 }
 .game-slate-tile:hover {
   border-color: var(--border);
