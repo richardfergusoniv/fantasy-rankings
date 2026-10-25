@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "../api";
-import { waiverStatusLabel } from "../waiver-status";
 import type {
   Dashboard,
   League,
@@ -551,7 +550,6 @@ export function ConnectedTeamCard({
 }
 
 export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, onOpenLeagueTeam, rankingPosition, rankingHorizon, rankingQuery, onRankingFiltersChange, linkedPlayerId, onOpenLinkedPlayer }: { dashboard: Dashboard; league: League; availableOnly: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void; onOpenLeagueTeam?: (rosterId: number) => void; rankingPosition: RankingPosition | null; rankingHorizon: RankingHorizon | null; rankingQuery: string | null; onRankingFiltersChange: (filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => void } & PlayerLink) {
-  const waiverLine = waiverStatusLabel(league.waivers);
   const [position, setPosition] = useState<PositionFilter>(rankingPosition ?? "QB");
   const [query, setQuery] = useState(rankingQuery ?? "");
   const [rankingMode, setRankingMode] = useState<RankingHorizon>(rankingHorizon ?? "week");
@@ -891,7 +889,6 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
 
   return (
     <section className="rankings-view">
-      {availableOnly && waiverLine ? <p className="waiver-status-line">{waiverLine}</p> : null}
       <div className="rankings-toolbar">
         <label className="search-field">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
