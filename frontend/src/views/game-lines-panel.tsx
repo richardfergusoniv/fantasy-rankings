@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ALL_GAMES_PICKER_ID,
   GAME_LINES_STALE_MS,
@@ -192,7 +192,9 @@ function GameLineCardBlock({
   );
 }
 
-/** The week's slate as tiles; picking one filters the props below. */
+/** The week's slate as tiles; picking one filters the props below. The
+ * rail swipes sideways; a chevron beside it (never over a tile) signals
+ * more games remain to the right, and goes dark at the end of the rail. */
 function GameSlate({
   cards,
   selectedId,
@@ -202,29 +204,58 @@ function GameSlate({
   selectedId: string;
   onSelect: (id: string) => void;
 }) {
+  const railRef = useRef<HTMLDivElement>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const updateMore = useCallback(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    setHasMore(rail.scrollWidth - rail.clientWidth - rail.scrollLeft > 4);
+  }, []);
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const syncRail = () => {
+      const selected = rail.querySelector<HTMLElement>("[aria-pressed='true']");
+      if (selected) {
+        const viewport = rail.getBoundingClientRect();
+        const tile = selected.getBoundingClientRect();
+        if (tile.left < viewport.left - 1 || tile.right > viewport.right + 1) {
+          rail.scrollTo({ left: rail.scrollLeft + tile.left - viewport.left });
+        }
+      }
+      updateMore();
+    };
+    syncRail();
+    const observer = new ResizeObserver(syncRail);
+    observer.observe(rail);
+    return () => observer.disconnect();
+  }, [cards, selectedId, updateMore]);
   return (
-    <div className="game-slate" role="group" aria-label="Game">
-      <button
-        type="button"
-        className="game-slate-tile is-all"
-        aria-pressed={selectedId === ALL_GAMES_PICKER_ID}
-        onClick={() => onSelect(ALL_GAMES_PICKER_ID)}
-      >
-        <strong>All games</strong>
-      </button>
-      {cards.map((card) => (
+    <div className="game-slate-rail" data-more={hasMore || undefined}>
+      <div className="game-slate" role="group" aria-label="Game" ref={railRef} onScroll={updateMore}>
         <button
-          key={card.gameId}
           type="button"
-          className="game-slate-tile"
-          aria-pressed={selectedId === card.gameId}
-          onClick={() => onSelect(card.gameId)}
+          className="game-slate-tile is-all"
+          aria-pressed={selectedId === ALL_GAMES_PICKER_ID}
+          onClick={() => onSelect(ALL_GAMES_PICKER_ID)}
         >
-          <strong>{card.matchup}</strong>
-          <span className="game-slate-kickoff">{card.kickoffPt}</span>
-          <span className="game-slate-lines">{card.spread} · {card.total}</span>
+          <strong>All games</strong>
         </button>
-      ))}
+        {cards.map((card) => (
+          <button
+            key={card.gameId}
+            type="button"
+            className="game-slate-tile"
+            aria-pressed={selectedId === card.gameId}
+            onClick={() => onSelect(card.gameId)}
+          >
+            <strong>{card.matchup}</strong>
+            <span className="game-slate-kickoff">{card.kickoffPt}</span>
+            <span className="game-slate-lines">{card.spread} · {card.total}</span>
+          </button>
+        ))}
+      </div>
+      <span className="game-slate-more" aria-hidden="true">›</span>
     </div>
   );
 }
