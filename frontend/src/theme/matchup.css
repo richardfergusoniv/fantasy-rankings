@@ -89,6 +89,9 @@
 .matchup-reference-tag { display: inline-flex; min-height: 18px; align-items: center; padding: 1px 5px 0; border: 1px solid var(--hairline); border-radius: var(--radius-xs); background: transparent; color: var(--text); font-size: var(--type-caption); line-height: 1; font-weight: 700; white-space: nowrap; }
 .matchup-reference-button.matchup-reference-tag { min-height: 44px; gap: 2px; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .matchup-reference-button-label { display: inline-flex; min-height: 18px; align-items: center; padding: 1px 4px 0; border: 1px solid var(--border); border-radius: var(--radius-xs); background: transparent; color: var(--text); }
+.matchup-data-header.matchup-data-header-minimal { justify-content: flex-end; }
+.matchup-reference-button.matchup-team-open .matchup-reference-button-label { min-height: 40px; padding: 6px 14px 5px; border-radius: var(--radius-sm); font-size: var(--type-section); }
+.matchup-team-open .matchup-reference-arrow { font-size: var(--type-section); }
 .matchup-reference-arrow { color: var(--link); font-size: var(--type-body, 1rem); font-weight: 700; line-height: 1; }
 .matchup-reference-tag.sos-soft { background: var(--stat-strength-soft); color: var(--stat-strength-readable); font-weight: 700; }
 .matchup-reference-tag.sos-tough { background: var(--stat-weakness-soft); color: var(--stat-weakness-readable); font-weight: 700; }
