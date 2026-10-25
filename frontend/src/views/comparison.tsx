@@ -44,16 +44,6 @@ type ComparisonMetricValue = {
   value: number;
 };
 
-function gameTimeLabel(value: string | null): string {
-  if (!value) return "Kickoff time not posted";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Kickoff time not posted";
-  const hasClock = /T\d{2}:\d{2}/.test(value);
-  return new Intl.DateTimeFormat(undefined, hasClock
-    ? { weekday: "short", hour: "numeric", minute: "2-digit" }
-    : { weekday: "short" }).format(date);
-}
-
 function comparisonValue(entity: ComparisonEntity | undefined, metric: Metric): ComparisonMetricValue | null {
   if (!entity) return null;
   const value = metricSourceValue(entity.values, metric);
@@ -282,7 +272,6 @@ function ComparisonBoardHeader({ left, right, leftPlayerId, rightPlayerId, trend
               {player.team && player.opponent && !player.isBye
                 ? <MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase ?? null }) : undefined} />
                 : <span>{player.team || "Team TBD"} · {comparisonMatchupLabel(player)}</span>}
-              {player.gameTime ? <time>{gameTimeLabel(player.gameTime)}</time> : null}
               {tier ? <span className="depth-chart-tag" title="Where this week's rank falls at the position">{tier}</span> : null}
               <ComparisonPlayerChips leagueId={leagueId} playerId={playerId} position={player.position} team={player.team} weeklyRank={player.values.leaguePositionRank} leagueSize={leagueSize} depth={depth} playerLists={playerLists} />
               {depthMove ? <DepthChangeMark change={depthMove} /> : null}
@@ -417,7 +406,6 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
               <span className="comparison-result-primary"><strong>{entity.name}</strong></span>
               <span className="comparison-result-meta">
                 <span>{comparisonPickMeta(entity)}</span>
-                {entity.gameTime ? <time>{gameTimeLabel(entity.gameTime)}</time> : null}
               </span>
             </button>
           ))}
