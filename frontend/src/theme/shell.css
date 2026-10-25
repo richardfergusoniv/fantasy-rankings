@@ -170,6 +170,18 @@ span.ticker-item:active { background: transparent; }
   font-size: var(--page-tab-font-size);
   font-weight: var(--page-tab-font-weight);
 }
+/* The horizon toggles (Players Rankings/Waivers and League Power scope:
+   Vegas / Season long / Dynasty) run at half the page-tab height. */
+.segmented-control.rankings-mode-toggle,
+.segmented-control.power-scope-toggle {
+  min-height: calc(var(--page-tab-height) / 2);
+  height: calc(var(--page-tab-height) / 2);
+}
+.segmented-control.rankings-mode-toggle button,
+.segmented-control.power-scope-toggle button {
+  min-height: calc((var(--page-tab-height) / 2) - (2 * var(--tab-track-padding)));
+  height: calc((var(--page-tab-height) / 2) - (2 * var(--tab-track-padding)));
+}
 /* Every Radix tab row (card tabs, comparison, matchup, team card) uses the same
    track, buttons and active state as the SegmentedControl, at sub-tab size. */
 [data-slot="tabs-list"] {
