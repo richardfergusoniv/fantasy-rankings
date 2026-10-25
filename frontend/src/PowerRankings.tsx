@@ -162,7 +162,7 @@ export function PowerRankings({
           {leagueAveragePicks !== null ? (
             <div role="listitem"><span>PICKS</span><strong>{formatWhole(leagueAveragePicks)}</strong></div>
           ) : null}
-          {isWeekly ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className="power-position-total power-position-total-highlight" role="listitem"><span>Total</span><strong>{formatWhole(leagueAverageDisplayTotal)}</strong></div>}
+          {isWeekly ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className={leagueAveragePicks !== null ? "power-position-total-highlight" : "power-position-total power-position-total-highlight"} role="listitem"><span>Total</span><strong>{formatWhole(leagueAverageDisplayTotal)}</strong></div>}
         </div>
       </section>
 
