@@ -12,7 +12,6 @@ import type {
   PfnTable,
   PositionFilter,
   TeamCardSelection,
-  TeamSituational,
   TeamSituationalRow,
   TeamUsage,
 } from "../dashboard-types";
@@ -27,7 +26,6 @@ import {
   isBoomBustPosition,
   matchupLabel,
   movementPercent,
-  pfnDateLabel,
   pfnNumber,
   pfnRankForRow,
   positionsForFilter,
@@ -154,7 +152,6 @@ export function TeamDataModal({
   usage,
   record,
   situational,
-  situationalSource,
   usageLeague = [],
   recordLeague = [],
   situationalLeague = [],
@@ -173,7 +170,6 @@ export function TeamDataModal({
   usage: TeamUsage | null;
   record: NflTeamRecord | null;
   situational: TeamSituationalRow | null;
-  situationalSource: Pick<TeamSituational, "fetchedAt" | "sourceUrl"> | null;
   usageLeague?: readonly TeamUsage[];
   recordLeague?: readonly NflTeamRecord[];
   situationalLeague?: readonly TeamSituationalRow[];
@@ -307,7 +303,8 @@ export function TeamDataModal({
         <article ref={dialogRef} className="matchup-data-card team-data-card" role="dialog" aria-modal="true" aria-labelledby="team-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
           <div className="matchup-data-header">
             <div>
-              <h2 id="team-card-title">{teamName}</h2>
+              <h2 id="team-card-title">{selection.team} team card</h2>
+              <span>{teamName}</span>
             </div>
             <button type="button" onClick={onClose} aria-label="Close team data">×</button>
           </div>
@@ -483,11 +480,6 @@ export function TeamDataModal({
                   {coloredStat(explosivePct === null ? "—" : formatPercent(explosivePct), pfnRankForRow(offense, offenseRow, "expl_pct"))}
                 </div>
               </div>
-              {situationalSource ? (
-                <p className="team-card-source">
-                  Situational rates · <a href={situationalSource.sourceUrl} target="_blank" rel="noreferrer"><span translate="no">Sportskeeda</span><span className="sr-only"> (opens in a new tab)</span></a> · fetched {pfnDateLabel(situationalSource.fetchedAt)}
-                </p>
-              ) : null}
             </section>
             </div>
           )}
@@ -537,7 +529,6 @@ export function ConnectedTeamCard({
       usage={dashboard.analytics.teamUsage.find((row) => (canonicalNflTeam(row.team) ?? row.team) === teamCode) ?? null}
       record={(dashboard.analytics.teamRecords ?? []).find((row) => (canonicalNflTeam(row.team) ?? row.team) === teamCode) ?? null}
       situational={situational}
-      situationalSource={teamSituational ? { fetchedAt: teamSituational.fetchedAt, sourceUrl: teamSituational.sourceUrl } : null}
       usageLeague={dashboard.analytics.teamUsage}
       recordLeague={dashboard.analytics.teamRecords ?? []}
       situationalLeague={teamSituational?.rows ?? []}
@@ -1109,7 +1100,6 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
           usage={teamUsageByTeam.get(canonicalNflTeam(selectedTeam.team) ?? selectedTeam.team) ?? null}
           record={teamRecordByTeam.get(canonicalNflTeam(selectedTeam.team) ?? selectedTeam.team) ?? null}
           situational={teamSituationalByTeam.get(canonicalNflTeam(selectedTeam.team) ?? selectedTeam.team) ?? null}
-          situationalSource={teamSituational ? { fetchedAt: teamSituational.fetchedAt, sourceUrl: teamSituational.sourceUrl } : null}
           usageLeague={dashboard.analytics.teamUsage}
           recordLeague={dashboard.analytics.teamRecords ?? []}
           situationalLeague={teamSituational?.rows ?? []}
