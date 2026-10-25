@@ -290,6 +290,33 @@ describe("propStatActual / history", () => {
       "No History",
     ]);
   });
+
+  it("keeps one-time hits below proven lines", () => {
+    const rows = [
+      { hitRate: 1, hits: 1, name: "One Timer", stat: "targets" },
+      { hitRate: 0, hits: 0, name: "Never Hit", stat: "targets" },
+      { hitRate: null, hits: 0, name: "No History", stat: "targets" },
+      { hitRate: 5 / 6, hits: 5, name: "Proven", stat: "targets" },
+      { hitRate: 0.5, hits: 2, name: "Two Hits", stat: "targets" },
+    ];
+    rows.sort(compareHitRateDesc);
+    expect(rows.map((row) => row.name)).toEqual([
+      "Proven",
+      "Two Hits",
+      "One Timer",
+      "Never Hit",
+      "No History",
+    ]);
+  });
+
+  it("breaks a proven rate tie by hit count", () => {
+    const rows = [
+      { hitRate: 1, hits: 2, name: "Two For Two", stat: "targets" },
+      { hitRate: 1, hits: 4, name: "Four For Four", stat: "targets" },
+    ];
+    rows.sort(compareHitRateDesc);
+    expect(rows.map((row) => row.name)).toEqual(["Four For Four", "Two For Two"]);
+  });
 });
 
 describe("history indexes", () => {

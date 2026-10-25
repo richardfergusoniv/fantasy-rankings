@@ -67,6 +67,8 @@ type PropTableRow = {
   sleeperFavorable: boolean;
   /** The rate for the side played on this row (see direction); rows sort by it. */
   hitRate: number | null;
+  /** Hits for the side played on this row; one-hit lines sort below proven ones. */
+  hits: number;
   overs: number;
   unders: number;
   cells: Array<{ week: number; line: number; actual: number; result: PropGameResult }>;
@@ -250,7 +252,7 @@ export function GameLinesPanel({
   const [position, setPosition] = useState<PropPosition | "ALL">("ALL");
   const [statId, setStatId] = useState<string>("ALL");
   const [userGameId, setUserGameId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<PropSortKey>("odds");
+  const [sortKey, setSortKey] = useState<PropSortKey>("hit");
   const [sortAsc, setSortAsc] = useState(false);
 
   const gamesQuery = useQuery({
@@ -476,6 +478,7 @@ export function GameLinesPanel({
           ? (direction === "over" ? line.sleeper.line < line.line : line.sleeper.line > line.line)
           : false,
         hitRate: displayRate,
+        hits: direction === null ? 0 : direction === "under" ? history.unders : history.overs,
         overs: history.overs,
         unders: history.unders,
         cells: history.cells,
@@ -549,7 +552,10 @@ export function GameLinesPanel({
           break;
         }
         case "hit":
-          cmp = (a.hitRate ?? -1) - (b.hitRate ?? -1);
+          // The shared hit-rate order (best first, one-timers demoted),
+          // negated into this switch's ascending convention; the dir
+          // multiplier below flips it to descending for the default view.
+          cmp = -compareHitRateDesc(a, b);
           break;
       }
       if (cmp !== 0) return cmp * dir;
