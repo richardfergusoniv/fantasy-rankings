@@ -542,11 +542,8 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
     <ModalPortal>
       <div className="matchup-card-backdrop" onClick={onClose}>
         <article ref={dialogRef} className="matchup-data-card" role="dialog" aria-modal="true" aria-labelledby="matchup-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
-          <div className="matchup-data-header">
-            <div>
-              <h2 id="matchup-card-title">{matchup.team} {matchup.isAway ? "@" : "vs"} {matchup.opponent}</h2>
-              <span>PFN grades</span>
-            </div>
+          <div className="matchup-data-header matchup-data-header-minimal">
+            <h2 id="matchup-card-title" className="sr-only">{matchup.team} {matchup.isAway ? "@" : "vs"} {matchup.opponent}</h2>
             <button type="button" onClick={onClose} aria-label="Close matchup data">×</button>
           </div>
           {toolLinks ? <ToolLinks ariaLabel={`Open ${matchup.team} and ${matchup.opponent} in a tool`} links={toolLinks} /> : null}
