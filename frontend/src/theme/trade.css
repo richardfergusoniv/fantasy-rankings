@@ -14,8 +14,9 @@
 .trade-history-season { margin-top: 18px; }
 .trade-history-season:first-of-type { margin-top: 2px; }
 .trade-history-season > h2 { margin: 0; padding: 0 2px 7px; border-bottom: 1px solid var(--border); font-size: var(--type-display); line-height: 1; letter-spacing: -.02em; }
-.trade-history-list { background: var(--surface); }
-.trade-history-row { display: grid; width: 100%; min-height: 104px; gap: 7px; padding: 11px 2px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.trade-history-list { border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--card); overflow: clip; }
+.trade-history-row { display: grid; width: 100%; min-height: 104px; gap: 7px; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.trade-history-row:last-child { border-bottom: 0; }
 .trade-history-row:active { background: var(--surface-2); }
 .trade-history-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 .trade-history-row-heading { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 12px; }
