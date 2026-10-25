@@ -24,7 +24,9 @@ import {
   buildPropHistory,
   compareHitRateDesc,
   impliedProbability,
+  indexPlayedWeeks,
   indexWeekStatsByPlayer,
+  indexWeeklyLines,
   isHiddenHalfPointPropStat,
   isPropStatId,
   propPlayerMatchKey,
@@ -66,13 +68,18 @@ type PropTableRow = {
   hitRate: number | null;
   overs: number;
   unders: number;
-  cells: Array<{ week: number; actual: number; result: PropGameResult }>;
+  cells: Array<{ week: number; line: number; actual: number; result: PropGameResult }>;
+  /** Weeks the player took at least one offensive snap (prior weeks). */
+  playedWeeks: ReadonlySet<number>;
   rostered: boolean;
   /** On this week's opponent's roster in this league. */
   opponent: boolean;
-  /** His players are played as unders; everyone else as overs. */
+  /** The side that has hit more often against each week's own line. */
   direction: "over" | "under";
 };
+
+const EMPTY_WEEKS: ReadonlySet<number> = new Set();
+const EMPTY_LINES: ReadonlyMap<number, number> = new Map();
 
 async function fetchText(url: string): Promise<string> {
   const response = await fetch(url);
@@ -372,6 +379,16 @@ export function GameLinesPanel({
     [priorStats],
   );
 
+  const playedWeeksByPlayer = useMemo(
+    () => indexPlayedWeeks(historyQuery.data?.snaps ?? []),
+    [historyQuery.data?.snaps],
+  );
+
+  const weeklyLinesByKey = useMemo(
+    () => indexWeeklyLines(propLinesQuery.data?.propLines.weeklyLines ?? []),
+    [propLinesQuery.data?.propLines.weeklyLines],
+  );
+
   const historyWeeks = useMemo(
     () => Array.from({ length: Math.max(0, week - 1) }, (_, index) => index + 1),
     [week],
@@ -424,17 +441,22 @@ export function GameLinesPanel({
       const matchKey = propPlayerMatchKey(line.name, team, positionCode);
       const rostered = rosterIds.has(line.playerId) || rosterKeys.has(matchKey);
       const opponent = !rostered && (opponentIds.has(line.playerId) || opponentKeys.has(matchKey));
-      // His players are played as unders, everyone else as overs; the
-      // row's rate, sort, and highlight all follow that direction.
-      const direction = rostered ? "under" : "over";
 
       const weekRowsForPlayer = weekStatsByPlayer.get(matchKey)
         ?? weekStatsByPlayer.get(propPlayerMatchKey(line.name, line.team, positionCode))
         ?? [];
-      const history = buildPropHistory(line.stat, line.line, weekRowsForPlayer);
+      const playedWeeks = playedWeeksByPlayer.get(matchKey)
+        ?? playedWeeksByPlayer.get(propPlayerMatchKey(line.name, line.team, positionCode))
+        ?? EMPTY_WEEKS;
+      const weeklyLines = weeklyLinesByKey.get(`${line.playerId}|${line.stat}`) ?? EMPTY_LINES;
+      const history = buildPropHistory(line.stat, weeklyLines, weekRowsForPlayer, playedWeeks);
+      // The row plays whichever side has hit more often against each
+      // week's own line; the rate, odds, sort, and highlight follow it.
+      // An exact tie (or no graded weeks) defaults to the over.
+      const direction = history.underRate !== null && (history.hitRate === null || history.underRate > history.hitRate)
+        ? "under"
+        : "over";
       const displayRate = direction === "under" ? history.underRate : history.hitRate;
-      // Only lines that hit their side more than half the time are shown.
-      if (displayRate === null || displayRate <= 0.5) continue;
       const def = propStatDef(line.stat);
       built.push({
         key: `${line.playerId}|${line.stat}`,
@@ -457,6 +479,7 @@ export function GameLinesPanel({
         overs: history.overs,
         unders: history.unders,
         cells: history.cells,
+        playedWeeks,
         rostered,
         opponent,
         direction,
@@ -475,6 +498,8 @@ export function GameLinesPanel({
     rosterKeys,
     activeStatId,
     weekStatsByPlayer,
+    playedWeeksByPlayer,
+    weeklyLinesByKey,
   ]);
 
   const sortedPropRows = useMemo(() => {
@@ -684,7 +709,7 @@ export function GameLinesPanel({
                     // though the fraction counts the played side.
                     const hitTone = hitRateTone(row.overs, row.unders);
                     const byWeek = new Map(row.cells.map((cell) => [cell.week, cell]));
-                    const scaleMax = Math.max(row.line, ...row.cells.map((cell) => cell.actual), 0) || 1;
+                    const scaleMax = Math.max(row.line, ...row.cells.flatMap((cell) => [cell.actual, cell.line]), 0) || 1;
                     return (
                       <tr
                         key={row.key}
@@ -734,18 +759,17 @@ export function GameLinesPanel({
                             className="props-history"
                             role="img"
                             aria-label={row.cells.length > 0
-                              ? `Weekly results against the line of ${formatPropNumber(row.line, 1)}: ${historyWeeks.map((weekNumber) => {
+                              ? `Weekly results, each against that week's own line: ${historyWeeks.map((weekNumber) => {
                                 const cell = byWeek.get(weekNumber);
-                                return cell
-                                  ? `W${weekNumber} ${formatPropNumber(cell.actual, 1)} (${cell.result})`
-                                  : `W${weekNumber} no game`;
+                                if (cell) return `W${weekNumber} ${formatPropNumber(cell.actual, 1)} vs ${formatPropNumber(cell.line, 1)} (${cell.result})`;
+                                return row.playedWeeks.has(weekNumber) ? `W${weekNumber} no line` : `W${weekNumber} no game`;
                               }).join(", ")}`
-                              : "No prior games this season"}
+                              : "No graded games yet this season"}
                           >
                             {historyWeeks.map((weekNumber) => {
                               const cell = byWeek.get(weekNumber);
                               if (!cell) {
-                                return <span key={weekNumber} className="props-bar is-empty" title={`W${weekNumber}: no game`} />;
+                                return <span key={weekNumber} className="props-bar is-empty" title={`W${weekNumber}: ${row.playedWeeks.has(weekNumber) ? "no line" : "no game"}`} />;
                               }
                               const heightPct = Math.max(4, (cell.actual / scaleMax) * 100);
                               return (
@@ -753,14 +777,10 @@ export function GameLinesPanel({
                                   key={weekNumber}
                                   className={`props-bar is-${cell.result}`}
                                   style={{ height: `${heightPct}%` }}
-                                  title={`W${weekNumber}: ${formatPropNumber(cell.actual, 1)} vs line ${formatPropNumber(row.line, 1)}`}
+                                  title={`W${weekNumber}: ${formatPropNumber(cell.actual, 1)} vs line ${formatPropNumber(cell.line, 1)}`}
                                 />
                               );
                             })}
-                            <span
-                              className="props-history-line"
-                              style={{ bottom: `${(row.line / scaleMax) * 100}%` }}
-                            />
                           </div>
                         </td>
                       </tr>

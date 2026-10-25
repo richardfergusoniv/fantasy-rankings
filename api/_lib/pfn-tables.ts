@@ -322,6 +322,7 @@ export async function handlePfnTables(req: Request): Promise<Response> {
           sleeperPulledAt: null,
           degraded: true,
           lines: [],
+          weeklyLines: [],
         };
       }),
     ]);
