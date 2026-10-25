@@ -317,6 +317,20 @@ describe("propStatActual / history", () => {
     rows.sort(compareHitRateDesc);
     expect(rows.map((row) => row.name)).toEqual(["Four For Four", "Two For Two"]);
   });
+
+  it("stays transitive when only some rows carry a hit count", () => {
+    const oneTimer = { hitRate: 1, hits: 1, name: "One Timer", stat: "targets" };
+    const noCount = { hitRate: 0.9, name: "No Count", stat: "targets" };
+    const proven = { hitRate: 0.8, hits: 5, name: "Proven", stat: "targets" };
+    // A count-less row counts as proven, so both sit above the one-timer
+    // and order between themselves by rate — no comparison cycle.
+    expect(compareHitRateDesc(noCount, proven)).toBeLessThan(0);
+    expect(compareHitRateDesc(proven, oneTimer)).toBeLessThan(0);
+    expect(compareHitRateDesc(noCount, oneTimer)).toBeLessThan(0);
+    const rows = [oneTimer, proven, noCount];
+    rows.sort(compareHitRateDesc);
+    expect(rows.map((row) => row.name)).toEqual(["No Count", "Proven", "One Timer"]);
+  });
 });
 
 describe("history indexes", () => {
