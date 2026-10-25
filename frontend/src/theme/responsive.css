@@ -285,8 +285,6 @@
 .team-card-metrics > div:nth-child(even) { padding-right: 0; padding-left: 12px; border-left: 1px solid var(--hairline); }
 .team-card-metrics span { color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
 .team-card-metrics strong { color: var(--text); font-size: var(--type-section); font-weight: 750; font-variant-numeric: tabular-nums; }
-.team-card-source { margin: 8px 0 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.4; }
-.team-card-source a { color: var(--link); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 
 @media (min-width: 760px) {
   .matchup-page .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
