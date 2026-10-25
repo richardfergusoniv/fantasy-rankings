@@ -8,6 +8,7 @@
 
 import {
   normalizeTeamStatsPlayerName,
+  type TeamWeekSnapRow,
   type TeamWeekStatRow,
 } from "./nflverse-team-week-stats.js";
 
@@ -112,6 +113,8 @@ export type PropGameResult = "over" | "under" | "push";
 
 export type PropGameCell = {
   week: number;
+  /** The player's own closing line for that week. */
+  line: number;
   actual: number;
   result: PropGameResult;
 };
@@ -125,7 +128,7 @@ export type PropHistory = {
   hitRate: number | null;
   /** unders / (overs + unders); null when no decided games. */
   underRate: number | null;
-  /** Per-game results vs the current line, oldest → newest. */
+  /** Per-game results, each graded against that week's own line, oldest → newest. */
   cells: PropGameCell[];
 };
 
@@ -269,27 +272,77 @@ export function propStatActual(stat: string, week: TeamWeekStatRow): number | nu
   }
 }
 
+/** All-zero week row: the actuals of a player who played but recorded nothing. */
+const ZERO_WEEK_ROW: TeamWeekStatRow = {
+  playerId: "",
+  name: "",
+  team: "",
+  opponent: "",
+  position: "WR",
+  week: 0,
+  targets: 0,
+  receptions: 0,
+  receivingYards: 0,
+  carries: 0,
+  rushingYards: 0,
+  receivingTds: 0,
+  rushingTds: 0,
+  passingTds: 0,
+  fantasyPpr: 0,
+  targetShare: null,
+  completions: 0,
+  passAttempts: 0,
+  passingYards: 0,
+  interceptions: 0,
+  passingFirstDowns: 0,
+  rushingFirstDowns: 0,
+  receivingFirstDowns: 0,
+  sacksTaken: 0,
+  fumblesLost: 0,
+  passing2pt: 0,
+  rushing2pt: 0,
+  receiving2pt: 0,
+};
+
 /**
- * Compare a line to the player's weekly actuals for that market — pure
- * history, no projection. `weekRows` should already be filtered to one
- * player and sorted by week.
+ * Grade a player's history one week at a time, each week against that
+ * week's own closing line — pure history, no projection. Only weeks with
+ * a stored line are graded. A week the player played (snap counts show
+ * offense snaps) but recorded no stats has no nflverse stat row; it still
+ * counts, as an actual of 0 — but only when the stats dataset itself
+ * covers that week (`statWeeks`). Without that guard, a week the stats
+ * file has not published yet (or a failed stats load) would zero-fill
+ * into a false under. Weeks he did not play are skipped entirely.
+ * `weekRows` should already be filtered to one player.
  */
 export function buildPropHistory(
   stat: string,
-  line: number,
+  weeklyLines: ReadonlyMap<number, number>,
   weekRows: readonly TeamWeekStatRow[],
+  playedWeeks: ReadonlySet<number>,
+  statWeeks: ReadonlySet<number>,
 ): PropHistory {
+  const rowByWeek = new Map(weekRows.map((row) => [row.week, row]));
   const cells: PropGameCell[] = [];
-  for (const row of weekRows) {
-    const actual = propStatActual(stat, row);
+  const weeks = [...weeklyLines.keys()].sort((left, right) => left - right);
+  for (const week of weeks) {
+    const line = weeklyLines.get(week);
+    if (line === undefined || !Number.isFinite(line)) continue;
+    const row = rowByWeek.get(week);
+    const actual = row
+      ? propStatActual(stat, row)
+      : playedWeeks.has(week) && statWeeks.has(week)
+        ? propStatActual(stat, ZERO_WEEK_ROW)
+        : null;
     if (actual === null) continue;
     cells.push({
-      week: row.week,
+      week,
+      line,
       actual,
       result: propGameResult(actual, line),
     });
   }
-  if (cells.length === 0 || !Number.isFinite(line)) {
+  if (cells.length === 0) {
     return { games: 0, overs: 0, unders: 0, pushes: 0, hitRate: null, underRate: null, cells: [] };
   }
   const overs = cells.filter((cell) => cell.result === "over").length;
@@ -334,6 +387,39 @@ export function compareHitRateDesc(
 export function propPlayerMatchKey(name: string, team: string | null | undefined, position: string): string {
   const teamKey = team ? team.trim().toUpperCase() : "";
   return `${position}|${teamKey}|${normalizeTeamStatsPlayerName(name)}`;
+}
+
+/** Index stored closing lines by player/stat key → week → line. */
+export function indexWeeklyLines(
+  entries: readonly { playerId: string; stat: string; week: number; line: number }[],
+): Map<string, Map<number, number>> {
+  const byKey = new Map<string, Map<number, number>>();
+  for (const entry of entries) {
+    const key = `${entry.playerId}|${entry.stat}`;
+    const group = byKey.get(key);
+    if (group) group.set(entry.week, entry.line);
+    else byKey.set(key, new Map([[entry.week, entry.line]]));
+  }
+  return byKey;
+}
+
+/**
+ * Weeks each player actually played (at least one offensive snap), keyed
+ * like the week-stats index so the two can be joined. A played week with
+ * no stat row is a zero week, not a missed game.
+ */
+export function indexPlayedWeeks(
+  snaps: readonly TeamWeekSnapRow[],
+): Map<string, Set<number>> {
+  const byKey = new Map<string, Set<number>>();
+  for (const snap of snaps) {
+    if (snap.offenseSnaps <= 0) continue;
+    const key = propPlayerMatchKey(snap.name, snap.team, snap.position);
+    const group = byKey.get(key);
+    if (group) group.add(snap.week);
+    else byKey.set(key, new Set([snap.week]));
+  }
+  return byKey;
 }
 
 /** Index nflverse week rows by name+team+position for joining to Sleeper ids. */

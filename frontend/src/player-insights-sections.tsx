@@ -1,17 +1,22 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
+import { missingPropWeekLabel, propHistoryRefreshOptions } from "./lib/prop-history-state";
 import type { AnalyticsEntity, PlayerSearchResult } from "./dashboard-types";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { sortPropLines } from "./lib/prop-line-order";
 import { TEAM_WEEK_STATS_STALE_MS } from "../../api/_lib/nflverse-team-week-stats";
 import {
   buildPropHistory,
+  indexPlayedWeeks,
   indexWeekStatsByPlayer,
   isHiddenHalfPointPropStat,
   propPlayerMatchKey,
   propStatDef,
 } from "../../api/_lib/prop-line-reads";
+
+const NO_PLAYED_WEEKS: ReadonlySet<number> = new Set();
+const NO_WEEKLY_LINES: ReadonlyMap<number, number> = new Map();
 
 function formatLine(value: number): string {
   return Number.isInteger(value) ? String(value) : formatDecimal(value, 2);
@@ -23,7 +28,7 @@ function formatOdds(odds: number | null): string {
   return rounded > 0 ? `+${rounded}` : `${rounded}`;
 }
 
-/** This week's consensus prop lines for one player, with each prior game against the line. */
+/** This week's consensus prop lines for one player, with each prior game graded against that week's own line. */
 export function PlayerPropsSection({ player, season, week }: { player: PlayerSearchResult; season: number; week: number }) {
   const pfnQuery = useQuery({
     // Ask for the card's own week; the server's default is the NFL week, which can differ.
@@ -34,7 +39,7 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
       if (response.propLines.degraded) throw new Error("Prop lines unavailable");
       return response;
     },
-    staleTime: 60 * 60 * 1000,
+    ...propHistoryRefreshOptions(60 * 60 * 1000),
     retry: 1,
   });
   const propLines = pfnQuery.data?.propLines;
@@ -56,11 +61,36 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
     enabled: lines.length > 0,
   });
   // Until the game logs load (or if they fail), show no bars rather than "no game" weeks.
-  const historyReady = historyQuery.isSuccess;
+  const historyUnavailable = propLines?.weeklyLinesDegraded === true || historyQuery.isError;
+  const historyReady = historyQuery.isSuccess && !historyUnavailable;
   const weekRows = useMemo(() => {
     const prior = (historyQuery.data?.stats ?? []).filter((row) => row.week >= 1 && row.week < week);
     return indexWeekStatsByPlayer(prior).get(propPlayerMatchKey(player.name, player.team, player.position)) ?? [];
   }, [historyQuery.data?.stats, player.name, player.position, player.team, week]);
+  const playedWeeks = useMemo(() => {
+    const key = propPlayerMatchKey(player.name, player.team, player.position);
+    return indexPlayedWeeks(historyQuery.data?.snaps ?? []).get(key) ?? NO_PLAYED_WEEKS;
+  }, [historyQuery.data?.snaps, player.name, player.position, player.team]);
+  // Weeks the stats dataset itself covers; a played week outside this set
+  // is unpublished stats data, not a zero week.
+  const statWeeks = useMemo(
+    () => new Set(
+      (historyQuery.data?.stats ?? [])
+        .filter((row) => row.week >= 1 && row.week < week)
+        .map((row) => row.week),
+    ),
+    [historyQuery.data?.stats, week],
+  );
+  const weeklyLinesByStat = useMemo(() => {
+    const byStat = new Map<string, Map<number, number>>();
+    for (const entry of propLines?.weeklyLines ?? []) {
+      if (entry.playerId !== player.playerId) continue;
+      const group = byStat.get(entry.stat);
+      if (group) group.set(entry.week, entry.line);
+      else byStat.set(entry.stat, new Map([[entry.week, entry.line]]));
+    }
+    return byStat;
+  }, [propLines, player.playerId]);
   // The five most recent weeks, oldest first.
   const recentWeeks = useMemo(() => Array.from({ length: Math.min(5, Math.max(0, week - 1)) }, (_, index) => week - Math.min(5, week - 1) + index), [week]);
 
@@ -82,9 +112,10 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
         </div>
         {lines.map((line) => {
           const def = propStatDef(line.stat);
-          const history = buildPropHistory(line.stat, line.line, weekRows);
+          const weeklyLines = weeklyLinesByStat.get(line.stat) ?? NO_WEEKLY_LINES;
+          const history = buildPropHistory(line.stat, weeklyLines, weekRows, playedWeeks, statWeeks);
           const byWeek = new Map(history.cells.map((cell) => [cell.week, cell]));
-          const scaleMax = Math.max(line.line, ...history.cells.map((cell) => cell.actual), 0) || 1;
+          const scaleMax = Math.max(line.line, ...history.cells.flatMap((cell) => [cell.actual, cell.line]), 0) || 1;
           return (
             <div className="player-props-row" role="row" key={line.stat}>
               <span role="cell">{def?.label ?? line.stat}</span>
@@ -95,17 +126,17 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
                 <span
                   className="props-history player-props-history"
                   role="img"
-                  aria-label={!historyReady ? (historyQuery.isError ? "Game history unavailable" : "Loading game history") : recentWeeks.map((weekNumber) => {
+                  aria-label={!historyReady ? (historyUnavailable ? "History unavailable" : "Loading game history") : recentWeeks.map((weekNumber) => {
                     const cell = byWeek.get(weekNumber);
-                    return cell ? `W${weekNumber} ${formatLine(cell.actual)} (${cell.result})` : `W${weekNumber} no game`;
+                    if (cell) return `W${weekNumber} ${formatLine(cell.actual)} vs ${formatLine(cell.line)} (${cell.result})`;
+                    return `W${weekNumber} ${missingPropWeekLabel(weekNumber, weeklyLines, playedWeeks, statWeeks)}`;
                   }).join(", ") || "No prior games"}
                 >
-                  {historyReady && recentWeeks.map((weekNumber) => {
+                  {historyUnavailable ? <span>History unavailable</span> : historyReady && recentWeeks.map((weekNumber) => {
                     const cell = byWeek.get(weekNumber);
-                    if (!cell) return <span key={weekNumber} className="props-bar is-empty" />;
+                    if (!cell) return <span key={weekNumber} className="props-bar is-empty" title={`W${weekNumber}: ${missingPropWeekLabel(weekNumber, weeklyLines, playedWeeks, statWeeks)}`} />;
                     return <span key={weekNumber} className={`props-bar is-${cell.result}`} style={{ height: `${Math.max(4, (cell.actual / scaleMax) * 100)}%` }} />;
                   })}
-                  <span className="props-history-line" style={{ bottom: `${(line.line / scaleMax) * 100}%` }} />
                 </span>
               </span>
             </div>
