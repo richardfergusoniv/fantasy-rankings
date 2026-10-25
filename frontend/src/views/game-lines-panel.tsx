@@ -210,10 +210,24 @@ function GameSlate({
     setHasMore(rail.scrollWidth - rail.clientWidth - rail.scrollLeft > 4);
   }, []);
   useEffect(() => {
-    updateMore();
-    window.addEventListener("resize", updateMore);
-    return () => window.removeEventListener("resize", updateMore);
-  }, [cards, updateMore]);
+    const rail = railRef.current;
+    if (!rail) return;
+    const syncRail = () => {
+      const selected = rail.querySelector<HTMLElement>("[aria-pressed='true']");
+      if (selected) {
+        const viewport = rail.getBoundingClientRect();
+        const tile = selected.getBoundingClientRect();
+        if (tile.left < viewport.left - 1 || tile.right > viewport.right + 1) {
+          rail.scrollTo({ left: rail.scrollLeft + tile.left - viewport.left });
+        }
+      }
+      updateMore();
+    };
+    syncRail();
+    const observer = new ResizeObserver(syncRail);
+    observer.observe(rail);
+    return () => observer.disconnect();
+  }, [cards, selectedId, updateMore]);
   return (
     <div className="game-slate-rail" data-more={hasMore || undefined}>
       <div className="game-slate" role="group" aria-label="Game" ref={railRef} onScroll={updateMore}>

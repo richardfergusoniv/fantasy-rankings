@@ -841,6 +841,7 @@
 }
 /* Game lines: the week's slate as a rail of tiles, then the picked game's board. */
 .game-slate-rail {
+  padding-inline: 2px;
   display: flex;
   align-items: stretch;
 }
@@ -851,7 +852,7 @@
   flex-wrap: nowrap;
   gap: 8px;
   overflow-x: auto;
-  padding: 2px 2px 6px;
+  padding: 2px 0 6px;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
 }
@@ -867,7 +868,7 @@
   color: var(--dim);
   font-size: 20px;
   font-weight: 700;
-  opacity: 0;
+  opacity: .3;
   transition: opacity .15s ease-out;
   pointer-events: none;
 }
@@ -878,6 +879,7 @@
   /* Exact fractions of the rail, so a rest position only ever shows
      whole games; the next game waits fully off the right edge. */
   flex: 0 0 calc((100% - 40px) / 6);
+  min-width: 0;
   scroll-snap-align: start;
   display: grid;
   align-content: center;
@@ -1015,8 +1017,6 @@
   /* The rail runs edge to edge on a phone; its chevron gutter stays on screen. */
   .game-slate-rail {
     margin: 0 -16px;
-  }
-  .game-slate {
     padding-inline: 16px;
   }
   .game-slate-tile {
