@@ -201,7 +201,9 @@ export function TeamDataModal({
   const successPct = pfnNumber(offenseRow, "success_pct");
   const yardsPerPlay = pfnNumber(offenseRow, "yds_per_play");
   const explosivePct = pfnNumber(offenseRow, "expl_pct");
-  const teamName = lineRow?.team_name ?? defenseRow?.team_name ?? offenseRow?.team_name ?? overallRow?.team_name ?? selection.team;
+  const teamName =
+    [lineRow?.team_name, defenseRow?.team_name, offenseRow?.team_name, overallRow?.team_name]
+      .find((name) => typeof name === "string" && name.trim().length > 0) ?? selection.team;
   const pfnRecord = overallRow?.record;
   const recordLabel = typeof pfnRecord === "string" && /^\d+-\d+(?:-\d+)?$/.test(pfnRecord)
     ? pfnRecord
