@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
+import { missingPropWeekLabel, propHistoryRefreshOptions } from "./lib/prop-history-state";
 import type { AnalyticsEntity, PlayerSearchResult } from "./dashboard-types";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { sortPropLines } from "./lib/prop-line-order";
@@ -38,7 +39,7 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
       if (response.propLines.degraded) throw new Error("Prop lines unavailable");
       return response;
     },
-    staleTime: 60 * 60 * 1000,
+    ...propHistoryRefreshOptions(60 * 60 * 1000),
     retry: 1,
   });
   const propLines = pfnQuery.data?.propLines;
@@ -60,7 +61,8 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
     enabled: lines.length > 0,
   });
   // Until the game logs load (or if they fail), show no bars rather than "no game" weeks.
-  const historyReady = historyQuery.isSuccess;
+  const historyUnavailable = propLines?.weeklyLinesDegraded === true || historyQuery.isError;
+  const historyReady = historyQuery.isSuccess && !historyUnavailable;
   const weekRows = useMemo(() => {
     const prior = (historyQuery.data?.stats ?? []).filter((row) => row.week >= 1 && row.week < week);
     return indexWeekStatsByPlayer(prior).get(propPlayerMatchKey(player.name, player.team, player.position)) ?? [];
@@ -110,7 +112,8 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
         </div>
         {lines.map((line) => {
           const def = propStatDef(line.stat);
-          const history = buildPropHistory(line.stat, weeklyLinesByStat.get(line.stat) ?? NO_WEEKLY_LINES, weekRows, playedWeeks, statWeeks);
+          const weeklyLines = weeklyLinesByStat.get(line.stat) ?? NO_WEEKLY_LINES;
+          const history = buildPropHistory(line.stat, weeklyLines, weekRows, playedWeeks, statWeeks);
           const byWeek = new Map(history.cells.map((cell) => [cell.week, cell]));
           const scaleMax = Math.max(line.line, ...history.cells.flatMap((cell) => [cell.actual, cell.line]), 0) || 1;
           return (
@@ -123,15 +126,15 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
                 <span
                   className="props-history player-props-history"
                   role="img"
-                  aria-label={!historyReady ? (historyQuery.isError ? "Game history unavailable" : "Loading game history") : recentWeeks.map((weekNumber) => {
+                  aria-label={!historyReady ? (historyUnavailable ? "History unavailable" : "Loading game history") : recentWeeks.map((weekNumber) => {
                     const cell = byWeek.get(weekNumber);
                     if (cell) return `W${weekNumber} ${formatLine(cell.actual)} vs ${formatLine(cell.line)} (${cell.result})`;
-                    return playedWeeks.has(weekNumber) ? `W${weekNumber} no line` : `W${weekNumber} no game`;
+                    return `W${weekNumber} ${missingPropWeekLabel(weekNumber, weeklyLines, playedWeeks, statWeeks)}`;
                   }).join(", ") || "No prior games"}
                 >
-                  {historyReady && recentWeeks.map((weekNumber) => {
+                  {historyUnavailable ? <span>History unavailable</span> : historyReady && recentWeeks.map((weekNumber) => {
                     const cell = byWeek.get(weekNumber);
-                    if (!cell) return <span key={weekNumber} className="props-bar is-empty" />;
+                    if (!cell) return <span key={weekNumber} className="props-bar is-empty" title={`W${weekNumber}: ${missingPropWeekLabel(weekNumber, weeklyLines, playedWeeks, statWeeks)}`} />;
                     return <span key={weekNumber} className={`props-bar is-${cell.result}`} style={{ height: `${Math.max(4, (cell.actual / scaleMax) * 100)}%` }} />;
                   })}
                 </span>
