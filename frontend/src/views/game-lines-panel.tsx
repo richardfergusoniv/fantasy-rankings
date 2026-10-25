@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ALL_GAMES_PICKER_ID,
   GAME_LINES_STALE_MS,
@@ -190,19 +190,8 @@ function GameSlate({
   selectedId: string;
   onSelect: (id: string) => void;
 }) {
-  const railRef = useRef<HTMLDivElement>(null);
-  // Bring the chosen game into view when a link or the default picks one off-screen.
-  useEffect(() => {
-    const rail = railRef.current;
-    const tile = rail?.querySelector<HTMLElement>("[aria-pressed='true']");
-    if (!rail || !tile) return;
-    const start = tile.offsetLeft;
-    const end = start + tile.offsetWidth;
-    if (start >= rail.scrollLeft && end <= rail.scrollLeft + rail.clientWidth) return;
-    rail.scrollTo({ left: Math.max(0, start - 16) });
-  }, [selectedId, cards.length]);
   return (
-    <div className="game-slate" role="group" aria-label="Game" ref={railRef}>
+    <div className="game-slate" role="group" aria-label="Game">
       <button
         type="button"
         className="game-slate-tile is-all"
