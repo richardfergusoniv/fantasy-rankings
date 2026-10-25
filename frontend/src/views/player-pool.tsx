@@ -205,7 +205,9 @@ export function TeamDataModal({
   const successPct = pfnNumber(offenseRow, "success_pct");
   const yardsPerPlay = pfnNumber(offenseRow, "yds_per_play");
   const explosivePct = pfnNumber(offenseRow, "expl_pct");
-  const teamName = lineRow?.team_name ?? defenseRow?.team_name ?? offenseRow?.team_name ?? overallRow?.team_name ?? selection.team;
+  const teamName =
+    [lineRow?.team_name, defenseRow?.team_name, offenseRow?.team_name, overallRow?.team_name]
+      .find((name) => typeof name === "string" && name.trim().length > 0) ?? selection.team;
   const pfnRecord = overallRow?.record;
   const recordLabel = typeof pfnRecord === "string" && /^\d+-\d+(?:-\d+)?$/.test(pfnRecord)
     ? pfnRecord
@@ -305,8 +307,7 @@ export function TeamDataModal({
         <article ref={dialogRef} className="matchup-data-card team-data-card" role="dialog" aria-modal="true" aria-labelledby="team-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
           <div className="matchup-data-header">
             <div>
-              <h2 id="team-card-title">{selection.team} team card</h2>
-              <span>{teamName}</span>
+              <h2 id="team-card-title">{teamName}</h2>
             </div>
             <button type="button" onClick={onClose} aria-label="Close team data">×</button>
           </div>
