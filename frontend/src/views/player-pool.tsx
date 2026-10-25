@@ -303,8 +303,7 @@ export function TeamDataModal({
         <article ref={dialogRef} className="matchup-data-card team-data-card" role="dialog" aria-modal="true" aria-labelledby="team-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
           <div className="matchup-data-header">
             <div>
-              <h2 id="team-card-title">{selection.team} team card</h2>
-              <span>{teamName}</span>
+              <h2 id="team-card-title">{teamName}</h2>
             </div>
             <button type="button" onClick={onClose} aria-label="Close team data">×</button>
           </div>
