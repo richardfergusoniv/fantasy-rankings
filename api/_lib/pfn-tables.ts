@@ -331,7 +331,7 @@ export async function handlePfnTables(req: Request): Promise<Response> {
       { tables, teamSituational, propLines },
       200,
       {
-        "Cache-Control": propLinesDegraded
+        "Cache-Control": propLinesDegraded || propLines.weeklyLinesDegraded
           ? "private, no-store"
           : `private, max-age=${PROP_LINES_HTTP_CACHE_SECONDS}`,
       },

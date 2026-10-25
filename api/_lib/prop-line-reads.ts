@@ -309,7 +309,10 @@ const ZERO_WEEK_ROW: TeamWeekStatRow = {
  * week's own closing line — pure history, no projection. Only weeks with
  * a stored line are graded. A week the player played (snap counts show
  * offense snaps) but recorded no stats has no nflverse stat row; it still
- * counts, as an actual of 0. Weeks he did not play are skipped entirely.
+ * counts, as an actual of 0 — but only when the stats dataset itself
+ * covers that week (`statWeeks`). Without that guard, a week the stats
+ * file has not published yet (or a failed stats load) would zero-fill
+ * into a false under. Weeks he did not play are skipped entirely.
  * `weekRows` should already be filtered to one player.
  */
 export function buildPropHistory(
@@ -317,6 +320,7 @@ export function buildPropHistory(
   weeklyLines: ReadonlyMap<number, number>,
   weekRows: readonly TeamWeekStatRow[],
   playedWeeks: ReadonlySet<number>,
+  statWeeks: ReadonlySet<number>,
 ): PropHistory {
   const rowByWeek = new Map(weekRows.map((row) => [row.week, row]));
   const cells: PropGameCell[] = [];
@@ -327,7 +331,7 @@ export function buildPropHistory(
     const row = rowByWeek.get(week);
     const actual = row
       ? propStatActual(stat, row)
-      : playedWeeks.has(week)
+      : playedWeeks.has(week) && statWeeks.has(week)
         ? propStatActual(stat, ZERO_WEEK_ROW)
         : null;
     if (actual === null) continue;

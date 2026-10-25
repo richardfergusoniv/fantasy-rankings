@@ -69,6 +69,16 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
     const key = propPlayerMatchKey(player.name, player.team, player.position);
     return indexPlayedWeeks(historyQuery.data?.snaps ?? []).get(key) ?? NO_PLAYED_WEEKS;
   }, [historyQuery.data?.snaps, player.name, player.position, player.team]);
+  // Weeks the stats dataset itself covers; a played week outside this set
+  // is unpublished stats data, not a zero week.
+  const statWeeks = useMemo(
+    () => new Set(
+      (historyQuery.data?.stats ?? [])
+        .filter((row) => row.week >= 1 && row.week < week)
+        .map((row) => row.week),
+    ),
+    [historyQuery.data?.stats, week],
+  );
   const weeklyLinesByStat = useMemo(() => {
     const byStat = new Map<string, Map<number, number>>();
     for (const entry of propLines?.weeklyLines ?? []) {
@@ -100,7 +110,7 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
         </div>
         {lines.map((line) => {
           const def = propStatDef(line.stat);
-          const history = buildPropHistory(line.stat, weeklyLinesByStat.get(line.stat) ?? NO_WEEKLY_LINES, weekRows, playedWeeks);
+          const history = buildPropHistory(line.stat, weeklyLinesByStat.get(line.stat) ?? NO_WEEKLY_LINES, weekRows, playedWeeks, statWeeks);
           const byWeek = new Map(history.cells.map((cell) => [cell.week, cell]));
           const scaleMax = Math.max(line.line, ...history.cells.flatMap((cell) => [cell.actual, cell.line]), 0) || 1;
           return (

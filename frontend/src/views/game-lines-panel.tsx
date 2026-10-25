@@ -384,6 +384,13 @@ export function GameLinesPanel({
     [historyQuery.data?.snaps],
   );
 
+  // Weeks the stats dataset itself covers; a played week outside this set
+  // is unpublished stats data, not a zero week.
+  const statWeeks = useMemo(
+    () => new Set(priorStats.map((row) => row.week)),
+    [priorStats],
+  );
+
   const weeklyLinesByKey = useMemo(
     () => indexWeeklyLines(propLinesQuery.data?.propLines.weeklyLines ?? []),
     [propLinesQuery.data?.propLines.weeklyLines],
@@ -449,7 +456,7 @@ export function GameLinesPanel({
         ?? playedWeeksByPlayer.get(propPlayerMatchKey(line.name, line.team, positionCode))
         ?? EMPTY_WEEKS;
       const weeklyLines = weeklyLinesByKey.get(`${line.playerId}|${line.stat}`) ?? EMPTY_LINES;
-      const history = buildPropHistory(line.stat, weeklyLines, weekRowsForPlayer, playedWeeks);
+      const history = buildPropHistory(line.stat, weeklyLines, weekRowsForPlayer, playedWeeks, statWeeks);
       // The row plays whichever side has hit more often against each
       // week's own line; the rate, odds, sort, and highlight follow it.
       // An exact tie (or no graded weeks) defaults to the over.
@@ -500,6 +507,7 @@ export function GameLinesPanel({
     weekStatsByPlayer,
     playedWeeksByPlayer,
     weeklyLinesByKey,
+    statWeeks,
   ]);
 
   const sortedPropRows = useMemo(() => {

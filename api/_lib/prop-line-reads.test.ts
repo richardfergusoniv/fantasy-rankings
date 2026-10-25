@@ -179,6 +179,7 @@ describe("propStatActual / history", () => {
         weekRow({ week: 4, name: "Patrick Mahomes", passingYards: 400 }),
       ],
       new Set([1, 2, 3, 4]),
+      new Set([1, 2, 3, 4]),
     );
     expect(history.games).toBe(3);
     expect(history.overs).toBe(1);
@@ -200,6 +201,7 @@ describe("propStatActual / history", () => {
         weekRow({ week: 3, name: "Isiah Pacheco", position: "RB", rushingTds: 0, receivingTds: 1 }),
       ],
       new Set([1, 2, 3]),
+      new Set([1, 2, 3]),
     );
     expect(history.overs).toBe(2);
     expect(history.cells.map((cell) => cell.actual)).toEqual([1, 0, 1]);
@@ -211,6 +213,7 @@ describe("propStatActual / history", () => {
         weekRow({ week: 1, name: "Travis Kelce", position: "TE", receptions: 5 }),
         weekRow({ week: 2, name: "Travis Kelce", position: "TE", receptions: 7 }),
       ],
+      new Set([1, 2]),
       new Set([1, 2]),
     );
     expect(pushHistory.pushes).toBe(1);
@@ -227,6 +230,7 @@ describe("propStatActual / history", () => {
       new Map([[4, 2.5], [5, 1.5], [6, 0.5]]),
       [weekRow({ week: 5, name: "Jonnu Smith", position: "TE", receptions: 2 })],
       new Set([5, 6]),
+      new Set([4, 5, 6]),
     );
     expect(history.games).toBe(2);
     expect(history.overs).toBe(1);
@@ -240,9 +244,25 @@ describe("propStatActual / history", () => {
       new Map([[6, 12.5]]),
       [],
       new Set([6]),
+      new Set([6]),
     );
     expect(ungradeable.games).toBe(0);
     expect(ungradeable.hitRate).toBeNull();
+  });
+
+  it("does not zero-fill a week the stats dataset has not published yet", () => {
+    // Snap counts for the newest week can land before the stats file does;
+    // a played week with no stats coverage is missing data, not a zero.
+    const history = buildPropHistory(
+      "receptions",
+      new Map([[6, 0.5]]),
+      [],
+      new Set([6]),
+      new Set([1, 2, 3, 4, 5]),
+    );
+    expect(history.games).toBe(0);
+    expect(history.cells).toEqual([]);
+    expect(history.hitRate).toBeNull();
   });
 
   it("converts American odds to implied probability", () => {

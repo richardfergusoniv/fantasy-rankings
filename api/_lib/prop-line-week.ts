@@ -58,6 +58,8 @@ export type PropLineWeekPayload = {
     week: number;
     line: number;
   }>;
+  /** Set only when the closing-line history query failed; the board lines are unaffected. */
+  weeklyLinesDegraded?: true;
 };
 
 type CacheEntry = {
@@ -188,8 +190,16 @@ export async function loadPropLineWeek(options?: {
   }
 
   const sleeperBoard = await loadSleeperPickBoard(season, week);
+  let weeklyLinesDegraded = false;
   const weeklyLines = await loadWeeklyClosingLines(season, week, collapsed).catch(
-    (): PropLineWeekPayload["weeklyLines"] => [],
+    (err): PropLineWeekPayload["weeklyLines"] => {
+      weeklyLinesDegraded = true;
+      console.error(
+        "[prop-line-week] weekly closing lines unavailable",
+        err instanceof Error ? err.message : err,
+      );
+      return [];
+    },
   );
   const body: PropLineWeekPayload = {
     season,
@@ -198,10 +208,13 @@ export async function loadPropLineWeek(options?: {
     sleeperPulledAt: sleeperBoard.pulledAt,
     lines: serializeLines(collapsed, players, sleeperBoard.byKey),
     weeklyLines,
+    ...(weeklyLinesDegraded ? { weeklyLinesDegraded: true as const } : {}),
   };
   // Avoid caching a non-empty week with missing player metadata (empty roster
   // map) — that degrades names/teams and hides game-filtered props for 15m.
-  if (collapsed.length === 0 || Object.keys(players).length > 0) {
+  // A failed history query is not cached either, so the next request retries
+  // instead of pinning an empty history for the cache window.
+  if (!weeklyLinesDegraded && (collapsed.length === 0 || Object.keys(players).length > 0)) {
     setCache(cacheKey, body);
   }
   return body;
