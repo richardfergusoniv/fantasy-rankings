@@ -1869,7 +1869,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         position,
         lineupSlot: isStarter && starterIndex !== undefined ? (starterSlots[starterIndex] ?? position) : null,
         isStarter,
-        rank: rankRow ? (rankRow.leagueProjection === null ? null : rankRow.leagueRank) : (defense?.rank ?? null),
+        rank: rankRow ? (rankRow.leagueProjection === null && !(rankRow.gamePhase === "final" && typeof rankRow.actual === "number") ? null : rankRow.leagueRank) : (defense?.rank ?? null),
         projection,
         projectionSource,
         actual,
