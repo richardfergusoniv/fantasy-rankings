@@ -65,9 +65,11 @@ import {
   fetchText,
   isDynasticalPpfdLeague,
   isUnavailableForCurrentWeek,
+  loadSleeperPlayerWeeklySeason,
   normalizePosition,
   seasonLongFormatForLeague,
   settingValue,
+  sleeperActualStats,
   weeklyAvailabilityStatus,
   type FantasyCalcRow,
   type SeasonLongFormat,
@@ -76,6 +78,7 @@ import {
   type SleeperRoster,
 } from "./sleeper.js";
 import { activeBenchIds, eligibleForSlot, espnStatusToPhase, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, normalizeGamePhase, optimizeLineup, sumLiveForecast } from "./lineup-optimizer.js";
+import { scoreProjectedPlayerStats } from "./fantasy-scoring.js";
 import { rankingsForLeagueFormats, redraftTwinFormat } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
@@ -1417,6 +1420,48 @@ async function saveProjectionAccuracy(dashboard: Dashboard): Promise<void> {
 // The build
 // ---------------------------------------------------------------------------
 
+/** Weekly stat lines for free-agent actuals, memoized per warm instance so
+ * repeated builds inside the TTL skip the per-player source-cache reads.
+ * Stats are league-independent; each league scores them at stamp time. */
+const FREE_AGENT_STATS_MEMO_TTL_MS = 10 * 60 * 1000;
+const freeAgentStatsMemo = new Map<string, { fetchedAtMs: number; stats: Record<string, number> | null }>();
+
+async function loadFreeAgentWeeklyStats(
+  playerIds: string[],
+  season: number,
+  week: number,
+): Promise<Map<string, Record<string, number>>> {
+  const result = new Map<string, Record<string, number>>();
+  const missing: string[] = [];
+  for (const playerId of playerIds) {
+    const memo = freeAgentStatsMemo.get(`${playerId}:${season}:${week}`);
+    if (memo && Date.now() - memo.fetchedAtMs < FREE_AGENT_STATS_MEMO_TTL_MS) {
+      if (memo.stats) result.set(playerId, memo.stats);
+    } else {
+      missing.push(playerId);
+    }
+  }
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < missing.length) {
+      const playerId = missing[cursor];
+      cursor += 1;
+      let stats: Record<string, number> | null = null;
+      try {
+        const weekly = await loadSleeperPlayerWeeklySeason(playerId, season);
+        const weekRow = weekly.find((row) => row.week === week);
+        if (weekRow) stats = sleeperActualStats(weekRow);
+      } catch {
+        stats = null;
+      }
+      freeAgentStatsMemo.set(`${playerId}:${season}:${week}`, { fetchedAtMs: Date.now(), stats });
+      if (stats) result.set(playerId, stats);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(12, missing.length) }, () => worker()));
+  return result;
+}
+
 /**
  * Build a dashboard from scratch for one Sleeper user. Ported from the
  * original `buildDashboard(ctx)` with the Sleeper account parameterized.
@@ -1621,6 +1666,8 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       projectionComponents: null,
       injuryStatus: weeklyAvailabilityStatus(player),
       gameTime: gameTimeByTeam.get(team) ?? null,
+      actual: null,
+      gamePhase: null,
     }];
   });
   const rankingsByLeagueId = new Map<string, Ranking[]>();
@@ -1654,6 +1701,25 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   }
   const rankings = [...rankingsByLeagueId.values()].flat();
   const weeklyChartRankings = rankings;
+  // Free-agent actuals: the matchup points stamped per league below only
+  // cover rostered players, so pre-load weekly stat lines for the
+  // strongest players whose games are live or final. Each league scores
+  // the lines through its own settings at stamp time.
+  const bestProjectionByPlayerId = new Map<string, number>();
+  for (const row of rankings) {
+    const phase = gamePhaseByTeam.get(canonicalTeam(row.team));
+    if (row.isBye || row.leagueProjection === null || (phase !== "live" && phase !== "final")) continue;
+    if (row.leagueProjection > (bestProjectionByPlayerId.get(row.playerId) ?? Number.NEGATIVE_INFINITY)) {
+      bestProjectionByPlayerId.set(row.playerId, row.leagueProjection);
+    }
+  }
+  const freeAgentCandidateIds = [...bestProjectionByPlayerId.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 200)
+    .map(([playerId]) => playerId);
+  const freeAgentStatsByPlayerId = freeAgentCandidateIds.length > 0
+    ? await loadFreeAgentWeeklyStats(freeAgentCandidateIds, season, week)
+    : new Map<string, Record<string, number>>();
   defenses = [...defensesByLeagueId.values()].flat();
   if (attachWeekContext && !useVegasPrimary) {
     const coverageLabel = isFirstDownSnapshot
@@ -1728,6 +1794,29 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     const leagueDefenses = defensesByLeagueId.get(league.league_id) ?? [];
     const rankingById = new Map(leagueRankings.map((row) => [row.playerId, row]));
     const defenseByTeam = new Map(leagueDefenses.map((row) => [row.team, row]));
+    // Rankings and Waivers swap projections for actuals as games are
+    // played, the way the totals already do. Rostered players take the
+    // league's own matchup points (already scored in this league); free
+    // agents are scored from their weekly stat lines through this
+    // league's settings.
+    const matchupPointsByPlayerId = new Map<string, number>();
+    for (const item of matchups) {
+      for (const [playerId, points] of Object.entries(item.players_points ?? {})) {
+        if (typeof points === "number" && Number.isFinite(points)) matchupPointsByPlayerId.set(playerId, points);
+      }
+    }
+    for (const row of leagueRankings) {
+      row.gamePhase = gamePhaseByTeam.get(canonicalTeam(row.team)) ?? null;
+      const matchupPoints = matchupPointsByPlayerId.get(row.playerId);
+      if (matchupPoints !== undefined) {
+        row.actual = matchupPoints;
+      } else if (row.gamePhase === "live" || row.gamePhase === "final") {
+        const stats = freeAgentStatsByPlayerId.get(row.playerId);
+        if (stats) {
+          row.actual = Math.round(scoreProjectedPlayerStats(row.position, stats, league.scoring_settings) * 100) / 100;
+        }
+      }
+    }
 
     const makePlayer = (playerId: string, isStarter: boolean, activeMatchup: SleeperMatchup | undefined, starterIndex?: number): RosterPlayer => {
       const meta = players[playerId];
@@ -1964,8 +2053,8 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         rank: row.leagueRank,
         projection: row.leagueProjection,
         projectionSource: row.projectionSource,
-        actual: null,
-        gamePhase: "pregame" as const,
+        actual: row.actual,
+        gamePhase: row.gamePhase ?? "pregame",
         gameTime: row.gameTime,
         gamePeriod: null,
         gameClockSeconds: null,

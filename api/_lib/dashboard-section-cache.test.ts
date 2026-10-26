@@ -39,6 +39,8 @@ const sampleRanking = {
   projectionComponents: null,
   injuryStatus: null,
   gameTime: null,
+  actual: null,
+  gamePhase: null,
 };
 
 const sampleDashboard: Dashboard = {

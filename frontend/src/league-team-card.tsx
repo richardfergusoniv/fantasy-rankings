@@ -4,6 +4,7 @@ import { compareByFantasyPosition } from "./fantasy-position-order";
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { DepthChangeMark, MatchupTag, ModalPortal, depthChange, leagueRank, points, useDialogFocusTrap } from "./shared";
 import { formatWhole } from "./lib/format-number";
+import { displayedMatchupPoints } from "../../api/_lib/lineup-optimizer";
 
 type RosterPlayer = League["tradeTeams"][number]["players"][number];
 type SeasonRow = Dashboard["seasonLongRankings"][number];
@@ -128,10 +129,11 @@ export function LeagueTeamCard({
 
   const renderPlayer = (row: RosterRow) => {
     const { player, season } = row;
-    const metric = scope === "week"
-      ? points(player.projection)
+    const weekMetric = scope === "week" ? displayedMatchupPoints(player) : null;
+    const metric = weekMetric
+      ? points(weekMetric.value)
       : formatWhole(season?.value ?? 0);
-    const metricLabel = scope === "week" ? "PROJ" : "VALUE";
+    const metricLabel = weekMetric ? weekMetric.label : "VALUE";
     const slotChip = scope === "week" && player.isStarter ? starterSlotChip(player) : null;
     const isSelected = selectedPlayerId === player.playerId;
     const depthMove = depthChange(dashboard.playerInsights?.depth[player.playerId], dashboard.playerInsights?.depthPrevious?.[player.playerId]);

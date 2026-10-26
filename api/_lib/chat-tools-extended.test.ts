@@ -349,6 +349,8 @@ function baseDashboard(): Dashboard {
         projectionComponents: null,
         injuryStatus: null,
         gameTime: null,
+        actual: null,
+        gamePhase: null,
       },
       {
         leagueId: "lg1",
@@ -372,6 +374,8 @@ function baseDashboard(): Dashboard {
         projectionComponents: null,
         injuryStatus: null,
         gameTime: null,
+        actual: null,
+        gamePhase: null,
       },
     ],
     weeklyChartRankings: [],
