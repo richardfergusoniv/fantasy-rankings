@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TeamWeekStatRow } from "./nflverse-team-week-stats.js";
 import {
   buildPropHistory,
-  compareHitRateDesc,
+  compareHitsDesc,
   currentWeekPropLines,
   impliedProbability,
   indexPlayedWeeks,
@@ -281,7 +281,7 @@ describe("propStatActual / history", () => {
       { hitRate: 1, name: "Always Over", stat: "targets" },
       { hitRate: 0.5, name: "Aaron First", stat: "targets" },
     ];
-    rows.sort(compareHitRateDesc);
+    rows.sort(compareHitsDesc);
     expect(rows.map((row) => row.name)).toEqual([
       "Always Over",
       "Aaron First",
@@ -291,45 +291,45 @@ describe("propStatActual / history", () => {
     ]);
   });
 
-  it("keeps one-time hits below proven lines", () => {
+  it("orders by quantity of hits before percentage", () => {
     const rows = [
       { hitRate: 1, hits: 1, name: "One Timer", stat: "targets" },
       { hitRate: 0, hits: 0, name: "Never Hit", stat: "targets" },
       { hitRate: null, hits: 0, name: "No History", stat: "targets" },
-      { hitRate: 5 / 6, hits: 5, name: "Proven", stat: "targets" },
-      { hitRate: 0.5, hits: 2, name: "Two Hits", stat: "targets" },
+      { hitRate: 0.5, hits: 5, name: "Five Hits", stat: "targets" },
+      { hitRate: 1, hits: 2, name: "Perfect Two", stat: "targets" },
     ];
-    rows.sort(compareHitRateDesc);
+    rows.sort(compareHitsDesc);
     expect(rows.map((row) => row.name)).toEqual([
-      "Proven",
-      "Two Hits",
+      "Five Hits",
+      "Perfect Two",
       "One Timer",
       "Never Hit",
       "No History",
     ]);
   });
 
-  it("breaks a proven rate tie by hit count", () => {
+  it("breaks a hit-count tie by rate", () => {
     const rows = [
-      { hitRate: 1, hits: 2, name: "Two For Two", stat: "targets" },
-      { hitRate: 1, hits: 4, name: "Four For Four", stat: "targets" },
+      { hitRate: 0.5, hits: 3, name: "Low Rate", stat: "targets" },
+      { hitRate: 0.75, hits: 3, name: "High Rate", stat: "targets" },
     ];
-    rows.sort(compareHitRateDesc);
-    expect(rows.map((row) => row.name)).toEqual(["Four For Four", "Two For Two"]);
+    rows.sort(compareHitsDesc);
+    expect(rows.map((row) => row.name)).toEqual(["High Rate", "Low Rate"]);
   });
 
   it("stays transitive when only some rows carry a hit count", () => {
     const oneTimer = { hitRate: 1, hits: 1, name: "One Timer", stat: "targets" };
     const noCount = { hitRate: 0.9, name: "No Count", stat: "targets" };
     const proven = { hitRate: 0.8, hits: 5, name: "Proven", stat: "targets" };
-    // A count-less row counts as proven, so both sit above the one-timer
-    // and order between themselves by rate — no comparison cycle.
-    expect(compareHitRateDesc(noCount, proven)).toBeLessThan(0);
-    expect(compareHitRateDesc(proven, oneTimer)).toBeLessThan(0);
-    expect(compareHitRateDesc(noCount, oneTimer)).toBeLessThan(0);
+    // A count-less row sorts below every counted row, so the counted rows
+    // order purely by hits — no comparison cycle.
+    expect(compareHitsDesc(proven, oneTimer)).toBeLessThan(0);
+    expect(compareHitsDesc(oneTimer, noCount)).toBeLessThan(0);
+    expect(compareHitsDesc(proven, noCount)).toBeLessThan(0);
     const rows = [oneTimer, proven, noCount];
-    rows.sort(compareHitRateDesc);
-    expect(rows.map((row) => row.name)).toEqual(["No Count", "Proven", "One Timer"]);
+    rows.sort(compareHitsDesc);
+    expect(rows.map((row) => row.name)).toEqual(["Proven", "One Timer", "No Count"]);
   });
 });
 

@@ -370,26 +370,24 @@ export function impliedProbability(odds: number | null): number | null {
 }
 
 /**
- * Props table order: best hit rate first, with one exception — a line
- * whose played side has hit only once (or never) has not proven anything,
- * so one-timers rank below every line with two or more hits no matter
- * their rate (a 1-for-1 does not sit above a 5-for-6). Within a group the
- * higher rate wins; a rate tie goes to more hits. Rows with no decided
- * games (hitRate null) sink below every rated row, including a 0% rate;
+ * Props table order: quantity of hits first — the line whose played side
+ * has hit most often leads the board, and the hit rate only breaks ties
+ * between lines with the same hit count (a 3-for-6 sits above a 2-for-2;
+ * percentages never outrank raw hits). Rows with no decided games
+ * (hitRate null) sink below every rated row, including a 0-hit one;
  * remaining ties fall back to player name, then stat. A row that does not
- * carry a hit count counts as proven (its rate speaks for itself). The
- * order is a fixed key per row, so comparisons stay transitive even when
- * a list mixes rows with and without hit counts.
+ * carry a hit count sorts as if it had none, below every counted row.
+ * The order is a fixed key per row, so comparisons stay transitive even
+ * when a list mixes rows with and without hit counts.
  */
-export function compareHitRateDesc(
+export function compareHitsDesc(
   left: { hitRate: number | null; hits?: number; name: string; stat: string },
   right: { hitRate: number | null; hits?: number; name: string; stat: string },
 ): number {
-  const keyOf = (row: { hitRate: number | null; hits?: number }): [number, number, number, number] => [
+  const keyOf = (row: { hitRate: number | null; hits?: number }): [number, number, number] => [
     row.hitRate === null ? 1 : 0,
-    row.hits !== undefined && row.hits < 2 ? 1 : 0,
-    -(row.hitRate ?? -1),
     -(row.hits ?? -1),
+    -(row.hitRate ?? -1),
   ];
   const leftKey = keyOf(left);
   const rightKey = keyOf(right);

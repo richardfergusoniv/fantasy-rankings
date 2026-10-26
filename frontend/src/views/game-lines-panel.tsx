@@ -22,7 +22,7 @@ import {
   PROP_POSITIONS,
   PROP_STAT_OPTIONS,
   buildPropHistory,
-  compareHitRateDesc,
+  compareHitsDesc,
   impliedProbability,
   indexPlayedWeeks,
   indexWeekStatsByPlayer,
@@ -522,7 +522,7 @@ export function GameLinesPanel({
       });
     }
 
-    built.sort(compareHitRateDesc);
+    built.sort(compareHitsDesc);
     return built;
   }, [
     gameTeamFilter,
@@ -583,14 +583,14 @@ export function GameLinesPanel({
           break;
         }
         case "hit":
-          // The shared hit-rate order (best first, one-timers demoted),
+          // The shared hit order (most hits first, rate breaks ties),
           // negated into this switch's ascending convention; the dir
           // multiplier below flips it to descending for the default view.
-          cmp = -compareHitRateDesc(a, b);
+          cmp = -compareHitsDesc(a, b);
           break;
       }
       if (cmp !== 0) return cmp * dir;
-      return compareHitRateDesc(a, b);
+      return compareHitsDesc(a, b);
     });
     return rowsCopy;
   }, [propRows, sortKey, sortAsc]);
