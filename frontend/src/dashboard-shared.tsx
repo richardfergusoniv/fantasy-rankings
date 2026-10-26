@@ -477,6 +477,17 @@ function MatchupStatRow({ stat, pairing, left, right }: { stat: MatchupStatConfi
   );
 }
 
+/** Weekday + date from the schedule row's raw strings ("Sun, Oct 26").
+ * Fallback for games whose kickoff time cannot be parsed: the game card's
+ * own label degrades to "—" in exactly that case, so it cannot be reused. */
+function kickoffDateLabel(row: { weekday: string; gameday: string }): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(row.gameday);
+  if (!match || !row.weekday) return null;
+  const date = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
+    .format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))));
+  return `${row.weekday.slice(0, 3)}, ${date}`;
+}
+
 export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, toolLinks, gameLines, suspended = false }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; toolLinks?: ToolLinkItem[]; gameLines?: readonly TeamGameLineLike[]; suspended?: boolean }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [pairingTab, setPairingTab] = useState<"team-offense" | "team-defense">("team-offense");
@@ -518,10 +529,15 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
         return (away === teamCode && home === opponentCode) || (away === opponentCode && home === teamCode);
       }) ?? null
     : null;
+  const gameRow = gameCard
+    ? (gamesQuery.data?.weekRows ?? []).find((row) => row.gameId === gameCard.gameId) ?? null
+    : null;
   const kickoffLabel = gameCard
     ? gameCard.kickoffAtMs !== null
       ? `${new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }).format(new Date(gameCard.kickoffAtMs))} PT`
-      : gameCard.kickoffPt
+      : gameRow
+        ? kickoffDateLabel(gameRow)
+        : null
     : null;
   const findRow = (table: PfnTable | null, code: string | null) => table?.rows.find((row) => canonicalNflTeam(row.team) === code);
   const teamRows = {

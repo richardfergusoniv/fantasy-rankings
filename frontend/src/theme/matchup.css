@@ -92,9 +92,9 @@
 .matchup-data-header.matchup-data-header-minimal { justify-content: flex-end; }
 /* The card's top row: kickoff date/time at the left, the two team badges
    centered on the same row. */
-.matchup-kickoff-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
+.matchup-kickoff-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
 .matchup-kickoff-row .matchup-stat-columns { padding: 0; border-bottom: 0; }
-.matchup-kickoff-label { color: var(--dim); font-size: var(--type-caption); font-weight: 600; white-space: nowrap; }
+.matchup-kickoff-label { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .matchup-reference-button.matchup-team-open .matchup-reference-button-label { min-height: 40px; padding: 6px 14px 5px; border-radius: var(--radius-sm); font-size: var(--type-section); }
 .matchup-team-open .matchup-reference-arrow { font-size: var(--type-section); }
 .matchup-reference-arrow { color: var(--link); font-size: var(--type-body, 1rem); font-weight: 700; line-height: 1; }
