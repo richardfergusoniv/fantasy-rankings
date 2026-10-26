@@ -29,6 +29,7 @@ import { RefreshIcon, SectionError } from "./section-error";
 import { dashboardFreshness } from "./dashboard-freshness";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { gameLineSummary, type TeamGameLineLike } from "./game-line-summary";
+import { GAME_LINES_STALE_MS, loadNflverseGameLines } from "../../api/_lib/nflverse-game-lines";
 import { ModalPortal, useDialogFocusTrap } from "./shared";
 import {
   TRADE_REMOVE_TOAST_ID,
@@ -493,6 +494,13 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
+  const gamesQuery = useQuery({
+    queryKey: ["nflverse-game-lines", season, week],
+    queryFn: () => loadNflverseGameLines(season, week),
+    staleTime: GAME_LINES_STALE_MS,
+    gcTime: GAME_LINES_STALE_MS * 2,
+    retry: false,
+  });
   const tables = tablesQuery.data?.tables;
   const offense = tables?.offense ?? null;
   const defense = tables?.defense ?? null;
@@ -502,6 +510,18 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   const opponentCodeLabel = opponentCode && opponentCode.length <= 4 ? opponentCode : matchup.opponent;
   const lineSummary = teamCode && opponentCode && matchup.gamePhase !== "final"
     ? gameLineSummary(gameLines ?? [], teamCode, opponentCode)
+    : null;
+  const gameCard = teamCode && opponentCode
+    ? (gamesQuery.data?.cards ?? []).find((card) => {
+        const away = canonicalNflTeam(card.awayTeam);
+        const home = canonicalNflTeam(card.homeTeam);
+        return (away === teamCode && home === opponentCode) || (away === opponentCode && home === teamCode);
+      }) ?? null
+    : null;
+  const kickoffLabel = gameCard
+    ? gameCard.kickoffAtMs !== null
+      ? `${new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" }).format(new Date(gameCard.kickoffAtMs))} PT`
+      : gameCard.kickoffPt
     : null;
   const findRow = (table: PfnTable | null, code: string | null) => table?.rows.find((row) => canonicalNflTeam(row.team) === code);
   const teamRows = {
@@ -546,6 +566,29 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
             <h2 id="matchup-card-title" className="sr-only">{matchup.team} {matchup.isAway ? "@" : "vs"} {matchup.opponent}</h2>
             <button type="button" onClick={onClose} aria-label="Close matchup data">×</button>
           </div>
+          <div className="matchup-kickoff-row">
+            {kickoffLabel ? <span className="matchup-kickoff-label">{kickoffLabel}</span> : <span aria-hidden="true" />}
+            <div className="matchup-stat-columns" role="group" aria-label={`${matchup.team} versus ${matchup.opponent}`}>
+              <div className="matchup-stat-team">
+                {onOpenTeam ? (
+                  <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.team} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.team)}>
+                    <span className="matchup-reference-button-label">{matchup.team}</span>
+                    <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+                  </button>
+                ) : <strong>{matchup.team}</strong>}
+              </div>
+              <span className="matchup-versus" aria-hidden="true">vs</span>
+              <div className="matchup-stat-team">
+                {onOpenTeam ? (
+                  <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.opponent} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.opponent)}>
+                    <span className="matchup-reference-button-label">{matchup.opponent}</span>
+                    <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+                  </button>
+                ) : <strong>{matchup.opponent}</strong>}
+              </div>
+            </div>
+            <span aria-hidden="true" />
+          </div>
           {toolLinks ? <ToolLinks ariaLabel={`Open ${matchup.team} and ${matchup.opponent} in a tool`} links={toolLinks} /> : null}
           {lineSummary ? <p className="matchup-game-line"><span>Line</span> {lineSummary}</p> : null}
 
@@ -571,25 +614,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
             <>
               <section className="matchup-grade-section" aria-label="Matchups">
                 <div className="matchup-stat-groups" aria-label={`${matchup.team} and ${matchup.opponent} PFN offense versus defense matchups`}>
-                  <div className="matchup-stat-columns" role="group" aria-label={`${matchup.team} versus ${matchup.opponent}`}>
-                    <div className="matchup-stat-team">
-                      {onOpenTeam ? (
-                        <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.team} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.team)}>
-                          <span className="matchup-reference-button-label">{matchup.team}</span>
-                          <span className="matchup-reference-arrow" aria-hidden="true">›</span>
-                        </button>
-                      ) : <strong>{matchup.team}</strong>}
-                    </div>
-                    <span className="matchup-versus" aria-hidden="true">vs</span>
-                    <div className="matchup-stat-team">
-                      {onOpenTeam ? (
-                        <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.opponent} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.opponent)}>
-                          <span className="matchup-reference-button-label">{matchup.opponent}</span>
-                          <span className="matchup-reference-arrow" aria-hidden="true">›</span>
-                        </button>
-                      ) : <strong>{matchup.opponent}</strong>}
-                    </div>
-                  </div>
                   <Tabs value={pairingTab} onValueChange={(value) => setPairingTab(value as "team-offense" | "team-defense")} className="matchup-pairing-tabs">
                     <TabsList aria-label="Matchup side">
                       <TabsTrigger id="matchup-team-offense-tab" value="team-offense" aria-controls="matchup-team-offense-panel">{teamCodeLabel} {matchupPairings[0].leftUnit} vs {opponentCodeLabel} {matchupPairings[0].rightUnit}</TabsTrigger>
