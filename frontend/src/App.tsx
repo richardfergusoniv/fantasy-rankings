@@ -1077,12 +1077,29 @@ export function App() {
     hasPayload: tradeWaiverQuery.data?.section === "trade-waiver" && tradeWaiverQuery.data.data != null,
     dataUndefined: tradeWaiverQuery.data === undefined,
   });
+  // Rankings and Waivers render league badges and roster-card lookups from
+  // the league section, so they wait until its payload is usable — including
+  // the building state, where the section answers data: null between polls
+  // and isPending alone would release the gate with empty power data.
+  const leagueSectionWaiting = isSectionWaiting({
+    active: (tab === "rankings" || tab === "waivers") && !hasCompleteDashboard,
+    isError: leagueQuery.isError,
+    isPending: leagueQuery.isPending,
+    isFetching: leagueQuery.isFetching,
+    hasPayload: leagueQuery.data?.section === "league" && leagueQuery.data.data != null,
+    dataUndefined: leagueQuery.data === undefined,
+  }) || (!hasCompleteDashboard
+    && !leagueQuery.isError
+    && !sectionBuildFailed(leagueQuery.data)
+    && leagueQuery.data?.section === "league"
+    && leagueQuery.data.data == null);
   const currentSectionLoading = tradeSectionWaiting
     || tradeWaiverWaiting
+    || leagueSectionWaiting
     || (!hasCompleteDashboard && (
       (tab === "team" && teamQuery.isPending)
       || (MARKET_TOOL_TABS.has(tab) && (teamQuery.isPending || leagueQuery.isPending || analyticsQuery.isPending || playersQuery.isPending))
-      || ((tab === "rankings" || tab === "waivers") && (playersQuery.isPending || leagueQuery.isPending))
+      || ((tab === "rankings" || tab === "waivers") && playersQuery.isPending)
       || (tab === "draft" && playersQuery.isPending)
       || (tab === "trade" && (playersQuery.isPending || teamQuery.isPending))
       || (tab === "power" && (leagueQuery.isPending || teamQuery.isPending || playersQuery.isPending))
