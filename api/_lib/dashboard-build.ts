@@ -84,6 +84,7 @@ import { rankingsForLeagueFormats, redraftTwinFormat } from "./season-long-forma
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
 import {
+  applyActualRanks,
   mergePlayerProjections,
   projectionBoardIsUsable,
   type SleeperProjection,
@@ -1825,6 +1826,11 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         }
       }
     }
+
+    // With actuals stamped, final players re-rank on what they scored
+    // (above or below the remaining projections); live and pregame players
+    // keep their projection ranks.
+    applyActualRanks(leagueRankings, rankingField);
 
     const makePlayer = (playerId: string, isStarter: boolean, activeMatchup: SleeperMatchup | undefined, starterIndex?: number): RosterPlayer => {
       const meta = players[playerId];

@@ -833,9 +833,12 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
         const projected = league.rankingField === "ppr" ? row.ppr : row.halfPpr;
         // Once a game is live or final, the row shows the points actually
         // scored (stamped onto the ranking row by the dashboard build)
-        // instead of the pregame projection. Sorting stays on the
-        // projection so the list order does not churn as games end.
+        // instead of the pregame projection. Cross-position sorts use the
+        // same value the build ranks on: the actual once the game is
+        // final, the projection otherwise (live games keep the projection
+        // so the order does not churn mid-game).
         const showActual = (row.gamePhase === "final" || row.gamePhase === "live") && typeof row.actual === "number";
+        const sortValue = row.gamePhase === "final" && typeof row.actual === "number" ? row.actual : projected;
         return {
           key: row.playerId,
           rank: league.rankingField === "ppr" ? row.pprRank : row.halfPprRank,
@@ -845,7 +848,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
           ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId, rosterIdByPlayerId),
           projection: showActual ? row.actual : projected,
           projectionLabel: showActual ? "PTS" : "PROJ",
-          sortProjection: projected,
+          sortProjection: sortValue,
           projectionSource: row.projectionSource,
           position: row.position,
           isRookie: rookiePlayerIds.has(row.playerId),
