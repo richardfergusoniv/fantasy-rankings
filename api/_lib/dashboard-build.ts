@@ -1702,24 +1702,20 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const rankings = [...rankingsByLeagueId.values()].flat();
   const weeklyChartRankings = rankings;
   // Free-agent actuals: the matchup points stamped per league below only
-  // cover rostered players, so pre-load weekly stat lines for the
-  // strongest players whose games are live or final. Each league scores
+  // cover rostered players, and rosters are only known inside the league
+  // loop, so each league lazily loads weekly stat lines for its own
+  // strongest unrostered live/final players. Loads are shared across
+  // leagues and backed by the per-player source cache; each league scores
   // the lines through its own settings at stamp time.
-  const bestProjectionByPlayerId = new Map<string, number>();
-  for (const row of rankings) {
-    const phase = gamePhaseByTeam.get(canonicalTeam(row.team));
-    if (row.isBye || row.leagueProjection === null || (phase !== "live" && phase !== "final")) continue;
-    if (row.leagueProjection > (bestProjectionByPlayerId.get(row.playerId) ?? Number.NEGATIVE_INFINITY)) {
-      bestProjectionByPlayerId.set(row.playerId, row.leagueProjection);
-    }
-  }
-  const freeAgentCandidateIds = [...bestProjectionByPlayerId.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 200)
-    .map(([playerId]) => playerId);
-  const freeAgentStatsByPlayerId = freeAgentCandidateIds.length > 0
-    ? await loadFreeAgentWeeklyStats(freeAgentCandidateIds, season, week)
-    : new Map<string, Record<string, number>>();
+  const freeAgentStatsByPlayerId = new Map<string, Record<string, number>>();
+  const freeAgentStatsRequested = new Set<string>();
+  const ensureFreeAgentStats = async (playerIds: string[]): Promise<void> => {
+    const wanted = playerIds.filter((playerId) => !freeAgentStatsRequested.has(playerId));
+    if (wanted.length === 0) return;
+    for (const playerId of wanted) freeAgentStatsRequested.add(playerId);
+    const loaded = await loadFreeAgentWeeklyStats(wanted, season, week);
+    for (const [playerId, stats] of loaded) freeAgentStatsByPlayerId.set(playerId, stats);
+  };
   defenses = [...defensesByLeagueId.values()].flat();
   if (attachWeekContext && !useVegasPrimary) {
     const coverageLabel = isFirstDownSnapshot
@@ -1807,6 +1803,21 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     }
     for (const row of leagueRankings) {
       row.gamePhase = gamePhaseByTeam.get(canonicalTeam(row.team)) ?? null;
+    }
+    // This league's free agents (and every player, if the matchup feed
+    // failed) need scored stat lines instead of matchup points.
+    const rosteredIds = new Set(rosters.flatMap((roster) => roster.players ?? []));
+    const matchupFeedMissing = matchupsResult.status === "rejected";
+    const freeAgentCandidates = leagueRankings
+      .filter((row) => (row.gamePhase === "live" || row.gamePhase === "final")
+        && !matchupPointsByPlayerId.has(row.playerId)
+        && (matchupFeedMissing || !rosteredIds.has(row.playerId)))
+      .sort((a, b) => (b.leagueProjection ?? Number.NEGATIVE_INFINITY) - (a.leagueProjection ?? Number.NEGATIVE_INFINITY))
+      .slice(0, 150);
+    if (freeAgentCandidates.length > 0) {
+      await ensureFreeAgentStats(freeAgentCandidates.map((row) => row.playerId));
+    }
+    for (const row of leagueRankings) {
       const matchupPoints = matchupPointsByPlayerId.get(row.playerId);
       if (matchupPoints !== undefined) {
         row.actual = matchupPoints;

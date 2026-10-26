@@ -22,7 +22,18 @@ export function scoreProjectedPlayerStats(
     "fum", "fum_lost", "pr_yd", "kr_yd", "pr_td", "kr_td",
   ];
   let total = directKeys.reduce((sum, key) => sum + (stats[key] ?? 0) * settingValue(settings, key), 0);
-  if (position === "TE") total += (stats.rec ?? 0) * settingValue(settings, "bonus_rec_te");
+  // Position reception bonuses: Sleeper can award extra points per
+  // reception to one position group (bonus_rec_te / bonus_rec_rb /
+  // bonus_rec_wr). All three count toward the league's official points,
+  // so a from-stats rescoring must apply whichever the league sets.
+  const recBonusKey = position === "TE"
+    ? "bonus_rec_te"
+    : position === "RB"
+      ? "bonus_rec_rb"
+      : position === "WR"
+        ? "bonus_rec_wr"
+        : null;
+  if (recBonusKey) total += (stats.rec ?? 0) * settingValue(settings, recBonusKey);
 
   const bonuses: Array<[string, string, number]> = [
     ["bonus_pass_yd_300", "pass_yd", 300], ["bonus_pass_yd_400", "pass_yd", 400],

@@ -989,7 +989,9 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                   : "no projection";
               const accessibleValue = isSeasonLong
                 ? `${formatWhole(row.projection ?? 0)} ${row.projectionLabel}`
-                : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
+                : row.projectionLabel === "PTS"
+                  ? `${formatProjectionPoints(row.projection, row.projectionSource)} points scored`
+                  : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
               const rosteredBy = row.rosterTeamName && row.rosterId === null ? `, rostered by ${row.rosterTeamName}` : "";
               const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${rosteredBy}${isSelected ? ", selected" : ""}`;
               const rosterId = row.rosterId;
