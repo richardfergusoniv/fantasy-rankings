@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { rankingSchema } from "./dashboard-schemas.js";
 import {
+  applyActualRanks,
   mergePlayerProjections,
   nonKickerProjectionCount,
   projectionBoardIsUsable,
@@ -221,5 +222,65 @@ describe("mergePlayerProjections", () => {
     expect(lowRow?.leagueProjection).toBe(7);
     expect(highRow?.pprRank).toBe(1);
     expect(lowRow?.pprRank).toBe(2);
+  });
+});
+
+describe("applyActualRanks", () => {
+  it("moves a final player who outscored every projection to the top of his group", () => {
+    const rows = [
+      baseRow({ playerId: "a", name: "Alpha", position: "WR", team: "BUF", leagueProjection: 18, gamePhase: "pregame" }),
+      baseRow({ playerId: "b", name: "Bravo", position: "WR", team: "MIA", leagueProjection: 15, gamePhase: "final", actual: 27.4 }),
+      baseRow({ playerId: "c", name: "Charlie", position: "WR", team: "NYJ", leagueProjection: 12, gamePhase: "pregame" }),
+    ];
+    applyActualRanks(rows, "ppr");
+    expect(rows.map((row) => [row.playerId, row.leagueRank, row.pprRank])).toEqual([
+      ["a", 2, 2],
+      ["b", 1, 1],
+      ["c", 3, 3],
+    ]);
+  });
+
+  it("drops a final player who underscored below the remaining projections", () => {
+    const rows = [
+      baseRow({ playerId: "a", name: "Alpha", position: "RB", team: "BUF", leagueProjection: 20, gamePhase: "pregame" }),
+      baseRow({ playerId: "b", name: "Bravo", position: "RB", team: "MIA", leagueProjection: 19, gamePhase: "final", actual: 4.2 }),
+      baseRow({ playerId: "c", name: "Charlie", position: "RB", team: "NYJ", leagueProjection: 10, gamePhase: "pregame" }),
+    ];
+    applyActualRanks(rows, "halfPpr");
+    expect(rows.map((row) => [row.playerId, row.leagueRank, row.halfPprRank])).toEqual([
+      ["a", 1, 1],
+      ["b", 3, 3],
+      ["c", 2, 2],
+    ]);
+    // The other lens rank is untouched.
+    expect(rows.every((row) => row.pprRank === 999)).toBe(true);
+  });
+
+  it("keeps live and pregame players on projection order, and a final player without an actual on his projection", () => {
+    const rows = [
+      baseRow({ playerId: "a", name: "Alpha", position: "QB", team: "BUF", leagueProjection: 22, gamePhase: "live", actual: 30 }),
+      baseRow({ playerId: "b", name: "Bravo", position: "QB", team: "MIA", leagueProjection: 24, gamePhase: "pregame" }),
+      baseRow({ playerId: "c", name: "Charlie", position: "QB", team: "NYJ", leagueProjection: 21, gamePhase: "final", actual: null }),
+    ];
+    applyActualRanks(rows, "ppr");
+    expect(rows.map((row) => [row.playerId, row.leagueRank])).toEqual([
+      ["a", 2],
+      ["b", 1],
+      ["c", 3],
+    ]);
+  });
+
+  it("ranks each position group independently, with a final zero counting as a real score", () => {
+    const rows = [
+      baseRow({ playerId: "a", name: "Alpha", position: "TE", team: "BUF", leagueProjection: 9, gamePhase: "final", actual: 0 }),
+      baseRow({ playerId: "b", name: "Bravo", position: "TE", team: "MIA", leagueProjection: 8, gamePhase: "pregame" }),
+      baseRow({ playerId: "c", name: "Charlie", position: "K", team: "NYJ", leagueProjection: 7, gamePhase: "pregame" }),
+    ];
+    applyActualRanks(rows, "ppr");
+    expect(rows.map((row) => [row.playerId, row.leagueRank])).toEqual([
+      ["a", 2],
+      ["b", 1],
+      ["c", 1],
+    ]);
   });
 });

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
+import { playerWeeklyRank } from "./player-card-state";
 import { newsForTicker, PROMINENT_OVERALL_RANK_LIMIT, tickerItemKind } from "./ticker-news";
 import type {
   Dashboard,
@@ -966,7 +967,7 @@ export function App() {
       isAway: weekly?.isAway ?? rosterPlayer?.isAway ?? defense?.isAway ?? null,
       isBye: weekly?.isBye ?? rosterPlayer?.isBye ?? false,
       injuryStatus: weekly?.injuryStatus ?? rosterPlayer?.injuryStatus ?? null,
-      weeklyRank: weekly ? (weekly.leagueProjection === null ? null : league.rankingField === "ppr" ? weekly.pprRank : weekly.halfPprRank) : defense?.rank ?? rosterPlayer?.rank ?? null,
+      weeklyRank: weekly ? playerWeeklyRank(weekly, league.rankingField) : defense?.rank ?? rosterPlayer?.rank ?? null,
       weeklyProjection: weekly
         ? (weekly.gamePhase === "final" && typeof weekly.actual === "number" ? weekly.actual : league.rankingField === "ppr" ? weekly.ppr : weekly.halfPpr)
         : defense?.displayProjection ?? (rosterPlayer?.gamePhase === "final" ? rosterPlayer.actual : rosterPlayer?.projection) ?? null,

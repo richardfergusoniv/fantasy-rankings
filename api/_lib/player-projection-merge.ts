@@ -388,3 +388,28 @@ export function mergePlayerProjections(
   }
   return merged;
 }
+
+/**
+ * Re-rank one league's rows after actuals are stamped. A player whose game
+ * is final is ranked on his actual points; everyone else keeps his league
+ * projection — one shared scale, so a final player who outscored the
+ * remaining projections tops his position group and one who underscored
+ * drops below them. Live games keep the projection rank so the order does
+ * not churn mid-game. Mirrors the merge's ordering (value desc, name asc)
+ * and writes the same fields (leagueRank + the league's lens rank).
+ */
+export function applyActualRanks(rows: Ranking[], rankingField: "ppr" | "halfPpr"): void {
+  const effectiveValue = (row: Ranking): number => (row.gamePhase === "final" && typeof row.actual === "number" && Number.isFinite(row.actual)
+    ? row.actual
+    : row.leagueProjection ?? Number.NEGATIVE_INFINITY);
+  for (const position of ["QB", "RB", "WR", "TE", "K"] as const) {
+    const group = rows
+      .filter((row) => row.position === position)
+      .sort((a, b) => effectiveValue(b) - effectiveValue(a) || a.name.localeCompare(b.name));
+    group.forEach((row, index) => {
+      row.leagueRank = index + 1;
+      if (rankingField === "ppr") row.pprRank = index + 1;
+      else row.halfPprRank = index + 1;
+    });
+  }
+}
