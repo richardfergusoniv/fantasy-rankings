@@ -44,6 +44,11 @@ describe("actual kicker scoring", () => {
     }
   });
 
+  it("scores a kicker with no made field goals in a yardage league", () => {
+    expect(scoreActualPlayerStats("K", { xpm: 3 }, { fgm_yds: 0.1, xpm: 1 })).toBe(3);
+    expect(scoreActualPlayerStats("K", { fgm: 0, xpm: 2, fgmiss: 1 }, { fgm_yds: 0.1, xpm: 1, fgmiss: -1 })).toBe(1);
+  });
+
   it("accepts zero yards and scores leagues without yardage scoring", () => {
     expect(scoreActualPlayerStats("K", { fgm_yds: 0, xpm: 2 }, { fgm_yds: 0.1, xpm: 1 })).toBe(2);
     expect(scoreActualPlayerStats("K", { fgm: 1, xpm: 2 }, { fgm: 3, xpm: 1 })).toBe(5);

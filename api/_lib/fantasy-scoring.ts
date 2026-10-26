@@ -86,7 +86,15 @@ export function scoreActualPlayerStats(
   settings: Record<string, number> | undefined,
 ): number | null {
   if (position === "K" && settingValue(settings, "fgm_yds") !== 0
-    && !Number.isFinite(stats.fgm_yds)) return null;
+    && !Number.isFinite(stats.fgm_yds)) {
+    // Exact yardage is only required when a field goal was actually made.
+    // A kicker whose line has no made field goals (extra points only) has
+    // a fully known score, so the missing yardage must not void it.
+    const madeFieldGoalRecorded = (stats.fgm ?? 0) > 0
+      || (stats.fgm_0_19 ?? 0) + (stats.fgm_20_29 ?? 0) + (stats.fgm_30_39 ?? 0)
+        + (stats.fgm_40_49 ?? 0) + (stats.fgm_50_59 ?? 0) + (stats.fgm_60p ?? 0) > 0;
+    if (madeFieldGoalRecorded) return null;
+  }
   return scoreProjectedPlayerStats(position, stats, settings, {
     madeFieldGoalYards: stats.fgm_yds,
   });
