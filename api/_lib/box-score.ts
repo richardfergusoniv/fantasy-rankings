@@ -1,3 +1,4 @@
+import { parsePeriodScores } from "./period-scores.js";
 import { z } from "zod";
 import {
   badRequest,
@@ -130,14 +131,10 @@ export async function handleBoxScore(req: Request): Promise<Response> {
       // Quarter-by-quarter line score, away first (matching the title and
       // score string). Only carried when both teams report the same number
       // of periods; a partial line score would mislead.
-      const periodValues = (c: typeof competitors[number] | undefined): number[] => (c?.linescores ?? []).map((ls) => {
-        if (typeof ls.value === "number" && Number.isFinite(ls.value)) return ls.value;
-        const parsed = Number.parseFloat(ls.displayValue ?? "");
-        return Number.isFinite(parsed) ? parsed : 0;
-      });
+      const periodValues = (c: typeof competitors[number] | undefined) => parsePeriodScores(c?.linescores);
       const awayPeriods = periodValues(away);
       const homePeriods = periodValues(home);
-      const lineScore = awayPeriods.length > 0 && awayPeriods.length === homePeriods.length
+      const lineScore = awayPeriods && homePeriods && awayPeriods.length > 0 && awayPeriods.length === homePeriods.length
         ? [
             { team: awayAbbr ?? "", periods: awayPeriods, total: Number.parseInt(awayScore, 10) || 0, winner: away?.winner === true },
             { team: homeAbbr ?? "", periods: homePeriods, total: Number.parseInt(homeScore, 10) || 0, winner: home?.winner === true },
