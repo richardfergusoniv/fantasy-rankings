@@ -78,7 +78,8 @@ import {
   type SleeperRoster,
 } from "./sleeper.js";
 import { activeBenchIds, eligibleForSlot, espnStatusToPhase, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, normalizeGamePhase, optimizeLineup, sumLiveForecast } from "./lineup-optimizer.js";
-import { scoreProjectedPlayerStats } from "./fantasy-scoring.js";
+import { scoreActualPlayerStats } from "./fantasy-scoring.js";
+import { createSharedBatchLoader } from "./shared-batch-loader.js";
 import { rankingsForLeagueFormats, redraftTwinFormat } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
@@ -1708,14 +1709,10 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   // leagues and backed by the per-player source cache; each league scores
   // the lines through its own settings at stamp time.
   const freeAgentStatsByPlayerId = new Map<string, Record<string, number>>();
-  const freeAgentStatsRequested = new Set<string>();
-  const ensureFreeAgentStats = async (playerIds: string[]): Promise<void> => {
-    const wanted = playerIds.filter((playerId) => !freeAgentStatsRequested.has(playerId));
-    if (wanted.length === 0) return;
-    for (const playerId of wanted) freeAgentStatsRequested.add(playerId);
-    const loaded = await loadFreeAgentWeeklyStats(wanted, season, week);
+  const ensureFreeAgentStats = createSharedBatchLoader(async (playerIds: string[]) => {
+    const loaded = await loadFreeAgentWeeklyStats(playerIds, season, week);
     for (const [playerId, stats] of loaded) freeAgentStatsByPlayerId.set(playerId, stats);
-  };
+  });
   defenses = [...defensesByLeagueId.values()].flat();
   if (attachWeekContext && !useVegasPrimary) {
     const coverageLabel = isFirstDownSnapshot
@@ -1824,7 +1821,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       } else if (row.gamePhase === "live" || row.gamePhase === "final") {
         const stats = freeAgentStatsByPlayerId.get(row.playerId);
         if (stats) {
-          row.actual = Math.round(scoreProjectedPlayerStats(row.position, stats, league.scoring_settings) * 100) / 100;
+          row.actual = scoreActualPlayerStats(row.position, stats, league.scoring_settings);
         }
       }
     }

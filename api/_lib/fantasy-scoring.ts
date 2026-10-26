@@ -13,7 +13,7 @@ export function scoreProjectedPlayerStats(
   position: string,
   stats: Record<string, number>,
   settings: Record<string, number> | undefined,
-  opts?: { recFdProxy?: boolean },
+  opts?: { recFdProxy?: boolean; madeFieldGoalYards?: number },
 ): number {
   const directKeys = [
     "pass_yd", "pass_td", "pass_int", "pass_cmp", "pass_att", "pass_inc", "pass_sack", "pass_fd", "pass_2pt",
@@ -74,7 +74,20 @@ export function scoreProjectedPlayerStats(
     total += (stats.xpmiss ?? 0) * settingValue(settings, "xpmiss");
     const estimatedMadeYards = (stats.fgm_0_19 ?? 0) * 19 + (stats.fgm_20_29 ?? 0) * 25 + (stats.fgm_30_39 ?? 0) * 35
       + (stats.fgm_40_49 ?? 0) * 45 + (stats.fgm_50_59 ?? 0) * 55 + (stats.fgm_60p ?? 0) * 62;
-    total += estimatedMadeYards * settingValue(settings, "fgm_yds");
+    total += (opts?.madeFieldGoalYards ?? estimatedMadeYards) * settingValue(settings, "fgm_yds");
   }
   return Number(total.toFixed(2));
+}
+
+/** Actuals must never substitute bucket midpoints for observed kicking yardage. */
+export function scoreActualPlayerStats(
+  position: string,
+  stats: Record<string, number>,
+  settings: Record<string, number> | undefined,
+): number | null {
+  if (position === "K" && settingValue(settings, "fgm_yds") !== 0
+    && !Number.isFinite(stats.fgm_yds)) return null;
+  return scoreProjectedPlayerStats(position, stats, settings, {
+    madeFieldGoalYards: stats.fgm_yds,
+  });
 }
