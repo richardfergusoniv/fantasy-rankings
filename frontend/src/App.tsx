@@ -555,7 +555,6 @@ export function App() {
     }
     dashboardUrl.commit({ tab: next, playerId: null, ...CLEARED_TOOL_SELECTIONS });
   }, [dashboardUrl.commit]);
-  const appliedAppPlayerId = useRef<string | null>(null);
   const inspectorDockViewport = useInspectorDockViewport();
   useEffect(() => {
     const titles: Record<Tab, string> = {
@@ -956,14 +955,15 @@ export function App() {
       injuryStatus: weekly?.injuryStatus ?? rosterPlayer?.injuryStatus ?? null,
       weeklyRank: weekly ? (weekly.leagueProjection === null ? null : league.rankingField === "ppr" ? weekly.pprRank : weekly.halfPprRank) : defense?.rank ?? rosterPlayer?.rank ?? null,
       weeklyProjection: weekly
-        ? (league.rankingField === "ppr" ? weekly.ppr : weekly.halfPpr)
+        ? (weekly.gamePhase === "final" && typeof weekly.actual === "number" ? weekly.actual : league.rankingField === "ppr" ? weekly.ppr : weekly.halfPpr)
         : defense?.displayProjection ?? (rosterPlayer?.gamePhase === "final" ? rosterPlayer.actual : rosterPlayer?.projection) ?? null,
       projectionSource: weekly?.projectionSource ?? defense?.projectionSource ?? rosterPlayer?.projectionSource ?? null,
       seasonRank: season?.positionRank ?? null,
       seasonValue: season?.value ?? null,
       movement30Day: season ? movementPercent(season.value, season.trend30Day) : null,
       isRostered: league.rosteredPlayerIds.includes(playerId),
-      gamePhase: defense?.gamePhase ?? rosterPlayer?.gamePhase,
+      gamePhase: weekly?.gamePhase ?? defense?.gamePhase ?? rosterPlayer?.gamePhase,
+      actual: weekly?.actual ?? defense?.actualScore ?? rosterPlayer?.actual ?? null,
       defenseComponents: defense?.components ?? rosterPlayer?.defenseComponents,
       projectionComponents: weekly?.projectionComponents ?? rosterPlayer?.projectionComponents ?? null,
     };
@@ -1130,15 +1130,13 @@ export function App() {
   useEffect(() => {
     const playerId = dashboardUrl.state.playerId;
     if (!playerId) {
-      appliedAppPlayerId.current = null;
       if (playerHistory.isOpen) playerHistory.close();
       return;
     }
-    if (appliedAppPlayerId.current === playerId && playerHistory.current?.playerId === playerId) return;
     const player = dashboardPlayerDetail(playerId);
     if (!player) return;
-    appliedAppPlayerId.current = playerId;
-    if (playerHistory.current?.playerId !== playerId) playerHistory.open(player);
+    if (playerHistory.current?.playerId === playerId) playerHistory.refresh(player);
+    else playerHistory.open(player);
   }, [dashboard, dashboardUrl.state.playerId, league, leagueDashboard, tab]);
 
   if (shouldShowProgressiveShell({

@@ -1,3 +1,4 @@
+import { refreshPlayerCard, playerPointsLabel } from "./player-card-state";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
@@ -28,6 +29,7 @@ import {
   pfnRankForRow,
   projectionComponentsForPlayer,
 } from "./dashboard-shared";
+import { actualComponentsForGame } from "./actual-components";
 import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { buildGameLogRows } from "./lib/game-log-rows";
 import { positionTierLabel } from "./lib/position-tier";
@@ -109,6 +111,10 @@ export function usePlayerCardHistory() {
     });
   }, []);
 
+  const refresh = useCallback((player: PlayerSearchResult) => {
+    setHistory((current) => refreshPlayerCard(current, player));
+  }, []);
+
   const back = useCallback(() => {
     setHistory((current) => current.index > 0 ? { ...current, index: current.index - 1 } : current);
   }, []);
@@ -123,6 +129,7 @@ export function usePlayerCardHistory() {
     canGoBack: history.index > 0,
     isOpen: current !== null,
     open,
+    refresh,
     back,
     close,
   };
@@ -662,7 +669,7 @@ export function PlayerDetailSheet({
       if (!boomBustPosition) throw new Error("Unsupported position");
       return api.getBoomBustHistory({ leagueId, playerId: player.playerId, position: boomBustPosition, view: boomBustView });
     },
-    enabled: supportsBoomBust && (activeTab === "season" || activeTab === "advanced"),
+    enabled: supportsBoomBust && (activeTab === "season" || activeTab === "advanced" || (activeTab === "overview" && player.gamePhase === "final")),
     staleTime: 30 * 60 * 1000,
     retry: false,
   });
@@ -688,6 +695,10 @@ export function PlayerDetailSheet({
           : [];
       })
     : [];
+  const finalGameLog = player.gamePhase === "final"
+    ? boomBustQuery.data?.gameLog.find((game) => game.week === week) ?? null
+    : null;
+  const actualComponents = finalGameLog ? actualComponentsForGame(player.position, finalGameLog.stats) : [];
 
   const sheet = (
         <section
@@ -749,13 +760,13 @@ export function PlayerDetailSheet({
         ) : null}
         {mode === "chart" ? (
           <div className="player-chart-peek">
-            <div><span>Week {week} {player.gamePhase === "final" ? "points" : player.gamePhase === "live" ? "live projection" : "projection"}</span><i><b style={{ width: `${weeklyWidth}%` }} /></i><strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong></div>
+            <div><span>Week {week} {playerPointsLabel(player)}</span><i><b style={{ width: `${weeklyWidth}%` }} /></i><strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong></div>
             <div><span>Season-long market value</span><i><b style={{ width: `${valueWidth}%` }} /></i><strong>{player.seasonValue === null ? "—" : formatWhole(player.seasonValue)}</strong></div>
           </div>
         ) : (
           <div className="player-detail-values">
             <div>
-              <span>Week {week} {player.gamePhase === "final" ? "points" : player.gamePhase === "live" ? "live projection" : "projection"}</span>
+              <span>Week {week} {playerPointsLabel(player)}</span>
               <div className="player-detail-value-row">
                 <strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong>
                 <small>{player.weeklyProjection === null ? "No weekly projection" : player.weeklyRank === null ? "No weekly rank" : <>{positionLabel} <span className={rankToneClassName(player.weeklyRank)}>#{player.weeklyRank}</span></>}</small>
@@ -799,6 +810,19 @@ export function PlayerDetailSheet({
             </>
           ) : <div className="empty-inline compact">No recent news for this player.</div>}
         </section>
+        {player.gamePhase === "final" && actualComponents.length > 0 ? (
+          <section className="dst-breakdown" aria-label={`${player.name} game stats`}>
+            <div className="section-heading"><h3>Game stats</h3></div>
+            <div className="dst-breakdown-grid">
+              {actualComponents.map((component) => (
+                <div key={component.key}>
+                  <span>{component.label}</span>
+                  <strong>{formatWhole(component.value)}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
         {player.position !== "DEF" && player.gamePhase !== "final" && projectionComponents.length > 0 ? (
           <section className="dst-breakdown" aria-label={`${player.name} projection components`}>
             <div className="section-heading"><h3>Projection components</h3></div>
