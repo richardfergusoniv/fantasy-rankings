@@ -1100,7 +1100,7 @@ export function TradeCalculator({
           ]}
           onChange={onTradeModeChange}
           label="Trade mode"
-          className="trade-valuation-toggle page-tab-control"
+          className="trade-valuation-toggle trade-scope-toggle page-tab-control"
         />
         {tradeMode === "market" && isDynastyLeague ? (
           <SegmentedControl
@@ -1111,7 +1111,7 @@ export function TradeCalculator({
             ]}
             onChange={setMarketBasis}
             label="Market basis"
-            className="trade-valuation-toggle trade-basis-toggle"
+            className="trade-valuation-toggle trade-basis-toggle trade-scope-toggle"
           />
         ) : null}
       </div>
