@@ -498,13 +498,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
     staleTime: 60 * 60 * 1000,
     retry: false,
   });
-  const scoreQuery = useQuery({
-    queryKey: ["nfl-matchup-box-score", matchup.team, matchup.opponent, season, week],
-    queryFn: () => api.getMatchupBoxScore({ team: matchup.team, opponent: matchup.opponent, season, week }),
-    enabled: matchup.gamePhase === "final",
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
   const gamesQuery = useQuery({
     queryKey: ["nflverse-game-lines", season, week],
     queryFn: () => loadNflverseGameLines(season, week),
@@ -519,9 +512,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   const opponentCode = canonicalNflTeam(matchup.opponent);
   const teamCodeLabel = teamCode && teamCode.length <= 4 ? teamCode : matchup.team;
   const opponentCodeLabel = opponentCode && opponentCode.length <= 4 ? opponentCode : matchup.opponent;
-  const lineSummary = teamCode && opponentCode && matchup.gamePhase !== "final"
-    ? gameLineSummary(gameLines ?? [], teamCode, opponentCode)
-    : null;
   const gameCard = teamCode && opponentCode
     ? (gamesQuery.data?.cards ?? []).find((card) => {
         const away = canonicalNflTeam(card.awayTeam);
@@ -538,6 +528,20 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
       : gameRow
         ? kickoffDateLabel(gameRow)
         : null
+    : null;
+  // Several surfaces build matchup selections without a phase. The
+  // nflverse card knows whether the game is final, so derive finality
+  // here and every entry point renders the same card for the same game.
+  const isFinalGame = matchup.gamePhase === "final" || gameCard?.isFinal === true;
+  const scoreQuery = useQuery({
+    queryKey: ["nfl-matchup-box-score", matchup.team, matchup.opponent, season, week],
+    queryFn: () => api.getMatchupBoxScore({ team: matchup.team, opponent: matchup.opponent, season, week }),
+    enabled: isFinalGame,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const lineSummary = teamCode && opponentCode && !isFinalGame
+    ? gameLineSummary(gameLines ?? [], teamCode, opponentCode)
     : null;
   const findRow = (table: PfnTable | null, code: string | null) => table?.rows.find((row) => canonicalNflTeam(row.team) === code);
   const teamRows = {
@@ -608,7 +612,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
           {toolLinks ? <ToolLinks ariaLabel={`Open ${matchup.team} and ${matchup.opponent} in a tool`} links={toolLinks} /> : null}
           {lineSummary ? <p className="matchup-game-line"><span>Line</span> {lineSummary}</p> : null}
 
-          {matchup.gamePhase === "final" ? (
+          {isFinalGame ? (
             scoreQuery.isPending ? <div className="matchup-card-status" role="status"><RefreshIcon spinning /> Loading box score…</div>
               : score?.status === "owner_required" ? (
                 <div className="matchup-card-status" role="status">Live box scores are available when the owner opens this matchup.</div>
@@ -619,10 +623,32 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                   <span>Final</span>
                   <strong>{score.game.score}</strong>
                   <small>{score.game.title}</small>
-                  {score.game.sourceUrl ? <a href={score.game.sourceUrl} target="_blank" rel="noreferrer">{score.game.sourceLabel ?? "Box score source"}<span className="sr-only"> (opens in a new tab)</span></a> : null}
+                  {score.game.lineScore.length === 2 && score.game.lineScore[0].periods.length > 0 ? (
+                    <table className="matchup-box-score-table">
+                      <thead>
+                        <tr>
+                          <th scope="col"><span className="sr-only">Team</span></th>
+                          {score.game.lineScore[0].periods.map((_, periodIndex) => (
+                            <th key={periodIndex} scope="col">{periodIndex < 4 ? `Q${periodIndex + 1}` : periodIndex === 4 ? "OT" : `${periodIndex - 3}OT`}</th>
+                          ))}
+                          <th scope="col">T</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {score.game.lineScore.map((line) => (
+                          <tr key={line.team} className={line.winner ? "is-winner" : undefined}>
+                            <th scope="row">{line.team}</th>
+                            {line.periods.map((points, periodIndex) => <td key={periodIndex}>{points}</td>)}
+                            <td className="matchup-box-score-total">{line.total}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : null}
                 </section>
               )
-          ) : tablesQuery.isPending ? (
+          ) : null}
+          {tablesQuery.isPending ? (
             <div className="matchup-card-status" role="status"><RefreshIcon spinning /> Loading PFN grades…</div>
           ) : tablesQuery.isError ? (
             <SectionError title="PFN matchup data didn’t load." onRetry={() => { void tablesQuery.refetch(); }} retrying={tablesQuery.isFetching} compact />

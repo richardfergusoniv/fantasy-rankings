@@ -1,3 +1,4 @@
+import { parsePeriodScores } from "./period-scores.js";
 import { z } from "zod";
 import {
   badRequest,
@@ -40,6 +41,12 @@ const matchupBoxScoreResponse = z.object({
     away: z.string().nullable(),
     sourceLabel: z.string().nullable(),
     sourceUrl: z.string().nullable(),
+    lineScore: z.array(z.object({
+      team: z.string(),
+      periods: z.array(z.number()),
+      total: z.number(),
+      winner: z.boolean(),
+    })).default([]),
     fetchedAt: z.string(),
   }).nullable(),
 });
@@ -59,6 +66,7 @@ type EspnScoreboard = {
         homeAway?: string;
         winner?: boolean;
         score?: string;
+        linescores?: Array<{ value?: number; displayValue?: string }>;
         team?: { abbreviation?: string; displayName?: string };
       }>;
       status?: { type?: { completed?: boolean; description?: string } };
@@ -120,6 +128,18 @@ export async function handleBoxScore(req: Request): Promise<Response> {
       const awayScore = away?.score ?? "";
       const state = competition?.status?.type?.description?.trim() || null;
       const isFinal = competition?.status?.type?.completed === true;
+      // Quarter-by-quarter line score, away first (matching the title and
+      // score string). Only carried when both teams report the same number
+      // of periods; a partial line score would mislead.
+      const periodValues = (c: typeof competitors[number] | undefined) => parsePeriodScores(c?.linescores);
+      const awayPeriods = periodValues(away);
+      const homePeriods = periodValues(home);
+      const lineScore = awayPeriods && homePeriods && awayPeriods.length > 0 && awayPeriods.length === homePeriods.length
+        ? [
+            { team: awayAbbr ?? "", periods: awayPeriods, total: Number.parseInt(awayScore, 10) || 0, winner: away?.winner === true },
+            { team: homeAbbr ?? "", periods: homePeriods, total: Number.parseInt(homeScore, 10) || 0, winner: home?.winner === true },
+          ]
+        : [];
       const game = {
         title: event.shortName ?? event.name ?? `${awayAbbr ?? "?"} @ ${homeAbbr ?? "?"}`,
         score: homeScore && awayScore ? `${awayAbbr} ${awayScore} – ${homeAbbr} ${homeScore}` : "",
@@ -129,6 +149,7 @@ export async function handleBoxScore(req: Request): Promise<Response> {
         away: awayAbbr,
         sourceLabel: "ESPN",
         sourceUrl: event.links?.[0]?.href ?? null,
+        lineScore,
         fetchedAt: new Date().toISOString(),
       };
       if (!isFinal || !game.score) {

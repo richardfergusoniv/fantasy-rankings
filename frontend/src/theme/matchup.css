@@ -89,7 +89,11 @@
 .matchup-reference-tag { display: inline-flex; min-height: 18px; align-items: center; padding: 1px 5px 0; border: 1px solid var(--hairline); border-radius: var(--radius-xs); background: transparent; color: var(--text); font-size: var(--type-caption); line-height: 1; font-weight: 700; white-space: nowrap; }
 .matchup-reference-button.matchup-reference-tag { min-height: 44px; gap: 2px; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; }
 .matchup-reference-button-label { display: inline-flex; min-height: 18px; align-items: center; padding: 1px 4px 0; border: 1px solid var(--border); border-radius: var(--radius-xs); background: transparent; color: var(--text); }
-.matchup-data-header.matchup-data-header-minimal { justify-content: flex-end; }
+/* The minimal header holds only the close button: float it over the card's
+   top-right corner (its -7px button margins land it 11px from the edges,
+   exactly where the in-flow row put it) so the kickoff row starts at the
+   top of the card instead of below an empty header band. */
+.matchup-data-header.matchup-data-header-minimal { position: absolute; top: 18px; right: 18px; justify-content: flex-end; }
 /* The card's top row: kickoff date/time at the left, the two team badges
    centered on the same row. */
 .matchup-kickoff-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }

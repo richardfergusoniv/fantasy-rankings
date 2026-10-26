@@ -170,15 +170,17 @@ span.ticker-item:active { background: transparent; }
   font-size: var(--page-tab-font-size);
   font-weight: var(--page-tab-font-weight);
 }
-/* The horizon toggles (Players Rankings/Waivers and League Power scope:
-   Vegas / Season long / Dynasty) run at half the page-tab height. */
+/* The horizon toggles (Players Rankings/Waivers, League Power scope, and
+   the Trade mode toggles) run at half the page-tab height. */
 .segmented-control.rankings-mode-toggle,
-.segmented-control.power-scope-toggle {
+.segmented-control.power-scope-toggle,
+.segmented-control.trade-scope-toggle {
   min-height: calc(var(--page-tab-height) / 2);
   height: calc(var(--page-tab-height) / 2);
 }
 .segmented-control.rankings-mode-toggle button,
-.segmented-control.power-scope-toggle button {
+.segmented-control.power-scope-toggle button,
+.segmented-control.trade-scope-toggle button {
   min-height: calc((var(--page-tab-height) / 2) - (2 * var(--tab-track-padding)));
   height: calc((var(--page-tab-height) / 2) - (2 * var(--tab-track-padding)));
 }
