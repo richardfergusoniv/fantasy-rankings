@@ -464,3 +464,21 @@ export function defaultGameLineCardId(
 
   return cards[0]?.gameId ?? null;
 }
+
+/** The Game lines query payload: every parsed row, this week's rows, and
+ * their cards. Shared by the Game lines tab and the matchup card so both
+ * read one react-query cache entry under ["nflverse-game-lines", ...]. */
+export type NflverseGameLinesData = {
+  rows: NflverseGameRow[];
+  weekRows: NflverseGameRow[];
+  cards: GameLineCard[];
+};
+
+export async function loadNflverseGameLines(season: number, week: number): Promise<NflverseGameLinesData> {
+  const response = await fetch(NFLVERSE_GAMES_CSV_URL);
+  if (!response.ok) throw new Error(`game lines HTTP ${response.status}`);
+  const rows = parseGamesCsv(await response.text());
+  if (rows.length === 0) throw new Error("game lines parse failed");
+  const weekRows = gamesForSeasonWeek(rows, season, week);
+  return { rows, weekRows, cards: weekRows.map(toGameLineCard) };
+}
