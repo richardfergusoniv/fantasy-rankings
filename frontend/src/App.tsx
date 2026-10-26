@@ -664,7 +664,9 @@ export function App() {
     retry: false,
     // The Tools market views keep the league section so the shell player
     // inspector can resolve roster-card teams via leaguePowerTeamForPlayer.
-    enabled: MARKET_TOOL_TABS.has(tab) || tab === "power",
+    // Rankings and Waivers need it too: their roster badges resolve the
+    // power team (label and card lookup) from powerRankingsWeek.
+    enabled: MARKET_TOOL_TABS.has(tab) || tab === "power" || tab === "rankings" || tab === "waivers",
     refetchInterval: pollWhileSectionBuilding,
   });
   const analyticsQuery = useQuery({
@@ -679,7 +681,7 @@ export function App() {
   // tradeTeams (+ starter slots) for Matchup/Power/Trade. Live-polled with
   // the team section so LeagueTeamCard projections/gamePhase stay fresh.
   // The Tools market views need trade when the player inspector opens a league roster card.
-  const tradeSectionActive = tab === "team" || MARKET_TOOL_TABS.has(tab) || tab === "power" || tab === "trade";
+  const tradeSectionActive = tab === "team" || MARKET_TOOL_TABS.has(tab) || tab === "power" || tab === "trade" || tab === "rankings" || tab === "waivers";
   const tradeMode = effectiveTradeMode(dashboardUrl.state);
   // Waiver pool is only consumed by League-adjusted trade (not Market/History).
   const tradeWaiverActive = tab === "trade" && tradeMode === "league";
