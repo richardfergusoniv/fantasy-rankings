@@ -28,6 +28,7 @@ import {
   pfnRankForRow,
   projectionComponentsForPlayer,
 } from "./dashboard-shared";
+import { actualComponentsForGame } from "./actual-components";
 import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { buildGameLogRows } from "./lib/game-log-rows";
 import { positionTierLabel } from "./lib/position-tier";
@@ -662,7 +663,7 @@ export function PlayerDetailSheet({
       if (!boomBustPosition) throw new Error("Unsupported position");
       return api.getBoomBustHistory({ leagueId, playerId: player.playerId, position: boomBustPosition, view: boomBustView });
     },
-    enabled: supportsBoomBust && (activeTab === "season" || activeTab === "advanced"),
+    enabled: supportsBoomBust && (activeTab === "season" || activeTab === "advanced" || (activeTab === "overview" && player.gamePhase === "final")),
     staleTime: 30 * 60 * 1000,
     retry: false,
   });
@@ -688,6 +689,10 @@ export function PlayerDetailSheet({
           : [];
       })
     : [];
+  const finalGameLog = player.gamePhase === "final"
+    ? boomBustQuery.data?.gameLog.find((game) => game.week === week) ?? null
+    : null;
+  const actualComponents = finalGameLog ? actualComponentsForGame(player.position, finalGameLog.stats) : [];
 
   const sheet = (
         <section
@@ -799,6 +804,19 @@ export function PlayerDetailSheet({
             </>
           ) : <div className="empty-inline compact">No recent news for this player.</div>}
         </section>
+        {player.gamePhase === "final" && actualComponents.length > 0 ? (
+          <section className="dst-breakdown" aria-label={`${player.name} game stats`}>
+            <div className="section-heading"><h3>Game stats</h3></div>
+            <div className="dst-breakdown-grid">
+              {actualComponents.map((component) => (
+                <div key={component.key}>
+                  <span>{component.label}</span>
+                  <strong>{formatWhole(component.value)}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
         {player.position !== "DEF" && player.gamePhase !== "final" && projectionComponents.length > 0 ? (
           <section className="dst-breakdown" aria-label={`${player.name} projection components`}>
             <div className="section-heading"><h3>Projection components</h3></div>

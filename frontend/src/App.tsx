@@ -956,14 +956,15 @@ export function App() {
       injuryStatus: weekly?.injuryStatus ?? rosterPlayer?.injuryStatus ?? null,
       weeklyRank: weekly ? (weekly.leagueProjection === null ? null : league.rankingField === "ppr" ? weekly.pprRank : weekly.halfPprRank) : defense?.rank ?? rosterPlayer?.rank ?? null,
       weeklyProjection: weekly
-        ? (league.rankingField === "ppr" ? weekly.ppr : weekly.halfPpr)
+        ? (weekly.gamePhase === "final" && typeof weekly.actual === "number" ? weekly.actual : league.rankingField === "ppr" ? weekly.ppr : weekly.halfPpr)
         : defense?.displayProjection ?? (rosterPlayer?.gamePhase === "final" ? rosterPlayer.actual : rosterPlayer?.projection) ?? null,
       projectionSource: weekly?.projectionSource ?? defense?.projectionSource ?? rosterPlayer?.projectionSource ?? null,
       seasonRank: season?.positionRank ?? null,
       seasonValue: season?.value ?? null,
       movement30Day: season ? movementPercent(season.value, season.trend30Day) : null,
       isRostered: league.rosteredPlayerIds.includes(playerId),
-      gamePhase: defense?.gamePhase ?? rosterPlayer?.gamePhase,
+      gamePhase: weekly?.gamePhase ?? defense?.gamePhase ?? rosterPlayer?.gamePhase,
+      actual: weekly?.actual ?? defense?.actualScore ?? rosterPlayer?.actual ?? null,
       defenseComponents: defense?.components ?? rosterPlayer?.defenseComponents,
       projectionComponents: weekly?.projectionComponents ?? rosterPlayer?.projectionComponents ?? null,
     };
