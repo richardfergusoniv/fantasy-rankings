@@ -868,8 +868,21 @@ export function App() {
     };
   }, [dashboard, league]);
 
+  // Don't persist a dashboard while a section this tab depends on is still
+  // building (a completed response with a null payload): caching it would
+  // freeze empty tradeTeams/league data for later visits. Errors release the
+  // gate so the retry paths can run.
+  const leagueCacheBlocked = (tab === "rankings" || tab === "waivers")
+    && !dashboardQuery.data
+    && !browserDashboard
+    && !leagueQuery.isError
+    && !(leagueQuery.data?.section === "league" && leagueQuery.data.data != null);
+  const tradeCacheBlocked = tradeSectionActive
+    && !tradeQuery.isError
+    && !(tradeQuery.data?.section === "trade" && tradeQuery.data.data != null);
   useEffect(() => {
     if (!dashboard || !browserViewerId) return;
+    if (leagueCacheBlocked || tradeCacheBlocked) return;
     saveBrowserDashboard(browserViewerId, viewer.accountId, dashboard);
     if (document.documentElement.dataset.fantasyFirstContentMs) return;
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -877,7 +890,7 @@ export function App() {
       document.documentElement.dataset.fantasyFirstContentMs = String(elapsed);
       performance.mark("fantasy-first-content");
     }));
-  }, [dashboard, browserViewerId]);
+  }, [dashboard, browserViewerId, leagueCacheBlocked, tradeCacheBlocked]);
 
   useEffect(() => {
     if (!dashboard?.leagues.length) return;
@@ -1061,6 +1074,9 @@ export function App() {
   const newsLoading = newsQuery.isPending && !newsQuery.data;
   const newsError = newsQuery.isError && !newsQuery.data;
   const retryNews = () => { void newsQuery.refetch(); };
+  // A `{ section: "trade", data: null }` response means the trade section is
+  // still building server-side; the poll keeps running, so keep waiting rather
+  // than assemble a dashboard with an empty tradeTeams.
   const tradeSectionWaiting = isSectionWaiting({
     active: tradeSectionActive,
     isError: tradeQuery.isError,
@@ -1068,6 +1084,9 @@ export function App() {
     isFetching: tradeQuery.isFetching,
     hasPayload: tradeQuery.data?.section === "trade" && tradeQuery.data.data != null,
     dataUndefined: tradeQuery.data === undefined,
+    waitingForBuild: !sectionBuildFailed(tradeQuery.data)
+      && tradeQuery.data?.section === "trade"
+      && tradeQuery.data.data == null,
   });
   const tradeWaiverWaiting = isSectionWaiting({
     active: tradeWaiverActive,
