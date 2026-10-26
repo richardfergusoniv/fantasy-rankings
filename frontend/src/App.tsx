@@ -1088,11 +1088,10 @@ export function App() {
     isFetching: leagueQuery.isFetching,
     hasPayload: leagueQuery.data?.section === "league" && leagueQuery.data.data != null,
     dataUndefined: leagueQuery.data === undefined,
-  }) || (!hasCompleteDashboard
-    && !leagueQuery.isError
-    && !sectionBuildFailed(leagueQuery.data)
-    && leagueQuery.data?.section === "league"
-    && leagueQuery.data.data == null);
+    waitingForBuild: !sectionBuildFailed(leagueQuery.data)
+      && leagueQuery.data?.section === "league"
+      && leagueQuery.data.data == null,
+  });
   const currentSectionLoading = tradeSectionWaiting
     || tradeWaiverWaiting
     || leagueSectionWaiting
