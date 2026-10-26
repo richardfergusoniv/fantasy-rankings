@@ -555,7 +555,6 @@ export function App() {
     }
     dashboardUrl.commit({ tab: next, playerId: null, ...CLEARED_TOOL_SELECTIONS });
   }, [dashboardUrl.commit]);
-  const appliedAppPlayerId = useRef<string | null>(null);
   const inspectorDockViewport = useInspectorDockViewport();
   useEffect(() => {
     const titles: Record<Tab, string> = {
@@ -1131,15 +1130,13 @@ export function App() {
   useEffect(() => {
     const playerId = dashboardUrl.state.playerId;
     if (!playerId) {
-      appliedAppPlayerId.current = null;
       if (playerHistory.isOpen) playerHistory.close();
       return;
     }
-    if (appliedAppPlayerId.current === playerId && playerHistory.current?.playerId === playerId) return;
     const player = dashboardPlayerDetail(playerId);
     if (!player) return;
-    appliedAppPlayerId.current = playerId;
-    if (playerHistory.current?.playerId !== playerId) playerHistory.open(player);
+    if (playerHistory.current?.playerId === playerId) playerHistory.refresh(player);
+    else playerHistory.open(player);
   }, [dashboard, dashboardUrl.state.playerId, league, leagueDashboard, tab]);
 
   if (shouldShowProgressiveShell({

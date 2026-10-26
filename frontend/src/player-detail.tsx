@@ -1,3 +1,4 @@
+import { refreshPlayerCard, playerPointsLabel } from "./player-card-state";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
@@ -110,6 +111,10 @@ export function usePlayerCardHistory() {
     });
   }, []);
 
+  const refresh = useCallback((player: PlayerSearchResult) => {
+    setHistory((current) => refreshPlayerCard(current, player));
+  }, []);
+
   const back = useCallback(() => {
     setHistory((current) => current.index > 0 ? { ...current, index: current.index - 1 } : current);
   }, []);
@@ -124,6 +129,7 @@ export function usePlayerCardHistory() {
     canGoBack: history.index > 0,
     isOpen: current !== null,
     open,
+    refresh,
     back,
     close,
   };
@@ -754,13 +760,13 @@ export function PlayerDetailSheet({
         ) : null}
         {mode === "chart" ? (
           <div className="player-chart-peek">
-            <div><span>Week {week} {player.gamePhase === "final" ? "points" : player.gamePhase === "live" ? "live projection" : "projection"}</span><i><b style={{ width: `${weeklyWidth}%` }} /></i><strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong></div>
+            <div><span>Week {week} {playerPointsLabel(player)}</span><i><b style={{ width: `${weeklyWidth}%` }} /></i><strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong></div>
             <div><span>Season-long market value</span><i><b style={{ width: `${valueWidth}%` }} /></i><strong>{player.seasonValue === null ? "—" : formatWhole(player.seasonValue)}</strong></div>
           </div>
         ) : (
           <div className="player-detail-values">
             <div>
-              <span>Week {week} {player.gamePhase === "final" ? "points" : player.gamePhase === "live" ? "live projection" : "projection"}</span>
+              <span>Week {week} {playerPointsLabel(player)}</span>
               <div className="player-detail-value-row">
                 <strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong>
                 <small>{player.weeklyProjection === null ? "No weekly projection" : player.weeklyRank === null ? "No weekly rank" : <>{positionLabel} <span className={rankToneClassName(player.weeklyRank)}>#{player.weeklyRank}</span></>}</small>
