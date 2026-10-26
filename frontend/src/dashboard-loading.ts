@@ -36,12 +36,15 @@ export type SectionWaitingInput = {
   /** True when the query has returned a non-null section payload. */
   hasPayload: boolean;
   dataUndefined: boolean;
+  /** A null payload between polls while its background build is still pending. */
+  waitingForBuild?: boolean;
 };
 
 /** Waiting for a lazily loaded dashboard section that must land before UI. */
 export function isSectionWaiting(input: SectionWaitingInput): boolean {
   if (!input.active || input.isError) return false;
-  return input.isPending
+  return Boolean(input.waitingForBuild)
+    || input.isPending
     || input.dataUndefined
     || (input.isFetching && !input.hasPayload);
 }

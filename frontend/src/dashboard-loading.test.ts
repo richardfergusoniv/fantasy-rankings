@@ -136,3 +136,22 @@ describe("sectionBuildFailed", () => {
     expect(sectionBuildFailed({ section: "meta", data: { leagues: [] } })).toBe(false);
   });
 });
+
+describe("pending league build between polls", () => {
+  const query = {
+    active: true, isError: false, isPending: false, isFetching: false,
+    hasPayload: false, dataUndefined: false, waitingForBuild: true,
+  };
+
+  it("waits on Rankings/Waivers, then releases the gate when navigating away", () => {
+    expect(isSectionWaiting(query)).toBe(true);
+    expect(isSectionWaiting({ ...query, active: false })).toBe(false);
+    expect(isSectionWaiting(query)).toBe(true);
+  });
+
+  it("releases the gate when a full dashboard arrives, a build fails, or the query errors", () => {
+    expect(isSectionWaiting({ ...query, active: false })).toBe(false);
+    expect(isSectionWaiting({ ...query, waitingForBuild: false })).toBe(false);
+    expect(isSectionWaiting({ ...query, isError: true })).toBe(false);
+  });
+});

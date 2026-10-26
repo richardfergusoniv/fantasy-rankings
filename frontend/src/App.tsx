@@ -664,7 +664,9 @@ export function App() {
     retry: false,
     // The Tools market views keep the league section so the shell player
     // inspector can resolve roster-card teams via leaguePowerTeamForPlayer.
-    enabled: MARKET_TOOL_TABS.has(tab) || tab === "power",
+    // Rankings and Waivers need it too: their roster badges resolve the
+    // power team (label and card lookup) from powerRankingsWeek.
+    enabled: MARKET_TOOL_TABS.has(tab) || tab === "power" || tab === "rankings" || tab === "waivers",
     refetchInterval: pollWhileSectionBuilding,
   });
   const analyticsQuery = useQuery({
@@ -679,7 +681,7 @@ export function App() {
   // tradeTeams (+ starter slots) for Matchup/Power/Trade. Live-polled with
   // the team section so LeagueTeamCard projections/gamePhase stay fresh.
   // The Tools market views need trade when the player inspector opens a league roster card.
-  const tradeSectionActive = tab === "team" || MARKET_TOOL_TABS.has(tab) || tab === "power" || tab === "trade";
+  const tradeSectionActive = tab === "team" || MARKET_TOOL_TABS.has(tab) || tab === "power" || tab === "trade" || tab === "rankings" || tab === "waivers";
   const tradeMode = effectiveTradeMode(dashboardUrl.state);
   // Waiver pool is only consumed by League-adjusted trade (not Market/History).
   const tradeWaiverActive = tab === "trade" && tradeMode === "league";
@@ -1049,7 +1051,7 @@ export function App() {
     || (playersQuery.data?.section === "players" && playersQuery.data.data != null);
   const playerSectionError = !hasPlayerSectionData && (playersQuery.isError || sectionBuildFailed(playersQuery.data));
   const teamSectionError = !hasCompleteDashboard && sectionBuildFailed(teamQuery.data);
-  const leagueSectionError = !hasCompleteDashboard && sectionBuildFailed(leagueQuery.data);
+  const leagueSectionError = !hasCompleteDashboard && (leagueQuery.isError || sectionBuildFailed(leagueQuery.data));
   const analyticsSectionError = !hasCompleteDashboard && sectionBuildFailed(analyticsQuery.data);
   // League-adjusted trade also needs the waiver pool; a failed one must not
   // silently render as an empty pool.
@@ -1075,12 +1077,29 @@ export function App() {
     hasPayload: tradeWaiverQuery.data?.section === "trade-waiver" && tradeWaiverQuery.data.data != null,
     dataUndefined: tradeWaiverQuery.data === undefined,
   });
+  // Rankings and Waivers render league badges and roster-card lookups from
+  // the league section, so they wait until its payload is usable — including
+  // the building state, where the section answers data: null between polls
+  // and isPending alone would release the gate with empty power data.
+  const leagueSectionWaiting = isSectionWaiting({
+    active: (tab === "rankings" || tab === "waivers") && !hasCompleteDashboard,
+    isError: leagueQuery.isError,
+    isPending: leagueQuery.isPending,
+    isFetching: leagueQuery.isFetching,
+    hasPayload: leagueQuery.data?.section === "league" && leagueQuery.data.data != null,
+    dataUndefined: leagueQuery.data === undefined,
+    waitingForBuild: !sectionBuildFailed(leagueQuery.data)
+      && leagueQuery.data?.section === "league"
+      && leagueQuery.data.data == null,
+  });
   const currentSectionLoading = tradeSectionWaiting
     || tradeWaiverWaiting
+    || leagueSectionWaiting
     || (!hasCompleteDashboard && (
       (tab === "team" && teamQuery.isPending)
       || (MARKET_TOOL_TABS.has(tab) && (teamQuery.isPending || leagueQuery.isPending || analyticsQuery.isPending || playersQuery.isPending))
-      || ((tab === "rankings" || tab === "waivers" || tab === "draft") && playersQuery.isPending)
+      || ((tab === "rankings" || tab === "waivers") && playersQuery.isPending)
+      || (tab === "draft" && playersQuery.isPending)
       || (tab === "trade" && (playersQuery.isPending || teamQuery.isPending))
       || (tab === "power" && (leagueQuery.isPending || teamQuery.isPending || playersQuery.isPending))
       || (tab === "comparison" && (analyticsQuery.isPending || playersQuery.isPending))
@@ -1352,7 +1371,8 @@ export function App() {
           } satisfies Record<Tab, string>)[tab]}</h1>
           <FeatureErrorBoundary title="This section didn’t load." resetKeys={[tab]}>
           {currentSectionLoading ? <SectionLoading label={`Loading ${({ team: "Matchup", players: "Players", league: "League", draft: "Draft", tools: "Tools" } as const)[primaryPage]}…`} />
-            : (tab === "rankings" || tab === "waivers" || tab === "comparison") && playerSectionError ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : tab === "waivers" ? "Waiver wire didn’t load." : "Comparison didn’t load."} onRetry={() => { retrySection(playersQuery, "players"); }} retrying={playersQuery.isFetching} />
+            : (tab === "rankings" || tab === "waivers") && (playerSectionError || leagueSectionError || tradeSectionError) ? <SectionError title={tab === "rankings" ? "Rankings didn’t load." : "Waiver wire didn’t load."} onRetry={() => { if (playerSectionError) retrySection(playersQuery, "players"); if (leagueSectionError) retrySection(leagueQuery, "league"); if (tradeSectionError) { retrySection(tradeQuery, "trade"); if (tradeWaiverError) retrySection(tradeWaiverQuery, "trade-waiver"); } }} retrying={playersQuery.isFetching || leagueQuery.isFetching || tradeQuery.isFetching || tradeWaiverQuery.isFetching} />
+            : tab === "comparison" && playerSectionError ? <SectionError title="Comparison didn’t load." onRetry={() => { retrySection(playersQuery, "players"); }} retrying={playersQuery.isFetching} />
             : tab === "comparison" && analyticsSectionError ? <SectionError title="Comparison didn’t load." onRetry={() => { retrySection(analyticsQuery, "analytics"); }} retrying={analyticsQuery.isFetching} />
             : tab === "team" && teamSectionError ? <SectionError title="Matchup didn’t load." onRetry={() => { retrySection(teamQuery, "team"); }} retrying={teamQuery.isFetching} />
             : tab === "power" && leagueSectionError ? <SectionError title="Power rankings didn’t load." onRetry={() => { retrySection(leagueQuery, "league"); }} retrying={leagueQuery.isFetching} />
