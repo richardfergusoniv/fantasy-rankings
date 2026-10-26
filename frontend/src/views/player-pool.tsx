@@ -828,6 +828,12 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
       .filter((row) => includedPositions.includes(row.position))
       .filter((row) => !availableOnly || !rostered.has(row.playerId))
       .map((row) => {
+        const projected = league.rankingField === "ppr" ? row.ppr : row.halfPpr;
+        // Once a game is live or final, the row shows the points actually
+        // scored (stamped onto the ranking row by the dashboard build)
+        // instead of the pregame projection. Sorting stays on the
+        // projection so the list order does not churn as games end.
+        const showActual = (row.gamePhase === "final" || row.gamePhase === "live") && typeof row.actual === "number";
         return {
           key: row.playerId,
           rank: league.rankingField === "ppr" ? row.pprRank : row.halfPprRank,
@@ -835,8 +841,9 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
           meta: `${row.position} · ${row.team}${row.opponent ? ` · ${matchupLabel(row.opponent, row.isAway)}` : ""}`,
           teamContext: null,
           ...rosterBadgeForPlayer(row.playerId, rosterTeamByPlayer, powerTeamByPlayerId, rosterIdByPlayerId),
-          projection: league.rankingField === "ppr" ? row.ppr : row.halfPpr,
-          projectionLabel: "PROJ",
+          projection: showActual ? row.actual : projected,
+          projectionLabel: showActual ? "PTS" : "PROJ",
+          sortProjection: projected,
           projectionSource: row.projectionSource,
           position: row.position,
           isRookie: rookiePlayerIds.has(row.playerId),
@@ -845,7 +852,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
         };
       })
       .sort((a, b) => effectivePosition === "FLEX" || effectivePosition === "SUPER"
-        ? (b.projection ?? -1) - (a.projection ?? -1) || a.rank - b.rank
+        ? (b.sortProjection ?? -1) - (a.sortProjection ?? -1) || a.rank - b.rank
         : a.rank - b.rank);
   }, [availableOnly, dashboard.seasonLongRankings, effectiveHorizon, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, leagueDefenses, leagueRankings, powerTeamByPlayerId, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
   const visibleRows = rows.slice(0, visibleRowCount);
@@ -982,7 +989,9 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                   : "no projection";
               const accessibleValue = isSeasonLong
                 ? `${formatWhole(row.projection ?? 0)} ${row.projectionLabel}`
-                : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
+                : row.projectionLabel === "PTS"
+                  ? `${formatProjectionPoints(row.projection, row.projectionSource)} points scored`
+                  : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
               const rosteredBy = row.rosterTeamName && row.rosterId === null ? `, rostered by ${row.rosterTeamName}` : "";
               const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${rosteredBy}${isSelected ? ", selected" : ""}`;
               const rosterId = row.rosterId;

@@ -199,6 +199,8 @@ function baseDashboard(overrides: Partial<Dashboard> = {}): Dashboard {
         projectionComponents: null,
         injuryStatus: null,
         gameTime: null,
+        actual: null,
+        gamePhase: null,
       },
     ],
     weeklyChartRankings: [],

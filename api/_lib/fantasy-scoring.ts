@@ -13,7 +13,7 @@ export function scoreProjectedPlayerStats(
   position: string,
   stats: Record<string, number>,
   settings: Record<string, number> | undefined,
-  opts?: { recFdProxy?: boolean },
+  opts?: { recFdProxy?: boolean; madeFieldGoalYards?: number },
 ): number {
   const directKeys = [
     "pass_yd", "pass_td", "pass_int", "pass_cmp", "pass_att", "pass_inc", "pass_sack", "pass_fd", "pass_2pt",
@@ -22,7 +22,18 @@ export function scoreProjectedPlayerStats(
     "fum", "fum_lost", "pr_yd", "kr_yd", "pr_td", "kr_td",
   ];
   let total = directKeys.reduce((sum, key) => sum + (stats[key] ?? 0) * settingValue(settings, key), 0);
-  if (position === "TE") total += (stats.rec ?? 0) * settingValue(settings, "bonus_rec_te");
+  // Position reception bonuses: Sleeper can award extra points per
+  // reception to one position group (bonus_rec_te / bonus_rec_rb /
+  // bonus_rec_wr). All three count toward the league's official points,
+  // so a from-stats rescoring must apply whichever the league sets.
+  const recBonusKey = position === "TE"
+    ? "bonus_rec_te"
+    : position === "RB"
+      ? "bonus_rec_rb"
+      : position === "WR"
+        ? "bonus_rec_wr"
+        : null;
+  if (recBonusKey) total += (stats.rec ?? 0) * settingValue(settings, recBonusKey);
 
   const bonuses: Array<[string, string, number]> = [
     ["bonus_pass_yd_300", "pass_yd", 300], ["bonus_pass_yd_400", "pass_yd", 400],
@@ -63,7 +74,28 @@ export function scoreProjectedPlayerStats(
     total += (stats.xpmiss ?? 0) * settingValue(settings, "xpmiss");
     const estimatedMadeYards = (stats.fgm_0_19 ?? 0) * 19 + (stats.fgm_20_29 ?? 0) * 25 + (stats.fgm_30_39 ?? 0) * 35
       + (stats.fgm_40_49 ?? 0) * 45 + (stats.fgm_50_59 ?? 0) * 55 + (stats.fgm_60p ?? 0) * 62;
-    total += estimatedMadeYards * settingValue(settings, "fgm_yds");
+    total += (opts?.madeFieldGoalYards ?? estimatedMadeYards) * settingValue(settings, "fgm_yds");
   }
   return Number(total.toFixed(2));
+}
+
+/** Actuals must never substitute bucket midpoints for observed kicking yardage. */
+export function scoreActualPlayerStats(
+  position: string,
+  stats: Record<string, number>,
+  settings: Record<string, number> | undefined,
+): number | null {
+  if (position === "K" && settingValue(settings, "fgm_yds") !== 0
+    && !Number.isFinite(stats.fgm_yds)) {
+    // Exact yardage is only required when a field goal was actually made.
+    // A kicker whose line has no made field goals (extra points only) has
+    // a fully known score, so the missing yardage must not void it.
+    const madeFieldGoalRecorded = (stats.fgm ?? 0) > 0
+      || (stats.fgm_0_19 ?? 0) + (stats.fgm_20_29 ?? 0) + (stats.fgm_30_39 ?? 0)
+        + (stats.fgm_40_49 ?? 0) + (stats.fgm_50_59 ?? 0) + (stats.fgm_60p ?? 0) > 0;
+    if (madeFieldGoalRecorded) return null;
+  }
+  return scoreProjectedPlayerStats(position, stats, settings, {
+    madeFieldGoalYards: stats.fgm_yds,
+  });
 }

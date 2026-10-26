@@ -30,6 +30,11 @@ export const rankingSchema = z.object({
   projectionComponents: z.record(z.string(), z.number()).nullable(),
   injuryStatus: z.string().nullable(),
   gameTime: z.string().nullable(),
+  // Points the player has actually scored this week and their game's
+  // phase, stamped during the dashboard build once matchups are known.
+  // Defaults keep snapshots cached before these fields existed valid.
+  actual: z.number().nullable().default(null),
+  gamePhase: z.enum(["pregame", "live", "final"]).nullable().default(null),
 });
 
 export const defenseProjectionComponentsSchema = z.record(z.string(), z.number());

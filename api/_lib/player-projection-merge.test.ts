@@ -33,6 +33,8 @@ function baseRow(partial: Partial<Ranking> & Pick<Ranking, "playerId" | "name" |
     projectionComponents: null,
     injuryStatus: null,
     gameTime: null,
+    actual: null,
+    gamePhase: null,
     ...partial,
   };
 }
