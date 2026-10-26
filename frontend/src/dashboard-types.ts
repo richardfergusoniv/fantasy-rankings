@@ -64,6 +64,7 @@ export type PlayerSearchResult = {
   movement30Day: number | null;
   isRostered: boolean;
   gamePhase?: "pregame" | "live" | "final" | null;
+  actual?: number | null;
   defenseComponents?: Dashboard["defenses"][number]["components"];
   projectionComponents?: Dashboard["rankings"][number]["projectionComponents"];
 };

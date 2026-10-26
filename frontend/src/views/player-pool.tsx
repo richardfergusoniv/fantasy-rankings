@@ -944,7 +944,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                 onPointerDown={() => prefetchPlayerPanels(row)}
                 onFocus={() => prefetchPlayerPanels(row)}
                 onClick={() => selectSearchResult(row)}
-                aria-label={`View ${row.name}, ${row.position === "DEF" ? "DST" : row.position}, ${accessibleMatchupLabel(row.team, row.opponent, row.isAway, row.isBye)}, ${row.weeklyProjection === null ? "no projection" : `${formatProjectionPoints(row.weeklyProjection, row.projectionSource)} projected points`}, ${row.seasonValue === null ? "no season value" : `${formatWhole(row.seasonValue)} season value`}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${isMine ? ", on your team" : ""}${isSelected ? ", selected" : ""}`}
+                aria-label={`View ${row.name}, ${row.position === "DEF" ? "DST" : row.position}, ${accessibleMatchupLabel(row.team, row.opponent, row.isAway, row.isBye)}, ${row.weeklyProjection === null ? "no projection" : `${formatProjectionPoints(row.weeklyProjection, row.projectionSource)} ${row.gamePhase === "final" && typeof row.actual === "number" ? "points scored" : "projected points"}`}, ${row.seasonValue === null ? "no season value" : `${formatWhole(row.seasonValue)} season value`}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${isMine ? ", on your team" : ""}${isSelected ? ", selected" : ""}`}
               >
                 <span className="player-search-main">
                   <span className="player-search-name">
