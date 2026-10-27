@@ -488,17 +488,26 @@ export function indexPlayedWeeks(
 
 /**
  * Index nflverse week rows by player id (when present) and name+team+position.
- * Id-less rows also get a name+position key when that name is unambiguous, so
+ * Rows also get a name+position key when that identity is unambiguous, so
  * mid-season team changes still join without mixing distinct players.
  */
 export function indexWeekStatsByPlayer(rows: readonly TeamWeekStatRow[]): Map<string, TeamWeekStatRow[]> {
   const byKey = new Map<string, TeamWeekStatRow[]>();
-  const idLess = rows.filter((row) => !row.playerId);
-  const ambiguous = ambiguousNamePositionKeys(idLess);
+  const ambiguous = ambiguousNamePositionKeys(rows);
+  // Consumers carry Sleeper IDs, while nflverse rows carry GSIS IDs. Permit
+  // name/position fallback across teams only when it resolves to one identity.
+  const idsByName = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!row.playerId) continue;
+    const key = propPlayerNamePositionKey(row.name, row.position);
+    const ids = idsByName.get(key) ?? new Set<string>();
+    ids.add(row.playerId);
+    idsByName.set(key, ids);
+    if (ids.size > 1) ambiguous.add(key);
+  }
   for (const row of rows) {
     if (row.playerId) addWeekStatKey(byKey, row.playerId, row);
     addWeekStatKey(byKey, propPlayerMatchKey(row.name, row.team, row.position), row);
-    if (row.playerId) continue;
     const crossKey = propPlayerNamePositionKey(row.name, row.position);
     if (!ambiguous.has(crossKey)) addWeekStatKey(byKey, crossKey, row);
   }

@@ -401,14 +401,24 @@ describe("history indexes", () => {
       team: "GB",
       position: "TE",
     }).map((row) => row.week)).toEqual([4, 6]);
-    // Id-bearing rows are not also keyed by name+position, so a nameless
-    // lookup stays on the current team rather than inventing a shared bucket.
+    // Sleeper IDs differ from nflverse GSIS IDs; an unambiguous name joins
+    // the full season even when the caller cannot use the source ID.
     expect(weekStatsForPlayer(stats, {
+      playerId: "sleeper-123",
       name: "Jonnu Smith",
       team: "GB",
       position: "TE",
-    }).map((row) => row.week)).toEqual([6]);
+    }).map((row) => row.week)).toEqual([4, 6]);
     expect(propPlayerNamePositionKey("Jonnu Smith", "TE")).toBe("TE|*|jonnusmith");
+  });
+
+  it("does not combine distinct source IDs even when their weeks do not overlap", () => {
+    const stats = indexWeekStatsByPlayer([
+      weekRow({ playerId: "00-a", name: "Chris Moore", team: "TEN", position: "WR", week: 1 }),
+      weekRow({ playerId: "00-b", name: "Chris Moore", team: "WAS", position: "WR", week: 2 }),
+    ]);
+    expect(weekStatsForPlayer(stats, { playerId: "sleeper-id", name: "Chris Moore", team: "WAS", position: "WR" })
+      .map((row) => row.week)).toEqual([2]);
   });
 
   it("does not share weeks between distinct players with the same name+position", () => {
