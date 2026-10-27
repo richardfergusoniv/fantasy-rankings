@@ -200,24 +200,21 @@ describe("propStatActual / history", () => {
     expect(noLine.hitRate).toBeNull();
   });
 
-  it("excludes unplayed stat rows while retaining played zero-stat weeks", () => {
+  it("does not grade a stat row for a week he did not play", () => {
+    // A stray stats row without snaps (join noise between the stats and
+    // snap files) must not invent a game: only played weeks grade.
     const history = buildPropHistory(
       "receptions",
-      0.5,
+      2.5,
       [
-        weekRow({ week: 1, name: "Jonnu Smith", position: "TE", receptions: 0 }),
-        weekRow({ week: 2, name: "Jonnu Smith", position: "TE", receptions: 2 }),
+        weekRow({ week: 1, name: "Travis Kelce", position: "TE", receptions: 4 }),
+        weekRow({ week: 2, name: "Travis Kelce", position: "TE", receptions: 4 }),
       ],
-      new Set([2, 3, 4]),
-      new Set([1, 2, 3]),
+      new Set([1]),
+      new Set([1, 2]),
     );
-    expect(history.cells.map(({ week, actual, result }) => ({ week, actual, result }))).toEqual([
-      { week: 2, actual: 2, result: "over" },
-      { week: 3, actual: 0, result: "under" },
-    ]);
-    expect(history.games).toBe(2);
-    expect(history.hitRate).toBe(0.5);
-    expect(history.underRate).toBe(0.5);
+    expect(history.games).toBe(1);
+    expect(history.cells.map((cell) => cell.week)).toEqual([1]);
   });
 
   it("counts anytime_td from combined touchdowns and marks pushes", () => {
