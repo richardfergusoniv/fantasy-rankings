@@ -9,13 +9,21 @@ const kickerPresets = [
 ];
 
 describe("chartWeeklyAxes", () => {
-  it("uses Vegas teamTotal axes for kickers when implied totals exist", () => {
+  it("uses Vegas teamTotal axes when every rank-eligible kicker has teamTotal", () => {
     expect(chartWeeklyAxes("K", [
       { position: "K", values: { league: 9.2, teamTotal: 24.5, leaguePositionRank: 3 } },
+      { position: "K", values: { league: 8.1, teamTotal: 21.0, leaguePositionRank: 7 } },
     ])).toEqual(["teamTotal", "league"]);
   });
 
-  it("falls back to projection-versus-rank when kicker teamTotal is absent", () => {
+  it("falls back to projection-versus-rank when some eligible kickers lack teamTotal", () => {
+    expect(chartWeeklyAxes("K", [
+      { position: "K", values: { league: 9.2, teamTotal: 24.5, leaguePositionRank: 3 } },
+      { position: "K", values: { league: 8.1, leaguePositionRank: 7 } },
+    ])).toEqual(["leaguePositionRank", "league"]);
+  });
+
+  it("falls back to projection-versus-rank when no kicker has teamTotal", () => {
     expect(chartWeeklyAxes("K", [
       { position: "K", values: { league: 9.2, leaguePositionRank: 3 } },
       { position: "RB", values: { league: 18, teamTotal: 27 } },
@@ -24,12 +32,14 @@ describe("chartWeeklyAxes", () => {
 });
 
 describe("preferredWeeklyPreset", () => {
-  it("picks the Vegas preset when teamTotal is available and ranks otherwise", () => {
+  it("auto-picks Vegas only for complete teamTotal coverage; ranks otherwise", () => {
     expect(preferredWeeklyPreset("K", kickerPresets, [
-      { position: "K", values: { teamTotal: 22, league: 8 } },
+      { position: "K", values: { teamTotal: 22, league: 8, leaguePositionRank: 2 } },
     ])?.label).toBe("Vegas implied total");
     expect(preferredWeeklyPreset("K", kickerPresets, [
-      { position: "K", values: { league: 8, leaguePositionRank: 4 } },
+      { position: "K", values: { teamTotal: 22, league: 8, leaguePositionRank: 2 } },
+      { position: "K", values: { league: 7, leaguePositionRank: 9 } },
     ])?.label).toBe("Projected kicker ranks");
+    expect(kickerPresets.some((preset) => preset.x === "teamTotal")).toBe(true);
   });
 });

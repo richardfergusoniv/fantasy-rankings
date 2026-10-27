@@ -21,25 +21,38 @@ const defaultWeeklyAxes: Record<Exclude<WeeklyAxesPosition, "FLEX">, [string, st
   DEF: ["opponentTotal", "projection"],
 };
 
-export function weeklyPositionHasMetric(
-  entities: readonly WeeklyAxesEntity[],
-  position: Exclude<WeeklyAxesPosition, "FLEX">,
-  key: string,
-): boolean {
-  return entities.some((entity) => (
-    entity.position === position
-    && typeof entity.values[key] === "number"
-    && Number.isFinite(entity.values[key])
+function finiteMetric(values: Record<string, number>, key: string): boolean {
+  const value = values[key];
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/** Kickers that would plot on projection-versus-rank axes. */
+export function eligibleKickersForRankAxes(entities: readonly WeeklyAxesEntity[]): WeeklyAxesEntity[] {
+  return entities.filter((entity) => (
+    entity.position === "K"
+    && finiteMetric(entity.values, "league")
+    && finiteMetric(entity.values, "leaguePositionRank")
   ));
 }
 
-/** Default axes for a position; kickers use Vegas totals when present, else projection vs rank. */
+/** True only when every rank-eligible kicker also has a team implied total. */
+export function kickersHaveCompleteTeamTotals(entities: readonly WeeklyAxesEntity[]): boolean {
+  const eligible = eligibleKickersForRankAxes(entities);
+  return eligible.length > 0 && eligible.every((entity) => finiteMetric(entity.values, "teamTotal"));
+}
+
+/**
+ * Default axes for a position.
+ * Kickers use Vegas team totals only when coverage is complete; partial coverage
+ * keeps rank axes so kickers with projection/rank stay visible. The Vegas preset
+ * remains available for manual selection.
+ */
 export function chartWeeklyAxes(
   position: WeeklyAxesPosition,
   entities: readonly WeeklyAxesEntity[] = [],
 ): [string, string] {
   if (position === "FLEX") return ["league", "fantasyCalcValue"];
-  if (position === "K" && weeklyPositionHasMetric(entities, "K", "teamTotal")) return ["teamTotal", "league"];
+  if (position === "K" && kickersHaveCompleteTeamTotals(entities)) return ["teamTotal", "league"];
   return defaultWeeklyAxes[position];
 }
 

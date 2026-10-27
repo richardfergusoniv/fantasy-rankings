@@ -348,6 +348,16 @@ export function playerInsightsNeedsSleeperIdMigration(snapshot: PlayerInsightsSn
   return map === undefined || Object.keys(map).length === 0;
 }
 
+/** Keep a prior gsis→Sleeper map when a refresh parsed an empty players.csv map. */
+export function retainSleeperByGsisFromPrevious(
+  snapshot: PlayerInsightsSnapshot,
+  previous: PlayerInsightsSnapshot | null,
+): void {
+  if (!playerInsightsNeedsSleeperIdMigration(snapshot)) return;
+  const prior = previous?.sleeperByGsis;
+  if (prior && Object.keys(prior).length > 0) snapshot.sleeperByGsis = prior;
+}
+
 function snapshotIsFresh(snapshot: PlayerInsightsSnapshot): boolean {
   return Date.now() - Date.parse(snapshot.fetchedAt) < PLAYER_INSIGHTS_CACHE_MS
     && !playerInsightsNeedsSleeperIdMigration(snapshot);
@@ -400,6 +410,7 @@ export async function loadPlayerInsightsSnapshot(options?: { force?: boolean }):
       snapshot.depthAsOf = previous.depthAsOf;
       snapshot.depthPrevious = previous.depthPrevious;
     }
+    retainSleeperByGsisFromPrevious(snapshot, previous);
     await writePlayerInsightsSnapshot(snapshot);
     return snapshot;
   } catch {

@@ -4,6 +4,7 @@ import {
   chartOwnershipForEntity,
   isPlayerOnSelectedTeam,
   isPlayerRosteredInLeague,
+  ownershipReadoutSuffix,
   type ChartOwnershipLeague,
 } from "./chart-ownership";
 
@@ -123,5 +124,14 @@ describe("chartOwnershipForEntity", () => {
       id: "WR:00-0037834",
       playerId: "12526",
     }, withSleeperRoster)).toBe("rostered");
+  });
+});
+
+describe("ownershipReadoutSuffix", () => {
+  it("omits a suffix for field points that are not fantasy ownership", () => {
+    expect(ownershipReadoutSuffix("mine")).toBe(" · My team");
+    expect(ownershipReadoutSuffix("rostered")).toBe(" · Rostered");
+    expect(ownershipReadoutSuffix("available")).toBe(" · Waivers");
+    expect(ownershipReadoutSuffix("field")).toBe("");
   });
 });

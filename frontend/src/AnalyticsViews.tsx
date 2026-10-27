@@ -24,6 +24,7 @@ import {
   chartOwnershipForEntity,
   comparableChartPlayerName,
   isPlayerOnSelectedTeam,
+  ownershipReadoutSuffix,
   type ChartOwnership,
 } from "./lib/chart-ownership";
 import { chartWeeklyAxes, preferredWeeklyPreset } from "./lib/chart-weekly-axes";
@@ -879,23 +880,6 @@ function chartDatumOwnership(
   return { ownership, isSelectedTeam: ownership === "mine" };
 }
 
-function ownershipReadoutSuffix(ownership: ChartOwnership | undefined): string {
-  switch (ownership) {
-    case "mine":
-      return " · My team";
-    case "available":
-      return " · Waivers";
-    case "rostered":
-      return " · Rostered";
-    case undefined:
-      return "";
-    default: {
-      const _exhaustive: never = ownership;
-      return _exhaustive;
-    }
-  }
-}
-
 function boxOverlap(a: LabelBox, b: LabelBox): number {
   const width = Math.max(0, Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left));
   const height = Math.max(0, Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top));
@@ -1238,7 +1222,8 @@ function ScatterPlot({
   );
 }
 
-const SNAP_TREND_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "#c4b5fd", "#f9a8d4", "#67e8f9"];
+// Omit --chart-1 so rostered snap lines stay distinct from the waiver amber series.
+const SNAP_TREND_COLORS = ["var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "#c4b5fd", "#f9a8d4", "#67e8f9"];
 
 function SnapShareTrendChart({
   series,
@@ -1786,7 +1771,8 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
         x: usage.playsPerGame,
         y: usage.proe,
         isSelectedTeam: mine,
-        ownership: mine ? "mine" : "rostered",
+        // NFL team pace dots are not fantasy roster ownership — omit "Rostered" readout.
+        ownership: mine ? "mine" : "field",
       }];
     });
   }, [chartKind, dashboard.analytics.teamUsage, league.bench, league.starters]);

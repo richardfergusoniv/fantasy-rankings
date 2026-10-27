@@ -12,6 +12,7 @@ const {
   parsePlayerIds,
   playerInsightsNeedsSleeperIdMigration,
   playerInsightsSnapshotSchema,
+  retainSleeperByGsisFromPrevious,
 } = await import("./player-insights");
 
 describe("csvObjects", () => {
@@ -167,5 +168,15 @@ describe("playerInsightsNeedsSleeperIdMigration", () => {
     expect(playerInsightsNeedsSleeperIdMigration({ ...base })).toBe(true);
     expect(playerInsightsNeedsSleeperIdMigration({ ...base, sleeperByGsis: {} })).toBe(true);
     expect(playerInsightsNeedsSleeperIdMigration({ ...base, sleeperByGsis: { "00-1": "12526" } })).toBe(false);
+  });
+
+  it("retains a previous sleeperByGsis map when the new snapshot map is empty", () => {
+    const next = { ...base, sleeperByGsis: {} };
+    retainSleeperByGsisFromPrevious(next, { ...base, sleeperByGsis: { "00-1": "12526" } });
+    expect(next.sleeperByGsis).toEqual({ "00-1": "12526" });
+
+    const populated = { ...base, sleeperByGsis: { "00-2": "4034" } };
+    retainSleeperByGsisFromPrevious(populated, { ...base, sleeperByGsis: { "00-1": "12526" } });
+    expect(populated.sleeperByGsis).toEqual({ "00-2": "4034" });
   });
 });

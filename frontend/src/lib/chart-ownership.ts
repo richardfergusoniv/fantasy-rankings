@@ -10,7 +10,8 @@
  * that incorrectly paints every rostered defense as "my team".
  */
 
-export type ChartOwnership = "mine" | "rostered" | "available";
+/** `field` = plotted but not a fantasy roster ownership class (e.g. NFL team pace dots). */
+export type ChartOwnership = "mine" | "rostered" | "available" | "field";
 
 export type ChartOwnershipEntity = {
   id?: string;
@@ -93,4 +94,22 @@ export function chartOwnershipForEntity(entity: ChartOwnershipEntity, league: Ch
   if (isPlayerOnSelectedTeam(entity, league)) return "mine";
   if (isPlayerRosteredInLeague(entity, league)) return "rostered";
   return "available";
+}
+
+export function ownershipReadoutSuffix(ownership: ChartOwnership | undefined): string {
+  switch (ownership) {
+    case "mine":
+      return " · My team";
+    case "available":
+      return " · Waivers";
+    case "rostered":
+      return " · Rostered";
+    case "field":
+    case undefined:
+      return "";
+    default: {
+      const _exhaustive: never = ownership;
+      return _exhaustive;
+    }
+  }
 }
