@@ -1743,6 +1743,10 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   if (fantasyCalcResult.failedPresets > 0) sourceErrors.push("FantasyCalc season-long rankings are unavailable for one or more league formats.");
   const fantasyCalcAsOf = seasonLongRankings.length > 0 ? new Date().toISOString() : null;
 
+  // One shared soft deadline for optional FA/defense actual loads across all
+  // leagues — each wave spends remaining time, not a fresh 4s restart.
+  const optionalActualsDeadlineAt = Date.now() + FREE_AGENT_ACTUALS_BUDGET_MS;
+
   // Fetch the required roster before optional league enrichments and bound
   // concurrency. The previous 24-request fan-out could throttle every roster
   // request, yielding a schema-valid dashboard with zero usable leagues.
@@ -1836,11 +1840,11 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       await statsLoaders.priority(priorityStatsIds);
     }
     if (optionalStatsIds.length > 0) {
-      // Best-effort: stamp whatever arrives inside the FA budget; continue
-      // the rest in the background so the instance memo still warms.
+      // Best-effort: stamp whatever arrives inside the shared FA budget;
+      // continue the rest in the background so the instance memo still warms.
       await awaitWithBudget(
         statsLoaders.optional(optionalStatsIds),
-        FREE_AGENT_ACTUALS_BUDGET_MS,
+        Math.max(0, optionalActualsDeadlineAt - Date.now()),
         (pending) => { waitUntil(pending.catch(() => undefined)); },
       );
     }
