@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Dashboard } from "./dashboard-schemas.js";
 import {
+  defaultToolLeague,
   dispatchChatTool,
   gameLineForTeam,
   parseToolCallArguments,
@@ -469,6 +470,32 @@ describe("dispatchChatTool", () => {
     expect(result.ok).toBe(true);
     expect(result.weekly.leagueProjection).toBe(18.2);
     expect(result.weekly.leagueRank).toBe(1);
+  });
+
+  it("defaults omitted leagueId to the viewing league instead of leagues[0]", async () => {
+    const dashboard = baseDashboard();
+    const second = {
+      ...dashboard.leagues[0]!,
+      id: "lg2",
+      name: "Second League",
+      rosteredPlayerIds: ["p9"],
+      starters: [],
+      bench: [],
+    };
+    dashboard.leagues = [dashboard.leagues[0]!, second];
+    expect(defaultToolLeague(dashboard, { userId: "u1", sleeperUserId: "s1", defaultLeagueId: "lg2" })?.id).toBe("lg2");
+
+    const ctx = {
+      ...ctxWithDashboard(dashboard),
+      defaultLeagueId: "lg2",
+    };
+    const result = await dispatchChatTool(
+      "get_player_card",
+      { playerId: "p1" },
+      ctx,
+    ) as { ok: boolean; leagueId: string | null };
+    expect(result.ok).toBe(true);
+    expect(result.leagueId).toBe("lg2");
   });
 });
 

@@ -66,6 +66,11 @@ export type ChatToolContext = {
   dashboardPromise?: Promise<Dashboard>;
   /** Ranking window the user is viewing — drives which score the model explains. */
   scoringWindow?: "week" | "season_long" | "dynasty";
+  /**
+   * League the user is currently viewing (resolved server-side). Used as the
+   * default when a tool call omits leagueId, instead of always leagues[0].
+   */
+  defaultLeagueId?: string;
 };
 
 export type OpenAiToolDefinition = {
@@ -239,6 +244,29 @@ export async function loadDashboard(ctx: ChatToolContext): Promise<Dashboard> {
 
 export function findLeague(dashboard: Dashboard, leagueId: string) {
   return dashboard.leagues.find((league) => league.id === leagueId) ?? null;
+}
+
+/**
+ * Resolve which league a tool should use when leagueId was omitted or when
+ * falling through after an optional league arg. Prefer the viewing league from
+ * the chat context over dashboard.leagues[0].
+ */
+export function defaultToolLeague(
+  dashboard: Dashboard,
+  ctx: ChatToolContext,
+  options?: { preferRosterOf?: string },
+): Dashboard["leagues"][number] | null {
+  if (ctx.defaultLeagueId) {
+    const viewing = findLeague(dashboard, ctx.defaultLeagueId);
+    if (viewing) return viewing;
+  }
+  if (options?.preferRosterOf) {
+    const rosterHit = dashboard.leagues.find((item) =>
+      item.rosteredPlayerIds.includes(options.preferRosterOf!),
+    );
+    if (rosterHit) return rosterHit;
+  }
+  return dashboard.leagues[0] ?? null;
 }
 
 /** This week's spread / total / implied points for an NFL team, or null. */
@@ -538,9 +566,7 @@ async function toolGetPlayerCard(
 
   const league =
     (args.leagueId ? findLeague(dashboard, args.leagueId) : null)
-    ?? dashboard.leagues.find((item) => item.rosteredPlayerIds.includes(playerId))
-    ?? dashboard.leagues[0]
-    ?? null;
+    ?? defaultToolLeague(dashboard, ctx, { preferRosterOf: playerId });
 
   const weekly =
     (league

@@ -406,10 +406,32 @@ export function propPlayerMatchKey(name: string, team: string | null | undefined
   return `${position}|${teamKey}|${normalizeTeamStatsPlayerName(name)}`;
 }
 
+/** Name+position only — survives mid-season team changes when player id is missing. */
+export function propPlayerNamePositionKey(name: string, position: string): string {
+  return `${position}|*|${normalizeTeamStatsPlayerName(name)}`;
+}
+
+function mergeWeekStatRows(existing: TeamWeekStatRow[], row: TeamWeekStatRow): void {
+  const prior = existing.findIndex((item) => item.week === row.week);
+  if (prior >= 0) existing[prior] = row;
+  else existing.push(row);
+}
+
+function addWeekStatKey(
+  byKey: Map<string, TeamWeekStatRow[]>,
+  key: string,
+  row: TeamWeekStatRow,
+): void {
+  const group = byKey.get(key);
+  if (group) mergeWeekStatRows(group, row);
+  else byKey.set(key, [row]);
+}
+
 /**
  * Weeks each player actually played (at least one offensive snap), keyed
- * like the week-stats index so the two can be joined. A played week with
- * no stat row is a zero week, not a missed game.
+ * by name+team+position and by name+position (cross-team) so a mid-season
+ * trade still joins prior weeks. A played week with no stat row is a zero
+ * week, not a missed game.
  */
 export function indexPlayedWeeks(
   snaps: readonly TeamWeekSnapRow[],
@@ -417,25 +439,62 @@ export function indexPlayedWeeks(
   const byKey = new Map<string, Set<number>>();
   for (const snap of snaps) {
     if (snap.offenseSnaps <= 0) continue;
-    const key = propPlayerMatchKey(snap.name, snap.team, snap.position);
-    const group = byKey.get(key);
-    if (group) group.add(snap.week);
-    else byKey.set(key, new Set([snap.week]));
+    for (const key of [
+      propPlayerMatchKey(snap.name, snap.team, snap.position),
+      propPlayerNamePositionKey(snap.name, snap.position),
+    ]) {
+      const group = byKey.get(key);
+      if (group) group.add(snap.week);
+      else byKey.set(key, new Set([snap.week]));
+    }
   }
   return byKey;
 }
 
-/** Index nflverse week rows by name+team+position for joining to Sleeper ids. */
+/**
+ * Index nflverse week rows by player id (when present), name+team+position,
+ * and name+position so mid-season team changes still join prior weeks.
+ */
 export function indexWeekStatsByPlayer(rows: readonly TeamWeekStatRow[]): Map<string, TeamWeekStatRow[]> {
   const byKey = new Map<string, TeamWeekStatRow[]>();
   for (const row of rows) {
-    const key = propPlayerMatchKey(row.name, row.team, row.position);
-    const group = byKey.get(key);
-    if (group) group.push(row);
-    else byKey.set(key, [row]);
+    if (row.playerId) addWeekStatKey(byKey, row.playerId, row);
+    addWeekStatKey(byKey, propPlayerMatchKey(row.name, row.team, row.position), row);
+    addWeekStatKey(byKey, propPlayerNamePositionKey(row.name, row.position), row);
   }
   for (const group of byKey.values()) {
     group.sort((left, right) => left.week - right.week);
   }
   return byKey;
+}
+
+export type PropHistoryPlayerRef = {
+  playerId?: string | null;
+  name: string;
+  team?: string | null;
+  position: string;
+};
+
+/** Prefer player id, then name+position across teams, then name+team+position. */
+export function weekStatsForPlayer(
+  index: ReadonlyMap<string, TeamWeekStatRow[]>,
+  player: PropHistoryPlayerRef,
+): TeamWeekStatRow[] {
+  if (player.playerId) {
+    const byId = index.get(player.playerId);
+    if (byId?.length) return byId;
+  }
+  const byNamePos = index.get(propPlayerNamePositionKey(player.name, player.position));
+  if (byNamePos?.length) return byNamePos;
+  return index.get(propPlayerMatchKey(player.name, player.team, player.position)) ?? [];
+}
+
+/** Prefer name+position across teams, then the team-keyed match. */
+export function playedWeeksForPlayer(
+  index: ReadonlyMap<string, Set<number>>,
+  player: PropHistoryPlayerRef,
+): Set<number> {
+  const byNamePos = index.get(propPlayerNamePositionKey(player.name, player.position));
+  if (byNamePos?.size) return byNamePos;
+  return index.get(propPlayerMatchKey(player.name, player.team, player.position)) ?? new Set();
 }

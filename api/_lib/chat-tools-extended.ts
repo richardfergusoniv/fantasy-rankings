@@ -30,6 +30,7 @@ import { loadPropLineWeek } from "./prop-line-week.js";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 import { PLAYER_NEWS_SNAPSHOT_KEY } from "./sleeper.js";
 import {
+  defaultToolLeague,
   findLeague,
   leagueAssets,
   leagueSeasonLongAssets,
@@ -251,7 +252,9 @@ export async function toolGetPlayerNews(
   const resolved = resolveOptionalPlayerId(dashboard, args);
   if (resolved.error) return { ok: false as const, error: resolved.error };
   const playerId = resolved.playerId;
-  const league = args.leagueId ? requireLeague(dashboard, args.leagueId) : dashboard.leagues[0] ?? null;
+  const league = args.leagueId
+    ? requireLeague(dashboard, args.leagueId)
+    : defaultToolLeague(dashboard, ctx);
   const scope =
     args.scope
     ?? (playerId ? "player" : "roster");
@@ -384,9 +387,7 @@ export async function toolGetPlayerAdvanced(
 
   const league =
     (args.leagueId ? requireLeague(dashboard, args.leagueId) : null)
-    ?? dashboard.leagues.find((item) => item.rosteredPlayerIds.includes(playerId))
-    ?? dashboard.leagues[0]
-    ?? null;
+    ?? defaultToolLeague(dashboard, ctx, { preferRosterOf: playerId });
 
   const entity = dashboard.analytics.entities.find((row) => row.id === playerId) ?? null;
   const insights = dashboard.playerInsights;
@@ -473,7 +474,7 @@ export async function toolGetProjections(
   const dashboard = await loadDashboard(ctx);
   const league = args.leagueId
     ? requireLeague(dashboard, args.leagueId)
-    : dashboard.leagues[0] ?? null;
+    : defaultToolLeague(dashboard, ctx);
   if (!league) return { ok: false as const, error: "League not found for this user." };
 
   const scope = args.scope ?? (args.playerId || args.playerName ? "player" : "roster");
@@ -604,9 +605,7 @@ export async function toolGetValueHistory(
 
   const league = args.leagueId
     ? requireLeague(dashboard, args.leagueId)
-    : dashboard.leagues.find((item) => item.rosteredPlayerIds.includes(playerId))
-      ?? dashboard.leagues[0]
-      ?? null;
+    : defaultToolLeague(dashboard, ctx, { preferRosterOf: playerId });
   const formatKey = args.formatKey?.trim() || league?.seasonLongFormat.key;
   if (!formatKey) return { ok: false as const, error: "formatKey or leagueId required." };
 

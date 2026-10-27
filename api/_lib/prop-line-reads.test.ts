@@ -6,10 +6,14 @@ import {
   currentWeekPropLines,
   impliedProbability,
   indexPlayedWeeks,
+  indexWeekStatsByPlayer,
   isHiddenHalfPointPropStat,
+  playedWeeksForPlayer,
   propPlayerMatchKey,
+  propPlayerNamePositionKey,
   propStatActual,
   summarizePropLineMovement,
+  weekStatsForPlayer,
 } from "./prop-line-reads.js";
 
 function weekRow(partial: Partial<TeamWeekStatRow> & Pick<TeamWeekStatRow, "week" | "name">): TeamWeekStatRow {
@@ -370,6 +374,50 @@ describe("history indexes", () => {
     ]);
     const key = propPlayerMatchKey("Jonnu Smith", "GB", "TE");
     expect([...(index.get(key) ?? [])]).toEqual([6]);
+  });
+
+  it("joins prior weeks across a mid-season team change by player id and name+position", () => {
+    const stats = indexWeekStatsByPlayer([
+      weekRow({
+        playerId: "te-1",
+        name: "Jonnu Smith",
+        team: "MIA",
+        position: "TE",
+        week: 4,
+        receptions: 5,
+      }),
+      weekRow({
+        playerId: "te-1",
+        name: "Jonnu Smith",
+        team: "GB",
+        position: "TE",
+        week: 6,
+        receptions: 3,
+      }),
+    ]);
+    const byId = weekStatsForPlayer(stats, {
+      playerId: "te-1",
+      name: "Jonnu Smith",
+      team: "GB",
+      position: "TE",
+    });
+    expect(byId.map((row) => row.week)).toEqual([4, 6]);
+
+    const byNamePos = weekStatsForPlayer(stats, {
+      name: "Jonnu Smith",
+      team: "GB",
+      position: "TE",
+    });
+    expect(byNamePos.map((row) => row.week)).toEqual([4, 6]);
+    expect(propPlayerNamePositionKey("Jonnu Smith", "TE")).toBe("TE|*|jonnusmith");
+
+    const played = indexPlayedWeeks([
+      { name: "Jonnu Smith", team: "MIA", position: "TE", week: 4, offenseSnaps: 20, offensePct: 40 },
+      { name: "Jonnu Smith", team: "GB", position: "TE", week: 6, offenseSnaps: 18, offensePct: 35 },
+    ]);
+    expect([
+      ...playedWeeksForPlayer(played, { name: "Jonnu Smith", team: "GB", position: "TE" }),
+    ].sort((a, b) => a - b)).toEqual([4, 6]);
   });
 });
 

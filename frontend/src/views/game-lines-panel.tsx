@@ -28,8 +28,10 @@ import {
   indexWeekStatsByPlayer,
   isHiddenHalfPointPropStat,
   isPropStatId,
+  playedWeeksForPlayer,
   propPlayerMatchKey,
   propStatDef,
+  weekStatsForPlayer,
   type PropGameResult,
   type PropPosition,
   type PropStatId,
@@ -80,8 +82,6 @@ type PropTableRow = {
   direction: "over" | "under" | null;
   historyUnavailable: boolean;
 };
-
-const EMPTY_WEEKS: ReadonlySet<number> = new Set();
 
 async function fetchText(url: string): Promise<string> {
   const response = await fetch(url);
@@ -468,12 +468,14 @@ export function GameLinesPanel({
       const rostered = rosterIds.has(line.playerId) || rosterKeys.has(matchKey);
       const opponent = !rostered && (opponentIds.has(line.playerId) || opponentKeys.has(matchKey));
 
-      const weekRowsForPlayer = weekStatsByPlayer.get(matchKey)
-        ?? weekStatsByPlayer.get(propPlayerMatchKey(line.name, line.team, positionCode))
-        ?? [];
-      const playedWeeks = playedWeeksByPlayer.get(matchKey)
-        ?? playedWeeksByPlayer.get(propPlayerMatchKey(line.name, line.team, positionCode))
-        ?? EMPTY_WEEKS;
+      const playerRef = {
+        playerId: line.playerId,
+        name: line.name,
+        team: team ?? line.team,
+        position: positionCode,
+      };
+      const weekRowsForPlayer = weekStatsForPlayer(weekStatsByPlayer, playerRef);
+      const playedWeeks = playedWeeksForPlayer(playedWeeksByPlayer, playerRef);
       const history = buildPropHistory(line.stat, line.line, weekRowsForPlayer, playedWeeks, statWeeks);
       // Hit counts clears of this week's line across the season, so the
       // row plays the over: the rate, odds, sort, and highlight follow it.

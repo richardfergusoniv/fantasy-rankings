@@ -21,14 +21,9 @@ describe("prop history availability", () => {
     expect(missingPropWeekLabel(6, played)).toBe("stats unavailable");
   });
 
-  it("retries degraded history promptly and stops polling after recovery", () => {
+  it("keeps a stable staleTime and does not poll for unused weeklyLines degradation", () => {
     const options = propHistoryRefreshOptions(6 * 60 * 60 * 1000);
-    const query = { state: { data: { propLines: { weeklyLinesDegraded: true } } } };
-    expect(options.staleTime(query)).toBe(0);
-    expect(options.refetchInterval(query)).toBe(30_000);
-    query.state.data.propLines.weeklyLinesDegraded = false;
-    expect(options.staleTime(query)).toBe(6 * 60 * 60 * 1000);
-    expect(options.refetchInterval(query)).toBe(false);
-    expect(options.refetchInterval({ state: {} })).toBe(false);
+    expect(options.staleTime).toBe(6 * 60 * 60 * 1000);
+    expect(options.refetchInterval).toBe(false);
   });
 });
