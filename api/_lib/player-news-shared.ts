@@ -47,10 +47,17 @@ export type NotesSnapshot = Record<string, NotesSnapshotEntry>;
 const newsTypeSchema = z.enum(["roster", "waiver", "headline"]);
 const sourceSchema = z.enum(["sleeper", "x", "nflverse"]);
 
+/**
+ * X ingest producer contract:
+ * Prefer `player_id` (Sleeper id) whenever known. Name matching is a fallback
+ * and will drop ambiguous last-name-only rows unless `team` is also sent.
+ */
 export const xNewsItemSchema = z
   .object({
     player_id: z.string().min(1).max(80).optional(),
     player_name: z.string().min(1).max(160).optional(),
+    /** Optional NFL team code; required to resolve last-name-only `player_name`. */
+    team: z.string().min(1).max(8).optional(),
     text: z.string().min(1).max(4000),
     author_handle: z.string().min(1).max(80),
     // z.string().url() accepts javascript:/data:/file:; allowlist http(s) only.
@@ -236,8 +243,144 @@ export function buildNewsUpdatedDraft(_input: {
   return null;
 }
 
+/** Trailing generational / ordinal suffixes stripped from name keys. */
+const GENERATIONAL_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
+
+/**
+ * Alternate normalized keys → canonical key matching Sleeper `full_name`
+ * after {@link normalizePlayerNameKey} (spaces kept; initials collapsed).
+ */
+export const PLAYER_NAME_KEY_ALIASES: Readonly<Record<string, string>> = {
+  // Wan'Dale → "wan dale …"; producers often emit "Wandale …".
+  "wandale robinson": "wan dale robinson",
+};
+
+function collapseSingleLetterTokens(tokens: string[]): string[] {
+  const collapsed: string[] = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i]!;
+    if (token.length !== 1) {
+      collapsed.push(token);
+      continue;
+    }
+    let run = token;
+    while (i + 1 < tokens.length && tokens[i + 1]!.length === 1) {
+      i += 1;
+      run += tokens[i]!;
+    }
+    collapsed.push(run);
+  }
+  return collapsed;
+}
+
+/**
+ * Space-separated name key for X / prop-line matching.
+ * Strips Jr/Sr/II–V, collapses A.J. → aj, applies {@link PLAYER_NAME_KEY_ALIASES}.
+ */
 export function normalizePlayerNameKey(name: string): string {
-  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const tokens = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  while (tokens.length > 1 && GENERATIONAL_SUFFIXES.has(tokens[tokens.length - 1]!)) {
+    tokens.pop();
+  }
+  const key = collapseSingleLetterTokens(tokens).join(" ");
+  return PLAYER_NAME_KEY_ALIASES[key] ?? key;
+}
+
+export function playerNameTokenCount(normalizedKey: string): number {
+  if (!normalizedKey) return 0;
+  return normalizedKey.split(/\s+/).filter(Boolean).length;
+}
+
+export function isLastNameOnlyKey(normalizedKey: string): boolean {
+  return playerNameTokenCount(normalizedKey) === 1;
+}
+
+export function lastNameFromKey(normalizedKey: string): string {
+  const parts = normalizedKey.split(/\s+/).filter(Boolean);
+  return parts[parts.length - 1] ?? "";
+}
+
+/** Align JAC/LA/… with roster team codes used in the name index. */
+export function normalizeNewsTeam(team: string | null | undefined): string | null {
+  if (!team) return null;
+  const raw = team.trim().toUpperCase();
+  if (!raw) return null;
+  if (raw === "JAC") return "JAX";
+  if (raw === "LA") return "LAR";
+  if (raw === "LVR" || raw === "OAK") return "LV";
+  if (raw === "WSH") return "WAS";
+  return raw;
+}
+
+export function nameTeamKey(nameKey: string, team: string): string {
+  return `${nameKey}|${team}`;
+}
+
+export type PlayerNewsNameIndex = {
+  byId: Map<string, { player: string; team: string }>;
+  /** Unique full-name key → playerId (ambiguous names omitted). */
+  byName: Map<string, string>;
+  /** `${fullNameKey}|${team}` → playerId. */
+  byNameTeam: Map<string, string>;
+  /** `${lastName}|${team}` → playerId when unique on that team. */
+  byLastNameTeam: Map<string, string>;
+};
+
+export type PlayerNewsNameIndexEntry = {
+  playerId: string;
+  player: string;
+  team: string;
+};
+
+/**
+ * Build lookup maps from roster rows. Ambiguous full names are left out of
+ * `byName` so callers cannot silently pick the wrong player; use `player_id`
+ * or `team` (+ last name) instead.
+ */
+export function buildPlayerNewsNameIndex(
+  entries: ReadonlyArray<PlayerNewsNameIndexEntry>,
+): PlayerNewsNameIndex {
+  const byId = new Map<string, { player: string; team: string }>();
+  const nameHits = new Map<string, string[]>();
+  const byNameTeam = new Map<string, string>();
+  const lastTeamHits = new Map<string, string[]>();
+
+  for (const entry of entries) {
+    const team = normalizeNewsTeam(entry.team) ?? "FA";
+    byId.set(entry.playerId, { player: entry.player, team });
+    const nameKey = normalizePlayerNameKey(entry.player);
+    if (!nameKey) continue;
+    const ids = nameHits.get(nameKey) ?? [];
+    ids.push(entry.playerId);
+    nameHits.set(nameKey, ids);
+    byNameTeam.set(nameTeamKey(nameKey, team), entry.playerId);
+    const last = lastNameFromKey(nameKey);
+    if (!last) continue;
+    const lastKey = nameTeamKey(last, team);
+    const lastIds = lastTeamHits.get(lastKey) ?? [];
+    lastIds.push(entry.playerId);
+    lastTeamHits.set(lastKey, lastIds);
+  }
+
+  const byName = new Map<string, string>();
+  for (const [key, ids] of nameHits) {
+    const unique = [...new Set(ids)];
+    if (unique.length === 1) byName.set(key, unique[0]!);
+  }
+
+  const byLastNameTeam = new Map<string, string>();
+  for (const [key, ids] of lastTeamHits) {
+    const unique = [...new Set(ids)];
+    if (unique.length === 1) byLastNameTeam.set(key, unique[0]!);
+  }
+
+  return { byId, byName, byNameTeam, byLastNameTeam };
 }
 
 export function resolvePlayerIdFromName(
@@ -245,6 +388,50 @@ export function resolvePlayerIdFromName(
   nameIndex: Map<string, string>,
 ): string | null {
   return nameIndex.get(normalizePlayerNameKey(playerName)) ?? null;
+}
+
+/**
+ * Resolve an X news item to a roster player.
+ * Prefer `player_id`. Name fallback uses unique full-name keys; last-name-only
+ * requires `team` and a unique last+team match (otherwise unresolved).
+ */
+export function resolveXNewsPlayer(
+  item: Pick<XNewsItem, "player_id" | "player_name" | "team">,
+  index: PlayerNewsNameIndex,
+): { playerId: string; player: string; team: string } | null {
+  const explicitId = item.player_id?.trim() || null;
+  if (explicitId) {
+    const meta = index.byId.get(explicitId);
+    if (meta) return { playerId: explicitId, player: meta.player, team: meta.team };
+  }
+
+  const rawName = item.player_name?.trim();
+  if (!rawName) return null;
+
+  const nameKey = normalizePlayerNameKey(rawName);
+  if (!nameKey) return null;
+  const team = normalizeNewsTeam(item.team);
+
+  if (team) {
+    const withTeam = index.byNameTeam.get(nameTeamKey(nameKey, team));
+    if (withTeam) {
+      const meta = index.byId.get(withTeam);
+      if (meta) return { playerId: withTeam, player: meta.player, team: meta.team };
+    }
+  }
+
+  if (isLastNameOnlyKey(nameKey)) {
+    if (!team) return null;
+    const lastHit = index.byLastNameTeam.get(nameTeamKey(nameKey, team));
+    if (!lastHit) return null;
+    const meta = index.byId.get(lastHit);
+    return meta ? { playerId: lastHit, player: meta.player, team: meta.team } : null;
+  }
+
+  const byName = index.byName.get(nameKey);
+  if (!byName) return null;
+  const meta = index.byId.get(byName);
+  return meta ? { playerId: byName, player: meta.player, team: meta.team } : null;
 }
 
 export function buildXNewsDraft(
