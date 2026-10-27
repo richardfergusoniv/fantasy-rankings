@@ -1,23 +1,9 @@
-import type { PropHistory } from "../../../api/_lib/prop-line-reads";
-
-/** Unavailable history cannot choose a side; healthy ties still default to over. */
-export function propHistoryDirection(history: PropHistory, unavailable: boolean): "over" | "under" | null {
-  if (unavailable) return null;
-  return history.underRate !== null && (history.hitRate === null || history.underRate > history.hitRate)
-    ? "under"
-    : "over";
-}
-
-/** Explain an ungraded week without confusing missing stats with missing lines. */
+/** Explain an ungraded week: he either did not play, or a played week's stats are not usable. */
 export function missingPropWeekLabel(
   week: number,
-  weeklyLines: ReadonlyMap<number, number>,
   playedWeeks: ReadonlySet<number>,
-  statWeeks: ReadonlySet<number>,
 ): string {
-  if (!statWeeks.has(week) && (weeklyLines.has(week) || playedWeeks.has(week))) return "stats unavailable";
-  if (!playedWeeks.has(week)) return "no game";
-  return weeklyLines.has(week) ? "stats unavailable" : "no line";
+  return playedWeeks.has(week) ? "stats unavailable" : "no game";
 }
 
 type PropHistoryQuery = { state: { data?: { propLines: { weeklyLinesDegraded?: boolean } } } };

@@ -1,37 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { buildPropHistory } from "../../../api/_lib/prop-line-reads";
-import { missingPropWeekLabel, propHistoryDirection, propHistoryRefreshOptions } from "./prop-history-state";
+import { missingPropWeekLabel, propHistoryRefreshOptions } from "./prop-history-state";
 
 const played = new Set([6]);
 const covered = new Set([6]);
-const lines = new Map([[6, 0.5]]);
 
 describe("prop history availability", () => {
-  it("does not turn a failed history load into an over selection", () => {
-    const unavailable = buildPropHistory("receptions", new Map(), [], played, covered);
-    expect(propHistoryDirection(unavailable, true)).toBeNull();
-    // A successful response without any stored lines retains the ordinary fallback.
-    expect(propHistoryDirection(unavailable, false)).toBe("over");
+  it("grades a played week with no stat row as a zero against this week's line", () => {
+    const history = buildPropHistory("receptions", 0.5, [], played, covered);
+    expect(history.cells[0]).toMatchObject({ week: 6, line: 0.5, actual: 0, result: "under" });
   });
 
-  it("recovers the historical side when lines become available", () => {
-    const history = buildPropHistory("receptions", lines, [], played, covered);
-    expect(history.cells[0]).toMatchObject({ actual: 0, result: "under" });
-    expect(propHistoryDirection(history, false)).toBe("under");
-    expect(propHistoryDirection(history, true)).toBeNull();
-  });
-
-  it("distinguishes unpublished stats, missing lines, and games not played", () => {
-    expect(buildPropHistory("receptions", lines, [], played, new Set()).cells).toEqual([]);
-    expect(missingPropWeekLabel(6, lines, played, new Set())).toBe("stats unavailable");
-    expect(missingPropWeekLabel(6, lines, new Set(), new Set())).toBe("stats unavailable");
-    expect(missingPropWeekLabel(6, new Map(), played, covered)).toBe("no line");
-    expect(missingPropWeekLabel(6, lines, new Set(), covered)).toBe("no game");
+  it("labels a played week with unusable stats, and a week he did not play", () => {
+    expect(missingPropWeekLabel(6, played)).toBe("stats unavailable");
+    expect(missingPropWeekLabel(6, new Set())).toBe("no game");
   });
 
   it("does not call an unsupported market a missing line", () => {
-    expect(buildPropHistory("longest_reception", lines, [], played, covered).cells).toEqual([]);
-    expect(missingPropWeekLabel(6, lines, played, covered)).toBe("stats unavailable");
+    expect(buildPropHistory("longest_reception", 12.5, [], played, covered).cells).toEqual([]);
+    expect(missingPropWeekLabel(6, played)).toBe("stats unavailable");
   });
 
   it("retries degraded history promptly and stops polling after recovery", () => {
