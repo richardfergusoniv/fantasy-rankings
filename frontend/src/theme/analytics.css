@@ -229,6 +229,8 @@
 .chart-key i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
 /* Diamond to match the plotted My team points. */
 .chart-key i.selected-team-dot { width: 8px; height: 8px; border-radius: 1px; background: var(--roster-highlight); transform: rotate(45deg); }
+.chart-key i.rostered-dot { background: var(--chart-2); }
+.chart-key i.waiver-dot { background: var(--chart-1); }
 .omitted-chart-labels { margin-top: 10px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
 .omitted-chart-labels summary { padding: 10px 1px; color: var(--link); font-size: var(--type-control); font-weight: 700; cursor: pointer; }
 .omitted-chart-labels p { margin: 0; padding: 0 1px 11px; color: var(--dim); font-size: var(--type-caption); line-height: 1.5; }
