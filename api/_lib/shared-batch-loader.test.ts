@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSharedBatchLoader } from "./shared-batch-loader.js";
+import { createSharedBatchLoader, createPriorityBatchLoaders } from "./shared-batch-loader.js";
 
 describe("shared batch loading", () => {
   it("makes overlapping league requests wait until their stats are published", async () => {
@@ -35,4 +35,22 @@ describe("shared batch loading", () => {
     await ensure(["a"]);
     expect(load).toHaveBeenCalledTimes(2);
   });
+});
+
+it("does not let one league's optional batch block another league's rostered player", async () => {
+  let finishOptional!: () => void;
+  const gate = new Promise<void>((resolve) => { finishOptional = resolve; });
+  const published = new Set<string>();
+  const loaders = createPriorityBatchLoaders(async (keys) => {
+    if (keys.includes("slow-free-agent")) await gate;
+    for (const key of keys) published.add(key);
+  });
+  let optionalDone = false;
+  const optional = loaders.optional(["rostered-elsewhere", "slow-free-agent"])
+    .then(() => { optionalDone = true; });
+  await loaders.priority(["rostered-elsewhere"]);
+  expect(published.has("rostered-elsewhere")).toBe(true);
+  expect(optionalDone).toBe(false);
+  finishOptional();
+  await optional;
 });

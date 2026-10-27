@@ -79,7 +79,7 @@ import {
 } from "./sleeper.js";
 import { activeBenchIds, eligibleForSlot, espnStatusToPhase, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, normalizeGamePhase, optimizeLineup, sumLiveForecast } from "./lineup-optimizer.js";
 import { scoreActualPlayerStats } from "./fantasy-scoring.js";
-import { createSharedBatchLoader } from "./shared-batch-loader.js";
+import { createPriorityBatchLoaders } from "./shared-batch-loader.js";
 import { rankingsForLeagueFormats, redraftTwinFormat } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
@@ -1718,7 +1718,7 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   // leagues and backed by the per-player source cache; each league scores
   // the lines through its own settings at stamp time.
   const freeAgentStatsByPlayerId = new Map<string, Record<string, number>>();
-  const ensureFreeAgentStats = createSharedBatchLoader(async (playerIds: string[]) => {
+  const statsLoaders = createPriorityBatchLoaders(async (playerIds: string[]) => {
     const loaded = await loadFreeAgentWeeklyStats(playerIds, season, week);
     for (const [playerId, stats] of loaded) freeAgentStatsByPlayerId.set(playerId, stats);
   });
@@ -1833,13 +1833,13 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     const optionalStatsIds = [...new Set([...freeAgentPlayerIds, ...optionalDefenseIds])]
       .filter((id) => !priorityStatsIdSet.has(id));
     if (priorityStatsIds.length > 0) {
-      await ensureFreeAgentStats(priorityStatsIds);
+      await statsLoaders.priority(priorityStatsIds);
     }
     if (optionalStatsIds.length > 0) {
       // Best-effort: stamp whatever arrives inside the FA budget; continue
       // the rest in the background so the instance memo still warms.
       await awaitWithBudget(
-        ensureFreeAgentStats(optionalStatsIds),
+        statsLoaders.optional(optionalStatsIds),
         FREE_AGENT_ACTUALS_BUDGET_MS,
         (pending) => { waitUntil(pending.catch(() => undefined)); },
       );
