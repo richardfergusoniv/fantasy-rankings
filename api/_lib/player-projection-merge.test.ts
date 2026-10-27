@@ -3,9 +3,12 @@ import type { z } from "zod";
 import { rankingSchema } from "./dashboard-schemas.js";
 import {
   applyActualRanks,
+  applyDefenseActualRanks,
+  finalizeDefenseActualDisplay,
   mergePlayerProjections,
   nonKickerProjectionCount,
   projectionBoardIsUsable,
+  type DefenseActualRow,
   type ProjectionSnapshot,
   type SleeperProjection,
 } from "./player-projection-merge.js";
@@ -281,6 +284,82 @@ describe("applyActualRanks", () => {
       ["a", 2],
       ["b", 1],
       ["c", 1],
+    ]);
+  });
+});
+
+function defenseRow(partial: Partial<DefenseActualRow> & Pick<DefenseActualRow, "team">): DefenseActualRow {
+  return {
+    pregameProjection: 8,
+    displayProjection: 8,
+    actualScore: null,
+    gamePhase: "pregame",
+    rank: null,
+    ...partial,
+  };
+}
+
+describe("applyDefenseActualRanks", () => {
+  it("re-ranks finals on actuals and keeps pregame defenses on projection order", () => {
+    const rows = [
+      defenseRow({ team: "BUF", pregameProjection: 12, gamePhase: "pregame", rank: 1 }),
+      defenseRow({ team: "MIA", pregameProjection: 10, gamePhase: "final", actualScore: 18, rank: 2 }),
+      defenseRow({ team: "NYJ", pregameProjection: 9, gamePhase: "final", actualScore: 3, rank: 3 }),
+    ];
+    applyDefenseActualRanks(rows);
+    expect(rows.map((row) => [row.team, row.rank])).toEqual([
+      ["BUF", 2],
+      ["MIA", 1],
+      ["NYJ", 3],
+    ]);
+  });
+
+  it("keeps a final defense without an actual on its projection rank", () => {
+    const rows = [
+      defenseRow({ team: "BUF", pregameProjection: 11, gamePhase: "final", actualScore: null }),
+      defenseRow({ team: "MIA", pregameProjection: 9, gamePhase: "pregame" }),
+    ];
+    applyDefenseActualRanks(rows);
+    expect(rows.map((row) => [row.team, row.rank])).toEqual([
+      ["BUF", 1],
+      ["MIA", 2],
+    ]);
+  });
+
+  it("isolates ranks per league row set so shared team codes cannot bleed", () => {
+    const leagueA = [
+      defenseRow({ team: "KC", pregameProjection: 10, gamePhase: "final", actualScore: 4 }),
+      defenseRow({ team: "BUF", pregameProjection: 9, gamePhase: "final", actualScore: 15 }),
+    ];
+    const leagueB = [
+      defenseRow({ team: "KC", pregameProjection: 10, gamePhase: "final", actualScore: 22 }),
+      defenseRow({ team: "BUF", pregameProjection: 9, gamePhase: "final", actualScore: 2 }),
+    ];
+    applyDefenseActualRanks(leagueA);
+    applyDefenseActualRanks(leagueB);
+    expect(leagueA.map((row) => [row.team, row.rank, row.actualScore])).toEqual([
+      ["KC", 2, 4],
+      ["BUF", 1, 15],
+    ]);
+    expect(leagueB.map((row) => [row.team, row.rank, row.actualScore])).toEqual([
+      ["KC", 1, 22],
+      ["BUF", 2, 2],
+    ]);
+  });
+});
+
+describe("finalizeDefenseActualDisplay", () => {
+  it("shows actual PTS on final and keeps projection when actual is missing", () => {
+    const rows = [
+      defenseRow({ team: "BUF", pregameProjection: 11, displayProjection: null, gamePhase: "final", actualScore: 14.5 }),
+      defenseRow({ team: "MIA", pregameProjection: 9, displayProjection: null, gamePhase: "final", actualScore: null }),
+      defenseRow({ team: "NYJ", pregameProjection: 8, displayProjection: 8, gamePhase: "live", actualScore: 3 }),
+    ];
+    finalizeDefenseActualDisplay(rows);
+    expect(rows.map((row) => [row.team, row.displayProjection])).toEqual([
+      ["BUF", 14.5],
+      ["MIA", 9],
+      ["NYJ", 8],
     ]);
   });
 });

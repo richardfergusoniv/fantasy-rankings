@@ -83,8 +83,11 @@ import { createSharedBatchLoader } from "./shared-batch-loader.js";
 import { rankingsForLeagueFormats, redraftTwinFormat } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
+import { selectActualStatsCandidateIds } from "./actual-stats-candidates.js";
 import {
   applyActualRanks,
+  applyDefenseActualRanks,
+  finalizeDefenseActualDisplay,
   mergePlayerProjections,
   projectionBoardIsUsable,
   type SleeperProjection,
@@ -1734,7 +1737,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const seasonLongRankings = rankingsForLeagueFormats(fantasyCalcResult.rows, seasonLongFormats);
   if (fantasyCalcResult.failedPresets > 0) sourceErrors.push("FantasyCalc season-long rankings are unavailable for one or more league formats.");
   const fantasyCalcAsOf = seasonLongRankings.length > 0 ? new Date().toISOString() : null;
-  const defenseActuals = new Map<string, number>();
 
   // Fetch the required roster before optional league enrichments and bound
   // concurrency. The previous 24-request fan-out could throttle every roster
@@ -1802,18 +1804,28 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     for (const row of leagueRankings) {
       row.gamePhase = gamePhaseByTeam.get(canonicalTeam(row.team)) ?? null;
     }
-    // This league's free agents (and every player, if the matchup feed
-    // failed) need scored stat lines instead of matchup points.
+    // This league's free agents (and every rostered player, if the matchup
+    // feed failed) need scored stat lines instead of matchup points.
+    // Rostered ids are uncapped on feed failure; FA volume stays capped.
     const rosteredIds = new Set(rosters.flatMap((roster) => roster.players ?? []));
     const matchupFeedMissing = matchupsResult.status === "rejected";
-    const freeAgentCandidates = leagueRankings
-      .filter((row) => (row.gamePhase === "live" || row.gamePhase === "final")
-        && !matchupPointsByPlayerId.has(row.playerId)
-        && (matchupFeedMissing || !rosteredIds.has(row.playerId)))
-      .sort((a, b) => (b.leagueProjection ?? Number.NEGATIVE_INFINITY) - (a.leagueProjection ?? Number.NEGATIVE_INFINITY))
-      .slice(0, 150);
-    if (freeAgentCandidates.length > 0) {
-      await ensureFreeAgentStats(freeAgentCandidates.map((row) => row.playerId));
+    const actualStatsCandidateIds = selectActualStatsCandidateIds({
+      rows: leagueRankings,
+      rosteredIds,
+      matchupPointsByPlayerId,
+      matchupFeedMissing,
+    });
+    // DST ids are team codes; load the same weekly-stat path for FA / feed-miss
+    // defenses so finals get league-scored actuals instead of a blank PTS cell.
+    const defenseStatsCandidateIds = leagueDefenses
+      .filter((defense) => (
+        (defense.gamePhase === "live" || defense.gamePhase === "final")
+        && !matchupPointsByPlayerId.has(defense.team)
+      ))
+      .map((defense) => defense.team);
+    const statsCandidateIds = [...new Set([...actualStatsCandidateIds, ...defenseStatsCandidateIds])];
+    if (statsCandidateIds.length > 0) {
+      await ensureFreeAgentStats(statsCandidateIds);
     }
     for (const row of leagueRankings) {
       const matchupPoints = matchupPointsByPlayerId.get(row.playerId);
@@ -1826,6 +1838,23 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         }
       }
     }
+
+    // Stamp DST actuals from this league's matchup points (or scored weekly
+    // stats). Keys stay on the per-league defense rows so scoring cannot bleed
+    // across leagues that share a team abbreviation.
+    for (const defense of leagueDefenses) {
+      const matchupPoints = matchupPointsByPlayerId.get(defense.team);
+      if (typeof matchupPoints === "number" && Number.isFinite(matchupPoints)) {
+        defense.actualScore = matchupPoints;
+      } else if (defense.gamePhase === "live" || defense.gamePhase === "final") {
+        const stats = freeAgentStatsByPlayerId.get(defense.team);
+        if (stats) {
+          defense.actualScore = scoreProjectedDefenseStats(stats, league.scoring_settings);
+        }
+      }
+    }
+    applyDefenseActualRanks(leagueDefenses);
+    finalizeDefenseActualDisplay(leagueDefenses);
 
     // With actuals stamped, final players re-rank on what they scored
     // (above or below the remaining projections); live and pregame players
@@ -1861,7 +1890,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         : (rankRow?.projectionComponents ?? null);
       const actual = typeof activeMatchup?.players_points?.[playerId] === "number" ? activeMatchup.players_points[playerId] ?? null : null;
       const clock = gamePhase === "live" ? gameClockByTeam.get(teamKey) : undefined;
-      if (position === "DEF" && actual !== null) defenseActuals.set(defenseTeam, actual);
       return {
         playerId,
         name: position === "DEF" ? `${defenseTeam} Defense` : (meta?.full_name ?? ([meta?.first_name, meta?.last_name].filter(Boolean).join(" ") || "Unknown player")),
@@ -2183,12 +2211,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       waivers: waiverStatus(league.settings, ownRoster, rosters.length),
     };
   });
-
-  for (const defense of defenses) {
-    if (defense.gamePhase !== "final") continue;
-    defense.actualScore = defenseActuals.get(defense.team) ?? null;
-    defense.displayProjection = defense.actualScore;
-  }
 
   const leagueIds = leagues.flatMap((league) => league ? [league.id] : []);
   const strengthOfSchedule = await loadStrengthOfSchedule(leagueIds);
