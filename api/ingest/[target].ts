@@ -70,6 +70,10 @@ const MAX_INGEST_BODY_BYTES = 8 * 1024 * 1024;
  * - pfn-tables:     writes `pfn:{tableKey}` rows to `source_cache` for the
  *                   4 PFN tables.
  * - player-news-x:  inserts shared player-news rows from X (dedupe by post_id).
+ *                   Prefer Sleeper `player_id` on every item; name resolve is
+ *                   fallback-only. Response includes `unresolvedSamples`
+ *                   (up to 10). Priority player ids:
+ *                   `GET /api/cron/jobs?job=x-producer-priority`.
  * - prop-line-snapshots: inserts dated consensus prop-line rows into
  *                   `prop_line_snapshots` (line-movement history).
  * - sleeper-picks:  stores the normalized Sleeper Picks NFL board as one
@@ -411,6 +415,15 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     )
     .returning({ id: schema.sharedPlayerNews.id });
 
+  const unresolvedSamples = unresolved.slice(0, 10);
+  if (unresolvedSamples.length > 0) {
+    console.warn(
+      "[ingest/player-news-x] unresolved samples",
+      unresolved.length,
+      unresolvedSamples,
+    );
+  }
+
   return json({
     ok: true,
     status: "committed",
@@ -419,7 +432,7 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     inserted,
     duplicates: Math.max(0, unique.length - inserted),
     unresolved: unresolved.length,
-    unresolvedSamples: unresolved.slice(0, 10),
+    unresolvedSamples,
     purged: purged.length,
   });
 }

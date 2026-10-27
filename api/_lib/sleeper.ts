@@ -102,6 +102,8 @@ export type SleeperPlayer = {
   news_updated?: string | number | null;
   status?: string | null;
   years_exp?: number | null;
+  /** Sleeper search relevance rank (lower = more searched / relevant). */
+  search_rank?: number | null;
 };
 
 export type SleeperDraft = {
