@@ -3,11 +3,13 @@ import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db, schema } from "./db.js";
 import {
   badRequest,
+  forbidden,
   internalError,
   json,
   unauthorized,
 } from "./api-utils.js";
 import { resolveSleeperUserId } from "./auth.js";
+import { viewerUsesValueHistoryFormat } from "./viewer-league-access.js";
 import {
   extendSparseValueHistoryThroughToday,
   FANTASY_CALC_SNAPSHOT_PRESETS,
@@ -118,6 +120,9 @@ export async function handleValueHistory(req: Request): Promise<Response> {
       playerIds: rawPlayerIds.split(",").map((id) => id.trim()).filter(Boolean),
     });
     if (!parsed.success) return badRequest("Invalid query params", parsed.error.issues);
+    if (!(await viewerUsesValueHistoryFormat(sleeperUserId, parsed.data.formatKey))) {
+      return forbidden("Format is not used by one of your leagues.");
+    }
     const playerIds = parsed.data.playerIds;
     const formatKey = resolveFantasyCalcSnapshotFormatKey(parsed.data.formatKey);
 

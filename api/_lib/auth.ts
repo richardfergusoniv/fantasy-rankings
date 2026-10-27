@@ -19,14 +19,13 @@ export async function getAuthUser(req: Request): Promise<AuthUser | null> {
   const supabaseEnv = readSupabasePublicEnv();
   if (!supabaseEnv) return null;
 
-  const supabase = createClient(supabaseEnv.url, supabaseEnv.anonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-  });
-
+  // Always pass the bearer token explicitly (same contract as getRequestUser).
+  // Do not rely on a global Authorization header quirk in supabase-js.
+  const supabase = createClient(supabaseEnv.url, supabaseEnv.anonKey);
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getUser(token);
   if (error || !user) return null;
   return { id: user.id, email: user.email };
 }

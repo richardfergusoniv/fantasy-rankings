@@ -3,11 +3,13 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "../_lib/db.js";
 import {
   badRequest,
+  forbidden,
   internalError,
   json,
   unauthorized,
 } from "../_lib/api-utils.js";
 import { resolveSleeperUserId } from "../_lib/auth.js";
+import { viewerBelongsToLeague } from "../_lib/viewer-league-access.js";
 import {
   BOOM_BUST_SEASONS,
   SLEEPER_BASE,
@@ -296,6 +298,16 @@ export async function GET(req: Request): Promise<Response> {
   const sleeperUserId = await resolveSleeperUserId(req);
   if (!sleeperUserId) return unauthorized("Sign in required.");
   const url = new URL(req.url, "https://localhost");
+  const leagueId = url.searchParams.get("leagueId") ?? "";
+  // Missing/foreign leagueId must not reach settings-cache writers below.
+  if (!leagueId) return badRequest("Invalid query params");
+  try {
+    if (!(await viewerBelongsToLeague(sleeperUserId, leagueId))) {
+      return forbidden("League is not in your Sleeper account.");
+    }
+  } catch (err) {
+    return internalError(err);
+  }
   if (url.pathname.endsWith("/ranges")) {
     return handleRanges(req);
   }

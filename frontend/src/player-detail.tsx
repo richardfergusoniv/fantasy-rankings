@@ -30,6 +30,7 @@ import {
   projectionComponentsForPlayer,
 } from "./dashboard-shared";
 import { actualComponentsForGame } from "./actual-components";
+import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { buildGameLogRows } from "./lib/game-log-rows";
 import { positionTierLabel } from "./lib/position-tier";
@@ -800,7 +801,11 @@ export function PlayerDetailSheet({
               {newsItems.slice(0, showAllNews ? 8 : 3).map((item) => (
                 <article className="player-news-item" key={item.id}>
                   <div><span className={`news-severity ${item.newsType}`}>{item.newsType === "headline" ? "League news" : item.newsType === "waiver" ? "Waiver signal" : "Roster update"}</span><time>{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel} · {item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent"}</time></div>
-                  <a className="player-news-headline" href={item.sourceUrl} target="_blank" rel="noreferrer"><strong>{item.change}</strong><span className="sr-only"> (opens in a new tab)</span></a>
+                  {isHttpOrHttpsUrl(item.sourceUrl) ? (
+                    <a className="player-news-headline" href={item.sourceUrl} target="_blank" rel="noreferrer"><strong>{item.change}</strong><span className="sr-only"> (opens in a new tab)</span></a>
+                  ) : (
+                    <span className="player-news-headline"><strong>{item.change}</strong></span>
+                  )}
                   <p>{item.roleContext}</p>
                 </article>
               ))}

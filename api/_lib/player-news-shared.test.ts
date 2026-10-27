@@ -51,6 +51,12 @@ describe("xNewsItemSchema / xNewsBatchSchema", () => {
     expect(xNewsBatchSchema.safeParse({ items: [{ ...validItem, post_id: "" }] }).success).toBe(false);
     expect(xNewsBatchSchema.safeParse({ items: [{ ...validItem, source_url: "not-a-url" }] }).success).toBe(false);
   });
+
+  it("rejects javascript/data/file source_url values", () => {
+    expect(xNewsItemSchema.safeParse({ ...validItem, source_url: "javascript:alert(1)" }).success).toBe(false);
+    expect(xNewsItemSchema.safeParse({ ...validItem, source_url: "data:text/html,hi" }).success).toBe(false);
+    expect(xNewsItemSchema.safeParse({ ...validItem, source_url: "file:///tmp/x" }).success).toBe(false);
+  });
 });
 
 describe("dedupe + filterDuplicateDrafts", () => {

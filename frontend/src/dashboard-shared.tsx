@@ -27,6 +27,7 @@ import type {
 import { RankStrip } from "./components/rank-strip";
 import { RefreshIcon, SectionError } from "./section-error";
 import { dashboardFreshness } from "./dashboard-freshness";
+import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { gameLineSummary, type TeamGameLineLike } from "./game-line-summary";
 import { GAME_LINES_STALE_MS, loadNflverseGameLines } from "../../api/_lib/nflverse-game-lines";
@@ -707,7 +708,11 @@ export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose
         </DialogHeader>
         <DialogTitle id="ticker-news-headline" className="news-card-headline">{item.change}</DialogTitle>
         <DialogDescription className="text-sm leading-relaxed text-muted-foreground">{item.roleContext}</DialogDescription>
-        <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel}<span className="sr-only"> (opens in a new tab)</span></a>
+        {isHttpOrHttpsUrl(item.sourceUrl) ? (
+          <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel}<span className="sr-only"> (opens in a new tab)</span></a>
+        ) : (
+          <span>{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel}</span>
+        )}
       </DialogContent>
     </Dialog>
   );
