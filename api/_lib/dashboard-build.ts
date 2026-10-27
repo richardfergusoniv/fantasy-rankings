@@ -84,9 +84,10 @@ import { rankingsForLeagueFormats, redraftTwinFormat } from "./season-long-forma
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
 import {
-  isMatchupFeedMissingForActuals,
+  FREE_AGENT_ACTUALS_BUDGET_MS,
+  awaitWithBudget,
   resolveRosterPlayerActual,
-  selectActualStatsCandidateIds,
+  selectActualStatsCandidates,
 } from "./actual-stats-candidates.js";
 import {
   applyActualRanks,
@@ -1808,33 +1809,40 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     for (const row of leagueRankings) {
       row.gamePhase = gamePhaseByTeam.get(canonicalTeam(row.team)) ?? null;
     }
-    // This league's free agents (and every rostered player, if the matchup
-    // feed failed) need scored stat lines instead of matchup points.
-    // Rostered ids are uncapped on feed failure; FA volume stays capped.
+    // Rostered live/final players missing *their own* matchup points always
+    // need scored weekly-stat lines (uncapped). Free agents stay capped and
+    // time-bounded so a cold 400-id fan-out cannot eat the build deadline.
     const rosteredIds = new Set(rosters.flatMap((roster) => roster.players ?? []));
-    // Rejected fetch *or* fulfilled payload with no usable players_points —
-    // both leave rostered live/final players unscored without the stats path.
-    const matchupFeedMissing = isMatchupFeedMissingForActuals(
-      matchupsResult.status === "rejected",
-      matchupPointsByPlayerId,
-    );
-    const actualStatsCandidateIds = selectActualStatsCandidateIds({
+    const { priorityPlayerIds, freeAgentPlayerIds } = selectActualStatsCandidates({
       rows: leagueRankings,
       rosteredIds,
       matchupPointsByPlayerId,
-      matchupFeedMissing,
     });
-    // DST ids are team codes; load the same weekly-stat path for FA / feed-miss
-    // defenses so finals get league-scored actuals instead of a blank PTS cell.
+    // DST ids are team codes; load the same weekly-stat path for defenses
+    // without matchup points. Rostered DSTs stay on the critical path.
     const defenseStatsCandidateIds = leagueDefenses
       .filter((defense) => (
         (defense.gamePhase === "live" || defense.gamePhase === "final")
         && !matchupPointsByPlayerId.has(defense.team)
       ))
       .map((defense) => defense.team);
-    const statsCandidateIds = [...new Set([...actualStatsCandidateIds, ...defenseStatsCandidateIds])];
-    if (statsCandidateIds.length > 0) {
-      await ensureFreeAgentStats(statsCandidateIds);
+    const priorityDefenseIds = defenseStatsCandidateIds.filter((team) => rosteredIds.has(team));
+    const optionalDefenseIds = defenseStatsCandidateIds.filter((team) => !rosteredIds.has(team));
+    const priorityStatsIds = [...new Set([...priorityPlayerIds, ...priorityDefenseIds])];
+    const priorityStatsIdSet = new Set(priorityStatsIds);
+    const optionalStatsIds = [...new Set([...freeAgentPlayerIds, ...optionalDefenseIds])]
+      .filter((id) => !priorityStatsIdSet.has(id));
+    if (priorityStatsIds.length > 0) {
+      await ensureFreeAgentStats(priorityStatsIds);
+    }
+    if (optionalStatsIds.length > 0) {
+      // Best-effort: stamp whatever arrives inside the FA budget; continue
+      // the rest in the background so the instance memo still warms.
+      await awaitWithBudget(
+        ensureFreeAgentStats(optionalStatsIds),
+        FREE_AGENT_ACTUALS_BUDGET_MS,
+        (pending) => { waitUntil(pending.catch(() => undefined)); },
+      );
     }
     for (const row of leagueRankings) {
       const matchupPoints = matchupPointsByPlayerId.get(row.playerId);

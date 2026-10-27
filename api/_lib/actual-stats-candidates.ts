@@ -1,11 +1,14 @@
 /**
  * Choose which live/final players need weekly-stat actuals when Sleeper
- * matchup points are missing. Rostered players are preferred uncapped when
- * the matchup feed failed; free agents stay capped so a cold cache cannot
- * fan out unbounded Sleeper weekly-stat reads.
+ * matchup points are missing for that player. Rostered players are always
+ * preferred uncapped; free agents stay capped and time-bounded so a cold
+ * cache cannot fan out unbounded Sleeper weekly-stat reads on the build path.
  */
 
 export const FREE_AGENT_ACTUALS_CAP = 400;
+
+/** Soft budget for optional FA weekly-stat loads on the dashboard critical path. */
+export const FREE_AGENT_ACTUALS_BUDGET_MS = 4_000;
 
 export type ActualStatsCandidateRow = {
   playerId: string;
@@ -13,17 +16,12 @@ export type ActualStatsCandidateRow = {
   leagueProjection: number | null;
 };
 
-/**
- * True when matchups were rejected, or the response carried no usable
- * numeric `players_points` (fulfilled empty / useless feed). Either case
- * needs the rostered uncapped weekly-stat fallback.
- */
-export function isMatchupFeedMissingForActuals(
-  matchupsRejected: boolean,
-  matchupPointsByPlayerId: ReadonlyMap<string, number>,
-): boolean {
-  return matchupsRejected || matchupPointsByPlayerId.size === 0;
-}
+export type ActualStatsCandidates = {
+  /** Rostered live/final players missing their own matchup points (uncapped). */
+  priorityPlayerIds: string[];
+  /** Unrostered live/final players, projection-sorted and capped. */
+  freeAgentPlayerIds: string[];
+};
 
 function finiteOrNull(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -45,31 +43,29 @@ export function resolveRosterPlayerActual(opts: {
 }
 
 /**
- * Returns player ids that should load weekly stat lines for actuals.
- * When the matchup feed is missing, every rostered live/final player without
- * points is included (no cap). Free agents are sorted by projection and
- * capped at `freeAgentCap` (default {@link FREE_AGENT_ACTUALS_CAP}).
+ * Split weekly-stat actual candidates into critical rostered ids and capped
+ * free agents. A rostered player is selected whenever *that* player lacks
+ * numeric matchup points — even if other players already have scores.
  */
-export function selectActualStatsCandidateIds(opts: {
+export function selectActualStatsCandidates(opts: {
   rows: ReadonlyArray<ActualStatsCandidateRow>;
   rosteredIds: ReadonlySet<string>;
   matchupPointsByPlayerId: ReadonlyMap<string, number>;
-  matchupFeedMissing: boolean;
   freeAgentCap?: number;
-}): string[] {
+}): ActualStatsCandidates {
   const freeAgentCap = opts.freeAgentCap ?? FREE_AGENT_ACTUALS_CAP;
   const needsStats = (row: ActualStatsCandidateRow): boolean => (
     (row.gamePhase === "live" || row.gamePhase === "final")
     && !opts.matchupPointsByPlayerId.has(row.playerId)
   );
 
-  const rosteredNeeded = opts.matchupFeedMissing
-    ? opts.rows
+  const priorityPlayerIds = [...new Set(
+    opts.rows
       .filter((row) => needsStats(row) && opts.rosteredIds.has(row.playerId))
-      .map((row) => row.playerId)
-    : [];
+      .map((row) => row.playerId),
+  )];
 
-  const freeAgents = opts.rows
+  const freeAgentPlayerIds = opts.rows
     .filter((row) => needsStats(row) && !opts.rosteredIds.has(row.playerId))
     .sort((a, b) => (
       (b.leagueProjection ?? Number.NEGATIVE_INFINITY)
@@ -79,5 +75,30 @@ export function selectActualStatsCandidateIds(opts: {
     .slice(0, freeAgentCap)
     .map((row) => row.playerId);
 
-  return [...new Set([...rosteredNeeded, ...freeAgents])];
+  return { priorityPlayerIds, freeAgentPlayerIds };
+}
+
+/**
+ * Await `work` up to `budgetMs`. On timeout, invoke `onTimeout` with the still-
+ * pending work (caller can background it) and return `"timeout"` without
+ * rejecting — so optional loads cannot blow the dashboard deadline.
+ */
+export async function awaitWithBudget(
+  work: Promise<void>,
+  budgetMs: number,
+  onTimeout: (pending: Promise<void>) => void,
+): Promise<"done" | "timeout"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await Promise.race([
+      work.then(() => "done" as const),
+      new Promise<"timeout">((resolve) => {
+        timer = setTimeout(() => resolve("timeout"), budgetMs);
+      }),
+    ]);
+    if (result === "timeout") onTimeout(work);
+    return result;
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }

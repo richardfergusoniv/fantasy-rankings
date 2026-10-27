@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   FREE_AGENT_ACTUALS_CAP,
-  isMatchupFeedMissingForActuals,
+  awaitWithBudget,
   resolveRosterPlayerActual,
-  selectActualStatsCandidateIds,
+  selectActualStatsCandidates,
   type ActualStatsCandidateRow,
 } from "./actual-stats-candidates.js";
 
@@ -54,77 +54,64 @@ describe("resolveRosterPlayerActual", () => {
   });
 });
 
-describe("isMatchupFeedMissingForActuals", () => {
-  it("is true when the matchup request was rejected", () => {
-    expect(isMatchupFeedMissingForActuals(true, new Map([["p1", 10]]))).toBe(true);
-  });
-
-  it("is true when the feed fulfilled but carried no usable numeric points", () => {
-    expect(isMatchupFeedMissingForActuals(false, new Map())).toBe(true);
-  });
-
-  it("is false when the feed has at least one usable points entry", () => {
-    expect(isMatchupFeedMissingForActuals(false, new Map([["p1", 10]]))).toBe(false);
-  });
-
-  it("lets rostered finals into the stats path when the feed is fulfilled but empty", () => {
-    const points = new Map<string, number>();
-    const selected = selectActualStatsCandidateIds({
-      rows: [row("rostered", { leagueProjection: 8 }), row("fa", { leagueProjection: 1 })],
-      rosteredIds: new Set(["rostered"]),
-      matchupPointsByPlayerId: points,
-      matchupFeedMissing: isMatchupFeedMissingForActuals(false, points),
-    });
-    expect(selected).toContain("rostered");
-  });
-});
-
-describe("selectActualStatsCandidateIds", () => {
-  it("includes every rostered live/final player uncapped when the matchup feed is missing", () => {
+describe("selectActualStatsCandidates", () => {
+  it("includes every rostered live/final player uncapped when none have matchup points", () => {
     const rosteredIds = new Set(Array.from({ length: 180 }, (_, index) => `r${index}`));
     const rows = [
       ...[...rosteredIds].map((playerId, index) => row(playerId, { leagueProjection: 1 + index * 0.01 })),
       row("fa-top", { leagueProjection: 99 }),
     ];
-    const selected = selectActualStatsCandidateIds({
+    const selected = selectActualStatsCandidates({
       rows,
       rosteredIds,
       matchupPointsByPlayerId: new Map(),
-      matchupFeedMissing: true,
       freeAgentCap: 1,
     });
-    expect(selected.filter((id) => rosteredIds.has(id))).toHaveLength(180);
-    expect(selected).toContain("fa-top");
+    expect(selected.priorityPlayerIds).toHaveLength(180);
+    expect(selected.freeAgentPlayerIds).toEqual(["fa-top"]);
+  });
+
+  it("includes rostered players missing their own points even when others already scored", () => {
+    const selected = selectActualStatsCandidates({
+      rows: [
+        row("rostered-missing", { leagueProjection: 14 }),
+        row("rostered-scored", { leagueProjection: 18 }),
+        row("fa", { leagueProjection: 20 }),
+      ],
+      rosteredIds: new Set(["rostered-missing", "rostered-scored"]),
+      matchupPointsByPlayerId: new Map([["rostered-scored", 12.4], ["other", 5]]),
+    });
+    expect(selected.priorityPlayerIds).toEqual(["rostered-missing"]);
+    expect(selected.freeAgentPlayerIds).toEqual(["fa"]);
   });
 
   it("does not pull rostered players into the stats path when matchup points already exist", () => {
-    const selected = selectActualStatsCandidateIds({
+    const selected = selectActualStatsCandidates({
       rows: [row("rostered"), row("fa", { leagueProjection: 20 })],
       rosteredIds: new Set(["rostered"]),
       matchupPointsByPlayerId: new Map([["rostered", 12.4]]),
-      matchupFeedMissing: true,
     });
-    expect(selected).toEqual(["fa"]);
+    expect(selected.priorityPlayerIds).toEqual([]);
+    expect(selected.freeAgentPlayerIds).toEqual(["fa"]);
   });
 
-  it("skips rostered players when the matchup feed is healthy and only caps free agents", () => {
+  it("caps free agents independently of rostered priority volume", () => {
     const freeAgents = Array.from({ length: FREE_AGENT_ACTUALS_CAP + 25 }, (_, index) => (
       row(`fa${index}`, { leagueProjection: FREE_AGENT_ACTUALS_CAP + 25 - index })
     ));
-    const selected = selectActualStatsCandidateIds({
+    const selected = selectActualStatsCandidates({
       rows: [row("rostered", { leagueProjection: 50 }), ...freeAgents],
       rosteredIds: new Set(["rostered"]),
       matchupPointsByPlayerId: new Map(),
-      matchupFeedMissing: false,
     });
-    expect(selected).not.toContain("rostered");
-    expect(selected).toHaveLength(FREE_AGENT_ACTUALS_CAP);
-    expect(selected[0]).toBe("fa0");
-    expect(selected.at(-1)).toBe(`fa${FREE_AGENT_ACTUALS_CAP - 1}`);
+    expect(selected.priorityPlayerIds).toEqual(["rostered"]);
+    expect(selected.freeAgentPlayerIds).toHaveLength(FREE_AGENT_ACTUALS_CAP);
+    expect(selected.freeAgentPlayerIds[0]).toBe("fa0");
+    expect(selected.freeAgentPlayerIds.at(-1)).toBe(`fa${FREE_AGENT_ACTUALS_CAP - 1}`);
   });
 
   it("ignores pregame rows and players who already have matchup points", () => {
-    const selected = selectActualStatsCandidateIds({
+    const selected = selectActualStatsCandidates({
       rows: [
         row("pregame", { gamePhase: "pregame", leagueProjection: 40 }),
         row("live-fa", { gamePhase: "live", leagueProjection: 15 }),
@@ -133,13 +120,13 @@ describe("selectActualStatsCandidateIds", () => {
       ],
       rosteredIds: new Set(),
       matchupPointsByPlayerId: new Map([["scored-fa", 8]]),
-      matchupFeedMissing: false,
     });
-    expect(selected).toEqual(["live-fa", "final-fa"]);
+    expect(selected.priorityPlayerIds).toEqual([]);
+    expect(selected.freeAgentPlayerIds).toEqual(["live-fa", "final-fa"]);
   });
 
   it("honors an explicit free-agent cap below the default", () => {
-    const selected = selectActualStatsCandidateIds({
+    const selected = selectActualStatsCandidates({
       rows: [
         row("a", { leagueProjection: 3 }),
         row("b", { leagueProjection: 2 }),
@@ -147,9 +134,34 @@ describe("selectActualStatsCandidateIds", () => {
       ],
       rosteredIds: new Set(),
       matchupPointsByPlayerId: new Map(),
-      matchupFeedMissing: false,
       freeAgentCap: 2,
     });
-    expect(selected).toEqual(["a", "b"]);
+    expect(selected.freeAgentPlayerIds).toEqual(["a", "b"]);
+  });
+});
+
+describe("awaitWithBudget", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns done when work finishes inside the budget", async () => {
+    const onTimeout = vi.fn();
+    await expect(awaitWithBudget(Promise.resolve(), 1_000, onTimeout)).resolves.toBe("done");
+    expect(onTimeout).not.toHaveBeenCalled();
+  });
+
+  it("returns timeout and hands off the pending work without rejecting", async () => {
+    vi.useFakeTimers();
+    let resolveWork!: () => void;
+    const work = new Promise<void>((resolve) => { resolveWork = resolve; });
+    const onTimeout = vi.fn();
+    const pending = awaitWithBudget(work, 50, onTimeout);
+    await vi.advanceTimersByTimeAsync(50);
+    await expect(pending).resolves.toBe("timeout");
+    expect(onTimeout).toHaveBeenCalledTimes(1);
+    expect(onTimeout.mock.calls[0]?.[0]).toBe(work);
+    resolveWork();
+    await work;
   });
 });
