@@ -6,7 +6,6 @@ import {
   currentWeekPropLines,
   impliedProbability,
   indexPlayedWeeks,
-  indexWeeklyLines,
   isHiddenHalfPointPropStat,
   propPlayerMatchKey,
   propStatActual,
@@ -167,34 +166,64 @@ describe("propStatActual / history", () => {
     expect(propStatActual("longest_reception", row)).toBeNull();
   });
 
-  it("grades each week against that week's own line", () => {
+  it("grades every played week against this week's line", () => {
     const history = buildPropHistory(
       "pass_yards",
-      new Map([[1, 270.5], [2, 250.5], [3, 315.5]]),
+      270.5,
       [
         weekRow({ week: 1, name: "Patrick Mahomes", passingYards: 220 }),
         weekRow({ week: 2, name: "Patrick Mahomes", passingYards: 260 }),
         weekRow({ week: 3, name: "Patrick Mahomes", passingYards: 310 }),
-        // Played, but no line was stored for week 4: not graded.
         weekRow({ week: 4, name: "Patrick Mahomes", passingYards: 400 }),
       ],
       new Set([1, 2, 3, 4]),
       new Set([1, 2, 3, 4]),
     );
-    expect(history.games).toBe(3);
-    expect(history.overs).toBe(1);
+    expect(history.games).toBe(4);
+    expect(history.overs).toBe(2);
     expect(history.unders).toBe(2);
-    expect(history.hitRate).toBeCloseTo(1 / 3);
-    expect(history.underRate).toBeCloseTo(2 / 3);
-    expect(history.cells.map((cell) => cell.result)).toEqual(["under", "over", "under"]);
-    expect(history.cells.map((cell) => cell.actual)).toEqual([220, 260, 310]);
-    expect(history.cells.map((cell) => cell.line)).toEqual([270.5, 250.5, 315.5]);
+    expect(history.hitRate).toBeCloseTo(0.5);
+    expect(history.underRate).toBeCloseTo(0.5);
+    expect(history.cells.map((cell) => cell.result)).toEqual(["under", "under", "over", "over"]);
+    expect(history.cells.map((cell) => cell.actual)).toEqual([220, 260, 310, 400]);
+    expect(history.cells.map((cell) => cell.line)).toEqual([270.5, 270.5, 270.5, 270.5]);
+
+    // No usable line, no history.
+    const noLine = buildPropHistory(
+      "pass_yards",
+      Number.NaN,
+      [weekRow({ week: 1, name: "Patrick Mahomes", passingYards: 400 })],
+      new Set([1]),
+      new Set([1]),
+    );
+    expect(noLine.games).toBe(0);
+    expect(noLine.hitRate).toBeNull();
+  });
+
+  it("excludes unplayed stat rows while retaining played zero-stat weeks", () => {
+    const history = buildPropHistory(
+      "receptions",
+      0.5,
+      [
+        weekRow({ week: 1, name: "Jonnu Smith", position: "TE", receptions: 0 }),
+        weekRow({ week: 2, name: "Jonnu Smith", position: "TE", receptions: 2 }),
+      ],
+      new Set([2, 3, 4]),
+      new Set([1, 2, 3]),
+    );
+    expect(history.cells.map(({ week, actual, result }) => ({ week, actual, result }))).toEqual([
+      { week: 2, actual: 2, result: "over" },
+      { week: 3, actual: 0, result: "under" },
+    ]);
+    expect(history.games).toBe(2);
+    expect(history.hitRate).toBe(0.5);
+    expect(history.underRate).toBe(0.5);
   });
 
   it("counts anytime_td from combined touchdowns and marks pushes", () => {
     const history = buildPropHistory(
       "anytime_td",
-      new Map([[1, 0.5], [2, 0.5], [3, 0.5]]),
+      0.5,
       [
         weekRow({ week: 1, name: "Isiah Pacheco", position: "RB", rushingTds: 1, receivingTds: 0 }),
         weekRow({ week: 2, name: "Isiah Pacheco", position: "RB", rushingTds: 0, receivingTds: 0 }),
@@ -208,7 +237,7 @@ describe("propStatActual / history", () => {
 
     const pushHistory = buildPropHistory(
       "receptions",
-      new Map([[1, 5], [2, 6.5]]),
+      5,
       [
         weekRow({ week: 1, name: "Travis Kelce", position: "TE", receptions: 5 }),
         weekRow({ week: 2, name: "Travis Kelce", position: "TE", receptions: 7 }),
@@ -223,11 +252,11 @@ describe("propStatActual / history", () => {
 
   it("counts a played week with no stat row as a zero, and skips weeks not played", () => {
     // Jonnu Smith, Week 6 2026: on the field for 9 snaps, never targeted,
-    // so nflverse carries no stat row for him. Against his closing
-    // receptions line of 0.5 that week is an under, not a missing game.
+    // so nflverse carries no stat row for him. Against a 0.5 receptions
+    // line that week is an under, not a missing game.
     const history = buildPropHistory(
       "receptions",
-      new Map([[4, 2.5], [5, 1.5], [6, 0.5]]),
+      0.5,
       [weekRow({ week: 5, name: "Jonnu Smith", position: "TE", receptions: 2 })],
       new Set([5, 6]),
       new Set([4, 5, 6]),
@@ -241,7 +270,7 @@ describe("propStatActual / history", () => {
     // A market with no nflverse actual never grades, even for a zero week.
     const ungradeable = buildPropHistory(
       "longest_reception",
-      new Map([[6, 12.5]]),
+      12.5,
       [],
       new Set([6]),
       new Set([6]),
@@ -255,7 +284,7 @@ describe("propStatActual / history", () => {
     // a played week with no stats coverage is missing data, not a zero.
     const history = buildPropHistory(
       "receptions",
-      new Map([[6, 0.5]]),
+      0.5,
       [],
       new Set([6]),
       new Set([1, 2, 3, 4, 5]),
@@ -334,18 +363,6 @@ describe("propStatActual / history", () => {
 });
 
 describe("history indexes", () => {
-  it("indexes weekly closing lines by player/stat", () => {
-    const index = indexWeeklyLines([
-      { playerId: "4144", stat: "receptions", week: 6, line: 0.5 },
-      { playerId: "4144", stat: "rec_yards", week: 6, line: 6.5 },
-      { playerId: "4144", stat: "rec_yards", week: 5, line: 9.5 },
-    ]);
-    expect(index.get("4144|receptions")?.get(6)).toBe(0.5);
-    expect(index.get("4144|rec_yards")?.get(6)).toBe(6.5);
-    expect(index.get("4144|rec_yards")?.get(5)).toBe(9.5);
-    expect(index.get("4144|rush_yards")).toBeUndefined();
-  });
-
   it("indexes played weeks from snap rows with at least one offensive snap", () => {
     const index = indexPlayedWeeks([
       { name: "Jonnu Smith", team: "GB", position: "TE", week: 6, offenseSnaps: 9, offensePct: 12 },

@@ -305,35 +305,39 @@ const ZERO_WEEK_ROW: TeamWeekStatRow = {
 };
 
 /**
- * Grade a player's history one week at a time, each week against that
- * week's own closing line — pure history, no projection. Only weeks with
- * a stored line are graded. A week the player played (snap counts show
- * offense snaps) but recorded no stats has no nflverse stat row; it still
- * counts, as an actual of 0 — but only when the stats dataset itself
- * covers that week (`statWeeks`). Without that guard, a week the stats
- * file has not published yet (or a failed stats load) would zero-fill
- * into a false under. Weeks he did not play are skipped entirely.
- * `weekRows` should already be filtered to one player.
+ * Backtest this week's line against the player's season: every prior
+ * week he played is graded against the one current line, so the hit
+ * count reads "how many times this season he cleared this week's line".
+ * A week he played (snap counts show offense snaps) but recorded no
+ * stats has no nflverse stat row; it still counts, as an actual of 0 —
+ * but only when the stats dataset itself covers that week
+ * (`statWeeks`). Without that guard, a week the stats file has not
+ * published yet (or a failed stats load) would zero-fill into a false
+ * under. Weeks he did not play are skipped entirely. `weekRows`,
+ * `playedWeeks`, and `statWeeks` should already be limited to prior
+ * weeks and to this one player.
  */
 export function buildPropHistory(
   stat: string,
-  weeklyLines: ReadonlyMap<number, number>,
+  line: number,
   weekRows: readonly TeamWeekStatRow[],
   playedWeeks: ReadonlySet<number>,
   statWeeks: ReadonlySet<number>,
 ): PropHistory {
   const rowByWeek = new Map(weekRows.map((row) => [row.week, row]));
   const cells: PropGameCell[] = [];
-  const weeks = [...weeklyLines.keys()].sort((left, right) => left - right);
-  for (const week of weeks) {
-    const line = weeklyLines.get(week);
-    if (line === undefined || !Number.isFinite(line)) continue;
+  if (!Number.isFinite(line)) {
+    return { games: 0, overs: 0, unders: 0, pushes: 0, hitRate: null, underRate: null, cells };
+  }
+  const weeks = new Set<number>([...rowByWeek.keys()].filter((week) => playedWeeks.has(week)));
+  for (const week of playedWeeks) {
+    if (statWeeks.has(week)) weeks.add(week);
+  }
+  for (const week of [...weeks].sort((left, right) => left - right)) {
     const row = rowByWeek.get(week);
     const actual = row
       ? propStatActual(stat, row)
-      : playedWeeks.has(week) && statWeeks.has(week)
-        ? propStatActual(stat, ZERO_WEEK_ROW)
-        : null;
+      : propStatActual(stat, ZERO_WEEK_ROW);
     if (actual === null) continue;
     cells.push({
       week,
@@ -400,20 +404,6 @@ export function compareHitsDesc(
 export function propPlayerMatchKey(name: string, team: string | null | undefined, position: string): string {
   const teamKey = team ? team.trim().toUpperCase() : "";
   return `${position}|${teamKey}|${normalizeTeamStatsPlayerName(name)}`;
-}
-
-/** Index stored closing lines by player/stat key → week → line. */
-export function indexWeeklyLines(
-  entries: readonly { playerId: string; stat: string; week: number; line: number }[],
-): Map<string, Map<number, number>> {
-  const byKey = new Map<string, Map<number, number>>();
-  for (const entry of entries) {
-    const key = `${entry.playerId}|${entry.stat}`;
-    const group = byKey.get(key);
-    if (group) group.set(entry.week, entry.line);
-    else byKey.set(key, new Map([[entry.week, entry.line]]));
-  }
-  return byKey;
 }
 
 /**
