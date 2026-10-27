@@ -1443,10 +1443,11 @@ html.ask-sheet-open [data-slot="dialog-overlay"] {
 .chat-panel.is-sheet .chat-main.is-active .chat-composer { background: linear-gradient(to top, var(--card) 70%, transparent); }
 @media (min-width: 760px) {
   [data-slot="dialog-content"].ask-sheet {
-    top: 0;
+    /* Landscape phones and tablets also need to stay above the keyboard. */
+    top: var(--vv-top, 0px);
     left: auto;
     width: 400px;
-    height: 100dvh;
+    height: var(--vv-height, 100dvh);
     border-width: 0 0 0 1px;
     border-radius: 0;
   }
