@@ -33,7 +33,7 @@ Richard’s X push routine is **out of repo**. This app only accepts batches and
 exposes a priority list the producer can refresh.
 
 1. **Priority set** — `GET /api/cron/jobs?job=x-producer-priority` with
-   `Authorization: Bearer $CRON_SECRET`. Optional `?fresh=1` refreshes league
+   `Authorization: Bearer $CRON_SECRET`. Optional `&fresh=1` refreshes league
    / roster caches. Returns `playerIds` = union of every player rostered in
    `OWNER_SLEEPER_USER_ID` leagues + active skill+K with Sleeper
    `search_rank` ≤ 300 (from `nfl-players-roster-v1`; run

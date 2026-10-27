@@ -168,8 +168,25 @@ export function buildXProducerPrioritySet(input: {
 }
 
 /**
+ * True when the NFL roster map is empty or has no finite `search_rank`
+ * values (e.g. a pre-search_rank cache snapshot). Callers should refresh
+ * from Sleeper in that case so the ≤300 cohort is not silently empty.
+ */
+export function nflPlayersMapNeedsSearchRankRefresh(
+  players: Record<string, SleeperPlayer>,
+): boolean {
+  if (Object.keys(players).length === 0) return true;
+  for (const player of Object.values(players)) {
+    const rank = player.search_rank;
+    if (typeof rank === "number" && Number.isFinite(rank)) return false;
+  }
+  return true;
+}
+
+/**
  * Load owner leagues + NFL roster cache and build the priority set.
- * Uses `OWNER_SLEEPER_USER_ID`. Prefers cached NFL players; refreshes when empty.
+ * Uses `OWNER_SLEEPER_USER_ID`. Prefers cached NFL players; refreshes when
+ * empty or when the snapshot lacks `search_rank` (legacy compact rows).
  */
 export async function loadXProducerPrioritySet(options: {
   freshLeagues?: boolean;
@@ -182,7 +199,7 @@ export async function loadXProducerPrioritySet(options: {
 
   let players = await readCachedNflPlayersMap();
   let playersCacheSource: "cache" | "refreshed" = "cache";
-  if (Object.keys(players).length === 0) {
+  if (nflPlayersMapNeedsSearchRankRefresh(players)) {
     players = await loadNflPlayersMap(true);
     playersCacheSource = "refreshed";
   }

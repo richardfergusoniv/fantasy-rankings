@@ -5,6 +5,7 @@ import {
   buildXProducerPrioritySet,
   collectRosteredPlayerIds,
   collectSearchRankPriorityIds,
+  nflPlayersMapNeedsSearchRankRefresh,
 } from "./x-producer-priority.js";
 
 function player(
@@ -48,6 +49,26 @@ describe("collectRosteredPlayerIds", () => {
       { rosters: [{ playerIds: ["3", "4"] }] },
     ]);
     expect([...ids].sort()).toEqual(["1", "2", "3", "4"]);
+  });
+});
+
+describe("nflPlayersMapNeedsSearchRankRefresh", () => {
+  it("refreshes when the map is empty", () => {
+    expect(nflPlayersMapNeedsSearchRankRefresh({})).toBe(true);
+  });
+
+  it("refreshes when players exist but none have a finite search_rank", () => {
+    expect(nflPlayersMapNeedsSearchRankRefresh({
+      a: player({ full_name: "A", search_rank: null }),
+      b: player({ full_name: "B", search_rank: undefined }),
+    })).toBe(true);
+  });
+
+  it("keeps the cache when at least one player has a finite search_rank", () => {
+    expect(nflPlayersMapNeedsSearchRankRefresh({
+      a: player({ full_name: "A", search_rank: null }),
+      b: player({ full_name: "B", search_rank: 12 }),
+    })).toBe(false);
   });
 });
 
