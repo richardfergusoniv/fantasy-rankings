@@ -22,8 +22,12 @@ describe("chartEntityRosterId", () => {
     expect(chartEntityRosterId({ name: "CIN Defense", team: "CIN", position: "DEF", id: "DEF:CIN" })).toBe("CIN");
   });
 
-  it("prefers playerId for skill players", () => {
-    expect(chartEntityRosterId({ name: "Justin Tucker", team: "BAL", position: "K", playerId: "5001", id: "K:5001" })).toBe("5001");
+  it("prefers Sleeper playerId for skill players", () => {
+    expect(chartEntityRosterId({ name: "Justin Tucker", team: "BAL", position: "K", playerId: "5001", id: "K:00-002000" })).toBe("5001");
+  });
+
+  it("does not treat nflverse GSIS ids as roster ids", () => {
+    expect(chartEntityRosterId({ name: "Puka Nacua", team: "LAR", position: "WR", id: "WR:00-0037834" })).toBeNull();
   });
 });
 
@@ -98,5 +102,26 @@ describe("chartOwnershipForEntity", () => {
   it("treats league-rosteredPlayerIds as rostered for skill ids without a name match", () => {
     expect(isPlayerRosteredInLeague({ name: "Waived WR", team: "CHI", position: "WR", playerId: "missing" }, leagueState)).toBe(false);
     expect(isPlayerRosteredInLeague({ name: "Rival K", team: "KC", position: "K", playerId: "k2" }, leagueState)).toBe(true);
+  });
+
+  it("does not mark GSIS-only analytics entities as rostered via encoded id", () => {
+    const withSleeperRoster = league({
+      rosteredPlayerIds: ["12526"],
+      rosterAssignments: [{ playerId: "12526", teamName: "Rival", isUser: false }],
+    });
+    // Without a resolved Sleeper playerId, GSIS in entity.id must not match rosteredPlayerIds.
+    expect(chartOwnershipForEntity({
+      name: "Puka Nacua",
+      team: "LAR",
+      position: "WR",
+      id: "WR:00-0037834",
+    }, withSleeperRoster)).toBe("available");
+    expect(chartOwnershipForEntity({
+      name: "Puka Nacua",
+      team: "LAR",
+      position: "WR",
+      id: "WR:00-0037834",
+      playerId: "12526",
+    }, withSleeperRoster)).toBe("rostered");
   });
 });

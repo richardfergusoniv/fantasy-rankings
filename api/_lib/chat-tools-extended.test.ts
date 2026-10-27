@@ -501,6 +501,7 @@ function baseDashboard(): Dashboard {
           name: "Alpha Receiver",
           team: "KC",
           position: "WR",
+          playerId: "p1",
           seasonGames: 6,
           rollingGames: 6,
           season: { targets: 48, receptions: 32 },

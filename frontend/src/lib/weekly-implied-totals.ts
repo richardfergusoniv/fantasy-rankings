@@ -64,7 +64,8 @@ export function defenseImpliedTotalValues(
   gameTotals: ReadonlyMap<string, number>,
 ): Record<string, number> {
   const values: Record<string, number> = {};
-  const opponentTotal = opponentProjectedPoints ?? teamTotals.get(opponent);
+  // Prefer nflverse game-line totals over the defense-cache field when both exist.
+  const opponentTotal = teamTotals.get(opponent) ?? opponentProjectedPoints;
   if (opponentTotal !== undefined && opponentTotal !== null) values.opponentTotal = opponentTotal;
   const ownTotal = teamTotals.get(team);
   if (ownTotal !== undefined) values.teamTotal = ownTotal;

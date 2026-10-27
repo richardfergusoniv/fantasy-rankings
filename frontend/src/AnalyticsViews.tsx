@@ -48,7 +48,7 @@ export type Metric = { key: string; label: string; short: string; unit?: string;
 type WeeklyEntity = {
   id: string; playerId: string; name: string; team: string; position: BasePosition; opponent: string | null; isAway: boolean | null; isBye: boolean; gameTime: string | null; gamePhase: MatchupSelection["gamePhase"]; values: Record<string, number>;
 };
-export type PlayerSelection = { playerId?: string; name: string; team: string; position: BasePosition };
+export type PlayerSelection = { playerId?: string | null; name: string; team: string; position: BasePosition };
 /** A player the Analytics tool was asked to focus (from a link): the scatter opens on their position with them selected. */
 export type AnalyticsFocusPlayer = { id: string; name: string; team: string | null; position: string };
 type ChartDatum = {
@@ -1732,6 +1732,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
           x,
           y,
           ...chartDatumOwnership(entity, league),
+          playerId: entity.playerId ?? null,
           position: entity.position,
         }];
       })

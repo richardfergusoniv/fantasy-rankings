@@ -253,6 +253,12 @@ export const analyticsEntitySchema = z.object({
   name: z.string(),
   team: z.string(),
   position: z.enum(["QB", "RB", "WR", "TE", "K", "DEF"]),
+  /**
+   * Sleeper player id for roster ownership (DST uses the NFL team code).
+   * Analytics `id` stays the nflverse GSIS key (`WR:00-003…`); do not treat that
+   * as a Sleeper id. Optional/default for snapshots built before this field.
+   */
+  playerId: z.string().nullable().default(null),
   seasonGames: z.number().int(),
   rollingGames: z.number().int(),
   season: z.record(z.string(), z.number()),

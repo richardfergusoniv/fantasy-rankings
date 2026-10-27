@@ -147,5 +147,6 @@ describe("playerInsightsSnapshotSchema", () => {
       depthAsOf: null,
     });
     expect(parsed.depthPrevious).toEqual({});
+    expect(parsed.sleeperByGsis).toEqual({});
   });
 });

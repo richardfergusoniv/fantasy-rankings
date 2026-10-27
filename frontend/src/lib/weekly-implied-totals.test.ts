@@ -39,4 +39,12 @@ describe("weekly implied totals", () => {
     });
     expect(teamTotals.get("ARI")).toBe(17.5);
   });
+
+  it("prefers game-line opponent totals over a differing defense-cache value", () => {
+    const { teamTotals, gameTotals } = buildImpliedTotalMaps(gameLines, [
+      { team: "BAL", opponent: "CIN", opponentProjectedPoints: 17.5 },
+    ]);
+    expect(teamTotals.get("CIN")).toBe(22);
+    expect(defenseImpliedTotalValues("BAL", "CIN", 17.5, teamTotals, gameTotals).opponentTotal).toBe(22);
+  });
 });

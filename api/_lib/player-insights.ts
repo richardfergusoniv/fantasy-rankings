@@ -61,6 +61,8 @@ export const playerInsightsSnapshotSchema = z.object({
   depthAsOf: z.string().nullable(),
   /** The same ranks from the oldest chart in the past week, to show who moved. */
   depthPrevious: z.record(z.string(), depthSchema).default({}),
+  /** gsis_id → Sleeper id from dynastyprocess db_playerids; used to stamp analytics.playerId. */
+  sleeperByGsis: z.record(z.string(), z.string()).default({}),
 });
 
 export type PlayerInsightsSnapshot = z.infer<typeof playerInsightsSnapshotSchema>;
@@ -327,6 +329,7 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
     depth,
     depthAsOf,
     depthPrevious,
+    sleeperByGsis: Object.fromEntries(ids.sleeperByGsis),
   };
 }
 

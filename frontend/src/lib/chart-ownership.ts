@@ -38,15 +38,15 @@ function isDefensePosition(position: string): boolean {
   return position === "DEF" || position === "DST";
 }
 
-/** Sleeper / analytics id used for roster lookups (DST → team code). */
-export function chartEntityRosterId(entity: ChartOwnershipEntity): string {
+/**
+ * Sleeper id used for roster lookups (DST → team code).
+ * Analytics entity `id` encodes an nflverse GSIS id (`WR:00-003…`); never use
+ * that for `rosteredPlayerIds` checks — callers must supply `playerId`.
+ */
+export function chartEntityRosterId(entity: ChartOwnershipEntity): string | null {
   if (isDefensePosition(entity.position)) return entity.team;
   if (entity.playerId) return entity.playerId;
-  if (entity.id?.includes(":")) {
-    const [, ...rest] = entity.id.split(":");
-    return rest.join(":");
-  }
-  return entity.id ?? entity.team;
+  return null;
 }
 
 function rosterPlayers(league: ChartOwnershipLeague) {
@@ -56,13 +56,20 @@ function rosterPlayers(league: ChartOwnershipLeague) {
 export function isPlayerOnSelectedTeam(entity: ChartOwnershipEntity, league: ChartOwnershipLeague): boolean {
   if (isDefensePosition(entity.position)) {
     const defenseId = chartEntityRosterId(entity);
-    if (league.rosterAssignments?.some((assignment) => assignment.isUser && assignment.playerId === defenseId)) {
+    if (defenseId && league.rosterAssignments?.some((assignment) => assignment.isUser && assignment.playerId === defenseId)) {
       return true;
     }
     return rosterPlayers(league).some((player) => (
       isDefensePosition(player.position)
       && (player.playerId === defenseId || player.team === entity.team)
     ));
+  }
+
+  if (entity.playerId) {
+    if (league.rosterAssignments?.some((assignment) => assignment.isUser && assignment.playerId === entity.playerId)) {
+      return true;
+    }
+    if (rosterPlayers(league).some((player) => player.playerId === entity.playerId)) return true;
   }
 
   const entityName = comparableChartPlayerName(entity.name);
@@ -75,10 +82,11 @@ export function isPlayerOnSelectedTeam(entity: ChartOwnershipEntity, league: Cha
 
 export function isPlayerRosteredInLeague(entity: ChartOwnershipEntity, league: ChartOwnershipLeague): boolean {
   const rosterId = chartEntityRosterId(entity);
-  if (league.rosteredPlayerIds.includes(rosterId)) return true;
+  if (rosterId && league.rosteredPlayerIds.includes(rosterId)) return true;
   if (entity.playerId && league.rosteredPlayerIds.includes(entity.playerId)) return true;
   if (isDefensePosition(entity.position) && league.rosteredPlayerIds.includes(entity.team)) return true;
-  return (league.rosterAssignments ?? []).some((assignment) => assignment.playerId === rosterId);
+  if (rosterId && (league.rosterAssignments ?? []).some((assignment) => assignment.playerId === rosterId)) return true;
+  return false;
 }
 
 export function chartOwnershipForEntity(entity: ChartOwnershipEntity, league: ChartOwnershipLeague): ChartOwnership {
