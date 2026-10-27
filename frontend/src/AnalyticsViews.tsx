@@ -1040,6 +1040,8 @@ type ScatterPlotProps = {
   yCutoff: number;
   ariaLabel: string;
   compact?: boolean;
+  /** Tooltip/legend name for the grey series; player charts keep "Rostered". */
+  fieldSeriesName?: string;
   /** Resolves a focused player to their card; without it no link is shown. */
   playerLink?: PlayerLinkResolver;
   /** Chart point id to focus when it changes (a link into the tool); the user can still change or clear it. */
@@ -1061,6 +1063,7 @@ function ScatterPlot({
   yCutoff,
   ariaLabel,
   compact = false,
+  fieldSeriesName = "Rostered",
   playerLink,
   focusRequestId = null,
 }: ScatterPlotProps) {
@@ -1097,7 +1100,7 @@ function ScatterPlot({
       }}
     >
       <ChartContainer config={{
-        rostered: { label: "Rostered", color: "var(--chart-2)" },
+        rostered: { label: fieldSeriesName, color: "var(--chart-2)" },
         available: { label: "Waivers", color: "var(--chart-1)" },
         team: { label: "My team", color: "var(--chart-team)" },
       }} className="aspect-auto h-full">
@@ -1140,7 +1143,7 @@ function ScatterPlot({
           {showQuadrants ? <ReferenceLine x={xCutoff} stroke="var(--hairline)" strokeWidth={1} strokeDasharray="4 8" /> : null}
           {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--hairline)" strokeWidth={1} strokeDasharray="4 8" /> : null}
           <ZAxis range={[dotSize, dotSize]} />
-          <Scatter name="Rostered" data={rosteredPlayers} fill="var(--chart-2)" fillOpacity={0.7} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
+          <Scatter name={fieldSeriesName} data={rosteredPlayers} fill="var(--chart-2)" fillOpacity={0.7} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
           {/* Waivers use amber so available K/DST stand apart from grey rostered points on mobile. */}
           <Scatter name="Waivers" data={availablePlayers} fill="var(--chart-1)" fillOpacity={0.85} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
           {/* My team is a diamond as well as teal, so it reads without colour. */}
@@ -1358,6 +1361,8 @@ function TeamScatterPlot({
       yCutoff={0}
       ariaLabel={ariaLabel}
       compact={compact}
+      // NFL pace points are teams, not fantasy roster slots — avoid "Rostered" in tooltips.
+      fieldSeriesName="NFL teams"
     />
   );
 }
