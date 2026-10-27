@@ -83,7 +83,7 @@ import { createSharedBatchLoader } from "./shared-batch-loader.js";
 import { rankingsForLeagueFormats, redraftTwinFormat } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
-import { selectActualStatsCandidateIds } from "./actual-stats-candidates.js";
+import { isMatchupFeedMissingForActuals, selectActualStatsCandidateIds } from "./actual-stats-candidates.js";
 import {
   applyActualRanks,
   applyDefenseActualRanks,
@@ -1808,7 +1808,12 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     // feed failed) need scored stat lines instead of matchup points.
     // Rostered ids are uncapped on feed failure; FA volume stays capped.
     const rosteredIds = new Set(rosters.flatMap((roster) => roster.players ?? []));
-    const matchupFeedMissing = matchupsResult.status === "rejected";
+    // Rejected fetch *or* fulfilled payload with no usable players_points —
+    // both leave rostered live/final players unscored without the stats path.
+    const matchupFeedMissing = isMatchupFeedMissingForActuals(
+      matchupsResult.status === "rejected",
+      matchupPointsByPlayerId,
+    );
     const actualStatsCandidateIds = selectActualStatsCandidateIds({
       rows: leagueRankings,
       rosteredIds,

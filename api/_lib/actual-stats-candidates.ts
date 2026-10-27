@@ -14,6 +14,18 @@ export type ActualStatsCandidateRow = {
 };
 
 /**
+ * True when matchups were rejected, or the response carried no usable
+ * numeric `players_points` (fulfilled empty / useless feed). Either case
+ * needs the rostered uncapped weekly-stat fallback.
+ */
+export function isMatchupFeedMissingForActuals(
+  matchupsRejected: boolean,
+  matchupPointsByPlayerId: ReadonlyMap<string, number>,
+): boolean {
+  return matchupsRejected || matchupPointsByPlayerId.size === 0;
+}
+
+/**
  * Returns player ids that should load weekly stat lines for actuals.
  * When the matchup feed is missing, every rostered live/final player without
  * points is included (no cap). Free agents are sorted by projection and

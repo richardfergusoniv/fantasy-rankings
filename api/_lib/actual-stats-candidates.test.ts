@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   FREE_AGENT_ACTUALS_CAP,
+  isMatchupFeedMissingForActuals,
   selectActualStatsCandidateIds,
   type ActualStatsCandidateRow,
 } from "./actual-stats-candidates.js";
@@ -16,6 +17,31 @@ function row(
     ...opts,
   };
 }
+
+describe("isMatchupFeedMissingForActuals", () => {
+  it("is true when the matchup request was rejected", () => {
+    expect(isMatchupFeedMissingForActuals(true, new Map([["p1", 10]]))).toBe(true);
+  });
+
+  it("is true when the feed fulfilled but carried no usable numeric points", () => {
+    expect(isMatchupFeedMissingForActuals(false, new Map())).toBe(true);
+  });
+
+  it("is false when the feed has at least one usable points entry", () => {
+    expect(isMatchupFeedMissingForActuals(false, new Map([["p1", 10]]))).toBe(false);
+  });
+
+  it("lets rostered finals into the stats path when the feed is fulfilled but empty", () => {
+    const points = new Map<string, number>();
+    const selected = selectActualStatsCandidateIds({
+      rows: [row("rostered", { leagueProjection: 8 }), row("fa", { leagueProjection: 1 })],
+      rosteredIds: new Set(["rostered"]),
+      matchupPointsByPlayerId: points,
+      matchupFeedMissing: isMatchupFeedMissingForActuals(false, points),
+    });
+    expect(selected).toContain("rostered");
+  });
+});
 
 describe("selectActualStatsCandidateIds", () => {
   it("includes every rostered live/final player uncapped when the matchup feed is missing", () => {
