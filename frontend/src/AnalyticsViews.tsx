@@ -1790,7 +1790,8 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
   const selectedTeamIds = new Set(selectedTeamPlayers.map((row) => row.id));
   const leaderIds = new Set(leaders.map((row) => row.id));
   const availablePlayers = chartData.filter((row) => row.ownership === "available");
-  const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered");
+  // Unresolved Sleeper ids share the grey series — never the amber "Waivers" series.
+  const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered" || row.ownership === "unknown");
   const labelData = plotLimit === "all" ? selectedTeamPlayers : chartData;
   const labeledIds = new Set(labelData.map((row) => row.id));
   const omittedNames = chartData.filter((row) => !labeledIds.has(row.id)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
@@ -2365,7 +2366,8 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   const selectedTeamIds = new Set(selectedTeamPlayers.map((row) => row.id));
   const leaderIds = new Set(leaders.map((row) => row.id));
   const availablePlayers = chartData.filter((row) => row.ownership === "available");
-  const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered");
+  // Unresolved Sleeper ids share the grey series — never the amber "Waivers" series.
+  const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered" || row.ownership === "unknown");
   const labelData = plotLimit === "all" ? selectedTeamPlayers : chartData;
   const labeledIds = new Set(labelData.map((row) => row.id));
   const omittedNames = chartData.filter((row) => !labeledIds.has(row.id)).map((row) => row.name).sort((a, b) => a.localeCompare(b));

@@ -3,15 +3,16 @@
  *
  * - mine: on the viewer's fantasy roster
  * - rostered: owned by another team in the league
- * - available: waivers / free agents
+ * - available: waivers / free agents (only when identity is resolved)
+ * - unknown: skill player with no Sleeper id yet — do not treat as waivers
+ * - field: plotted but not a fantasy roster ownership class (e.g. NFL team pace dots)
  *
  * DST (DEF) ids are NFL team codes in Sleeper; matching must use the viewer's
  * starters/bench (or user rosterAssignments), never league-wide rosteredPlayerIds —
  * that incorrectly paints every rostered defense as "my team".
  */
 
-/** `field` = plotted but not a fantasy roster ownership class (e.g. NFL team pace dots). */
-export type ChartOwnership = "mine" | "rostered" | "available" | "field";
+export type ChartOwnership = "mine" | "rostered" | "available" | "unknown" | "field";
 
 export type ChartOwnershipEntity = {
   id?: string;
@@ -93,6 +94,8 @@ export function isPlayerRosteredInLeague(entity: ChartOwnershipEntity, league: C
 export function chartOwnershipForEntity(entity: ChartOwnershipEntity, league: ChartOwnershipLeague): ChartOwnership {
   if (isPlayerOnSelectedTeam(entity, league)) return "mine";
   if (isPlayerRosteredInLeague(entity, league)) return "rostered";
+  // Without a Sleeper/DST roster id we cannot distinguish waivers from rival-owned.
+  if (!chartEntityRosterId(entity)) return "unknown";
   return "available";
 }
 
@@ -104,6 +107,7 @@ export function ownershipReadoutSuffix(ownership: ChartOwnership | undefined): s
       return " · Waivers";
     case "rostered":
       return " · Rostered";
+    case "unknown":
     case "field":
     case undefined:
       return "";

@@ -116,7 +116,7 @@ describe("chartOwnershipForEntity", () => {
       team: "LAR",
       position: "WR",
       id: "WR:00-0037834",
-    }, withSleeperRoster)).toBe("available");
+    }, withSleeperRoster)).toBe("unknown");
     expect(chartOwnershipForEntity({
       name: "Puka Nacua",
       team: "LAR",
@@ -125,13 +125,38 @@ describe("chartOwnershipForEntity", () => {
       playerId: "12526",
     }, withSleeperRoster)).toBe("rostered");
   });
+
+  it("does not label unmapped skill players as waivers", () => {
+    // Rival-owned on Sleeper, but analytics row lacks playerId — must not show as Waivers.
+    const withRival = league({
+      rosteredPlayerIds: ["9999"],
+      rosterAssignments: [{ playerId: "9999", teamName: "Rival", isUser: false }],
+    });
+    expect(chartOwnershipForEntity({
+      name: "Amon-Ra St. Brown",
+      team: "DET",
+      position: "WR",
+      id: "WR:00-0037239",
+    }, withRival)).toBe("unknown");
+    expect(ownershipReadoutSuffix("unknown")).toBe("");
+  });
+
+  it("still marks resolved free agents as available", () => {
+    expect(chartOwnershipForEntity({
+      name: "Jake Moody",
+      team: "SF",
+      position: "K",
+      playerId: "k3",
+    }, leagueState)).toBe("available");
+  });
 });
 
 describe("ownershipReadoutSuffix", () => {
-  it("omits a suffix for field points that are not fantasy ownership", () => {
+  it("omits a suffix for field and unknown points", () => {
     expect(ownershipReadoutSuffix("mine")).toBe(" · My team");
     expect(ownershipReadoutSuffix("rostered")).toBe(" · Rostered");
     expect(ownershipReadoutSuffix("available")).toBe(" · Waivers");
+    expect(ownershipReadoutSuffix("unknown")).toBe("");
     expect(ownershipReadoutSuffix("field")).toBe("");
   });
 });
