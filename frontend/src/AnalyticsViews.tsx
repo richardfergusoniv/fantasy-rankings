@@ -26,6 +26,7 @@ import {
   isPlayerOnSelectedTeam,
   type ChartOwnership,
 } from "./lib/chart-ownership";
+import { chartWeeklyAxes, preferredWeeklyPreset } from "./lib/chart-weekly-axes";
 import {
   buildImpliedTotalMaps,
   defenseImpliedTotalValues,
@@ -480,15 +481,6 @@ const weeklyPresets: Record<BasePosition, ChartPreset[]> = {
   ],
 };
 
-const defaultWeeklyAxes: Record<BasePosition, [string, string]> = {
-  QB: ["leaguePositionRank", "league"],
-  RB: ["leaguePositionRank", "league"],
-  WR: ["leaguePositionRank", "league"],
-  TE: ["leaguePositionRank", "league"],
-  K: ["teamTotal", "league"],
-  DEF: ["opponentTotal", "projection"],
-};
-
 /** A chart's player group: one position, or FLEX (RB, WR and TE together). */
 type ChartPosition = BasePosition | "FLEX";
 const flexPositions: readonly BasePosition[] = ["RB", "WR", "TE"];
@@ -537,10 +529,6 @@ function chartWeeklyPresets(position: ChartPosition): ChartPreset[] {
 
 function chartAnalyticsAxes(position: ChartPosition): [string, string] {
   return position === "FLEX" ? ["opportunity", "fantasy_league"] : defaultAnalyticsAxes[position];
-}
-
-function chartWeeklyAxes(position: ChartPosition): [string, string] {
-  return position === "FLEX" ? ["league", "fantasyCalcValue"] : defaultWeeklyAxes[position];
 }
 
 /** Saved views store one base position, so a FLEX chart can't be saved; this only fills the type. */
@@ -2181,8 +2169,8 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   const [playerQuery, setPlayerQuery] = useState("");
   const monitorDefaultPreset = projectionPresets[0]!;
   const [position, setPosition] = useState<ChartPosition>("RB");
-  const [xMetric, setXMetric] = useState(layout === "monitor" ? monitorDefaultPreset.x : defaultWeeklyAxes.RB[0]);
-  const [yMetric, setYMetric] = useState(layout === "monitor" ? monitorDefaultPreset.y : defaultWeeklyAxes.RB[1]);
+  const [xMetric, setXMetric] = useState(layout === "monitor" ? monitorDefaultPreset.x : chartWeeklyAxes("RB")[0]);
+  const [yMetric, setYMetric] = useState(layout === "monitor" ? monitorDefaultPreset.y : chartWeeklyAxes("RB")[1]);
   const [plotLimit, setPlotLimit] = useState<PlotLimit>("40");
   const [showQuadrants, setShowQuadrants] = useState(true);
   const [xPercentile, setXPercentile] = useState(50);
@@ -2281,7 +2269,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   function choosePosition(nextPosition: ChartPosition) {
     if (layout === "monitor") {
       const nextPresets = chartWeeklyPresets(nextPosition);
-      const preferred = nextPresets[0];
+      const preferred = preferredWeeklyPreset(nextPosition, nextPresets, entities);
       setPosition(nextPosition);
       if (preferred) {
         setXMetric(preferred.x);
@@ -2289,7 +2277,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
         setSelectedSavedViewId(null);
         setPickerMode("derived");
       } else {
-        const [nextX, nextY] = chartWeeklyAxes(nextPosition);
+        const [nextX, nextY] = chartWeeklyAxes(nextPosition, entities);
         setXMetric(nextX);
         setYMetric(nextY);
         setSelectedSavedViewId(null);
@@ -2297,7 +2285,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
       }
       return;
     }
-    const [nextX, nextY] = chartWeeklyAxes(nextPosition);
+    const [nextX, nextY] = chartWeeklyAxes(nextPosition, entities);
     setPosition(nextPosition);
     setXMetric(nextX);
     setYMetric(nextY);
@@ -2317,7 +2305,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
     if (view.dataset !== "projections") return;
     if (!validPositions.includes(view.position)) return;
     const validMetrics = weeklyMetrics[view.position];
-    const [fallbackX, fallbackY] = defaultWeeklyAxes[view.position];
+    const [fallbackX, fallbackY] = chartWeeklyAxes(view.position, entities);
     setPosition(view.position);
     setXMetric(validMetrics.some((metric) => metric.key === view.xMetric) ? view.xMetric : fallbackX);
     setYMetric(validMetrics.some((metric) => metric.key === view.yMetric) ? view.yMetric : fallbackY);

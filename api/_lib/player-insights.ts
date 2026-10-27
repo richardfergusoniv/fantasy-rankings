@@ -61,8 +61,12 @@ export const playerInsightsSnapshotSchema = z.object({
   depthAsOf: z.string().nullable(),
   /** The same ranks from the oldest chart in the past week, to show who moved. */
   depthPrevious: z.record(z.string(), depthSchema).default({}),
-  /** gsis_id → Sleeper id from dynastyprocess db_playerids; used to stamp analytics.playerId. */
-  sleeperByGsis: z.record(z.string(), z.string()).default({}),
+  /**
+   * gsis_id → Sleeper id from dynastyprocess db_playerids; used to stamp analytics.playerId.
+   * Optional (no default): pre-map snapshots omit the key so load/refresh can migrate
+   * instead of treating an empty `{}` default as a fresh cache hit.
+   */
+  sleeperByGsis: z.record(z.string(), z.string()).optional(),
 });
 
 export type PlayerInsightsSnapshot = z.infer<typeof playerInsightsSnapshotSchema>;
@@ -338,6 +342,17 @@ function looksComplete(snapshot: PlayerInsightsSnapshot): boolean {
   return Object.keys(snapshot.opportunity).length >= 100;
 }
 
+/** Pre-map caches lack sleeperByGsis (or parsed empty); force refresh rather than stamp null playerIds. */
+export function playerInsightsNeedsSleeperIdMigration(snapshot: PlayerInsightsSnapshot): boolean {
+  const map = snapshot.sleeperByGsis;
+  return map === undefined || Object.keys(map).length === 0;
+}
+
+function snapshotIsFresh(snapshot: PlayerInsightsSnapshot): boolean {
+  return Date.now() - Date.parse(snapshot.fetchedAt) < PLAYER_INSIGHTS_CACHE_MS
+    && !playerInsightsNeedsSleeperIdMigration(snapshot);
+}
+
 // ---------------------------------------------------------------------------
 // Cache
 // ---------------------------------------------------------------------------
@@ -372,7 +387,7 @@ async function writePlayerInsightsSnapshot(snapshot: PlayerInsightsSnapshot): Pr
 /** Cached snapshot when fresh; otherwise refetch and store (keeping the old one on failure). */
 export async function loadPlayerInsightsSnapshot(options?: { force?: boolean }): Promise<PlayerInsightsSnapshot | null> {
   const previous = await readPlayerInsightsSnapshot().catch(() => null);
-  if (!options?.force && previous && Date.now() - Date.parse(previous.fetchedAt) < PLAYER_INSIGHTS_CACHE_MS) {
+  if (!options?.force && previous && snapshotIsFresh(previous)) {
     return previous;
   }
   try {
@@ -415,7 +430,7 @@ function refreshResult(status: PlayerInsightsRefreshResult["status"], snapshot: 
 
 export async function refreshPlayerInsightsSnapshot(): Promise<PlayerInsightsRefreshResult> {
   const previous = await readPlayerInsightsSnapshot().catch(() => null);
-  if (previous && Date.now() - Date.parse(previous.fetchedAt) < PLAYER_INSIGHTS_CACHE_MS) {
+  if (previous && snapshotIsFresh(previous)) {
     return refreshResult("fresh-cache", previous);
   }
   const snapshot = await loadPlayerInsightsSnapshot({ force: true });
