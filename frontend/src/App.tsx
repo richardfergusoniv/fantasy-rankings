@@ -1295,7 +1295,7 @@ export function App() {
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
       {askOpen ? (
         <Suspense fallback={null}>
-          <LazyAskSheet open={askOpen} onOpenChange={changeAskOpen} context={askContextForTab(tab)} horizon={dashboardUrl.state.horizon} />
+          <LazyAskSheet open={askOpen} onOpenChange={changeAskOpen} context={askContextForTab(tab)} horizon={dashboardUrl.state.horizon} leagueId={league?.id ?? null} />
         </Suspense>
       ) : null}
       <div role="region" aria-label="League and week" className="league-sticky">

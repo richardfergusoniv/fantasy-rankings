@@ -48,11 +48,14 @@ function prefersReducedMotion(): boolean {
 
 export function ChatPanel({
   horizon = null,
+  leagueId = null,
   variant = "page",
   suggestions = CHAT_SUGGESTIONS,
 }: {
   /** Ranking horizon the user is viewing — chat explains that window's scores. */
   horizon?: "week" | "ros" | "dynasty" | null;
+  /** League the user is viewing — sent per turn so the model defaults to it. */
+  leagueId?: string | null;
   /** "sheet" keeps past chats behind a History toggle so the thread has the room. */
   variant?: "page" | "sheet";
   suggestions?: readonly string[];
@@ -214,6 +217,7 @@ export function ChatPanel({
         history,
         chatId: chatId ?? undefined,
         horizon,
+        leagueId,
       });
       setChatId(result.chatId);
       setMessages((prev) => [
