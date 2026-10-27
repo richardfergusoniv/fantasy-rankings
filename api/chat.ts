@@ -37,6 +37,10 @@ import {
 } from "./_lib/chat-preferences.js";
 import { checkChatRateLimit } from "./_lib/chat-rate-limit.js";
 import {
+  appendViewingLeague,
+  resolveViewingLeague,
+} from "./_lib/chat-viewing-league.js";
+import {
   chatConversationOwned,
   ChatStoreError,
   deleteChatConversation,
@@ -68,6 +72,8 @@ const postBodySchema = z.object({
   chatId: z.string().trim().min(1).max(80).optional(),
   /** Ranking horizon the user is viewing (ECR removed). */
   horizon: z.enum(["week", "ros", "dynasty", "season_long"]).optional(),
+  /** League the user is currently viewing; resolved server-side before use. */
+  leagueId: z.string().trim().min(1).max(80).optional(),
   scoringWindow: z.enum(["week", "season_long", "dynasty"]).optional(),
 });
 
@@ -144,9 +150,13 @@ export async function POST(req: Request): Promise<Response> {
     const scoringWindow = parsed.data.scoringWindow
       ?? scoringWindowFromHorizon(parsed.data.horizon);
     const preferences = await listChatPreferences(viewer.userId);
-    const systemPrompt = appendChatPreferences(
-      buildChatSystemPrompt(scoringWindow),
-      preferences,
+    const viewingLeague = await resolveViewingLeague(viewer.sleeperUserId, parsed.data.leagueId);
+    const systemPrompt = appendViewingLeague(
+      appendChatPreferences(
+        buildChatSystemPrompt(scoringWindow),
+        preferences,
+      ),
+      viewingLeague,
     );
     const history = parsed.data.history.slice(-CHAT_MAX_HISTORY_MESSAGES);
 

@@ -8,11 +8,14 @@ export function AskSheet({
   onOpenChange,
   context,
   horizon,
+  leagueId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   context: AskContext;
   horizon: "week" | "ros" | "dynasty" | null;
+  /** League the user is viewing — chat defaults team questions to it. */
+  leagueId?: string | null;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -24,7 +27,7 @@ export function AskSheet({
           <DialogDescription className="sr-only">Ask questions about your leagues, answered from your data.</DialogDescription>
         </div>
         <DialogCloseButton />
-        <ChatPanel horizon={horizon} variant="sheet" suggestions={context.suggestions} />
+        <ChatPanel horizon={horizon} leagueId={leagueId} variant="sheet" suggestions={context.suggestions} />
       </DialogContent>
     </Dialog>
   );

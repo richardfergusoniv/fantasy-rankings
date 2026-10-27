@@ -181,6 +181,8 @@ export const api = {
     history?: Array<{ role: "user" | "assistant"; content: string }>;
     chatId?: string;
     horizon?: "week" | "ros" | "dynasty" | null;
+    /** League the user is viewing, so the model defaults team questions to it. */
+    leagueId?: string | null;
   }): Promise<{
     ok: true;
     reply: string;
@@ -200,6 +202,7 @@ export const api = {
         history: args.history ?? [],
         chatId: args.chatId,
         horizon: args.horizon ?? "week",
+        leagueId: args.leagueId ?? undefined,
       }),
     });
     const bodyText = await res.text().catch(() => "");

@@ -15,6 +15,13 @@ vi.mock("./chat-preferences.js", () => ({
   listChatPreferences: vi.fn(async () => []),
 }));
 
+vi.mock("./chat-viewing-league.js", () => ({
+  resolveViewingLeague: vi.fn(async () => null),
+  appendViewingLeague: vi.fn((base: string, league: { name: string } | null) => (
+    league ? `${base}\n\nviewing: ${league.name}` : base
+  )),
+}));
+
 vi.mock("./chat-store.js", () => ({
   ChatStoreError: class ChatStoreError extends Error {
     code: string;
@@ -33,6 +40,7 @@ vi.mock("./chat-store.js", () => ({
 import { resolveViewer } from "./auth.js";
 import { runChatAgent } from "./chat-agent.js";
 import { listChatPreferences } from "./chat-preferences.js";
+import { resolveViewingLeague } from "./chat-viewing-league.js";
 import { resetChatRateLimits } from "./chat-rate-limit.js";
 import {
   chatConversationOwned,
@@ -46,6 +54,7 @@ import { DELETE, GET, POST } from "../chat.js";
 const resolveViewerMock = vi.mocked(resolveViewer);
 const runChatAgentMock = vi.mocked(runChatAgent);
 const listPrefsMock = vi.mocked(listChatPreferences);
+const resolveViewingLeagueMock = vi.mocked(resolveViewingLeague);
 const listChatsMock = vi.mocked(listChatConversations);
 const getChatMock = vi.mocked(getChatConversation);
 const ownedMock = vi.mocked(chatConversationOwned);
@@ -69,6 +78,8 @@ describe("api/chat handler", () => {
     resolveViewerMock.mockReset();
     runChatAgentMock.mockReset();
     listPrefsMock.mockReset();
+    resolveViewingLeagueMock.mockReset();
+    resolveViewingLeagueMock.mockResolvedValue(null);
     listChatsMock.mockReset();
     getChatMock.mockReset();
     ownedMock.mockReset();
@@ -175,6 +186,32 @@ describe("api/chat handler", () => {
         userId: "u1",
         userMessage: "Who is my WR1?",
         assistantMessage: "Your WR1 projects 18.20.",
+      }),
+    );
+  });
+
+  it("POST puts the resolved viewing league into the system prompt", async () => {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    resolveViewingLeagueMock.mockResolvedValue({
+      id: "lg1",
+      name: "Hoe Ass Dynasty League",
+      scoringLabel: "PPR",
+      isDynasty: true,
+    });
+    runChatAgentMock.mockResolvedValue({
+      reply: "Start him.",
+      model: "thinkingmachines/inkling:free",
+      toolSteps: 1,
+    });
+    persistMock.mockResolvedValue({ chatId: "c2", title: "How can I fix this team?" });
+
+    const res = await POST(authReq("POST", { message: "How can I fix this team?", leagueId: "lg1" }));
+    expect(res.status).toBe(200);
+    expect(resolveViewingLeagueMock).toHaveBeenCalledWith("s1", "lg1");
+    expect(runChatAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemPrompt: "system-with-prefs\n\nviewing: Hoe Ass Dynasty League",
       }),
     );
   });
