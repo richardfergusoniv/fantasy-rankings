@@ -155,7 +155,10 @@ export async function getChatRecentMessages(
   return newestFirst
     .reverse()
     .filter((message) => message.role === "user" || message.role === "assistant")
-    .map((message) => ({ role: message.role, content: message.content }));
+    .map((message) => ({
+      role: message.role,
+      content: message.content.slice(0, CHAT_MAX_INPUT_CHARS),
+    }));
 }
 
 export async function deleteChatConversation(
