@@ -83,7 +83,11 @@ import { createSharedBatchLoader } from "./shared-batch-loader.js";
 import { rankingsForLeagueFormats, redraftTwinFormat } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
-import { isMatchupFeedMissingForActuals, selectActualStatsCandidateIds } from "./actual-stats-candidates.js";
+import {
+  isMatchupFeedMissingForActuals,
+  resolveRosterPlayerActual,
+  selectActualStatsCandidateIds,
+} from "./actual-stats-candidates.js";
 import {
   applyActualRanks,
   applyDefenseActualRanks,
@@ -1893,7 +1897,14 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       const projectionComponents = gamePhase === "final" || position === "DEF" || projection === null || isUnavailable
         ? null
         : (rankRow?.projectionComponents ?? null);
-      const actual = typeof activeMatchup?.players_points?.[playerId] === "number" ? activeMatchup.players_points[playerId] ?? null : null;
+      // Prefer matchup points; when the feed is missing/empty, reuse the
+      // weekly-stat actual already stamped on the ranking or defense row so
+      // lineup totals and power rankings stay consistent with the board.
+      const actual = resolveRosterPlayerActual({
+        matchupPoints: activeMatchup?.players_points?.[playerId],
+        rankingActual: rankRow?.actual,
+        defenseActualScore: defense?.actualScore,
+      });
       const clock = gamePhase === "live" ? gameClockByTeam.get(teamKey) : undefined;
       return {
         playerId,

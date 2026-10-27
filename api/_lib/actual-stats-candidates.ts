@@ -25,6 +25,25 @@ export function isMatchupFeedMissingForActuals(
   return matchupsRejected || matchupPointsByPlayerId.size === 0;
 }
 
+function finiteOrNull(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Roster/lineup actual for one player: prefer Sleeper matchup points, then
+ * the ranking-row or defense actual already stamped by the weekly-stats
+ * fallback. Returns null when neither source has a usable score.
+ */
+export function resolveRosterPlayerActual(opts: {
+  matchupPoints: number | null | undefined;
+  rankingActual?: number | null;
+  defenseActualScore?: number | null;
+}): number | null {
+  return finiteOrNull(opts.matchupPoints)
+    ?? finiteOrNull(opts.rankingActual)
+    ?? finiteOrNull(opts.defenseActualScore);
+}
+
 /**
  * Returns player ids that should load weekly stat lines for actuals.
  * When the matchup feed is missing, every rostered live/final player without

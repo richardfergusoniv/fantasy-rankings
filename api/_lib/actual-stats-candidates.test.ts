@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FREE_AGENT_ACTUALS_CAP,
   isMatchupFeedMissingForActuals,
+  resolveRosterPlayerActual,
   selectActualStatsCandidateIds,
   type ActualStatsCandidateRow,
 } from "./actual-stats-candidates.js";
@@ -17,6 +18,41 @@ function row(
     ...opts,
   };
 }
+
+describe("resolveRosterPlayerActual", () => {
+  it("prefers numeric matchup points over ranking/defense fallbacks", () => {
+    expect(resolveRosterPlayerActual({
+      matchupPoints: 12.4,
+      rankingActual: 9,
+      defenseActualScore: 8,
+    })).toBe(12.4);
+  });
+
+  it("falls back to ranking actual when matchup points are unavailable", () => {
+    expect(resolveRosterPlayerActual({
+      matchupPoints: undefined,
+      rankingActual: 11.2,
+      defenseActualScore: 7,
+    })).toBe(11.2);
+  });
+
+  it("falls back to defense actualScore for DST rows without matchup points", () => {
+    expect(resolveRosterPlayerActual({
+      matchupPoints: null,
+      rankingActual: null,
+      defenseActualScore: 6.5,
+    })).toBe(6.5);
+  });
+
+  it("keeps a real zero from matchup points and returns null when nothing is usable", () => {
+    expect(resolveRosterPlayerActual({ matchupPoints: 0, rankingActual: 4 })).toBe(0);
+    expect(resolveRosterPlayerActual({
+      matchupPoints: Number.NaN,
+      rankingActual: undefined,
+      defenseActualScore: null,
+    })).toBeNull();
+  });
+});
 
 describe("isMatchupFeedMissingForActuals", () => {
   it("is true when the matchup request was rejected", () => {
