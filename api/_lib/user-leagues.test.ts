@@ -27,9 +27,10 @@ vi.mock("./sleeper.js", () => ({
 
 import { encodeSourceCachePayload } from "./source-cache-payload.js";
 import { leagueDataTtlMs } from "./league-relevance.js";
-import { readUserLeagues } from "./user-leagues.js";
+import { readNflState, readUserLeagues } from "./user-leagues.js";
 
 const nflState = { season: 2026, week: 4, seasonType: "regular" };
+const priorSeasonNflState = { season: 2025, week: 18, seasonType: "post" };
 const leagues = [
   {
     league_id: "lg-mine",
@@ -45,6 +46,33 @@ beforeEach(() => {
   selectLimitMock.mockReset();
   insertConflictMock.mockReset().mockResolvedValue(undefined);
   fetchJsonMock.mockReset();
+});
+
+describe("readNflState allowStaleOnError", () => {
+  it("fails closed when refresh fails and cached NFL state is expired", async () => {
+    const expired = new Date(Date.now() - leagueDataTtlMs() - 60_000);
+    selectLimitMock.mockResolvedValueOnce([{
+      cacheKey: "sleeper-nfl-state-v1",
+      payload: encodeSourceCachePayload(priorSeasonNflState),
+      fetchedAt: expired,
+    }]);
+    fetchJsonMock.mockRejectedValue(new Error("Sleeper NFL state down"));
+
+    await expect(readNflState(false, { allowStaleOnError: false }))
+      .rejects.toThrow(/Sleeper NFL state down/);
+  });
+
+  it("keeps expired NFL state fallback by default", async () => {
+    const expired = new Date(Date.now() - leagueDataTtlMs() - 60_000);
+    selectLimitMock.mockResolvedValueOnce([{
+      cacheKey: "sleeper-nfl-state-v1",
+      payload: encodeSourceCachePayload(priorSeasonNflState),
+      fetchedAt: expired,
+    }]);
+    fetchJsonMock.mockRejectedValue(new Error("Sleeper NFL state down"));
+
+    await expect(readNflState()).resolves.toEqual(priorSeasonNflState);
+  });
 });
 
 describe("readUserLeagues allowStaleOnError", () => {
@@ -65,6 +93,22 @@ describe("readUserLeagues allowStaleOnError", () => {
 
     await expect(readUserLeagues("user-1", false, { allowStaleOnError: false }))
       .rejects.toThrow(/Sleeper down/);
+  });
+
+  it("fails closed when NFL state is expired so membership cannot use a prior season", async () => {
+    const expired = new Date(Date.now() - leagueDataTtlMs() - 60_000);
+    selectLimitMock.mockResolvedValueOnce([{
+      cacheKey: "sleeper-nfl-state-v1",
+      payload: encodeSourceCachePayload(priorSeasonNflState),
+      fetchedAt: expired,
+    }]);
+    fetchJsonMock.mockRejectedValue(new Error("Sleeper NFL state down"));
+
+    await expect(readUserLeagues("user-1", false, { allowStaleOnError: false }))
+      .rejects.toThrow(/Sleeper NFL state down/);
+    // Must not proceed to a prior-season leagues endpoint/cache key.
+    expect(fetchJsonMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchJsonMock.mock.calls[0]?.[0])).toContain("/state/nfl");
   });
 
   it("uses a still-fresh cached list without requiring a live refresh", async () => {

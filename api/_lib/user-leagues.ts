@@ -97,7 +97,21 @@ async function writeCache(cacheKey: string, payload: unknown): Promise<void> {
   }
 }
 
-export async function readNflState(fresh = false): Promise<NflState> {
+export type ReadUserLeaguesOptions = {
+  /**
+   * When false, a failed Sleeper refresh must not fall back to an expired
+   * cache row. Membership / auth gates use this so stale league lists (and
+   * stale NFL season selection) cannot authorize shared writes. Default true
+   * preserves dashboard/draft reads.
+   */
+  allowStaleOnError?: boolean;
+};
+
+export async function readNflState(
+  fresh = false,
+  options: Pick<ReadUserLeaguesOptions, "allowStaleOnError"> = {},
+): Promise<NflState> {
+  const allowStaleOnError = options.allowStaleOnError !== false;
   const cached = await readCachedPayload(NFL_STATE_KEY);
   const parsed = cached ? parseNflState(cached.value) : null;
   if (!fresh && parsed && cached?.fresh) return parsed;
@@ -112,19 +126,12 @@ export async function readNflState(fresh = false): Promise<NflState> {
     await writeCache(NFL_STATE_KEY, next);
     return next;
   } catch (err) {
-    if (parsed) return parsed;
+    // Still-fresh state is fine after a refresh blip; expired state would pin
+    // membership checks to a prior-season leagues endpoint.
+    if (parsed && (cached?.fresh || allowStaleOnError)) return parsed;
     throw err;
   }
 }
-
-export type ReadUserLeaguesOptions = {
-  /**
-   * When false, a failed Sleeper refresh must not fall back to an expired
-   * cache row. Membership / auth gates use this so stale league lists cannot
-   * authorize shared writes. Default true preserves dashboard/draft reads.
-   */
-  allowStaleOnError?: boolean;
-};
 
 export async function readUserLeagues(
   sleeperUserId: string,
@@ -132,7 +139,7 @@ export async function readUserLeagues(
   options: ReadUserLeaguesOptions = {},
 ): Promise<UserLeagues> {
   const allowStaleOnError = options.allowStaleOnError !== false;
-  const state = await readNflState(fresh);
+  const state = await readNflState(fresh, { allowStaleOnError });
   const cacheKey = userLeaguesCacheKey(sleeperUserId, state.season);
   const cached = await readCachedPayload(cacheKey);
   const parsed = cached ? parseLeagueList(cached.value) : null;
