@@ -27,6 +27,12 @@ describe("viewerBelongsToLeague", () => {
     });
     expect(await viewerBelongsToLeague("user-1", "lg-mine")).toBe(true);
     expect(await viewerBelongsToLeague("user-1", "lg-other")).toBe(false);
+    expect(readUserLeaguesMock).toHaveBeenCalledWith("user-1", false, { allowStaleOnError: false });
+  });
+
+  it("propagates refresh failures when membership cannot be confirmed", async () => {
+    readUserLeaguesMock.mockRejectedValue(new Error("Sleeper leagues are unavailable"));
+    await expect(viewerBelongsToLeague("user-1", "lg-mine")).rejects.toThrow(/unavailable/);
   });
 });
 
@@ -52,5 +58,6 @@ describe("viewerUsesValueHistoryFormat", () => {
     // Redraft twin used by trade / ROS charts.
     expect(await viewerUsesValueHistoryFormat("user-1", "redraft-2qb-12t-1ppr")).toBe(true);
     expect(await viewerUsesValueHistoryFormat("user-1", "redraft-1qb-10t-0.5ppr")).toBe(false);
+    expect(readUserLeaguesMock).toHaveBeenCalledWith("user-1", false, { allowStaleOnError: false });
   });
 });

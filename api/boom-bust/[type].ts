@@ -299,10 +299,14 @@ export async function GET(req: Request): Promise<Response> {
   if (!sleeperUserId) return unauthorized("Sign in required.");
   const url = new URL(req.url, "https://localhost");
   const leagueId = url.searchParams.get("leagueId") ?? "";
-  if (!leagueId || !(await viewerBelongsToLeague(sleeperUserId, leagueId))) {
-    // Missing/foreign leagueId must not reach settings-cache writers below.
-    if (!leagueId) return badRequest("Invalid query params");
-    return forbidden("League is not in your Sleeper account.");
+  // Missing/foreign leagueId must not reach settings-cache writers below.
+  if (!leagueId) return badRequest("Invalid query params");
+  try {
+    if (!(await viewerBelongsToLeague(sleeperUserId, leagueId))) {
+      return forbidden("League is not in your Sleeper account.");
+    }
+  } catch (err) {
+    return internalError(err);
   }
   if (url.pathname.endsWith("/ranges")) {
     return handleRanges(req);

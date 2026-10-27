@@ -75,4 +75,23 @@ describe("boom-bust league membership gate", () => {
     expect(res.status).toBe(403);
     expect(viewerBelongsToLeagueMock).toHaveBeenCalledWith("sleeper-1", "lg-foreign");
   });
+
+  it("returns 400 when leagueId is missing", async () => {
+    resolveSleeperUserIdMock.mockResolvedValue("sleeper-1");
+    const res = await GET(
+      new Request("https://example.com/api/boom-bust/history?playerId=p1&position=WR&view=season"),
+    );
+    expect(res.status).toBe(400);
+    expect(viewerBelongsToLeagueMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 when membership lookup throws", async () => {
+    resolveSleeperUserIdMock.mockResolvedValue("sleeper-1");
+    viewerBelongsToLeagueMock.mockRejectedValue(new Error("Sleeper leagues are unavailable"));
+    const res = await GET(
+      new Request("https://example.com/api/boom-bust/history?leagueId=lg1&playerId=p1&position=WR&view=season"),
+    );
+    expect(res.status).toBe(500);
+    expect(await res.json()).toMatchObject({ ok: false });
+  });
 });

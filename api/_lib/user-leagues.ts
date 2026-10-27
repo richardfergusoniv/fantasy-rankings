@@ -117,7 +117,21 @@ export async function readNflState(fresh = false): Promise<NflState> {
   }
 }
 
-export async function readUserLeagues(sleeperUserId: string, fresh = false): Promise<UserLeagues> {
+export type ReadUserLeaguesOptions = {
+  /**
+   * When false, a failed Sleeper refresh must not fall back to an expired
+   * cache row. Membership / auth gates use this so stale league lists cannot
+   * authorize shared writes. Default true preserves dashboard/draft reads.
+   */
+  allowStaleOnError?: boolean;
+};
+
+export async function readUserLeagues(
+  sleeperUserId: string,
+  fresh = false,
+  options: ReadUserLeaguesOptions = {},
+): Promise<UserLeagues> {
+  const allowStaleOnError = options.allowStaleOnError !== false;
   const state = await readNflState(fresh);
   const cacheKey = userLeaguesCacheKey(sleeperUserId, state.season);
   const cached = await readCachedPayload(cacheKey);
@@ -132,7 +146,9 @@ export async function readUserLeagues(sleeperUserId: string, fresh = false): Pro
     await writeCache(cacheKey, next);
     return { ...state, leagues: next };
   } catch (err) {
-    if (parsed) return { ...state, leagues: parsed };
+    // Still-fresh cache is trustworthy even when the live refresh failed;
+    // expired cache is only used when callers explicitly allow stale fallback.
+    if (parsed && (cached?.fresh || allowStaleOnError)) return { ...state, leagues: parsed };
     throw err;
   }
 }

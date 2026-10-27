@@ -8,11 +8,14 @@ import { resolveFantasyCalcSnapshotFormatKey } from "./player-value-history.js";
 import { seasonLongFormatForLeague } from "./sleeper.js";
 import { readUserLeagues } from "./user-leagues.js";
 
+/** Membership checks must not authorize from an expired league-list cache. */
+const membershipLeagueOptions = { allowStaleOnError: false } as const;
+
 export async function viewerBelongsToLeague(
   sleeperUserId: string,
   leagueId: string,
 ): Promise<boolean> {
-  const { leagues } = await readUserLeagues(sleeperUserId);
+  const { leagues } = await readUserLeagues(sleeperUserId, false, membershipLeagueOptions);
   return leagues.some((league) => league.league_id === leagueId);
 }
 
@@ -26,7 +29,7 @@ export async function viewerUsesValueHistoryFormat(
   formatKey: string,
 ): Promise<boolean> {
   const requested = resolveFantasyCalcSnapshotFormatKey(formatKey);
-  const { leagues } = await readUserLeagues(sleeperUserId);
+  const { leagues } = await readUserLeagues(sleeperUserId, false, membershipLeagueOptions);
   for (const league of leagues) {
     const format = seasonLongFormatForLeague(league);
     if (resolveFantasyCalcSnapshotFormatKey(format.key) === requested) return true;
