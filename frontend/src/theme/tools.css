@@ -1423,6 +1423,10 @@
 .chat-panel.is-sheet .chat-intro h2 { font-size: var(--type-section); }
 .chat-panel.is-sheet .chat-thread { max-height: none; }
 .chat-panel.is-sheet .chat-main.is-active { min-height: 0; flex: 1 1 auto; }
+/* The sheet's background is var(--card), so the active composer's fade must end at
+   var(--card) too. The page rule fades to var(--bg), which painted a black band
+   below the composer inside the sheet. */
+.chat-panel.is-sheet .chat-main.is-active .chat-composer { background: linear-gradient(to top, var(--card) 70%, transparent); }
 @media (min-width: 760px) {
   [data-slot="dialog-content"].ask-sheet {
     top: 0;
