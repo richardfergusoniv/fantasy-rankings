@@ -413,3 +413,50 @@ export function applyActualRanks(rows: Ranking[], rankingField: "ppr" | "halfPpr
     });
   }
 }
+
+/** Minimal defense row shape for final/live actual re-ranking. */
+export type DefenseActualRow = {
+  team: string;
+  pregameProjection: number | null;
+  displayProjection: number | null;
+  actualScore: number | null;
+  gamePhase: "pregame" | "live" | "final" | null;
+  rank: number | null;
+};
+
+/**
+ * Re-rank one league's DST rows the same way skill positions re-rank after
+ * #320: finals with a numeric actual use that score; everyone else stays on
+ * pregame projection. Rows with neither stay unranked (`rank = null`).
+ */
+export function applyDefenseActualRanks(rows: DefenseActualRow[]): void {
+  const effectiveValue = (row: DefenseActualRow): number => (
+    row.gamePhase === "final" && typeof row.actualScore === "number" && Number.isFinite(row.actualScore)
+      ? row.actualScore
+      : row.pregameProjection ?? Number.NEGATIVE_INFINITY
+  );
+  const hasRankValue = (row: DefenseActualRow): boolean => (
+    (row.gamePhase === "final" && typeof row.actualScore === "number" && Number.isFinite(row.actualScore))
+    || row.pregameProjection !== null
+  );
+  for (const row of rows) row.rank = null;
+  const group = rows
+    .filter(hasRankValue)
+    .sort((a, b) => effectiveValue(b) - effectiveValue(a) || a.team.localeCompare(b.team));
+  group.forEach((row, index) => {
+    row.rank = index + 1;
+  });
+}
+
+/**
+ * On final, show PTS when an actual exists; otherwise keep the pregame
+ * projection so FA DSTs without matchup points do not blank the board.
+ */
+export function finalizeDefenseActualDisplay(rows: DefenseActualRow[]): void {
+  for (const row of rows) {
+    if (row.gamePhase !== "final") continue;
+    row.displayProjection = typeof row.actualScore === "number" && Number.isFinite(row.actualScore)
+      ? row.actualScore
+      : row.pregameProjection;
+  }
+}

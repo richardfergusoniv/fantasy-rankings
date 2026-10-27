@@ -79,12 +79,22 @@ import {
 } from "./sleeper.js";
 import { activeBenchIds, eligibleForSlot, espnStatusToPhase, isLineupLocked, isVacantLineupSlot, lineupCountingPoints, mapSubmittedStarters, normalizeGamePhase, optimizeLineup, sumLiveForecast } from "./lineup-optimizer.js";
 import { scoreActualPlayerStats } from "./fantasy-scoring.js";
-import { createSharedBatchLoader } from "./shared-batch-loader.js";
+import { createPriorityBatchLoaders } from "./shared-batch-loader.js";
 import { rankingsForLeagueFormats, redraftTwinFormat } from "./season-long-format.js";
 import { usesRegularSeasonWeek } from "./season-week.js";
 import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-tier.js";
 import {
+  FREE_AGENT_ACTUALS_BUDGET_MS,
+  awaitWithBudget,
+  remainingMsUntil,
+  remainingOptionalActualsBudgetMs,
+  resolveRosterPlayerActual,
+  selectActualStatsCandidates,
+} from "./actual-stats-candidates.js";
+import {
   applyActualRanks,
+  applyDefenseActualRanks,
+  finalizeDefenseActualDisplay,
   mergePlayerProjections,
   projectionBoardIsUsable,
   type SleeperProjection,
@@ -1432,13 +1442,18 @@ async function loadFreeAgentWeeklyStats(
   playerIds: string[],
   season: number,
   week: number,
+  onPlayerStats?: (playerId: string, stats: Record<string, number>) => void,
 ): Promise<Map<string, Record<string, number>>> {
   const result = new Map<string, Record<string, number>>();
   const missing: string[] = [];
+  const publish = (playerId: string, stats: Record<string, number>) => {
+    result.set(playerId, stats);
+    onPlayerStats?.(playerId, stats);
+  };
   for (const playerId of playerIds) {
     const memo = freeAgentStatsMemo.get(`${playerId}:${season}:${week}`);
     if (memo && Date.now() - memo.fetchedAtMs < FREE_AGENT_STATS_MEMO_TTL_MS) {
-      if (memo.stats) result.set(playerId, memo.stats);
+      if (memo.stats) publish(playerId, memo.stats);
     } else {
       missing.push(playerId);
     }
@@ -1457,7 +1472,7 @@ async function loadFreeAgentWeeklyStats(
         stats = null;
       }
       freeAgentStatsMemo.set(`${playerId}:${season}:${week}`, { fetchedAtMs: Date.now(), stats });
-      if (stats) result.set(playerId, stats);
+      if (stats) publish(playerId, stats);
     }
   };
   await Promise.all(Array.from({ length: Math.min(12, missing.length) }, () => worker()));
@@ -1467,8 +1482,16 @@ async function loadFreeAgentWeeklyStats(
 /**
  * Build a dashboard from scratch for one Sleeper user. Ported from the
  * original `buildDashboard(ctx)` with the Sleeper account parameterized.
+ *
+ * `deadlineAtMs` aligns soft actuals waits with the outer `runWithBuildLease`
+ * budget so uncapped rostered stats loads cannot hold the build open forever.
  */
-export async function buildUserDashboard(sleeperUserId: string, fresh = false): Promise<Dashboard> {
+export async function buildUserDashboard(
+  sleeperUserId: string,
+  fresh = false,
+  options?: { deadlineAtMs?: number },
+): Promise<Dashboard> {
+  const buildDeadlineAt = options?.deadlineAtMs ?? Date.now() + BUILD_DEADLINE_MS;
   const sourceErrors: string[] = [];
   let season: number;
   let week: number;
@@ -1710,9 +1733,12 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   // leagues and backed by the per-player source cache; each league scores
   // the lines through its own settings at stamp time.
   const freeAgentStatsByPlayerId = new Map<string, Record<string, number>>();
-  const ensureFreeAgentStats = createSharedBatchLoader(async (playerIds: string[]) => {
-    const loaded = await loadFreeAgentWeeklyStats(playerIds, season, week);
-    for (const [playerId, stats] of loaded) freeAgentStatsByPlayerId.set(playerId, stats);
+  // Publish each player as it lands so a budget timeout can stamp partial
+  // scores instead of waiting for the whole batch.
+  const statsLoaders = createPriorityBatchLoaders(async (playerIds: string[]) => {
+    await loadFreeAgentWeeklyStats(playerIds, season, week, (playerId, stats) => {
+      freeAgentStatsByPlayerId.set(playerId, stats);
+    });
   });
   defenses = [...defensesByLeagueId.values()].flat();
   if (attachWeekContext && !useVegasPrimary) {
@@ -1734,7 +1760,10 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   const seasonLongRankings = rankingsForLeagueFormats(fantasyCalcResult.rows, seasonLongFormats);
   if (fantasyCalcResult.failedPresets > 0) sourceErrors.push("FantasyCalc season-long rankings are unavailable for one or more league formats.");
   const fantasyCalcAsOf = seasonLongRankings.length > 0 ? new Date().toISOString() : null;
-  const defenseActuals = new Map<string, number>();
+
+  // One shared soft deadline for optional FA/defense actual loads across all
+  // leagues — each wave spends remaining time, not a fresh 4s restart.
+  const optionalActualsDeadlineAt = Date.now() + FREE_AGENT_ACTUALS_BUDGET_MS;
 
   // Fetch the required roster before optional league enrichments and bound
   // concurrency. The previous 24-request fan-out could throttle every roster
@@ -1802,18 +1831,46 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     for (const row of leagueRankings) {
       row.gamePhase = gamePhaseByTeam.get(canonicalTeam(row.team)) ?? null;
     }
-    // This league's free agents (and every player, if the matchup feed
-    // failed) need scored stat lines instead of matchup points.
+    // Rostered live/final players missing *their own* matchup points always
+    // need scored weekly-stat lines (uncapped). Free agents stay capped and
+    // time-bounded so a cold 400-id fan-out cannot eat the build deadline.
     const rosteredIds = new Set(rosters.flatMap((roster) => roster.players ?? []));
-    const matchupFeedMissing = matchupsResult.status === "rejected";
-    const freeAgentCandidates = leagueRankings
-      .filter((row) => (row.gamePhase === "live" || row.gamePhase === "final")
-        && !matchupPointsByPlayerId.has(row.playerId)
-        && (matchupFeedMissing || !rosteredIds.has(row.playerId)))
-      .sort((a, b) => (b.leagueProjection ?? Number.NEGATIVE_INFINITY) - (a.leagueProjection ?? Number.NEGATIVE_INFINITY))
-      .slice(0, 150);
-    if (freeAgentCandidates.length > 0) {
-      await ensureFreeAgentStats(freeAgentCandidates.map((row) => row.playerId));
+    const { priorityPlayerIds, freeAgentPlayerIds } = selectActualStatsCandidates({
+      rows: leagueRankings,
+      rosteredIds,
+      matchupPointsByPlayerId,
+    });
+    // DST ids are team codes; load the same weekly-stat path for defenses
+    // without matchup points. Rostered DSTs stay on the critical path.
+    const defenseStatsCandidateIds = leagueDefenses
+      .filter((defense) => (
+        (defense.gamePhase === "live" || defense.gamePhase === "final")
+        && !matchupPointsByPlayerId.has(defense.team)
+      ))
+      .map((defense) => defense.team);
+    const priorityDefenseIds = defenseStatsCandidateIds.filter((team) => rosteredIds.has(team));
+    const optionalDefenseIds = defenseStatsCandidateIds.filter((team) => !rosteredIds.has(team));
+    const priorityStatsIds = [...new Set([...priorityPlayerIds, ...priorityDefenseIds])];
+    const priorityStatsIdSet = new Set(priorityStatsIds);
+    const optionalStatsIds = [...new Set([...freeAgentPlayerIds, ...optionalDefenseIds])]
+      .filter((id) => !priorityStatsIdSet.has(id));
+    if (priorityStatsIds.length > 0) {
+      // Uncapped rostered candidates, but only wait within the remaining
+      // build-lease budget; stamp whatever has already published on timeout.
+      await awaitWithBudget(
+        statsLoaders.priority(priorityStatsIds),
+        remainingMsUntil(buildDeadlineAt),
+        (pending) => { waitUntil(pending.catch(() => undefined)); },
+      );
+    }
+    if (optionalStatsIds.length > 0) {
+      // Best-effort: stamp whatever arrives inside the shared FA budget
+      // (also capped by the build deadline); continue the rest in background.
+      await awaitWithBudget(
+        statsLoaders.optional(optionalStatsIds),
+        remainingOptionalActualsBudgetMs(optionalActualsDeadlineAt, buildDeadlineAt),
+        (pending) => { waitUntil(pending.catch(() => undefined)); },
+      );
     }
     for (const row of leagueRankings) {
       const matchupPoints = matchupPointsByPlayerId.get(row.playerId);
@@ -1826,6 +1883,23 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
         }
       }
     }
+
+    // Stamp DST actuals from this league's matchup points (or scored weekly
+    // stats). Keys stay on the per-league defense rows so scoring cannot bleed
+    // across leagues that share a team abbreviation.
+    for (const defense of leagueDefenses) {
+      const matchupPoints = matchupPointsByPlayerId.get(defense.team);
+      if (typeof matchupPoints === "number" && Number.isFinite(matchupPoints)) {
+        defense.actualScore = matchupPoints;
+      } else if (defense.gamePhase === "live" || defense.gamePhase === "final") {
+        const stats = freeAgentStatsByPlayerId.get(defense.team);
+        if (stats) {
+          defense.actualScore = scoreProjectedDefenseStats(stats, league.scoring_settings);
+        }
+      }
+    }
+    applyDefenseActualRanks(leagueDefenses);
+    finalizeDefenseActualDisplay(leagueDefenses);
 
     // With actuals stamped, final players re-rank on what they scored
     // (above or below the remaining projections); live and pregame players
@@ -1859,9 +1933,15 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       const projectionComponents = gamePhase === "final" || position === "DEF" || projection === null || isUnavailable
         ? null
         : (rankRow?.projectionComponents ?? null);
-      const actual = typeof activeMatchup?.players_points?.[playerId] === "number" ? activeMatchup.players_points[playerId] ?? null : null;
+      // Prefer matchup points; when the feed is missing/empty, reuse the
+      // weekly-stat actual already stamped on the ranking or defense row so
+      // lineup totals and power rankings stay consistent with the board.
+      const actual = resolveRosterPlayerActual({
+        matchupPoints: activeMatchup?.players_points?.[playerId],
+        rankingActual: rankRow?.actual,
+        defenseActualScore: defense?.actualScore,
+      });
       const clock = gamePhase === "live" ? gameClockByTeam.get(teamKey) : undefined;
-      if (position === "DEF" && actual !== null) defenseActuals.set(defenseTeam, actual);
       return {
         playerId,
         name: position === "DEF" ? `${defenseTeam} Defense` : (meta?.full_name ?? ([meta?.first_name, meta?.last_name].filter(Boolean).join(" ") || "Unknown player")),
@@ -2183,12 +2263,6 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
       waivers: waiverStatus(league.settings, ownRoster, rosters.length),
     };
   });
-
-  for (const defense of defenses) {
-    if (defense.gamePhase !== "final") continue;
-    defense.actualScore = defenseActuals.get(defense.team) ?? null;
-    defense.displayProjection = defense.actualScore;
-  }
 
   const leagueIds = leagues.flatMap((league) => league ? [league.id] : []);
   const strengthOfSchedule = await loadStrengthOfSchedule(leagueIds);
@@ -2570,7 +2644,9 @@ async function buildUserDashboardUnderLease(
     crypto.randomUUID(),
     BUILD_LEASE_TTL_MS,
     async () => {
-      const dashboard = await buildUserDashboard(sleeperUserId, force);
+      // Align soft actuals waits with this lease wait (same budget window).
+      const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
+      const dashboard = await buildUserDashboard(sleeperUserId, force, { deadlineAtMs });
       // Publish inside the lease: a joiner polls for this row, so the lease
       // must still be held when it lands (CodeRabbit, PR #282).
       await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
@@ -2659,7 +2735,8 @@ export function kickUserDashboardBuild(
         crypto.randomUUID(),
         BUILD_LEASE_TTL_MS,
         async () => {
-          const dashboard = await buildUserDashboard(sleeperUserId);
+          const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
+          const dashboard = await buildUserDashboard(sleeperUserId, false, { deadlineAtMs });
           // Publish inside the lease (see buildUserDashboardUnderLease).
           await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
           return dashboard;

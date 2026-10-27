@@ -14,3 +14,11 @@ export function createSharedBatchLoader(load: (keys: string[]) => Promise<void>)
     await Promise.all(keys.map((key) => requests.get(key)));
   };
 }
+
+/** Priority work must never inherit the completion of a large optional batch. */
+export function createPriorityBatchLoaders(load: (keys: string[]) => Promise<void>) {
+  return {
+    priority: createSharedBatchLoader(load),
+    optional: createSharedBatchLoader(load),
+  };
+}

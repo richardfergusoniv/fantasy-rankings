@@ -806,6 +806,9 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
       return leagueDefenses
         .filter((row) => !availableOnly || !rostered.has(row.team))
         .map((row) => {
+          // Mirror skill-position #320 labeling: PTS only when a numeric
+          // actual exists. Rank comes from the build's actual-aware DEF order.
+          const showActual = row.gamePhase === "final" && typeof row.actualScore === "number";
           return {
             key: row.team,
             rank: row.rank,
@@ -814,7 +817,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             teamContext: null,
             ...rosterBadgeForPlayer(row.team, rosterTeamByPlayer, powerTeamByPlayerId, rosterIdByPlayerId),
             projection: row.displayProjection,
-            projectionLabel: row.gamePhase === "final" ? "PTS" : "PROJ",
+            projectionLabel: showActual ? "PTS" : "PROJ",
             projectionSource: row.projectionSource,
             position: "DEF",
             isRookie: false,
@@ -822,8 +825,8 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             movement30Day: null,
           };
         })
-        .sort((a, b) => (b.projection ?? Number.NEGATIVE_INFINITY) - (a.projection ?? Number.NEGATIVE_INFINITY)
-          || (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER)
+        .sort((a, b) => (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER)
+          || (b.projection ?? Number.NEGATIVE_INFINITY) - (a.projection ?? Number.NEGATIVE_INFINITY)
           || a.name.localeCompare(b.name));
     }
     return leagueRankings
