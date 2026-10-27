@@ -78,6 +78,23 @@ export function selectActualStatsCandidates(opts: {
   return { priorityPlayerIds, freeAgentPlayerIds };
 }
 
+/** Milliseconds left until `deadlineAtMs` (never negative). */
+export function remainingMsUntil(deadlineAtMs: number, nowMs = Date.now()): number {
+  return Math.max(0, deadlineAtMs - nowMs);
+}
+
+/**
+ * Soft FA budget capped by the harder build-lease deadline so optional waves
+ * cannot outlive the lease wait.
+ */
+export function remainingOptionalActualsBudgetMs(
+  optionalDeadlineAtMs: number,
+  buildDeadlineAtMs: number,
+  nowMs = Date.now(),
+): number {
+  return remainingMsUntil(Math.min(optionalDeadlineAtMs, buildDeadlineAtMs), nowMs);
+}
+
 /**
  * Await `work` up to `budgetMs`. On timeout, invoke `onTimeout` with the still-
  * pending work (caller can background it) and return `"timeout"` without

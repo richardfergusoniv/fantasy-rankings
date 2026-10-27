@@ -86,6 +86,8 @@ import { blendedContenderRanks, pickTierForRank, type PickTier } from "./pick-ti
 import {
   FREE_AGENT_ACTUALS_BUDGET_MS,
   awaitWithBudget,
+  remainingMsUntil,
+  remainingOptionalActualsBudgetMs,
   resolveRosterPlayerActual,
   selectActualStatsCandidates,
 } from "./actual-stats-candidates.js";
@@ -1440,13 +1442,18 @@ async function loadFreeAgentWeeklyStats(
   playerIds: string[],
   season: number,
   week: number,
+  onPlayerStats?: (playerId: string, stats: Record<string, number>) => void,
 ): Promise<Map<string, Record<string, number>>> {
   const result = new Map<string, Record<string, number>>();
   const missing: string[] = [];
+  const publish = (playerId: string, stats: Record<string, number>) => {
+    result.set(playerId, stats);
+    onPlayerStats?.(playerId, stats);
+  };
   for (const playerId of playerIds) {
     const memo = freeAgentStatsMemo.get(`${playerId}:${season}:${week}`);
     if (memo && Date.now() - memo.fetchedAtMs < FREE_AGENT_STATS_MEMO_TTL_MS) {
-      if (memo.stats) result.set(playerId, memo.stats);
+      if (memo.stats) publish(playerId, memo.stats);
     } else {
       missing.push(playerId);
     }
@@ -1465,7 +1472,7 @@ async function loadFreeAgentWeeklyStats(
         stats = null;
       }
       freeAgentStatsMemo.set(`${playerId}:${season}:${week}`, { fetchedAtMs: Date.now(), stats });
-      if (stats) result.set(playerId, stats);
+      if (stats) publish(playerId, stats);
     }
   };
   await Promise.all(Array.from({ length: Math.min(12, missing.length) }, () => worker()));
@@ -1475,8 +1482,16 @@ async function loadFreeAgentWeeklyStats(
 /**
  * Build a dashboard from scratch for one Sleeper user. Ported from the
  * original `buildDashboard(ctx)` with the Sleeper account parameterized.
+ *
+ * `deadlineAtMs` aligns soft actuals waits with the outer `runWithBuildLease`
+ * budget so uncapped rostered stats loads cannot hold the build open forever.
  */
-export async function buildUserDashboard(sleeperUserId: string, fresh = false): Promise<Dashboard> {
+export async function buildUserDashboard(
+  sleeperUserId: string,
+  fresh = false,
+  options?: { deadlineAtMs?: number },
+): Promise<Dashboard> {
+  const buildDeadlineAt = options?.deadlineAtMs ?? Date.now() + BUILD_DEADLINE_MS;
   const sourceErrors: string[] = [];
   let season: number;
   let week: number;
@@ -1718,9 +1733,12 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
   // leagues and backed by the per-player source cache; each league scores
   // the lines through its own settings at stamp time.
   const freeAgentStatsByPlayerId = new Map<string, Record<string, number>>();
+  // Publish each player as it lands so a budget timeout can stamp partial
+  // scores instead of waiting for the whole batch.
   const statsLoaders = createPriorityBatchLoaders(async (playerIds: string[]) => {
-    const loaded = await loadFreeAgentWeeklyStats(playerIds, season, week);
-    for (const [playerId, stats] of loaded) freeAgentStatsByPlayerId.set(playerId, stats);
+    await loadFreeAgentWeeklyStats(playerIds, season, week, (playerId, stats) => {
+      freeAgentStatsByPlayerId.set(playerId, stats);
+    });
   });
   defenses = [...defensesByLeagueId.values()].flat();
   if (attachWeekContext && !useVegasPrimary) {
@@ -1837,14 +1855,20 @@ export async function buildUserDashboard(sleeperUserId: string, fresh = false): 
     const optionalStatsIds = [...new Set([...freeAgentPlayerIds, ...optionalDefenseIds])]
       .filter((id) => !priorityStatsIdSet.has(id));
     if (priorityStatsIds.length > 0) {
-      await statsLoaders.priority(priorityStatsIds);
+      // Uncapped rostered candidates, but only wait within the remaining
+      // build-lease budget; stamp whatever has already published on timeout.
+      await awaitWithBudget(
+        statsLoaders.priority(priorityStatsIds),
+        remainingMsUntil(buildDeadlineAt),
+        (pending) => { waitUntil(pending.catch(() => undefined)); },
+      );
     }
     if (optionalStatsIds.length > 0) {
-      // Best-effort: stamp whatever arrives inside the shared FA budget;
-      // continue the rest in the background so the instance memo still warms.
+      // Best-effort: stamp whatever arrives inside the shared FA budget
+      // (also capped by the build deadline); continue the rest in background.
       await awaitWithBudget(
         statsLoaders.optional(optionalStatsIds),
-        Math.max(0, optionalActualsDeadlineAt - Date.now()),
+        remainingOptionalActualsBudgetMs(optionalActualsDeadlineAt, buildDeadlineAt),
         (pending) => { waitUntil(pending.catch(() => undefined)); },
       );
     }
@@ -2620,7 +2644,9 @@ async function buildUserDashboardUnderLease(
     crypto.randomUUID(),
     BUILD_LEASE_TTL_MS,
     async () => {
-      const dashboard = await buildUserDashboard(sleeperUserId, force);
+      // Align soft actuals waits with this lease wait (same budget window).
+      const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
+      const dashboard = await buildUserDashboard(sleeperUserId, force, { deadlineAtMs });
       // Publish inside the lease: a joiner polls for this row, so the lease
       // must still be held when it lands (CodeRabbit, PR #282).
       await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
@@ -2709,7 +2735,8 @@ export function kickUserDashboardBuild(
         crypto.randomUUID(),
         BUILD_LEASE_TTL_MS,
         async () => {
-          const dashboard = await buildUserDashboard(sleeperUserId);
+          const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
+          const dashboard = await buildUserDashboard(sleeperUserId, false, { deadlineAtMs });
           // Publish inside the lease (see buildUserDashboardUnderLease).
           await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
           return dashboard;

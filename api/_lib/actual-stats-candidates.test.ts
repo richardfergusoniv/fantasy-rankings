@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   FREE_AGENT_ACTUALS_CAP,
   awaitWithBudget,
+  remainingMsUntil,
+  remainingOptionalActualsBudgetMs,
   resolveRosterPlayerActual,
   selectActualStatsCandidates,
   type ActualStatsCandidateRow,
@@ -137,6 +139,19 @@ describe("selectActualStatsCandidates", () => {
       freeAgentCap: 2,
     });
     expect(selected.freeAgentPlayerIds).toEqual(["a", "b"]);
+  });
+});
+
+describe("remainingMsUntil / remainingOptionalActualsBudgetMs", () => {
+  it("never returns a negative remaining budget", () => {
+    expect(remainingMsUntil(1_000, 1_500)).toBe(0);
+    expect(remainingMsUntil(2_000, 1_500)).toBe(500);
+  });
+
+  it("caps the optional FA budget by the harder build-lease deadline", () => {
+    expect(remainingOptionalActualsBudgetMs(5_000, 3_000, 1_000)).toBe(2_000);
+    expect(remainingOptionalActualsBudgetMs(2_500, 10_000, 1_000)).toBe(1_500);
+    expect(remainingOptionalActualsBudgetMs(2_000, 3_000, 4_000)).toBe(0);
   });
 });
 
