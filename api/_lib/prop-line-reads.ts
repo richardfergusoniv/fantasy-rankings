@@ -406,7 +406,7 @@ export function propPlayerMatchKey(name: string, team: string | null | undefined
   return `${position}|${teamKey}|${normalizeTeamStatsPlayerName(name)}`;
 }
 
-/** Name+position only — survives mid-season team changes when player id is missing. */
+/** Name+position only — used for id-less rows when the name+position is unambiguous. */
 export function propPlayerNamePositionKey(name: string, position: string): string {
   return `${position}|*|${normalizeTeamStatsPlayerName(name)}`;
 }
@@ -428,39 +428,79 @@ function addWeekStatKey(
 }
 
 /**
- * Weeks each player actually played (at least one offensive snap), keyed
- * by name+team+position and by name+position (cross-team) so a mid-season
- * trade still joins prior weeks. A played week with no stat row is a zero
- * week, not a missed game.
+ * Name+position keys that appear on two+ teams in the same week — distinct
+ * players sharing a normalized name, so cross-team joining would mix them.
+ */
+function ambiguousNamePositionKeys(
+  rows: ReadonlyArray<{ name: string; team: string; position: string; week: number }>,
+): Set<string> {
+  const teamsByWeek = new Map<string, Map<number, Set<string>>>();
+  for (const row of rows) {
+    const key = propPlayerNamePositionKey(row.name, row.position);
+    const team = row.team.trim().toUpperCase();
+    let byWeek = teamsByWeek.get(key);
+    if (!byWeek) {
+      byWeek = new Map();
+      teamsByWeek.set(key, byWeek);
+    }
+    const teams = byWeek.get(row.week);
+    if (teams) teams.add(team);
+    else byWeek.set(row.week, new Set([team]));
+  }
+  const ambiguous = new Set<string>();
+  for (const [key, byWeek] of teamsByWeek) {
+    for (const teams of byWeek.values()) {
+      if (teams.size > 1) {
+        ambiguous.add(key);
+        break;
+      }
+    }
+  }
+  return ambiguous;
+}
+
+/**
+ * Weeks each player actually played (at least one offensive snap). Always
+ * keyed by name+team+position; also by name+position across teams when that
+ * identity is unambiguous (no same-week multi-team clash). A played week with
+ * no stat row is a zero week, not a missed game.
  */
 export function indexPlayedWeeks(
   snaps: readonly TeamWeekSnapRow[],
 ): Map<string, Set<number>> {
+  const played = snaps.filter((snap) => snap.offenseSnaps > 0);
+  const ambiguous = ambiguousNamePositionKeys(played);
   const byKey = new Map<string, Set<number>>();
-  for (const snap of snaps) {
-    if (snap.offenseSnaps <= 0) continue;
-    for (const key of [
-      propPlayerMatchKey(snap.name, snap.team, snap.position),
-      propPlayerNamePositionKey(snap.name, snap.position),
-    ]) {
-      const group = byKey.get(key);
-      if (group) group.add(snap.week);
-      else byKey.set(key, new Set([snap.week]));
-    }
+  for (const snap of played) {
+    const teamKey = propPlayerMatchKey(snap.name, snap.team, snap.position);
+    const teamGroup = byKey.get(teamKey);
+    if (teamGroup) teamGroup.add(snap.week);
+    else byKey.set(teamKey, new Set([snap.week]));
+
+    const crossKey = propPlayerNamePositionKey(snap.name, snap.position);
+    if (ambiguous.has(crossKey)) continue;
+    const crossGroup = byKey.get(crossKey);
+    if (crossGroup) crossGroup.add(snap.week);
+    else byKey.set(crossKey, new Set([snap.week]));
   }
   return byKey;
 }
 
 /**
- * Index nflverse week rows by player id (when present), name+team+position,
- * and name+position so mid-season team changes still join prior weeks.
+ * Index nflverse week rows by player id (when present) and name+team+position.
+ * Id-less rows also get a name+position key when that name is unambiguous, so
+ * mid-season team changes still join without mixing distinct players.
  */
 export function indexWeekStatsByPlayer(rows: readonly TeamWeekStatRow[]): Map<string, TeamWeekStatRow[]> {
   const byKey = new Map<string, TeamWeekStatRow[]>();
+  const idLess = rows.filter((row) => !row.playerId);
+  const ambiguous = ambiguousNamePositionKeys(idLess);
   for (const row of rows) {
     if (row.playerId) addWeekStatKey(byKey, row.playerId, row);
     addWeekStatKey(byKey, propPlayerMatchKey(row.name, row.team, row.position), row);
-    addWeekStatKey(byKey, propPlayerNamePositionKey(row.name, row.position), row);
+    if (row.playerId) continue;
+    const crossKey = propPlayerNamePositionKey(row.name, row.position);
+    if (!ambiguous.has(crossKey)) addWeekStatKey(byKey, crossKey, row);
   }
   for (const group of byKey.values()) {
     group.sort((left, right) => left.week - right.week);
@@ -475,7 +515,7 @@ export type PropHistoryPlayerRef = {
   position: string;
 };
 
-/** Prefer player id, then name+position across teams, then name+team+position. */
+/** Prefer player id, then unambiguous name+position, then name+team+position. */
 export function weekStatsForPlayer(
   index: ReadonlyMap<string, TeamWeekStatRow[]>,
   player: PropHistoryPlayerRef,
@@ -489,7 +529,7 @@ export function weekStatsForPlayer(
   return index.get(propPlayerMatchKey(player.name, player.team, player.position)) ?? [];
 }
 
-/** Prefer name+position across teams, then the team-keyed match. */
+/** Prefer unambiguous name+position across teams, then the team-keyed match. */
 export function playedWeeksForPlayer(
   index: ReadonlyMap<string, Set<number>>,
   player: PropHistoryPlayerRef,

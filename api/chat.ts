@@ -44,6 +44,7 @@ import {
   ChatStoreError,
   deleteChatConversation,
   getChatConversation,
+  getChatRecentMessages,
   listChatConversations,
   persistChatTurn,
 } from "./_lib/chat-store.js";
@@ -144,14 +145,15 @@ export async function POST(req: Request): Promise<Response> {
     // passed to the model when a chatId is set (and unused for new chats).
     let history: Array<{ role: "user" | "assistant"; content: string }> = [];
     if (parsed.data.chatId) {
-      const stored = await getChatConversation(viewer.userId, parsed.data.chatId);
-      if (!stored) {
+      const recent = await getChatRecentMessages(
+        viewer.userId,
+        parsed.data.chatId,
+        CHAT_MAX_HISTORY_MESSAGES,
+      );
+      if (!recent) {
         return json({ ok: false, error: "Chat not found.", code: "chat_not_found" }, 404);
       }
-      history = stored.messages
-        .filter((message) => message.role === "user" || message.role === "assistant")
-        .map((message) => ({ role: message.role, content: message.content }))
-        .slice(-CHAT_MAX_HISTORY_MESSAGES);
+      history = recent;
     }
 
     const scoringWindow = parsed.data.scoringWindow

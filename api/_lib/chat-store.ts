@@ -3,7 +3,7 @@
  * List queries return titles only; messages load when a chat is opened.
  */
 import { and, asc, desc, eq } from "drizzle-orm";
-import { CHAT_MAX_INPUT_CHARS } from "./chat-config.js";
+import { CHAT_MAX_HISTORY_MESSAGES, CHAT_MAX_INPUT_CHARS } from "./chat-config.js";
 import { db, schema } from "./db.js";
 
 export const CHAT_TITLE_MAX_CHARS = 72;
@@ -119,6 +119,43 @@ export async function getChatConversation(
       createdAt: row.createdAt.toISOString(),
     })),
   };
+}
+
+/**
+ * Newest N transcript turns for an owned chat, returned oldest→newest.
+ * Used on send so long conversations do not load the full message table.
+ * Returns null when the conversation is missing or not owned.
+ */
+export async function getChatRecentMessages(
+  userId: string,
+  conversationId: string,
+  limit: number = CHAT_MAX_HISTORY_MESSAGES,
+): Promise<Array<{ role: "user" | "assistant"; content: string }> | null> {
+  const owned = await chatConversationOwned(userId, conversationId);
+  if (!owned) return null;
+
+  const take = Math.max(0, Math.floor(limit));
+  if (take === 0) return [];
+
+  const newestFirst = await db
+    .select({
+      role: schema.chatMessages.role,
+      content: schema.chatMessages.content,
+    })
+    .from(schema.chatMessages)
+    .where(
+      and(
+        eq(schema.chatMessages.conversationId, conversationId),
+        eq(schema.chatMessages.userId, userId),
+      ),
+    )
+    .orderBy(desc(schema.chatMessages.createdAt))
+    .limit(take);
+
+  return newestFirst
+    .reverse()
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .map((message) => ({ role: message.role, content: message.content }));
 }
 
 export async function deleteChatConversation(

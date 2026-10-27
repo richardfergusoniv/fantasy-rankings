@@ -376,7 +376,7 @@ describe("history indexes", () => {
     expect([...(index.get(key) ?? [])]).toEqual([6]);
   });
 
-  it("joins prior weeks across a mid-season team change by player id and name+position", () => {
+  it("joins prior weeks across a mid-season team change by player id", () => {
     const stats = indexWeekStatsByPlayer([
       weekRow({
         playerId: "te-1",
@@ -395,22 +395,70 @@ describe("history indexes", () => {
         receptions: 3,
       }),
     ]);
-    const byId = weekStatsForPlayer(stats, {
+    expect(weekStatsForPlayer(stats, {
       playerId: "te-1",
       name: "Jonnu Smith",
       team: "GB",
       position: "TE",
-    });
-    expect(byId.map((row) => row.week)).toEqual([4, 6]);
-
-    const byNamePos = weekStatsForPlayer(stats, {
+    }).map((row) => row.week)).toEqual([4, 6]);
+    // Id-bearing rows are not also keyed by name+position, so a nameless
+    // lookup stays on the current team rather than inventing a shared bucket.
+    expect(weekStatsForPlayer(stats, {
       name: "Jonnu Smith",
       team: "GB",
       position: "TE",
-    });
-    expect(byNamePos.map((row) => row.week)).toEqual([4, 6]);
+    }).map((row) => row.week)).toEqual([6]);
     expect(propPlayerNamePositionKey("Jonnu Smith", "TE")).toBe("TE|*|jonnusmith");
+  });
 
+  it("does not share weeks between distinct players with the same name+position", () => {
+    const stats = indexWeekStatsByPlayer([
+      weekRow({
+        playerId: "wr-a",
+        name: "Chris Moore",
+        team: "TEN",
+        position: "WR",
+        week: 3,
+        receptions: 2,
+      }),
+      weekRow({
+        playerId: "wr-b",
+        name: "Chris Moore",
+        team: "WAS",
+        position: "WR",
+        week: 3,
+        receptions: 4,
+      }),
+    ]);
+    expect(weekStatsForPlayer(stats, {
+      playerId: "wr-a",
+      name: "Chris Moore",
+      team: "TEN",
+      position: "WR",
+    }).map((row) => ({ week: row.week, team: row.team }))).toEqual([{ week: 3, team: "TEN" }]);
+    expect(weekStatsForPlayer(stats, {
+      playerId: "wr-b",
+      name: "Chris Moore",
+      team: "WAS",
+      position: "WR",
+    }).map((row) => ({ week: row.week, team: row.team }))).toEqual([{ week: 3, team: "WAS" }]);
+    expect(stats.has(propPlayerNamePositionKey("Chris Moore", "WR"))).toBe(false);
+
+    const played = indexPlayedWeeks([
+      { name: "Chris Moore", team: "TEN", position: "WR", week: 3, offenseSnaps: 12, offensePct: 20 },
+      { name: "Chris Moore", team: "WAS", position: "WR", week: 3, offenseSnaps: 18, offensePct: 30 },
+      { name: "Chris Moore", team: "TEN", position: "WR", week: 4, offenseSnaps: 10, offensePct: 18 },
+    ]);
+    expect([
+      ...playedWeeksForPlayer(played, { name: "Chris Moore", team: "TEN", position: "WR" }),
+    ].sort((a, b) => a - b)).toEqual([3, 4]);
+    expect([
+      ...playedWeeksForPlayer(played, { name: "Chris Moore", team: "WAS", position: "WR" }),
+    ]).toEqual([3]);
+    expect(played.has(propPlayerNamePositionKey("Chris Moore", "WR"))).toBe(false);
+  });
+
+  it("joins id-less snap weeks across teams when the name+position is unambiguous", () => {
     const played = indexPlayedWeeks([
       { name: "Jonnu Smith", team: "MIA", position: "TE", week: 4, offenseSnaps: 20, offensePct: 40 },
       { name: "Jonnu Smith", team: "GB", position: "TE", week: 6, offenseSnaps: 18, offensePct: 35 },

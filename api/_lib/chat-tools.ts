@@ -249,7 +249,8 @@ export function findLeague(dashboard: Dashboard, leagueId: string) {
 /**
  * Resolve which league a tool should use when leagueId was omitted or when
  * falling through after an optional league arg. Prefer the viewing league from
- * the chat context over dashboard.leagues[0].
+ * the chat context over dashboard.leagues[0]. When a viewing league id is set
+ * but missing from the dashboard, return null — do not silently switch leagues.
  */
 export function defaultToolLeague(
   dashboard: Dashboard,
@@ -257,8 +258,7 @@ export function defaultToolLeague(
   options?: { preferRosterOf?: string },
 ): Dashboard["leagues"][number] | null {
   if (ctx.defaultLeagueId) {
-    const viewing = findLeague(dashboard, ctx.defaultLeagueId);
-    if (viewing) return viewing;
+    return findLeague(dashboard, ctx.defaultLeagueId);
   }
   if (options?.preferRosterOf) {
     const rosterHit = dashboard.leagues.find((item) =>

@@ -484,6 +484,11 @@ describe("dispatchChatTool", () => {
     };
     dashboard.leagues = [dashboard.leagues[0]!, second];
     expect(defaultToolLeague(dashboard, { userId: "u1", sleeperUserId: "s1", defaultLeagueId: "lg2" })?.id).toBe("lg2");
+    expect(defaultToolLeague(dashboard, {
+      userId: "u1",
+      sleeperUserId: "s1",
+      defaultLeagueId: "missing",
+    }, { preferRosterOf: "p1" })).toBeNull();
 
     const ctx = {
       ...ctxWithDashboard(dashboard),
