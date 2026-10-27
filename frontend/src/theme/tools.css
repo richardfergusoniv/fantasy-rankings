@@ -1367,14 +1367,20 @@
 
 /* Ask sheet: chat over the current page. Bottom sheet on a phone, right-hand panel from 760px. */
 [data-slot="dialog-content"].ask-sheet {
-  top: auto;
+  /* Anchored to the visual viewport (the --vv-* variables, published by
+     visual-viewport.ts while the sheet is open): when the on-screen keyboard
+     opens, the sheet shrinks in place and its bottom edge stays on the visible
+     area, instead of riding up with the layout viewport. Before the variables
+     land (or without visualViewport support) the fallbacks reproduce the old
+     bottom-sheet geometry. */
+  top: calc(var(--vv-top, 0px) + var(--vv-height, 100dvh) - min(calc(var(--vv-height, 100dvh) * 0.86), 640px));
   right: 0;
-  bottom: 0;
+  bottom: auto;
   left: 0;
   display: flex;
   width: 100%;
   max-width: none;
-  height: min(86dvh, 640px);
+  height: min(calc(var(--vv-height, 100dvh) * 0.86), 640px);
   max-height: none;
   flex-direction: column;
   gap: 0;
@@ -1386,6 +1392,14 @@
   border-width: 1px 0 0;
   border-radius: 16px 16px 0 0;
   background: var(--card);
+}
+/* While the ask sheet is open, its overlay covers the visual viewport rather
+   than the full layout height, so no strip of the page behind shows between
+   the sheet and the keyboard. */
+html.ask-sheet-open [data-slot="dialog-overlay"] {
+  top: var(--vv-top, 0px);
+  bottom: auto;
+  height: var(--vv-height, 100dvh);
 }
 .ask-sheet-grabber {
   width: 36px;
