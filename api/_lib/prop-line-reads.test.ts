@@ -200,6 +200,26 @@ describe("propStatActual / history", () => {
     expect(noLine.hitRate).toBeNull();
   });
 
+  it("excludes unplayed stat rows while retaining played zero-stat weeks", () => {
+    const history = buildPropHistory(
+      "receptions",
+      0.5,
+      [
+        weekRow({ week: 1, name: "Jonnu Smith", position: "TE", receptions: 0 }),
+        weekRow({ week: 2, name: "Jonnu Smith", position: "TE", receptions: 2 }),
+      ],
+      new Set([2, 3, 4]),
+      new Set([1, 2, 3]),
+    );
+    expect(history.cells.map(({ week, actual, result }) => ({ week, actual, result }))).toEqual([
+      { week: 2, actual: 2, result: "over" },
+      { week: 3, actual: 0, result: "under" },
+    ]);
+    expect(history.games).toBe(2);
+    expect(history.hitRate).toBe(0.5);
+    expect(history.underRate).toBe(0.5);
+  });
+
   it("counts anytime_td from combined touchdowns and marks pushes", () => {
     const history = buildPropHistory(
       "anytime_td",
