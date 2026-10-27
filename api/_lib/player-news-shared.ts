@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { isHttpOrHttpsUrl } from "./http-url.js";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 
 export {
@@ -52,7 +53,10 @@ export const xNewsItemSchema = z
     player_name: z.string().min(1).max(160).optional(),
     text: z.string().min(1).max(4000),
     author_handle: z.string().min(1).max(80),
-    source_url: z.string().url().max(500),
+    // z.string().url() accepts javascript:/data:/file:; allowlist http(s) only.
+    source_url: z.string().url().max(500).refine(isHttpOrHttpsUrl, {
+      message: "source_url must be an http or https URL.",
+    }),
     post_id: z.string().min(1).max(80),
     published_at: z.string().datetime(),
     signal: z.string().min(1).max(80).optional(),

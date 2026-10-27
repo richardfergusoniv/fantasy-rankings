@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const selectLimitMock = vi.fn();
 const insertConflictMock = vi.fn();
 const fetchTextMock = vi.fn();
+const resolveSleeperUserIdMock = vi.fn();
+const hasCronSecretMock = vi.fn();
 
 vi.mock("./db.js", () => ({
   db: {
@@ -23,6 +25,18 @@ vi.mock("./db.js", () => ({
 vi.mock("./sleeper.js", () => ({
   fetchText: (...args: unknown[]) => fetchTextMock(...args),
 }));
+
+vi.mock("./auth.js", () => ({
+  resolveSleeperUserId: (...args: unknown[]) => resolveSleeperUserIdMock(...args),
+}));
+
+vi.mock("./api-utils.js", async () => {
+  const actual = await vi.importActual<typeof import("./api-utils.js")>("./api-utils.js");
+  return {
+    ...actual,
+    hasCronSecret: (...args: unknown[]) => hasCronSecretMock(...args),
+  };
+});
 
 import { encodeSourceCachePayload } from "./source-cache-payload.js";
 import {
@@ -60,6 +74,8 @@ beforeEach(() => {
   selectLimitMock.mockReset().mockResolvedValue([]);
   insertConflictMock.mockReset().mockResolvedValue(undefined);
   fetchTextMock.mockReset();
+  resolveSleeperUserIdMock.mockReset().mockResolvedValue("sleeper-1");
+  hasCronSecretMock.mockReset().mockReturnValue(false);
 });
 
 describe("loadTeamWeekStats", () => {
@@ -111,6 +127,32 @@ describe("loadTeamWeekStats", () => {
     expect(await loadTeamWeekStats(SEASON)).toEqual(stale);
     expect(fetchTextMock).not.toHaveBeenCalled();
     expect(insertConflictMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects unauthenticated team-week-stats requests before fetching", async () => {
+    resolveSleeperUserIdMock.mockResolvedValue(null);
+    hasCronSecretMock.mockReturnValue(false);
+
+    const res = await handlePfnTables(
+      new Request(`https://example.com/api/pfn-tables?team-week-stats=1&season=${SEASON}`),
+    );
+    expect(res.status).toBe(401);
+    expect(fetchTextMock).not.toHaveBeenCalled();
+    expect(insertConflictMock).not.toHaveBeenCalled();
+  });
+
+  it("allows cron-authenticated team-week-stats without a Sleeper session", async () => {
+    resolveSleeperUserIdMock.mockResolvedValue(null);
+    hasCronSecretMock.mockReturnValue(true);
+    selectLimitMock.mockResolvedValue([]);
+    fetchTextMock.mockImplementation(async (url: string) =>
+      url.includes("snap_counts") ? snapsCsv() : statsCsv());
+
+    const res = await handlePfnTables(
+      new Request(`https://example.com/api/pfn-tables?team-week-stats=1&season=${SEASON}`),
+    );
+    expect(res.status).toBe(200);
+    expect(fetchTextMock).toHaveBeenCalled();
   });
 
   it("returns a controlled 500 when upstream fails and nothing is cached", async () => {

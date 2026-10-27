@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   badRequest,
+  forbidden,
   internalError,
   json,
   queryBool,
@@ -9,6 +10,7 @@ import {
 } from "./api-utils.js";
 import { resolveSleeperUserId } from "./auth.js";
 import { historicalTradesResponse, loadHistoricalTrades } from "./trades.js";
+import { viewerBelongsToLeague } from "./viewer-league-access.js";
 
 /**
  * GET /api/trades/history?leagueId=&refresh=&season=
@@ -40,6 +42,9 @@ export async function handleTradesHistory(req: Request): Promise<Response> {
 
     const sleeperUserId = await resolveSleeperUserId(req);
     if (!sleeperUserId) return unauthorized("Sign in required.");
+    if (!(await viewerBelongsToLeague(sleeperUserId, parsed.data.leagueId))) {
+      return forbidden("League is not in your Sleeper account.");
+    }
 
     const result = await loadHistoricalTrades(
       parsed.data.leagueId,

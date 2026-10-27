@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
 import { db, schema } from "./db.js";
-import { badRequest, internalError, json } from "./api-utils.js";
+import { badRequest, hasCronSecret, internalError, json, unauthorized } from "./api-utils.js";
+import { resolveSleeperUserId } from "./auth.js";
 import { encodeSourceCachePayload } from "./source-cache-payload.js";
 import { fetchText } from "./sleeper.js";
 import {
@@ -286,6 +287,12 @@ export async function handlePfnTables(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url, "https://localhost");
     if (url.searchParams.has("team-week-stats")) {
+      // Cache miss fetches nflverse CSVs and upserts shared source_cache — require
+      // a signed-in Sleeper user or the cron secret (same bar as sibling data writes).
+      if (!hasCronSecret(req)) {
+        const sleeperUserId = await resolveSleeperUserId(req);
+        if (!sleeperUserId) return unauthorized("Sign in required.");
+      }
       const seasonRaw = url.searchParams.get("season");
       const parsedSeason = teamWeekStatsSeasonSchema.safeParse(
         seasonRaw == null || seasonRaw === "" ? Number.NaN : Number(seasonRaw),
