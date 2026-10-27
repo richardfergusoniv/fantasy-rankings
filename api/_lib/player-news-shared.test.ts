@@ -315,4 +315,31 @@ describe("resolveXNewsPlayer matching", () => {
       index,
     )?.playerId).toBe("2002");
   });
+
+  it("omits ambiguous byNameTeam keys instead of last-write-wins", () => {
+    const ambiguous = buildPlayerNewsNameIndex([
+      { playerId: "a1", player: "Same Name", team: "DAL" },
+      { playerId: "a2", player: "Same Name", team: "DAL" },
+    ]);
+    expect(ambiguous.byNameTeam.has("same name|DAL")).toBe(false);
+    expect(resolveXNewsPlayer(
+      { player_name: "Same Name", team: "DAL" },
+      ambiguous,
+    )).toBeNull();
+  });
+
+  it("routes last-name-only through byLastNameTeam, not byNameTeam", () => {
+    // Mononym "Johnson" would occupy byNameTeam "johnson|HOU" if consulted
+    // first, masking the ambiguous surname collision with Diontae Johnson.
+    const crowded = buildPlayerNewsNameIndex([
+      { playerId: "mono", player: "Johnson", team: "HOU" },
+      { playerId: "full", player: "Diontae Johnson", team: "HOU" },
+    ]);
+    expect(crowded.byNameTeam.get("johnson|HOU")).toBe("mono");
+    expect(crowded.byLastNameTeam.has("johnson|HOU")).toBe(false);
+    expect(resolveXNewsPlayer(
+      { player_name: "Johnson", team: "HOU" },
+      crowded,
+    )).toBeNull();
+  });
 });

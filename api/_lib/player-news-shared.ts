@@ -339,16 +339,16 @@ export type PlayerNewsNameIndexEntry = {
 };
 
 /**
- * Build lookup maps from roster rows. Ambiguous full names are left out of
- * `byName` so callers cannot silently pick the wrong player; use `player_id`
- * or `team` (+ last name) instead.
+ * Build lookup maps from roster rows. Ambiguous names are left out of
+ * `byName` / `byNameTeam` / `byLastNameTeam` so callers cannot silently pick
+ * the wrong player; use `player_id` or a unique name(+team) match instead.
  */
 export function buildPlayerNewsNameIndex(
   entries: ReadonlyArray<PlayerNewsNameIndexEntry>,
 ): PlayerNewsNameIndex {
   const byId = new Map<string, { player: string; team: string }>();
   const nameHits = new Map<string, string[]>();
-  const byNameTeam = new Map<string, string>();
+  const nameTeamHits = new Map<string, string[]>();
   const lastTeamHits = new Map<string, string[]>();
 
   for (const entry of entries) {
@@ -359,7 +359,10 @@ export function buildPlayerNewsNameIndex(
     const ids = nameHits.get(nameKey) ?? [];
     ids.push(entry.playerId);
     nameHits.set(nameKey, ids);
-    byNameTeam.set(nameTeamKey(nameKey, team), entry.playerId);
+    const nameTeam = nameTeamKey(nameKey, team);
+    const nameTeamIds = nameTeamHits.get(nameTeam) ?? [];
+    nameTeamIds.push(entry.playerId);
+    nameTeamHits.set(nameTeam, nameTeamIds);
     const last = lastNameFromKey(nameKey);
     if (!last) continue;
     const lastKey = nameTeamKey(last, team);
@@ -372,6 +375,12 @@ export function buildPlayerNewsNameIndex(
   for (const [key, ids] of nameHits) {
     const unique = [...new Set(ids)];
     if (unique.length === 1) byName.set(key, unique[0]!);
+  }
+
+  const byNameTeam = new Map<string, string>();
+  for (const [key, ids] of nameTeamHits) {
+    const unique = [...new Set(ids)];
+    if (unique.length === 1) byNameTeam.set(key, unique[0]!);
   }
 
   const byLastNameTeam = new Map<string, string>();
@@ -412,20 +421,22 @@ export function resolveXNewsPlayer(
   if (!nameKey) return null;
   const team = normalizeNewsTeam(item.team);
 
-  if (team) {
-    const withTeam = index.byNameTeam.get(nameTeamKey(nameKey, team));
-    if (withTeam) {
-      const meta = index.byId.get(withTeam);
-      if (meta) return { playerId: withTeam, player: meta.player, team: meta.team };
-    }
-  }
-
+  // One-token names use last+team uniqueness only — never byNameTeam, which
+  // keys on full normalized name and would bypass surname collision checks.
   if (isLastNameOnlyKey(nameKey)) {
     if (!team) return null;
     const lastHit = index.byLastNameTeam.get(nameTeamKey(nameKey, team));
     if (!lastHit) return null;
     const meta = index.byId.get(lastHit);
     return meta ? { playerId: lastHit, player: meta.player, team: meta.team } : null;
+  }
+
+  if (team) {
+    const withTeam = index.byNameTeam.get(nameTeamKey(nameKey, team));
+    if (withTeam) {
+      const meta = index.byId.get(withTeam);
+      if (meta) return { playerId: withTeam, player: meta.player, team: meta.team };
+    }
   }
 
   const byName = index.byName.get(nameKey);
