@@ -329,9 +329,7 @@ export function buildPropHistory(
   if (!Number.isFinite(line)) {
     return { games: 0, overs: 0, unders: 0, pushes: 0, hitRate: null, underRate: null, cells };
   }
-  const weeks = new Set<number>(
-    [...rowByWeek.keys()].filter((week) => playedWeeks.has(week)),
-  );
+  const weeks = new Set<number>([...rowByWeek.keys()].filter((week) => playedWeeks.has(week)));
   for (const week of playedWeeks) {
     if (statWeeks.has(week)) weeks.add(week);
   }
