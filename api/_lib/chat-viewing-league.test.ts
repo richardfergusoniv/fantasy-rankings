@@ -4,7 +4,12 @@ vi.mock("./dashboard-build.js", () => ({
   readUserDashboardCache: vi.fn(),
 }));
 
+vi.mock("./user-leagues.js", () => ({
+  readUserLeagues: vi.fn(),
+}));
+
 import { readUserDashboardCache } from "./dashboard-build.js";
+import { readUserLeagues } from "./user-leagues.js";
 import {
   appendViewingLeague,
   resolveViewingLeague,
@@ -13,6 +18,7 @@ import {
 } from "./chat-viewing-league.js";
 
 const cacheMock = vi.mocked(readUserDashboardCache);
+const leaguesMock = vi.mocked(readUserLeagues);
 
 const LEAGUE: ViewingLeague = {
   id: "1312127020972404736",
@@ -33,6 +39,7 @@ function cacheWith(leagues: unknown[]) {
 describe("resolveViewingLeague", () => {
   beforeEach(() => {
     cacheMock.mockReset();
+    leaguesMock.mockReset();
   });
 
   it("returns null without a sleeper user or league id, without reading the cache", async () => {
@@ -40,6 +47,7 @@ describe("resolveViewingLeague", () => {
     expect(await resolveViewingLeague("s1", null)).toBeNull();
     expect(await resolveViewingLeague("s1", undefined)).toBeNull();
     expect(cacheMock).not.toHaveBeenCalled();
+    expect(leaguesMock).not.toHaveBeenCalled();
   });
 
   it("resolves a league from the viewer's cached dashboard", async () => {
@@ -48,19 +56,44 @@ describe("resolveViewingLeague", () => {
       { id: LEAGUE.id, name: LEAGUE.name, scoringLabel: "PPR", seasonLongFormat: { isDynasty: true } },
     ]));
     expect(await resolveViewingLeague("s1", LEAGUE.id)).toEqual(LEAGUE);
+    expect(leaguesMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the lightweight leagues list on a cold dashboard cache", async () => {
+    cacheMock.mockResolvedValue(null);
+    leaguesMock.mockResolvedValue({
+      season: 2026,
+      week: 7,
+      seasonType: "regular",
+      leagues: [
+        {
+          league_id: LEAGUE.id,
+          name: LEAGUE.name,
+          scoring_settings: { rec: 1 },
+          settings: { type: 2 },
+          total_rosters: 12,
+        },
+      ],
+    });
+    expect(await resolveViewingLeague("s1", LEAGUE.id)).toEqual(LEAGUE);
   });
 
   it("returns null for a league the viewer does not belong to", async () => {
     cacheMock.mockResolvedValue(cacheWith([
       { id: "other", name: "Other", scoringLabel: "Half PPR", seasonLongFormat: { isDynasty: false } },
     ]));
+    leaguesMock.mockResolvedValue({
+      season: 2026,
+      week: 7,
+      seasonType: "regular",
+      leagues: [{ league_id: "other", name: "Other", scoring_settings: { rec: 0.5 } }],
+    });
     expect(await resolveViewingLeague("s1", LEAGUE.id)).toBeNull();
   });
 
-  it("returns null when the cache is empty or unreadable", async () => {
-    cacheMock.mockResolvedValue(null);
-    expect(await resolveViewingLeague("s1", LEAGUE.id)).toBeNull();
+  it("returns null when both the dashboard cache and leagues list fail", async () => {
     cacheMock.mockRejectedValue(new Error("db down"));
+    leaguesMock.mockRejectedValue(new Error("sleeper down"));
     expect(await resolveViewingLeague("s1", LEAGUE.id)).toBeNull();
   });
 });

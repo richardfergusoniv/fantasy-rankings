@@ -11,11 +11,10 @@ import {
   indexPlayedWeeks,
   indexWeekStatsByPlayer,
   isHiddenHalfPointPropStat,
-  propPlayerMatchKey,
+  playedWeeksForPlayer,
   propStatDef,
+  weekStatsForPlayer,
 } from "../../api/_lib/prop-line-reads";
-
-const NO_PLAYED_WEEKS: ReadonlySet<number> = new Set();
 
 function formatLine(value: number): string {
   return Number.isInteger(value) ? String(value) : formatDecimal(value, 2);
@@ -27,7 +26,7 @@ function formatOdds(odds: number | null): string {
   return rounded > 0 ? `+${rounded}` : `${rounded}`;
 }
 
-/** This week's consensus prop lines for one player, with each prior game graded against that week's own line. */
+/** This week's consensus prop lines for one player, with each prior game graded against this week's line. */
 export function PlayerPropsSection({ player, season, week }: { player: PlayerSearchResult; season: number; week: number }) {
   const pfnQuery = useQuery({
     // Ask for the card's own week; the server's default is the NFL week, which can differ.
@@ -64,11 +63,19 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
   const historyReady = historyQuery.isSuccess && !historyUnavailable;
   const weekRows = useMemo(() => {
     const prior = (historyQuery.data?.stats ?? []).filter((row) => row.week >= 1 && row.week < week);
-    return indexWeekStatsByPlayer(prior).get(propPlayerMatchKey(player.name, player.team, player.position)) ?? [];
-  }, [historyQuery.data?.stats, player.name, player.position, player.team, week]);
+    return weekStatsForPlayer(indexWeekStatsByPlayer(prior), {
+      playerId: player.playerId,
+      name: player.name,
+      team: player.team,
+      position: player.position,
+    });
+  }, [historyQuery.data?.stats, player.name, player.playerId, player.position, player.team, week]);
   const playedWeeks = useMemo(() => {
-    const key = propPlayerMatchKey(player.name, player.team, player.position);
-    return indexPlayedWeeks(historyQuery.data?.snaps ?? []).get(key) ?? NO_PLAYED_WEEKS;
+    return playedWeeksForPlayer(indexPlayedWeeks(historyQuery.data?.snaps ?? []), {
+      name: player.name,
+      team: player.team,
+      position: player.position,
+    });
   }, [historyQuery.data?.snaps, player.name, player.position, player.team]);
   // Weeks the stats dataset itself covers; a played week outside this set
   // is unpublished stats data, not a zero week.

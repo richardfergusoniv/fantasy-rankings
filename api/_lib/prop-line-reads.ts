@@ -406,36 +406,144 @@ export function propPlayerMatchKey(name: string, team: string | null | undefined
   return `${position}|${teamKey}|${normalizeTeamStatsPlayerName(name)}`;
 }
 
+/** Name+position only — used for id-less rows when the name+position is unambiguous. */
+export function propPlayerNamePositionKey(name: string, position: string): string {
+  return `${position}|*|${normalizeTeamStatsPlayerName(name)}`;
+}
+
+function mergeWeekStatRows(existing: TeamWeekStatRow[], row: TeamWeekStatRow): void {
+  const prior = existing.findIndex((item) => item.week === row.week);
+  if (prior >= 0) existing[prior] = row;
+  else existing.push(row);
+}
+
+function addWeekStatKey(
+  byKey: Map<string, TeamWeekStatRow[]>,
+  key: string,
+  row: TeamWeekStatRow,
+): void {
+  const group = byKey.get(key);
+  if (group) mergeWeekStatRows(group, row);
+  else byKey.set(key, [row]);
+}
+
 /**
- * Weeks each player actually played (at least one offensive snap), keyed
- * like the week-stats index so the two can be joined. A played week with
+ * Name+position keys that appear on two+ teams in the same week — distinct
+ * players sharing a normalized name, so cross-team joining would mix them.
+ */
+function ambiguousNamePositionKeys(
+  rows: ReadonlyArray<{ name: string; team: string; position: string; week: number }>,
+): Set<string> {
+  const teamsByWeek = new Map<string, Map<number, Set<string>>>();
+  for (const row of rows) {
+    const key = propPlayerNamePositionKey(row.name, row.position);
+    const team = row.team.trim().toUpperCase();
+    let byWeek = teamsByWeek.get(key);
+    if (!byWeek) {
+      byWeek = new Map();
+      teamsByWeek.set(key, byWeek);
+    }
+    const teams = byWeek.get(row.week);
+    if (teams) teams.add(team);
+    else byWeek.set(row.week, new Set([team]));
+  }
+  const ambiguous = new Set<string>();
+  for (const [key, byWeek] of teamsByWeek) {
+    for (const teams of byWeek.values()) {
+      if (teams.size > 1) {
+        ambiguous.add(key);
+        break;
+      }
+    }
+  }
+  return ambiguous;
+}
+
+/**
+ * Weeks each player actually played (at least one offensive snap). Always
+ * keyed by name+team+position; also by name+position across teams when that
+ * identity is unambiguous (no same-week multi-team clash). A played week with
  * no stat row is a zero week, not a missed game.
  */
 export function indexPlayedWeeks(
   snaps: readonly TeamWeekSnapRow[],
 ): Map<string, Set<number>> {
+  const played = snaps.filter((snap) => snap.offenseSnaps > 0);
+  const ambiguous = ambiguousNamePositionKeys(played);
   const byKey = new Map<string, Set<number>>();
-  for (const snap of snaps) {
-    if (snap.offenseSnaps <= 0) continue;
-    const key = propPlayerMatchKey(snap.name, snap.team, snap.position);
-    const group = byKey.get(key);
-    if (group) group.add(snap.week);
-    else byKey.set(key, new Set([snap.week]));
+  for (const snap of played) {
+    const teamKey = propPlayerMatchKey(snap.name, snap.team, snap.position);
+    const teamGroup = byKey.get(teamKey);
+    if (teamGroup) teamGroup.add(snap.week);
+    else byKey.set(teamKey, new Set([snap.week]));
+
+    const crossKey = propPlayerNamePositionKey(snap.name, snap.position);
+    if (ambiguous.has(crossKey)) continue;
+    const crossGroup = byKey.get(crossKey);
+    if (crossGroup) crossGroup.add(snap.week);
+    else byKey.set(crossKey, new Set([snap.week]));
   }
   return byKey;
 }
 
-/** Index nflverse week rows by name+team+position for joining to Sleeper ids. */
+/**
+ * Index nflverse week rows by player id (when present) and name+team+position.
+ * Rows also get a name+position key when that identity is unambiguous, so
+ * mid-season team changes still join without mixing distinct players.
+ */
 export function indexWeekStatsByPlayer(rows: readonly TeamWeekStatRow[]): Map<string, TeamWeekStatRow[]> {
   const byKey = new Map<string, TeamWeekStatRow[]>();
+  const ambiguous = ambiguousNamePositionKeys(rows);
+  // Consumers carry Sleeper IDs, while nflverse rows carry GSIS IDs. Permit
+  // name/position fallback across teams only when it resolves to one identity.
+  const idsByName = new Map<string, Set<string>>();
   for (const row of rows) {
-    const key = propPlayerMatchKey(row.name, row.team, row.position);
-    const group = byKey.get(key);
-    if (group) group.push(row);
-    else byKey.set(key, [row]);
+    if (!row.playerId) continue;
+    const key = propPlayerNamePositionKey(row.name, row.position);
+    const ids = idsByName.get(key) ?? new Set<string>();
+    ids.add(row.playerId);
+    idsByName.set(key, ids);
+    if (ids.size > 1) ambiguous.add(key);
+  }
+  for (const row of rows) {
+    if (row.playerId) addWeekStatKey(byKey, row.playerId, row);
+    addWeekStatKey(byKey, propPlayerMatchKey(row.name, row.team, row.position), row);
+    const crossKey = propPlayerNamePositionKey(row.name, row.position);
+    if (!ambiguous.has(crossKey)) addWeekStatKey(byKey, crossKey, row);
   }
   for (const group of byKey.values()) {
     group.sort((left, right) => left.week - right.week);
   }
   return byKey;
+}
+
+export type PropHistoryPlayerRef = {
+  playerId?: string | null;
+  name: string;
+  team?: string | null;
+  position: string;
+};
+
+/** Prefer player id, then unambiguous name+position, then name+team+position. */
+export function weekStatsForPlayer(
+  index: ReadonlyMap<string, TeamWeekStatRow[]>,
+  player: PropHistoryPlayerRef,
+): TeamWeekStatRow[] {
+  if (player.playerId) {
+    const byId = index.get(player.playerId);
+    if (byId?.length) return byId;
+  }
+  const byNamePos = index.get(propPlayerNamePositionKey(player.name, player.position));
+  if (byNamePos?.length) return byNamePos;
+  return index.get(propPlayerMatchKey(player.name, player.team, player.position)) ?? [];
+}
+
+/** Prefer unambiguous name+position across teams, then the team-keyed match. */
+export function playedWeeksForPlayer(
+  index: ReadonlyMap<string, Set<number>>,
+  player: PropHistoryPlayerRef,
+): Set<number> {
+  const byNamePos = index.get(propPlayerNamePositionKey(player.name, player.position));
+  if (byNamePos?.size) return byNamePos;
+  return index.get(propPlayerMatchKey(player.name, player.team, player.position)) ?? new Set();
 }

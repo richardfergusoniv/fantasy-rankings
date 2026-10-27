@@ -1,9 +1,12 @@
 /**
  * Load current-week prop lines from `prop_line_snapshots` (one compact query)
  * and enrich with Sleeper player identity from the NFL players cache.
+ *
+ * Hit grading uses this week's line via `buildPropHistory`; prior-week closing
+ * lines are not loaded here.
  */
 
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "./db.js";
 import { readCachedNflPlayersMap } from "./nfl-players-cache.js";
 import {
@@ -47,19 +50,6 @@ export type PropLineWeekPayload = {
       underMultiplier: number | null;
     } | null;
   }>;
-  /**
-   * Closing consensus line (last pull of that week) for each prior week
-   * of the season, restricted to player/stat pairs on this week's board.
-   * History grading reads these; weeks absent here were never stored.
-   */
-  weeklyLines: Array<{
-    playerId: string;
-    stat: string;
-    week: number;
-    line: number;
-  }>;
-  /** Set only when the closing-line history query failed; the board lines are unaffected. */
-  weeklyLinesDegraded?: true;
 };
 
 type CacheEntry = {
@@ -190,79 +180,19 @@ export async function loadPropLineWeek(options?: {
   }
 
   const sleeperBoard = await loadSleeperPickBoard(season, week);
-  let weeklyLinesDegraded = false;
-  const weeklyLines = await loadWeeklyClosingLines(season, week, collapsed).catch(
-    (err): PropLineWeekPayload["weeklyLines"] => {
-      weeklyLinesDegraded = true;
-      console.error(
-        "[prop-line-week] weekly closing lines unavailable",
-        err instanceof Error ? err.message : err,
-      );
-      return [];
-    },
-  );
   const body: PropLineWeekPayload = {
     season,
     week,
     pulledAt: latestPulledAt?.toISOString() ?? null,
     sleeperPulledAt: sleeperBoard.pulledAt,
     lines: serializeLines(collapsed, players, sleeperBoard.byKey),
-    weeklyLines,
-    ...(weeklyLinesDegraded ? { weeklyLinesDegraded: true as const } : {}),
   };
   // Avoid caching a non-empty week with missing player metadata (empty roster
   // map) — that degrades names/teams and hides game-filtered props for 15m.
-  // A failed history query is not cached either, so the next request retries
-  // instead of pinning an empty history for the cache window.
-  if (!weeklyLinesDegraded && (collapsed.length === 0 || Object.keys(players).length > 0)) {
+  if (collapsed.length === 0 || Object.keys(players).length > 0) {
     setCache(cacheKey, body);
   }
   return body;
-}
-
-/**
- * Closing line per player/stat for each prior week of the season: the
- * last pull stored within that week. Restricted to player/stat pairs on
- * the current board so the payload stays board-sized.
- */
-async function loadWeeklyClosingLines(
-  season: number,
-  week: number,
-  board: readonly CurrentWeekPropLine[],
-): Promise<PropLineWeekPayload["weeklyLines"]> {
-  if (week <= 1 || board.length === 0) return [];
-  const boardKeys = new Set(board.map((line) => `${line.playerId}|${line.stat}`));
-  const boardPlayerIds = [...new Set(board.map((line) => line.playerId))];
-  const rows = await db
-    .select({
-      playerId: schema.propLineSnapshots.playerId,
-      stat: schema.propLineSnapshots.stat,
-      week: schema.propLineSnapshots.week,
-      line: schema.propLineSnapshots.line,
-      pulledAt: schema.propLineSnapshots.pulledAt,
-    })
-    .from(schema.propLineSnapshots)
-    .where(and(
-      eq(schema.propLineSnapshots.season, season),
-      lt(schema.propLineSnapshots.week, week),
-      inArray(schema.propLineSnapshots.playerId, boardPlayerIds),
-    ));
-  const closing = new Map<string, { playerId: string; stat: string; week: number; line: number; pulledAt: Date }>();
-  for (const row of rows) {
-    if (!boardKeys.has(`${row.playerId}|${row.stat}`)) continue;
-    const key = `${row.playerId}|${row.stat}|${row.week}`;
-    const best = closing.get(key);
-    if (!best || row.pulledAt.getTime() > best.pulledAt.getTime()) {
-      closing.set(key, row);
-    }
-  }
-  return [...closing.values()]
-    .map(({ playerId, stat, week: lineWeek, line }) => ({ playerId, stat, week: lineWeek, line }))
-    .sort((left, right) => (
-      left.playerId.localeCompare(right.playerId)
-      || left.stat.localeCompare(right.stat)
-      || left.week - right.week
-    ));
 }
 
 /** Test helper — clear the in-process week cache. */

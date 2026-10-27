@@ -41,10 +41,10 @@ import {
   resolveViewingLeague,
 } from "./_lib/chat-viewing-league.js";
 import {
-  chatConversationOwned,
   ChatStoreError,
   deleteChatConversation,
   getChatConversation,
+  getChatRecentMessages,
   listChatConversations,
   persistChatTurn,
 } from "./_lib/chat-store.js";
@@ -140,11 +140,20 @@ export async function POST(req: Request): Promise<Response> {
       return badRequest("Invalid chat payload.", parsed.error.issues);
     }
 
+    // Owned transcript is the source of truth for prior turns. Client-supplied
+    // history is accepted by the schema for backwards compatibility but never
+    // passed to the model when a chatId is set (and unused for new chats).
+    let history: Array<{ role: "user" | "assistant"; content: string }> = [];
     if (parsed.data.chatId) {
-      const owned = await chatConversationOwned(viewer.userId, parsed.data.chatId);
-      if (!owned) {
+      const recent = await getChatRecentMessages(
+        viewer.userId,
+        parsed.data.chatId,
+        CHAT_MAX_HISTORY_MESSAGES,
+      );
+      if (!recent) {
         return json({ ok: false, error: "Chat not found.", code: "chat_not_found" }, 404);
       }
+      history = recent;
     }
 
     const scoringWindow = parsed.data.scoringWindow
@@ -158,7 +167,6 @@ export async function POST(req: Request): Promise<Response> {
       ),
       viewingLeague,
     );
-    const history = parsed.data.history.slice(-CHAT_MAX_HISTORY_MESSAGES);
 
     const result = await runChatAgent({
       apiKey,
@@ -170,6 +178,7 @@ export async function POST(req: Request): Promise<Response> {
         userId: viewer.userId,
         sleeperUserId: viewer.sleeperUserId,
         scoringWindow,
+        defaultLeagueId: viewingLeague?.id,
       },
     });
 

@@ -625,6 +625,29 @@ describe("extended chat tools", () => {
     expect(result.propLines.length).toBeGreaterThan(0);
   });
 
+  it("get_projections defaults omitted leagueId to the viewing league", async () => {
+    selectResults.push([]);
+    const dashboard = baseDashboard();
+    const second = {
+      ...dashboard.leagues[0]!,
+      id: "lg2",
+      name: "Second League",
+      starters: dashboard.leagues[0]!.starters,
+      bench: dashboard.leagues[0]!.bench,
+      rosteredPlayerIds: dashboard.leagues[0]!.rosteredPlayerIds,
+    };
+    dashboard.leagues = [
+      { ...dashboard.leagues[0]!, starters: [], bench: [], rosteredPlayerIds: [] },
+      second,
+    ];
+    const result = await toolGetProjections(
+      { ...ctxWithDashboard(dashboard), defaultLeagueId: "lg2" },
+      { scope: "roster" },
+    ) as { ok: boolean; leagueId: string };
+    expect(result.ok).toBe(true);
+    expect(result.leagueId).toBe("lg2");
+  });
+
   it("get_value_history downsamples stored snapshots", async () => {
     selectResults.push([
       { snapshotDate: "2026-09-01", playerName: "Alpha Receiver", position: "WR", value: 7000 },

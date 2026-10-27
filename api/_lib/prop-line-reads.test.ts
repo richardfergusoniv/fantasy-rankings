@@ -6,10 +6,14 @@ import {
   currentWeekPropLines,
   impliedProbability,
   indexPlayedWeeks,
+  indexWeekStatsByPlayer,
   isHiddenHalfPointPropStat,
+  playedWeeksForPlayer,
   propPlayerMatchKey,
+  propPlayerNamePositionKey,
   propStatActual,
   summarizePropLineMovement,
+  weekStatsForPlayer,
 } from "./prop-line-reads.js";
 
 function weekRow(partial: Partial<TeamWeekStatRow> & Pick<TeamWeekStatRow, "week" | "name">): TeamWeekStatRow {
@@ -370,6 +374,108 @@ describe("history indexes", () => {
     ]);
     const key = propPlayerMatchKey("Jonnu Smith", "GB", "TE");
     expect([...(index.get(key) ?? [])]).toEqual([6]);
+  });
+
+  it("joins prior weeks across a mid-season team change by player id", () => {
+    const stats = indexWeekStatsByPlayer([
+      weekRow({
+        playerId: "te-1",
+        name: "Jonnu Smith",
+        team: "MIA",
+        position: "TE",
+        week: 4,
+        receptions: 5,
+      }),
+      weekRow({
+        playerId: "te-1",
+        name: "Jonnu Smith",
+        team: "GB",
+        position: "TE",
+        week: 6,
+        receptions: 3,
+      }),
+    ]);
+    expect(weekStatsForPlayer(stats, {
+      playerId: "te-1",
+      name: "Jonnu Smith",
+      team: "GB",
+      position: "TE",
+    }).map((row) => row.week)).toEqual([4, 6]);
+    // Sleeper IDs differ from nflverse GSIS IDs; an unambiguous name joins
+    // the full season even when the caller cannot use the source ID.
+    expect(weekStatsForPlayer(stats, {
+      playerId: "sleeper-123",
+      name: "Jonnu Smith",
+      team: "GB",
+      position: "TE",
+    }).map((row) => row.week)).toEqual([4, 6]);
+    expect(propPlayerNamePositionKey("Jonnu Smith", "TE")).toBe("TE|*|jonnusmith");
+  });
+
+  it("does not combine distinct source IDs even when their weeks do not overlap", () => {
+    const stats = indexWeekStatsByPlayer([
+      weekRow({ playerId: "00-a", name: "Chris Moore", team: "TEN", position: "WR", week: 1 }),
+      weekRow({ playerId: "00-b", name: "Chris Moore", team: "WAS", position: "WR", week: 2 }),
+    ]);
+    expect(weekStatsForPlayer(stats, { playerId: "sleeper-id", name: "Chris Moore", team: "WAS", position: "WR" })
+      .map((row) => row.week)).toEqual([2]);
+  });
+
+  it("does not share weeks between distinct players with the same name+position", () => {
+    const stats = indexWeekStatsByPlayer([
+      weekRow({
+        playerId: "wr-a",
+        name: "Chris Moore",
+        team: "TEN",
+        position: "WR",
+        week: 3,
+        receptions: 2,
+      }),
+      weekRow({
+        playerId: "wr-b",
+        name: "Chris Moore",
+        team: "WAS",
+        position: "WR",
+        week: 3,
+        receptions: 4,
+      }),
+    ]);
+    expect(weekStatsForPlayer(stats, {
+      playerId: "wr-a",
+      name: "Chris Moore",
+      team: "TEN",
+      position: "WR",
+    }).map((row) => ({ week: row.week, team: row.team }))).toEqual([{ week: 3, team: "TEN" }]);
+    expect(weekStatsForPlayer(stats, {
+      playerId: "wr-b",
+      name: "Chris Moore",
+      team: "WAS",
+      position: "WR",
+    }).map((row) => ({ week: row.week, team: row.team }))).toEqual([{ week: 3, team: "WAS" }]);
+    expect(stats.has(propPlayerNamePositionKey("Chris Moore", "WR"))).toBe(false);
+
+    const played = indexPlayedWeeks([
+      { name: "Chris Moore", team: "TEN", position: "WR", week: 3, offenseSnaps: 12, offensePct: 20 },
+      { name: "Chris Moore", team: "WAS", position: "WR", week: 3, offenseSnaps: 18, offensePct: 30 },
+      { name: "Chris Moore", team: "TEN", position: "WR", week: 4, offenseSnaps: 10, offensePct: 18 },
+    ]);
+    expect([
+      ...playedWeeksForPlayer(played, { name: "Chris Moore", team: "TEN", position: "WR" }),
+    ].sort((a, b) => a - b)).toEqual([3, 4]);
+    expect([
+      ...playedWeeksForPlayer(played, { name: "Chris Moore", team: "WAS", position: "WR" }),
+    ]).toEqual([3]);
+    expect(played.has(propPlayerNamePositionKey("Chris Moore", "WR"))).toBe(false);
+  });
+
+  it("joins id-less snap weeks across teams when the name+position is unambiguous", () => {
+    const played = indexPlayedWeeks([
+      { name: "Jonnu Smith", team: "MIA", position: "TE", week: 4, offenseSnaps: 20, offensePct: 40 },
+      { name: "Jonnu Smith", team: "GB", position: "TE", week: 6, offenseSnaps: 18, offensePct: 35 },
+    ]);
+    expect([
+      ...playedWeeksForPlayer(played, { name: "Jonnu Smith", team: "GB", position: "TE" }),
+    ].sort((a, b) => a - b)).toEqual([4, 6]);
   });
 });
 
