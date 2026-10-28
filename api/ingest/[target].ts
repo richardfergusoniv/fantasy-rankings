@@ -70,10 +70,6 @@ const MAX_INGEST_BODY_BYTES = 8 * 1024 * 1024;
  * - pfn-tables:     writes `pfn:{tableKey}` rows to `source_cache` for the
  *                   4 PFN tables.
  * - player-news-x:  inserts shared player-news rows from X (dedupe by post_id).
- *                   Prefer Sleeper `player_id` on every item; name resolve is
- *                   fallback-only. Response includes `unresolvedSamples`
- *                   (up to 10). Priority player ids:
- *                   `GET /api/cron/jobs?job=x-producer-priority`.
  * - prop-line-snapshots: inserts dated consensus prop-line rows into
  *                   `prop_line_snapshots` (line-movement history).
  * - sleeper-picks:  stores the normalized Sleeper Picks NFL board as one

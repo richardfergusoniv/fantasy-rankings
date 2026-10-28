@@ -47,16 +47,9 @@ export type NotesSnapshot = Record<string, NotesSnapshotEntry>;
 const newsTypeSchema = z.enum(["roster", "waiver", "headline"]);
 const sourceSchema = z.enum(["sleeper", "x", "nflverse"]);
 
-/**
- * X ingest item. Always prefer Sleeper `player_id` when known — name matching
- * is exact-key only and silent on collisions / Jr. suffixes. `player_name` is
- * a fallback for the external producer, not the preferred contract.
- */
 export const xNewsItemSchema = z
   .object({
-    /** Preferred. Sleeper player id from the producer priority list / roster. */
     player_id: z.string().min(1).max(80).optional(),
-    /** Fallback only when player_id is unknown. */
     player_name: z.string().min(1).max(160).optional(),
     text: z.string().min(1).max(4000),
     author_handle: z.string().min(1).max(80),
