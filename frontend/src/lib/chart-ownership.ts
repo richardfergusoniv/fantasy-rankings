@@ -108,6 +108,7 @@ export function ownershipReadoutSuffix(ownership: ChartOwnership | undefined): s
     case "rostered":
       return " · Rostered";
     case "unknown":
+      return " · Ownership unavailable";
     case "field":
     case undefined:
       return "";

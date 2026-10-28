@@ -1028,6 +1028,7 @@ type ScatterAxisSpec = { short: string; lowerIsBetter?: boolean; titleSuffix: st
 type ScatterPlotProps = {
   rosteredPlayers: ChartDatum[];
   availablePlayers: ChartDatum[];
+  unknownPlayers?: ChartDatum[];
   selectedTeamPlayers: ChartDatum[];
   labelData: ChartDatum[];
   leaderIds: ReadonlySet<string>;
@@ -1051,6 +1052,7 @@ type ScatterPlotProps = {
 function ScatterPlot({
   rosteredPlayers,
   availablePlayers,
+  unknownPlayers = [],
   selectedTeamPlayers,
   labelData,
   leaderIds,
@@ -1071,7 +1073,7 @@ function ScatterPlot({
   const [focusedId, setFocusedId] = useState<string | null>(focusRequestId);
   useEffect(() => { if (focusRequestId) setFocusedId(focusRequestId); }, [focusRequestId]);
   const plottedData = Array.from(new Map(
-    [...rosteredPlayers, ...availablePlayers, ...selectedTeamPlayers].map((point) => [point.id, point]),
+    [...rosteredPlayers, ...availablePlayers, ...unknownPlayers, ...selectedTeamPlayers].map((point) => [point.id, point]),
   ).values());
   const focused = plottedData.find((point) => point.id === focusedId) ?? null;
   const focusedLink = focused && playerLink
@@ -1146,6 +1148,7 @@ function ScatterPlot({
           <Scatter name={fieldSeriesName} data={rosteredPlayers} fill="var(--chart-2)" fillOpacity={0.7} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
           {/* Waivers use amber so available K/DST stand apart from grey rostered points on mobile. */}
           <Scatter name="Waivers" data={availablePlayers} fill="var(--chart-1)" fillOpacity={0.85} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
+          <Scatter name="Ownership unavailable" data={unknownPlayers} fill="var(--dim)" fillOpacity={0.45} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
           {/* My team is a diamond as well as teal, so it reads without colour. */}
           <Scatter name="My team" data={selectedTeamPlayers} shape="diamond" fill="var(--chart-team)" stroke="var(--chart-team)" strokeWidth={1} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
           {!compact && focused ? (
@@ -1361,18 +1364,19 @@ function TeamScatterPlot({
       yCutoff={0}
       ariaLabel={ariaLabel}
       compact={compact}
-      // NFL pace points are teams, not fantasy roster slots — avoid "Rostered" in tooltips.
+      // NFL pace points are teams, not fantasy roster slots.
       fieldSeriesName="NFL teams"
     />
   );
 }
 
-function ChartKey({ teamName }: { teamName: string }) {
+function ChartKey({ teamName, hasUnknown = false }: { teamName: string; hasUnknown?: boolean }) {
   return (
     <div className="chart-key">
       <span><i className="selected-team-dot" /> {teamName}</span>
       <span><i className="rostered-dot" /> Rostered</span>
       <span><i className="waiver-dot" /> Waivers</span>
+      {hasUnknown ? <span><i /> Ownership unavailable</span> : null}
     </div>
   );
 }
@@ -1752,7 +1756,9 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
         ? "var(--chart-team)"
         : row.ownership === "available"
           ? "var(--chart-1)"
-          : SNAP_TREND_COLORS[index % SNAP_TREND_COLORS.length] ?? "var(--chart-2)",
+          : row.ownership === "unknown"
+            ? "var(--dim)"
+            : SNAP_TREND_COLORS[index % SNAP_TREND_COLORS.length] ?? "var(--chart-2)",
       points: row.points,
     }));
   }, [chartKind, dashboard.analytics.entities, league, plotLimit, position]);
@@ -1790,8 +1796,8 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
   const selectedTeamIds = new Set(selectedTeamPlayers.map((row) => row.id));
   const leaderIds = new Set(leaders.map((row) => row.id));
   const availablePlayers = chartData.filter((row) => row.ownership === "available");
-  // Unresolved Sleeper ids share the grey series — never the amber "Waivers" series.
-  const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered" || row.ownership === "unknown");
+  const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered");
+  const unknownPlayers = chartData.filter((row) => row.ownership === "unknown");
   const labelData = plotLimit === "all" ? selectedTeamPlayers : chartData;
   const labeledIds = new Set(labelData.map((row) => row.id));
   const omittedNames = chartData.filter((row) => !labeledIds.has(row.id)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
@@ -1865,6 +1871,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
           <ScatterPlot
             rosteredPlayers={rosteredPlayers}
             availablePlayers={availablePlayers}
+            unknownPlayers={unknownPlayers}
             selectedTeamPlayers={selectedTeamPlayers}
             labelData={showLabels ? labelData : selectedTeamPlayers}
             leaderIds={leaderIds}
@@ -1880,7 +1887,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
             playerLink={chartPlayerLink}
             focusRequestId={showLabels ? focusEntityId : null}
           />
-          <ChartKey teamName={fantasyTeamName(league)} />
+          <ChartKey teamName={fantasyTeamName(league)} hasUnknown={unknownPlayers.length > 0} />
           {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
         </>
       ) : null}
@@ -2366,8 +2373,8 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   const selectedTeamIds = new Set(selectedTeamPlayers.map((row) => row.id));
   const leaderIds = new Set(leaders.map((row) => row.id));
   const availablePlayers = chartData.filter((row) => row.ownership === "available");
-  // Unresolved Sleeper ids share the grey series — never the amber "Waivers" series.
-  const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered" || row.ownership === "unknown");
+  const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered");
+  const unknownPlayers = chartData.filter((row) => row.ownership === "unknown");
   const labelData = plotLimit === "all" ? selectedTeamPlayers : chartData;
   const labeledIds = new Set(labelData.map((row) => row.id));
   const omittedNames = chartData.filter((row) => !labeledIds.has(row.id)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
@@ -2464,6 +2471,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
             <ScatterPlot
               rosteredPlayers={rosteredPlayers}
               availablePlayers={availablePlayers}
+              unknownPlayers={unknownPlayers}
               selectedTeamPlayers={selectedTeamPlayers}
               labelData={showLabels ? labelData : selectedTeamPlayers}
               leaderIds={leaderIds}
@@ -2478,7 +2486,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
               compact={!showLabels && layout === "monitor"}
               playerLink={chartPlayerLink}
             />
-            <ChartKey teamName={fantasyTeamName(league)} />
+            <ChartKey teamName={fantasyTeamName(league)} hasUnknown={unknownPlayers.length > 0} />
             {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
             </>
           )

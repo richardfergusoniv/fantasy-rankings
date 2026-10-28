@@ -100,6 +100,14 @@ describe("chartOwnershipForEntity", () => {
     expect(chartOwnershipForEntity({ name: "Jake Moody", team: "SF", position: "K", playerId: "k3" }, leagueState)).toBe("available");
   });
 
+  it("keeps missing mappings unknown but preserves the own-roster name fallback", () => {
+    for (const playerId of [undefined, null, ""]) {
+      expect(chartOwnershipForEntity({ name: "Rival WR", team: "LAR", position: "WR", playerId }, leagueState)).toBe("unknown");
+      expect(chartOwnershipForEntity({ name: "Justin Tucker", team: "BAL", position: "K", playerId }, leagueState)).toBe("mine");
+    }
+    expect(chartOwnershipForEntity({ name: "Unowned WR", team: "LAR", position: "WR", playerId: "valid-unowned-id" }, leagueState)).toBe("available");
+  });
+
   it("treats league-rosteredPlayerIds as rostered for skill ids without a name match", () => {
     expect(isPlayerRosteredInLeague({ name: "Waived WR", team: "CHI", position: "WR", playerId: "missing" }, leagueState)).toBe(false);
     expect(isPlayerRosteredInLeague({ name: "Rival K", team: "KC", position: "K", playerId: "k2" }, leagueState)).toBe(true);
@@ -138,7 +146,7 @@ describe("chartOwnershipForEntity", () => {
       position: "WR",
       id: "WR:00-0037239",
     }, withRival)).toBe("unknown");
-    expect(ownershipReadoutSuffix("unknown")).toBe("");
+    expect(ownershipReadoutSuffix("unknown")).toBe(" · Ownership unavailable");
   });
 
   it("still marks resolved free agents as available", () => {
@@ -152,11 +160,11 @@ describe("chartOwnershipForEntity", () => {
 });
 
 describe("ownershipReadoutSuffix", () => {
-  it("omits a suffix for field and unknown points", () => {
+  it("labels unknown ownership and omits a suffix for field points", () => {
     expect(ownershipReadoutSuffix("mine")).toBe(" · My team");
     expect(ownershipReadoutSuffix("rostered")).toBe(" · Rostered");
     expect(ownershipReadoutSuffix("available")).toBe(" · Waivers");
-    expect(ownershipReadoutSuffix("unknown")).toBe("");
+    expect(ownershipReadoutSuffix("unknown")).toBe(" · Ownership unavailable");
     expect(ownershipReadoutSuffix("field")).toBe("");
   });
 });
