@@ -21,9 +21,10 @@ import {
   vegasProjectionPayloadSchema,
 } from "../_lib/ingest-helpers.js";
 import {
+  buildPlayerNewsNameIndex,
   buildXNewsDraft,
   filterDuplicateDrafts,
-  normalizePlayerNameKey,
+  resolveXNewsPlayer,
   retentionCutoff,
   xNewsBatchSchema,
 } from "../_lib/player-news-shared.js";
@@ -70,6 +71,9 @@ const MAX_INGEST_BODY_BYTES = 8 * 1024 * 1024;
  * - pfn-tables:     writes `pfn:{tableKey}` rows to `source_cache` for the
  *                   4 PFN tables.
  * - player-news-x:  inserts shared player-news rows from X (dedupe by post_id).
+ *                   Producers should send Sleeper `player_id` when known;
+ *                   `player_name` (+ optional `team`) is a fallback. Last-name-
+ *                   only names require `team` or the item is dropped.
  * - prop-line-snapshots: inserts dated consensus prop-line rows into
  *                   `prop_line_snapshots` (line-movement history).
  * - sleeper-picks:  stores the normalized Sleeper Picks NFL board as one
@@ -304,21 +308,19 @@ function playerLabel(player: SleeperPlayer): string {
   return player.full_name ?? [player.first_name, player.last_name].filter(Boolean).join(" ");
 }
 
-async function loadPlayerNameIndex(): Promise<{
-  byId: Map<string, { player: string; team: string }>;
-  byName: Map<string, string>;
-}> {
+async function loadPlayerNameIndex() {
   const players = await loadNflPlayersMap(false);
-  const byId = new Map<string, { player: string; team: string }>();
-  const byName = new Map<string, string>();
+  const entries = [];
   for (const [playerId, player] of Object.entries(players)) {
     const name = playerLabel(player);
     if (!name) continue;
-    byId.set(playerId, { player: name, team: player.team ?? "FA" });
-    const key = normalizePlayerNameKey(name);
-    if (!byName.has(key)) byName.set(key, playerId);
+    entries.push({
+      playerId,
+      player: name,
+      team: player.team ?? "FA",
+    });
   }
-  return { byId, byName };
+  return buildPlayerNewsNameIndex(entries);
 }
 
 async function handlePlayerNewsX(req: Request): Promise<Response> {
@@ -345,24 +347,12 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
   const unresolved: string[] = [];
   const drafts = [];
   for (const item of parsed.data.items) {
-    let playerId = item.player_id?.trim() || null;
-    let meta = playerId ? index.byId.get(playerId) : undefined;
-    if (!meta && item.player_name) {
-      const resolvedId = index.byName.get(normalizePlayerNameKey(item.player_name));
-      if (resolvedId) {
-        playerId = resolvedId;
-        meta = index.byId.get(resolvedId);
-      }
-    }
-    if (!playerId || !meta) {
+    const resolved = resolveXNewsPlayer(item, index);
+    if (!resolved) {
       unresolved.push(item.player_id ?? item.player_name ?? item.post_id);
       continue;
     }
-    drafts.push(buildXNewsDraft(item, {
-      playerId,
-      player: meta.player,
-      team: meta.team,
-    }));
+    drafts.push(buildXNewsDraft(item, resolved));
   }
 
   const unique = filterDuplicateDrafts(drafts);
