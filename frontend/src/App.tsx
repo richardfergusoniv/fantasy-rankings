@@ -745,26 +745,6 @@ export function App() {
       signOutForPersonalData(error);
     },
   });
-  // Prefer cached/streamed leagues so redraft vs dynasty is known before news fetch.
-  // No league yet → redraft (exclude dynasty-tagged rows) per product default.
-  const newsIsDynasty = useMemo(() => {
-    const leagues = dashboardQuery.data?.leagues ?? browserDashboard?.leagues ?? [];
-    const match = leagues.find((item) => item.id === selectedLeagueId) ?? leagues[0];
-    return Boolean(match?.seasonLongFormat.isDynasty);
-  }, [browserDashboard?.leagues, dashboardQuery.data?.leagues, selectedLeagueId]);
-  const newsQuery = useQuery({
-    queryKey: personalQueryKey(viewer, "player-news", newsIsDynasty ? "dynasty" : "redraft"),
-    queryFn: async () => {
-      try {
-        return await withClientDeadline(api.getPlayerNews({ dynasty: newsIsDynasty }), 8_000);
-      } catch (error) {
-        signOutForPersonalData(error);
-        throw error;
-      }
-    },
-    staleTime: 60_000,
-    retry: false,
-  });
   const draftQuery = useQuery({
     queryKey: personalQueryKey(viewer, "draft-center"),
     queryFn: async () => {
@@ -839,7 +819,22 @@ export function App() {
   const dashboard = withStreamedAnalytics(freshestDashboard(dashboardQuery.data, streamedDashboard, browserDashboard), streamedDashboard);
 
   const league = dashboard?.leagues.find((item) => item.id === selectedLeagueId) ?? dashboard?.leagues[0];
+  // Same effective league as the rendered dashboard (cached + streamed meta).
+  // No league yet → redraft (exclude dynasty-tagged rows) per product default.
   const leagueIsDynasty = Boolean(league?.seasonLongFormat.isDynasty);
+  const newsQuery = useQuery({
+    queryKey: personalQueryKey(viewer, "player-news", leagueIsDynasty ? "dynasty" : "redraft"),
+    queryFn: async () => {
+      try {
+        return await withClientDeadline(api.getPlayerNews({ dynasty: leagueIsDynasty }), 8_000);
+      } catch (error) {
+        signOutForPersonalData(error);
+        throw error;
+      }
+    },
+    staleTime: 60_000,
+    retry: false,
+  });
   const leagueScopedNews = useMemo((): PlayerNews | undefined => {
     if (!newsQuery.data) return undefined;
     return {
