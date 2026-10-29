@@ -112,6 +112,7 @@ import {
   type ChartStatRow,
 } from "./chart-metric-transforms.js";
 import { loadChartExtrasSnapshot, type ChartExtrasSnapshot } from "./nflverse-chart-extras.js";
+import { analyticsSleeperPlayerId } from "./analytics-player-id.js";
 import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./player-insights.js";
 import { buildStandings, waiverStatus } from "./league-standings.js";
 import { loadTeamGameLines, type TeamGameLine } from "./team-game-lines.js";
@@ -766,11 +767,14 @@ function buildAnalytics(
     }
     const ngs = latest.position === "K" || latest.position === "DEF" ? undefined : insights?.ngs[latest.id];
     if (ngs) Object.assign(seasonMetrics, ngs);
+    // `latest.id` is nflverse GSIS for skill/K; Sleeper roster ids need the mapped playerId.
+    const playerId = analyticsSleeperPlayerId(latest.position, latest.id, latest.team, insights?.sleeperByGsis);
     entities.push({
       id: key,
       name: latest.name,
       team: latest.team,
       position: latest.position,
+      playerId,
       seasonGames: seasonRows.length,
       rollingGames: rollingRows.length,
       season: seasonMetrics,

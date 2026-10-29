@@ -8,6 +8,7 @@ function entity(name: string, position: AnalyticsEntity["position"], season: Rec
     name,
     team: "KC",
     position,
+    playerId: null,
     seasonGames: 5,
     rollingGames: 5,
     season,

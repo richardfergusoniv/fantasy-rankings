@@ -20,6 +20,19 @@ import { useViewerIdentity } from "./viewer-scope";
 import { formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { ChartDialog } from "./chart-dialog";
 import { MatchupTag, SegmentedControl, shortLeagueName } from "./shared";
+import {
+  chartOwnershipForEntity,
+  comparableChartPlayerName,
+  isPlayerOnSelectedTeam,
+  ownershipReadoutSuffix,
+  type ChartOwnership,
+} from "./lib/chart-ownership";
+import { chartWeeklyAxes, preferredWeeklyPreset } from "./lib/chart-weekly-axes";
+import {
+  buildImpliedTotalMaps,
+  defenseImpliedTotalValues,
+  skillImpliedTotalValues,
+} from "./lib/weekly-implied-totals";
 import { scatterAxisDomain } from "./scatter-zoom";
 import { shouldWarnBeforeLeave, useUnsavedLeaveWarning } from "./unsaved-input";
 
@@ -37,11 +50,13 @@ export type Metric = { key: string; label: string; short: string; unit?: string;
 type WeeklyEntity = {
   id: string; playerId: string; name: string; team: string; position: BasePosition; opponent: string | null; isAway: boolean | null; isBye: boolean; gameTime: string | null; gamePhase: MatchupSelection["gamePhase"]; values: Record<string, number>;
 };
-export type PlayerSelection = { playerId?: string; name: string; team: string; position: BasePosition };
+export type PlayerSelection = { playerId?: string | null; name: string; team: string; position: BasePosition };
 /** A player the Analytics tool was asked to focus (from a link): the scatter opens on their position with them selected. */
 export type AnalyticsFocusPlayer = { id: string; name: string; team: string | null; position: string };
 type ChartDatum = {
-  id: string; name: string; label: string; team: string; games: number; x: number; y: number; isSelectedTeam: boolean;
+  id: string; name: string; label: string; team: string; games: number; x: number; y: number;
+  isSelectedTeam: boolean;
+  ownership: ChartOwnership;
   /** Set where the data source knows them; lets the focused-player link find the player card. */
   playerId?: string | null; position?: string;
 };
@@ -283,6 +298,7 @@ const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
   K: [
     { label: "Conversion volume", x: "fg_attempts", y: "fg_made" },
     { label: "Distance upside", x: "fg_40_plus", y: "fg_50_plus" },
+    { label: "Volume vs accuracy", x: "fg_attempts", y: "fg_pct" },
     { label: "FPA heatmap", x: "fpa_team", y: "fpa_position", kind: "heatmap" },
     { label: "Pace x PROE", x: "plays_per_game", y: "proe", kind: "team-scatter" },
   ],
@@ -290,6 +306,7 @@ const analyticsPresets: Record<BasePosition, ChartPreset[]> = {
     { label: "Pressure to sacks", x: "qb_hits", y: "sacks" },
     { label: "Takeaway scoring", x: "takeaways", y: "defensive_tds" },
     { label: "Backfield disruption", x: "tackles_for_loss", y: "takeaways" },
+    { label: "Pass rush volume", x: "qb_hits", y: "tackles_for_loss" },
     { label: "FPA heatmap", x: "fpa_team", y: "fpa_position", kind: "heatmap" },
     { label: "Pace x PROE", x: "plays_per_game", y: "proe", kind: "team-scatter" },
   ],
@@ -368,6 +385,7 @@ export const weeklyMetrics: Record<BasePosition, Metric[]> = {
     { key: "league", label: "League projection", short: "League proj" },
     { key: "sleeperProjection", label: "Sleeper projection", short: "Sleeper" },
     { key: "teamTotal", label: "Team implied points", short: "Team pts" },
+    { key: "gameTotal", label: "Game total (O/U)", short: "O/U" },
     { key: "leaguePositionRank", label: "Weekly positional rank", short: "Pos rank", lowerIsBetter: true },
     { key: "fantasyCalcValue", label: "FantasyCalc value", short: "FC value" },
     { key: "fantasyCalcPositionRank", label: "FantasyCalc position rank", short: "FC pos rank", lowerIsBetter: true },
@@ -375,6 +393,8 @@ export const weeklyMetrics: Record<BasePosition, Metric[]> = {
   DEF: [
     { key: "projection", label: "Fantasy projection", short: "Proj" },
     { key: "opponentTotal", label: "Opponent implied points", short: "Opp pts", lowerIsBetter: true },
+    { key: "gameTotal", label: "Game total (O/U)", short: "O/U", lowerIsBetter: true },
+    { key: "teamTotal", label: "Team implied points", short: "Team pts" },
   ],
 };
 
@@ -436,9 +456,8 @@ for (const position of ["QB", "RB", "WR", "TE"] as const) {
   else metrics.push(...stats);
 }
 
-// Weekly presets checked against live rankings/defenses cache. Removed empty:
-// Team environment / Scoring environment (teamTotal never set — opponent
-// projected points are null), Matchup leverage (opponentTotal likewise).
+// Weekly presets use rankings + defenses + dashboard.gameLines (nflverse implied
+// totals). Kickers benefit from higher team totals; DSTs from lower opponent totals.
 const projectionPresets: ChartPreset[] = [
   { label: "Vegas vs Sleeper", x: "vegasProjection", y: "sleeperProjection" },
   { label: "Projection vs FantasyCalc value", x: "league", y: "fantasyCalcValue" },
@@ -452,19 +471,15 @@ const weeklyPresets: Record<BasePosition, ChartPreset[]> = {
   WR: projectionPresets,
   TE: projectionPresets,
   K: [
+    { label: "Vegas implied total", x: "teamTotal", y: "league" },
+    { label: "Game total vs projection", x: "gameTotal", y: "league" },
     { label: "Projection vs Sleeper", x: "sleeperProjection", y: "league" },
     { label: "Projected kicker ranks", x: "leaguePositionRank", y: "league" },
   ],
-  DEF: [],
-};
-
-const defaultWeeklyAxes: Record<BasePosition, [string, string]> = {
-  QB: ["leaguePositionRank", "league"],
-  RB: ["leaguePositionRank", "league"],
-  WR: ["leaguePositionRank", "league"],
-  TE: ["leaguePositionRank", "league"],
-  K: ["leaguePositionRank", "league"],
-  DEF: ["opponentTotal", "projection"],
+  DEF: [
+    { label: "Vegas implied total", x: "opponentTotal", y: "projection" },
+    { label: "Game total vs projection", x: "gameTotal", y: "projection" },
+  ],
 };
 
 /** A chart's player group: one position, or FLEX (RB, WR and TE together). */
@@ -515,10 +530,6 @@ function chartWeeklyPresets(position: ChartPosition): ChartPreset[] {
 
 function chartAnalyticsAxes(position: ChartPosition): [string, string] {
   return position === "FLEX" ? ["opportunity", "fantasy_league"] : defaultAnalyticsAxes[position];
-}
-
-function chartWeeklyAxes(position: ChartPosition): [string, string] {
-  return position === "FLEX" ? ["league", "fantasyCalcValue"] : defaultWeeklyAxes[position];
 }
 
 /** Saved views store one base position, so a FLEX chart can't be saved; this only fills the type. */
@@ -851,10 +862,7 @@ function analyticsLabel(entity: Pick<AnalyticsEntity, "name" | "team" | "positio
 }
 
 export function comparablePlayerName(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/\b(jr|sr|ii|iii|iv)\b/g, "")
-    .replace(/[^a-z0-9]/g, "");
+  return comparableChartPlayerName(value);
 }
 
 export function isSamePlayer(entity: PlayerSelection, selection: PlayerSelection): boolean {
@@ -864,14 +872,12 @@ export function isSamePlayer(entity: PlayerSelection, selection: PlayerSelection
   return comparablePlayerName(entity.name) === comparablePlayerName(selection.name);
 }
 
-function isPlayerOnSelectedTeam(entity: Pick<AnalyticsEntity, "name" | "team" | "position">, league: League): boolean {
-  if (entity.position === "DEF") return league.rosteredPlayerIds.includes(entity.team);
-  const entityName = comparablePlayerName(entity.name);
-  return [...league.starters, ...league.bench].some((player) => (
-    player.position === entity.position
-    && player.team === entity.team
-    && comparablePlayerName(player.name) === entityName
-  ));
+function chartDatumOwnership(
+  entity: { id?: string; playerId?: string | null; name: string; team: string; position: string },
+  league: League,
+): { ownership: ChartOwnership; isSelectedTeam: boolean } {
+  const ownership = chartOwnershipForEntity(entity, league);
+  return { ownership, isSelectedTeam: ownership === "mine" };
 }
 
 function boxOverlap(a: LabelBox, b: LabelBox): number {
@@ -1020,8 +1026,9 @@ function ScatterTrendLine({ data, xAxisMap, yAxisMap, offset }: {
 // projection values (short, no suffix).
 type ScatterAxisSpec = { short: string; lowerIsBetter?: boolean; titleSuffix: string };
 type ScatterPlotProps = {
-  others: ChartDatum[];
-  leadersWithoutSelectedTeam: ChartDatum[];
+  rosteredPlayers: ChartDatum[];
+  availablePlayers: ChartDatum[];
+  unknownPlayers?: ChartDatum[];
   selectedTeamPlayers: ChartDatum[];
   labelData: ChartDatum[];
   leaderIds: ReadonlySet<string>;
@@ -1034,6 +1041,8 @@ type ScatterPlotProps = {
   yCutoff: number;
   ariaLabel: string;
   compact?: boolean;
+  /** Tooltip/legend name for the grey series; player charts keep "Rostered". */
+  fieldSeriesName?: string;
   /** Resolves a focused player to their card; without it no link is shown. */
   playerLink?: PlayerLinkResolver;
   /** Chart point id to focus when it changes (a link into the tool); the user can still change or clear it. */
@@ -1041,8 +1050,9 @@ type ScatterPlotProps = {
 };
 
 function ScatterPlot({
-  others,
-  leadersWithoutSelectedTeam,
+  rosteredPlayers,
+  availablePlayers,
+  unknownPlayers = [],
   selectedTeamPlayers,
   labelData,
   leaderIds,
@@ -1055,6 +1065,7 @@ function ScatterPlot({
   yCutoff,
   ariaLabel,
   compact = false,
+  fieldSeriesName = "Rostered",
   playerLink,
   focusRequestId = null,
 }: ScatterPlotProps) {
@@ -1062,7 +1073,7 @@ function ScatterPlot({
   const [focusedId, setFocusedId] = useState<string | null>(focusRequestId);
   useEffect(() => { if (focusRequestId) setFocusedId(focusRequestId); }, [focusRequestId]);
   const plottedData = Array.from(new Map(
-    [...others, ...leadersWithoutSelectedTeam, ...selectedTeamPlayers].map((point) => [point.id, point]),
+    [...rosteredPlayers, ...availablePlayers, ...unknownPlayers, ...selectedTeamPlayers].map((point) => [point.id, point]),
   ).values());
   const focused = plottedData.find((point) => point.id === focusedId) ?? null;
   const focusedLink = focused && playerLink
@@ -1090,7 +1101,11 @@ function ScatterPlot({
         toggleZoom();
       }}
     >
-      <ChartContainer config={{ field: { label: "Field", color: "var(--chart-2)" }, team: { label: "My team", color: "var(--chart-team)" } }} className="aspect-auto h-full">
+      <ChartContainer config={{
+        rostered: { label: fieldSeriesName, color: "var(--chart-2)" },
+        available: { label: "Waivers", color: "var(--chart-1)" },
+        team: { label: "My team", color: "var(--chart-team)" },
+      }} className="aspect-auto h-full">
         <ScatterChart margin={margin}>
           <CartesianGrid stroke="var(--hairline)" strokeDasharray="1 6" vertical={false} />
           <XAxis
@@ -1130,8 +1145,10 @@ function ScatterPlot({
           {showQuadrants ? <ReferenceLine x={xCutoff} stroke="var(--hairline)" strokeWidth={1} strokeDasharray="4 8" /> : null}
           {showQuadrants ? <ReferenceLine y={yCutoff} stroke="var(--hairline)" strokeWidth={1} strokeDasharray="4 8" /> : null}
           <ZAxis range={[dotSize, dotSize]} />
-          <Scatter name="Field" data={others} fill="var(--chart-2)" fillOpacity={0.7} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
-          <Scatter name="Smash spots" data={leadersWithoutSelectedTeam} fill="var(--chart-2)" fillOpacity={0.7} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
+          <Scatter name={fieldSeriesName} data={rosteredPlayers} fill="var(--chart-2)" fillOpacity={0.7} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
+          {/* Waivers use amber so available K/DST stand apart from grey rostered points on mobile. */}
+          <Scatter name="Waivers" data={availablePlayers} fill="var(--chart-1)" fillOpacity={0.85} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
+          <Scatter name="Ownership unavailable" data={unknownPlayers} fill="var(--dim)" fillOpacity={0.45} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
           {/* My team is a diamond as well as teal, so it reads without colour. */}
           <Scatter name="My team" data={selectedTeamPlayers} shape="diamond" fill="var(--chart-team)" stroke="var(--chart-team)" strokeWidth={1} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
           {!compact && focused ? (
@@ -1193,7 +1210,7 @@ function ScatterPlot({
               {focused ? (
                 <>
                   <strong>{focused.name}</strong>{" "}
-                  <span>{focused.team}{selectedTeamIds.has(focused.id) ? " · My team" : ""}</span>{" "}
+                  <span>{focused.team}{ownershipReadoutSuffix(focused.ownership)}</span>{" "}
                   <span>{`${xAxis.short} ${focused.x}`}</span>{" "}
                   <span>{`${yAxis.short} ${focused.y}`}</span>
                 </>
@@ -1211,7 +1228,8 @@ function ScatterPlot({
   );
 }
 
-const SNAP_TREND_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "#c4b5fd", "#f9a8d4", "#67e8f9"];
+// Omit --chart-1 so rostered snap lines stay distinct from the waiver amber series.
+const SNAP_TREND_COLORS = ["var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "#c4b5fd", "#f9a8d4", "#67e8f9"];
 
 function SnapShareTrendChart({
   series,
@@ -1332,8 +1350,8 @@ function TeamScatterPlot({
 }) {
   return (
     <ScatterPlot
-      others={data.filter((row) => !row.isSelectedTeam)}
-      leadersWithoutSelectedTeam={[]}
+      rosteredPlayers={data.filter((row) => !row.isSelectedTeam)}
+      availablePlayers={[]}
       selectedTeamPlayers={data.filter((row) => row.isSelectedTeam)}
       labelData={showLabels ? data : data.filter((row) => row.isSelectedTeam)}
       leaderIds={new Set()}
@@ -1346,14 +1364,19 @@ function TeamScatterPlot({
       yCutoff={0}
       ariaLabel={ariaLabel}
       compact={compact}
+      // NFL pace points are teams, not fantasy roster slots.
+      fieldSeriesName="NFL teams"
     />
   );
 }
 
-function ChartKey({ teamName }: { teamName: string }) {
+function ChartKey({ teamName, hasUnknown = false }: { teamName: string; hasUnknown?: boolean }) {
   return (
     <div className="chart-key">
       <span><i className="selected-team-dot" /> {teamName}</span>
+      <span><i className="rostered-dot" /> Rostered</span>
+      <span><i className="waiver-dot" /> Waivers</span>
+      {hasUnknown ? <span><i /> Ownership unavailable</span> : null}
     </div>
   );
 }
@@ -1690,7 +1713,8 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
           games: window === "season" ? entity.seasonGames : entity.rollingGames,
           x,
           y,
-          isSelectedTeam: isPlayerOnSelectedTeam(entity, league),
+          ...chartDatumOwnership(entity, league),
+          playerId: entity.playerId ?? null,
           position: entity.position,
         }];
       })
@@ -1705,16 +1729,20 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
     if (chartKind !== "snap-trend") return [];
     const mapped = dashboard.analytics.entities
       .filter((entity) => inChartPosition(entity.position, position) && (entity.weeklySnaps?.length ?? 0) > 0)
-      .map((entity) => ({
-        id: entity.id,
-        name: entity.name,
-        label: analyticsLabel(entity),
-        team: entity.team,
-        games: entity.weeklySnaps.length,
-        avgSnap: entity.weeklySnaps.reduce((sum, point) => sum + point.snapShare, 0) / entity.weeklySnaps.length,
-        points: entity.weeklySnaps,
-        isSelectedTeam: isPlayerOnSelectedTeam(entity, league),
-      }))
+      .map((entity) => {
+        const { ownership, isSelectedTeam } = chartDatumOwnership(entity, league);
+        return {
+          id: entity.id,
+          name: entity.name,
+          label: analyticsLabel(entity),
+          team: entity.team,
+          games: entity.weeklySnaps.length,
+          avgSnap: entity.weeklySnaps.reduce((sum, point) => sum + point.snapShare, 0) / entity.weeklySnaps.length,
+          points: entity.weeklySnaps,
+          ownership,
+          isSelectedTeam,
+        };
+      })
       .sort((a, b) => Number(b.isSelectedTeam) - Number(a.isSelectedTeam) || b.avgSnap - a.avgSnap);
     const limit = plotLimit === "all" ? mapped.length : Number(plotLimit);
     const selected = mapped.filter((row) => row.isSelectedTeam);
@@ -1724,7 +1752,13 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
       id: row.id,
       name: row.name,
       label: row.label,
-      color: row.isSelectedTeam ? "var(--chart-team)" : SNAP_TREND_COLORS[index % SNAP_TREND_COLORS.length] ?? "var(--chart-2)",
+      color: row.ownership === "mine"
+        ? "var(--chart-team)"
+        : row.ownership === "available"
+          ? "var(--chart-1)"
+          : row.ownership === "unknown"
+            ? "var(--dim)"
+            : SNAP_TREND_COLORS[index % SNAP_TREND_COLORS.length] ?? "var(--chart-2)",
       points: row.points,
     }));
   }, [chartKind, dashboard.analytics.entities, league, plotLimit, position]);
@@ -1738,6 +1772,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
     );
     return dashboard.analytics.teamUsage.flatMap((usage): ChartDatum[] => {
       if (typeof usage.proe !== "number" || !Number.isFinite(usage.proe)) return [];
+      const mine = userTeams.has(usage.team);
       return [{
         id: usage.team,
         name: usage.team,
@@ -1746,7 +1781,9 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
         games: usage.games,
         x: usage.playsPerGame,
         y: usage.proe,
-        isSelectedTeam: userTeams.has(usage.team),
+        isSelectedTeam: mine,
+        // NFL team pace dots are not fantasy roster ownership — omit "Rostered" readout.
+        ownership: mine ? "mine" : "field",
       }];
     });
   }, [chartKind, dashboard.analytics.teamUsage, league.bench, league.starters]);
@@ -1757,9 +1794,10 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
   const leaders = selectedX && selectedY ? chartData.filter((row) => (selectedX.lowerIsBetter ? row.x <= xCutoff : row.x >= xCutoff) && (selectedY.lowerIsBetter ? row.y <= yCutoff : row.y >= yCutoff)) : [];
   const selectedTeamPlayers = chartData.filter((row) => row.isSelectedTeam);
   const selectedTeamIds = new Set(selectedTeamPlayers.map((row) => row.id));
-  const leadersWithoutSelectedTeam = leaders.filter((row) => !row.isSelectedTeam);
   const leaderIds = new Set(leaders.map((row) => row.id));
-  const others = chartData.filter((row) => !row.isSelectedTeam && !leaderIds.has(row.id));
+  const availablePlayers = chartData.filter((row) => row.ownership === "available");
+  const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered");
+  const unknownPlayers = chartData.filter((row) => row.ownership === "unknown");
   const labelData = plotLimit === "all" ? selectedTeamPlayers : chartData;
   const labeledIds = new Set(labelData.map((row) => row.id));
   const omittedNames = chartData.filter((row) => !labeledIds.has(row.id)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
@@ -1831,8 +1869,9 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
       {chartKind === "scatter" && selectedX && selectedY ? (
         <>
           <ScatterPlot
-            others={others}
-            leadersWithoutSelectedTeam={leadersWithoutSelectedTeam}
+            rosteredPlayers={rosteredPlayers}
+            availablePlayers={availablePlayers}
+            unknownPlayers={unknownPlayers}
             selectedTeamPlayers={selectedTeamPlayers}
             labelData={showLabels ? labelData : selectedTeamPlayers}
             leaderIds={leaderIds}
@@ -1848,7 +1887,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
             playerLink={chartPlayerLink}
             focusRequestId={showLabels ? focusEntityId : null}
           />
-          <ChartKey teamName={fantasyTeamName(league)} />
+          <ChartKey teamName={fantasyTeamName(league)} hasUnknown={unknownPlayers.length > 0} />
           {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
         </>
       ) : null}
@@ -1999,12 +2038,13 @@ export function buildWeeklyEntities(dashboard: Dashboard, league: League, pfnTab
     const tierCliff = next?.position === row.position ? Math.max(0, row.value - next.value) : 0;
     return [row.playerId, { value: row.value, positionRank: row.positionRank, tierCliff }] as const;
   }));
-  const teamTotals = new Map<string, number>();
-  for (const defense of leagueDefenses) {
-    if (defense.opponentProjectedPoints !== null) teamTotals.set(defense.opponent, defense.opponentProjectedPoints);
-  }
+  // Prefer nflverse gameLines (Tools → Game lines) for implied totals; fall back to
+  // defense.opponentProjectedPoints from the draft-market cache when present.
+  const { teamTotals, gameTotals } = buildImpliedTotalMaps(dashboard.gameLines ?? [], leagueDefenses);
   const players: WeeklyEntity[] = leagueRankings.map((row) => {
-    const values: Record<string, number> = {};
+    const values: Record<string, number> = {
+      ...skillImpliedTotalValues(row.team, teamTotals, gameTotals),
+    };
     if (row.leagueProjection !== null) values.league = row.leagueProjection;
     values.leaguePositionRank = row.leagueRank;
     if (row.vegasProjection !== null) values.vegasProjection = row.vegasProjection;
@@ -2019,8 +2059,6 @@ export function buildWeeklyEntities(dashboard: Dashboard, league: League, pfnTab
     if (row.halfPpr !== null) values.halfPpr = row.halfPpr;
     if (row.standard !== null) values.standard = row.standard;
     if (row.ppr !== null && row.standard !== null) values.receptionBonus = Number((row.ppr - row.standard).toFixed(2));
-    const teamTotal = teamTotals.get(row.team);
-    if (teamTotal !== undefined) values.teamTotal = teamTotal;
     const teamOffenseRank = pfnTeamRank(pfnTables?.offense ?? null, row.team);
     if (teamOffenseRank !== undefined) values.teamOffenseRank = teamOffenseRank;
     const teamOLineRank = pfnTeamRank(pfnTables?.["offensive-line"] ?? null, row.team);
@@ -2057,9 +2095,10 @@ export function buildWeeklyEntities(dashboard: Dashboard, league: League, pfnTab
     };
   });
   const defenses: WeeklyEntity[] = leagueDefenses.map((row) => {
-    const values: Record<string, number> = {};
+    const values: Record<string, number> = {
+      ...defenseImpliedTotalValues(row.team, row.opponent, row.opponentProjectedPoints, teamTotals, gameTotals),
+    };
     if (row.displayProjection !== null) values.projection = row.displayProjection;
-    if (row.opponentProjectedPoints !== null) values.opponentTotal = row.opponentProjectedPoints;
     return {
       id: `DEF:${row.team}`,
       playerId: row.team,
@@ -2129,8 +2168,8 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   const [playerQuery, setPlayerQuery] = useState("");
   const monitorDefaultPreset = projectionPresets[0]!;
   const [position, setPosition] = useState<ChartPosition>("RB");
-  const [xMetric, setXMetric] = useState(layout === "monitor" ? monitorDefaultPreset.x : defaultWeeklyAxes.RB[0]);
-  const [yMetric, setYMetric] = useState(layout === "monitor" ? monitorDefaultPreset.y : defaultWeeklyAxes.RB[1]);
+  const [xMetric, setXMetric] = useState(layout === "monitor" ? monitorDefaultPreset.x : chartWeeklyAxes("RB")[0]);
+  const [yMetric, setYMetric] = useState(layout === "monitor" ? monitorDefaultPreset.y : chartWeeklyAxes("RB")[1]);
   const [plotLimit, setPlotLimit] = useState<PlotLimit>("40");
   const [showQuadrants, setShowQuadrants] = useState(true);
   const [xPercentile, setXPercentile] = useState(50);
@@ -2229,7 +2268,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   function choosePosition(nextPosition: ChartPosition) {
     if (layout === "monitor") {
       const nextPresets = chartWeeklyPresets(nextPosition);
-      const preferred = nextPresets[0];
+      const preferred = preferredWeeklyPreset(nextPosition, nextPresets, entities);
       setPosition(nextPosition);
       if (preferred) {
         setXMetric(preferred.x);
@@ -2237,7 +2276,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
         setSelectedSavedViewId(null);
         setPickerMode("derived");
       } else {
-        const [nextX, nextY] = chartWeeklyAxes(nextPosition);
+        const [nextX, nextY] = chartWeeklyAxes(nextPosition, entities);
         setXMetric(nextX);
         setYMetric(nextY);
         setSelectedSavedViewId(null);
@@ -2245,7 +2284,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
       }
       return;
     }
-    const [nextX, nextY] = chartWeeklyAxes(nextPosition);
+    const [nextX, nextY] = chartWeeklyAxes(nextPosition, entities);
     setPosition(nextPosition);
     setXMetric(nextX);
     setYMetric(nextY);
@@ -2265,7 +2304,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
     if (view.dataset !== "projections") return;
     if (!validPositions.includes(view.position)) return;
     const validMetrics = weeklyMetrics[view.position];
-    const [fallbackX, fallbackY] = defaultWeeklyAxes[view.position];
+    const [fallbackX, fallbackY] = chartWeeklyAxes(view.position, entities);
     setPosition(view.position);
     setXMetric(validMetrics.some((metric) => metric.key === view.xMetric) ? view.xMetric : fallbackX);
     setYMetric(validMetrics.some((metric) => metric.key === view.yMetric) ? view.yMetric : fallbackY);
@@ -2313,7 +2352,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
           games: 1,
           x,
           y,
-          isSelectedTeam: isPlayerOnSelectedTeam(entity, league),
+          ...chartDatumOwnership(entity, league),
           playerId: entity.playerId,
           position: entity.position,
         }];
@@ -2333,8 +2372,9 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   const selectedTeamPlayers = chartData.filter((row) => row.isSelectedTeam);
   const selectedTeamIds = new Set(selectedTeamPlayers.map((row) => row.id));
   const leaderIds = new Set(leaders.map((row) => row.id));
-  const leadersWithoutSelectedTeam = leaders.filter((row) => !row.isSelectedTeam);
-  const others = chartData.filter((row) => !row.isSelectedTeam && !leaderIds.has(row.id));
+  const availablePlayers = chartData.filter((row) => row.ownership === "available");
+  const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered");
+  const unknownPlayers = chartData.filter((row) => row.ownership === "unknown");
   const labelData = plotLimit === "all" ? selectedTeamPlayers : chartData;
   const labeledIds = new Set(labelData.map((row) => row.id));
   const omittedNames = chartData.filter((row) => !labeledIds.has(row.id)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
@@ -2429,8 +2469,9 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
           ) : (
             <>
             <ScatterPlot
-              others={others}
-              leadersWithoutSelectedTeam={leadersWithoutSelectedTeam}
+              rosteredPlayers={rosteredPlayers}
+              availablePlayers={availablePlayers}
+              unknownPlayers={unknownPlayers}
               selectedTeamPlayers={selectedTeamPlayers}
               labelData={showLabels ? labelData : selectedTeamPlayers}
               leaderIds={leaderIds}
@@ -2445,7 +2486,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
               compact={!showLabels && layout === "monitor"}
               playerLink={chartPlayerLink}
             />
-            <ChartKey teamName={fantasyTeamName(league)} />
+            <ChartKey teamName={fantasyTeamName(league)} hasUnknown={unknownPlayers.length > 0} />
             {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
             </>
           )
