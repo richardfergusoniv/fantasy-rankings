@@ -110,7 +110,7 @@ New table `league_outcome_snapshots`:
 | `computed_at` | timestamptz default now() |
 | `payload` | jsonb: `{ teams: [{ rosterId, playoffPct, lastPct }] }` |
 
-Follow the repo's conventions: add `drizzle-pg/0015_league_outcome_snapshots.sql`, the `_journal.json` entry, and the table in `api/_lib/schema.ts` (see `buildLeases` and `0011` for style). **Enable RLS with no policies** (service-role only), matching `0011`/`0013`; run `drizzle-pg/verify_rls.sh`. Production migrations are applied by hand (`MIGRATION-STATUS.md`), so list the exact SQL in the PR for the owner to apply; the code must **degrade gracefully (treat as "no snapshot") if the table does not exist yet**.
+Follow the repo's conventions: add the next free migration number (`0016_league_outcome_snapshots.sql` when this was written; `0015` is taken on `main`, so check again before you push), the `_journal.json` entry, and the table in `api/_lib/schema.ts` (see `buildLeases` and `0011` for style). **Enable RLS with no policies** (service-role only), matching `0011`/`0013`; run `drizzle-pg/verify_rls.sh`. Production migrations are applied by hand (`MIGRATION-STATUS.md`), so list the exact SQL in the PR for the owner to apply; the code must **degrade gracefully (treat as "no snapshot") if the table does not exist yet**.
 
 Semantics:
 - A snapshot is written the first time `projection-v1` runs for a (league, `throughWeek`) pair, upsert-if-absent (never overwrite), so it captures "odds as of the first look after week N finished".

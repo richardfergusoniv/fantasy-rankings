@@ -1,36 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, type ApiResponse } from "./api";
+import { api } from "./api";
 import { SectionError } from "./section-error";
 import { SegmentedControl } from "./shared";
 import { formatDecimal, formatPercent } from "./lib/format-number";
-
-type Outcomes = ApiResponse<typeof api, "getLeagueOutcomes">;
-type OutcomeTeam = Outcomes["teams"][number];
-type View = "playoffs" | "last";
-
-/** Moves smaller than this read as no change. */
-const FLAT_PP = 0.05;
-
-function config(view: View) {
-  return view === "playoffs"
-    ? {
-      now: (team: OutcomeTeam) => team.playoffPct,
-      before: (team: OutcomeTeam) => team.previousPlayoffPct,
-      higherIsBetter: true,
-    }
-    : {
-      now: (team: OutcomeTeam) => team.lastPct,
-      before: (team: OutcomeTeam) => team.previousLastPct,
-      higherIsBetter: false,
-    };
-}
-
-function axisMax(view: View, teams: OutcomeTeam[]): number {
-  if (view === "playoffs") return 100;
-  const top = Math.max(...teams.flatMap((team) => [team.lastPct, team.previousLastPct ?? 0]), 0);
-  return Math.max(10, Math.ceil(top / 10) * 10);
-}
+import { axisMax, changeLabel, changeTone, outcomeMeasure, pctLabel, type OutcomesView as View } from "./outcomes-view";
 
 export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; queryKey: readonly unknown[] }) {
   const [view, setView] = useState<View>("playoffs");
@@ -57,7 +31,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
   }
 
   const data = query.data;
-  const { now, before, higherIsBetter } = config(view);
+  const { now, before, higherIsBetter } = outcomeMeasure(view);
   const teams = [...data.teams].sort((a, b) => now(b) - now(a));
   const max = axisMax(view, teams);
   const ticks = [0, max / 2, max];
@@ -83,9 +57,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
           const current = now(team);
           const previous = before(team);
           const change = previous == null ? null : current - previous;
-          const tone = change == null || Math.abs(change) < FLAT_PP
-            ? "flat"
-            : (change > 0) === higherIsBetter ? "good" : "bad";
+          const tone = changeTone(change, higherIsBetter);
           return (
             <div key={team.rosterId} className={`outcomes-row${team.isUser ? " is-user" : ""}`} role="row">
               <span className="outcomes-team" role="cell"><strong>{team.teamName}</strong> <small>{team.record}</small></span>
@@ -98,9 +70,9 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
                 ) : null}
                 <i className={`outcomes-dot now ${tone}`} style={{ left: position(current) }} />
               </span>
-              <b className="outcomes-pct" role="cell">{current > 0 && current < 1 ? `${formatDecimal(current, 2)}%` : formatPercent(current)}</b>
+              <b className="outcomes-pct" role="cell">{pctLabel(current)}</b>
               <b className={`outcomes-change ${tone}`} role="cell">
-                {change == null ? "–" : `${change > 0 ? "+" : change < 0 ? "−" : ""}${formatDecimal(Math.abs(change), 1)} pp`}
+                {changeLabel(change)}
               </b>
             </div>
           );
