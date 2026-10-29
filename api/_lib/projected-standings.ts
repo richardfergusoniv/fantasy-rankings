@@ -14,6 +14,7 @@ import { badRequest, forbidden, internalError, json, unauthorized } from "./api-
 import { resolveSleeperUserId } from "./auth.js";
 import { readUserDashboardCache } from "./dashboard-build.js";
 import type { Dashboard } from "./dashboard-schemas.js";
+import { scoreProjectedDefenseStats } from "./defense-scoring.js";
 import { scoreSleeperPlayerProjection } from "./player-projection-merge.js";
 import { isUnavailableStatus, optimizeTradeRoster, type OptimizablePlayer } from "./lineup-optimizer.js";
 import { DEFAULT_LAST_REGULAR_WEEK, loadScheduleGames } from "./outcomes-engine-pace.js";
@@ -77,7 +78,10 @@ export function projectedPlayerPoints(
 ): number {
   if (!entry) return 0;
   const fallback = league.rankingField === "halfPpr" ? entry.stats.pts_half_ppr : entry.stats.pts_ppr;
-  if (player.position === "DEF") return fallback ?? 0;
+  if (player.position === "DEF") {
+    const scoredDefense = league.scoringSettings ? scoreProjectedDefenseStats(entry.stats, league.scoringSettings) : null;
+    return scoredDefense ?? fallback ?? 0;
+  }
   const scored = league.scoringSettings
     ? scoreSleeperPlayerProjection(player.position as "QB", entry.stats, league.scoringSettings)
     : null;
@@ -264,11 +268,18 @@ export async function loadProjectedStandings(
   const missingWeeks = new Set(schedule.missingWeeks);
   projections.forEach((result, i) => {
     if (result.status === "fulfilled") weeks.set(sleeperWeeks[i]!, result.value);
-    else missingWeeks.add(sleeperWeeks[i]!);
   });
-  if (sleeperWeeks.length > 0 && weeks.size === 0) return { error: "Sleeper projections could not be loaded." };
-  // A missing matchup week would silently shorten every team's record, so withhold the table instead.
+  // One retry for weeks that failed (each success is cached, so a retry also warms the next request).
+  const retry = sleeperWeeks.filter((week) => !weeks.has(week));
+  const retried = await Promise.allSettled(retry.map((week) => loadProjections(season, week)));
+  retried.forEach((result, i) => {
+    if (result.status === "fulfilled") weeks.set(retry[i]!, result.value);
+  });
+  for (const week of sleeperWeeks) if (!weeks.has(week)) missingWeeks.add(week);
+  // A missing week would silently change every team's result (a short schedule, or a stand-in score
+  // that ignores byes and injuries), so withhold the table rather than show it.
   if (schedule.missingWeeks.length > 0) return { error: "The remaining schedule could not be fully loaded from Sleeper." };
+  if (missingWeeks.size > 0) return { error: "Sleeper projections could not be fully loaded." };
   if (remaining.length > 0 && schedule.games.length === 0) return { error: "The remaining schedule could not be loaded from Sleeper." };
 
   return buildProjectedStandings({

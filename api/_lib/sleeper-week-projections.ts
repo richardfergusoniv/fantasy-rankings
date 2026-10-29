@@ -21,7 +21,7 @@ type RawRow = {
   stats?: Record<string, number>;
 };
 
-/** Everything `scoreProjectedPlayerStats` reads, plus Sleeper's own point totals (used for DEF). */
+/** Everything the player and defense scorers read, plus Sleeper's own point totals (used as a fallback). */
 const KEPT_STAT_KEYS = new Set([
   "pass_yd", "pass_td", "pass_int", "pass_cmp", "pass_att", "pass_inc", "pass_sack", "pass_fd", "pass_2pt",
   "rush_yd", "rush_td", "rush_att", "rush_fd", "rush_2pt",
@@ -30,6 +30,8 @@ const KEPT_STAT_KEYS = new Set([
   "fgm", "fgmiss", "fgm_0_19", "fgm_20_29", "fgm_30_39", "fgm_40_49", "fgm_50_59", "fgm_60p", "fgm_50p",
   "fgmiss_0_19", "fgmiss_20_29", "fgmiss_30_39", "fgmiss_40_49", "fgmiss_50_59", "fgmiss_60p",
   "fgm_yds", "xpm", "xpmiss",
+  // Team defense lines, rescored with scoreProjectedDefenseStats.
+  "sack", "int", "fum_rec", "def_td", "safe", "blk_kick", "def_2pt", "st_td", "st_fum_rec", "pts_allow", "yds_allow",
   "pts_ppr", "pts_half_ppr", "pts_std",
 ]);
 

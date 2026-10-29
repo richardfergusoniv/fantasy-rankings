@@ -109,6 +109,14 @@ describe("projectedPlayerPoints", () => {
     expect(sleeperWeekPoints(week(9, {}), league)(injured)).toBe(0);
   });
 
+  it("rescores a defense in the league's rules and falls back to Sleeper's total without settings", () => {
+    const defStats = { sack: 3, int: 1, pts_allow: 17, pts_ppr: 8.9, pts_half_ppr: 8.9 };
+    const custom = { scoringSettings: { sack: 2, int: 3, pts_allow_14_20: 1 }, rankingField: "ppr" } as unknown as League;
+    expect(projectedPlayerPoints({ position: "DEF" }, { stats: defStats }, custom)).toBe(3 * 2 + 1 * 3 + 1);
+    const bare = { scoringSettings: undefined, rankingField: "ppr" } as unknown as League;
+    expect(projectedPlayerPoints({ position: "DEF" }, { stats: defStats }, bare)).toBe(8.9);
+  });
+
   it("falls back to Sleeper's own total for DEF and when scoring settings are missing", () => {
     expect(projectedPlayerPoints({ position: "DEF" }, { stats: { pts_ppr: 8.9, pts_half_ppr: 8.9 } }, league)).toBe(8.9);
     const bare = { scoringSettings: undefined, rankingField: "halfPpr" } as unknown as League;
@@ -225,14 +233,20 @@ describe("loadProjectedStandings", () => {
     expect(result).toEqual({ error: "The remaining schedule could not be fully loaded from Sleeper." });
   });
 
-  it("degrades per week and fails only when nothing loads", async () => {
-    const partial = await loadProjectedStandings(league, 2026, 3, {
+  it("retries a failed projection week once, then withholds the table", async () => {
+    let calls = 0;
+    const flaky = await loadProjectedStandings(league, 2026, 3, {
+      fetchWeek,
+      loadProjections: async (_s, w) => { if (w === 6 && ++calls === 1) throw new Error("down"); return week(w, WK); },
+    });
+    expect("error" in flaky).toBe(false);
+    expect(calls).toBe(2);
+    const down = await loadProjectedStandings(league, 2026, 3, {
       fetchWeek,
       loadProjections: async (_s, w) => { if (w === 6) throw new Error("down"); return week(w, WK); },
     });
-    if ("error" in partial) throw new Error(partial.error);
-    expect(partial.missingWeeks).toEqual([6]);
+    expect(down).toEqual({ error: "Sleeper projections could not be fully loaded." });
     const none = await loadProjectedStandings(league, 2026, 5, { fetchWeek, loadProjections: async () => { throw new Error("down"); } });
-    expect(none).toEqual({ error: "Sleeper projections could not be loaded." });
+    expect(none).toEqual({ error: "Sleeper projections could not be fully loaded." });
   });
 });
