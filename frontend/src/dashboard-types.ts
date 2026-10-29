@@ -8,6 +8,7 @@ export type Tab =
   | "rankings"
   | "waivers"
   | "power"
+  | "outcomes"
   | "draft"
   | "trade"
   | "comparison"

@@ -26,6 +26,8 @@ export type TeamOdds = {
   projectedWins: number;
   playoffPct: number;
   topSeedPct: number;
+  /** Chance of finishing last in the regular season. */
+  lastPct: number;
 };
 
 export type WinScenario = { finalWins: number; probability: number; playoffPct: number };
@@ -98,6 +100,7 @@ export function simulatePlayoffOdds(args: {
 
   const made = teams.map(() => 0);
   const top = teams.map(() => 0);
+  const last = teams.map(() => 0);
   const winsSum = teams.map(() => 0);
   const userIndex = teams.findIndex((team) => team.isUser);
   const scenarioCount = new Map<number, { n: number; made: number }>();
@@ -118,6 +121,7 @@ export function simulatePlayoffOdds(args: {
       winsSum[row.i] = winsSum[row.i]! + row.wins;
       if (rank < playoffTeams) made[row.i] = made[row.i]! + 1;
       if (rank === 0) top[row.i] = top[row.i]! + 1;
+      if (rank === teams.length - 1) last[row.i] = last[row.i]! + 1;
     });
     if (userIndex >= 0) {
       const key = wins[userIndex]!;
@@ -141,6 +145,8 @@ export function simulatePlayoffOdds(args: {
         projectedWins: Math.round((winsSum[i]! / trials) * 10) / 10,
         playoffPct: pct(made[i]!),
         topSeedPct: pct(top[i]!),
+        // Two decimals: last-place odds for the strongest teams are tiny but not zero.
+        lastPct: Math.round((last[i]! / trials) * 10000) / 100,
       }))
       .sort((x, y) => y.playoffPct - x.playoffPct || y.projectedWins - x.projectedWins),
     userScenarios: [...scenarioCount.entries()]

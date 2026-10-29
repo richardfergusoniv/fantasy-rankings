@@ -6,6 +6,7 @@ export const DASHBOARD_TABS = [
   "waivers",
   "comparison",
   "power",
+  "outcomes",
   "draft",
   "trade",
   "monitor",

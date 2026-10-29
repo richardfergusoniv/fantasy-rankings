@@ -13,8 +13,8 @@ import {
   type ChatToolContext,
 } from "./chat-tools.js";
 import { summarizeLeagueRules } from "./league-rules.js";
-import { simulatePlayoffOdds, type OddsGame } from "./playoff-odds.js";
-import { fetchJson, SLEEPER_BASE } from "./sleeper.js";
+import { simulatePlayoffOdds } from "./playoff-odds.js";
+import { loadScheduleGames } from "./league-outcomes.js";
 
 type League = Dashboard["leagues"][number];
 const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
@@ -211,8 +211,6 @@ export async function toolSearchPlayers(ctx: ChatToolContext, args: z.infer<type
   };
 }
 
-type SleeperMatchupRow = { roster_id: number; matchup_id?: number | null };
-
 export async function toolGetPlayoffOdds(ctx: ChatToolContext, args: { leagueId: string }) {
   const dashboard = await loadDashboard(ctx);
   const league = findLeague(dashboard, args.leagueId);
@@ -227,26 +225,7 @@ export async function toolGetPlayoffOdds(ctx: ChatToolContext, args: { leagueId:
   const firstWeek = gamesPlayed + 1;
   const weeks = Array.from({ length: Math.max(0, lastRegularWeek - firstWeek + 1) }, (_, i) => firstWeek + i);
 
-  const results = await Promise.allSettled(
-    weeks.map((week) => fetchJson<SleeperMatchupRow[]>(`${SLEEPER_BASE}/league/${league.id}/matchups/${week}`)),
-  );
-  const games: OddsGame[] = [];
-  const missingWeeks: number[] = [];
-  results.forEach((result, i) => {
-    const week = weeks[i]!;
-    if (result.status !== "fulfilled" || !Array.isArray(result.value)) {
-      missingWeeks.push(week);
-      return;
-    }
-    const byMatchup = new Map<number, number[]>();
-    for (const row of result.value) {
-      if (row.matchup_id == null) continue;
-      byMatchup.set(row.matchup_id, [...(byMatchup.get(row.matchup_id) ?? []), row.roster_id]);
-    }
-    for (const pair of byMatchup.values()) {
-      if (pair.length === 2) games.push({ week, a: pair[0]!, b: pair[1]! });
-    }
-  });
+  const { games, missingWeeks } = await loadScheduleGames(league.id, weeks);
   if (weeks.length > 0 && games.length === 0) {
     return { ok: false as const, error: "The remaining schedule could not be loaded from Sleeper." };
   }

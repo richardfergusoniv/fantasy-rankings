@@ -7,6 +7,7 @@ describe("api/data kindFromPath", () => {
     expect(kindFromPath("/api/data/pfn-tables")).toBe("pfn-tables");
     expect(kindFromPath("/api/data/value-history")).toBe("value-history");
     expect(kindFromPath("/api/data/trades-history")).toBe("trades-history");
+    expect(kindFromPath("/api/data/league-outcomes")).toBe("league-outcomes");
   });
 
   it("resolves rewritten old URLs (Vercel keeps the original pathname)", () => {
