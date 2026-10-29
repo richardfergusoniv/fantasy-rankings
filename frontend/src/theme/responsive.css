@@ -93,6 +93,11 @@
     min-height: 0;
     height: 100%;
   }
+  .monitor-chart-expand-card .monitor-expanded-chart > .scatter-frame {
+    flex: none;
+    height: min(55dvh, 420px);
+    min-height: 220px;
+  }
   .monitor-chart-expand-card .monitor-expanded-chart .chart-key {
     flex: none;
     padding-top: 8px;

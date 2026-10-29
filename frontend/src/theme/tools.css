@@ -109,6 +109,12 @@
   max-height: none;
   margin: 0;
 }
+/* Snap Share has no axis rail; its ResponsiveContainer also needs a definite height. */
+.monitor-expanded-chart > .scatter-frame {
+  flex: none;
+  height: min(58dvh, 480px);
+  min-height: 240px;
+}
 .monitor-expanded-chart .fpa-heatmap,
 .monitor-expanded-chart .tier-cliff-list,
 .monitor-expanded-chart .boom-bust-range-list {
