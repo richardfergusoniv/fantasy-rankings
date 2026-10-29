@@ -262,6 +262,8 @@ const GENERATIONAL_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
 export const PLAYER_NAME_KEY_ALIASES: Readonly<Record<string, string>> = {
   // Wan'Dale → "wan dale …"; producers often emit "Wandale …".
   "wandale robinson": "wan dale robinson",
+  // Practice / roundup extracts often send just "Amon-Ra".
+  "amon ra": "amon ra st brown",
 };
 
 function collapseSingleLetterTokens(tokens: string[]): string[] {
@@ -345,6 +347,10 @@ export type PlayerNewsNameIndexEntry = {
   playerId: string;
   player: string;
   team: string;
+  /** Optional Sleeper first_name — used by X mention → player_id expansion. */
+  firstName?: string | null;
+  /** Optional Sleeper last_name — reserved for compound-surname matching. */
+  lastName?: string | null;
 };
 
 /**

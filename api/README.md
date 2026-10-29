@@ -29,8 +29,8 @@ Live handlers export named `GET`, `POST`, and `DELETE` functions. Several Hatch 
 
 ## X producer (external push → player-news-x)
 
-Richard’s X push routine is **out of repo**. This app only accepts batches and
-exposes a priority list the producer can refresh.
+Richard’s X **fetch** routine (accounts / timeline poll) is still **out of
+repo**. Player-id attachment for mentions lives **in this app** on ingest.
 
 1. **Priority set** — `GET /api/cron/jobs?job=x-producer-priority` with
    `Authorization: Bearer $CRON_SECRET`. Optional `&fresh=1` refreshes league
@@ -39,13 +39,14 @@ exposes a priority list the producer can refresh.
    `search_rank` ≤ 300 (from `nfl-players-roster-v1`; run
    `refresh-nfl-players` so ranks are present). Helper:
    `api/_lib/x-producer-priority.ts`.
-2. **Always send `player_id`** on `POST /api/ingest/player-news-x`. Name
-   matching is exact-key fallback only; prefer Sleeper ids from the priority
-   list. One X post may be sent once per player (`post_id` + `player_id` is
-   unique). Response includes `unresolved` + `unresolvedSamples` (≤10);
-   unresolved samples are also `console.warn`’d.
-3. **Beat + national accounts** stay in the producer (Schefter, Rapoport,
-   team beats for under-covered clubs). No scraper lives here.
+2. **Ingest expands mentions** — `POST /api/ingest/player-news-x` still
+   accepts one extract per item, but `api/_lib/x-news-mentions.ts` scans
+   `text` for every uniquely resolvable name (full names, aliases, multi-token
+   first names like Amon-Ra) and writes one row per `player_id` (`post_id` +
+   `player_id` unique). Prefer sending `player_id` when known; name matching
+   remains a fallback. Response includes `unresolved` + `unresolvedSamples`.
+3. **Beat + national accounts** stay in the external fetcher (Schefter,
+   Rapoport, team beats). No X scraper lives here.
 4. **Alert** if weekday X volume collapses (e.g. &lt; ~20 rows on a weekday).
 
 ## DO NOT MIGRATE

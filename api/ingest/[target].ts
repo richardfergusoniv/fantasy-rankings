@@ -28,6 +28,10 @@ import {
   retentionCutoff,
   xNewsBatchSchema,
 } from "../_lib/player-news-shared.js";
+import {
+  buildXNewsMentionNeedles,
+  resolveXNewsPlayerIdsForItem,
+} from "../_lib/x-news-mentions.js";
 import { loadNflPlayersMap } from "../_lib/nfl-players-cache.js";
 import { type SleeperPlayer } from "../_lib/sleeper.js";
 import {
@@ -319,9 +323,13 @@ async function loadPlayerNameIndex() {
       playerId,
       player: name,
       team: player.team ?? "FA",
+      firstName: player.first_name ?? null,
+      lastName: player.last_name ?? null,
     });
   }
-  return buildPlayerNewsNameIndex(entries);
+  const index = buildPlayerNewsNameIndex(entries);
+  const mentionNeedles = buildXNewsMentionNeedles(entries, index);
+  return { index, mentionNeedles };
 }
 
 async function handlePlayerNewsX(req: Request): Promise<Response> {
@@ -338,22 +346,40 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     return badRequest("Invalid player-news-x payload.", parsed.error.issues);
   }
 
-  let index: Awaited<ReturnType<typeof loadPlayerNameIndex>>;
+  let loaded: Awaited<ReturnType<typeof loadPlayerNameIndex>>;
   try {
-    index = await loadPlayerNameIndex();
+    loaded = await loadPlayerNameIndex();
   } catch {
     return json({ ok: false, error: "Sleeper player data is temporarily unavailable." }, 502);
   }
+  const { index, mentionNeedles } = loaded;
 
   const unresolved: string[] = [];
   const drafts = [];
   for (const item of parsed.data.items) {
-    const resolved = resolveXNewsPlayer(item, index);
-    if (!resolved) {
+    // Producer may send one extract; expand text mentions to every resolvable
+    // Sleeper id so multi-player roundups attach Amon-Ra / Gibbs / … too.
+    const playerIds = resolveXNewsPlayerIdsForItem(
+      item,
+      index,
+      mentionNeedles,
+      resolveXNewsPlayer,
+    );
+    if (playerIds.length === 0) {
       unresolved.push(item.player_id ?? item.player_name ?? item.post_id);
       continue;
     }
-    drafts.push(buildXNewsDraft(item, resolved));
+    for (const playerId of playerIds) {
+      const meta = index.byId.get(playerId);
+      if (!meta) continue;
+      drafts.push(
+        buildXNewsDraft(item, {
+          playerId,
+          player: meta.player,
+          team: meta.team,
+        }),
+      );
+    }
   }
 
   const unique = filterDuplicateDrafts(drafts);
