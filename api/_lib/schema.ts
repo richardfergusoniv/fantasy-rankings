@@ -189,8 +189,10 @@ export const playerNewsItems = pgTable(
 );
 
 /**
- * User-agnostic player news (one row per source URL / post id).
- * Cron + X ingest write here; clients filter by roster for the ticker.
+ * User-agnostic player news (one row per source URL / post id + player).
+ * Cron + X ingest write here; a single X roundup may attach to several
+ * players. Global feeds (ticker) dedupe by post; player pages filter by
+ * player_id.
  */
 export const sharedPlayerNews = pgTable(
   "shared_player_news",
@@ -215,8 +217,12 @@ export const sharedPlayerNews = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("shared_player_news_source_url_uidx").on(table.sourceUrl),
-    uniqueIndex("shared_player_news_source_external_uidx").on(table.source, table.externalId),
+    uniqueIndex("shared_player_news_source_url_player_uidx").on(table.sourceUrl, table.playerId),
+    uniqueIndex("shared_player_news_source_external_player_uidx").on(
+      table.source,
+      table.externalId,
+      table.playerId,
+    ),
     index("shared_player_news_player_id_idx").on(table.playerId),
     index("shared_player_news_published_at_idx").on(table.publishedAt),
   ],

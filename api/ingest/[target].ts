@@ -70,10 +70,11 @@ const MAX_INGEST_BODY_BYTES = 8 * 1024 * 1024;
  *                   `computedAt`, busts the dashboard cache on commit.
  * - pfn-tables:     writes `pfn:{tableKey}` rows to `source_cache` for the
  *                   4 PFN tables.
- * - player-news-x:  inserts shared player-news rows from X (dedupe by post_id).
- *                   Producers should send Sleeper `player_id` when known;
- *                   `player_name` (+ optional `team`) is a fallback. Last-name-
- *                   only names require `team` or the item is dropped.
+ * - player-news-x:  inserts shared player-news rows from X (dedupe by
+ *                   post_id + player_id so one roundup can attach to several
+ *                   players). Producers should send Sleeper `player_id` when
+ *                   known; `player_name` (+ optional `team`) is a fallback.
+ *                   Last-name-only names require `team` or the item is dropped.
  * - prop-line-snapshots: inserts dated consensus prop-line rows into
  *                   `prop_line_snapshots` (line-movement history).
  * - sleeper-picks:  stores the normalized Sleeper Picks NFL board as one
@@ -379,7 +380,12 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     const result = await db
       .insert(schema.sharedPlayerNews)
       .values(chunk)
-      .onConflictDoNothing()
+      // Match unique (source_url, player_id). Bare ON CONFLICT also covers
+      // (source, external_id, player_id); target the URL composite because
+      // every row has source_url.
+      .onConflictDoNothing({
+        target: [schema.sharedPlayerNews.sourceUrl, schema.sharedPlayerNews.playerId],
+      })
       .returning({ id: schema.sharedPlayerNews.id });
     inserted += result.length;
   }

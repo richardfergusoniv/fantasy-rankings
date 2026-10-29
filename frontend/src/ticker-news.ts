@@ -1,4 +1,4 @@
-import { isSleeperTimestampOnlyNews } from "../../api/_lib/player-news-filters";
+import { isSleeperTimestampOnlyNews, newsPostDedupeKey } from "../../api/_lib/player-news-filters";
 import type { PlayerNews, PlayerNewsItem } from "./dashboard-types";
 
 /** Max items shown in the live ticker strip. */
@@ -43,7 +43,8 @@ function isProminentItem(
  * 1) selected-league roster news,
  * 2) current-week opponent roster news,
  * 3) remaining prominent shared news (top season-long ranks or high score).
- * Dedupes by identical `change` text and caps at `limit`.
+ * Dedupes by post id (or source URL / identical change text) so a multi-player
+ * X roundup appears once, and caps at `limit`.
  */
 export function newsForTicker(
   news: PlayerNews | undefined,
@@ -57,13 +58,16 @@ export function newsForTicker(
   if (limit <= 0) return [];
 
   const all = flattenNews(news);
+  const seenPost = new Set<string>();
   const seenText = new Set<string>();
   const out: PlayerNewsItem[] = [];
 
   const take = (items: PlayerNewsItem[]) => {
     for (const item of items) {
       if (out.length >= limit) return;
-      if (seenText.has(item.change)) continue;
+      const postKey = newsPostDedupeKey(item);
+      if (seenPost.has(postKey) || seenText.has(item.change)) continue;
+      seenPost.add(postKey);
       seenText.add(item.change);
       out.push(item);
     }

@@ -19,7 +19,7 @@ import {
   scoreWaiver,
 } from "./move-scoring.js";
 import { readChartExtrasSnapshot } from "./nflverse-chart-extras.js";
-import { isSleeperTimestampOnlyNews } from "./player-news-filters.js";
+import { isSleeperTimestampOnlyNews, newsPostDedupeKey } from "./player-news-filters.js";
 import {
   PLAYER_NEWS_NOTES_SNAPSHOT_KEY,
   parseNotesSnapshot,
@@ -274,6 +274,10 @@ export async function toolGetPlayerNews(
 
   const limit = Math.min(30, Math.max(1, Math.floor(args.limit ?? 15)));
   const cutoff = retentionCutoff();
+  // Multi-player scopes may collapse roundup posts; over-fetch then dedupe.
+  const fetchCap = scope === "player"
+    ? Math.max(limit * 2, 16)
+    : Math.max(limit * 4, 32);
   const shared = await db
     .select({
       id: schema.sharedPlayerNews.id,
@@ -285,6 +289,7 @@ export async function toolGetPlayerNews(
       roleContext: schema.sharedPlayerNews.roleContext,
       sourceLabel: schema.sharedPlayerNews.sourceLabel,
       sourceUrl: schema.sharedPlayerNews.sourceUrl,
+      externalId: schema.sharedPlayerNews.externalId,
       publishedAt: schema.sharedPlayerNews.publishedAt,
       createdAt: schema.sharedPlayerNews.createdAt,
       source: schema.sharedPlayerNews.source,
@@ -306,12 +311,20 @@ export async function toolGetPlayerNews(
       ),
     )
     .orderBy(desc(sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`))
-    .limit(Math.max(limit * 2, 16));
+    .limit(fetchCap);
 
-  const items = shared
-    .filter((row) => !isSleeperTimestampOnlyNews(row))
-    .slice(0, limit)
-    .map((row) => ({
+  const seenPost = new Set<string>();
+  const items = [];
+  for (const row of shared) {
+    if (isSleeperTimestampOnlyNews(row)) continue;
+    // Player-scoped reads keep every row for that player; global scopes
+    // collapse a multi-player X roundup to one chat item.
+    if (scope !== "player") {
+      const postKey = newsPostDedupeKey(row);
+      if (seenPost.has(postKey)) continue;
+      seenPost.add(postKey);
+    }
+    items.push({
       playerId: row.playerId,
       player: row.player,
       team: row.team,
@@ -321,7 +334,9 @@ export async function toolGetPlayerNews(
       sourceUrl: row.sourceUrl,
       publishedAt: (row.publishedAt ?? row.createdAt).toISOString(),
       source: row.source,
-    }));
+    });
+    if (items.length >= limit) break;
+  }
 
   const injuryRaw = await readSourceCacheValue(PLAYER_NEWS_SNAPSHOT_KEY);
   const notesPayloadRows = await db

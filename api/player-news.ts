@@ -40,10 +40,11 @@ import { readNflState } from "./_lib/user-leagues.js";
  * POST — cron-secret refresh.
  *
  * Refresh diffs Sleeper injury_status and injury_notes for fantasy players
- * league-wide into `shared_player_news` (deduped by URL / external id).
- * Timestamp-only news_updated pings are not created; legacy rows are filtered
- * on read. Clients filter the ticker by the signed-in user's roster in the
- * selected league; player cards show all shared rows for that player.
+ * league-wide into `shared_player_news` (deduped by URL+player /
+ * external id+player). Timestamp-only news_updated pings are not created;
+ * legacy rows are filtered on read. Clients filter the ticker by the
+ * signed-in user's roster in the selected league (and collapse multi-player
+ * X roundups by post); player cards show all shared rows for that player.
  */
 
 const PLAYER_NEWS_CHECK_KEY = "player-news-last-check-v1";
@@ -82,6 +83,8 @@ export type PlayerNews = {
       sourceUrl: string;
       sourcePublishedAt: string | null;
       author: string | null;
+      /** X post_id / Sleeper external id — used by global feeds to group roundups. */
+      externalId: string | null;
       source: "sleeper" | "x" | "nflverse";
       signal: string | null;
       score: number | null;
@@ -155,7 +158,9 @@ async function insertSharedDrafts(drafts: SharedNewsDraft[]): Promise<number> {
     const result = await db
       .insert(schema.sharedPlayerNews)
       .values(chunk)
-      .onConflictDoNothing()
+      .onConflictDoNothing({
+        target: [schema.sharedPlayerNews.sourceUrl, schema.sharedPlayerNews.playerId],
+      })
       .returning({ id: schema.sharedPlayerNews.id });
     inserted += result.length;
   }
@@ -203,6 +208,7 @@ async function readStoredNews(): Promise<Response> {
       sourceUrl: item.sourceUrl,
       sourcePublishedAt: item.publishedAt?.toISOString() ?? item.createdAt.toISOString(),
       author: item.author,
+      externalId: item.externalId,
       source: item.source as "sleeper" | "x" | "nflverse",
       signal: item.signal,
       score: item.score,

@@ -87,10 +87,19 @@ export function stableNewsId(parts: string[]): string {
   return createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 32);
 }
 
-/** Prefer (source, externalId); fall back to sourceUrl. */
-export function dedupeKey(source: PlayerNewsSource, externalId: string | null, sourceUrl: string): string {
-  if (externalId && externalId.trim()) return `${source}:${externalId.trim()}`;
-  return `url:${sourceUrl.trim()}`;
+/**
+ * In-batch / write dedupe: one row per (post, player).
+ * Prefer (source, externalId, playerId); fall back to (sourceUrl, playerId).
+ */
+export function dedupeKey(
+  source: PlayerNewsSource,
+  externalId: string | null,
+  sourceUrl: string,
+  playerId: string,
+): string {
+  const player = playerId.trim();
+  if (externalId && externalId.trim()) return `${source}:${externalId.trim()}:${player}`;
+  return `url:${sourceUrl.trim()}:${player}`;
 }
 
 export function signalToNewsType(signal: string | null | undefined): PlayerNewsKind {
@@ -451,8 +460,10 @@ export function buildXNewsDraft(
 ): SharedNewsDraft {
   const handle = item.author_handle.replace(/^@/, "");
   const newsType = signalToNewsType(item.signal);
+  const postId = item.post_id.trim();
   return {
-    id: stableNewsId(["x", item.post_id]),
+    // Include playerId so the same X post can produce distinct PKs per player.
+    id: stableNewsId(["x", postId, resolved.playerId]),
     playerId: resolved.playerId,
     player: resolved.player,
     team: resolved.team,
@@ -463,7 +474,7 @@ export function buildXNewsDraft(
     sourceLabel: `@${handle}`,
     sourceUrl: item.source_url.trim(),
     author: `@${handle}`,
-    externalId: item.post_id.trim(),
+    externalId: postId,
     publishedAt: new Date(item.published_at),
     signal: item.signal?.trim() || null,
     score: item.score ?? null,
@@ -474,7 +485,7 @@ export function filterDuplicateDrafts(drafts: SharedNewsDraft[]): SharedNewsDraf
   const seen = new Set<string>();
   const out: SharedNewsDraft[] = [];
   for (const draft of drafts) {
-    const key = dedupeKey(draft.source, draft.externalId, draft.sourceUrl);
+    const key = dedupeKey(draft.source, draft.externalId, draft.sourceUrl, draft.playerId);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(draft);

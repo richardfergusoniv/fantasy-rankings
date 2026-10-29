@@ -92,6 +92,13 @@
       "when": 1762800000000,
       "tag": "0013_rls_and_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1763000000000,
+      "tag": "0014_shared_player_news_per_player",
+      "breakpoints": true
     }
   ]
 }

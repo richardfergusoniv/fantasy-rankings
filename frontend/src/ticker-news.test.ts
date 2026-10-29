@@ -10,6 +10,9 @@ function item(partial: {
   score?: number | null;
   sourcePublishedAt?: string | null;
   roleContext?: string;
+  sourceUrl?: string;
+  externalId?: string | null;
+  source?: "sleeper" | "x" | "nflverse";
 }): PlayerNewsItem {
   return {
     id: partial.id,
@@ -23,10 +26,15 @@ function item(partial: {
     availability: [],
     roleContext: partial.roleContext ?? "",
     sourceLabel: "Sleeper",
-    sourceUrl: "https://sleeper.app",
+    // Default URL/externalId are unique per item so post-level grouping does
+    // not collapse unrelated Sleeper rows that share a placeholder URL.
+    sourceUrl: partial.sourceUrl ?? `https://sleeper.app/news/${partial.id}`,
     sourcePublishedAt: partial.sourcePublishedAt ?? "2026-10-10T12:00:00.000Z",
     author: null,
-    source: "sleeper",
+    externalId: partial.externalId === undefined
+      ? `fixture:${partial.id}`
+      : partial.externalId,
+    source: partial.source ?? "sleeper",
     signal: null,
     score: partial.score ?? null,
   };
@@ -120,5 +128,56 @@ describe("newsForTicker", () => {
     ]);
     const items = newsForTicker(news, new Set(["a"]), new Set(), new Set());
     expect(items.map((row) => row.id)).toEqual(["real"]);
+  });
+
+  it("collapses a multi-player X roundup to one ticker item by post_id", () => {
+    const roundup = "Wednesday practice: Amon-Ra DNP, Gibbs limited, LaPorta full.";
+    const postId = "2115569505300811921";
+    const sourceUrl = `https://x.com/r/status/${postId}`;
+    const news = feed([
+      item({
+        id: "x-a",
+        playerId: "roster-a",
+        change: roundup,
+        source: "x",
+        externalId: postId,
+        sourceUrl,
+        score: 80,
+      }),
+      item({
+        id: "x-b",
+        playerId: "roster-b",
+        change: `${roundup} (Gibbs)`,
+        source: "x",
+        externalId: postId,
+        sourceUrl,
+        score: 70,
+      }),
+      item({
+        id: "x-c",
+        playerId: "opp-a",
+        change: `${roundup} (LaPorta)`,
+        source: "x",
+        externalId: postId,
+        sourceUrl,
+        score: 60,
+      }),
+      item({
+        id: "other",
+        playerId: "roster-c",
+        change: "Separate injury note",
+        score: 50,
+        sourceUrl: "https://sleeper.app/other",
+        externalId: "injury-notes:roster-c:abc",
+      }),
+    ]);
+
+    const items = newsForTicker(
+      news,
+      new Set(["roster-a", "roster-b", "roster-c"]),
+      new Set(["opp-a"]),
+      new Set(),
+    );
+    expect(items.map((row) => row.id)).toEqual(["x-a", "other"]);
   });
 });
