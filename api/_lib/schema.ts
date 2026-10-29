@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -214,6 +215,8 @@ export const sharedPlayerNews = pgTable(
     publishedAt: timestamp("published_at", { withTimezone: true, mode: "date" }),
     signal: text("signal"),
     score: integer("score"),
+    /** e.g. `["dynasty"]` — redraft feeds hide dynasty-tagged rows. */
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (table) => [

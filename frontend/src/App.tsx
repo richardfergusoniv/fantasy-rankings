@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
 import { playerWeeklyRank } from "./player-card-state";
+import { newsVisibleInContext } from "../../api/_lib/player-news-filters";
 import { newsForTicker, PROMINENT_OVERALL_RANK_LIMIT, tickerItemKind } from "./ticker-news";
 import type {
   Dashboard,
@@ -186,7 +187,7 @@ function tickerNewsLabel(item: PlayerNewsItem): string {
   return tickerLabel(subject, detail.replace(/^(?:is|are|has|have)\s+/i, ""));
 }
 
-function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominentPlayerIds, onPlayer, onNews }: {
+function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominentPlayerIds, isDynastyContext, onPlayer, onNews }: {
   data: DraftCenterData | undefined;
   news: PlayerNews | undefined;
   /** Player ids on the signed-in user's roster in the selected league. */
@@ -195,6 +196,8 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
   opponentPlayerIds: Set<string>;
   /** Season-long top ranks (and similar) used to fill remaining ticker slots. */
   prominentPlayerIds: Set<string>;
+  /** Dynasty leagues show dynasty-tagged news; redraft / no league hides them. */
+  isDynastyContext: boolean;
   onPlayer: (playerId: string) => void;
   onNews: (item: PlayerNewsItem) => void;
 }) {
@@ -204,6 +207,7 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
       rosterPlayerIds,
       opponentPlayerIds,
       prominentPlayerIds,
+      { isDynastyContext },
     ).map((item) => ({
       key: `news:${item.id}`,
       source: item.newsType === "headline" && item.playerId === "league" ? "BREAKING" : "NEWS",
@@ -231,7 +235,7 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
         tone: Math.abs(edge) < 0.05 ? "neutral" : edge > 0 ? "up" : "down",
         ...(row.playerId ? { playerId: row.playerId } : {}),
       }));
-  }, [data, news, opponentPlayerIds, prominentPlayerIds, rosterPlayerIds]);
+  }, [data, isDynastyContext, news, opponentPlayerIds, prominentPlayerIds, rosterPlayerIds]);
 
   const visibleItems = items.length > 0 ? items : [{ key: "waiting", source: "NFL", label: "Awaiting the next update", quote: null, move: null, tone: "neutral" as const }];
   const repeatedItems = visibleItems.length > 1 ? [...visibleItems, ...visibleItems] : visibleItems;
@@ -741,11 +745,18 @@ export function App() {
       signOutForPersonalData(error);
     },
   });
+  // Prefer cached/streamed leagues so redraft vs dynasty is known before news fetch.
+  // No league yet → redraft (exclude dynasty-tagged rows) per product default.
+  const newsIsDynasty = useMemo(() => {
+    const leagues = dashboardQuery.data?.leagues ?? browserDashboard?.leagues ?? [];
+    const match = leagues.find((item) => item.id === selectedLeagueId) ?? leagues[0];
+    return Boolean(match?.seasonLongFormat.isDynasty);
+  }, [browserDashboard?.leagues, dashboardQuery.data?.leagues, selectedLeagueId]);
   const newsQuery = useQuery({
-    queryKey: personalQueryKey(viewer, "player-news"),
+    queryKey: personalQueryKey(viewer, "player-news", newsIsDynasty ? "dynasty" : "redraft"),
     queryFn: async () => {
       try {
-        return await withClientDeadline(api.getPlayerNews({}), 8_000);
+        return await withClientDeadline(api.getPlayerNews({ dynasty: newsIsDynasty }), 8_000);
       } catch (error) {
         signOutForPersonalData(error);
         throw error;
@@ -780,9 +791,6 @@ export function App() {
       signOutForPersonalData(error);
     },
   });
-  const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(newsQuery.data), [newsQuery.data]);
-  const tickerPlayerNews = playerHistory.current ? newsItemsByPlayer.get(playerHistory.current.playerId) ?? [] : [];
-
   // Prefer browser/full dashboard until tradeTeams land so returning users do not
   // flash empty "No roster available" / "My Team" states over localStorage data.
   const streamedDashboard = useMemo(() => {
@@ -831,6 +839,19 @@ export function App() {
   const dashboard = withStreamedAnalytics(freshestDashboard(dashboardQuery.data, streamedDashboard, browserDashboard), streamedDashboard);
 
   const league = dashboard?.leagues.find((item) => item.id === selectedLeagueId) ?? dashboard?.leagues[0];
+  const leagueIsDynasty = Boolean(league?.seasonLongFormat.isDynasty);
+  const leagueScopedNews = useMemo((): PlayerNews | undefined => {
+    if (!newsQuery.data) return undefined;
+    return {
+      ...newsQuery.data,
+      runs: newsQuery.data.runs.map((run) => ({
+        ...run,
+        items: run.items.filter((item) => newsVisibleInContext(item, leagueIsDynasty)),
+      })),
+    };
+  }, [leagueIsDynasty, newsQuery.data]);
+  const newsItemsByPlayer = useMemo(() => groupNewsItemsByPlayer(leagueScopedNews), [leagueScopedNews]);
+  const tickerPlayerNews = playerHistory.current ? newsItemsByPlayer.get(playerHistory.current.playerId) ?? [] : [];
   const selectedLeagueRosterIds = useMemo(
     () => new Set([...(league?.starters ?? []), ...(league?.bench ?? [])].map((p) => p.playerId)),
     [league],
@@ -1301,10 +1322,11 @@ export function App() {
       <div role="region" aria-label="League and week" className="league-sticky">
           <TickerStrip
             data={draftQuery.data}
-            news={newsQuery.data}
+            news={leagueScopedNews}
             rosterPlayerIds={selectedLeagueRosterIds}
             opponentPlayerIds={selectedLeagueOpponentIds}
             prominentPlayerIds={selectedLeagueProminentIds}
+            isDynastyContext={leagueIsDynasty}
             onPlayer={openTickerPlayer}
             onNews={setTickerNews}
           />

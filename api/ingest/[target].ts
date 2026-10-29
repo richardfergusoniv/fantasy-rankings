@@ -401,6 +401,7 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
       publishedAt: draft.publishedAt,
       signal: draft.signal,
       score: draft.score,
+      tags: draft.tags,
       createdAt: new Date(),
     }));
     const result = await db

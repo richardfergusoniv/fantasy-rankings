@@ -19,7 +19,11 @@ import {
   scoreWaiver,
 } from "./move-scoring.js";
 import { readChartExtrasSnapshot } from "./nflverse-chart-extras.js";
-import { isSleeperTimestampOnlyNews, newsPostDedupeKey } from "./player-news-filters.js";
+import {
+  DYNASTY_NEWS_TAG,
+  isSleeperTimestampOnlyNews,
+  newsPostDedupeKey,
+} from "./player-news-filters.js";
 import {
   PLAYER_NEWS_NOTES_SNAPSHOT_KEY,
   parseNotesSnapshot,
@@ -274,6 +278,7 @@ export async function toolGetPlayerNews(
 
   const limit = Math.min(30, Math.max(1, Math.floor(args.limit ?? 15)));
   const cutoff = retentionCutoff();
+  const isDynastyContext = Boolean(league?.seasonLongFormat.isDynasty);
   const pageSize = scope === "player"
     ? Math.max(limit * 2, 16)
     : Math.max(limit * 4, 32);
@@ -293,6 +298,9 @@ export async function toolGetPlayerNews(
         gte(schema.sharedPlayerNews.createdAt, cutoff),
       ),
     ),
+    ...(isDynastyContext
+      ? []
+      : [sql`NOT (${DYNASTY_NEWS_TAG} = ANY(${schema.sharedPlayerNews.tags}))`]),
   );
 
   const seenPost = new Set<string>();

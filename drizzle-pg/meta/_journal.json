@@ -99,6 +99,13 @@
       "when": 1763000000000,
       "tag": "0014_shared_player_news_per_player",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1763200000000,
+      "tag": "0015_shared_player_news_tags",
+      "breakpoints": true
     }
   ]
 }

@@ -44,7 +44,9 @@ repo**. Player-id attachment for mentions lives **in this app** on ingest.
    `text` for every uniquely resolvable name (full names, aliases, multi-token
    first names like Amon-Ra) and writes one row per `player_id` (`post_id` +
    `player_id` unique). Prefer sending `player_id` when known; name matching
-   remains a fallback. Response includes `unresolved` + `unresolvedSamples`.
+   remains a fallback. Optional `tags` (≤5 lowercase strings); use
+   `["dynasty"]` for dynasty-only posts — redraft feeds hide those rows.
+   Response includes `unresolved` + `unresolvedSamples`.
 3. **Beat + national accounts** stay in the external fetcher (Schefter,
    Rapoport, team beats). No X scraper lives here.
 4. **Alert** if weekday X volume collapses (e.g. &lt; ~20 rows on a weekday).
