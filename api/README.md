@@ -47,9 +47,10 @@ repo**. Player-id attachment for mentions lives **in this app** on ingest.
    expansion runs only when total resolved players ≤ 6 (≤ 15 for practice /
    injury reports). Above the cap, expansion is skipped entirely (explicit
    only — not truncated to N). Prefer sending `player_id` when known; name
-   matching remains a fallback. Response includes `unresolved` +
-   `unresolvedSamples`. One-off cleanup for legacy over-cap rows:
-   `docs/x-news-over-cap-cleanup.sql`.
+   matching remains a fallback. Optional `tags` (≤5 lowercase strings); use
+   `["dynasty"]` for dynasty-only posts — redraft feeds hide those rows.
+   Response includes `unresolved` + `unresolvedSamples`. One-off cleanup for
+   legacy over-cap rows: `docs/x-news-over-cap-cleanup.sql`.
 3. **Beat + national accounts** stay in the external fetcher (Schefter,
    Rapoport, team beats). No X scraper lives here.
 4. **Alert** if weekday X volume collapses (e.g. &lt; ~20 rows on a weekday).
