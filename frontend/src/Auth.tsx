@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SkipLink } from "./shared";
 import { ThemeToggle } from "./shell/theme-toggle";
+import { authErrorMessage } from "./lib/auth-error-message";
 import { getAccessToken, isSupabaseConfigured, supabase, type Session } from "./supabase";
 import { identifyPostHogUser, resetPostHog } from "./posthog";
 import { ViewerIdentityContext, clearPersonalQueries } from "./viewer-scope";
@@ -326,7 +327,7 @@ function UpdatePassword({ onDone }: { onDone: () => void }) {
       if (updateError) throw updateError;
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setError(authErrorMessage(err));
       errorRef.current?.focus();
     } finally {
       setBusy(false);
@@ -437,7 +438,7 @@ function AuthScreen({ initialNotice }: { initialNotice?: string | null }) {
         if (signInError) throw signInError;
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setError(authErrorMessage(err));
       errorRef.current?.focus();
     } finally {
       setBusy(false);
@@ -462,7 +463,7 @@ function AuthScreen({ initialNotice }: { initialNotice?: string | null }) {
       if (resetError) throw resetError;
       setNotice("Check your email for a password reset link.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setError(authErrorMessage(err));
       errorRef.current?.focus();
     } finally {
       setBusy(false);
@@ -604,7 +605,7 @@ function ConnectSleeper({
       }
       await onConnected();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setError(authErrorMessage(err));
       errorRef.current?.focus();
     } finally {
       setBusy(false);
