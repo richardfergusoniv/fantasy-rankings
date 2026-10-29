@@ -258,7 +258,7 @@ export async function toolGetProjectedStandings(ctx: ChatToolContext, args: { le
   const dashboard = await loadDashboard(ctx);
   const league = findLeague(dashboard, args.leagueId);
   if (!league) return { ok: false as const, error: "League not found for this user." };
-  const result = await loadProjectedStandings(league, dashboard.season);
+  const result = await loadProjectedStandings(league, dashboard.season, dashboard.week);
   if ("error" in result) return { ok: false as const, error: result.error };
   const names = new Map(result.teams.map((team) => [team.rosterId, team.teamName]));
   return {
@@ -271,7 +271,7 @@ export async function toolGetProjectedStandings(ctx: ChatToolContext, args: { le
       teamB: names.get(game.rosterIdB) ?? "Unknown",
       projectedB: game.projectedB,
     })),
-    note: "Sleeper projections for current rosters' best lineups, scored in this league's rules. Players currently out are excluded from every remaining week; future roster moves and actual lineup choices would change results. Not a probability.",
+    note: "Best lineups from current rosters. The current week uses the app's blended projections; later weeks use Sleeper's projections scored in this league's rules, which already include injury timelines and byes. Future roster moves and actual lineup choices would change results. Not a probability.",
   };
 }
 

@@ -1,11 +1,13 @@
 /**
  * Projected standings: each team's best lineup from its current roster for
- * every remaining week, using Sleeper's per-week projections rescored in the
- * league's rules. The higher projected score wins the matchup. No
- * simulation and no probabilities: third-party projections added up.
+ * every remaining week. The current week uses the app's blended projections
+ * (what the rest of the app shows); later weeks use Sleeper's per-week
+ * projections rescored in the league's rules. The higher projected score wins
+ * the matchup. No simulation and no probabilities: projections added up.
  *
- * Players currently out (Out/IR/suspended) are left out of every remaining
- * week, since no injury timeline exists. Players on bye have no projection.
+ * Sleeper's future-week projections already carry injury timelines and byes:
+ * a player who is out or on bye in a week has no projection row for it, and
+ * one expected back later is projected from that week on.
  */
 import { z } from "zod";
 import { badRequest, forbidden, internalError, json, unauthorized } from "./api-utils.js";
@@ -64,13 +66,16 @@ export type ProjectedStandings = {
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
-/** A player's projected points in this league's scoring; 0 on bye (no row) or when currently out. */
+/**
+ * A player's Sleeper-projected points for a week in this league's scoring.
+ * No row means bye, out, or no projection: 0.
+ */
 export function projectedPlayerPoints(
-  player: Pick<RosterPlayer, "position" | "injuryStatus">,
+  player: Pick<RosterPlayer, "position">,
   entry: { stats: Record<string, number> } | undefined,
   league: Pick<League, "scoringSettings" | "rankingField">,
 ): number {
-  if (!entry || isUnavailableStatus(player.injuryStatus)) return 0;
+  if (!entry) return 0;
   const fallback = league.rankingField === "halfPpr" ? entry.stats.pts_half_ppr : entry.stats.pts_ppr;
   if (player.position === "DEF") return fallback ?? 0;
   const scored = league.scoringSettings
@@ -79,12 +84,24 @@ export function projectedPlayerPoints(
   return scored ?? fallback ?? 0;
 }
 
+export type PointsOf = (player: RosterPlayer) => number;
+
+export function sleeperWeekPoints(
+  week: WeekProjections,
+  league: Pick<League, "scoringSettings" | "rankingField">,
+): PointsOf {
+  return (player) => projectedPlayerPoints(player, week.players.get(player.playerId), league);
+}
+
+/** The app's blended projection for the current week; 0 on bye or when the app already treats the player as out. */
+export const appWeekPoints: PointsOf = (player) =>
+  player.isBye || isUnavailableStatus(player.injuryStatus) ? 0 : player.projection ?? 0;
+
 /** Best projected lineup total for one roster in one week. */
 export function bestLineupTotal(
   players: readonly RosterPlayer[],
   slots: readonly string[],
-  week: WeekProjections,
-  league: Pick<League, "scoringSettings" | "rankingField">,
+  pointsOf: PointsOf,
 ): number {
   const optimizable: OptimizablePlayer[] = players
     .filter((player) => player.playerId !== "0")
@@ -93,7 +110,7 @@ export function bestLineupTotal(
       position: player.position,
       lineupSlot: null,
       isStarter: false,
-      projection: projectedPlayerPoints(player, week.players.get(player.playerId), league),
+      projection: pointsOf(player),
       actual: null,
     }));
   return optimizeTradeRoster(optimizable, [...slots]).score;
@@ -102,6 +119,8 @@ export function bestLineupTotal(
 export function buildProjectedStandings(args: {
   league: League;
   weeks: ReadonlyMap<number, WeekProjections>;
+  /** Week scored from the app's own projections instead of Sleeper's. */
+  appWeek?: number | null;
   games: ReadonlyArray<{ week: number; a: number; b: number }>;
   throughWeek: number;
   regularSeasonEndsWeek: number;
@@ -114,13 +133,19 @@ export function buildProjectedStandings(args: {
   const rosters = new Map(league.tradeTeams.map((team) => [team.rosterId, team.players]));
 
   const weekTotals = new Map<string, number>();
-  for (const [week, projections] of weeks) {
+  const scoredWeeks = new Set<number>(weeks.keys());
+  const weekPoints = (week: number): PointsOf | null =>
+    week === args.appWeek ? appWeekPoints : weeks.has(week) ? sleeperWeekPoints(weeks.get(week)!, league) : null;
+  if (args.appWeek != null) scoredWeeks.add(args.appWeek);
+  for (const week of scoredWeeks) {
+    const pointsOf = weekPoints(week);
+    if (!pointsOf) continue;
     for (const [rosterId, players] of rosters) {
-      weekTotals.set(`${week}:${rosterId}`, bestLineupTotal(players, slots, projections, league));
+      weekTotals.set(`${week}:${rosterId}`, bestLineupTotal(players, slots, pointsOf));
     }
   }
   const teamAverage = (rosterId: number) => {
-    const totals = [...weeks.keys()].map((week) => weekTotals.get(`${week}:${rosterId}`) ?? 0);
+    const totals = [...scoredWeeks].map((week) => weekTotals.get(`${week}:${rosterId}`) ?? 0);
     return totals.length ? totals.reduce((sum, value) => sum + value, 0) / totals.length : 0;
   };
   const projectedFor = (week: number, rosterId: number) => weekTotals.get(`${week}:${rosterId}`) ?? teamAverage(rosterId);
@@ -194,6 +219,7 @@ export type LoadProjectedStandingsOptions = {
 export async function loadProjectedStandings(
   league: League,
   season: number,
+  currentWeek: number,
   options: LoadProjectedStandingsOptions = {},
 ): Promise<ProjectedStandings | { error: string }> {
   const standings = league.standings ?? [];
@@ -203,22 +229,26 @@ export async function loadProjectedStandings(
   const remaining = Array.from({ length: Math.max(0, regularSeasonEndsWeek - throughWeek) }, (_, i) => throughWeek + 1 + i);
 
   const loadProjections = options.loadProjections ?? loadWeekProjections;
+  // The current week comes from the app's own projections, so only later weeks need Sleeper.
+  const appWeek = remaining.includes(currentWeek) ? currentWeek : null;
+  const sleeperWeeks = remaining.filter((week) => week !== appWeek);
   const [schedule, projections] = await Promise.all([
     loadScheduleGames(league.id, remaining, options.fetchWeek),
-    Promise.allSettled(remaining.map((week) => loadProjections(season, week))),
+    Promise.allSettled(sleeperWeeks.map((week) => loadProjections(season, week))),
   ]);
   const weeks = new Map<number, WeekProjections>();
   const missingWeeks = new Set(schedule.missingWeeks);
   projections.forEach((result, i) => {
-    if (result.status === "fulfilled") weeks.set(remaining[i]!, result.value);
-    else missingWeeks.add(remaining[i]!);
+    if (result.status === "fulfilled") weeks.set(sleeperWeeks[i]!, result.value);
+    else missingWeeks.add(sleeperWeeks[i]!);
   });
-  if (remaining.length > 0 && weeks.size === 0) return { error: "Sleeper projections could not be loaded." };
+  if (sleeperWeeks.length > 0 && weeks.size === 0) return { error: "Sleeper projections could not be loaded." };
   if (remaining.length > 0 && schedule.games.length === 0) return { error: "The remaining schedule could not be loaded from Sleeper." };
 
   return buildProjectedStandings({
     league,
     weeks,
+    appWeek,
     games: schedule.games,
     throughWeek,
     regularSeasonEndsWeek,
@@ -244,7 +274,7 @@ export async function handleProjectedStandings(req: Request): Promise<Response> 
     const league = cached?.dashboard.leagues.find((item) => item.id === parsed.data.leagueId);
     if (!cached || !league) return json({ ok: false, error: "League data is still loading. Try again shortly." }, 409);
 
-    const result = await loadProjectedStandings(league, cached.dashboard.season);
+    const result = await loadProjectedStandings(league, cached.dashboard.season, cached.dashboard.week);
     if ("error" in result) return json({ ok: false, error: result.error }, 422);
     return json(result);
   } catch (err) {

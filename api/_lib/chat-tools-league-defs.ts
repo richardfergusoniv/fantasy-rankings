@@ -77,7 +77,7 @@ export const LEAGUE_CHAT_TOOL_DEFINITIONS: ToolDefinition[] = [
     function: {
       name: "get_projected_standings",
       description:
-        "The app's Projected standings: each team's best lineup from its current roster for every remaining week, using Sleeper's projections in this league's scoring; the higher projected score wins each matchup. Returns projected final records and points, the playoff cut, and every remaining game with both teams' projected scores. Players currently out are left out of every remaining week and future roster moves are not reflected. Third-party projections added up, not a probability; use it as the base for your own forecast.",
+        "The app's Projected standings: each team's best lineup from its current roster for every remaining week; the current week uses the app's blended projections and later weeks use Sleeper's projections in this league's scoring (they already include injury timelines and byes). The higher projected score wins each matchup. Returns projected final records and points, the playoff cut, and every remaining game with both teams' projected scores. Future roster moves are not reflected. Projections added up, not a probability; use it as the base for your own forecast.",
       parameters: {
         type: "object",
         properties: { leagueId: { type: "string" } },
