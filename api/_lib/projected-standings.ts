@@ -17,8 +17,7 @@ import type { Dashboard } from "./dashboard-schemas.js";
 import { scoreProjectedDefenseStats } from "./defense-scoring.js";
 import { scoreSleeperPlayerProjection } from "./player-projection-merge.js";
 import { isUnavailableStatus, optimizeTradeRoster, type OptimizablePlayer } from "./lineup-optimizer.js";
-import { DEFAULT_LAST_REGULAR_WEEK, loadScheduleGames } from "./outcomes-engine-pace.js";
-import type { FetchWeek } from "./league-outcomes-contract.js";
+import { DEFAULT_LAST_REGULAR_WEEK, loadScheduleGames, type FetchWeek } from "./league-schedule.js";
 import { fetchJson, SLEEPER_BASE } from "./sleeper.js";
 import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projections.js";
 import { viewerBelongsToLeague } from "./viewer-league-access.js";
@@ -58,6 +57,8 @@ export type ProjectedStandings = {
   regularSeasonEndsWeek: number;
   playoffTeams: number;
   divisionsIgnored: boolean;
+  /** League also plays each team against the weekly median (included in the projected records). */
+  medianMatchup: boolean;
   /** Weeks whose projections failed to load; each team's average of the loaded weeks stands in. */
   missingWeeks: number[];
   /** Oldest projection pull used, ISO time. */
@@ -260,6 +261,7 @@ export function buildProjectedStandings(args: {
     regularSeasonEndsWeek: args.regularSeasonEndsWeek,
     playoffTeams,
     divisionsIgnored: league.playoffs?.positionKnown === false,
+    medianMatchup: args.medianMatchup === true,
     missingWeeks: args.missingWeeks,
     projectionsAsOf: asOfs[0] ?? null,
     teams: ordered.map((t, index) => ({

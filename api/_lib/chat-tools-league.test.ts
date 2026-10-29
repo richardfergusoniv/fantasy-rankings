@@ -18,6 +18,18 @@ vi.mock("./sleeper.js", async (importOriginal) => {
   };
 });
 
+vi.mock("./sleeper-week-projections.js", () => ({
+  loadWeekProjections: vi.fn(async (season: number, week: number) => ({
+    season,
+    week,
+    asOf: "2026-10-29T00:00:00.000Z",
+    players: new Map([
+      ["p1", { opponent: "LV", stats: { rec: 6, rec_yd: 80, rec_td: 0.5, pts_ppr: 17 } }],
+      ["p2", { opponent: "LV", stats: { rush_yd: 60, rush_td: 0.4, pts_ppr: 9 } }],
+    ]),
+  })),
+}));
+
 const power = (rosterId: number, teamName: string, isUser: boolean, rb: number, wr: number) => ({
   rosterId,
   teamName,
@@ -175,16 +187,27 @@ describe("league chat tools", () => {
     const result = (await dispatchChatTool("get_playoff_odds", { leagueId: "lg1" }, ctx())) as {
       ok: true;
       regularSeasonEndsWeek: number;
-      you: { playoffPct: number; remainingGames: Array<{ opponentName: string; winProbability: number }>; finalWinScenarios: Array<{ finalWins: number }> };
+      method: string;
+      you: { playoffPct: number; remainingGames: Array<{ opponent: string; winChance: number; projectedFor: number; projectedAgainst: number }>; finalWinScenarios: Array<{ finalWins: number }> };
       teams: unknown[];
     };
     expect(result.ok).toBe(true);
     expect(result.regularSeasonEndsWeek).toBe(10);
-    expect(result.you.remainingGames.length).toBeGreaterThan(0);
-    expect(result.you.remainingGames[0]!.opponentName).toBe("Rival");
-    expect(result.you.remainingGames[0]!.winProbability).toBeGreaterThan(0);
+    expect(result.method).toContain("Projected standings");
+    expect(result.you.remainingGames.map((g) => g.opponent)).toEqual(["Rival", "Rival"]);
+    expect(result.you.remainingGames[0]!.winChance).toBeGreaterThan(0);
+    expect(result.you.remainingGames[0]!.projectedFor).toBeGreaterThan(0);
     expect(result.you.playoffPct).toBeGreaterThan(0);
     expect(result.teams).toHaveLength(2);
+  });
+
+  it("get_playoff_odds refuses leagues without playoff settings instead of inventing a berth", async () => {
+    const noPlayoffs = {
+      ...dashboard,
+      leagues: [{ ...dashboard.leagues[0]!, playoffs: { teams: null, weekStart: 11, positionKnown: true } }],
+    } as unknown as Dashboard;
+    const result = await dispatchChatTool("get_playoff_odds", { leagueId: "lg1" }, { ...ctx(), dashboardPromise: Promise.resolve(noPlayoffs) });
+    expect(result).toEqual({ ok: false, error: "Playoff settings are not available for this league." });
   });
 
   it("uses dynasty power rows for dynasty leagues and season-long rows otherwise", () => {

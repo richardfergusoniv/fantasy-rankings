@@ -404,6 +404,28 @@ describe("dispatchChatTool", () => {
     expect(leagues.leagues[0]?.standing?.pointsFor).toBe(801.2);
   });
 
+  it("get_week_matchup reports a win chance from the same model as the Matchup screen", async () => {
+    const dashboard = baseDashboard();
+    const league = dashboard.leagues[0]!;
+    const mine = league.starters[0]!;
+    league.starters = [{ ...mine, projection: 30 }];
+    league.opponentTeam = { ...league.opponentTeam!, starters: [{ ...mine, playerId: "o1", name: "Their WR", projection: 10 }] };
+    const matchup = await dispatchChatTool("get_week_matchup", { leagueId: "lg1" }, ctxWithDashboard(dashboard)) as {
+      winChance: { you: number; opponent: number; yourRange: { low: number; high: number }; opponentRange: { low: number; high: number } } | null;
+    };
+    expect(matchup.winChance).not.toBeNull();
+    expect(matchup.winChance!.you).toBeGreaterThan(80);
+    expect(matchup.winChance!.you + matchup.winChance!.opponent).toBeGreaterThan(99.8);
+    expect(matchup.winChance!.you + matchup.winChance!.opponent).toBeLessThan(100.2);
+    expect(matchup.winChance!.yourRange.low).toBeLessThan(30);
+    expect(matchup.winChance!.yourRange.high).toBeGreaterThan(30);
+  });
+
+  it("get_week_matchup has no win chance without an opponent lineup", async () => {
+    const matchup = await dispatchChatTool("get_week_matchup", { leagueId: "lg1" }, ctxWithDashboard(baseDashboard())) as { winChance: unknown };
+    expect(matchup.winChance).toBeNull();
+  });
+
   it.each([3, null])("handles duplicate opponent names using roster ID %s", async (rosterId) => {
     const dashboard = baseDashboard();
     const league = dashboard.leagues[0]!;

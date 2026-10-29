@@ -33,6 +33,9 @@ import { VALUE_HISTORY_CHART_MIN_DATE } from "./player-value-history.js";
 import { suggestFaabBid } from "./faab-bid.js";
 import type { WaiverLabel } from "./scoring/labels.js";
 import { loadPropLineWeek } from "./prop-line-week.js";
+import { projectedPlayerPoints } from "./projected-standings.js";
+import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projections.js";
+import { DEFAULT_LAST_REGULAR_WEEK } from "./league-schedule.js";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 import { PLAYER_NEWS_SNAPSHOT_KEY } from "./sleeper.js";
 import {
@@ -96,7 +99,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "get_projections",
       description:
-        "This week's and rest-of-season projections for a player or my roster, plus prop lines and recent projection accuracy when available.",
+        "This week's projection plus projected points for each remaining regular-season week and their total (Sleeper's per-week projections in this league's scoring, with byes and injury timelines), for a player or my roster, plus trade value, prop lines and recent projection accuracy when available.",
       parameters: {
         type: "object",
         properties: {
@@ -502,6 +505,54 @@ export async function toolGetPlayerAdvanced(
   };
 }
 
+/**
+ * Each player's projected points for the rest of the regular season: this week
+ * from the app's projection, later weeks from Sleeper's per-week projections
+ * scored in the league's rules (which already reflect byes and injury timelines;
+ * no row means bye or out that week). Weeks Sleeper cannot supply are listed.
+ */
+export async function loadUpcomingOutlook(
+  season: number,
+  currentWeek: number,
+  league: Dashboard["leagues"][number],
+  players: ReadonlyArray<{ playerId: string; position: string | null; thisWeek: number | null }>,
+  loadProjections: (season: number, week: number) => Promise<WeekProjections> = loadWeekProjections,
+) {
+  const lastWeek = league.playoffs?.weekStart ? league.playoffs.weekStart - 1 : DEFAULT_LAST_REGULAR_WEEK;
+  const later = Array.from({ length: Math.max(0, lastWeek - currentWeek) }, (_, i) => currentWeek + 1 + i);
+  const loaded = await Promise.allSettled(later.map((week) => loadProjections(season, week)));
+  const weeks = new Map<number, WeekProjections>();
+  const missingWeeks: number[] = [];
+  loaded.forEach((result, i) => {
+    if (result.status === "fulfilled") weeks.set(later[i]!, result.value);
+    else missingWeeks.push(later[i]!);
+  });
+  const round1 = (value: number) => Math.round(value * 10) / 10;
+  return {
+    firstWeek: currentWeek <= lastWeek ? currentWeek : null,
+    lastWeek,
+    missingWeeks,
+    byPlayer: new Map(players.map((player) => {
+      const rows: Array<{ week: number; projected: number | null; opponent: string | null; source: "app" | "sleeper" }> = [];
+      if (currentWeek <= lastWeek) {
+        rows.push({ week: currentWeek, projected: player.thisWeek == null ? null : round1(player.thisWeek), opponent: null, source: "app" });
+      }
+      for (const week of later) {
+        const entry = weeks.get(week)?.players.get(player.playerId);
+        if (!weeks.has(week)) continue;
+        rows.push({
+          week,
+          projected: round1(projectedPlayerPoints({ position: player.position ?? "" }, entry, league)),
+          opponent: entry?.opponent ?? null,
+          source: "sleeper",
+        });
+      }
+      const total = rows.reduce((sum, row) => sum + (row.projected ?? 0), 0);
+      return [player.playerId, { weeks: rows, total: round1(total) }] as const;
+    })),
+  };
+}
+
 export async function toolGetProjections(
   ctx: ChatToolContext,
   args: {
@@ -570,6 +621,17 @@ export async function toolGetProjections(
     };
   });
 
+  const outlook = await loadUpcomingOutlook(
+    dashboard.season,
+    dashboard.week,
+    league,
+    players.map((player) => ({
+      playerId: player.playerId,
+      position: player.position,
+      thisWeek: player.week.leagueProjection,
+    })),
+  );
+
   let propLines: unknown[] = [];
   try {
     const weekProps = await loadPropLineWeek({ season: dashboard.season, week: dashboard.week });
@@ -610,7 +672,8 @@ export async function toolGetProjections(
     leagueId: league.id,
     formatKey,
     scope,
-    players,
+    players: players.map((player) => ({ ...player, upcoming: outlook.byPlayer.get(player.playerId) ?? null })),
+    upcomingNote: `upcoming: projected points per remaining regular-season week (through week ${outlook.lastWeek}) and their total. This week is the app's projection; later weeks are Sleeper's per-week projections in this league's scoring, which already reflect byes and injury timelines (0 or a missing week means bye or out). Third-party projections, not a guarantee.${outlook.missingWeeks.length ? ` Week(s) ${outlook.missingWeeks.join(", ")} could not be loaded.` : ""} restOfSeason is trade value, not points.`,
     propLines,
     projectionAccuracy: accuracy,
   };

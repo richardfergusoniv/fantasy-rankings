@@ -75,14 +75,18 @@ export function simulatePlayoffOdds(args: {
   playoffTeams: number;
   trials?: number;
   seed?: number;
+  /** Chance team `a` wins each game, aligned with `games`; defaults to the scoring-pace model. */
+  gameWinProbabilities?: readonly number[];
+  /** Expected points still to come for a team (for the points-for tiebreak); defaults to pace. */
+  remainingPoints?: ReadonlyMap<number, number>;
 }): PlayoffOdds {
   const trials = args.trials ?? 4000;
   const rand = mulberry32(args.seed ?? 20260);
   const teams = args.teams;
   const index = new Map(teams.map((team, i) => [team.rosterId, i]));
   const games = args.games
-    .map((game) => ({ a: index.get(game.a), b: index.get(game.b) }))
-    .filter((game): game is { a: number; b: number } => game.a !== undefined && game.b !== undefined && game.a !== game.b);
+    .map((game, original) => ({ a: index.get(game.a), b: index.get(game.b), original }))
+    .filter((game): game is { a: number; b: number; original: number } => game.a !== undefined && game.b !== undefined && game.a !== game.b);
 
   const played = teams.map((team) => team.wins + team.losses + team.ties);
   const withGames = teams.filter((_, i) => played[i]! > 0);
@@ -98,7 +102,8 @@ export function simulatePlayoffOdds(args: {
     remaining[game.a] = remaining[game.a]! + 1;
     remaining[game.b] = remaining[game.b]! + 1;
   }
-  const pCache = games.map((game) => winProbability(mu[game.a]!, mu[game.b]!));
+  const pCache = games.map((game) => args.gameWinProbabilities?.[game.original] ?? winProbability(mu[game.a]!, mu[game.b]!));
+  const expectedRemaining = (i: number) => args.remainingPoints?.get(teams[i]!.rosterId) ?? remaining[i]! * mu[i]!;
 
   const made = teams.map(() => 0);
   const top = teams.map(() => 0);
@@ -117,7 +122,7 @@ export function simulatePlayoffOdds(args: {
     }
     // Points-for tiebreak: points so far plus expected points still to come.
     const order = teams
-      .map((team, i) => ({ i, wins: wins[i]!, pf: team.pointsFor + remaining[i]! * mu[i]! + rand() * 0.01 }))
+      .map((team, i) => ({ i, wins: wins[i]!, pf: team.pointsFor + expectedRemaining(i) + rand() * 0.01 }))
       .sort((x, y) => y.wins - x.wins || y.pf - x.pf);
     order.forEach((row, rank) => {
       winsSum[row.i] = winsSum[row.i]! + row.wins;
@@ -138,9 +143,7 @@ export function simulatePlayoffOdds(args: {
   return {
     trials,
     gamesRemaining: games.length,
-    games: args.games
-      .filter((game) => index.has(game.a) && index.has(game.b) && game.a !== game.b)
-      .map((game, g) => ({ ...game, pA: Math.round(pCache[g]! * 1000) / 1000 })),
+    games: games.map((game, g) => ({ ...args.games[game.original]!, pA: Math.round(pCache[g]! * 1000) / 1000 })),
     teams: teams
       .map((team, i) => ({
         rosterId: team.rosterId,

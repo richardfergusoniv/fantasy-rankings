@@ -26,6 +26,7 @@ import {
   type OptimizablePlayer,
 } from "./lineup-optimizer.js";
 import { scoreTrade } from "./move-scoring.js";
+import { teamOutlook, winPercent, winProbability } from "./win-probability.js";
 import { redraftTwinFormat } from "./season-long-format.js";
 import { loadActiveScoringWeights } from "./scoring-jobs.js";
 import { loadHistoricalTrades } from "./trades.js";
@@ -188,7 +189,7 @@ export const CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     type: "function",
     function: {
       name: "get_week_matchup",
-      description: "This week's projections and matchup for the user's team in a league (starters, bench, opponent), with each player's game line (spread, over/under, implied team points) and both teams' standings.",
+      description: "This week's projections and matchup for the user's team in a league (starters, bench, opponent), the user's win chance this week (the same model as the Matchup screen) with both teams' likely score ranges, each player's game line (spread, over/under, implied team points) and both teams' standings.",
       parameters: {
         type: "object",
         properties: {
@@ -977,6 +978,19 @@ async function toolGetWeekMatchup(ctx: ChatToolContext, args: { leagueId: string
   if (!league) return { ok: false as const, error: "League not found for this user." };
   const valueById = new Map(leagueAssets(dashboard, league.id).map((row) => [row.playerId, row.value]));
   const opponentRosterId = weeklyOpponentRosterId(league.opponentTeam?.name, league.standings ?? [], league.opponentTeam?.rosterId);
+  // The same model the Matchup screen uses: current lineups, live-aware, with position-based spread.
+  const myOutlook = teamOutlook(league.starters);
+  const theirOutlook = league.opponentTeam ? teamOutlook(league.opponentTeam.starters) : null;
+  const round1 = (value: number) => Math.round(value * 10) / 10;
+  const winChance = myOutlook && theirOutlook
+    ? {
+      you: winPercent(winProbability(myOutlook, theirOutlook)),
+      opponent: winPercent(winProbability(theirOutlook, myOutlook)),
+      yourRange: { low: round1(myOutlook.low), high: round1(myOutlook.high) },
+      opponentRange: { low: round1(theirOutlook.low), high: round1(theirOutlook.high) },
+      basis: "Current lineups. Finished games count actual points, live games blend actual with projection, unplayed games use the app's projection. Ranges are the middle 80% of outcomes.",
+    }
+    : null;
   return {
     ok: true as const,
     season: dashboard.season,
@@ -987,6 +1001,7 @@ async function toolGetWeekMatchup(ctx: ChatToolContext, args: { leagueId: string
     standing: standingFor(league, (row) => row.isUser),
     teamProjection: league.teamProjection,
     teamActual: league.teamActual,
+    winChance,
     suggestion: league.suggestion,
     starters: league.starters.map((player) => ({ ...rosterPlayerSummary(player, valueById), game: gameLineForTeam(dashboard, player.team) })),
     bench: league.bench.map((player) => ({ ...rosterPlayerSummary(player, valueById), game: gameLineForTeam(dashboard, player.team) })),
