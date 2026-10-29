@@ -178,6 +178,15 @@ describe("buildProjectedStandings", () => {
     expect(a.projectedRecord).toEqual({ wins: 4, losses: 2, ties: 0 });
   });
 
+  it("draws no playoff cut when divisions are not modeled", () => {
+    const divisional = { ...league, playoffs: { teams: 1, weekStart: 7, positionKnown: false } } as unknown as League;
+    const result = buildProjectedStandings({
+      league: divisional, weeks, games: [{ week: 5, a: 1, b: 2 }], throughWeek: 4, regularSeasonEndsWeek: 6, missingWeeks: [],
+    });
+    expect(result.divisionsIgnored).toBe(true);
+    expect(result.teams.some((t) => t.inPlayoffs)).toBe(false);
+  });
+
   it("leaves current standings untouched when nothing remains", () => {
     const result = buildProjectedStandings({ league, weeks: new Map(), games: [], throughWeek: 4, regularSeasonEndsWeek: 4, missingWeeks: [] });
     expect(result.teams.map((t) => t.teamName)).toEqual(["A", "B", "C"]);

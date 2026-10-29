@@ -211,6 +211,13 @@ describe("league chat tools", () => {
     expect(result.players.find((row) => row.playerId === "p3")?.owner).toBe("you");
   });
 
+  it("search_players never falls back to a different league", async () => {
+    expect(await dispatchChatTool("search_players", { leagueId: "nope" }, ctx())).toMatchObject({ ok: false });
+    const missingDefault: ChatToolContext = { ...ctx(), defaultLeagueId: "gone" };
+    expect(await dispatchChatTool("search_players", { position: "WR" }, missingDefault)).toMatchObject({ ok: false });
+    expect(await dispatchChatTool("search_players", { position: "WR" }, ctx())).toMatchObject({ ok: true });
+  });
+
   it("rejects bad arguments and unknown leagues", async () => {
     expect(await dispatchChatTool("get_league_rules", {}, ctx())).toMatchObject({ ok: false });
     expect(await dispatchChatTool("get_playoff_odds", { leagueId: "nope" }, ctx())).toMatchObject({ ok: false });

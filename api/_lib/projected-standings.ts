@@ -228,7 +228,8 @@ export function buildProjectedStandings(args: {
       projectedRecord: { wins: t.wins, losses: t.losses, ties: t.ties },
       pointsFor: round2(t.row.pointsFor),
       projectedPointsFor: round2(t.pf),
-      inPlayoffs: playoffTeams > 0 && index < playoffTeams,
+      // With divisions a division winner can qualify below the overall cut, so draw no cut at all.
+      inPlayoffs: playoffTeams > 0 && league.playoffs?.positionKnown !== false && index < playoffTeams,
     })),
     games: projectedGames,
   };

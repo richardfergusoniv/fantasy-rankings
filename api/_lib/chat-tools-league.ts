@@ -6,6 +6,7 @@
 import { z } from "zod";
 import type { Dashboard } from "./dashboard-schemas.js";
 import {
+  defaultToolLeague,
   findLeague,
   leagueAssets,
   loadDashboard,
@@ -149,10 +150,8 @@ export async function toolGetLeagueTeams(ctx: ChatToolContext, args: { leagueId:
 
 export async function toolSearchPlayers(ctx: ChatToolContext, args: z.infer<typeof searchSchema>) {
   const dashboard = await loadDashboard(ctx);
-  const league = (args.leagueId ? findLeague(dashboard, args.leagueId) : null)
-    ?? (ctx.defaultLeagueId ? findLeague(dashboard, ctx.defaultLeagueId) : null)
-    ?? dashboard.leagues[0]
-    ?? null;
+  // An explicit league never falls back to another one; an omitted league uses the viewing league.
+  const league = args.leagueId ? findLeague(dashboard, args.leagueId) : defaultToolLeague(dashboard, ctx);
   if (!league) return { ok: false as const, error: "League not found for this user." };
 
   const weekly = new Map(dashboard.rankings.filter((row) => row.leagueId === league.id).map((row) => [row.playerId, row]));
