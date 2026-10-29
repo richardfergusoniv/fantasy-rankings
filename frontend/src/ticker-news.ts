@@ -1,4 +1,8 @@
-import { isSleeperTimestampOnlyNews, newsPostDedupeKey } from "../../api/_lib/player-news-filters";
+import {
+  isSleeperTimestampOnlyNews,
+  newsPostDedupeKey,
+  newsVisibleInContext,
+} from "../../api/_lib/player-news-filters";
 import type { PlayerNews, PlayerNewsItem } from "./dashboard-types";
 
 /** Max items shown in the live ticker strip. */
@@ -14,10 +18,14 @@ export const PROMINENT_OVERALL_RANK_LIMIT = 150;
  */
 export const HIGH_NEWS_SCORE = 70;
 
-function flattenNews(news: PlayerNews | undefined): PlayerNewsItem[] {
+function flattenNews(
+  news: PlayerNews | undefined,
+  isDynastyContext: boolean,
+): PlayerNewsItem[] {
   return (news?.runs ?? [])
     .flatMap((run) => run.items)
-    .filter((item) => !isSleeperTimestampOnlyNews(item));
+    .filter((item) => !isSleeperTimestampOnlyNews(item))
+    .filter((item) => newsVisibleInContext(item, isDynastyContext));
 }
 
 /** Highest score first, then newest published time. Missing score sorts last. */
@@ -51,13 +59,13 @@ export function newsForTicker(
   rosterPlayerIds: Set<string>,
   opponentPlayerIds: Set<string>,
   prominentPlayerIds: Set<string>,
-  options?: { limit?: number; highScore?: number },
+  options?: { limit?: number; highScore?: number; isDynastyContext?: boolean },
 ): PlayerNewsItem[] {
   const limit = options?.limit ?? TICKER_NEWS_LIMIT;
   const highScore = options?.highScore ?? HIGH_NEWS_SCORE;
   if (limit <= 0) return [];
 
-  const all = flattenNews(news);
+  const all = flattenNews(news, options?.isDynastyContext ?? false);
   const seenPost = new Set<string>();
   const seenText = new Set<string>();
   const out: PlayerNewsItem[] = [];

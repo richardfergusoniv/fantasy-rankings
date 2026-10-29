@@ -41,10 +41,16 @@ repo**. Player-id attachment for mentions lives **in this app** on ingest.
    `api/_lib/x-producer-priority.ts`.
 2. **Ingest expands mentions** — `POST /api/ingest/player-news-x` still
    accepts one extract per item, but `api/_lib/x-news-mentions.ts` scans
-   `text` for every uniquely resolvable name (full names, aliases, multi-token
+   `text` for uniquely resolvable names (full names, aliases, multi-token
    first names like Amon-Ra) and writes one row per `player_id` (`post_id` +
-   `player_id` unique). Prefer sending `player_id` when known; name matching
-   remains a fallback. Response includes `unresolved` + `unresolvedSamples`.
+   `player_id` unique). Explicit producer `player_id`s always attach; text
+   expansion runs only when total resolved players ≤ 6 (≤ 15 for practice /
+   injury reports). Above the cap, expansion is skipped entirely (explicit
+   only — not truncated to N). Prefer sending `player_id` when known; name
+   matching remains a fallback. Optional `tags` (≤5 lowercase strings); use
+   `["dynasty"]` for dynasty-only posts — redraft feeds hide those rows.
+   Response includes `unresolved` + `unresolvedSamples`. One-off cleanup for
+   legacy over-cap rows: `docs/x-news-over-cap-cleanup.sql`.
 3. **Beat + national accounts** stay in the external fetcher (Schefter,
    Rapoport, team beats). No X scraper lives here.
 4. **Alert** if weekday X volume collapses (e.g. &lt; ~20 rows on a weekday).

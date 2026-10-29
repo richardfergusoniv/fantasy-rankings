@@ -7,8 +7,24 @@
 export const SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT =
   "Sleeper news_updated timestamp changed without new injury notes.";
 
+/** Tag for dynasty-only X posts; redraft contexts hide these rows. */
+export const DYNASTY_NEWS_TAG = "dynasty";
+
 export function isSleeperTimestampOnlyNews(item: { roleContext: string }): boolean {
   return item.roleContext === SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT;
+}
+
+/**
+ * Whether a news row should appear for the current league context.
+ * No league context → treat as redraft (hide dynasty-tagged rows).
+ */
+export function newsVisibleInContext(
+  item: { tags?: readonly string[] | null },
+  isDynastyContext: boolean,
+): boolean {
+  if (isDynastyContext) return true;
+  const tags = item.tags ?? [];
+  return !tags.includes(DYNASTY_NEWS_TAG);
 }
 
 /**

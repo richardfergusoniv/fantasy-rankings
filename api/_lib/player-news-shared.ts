@@ -4,7 +4,9 @@ import { isHttpOrHttpsUrl } from "./http-url.js";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 
 export {
+  DYNASTY_NEWS_TAG,
   isSleeperTimestampOnlyNews,
+  newsVisibleInContext,
   SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT,
 } from "./player-news-filters.js";
 
@@ -35,7 +37,15 @@ export type SharedNewsDraft = {
   publishedAt: Date | null;
   signal: string | null;
   score: number | null;
+  tags: string[];
 };
+
+/** Short lowercase tags (e.g. `dynasty`); max 5 per item. */
+const newsTagSchema = z
+  .string()
+  .min(1)
+  .max(32)
+  .regex(/^[a-z][a-z0-9_-]*$/, "tags must be lowercase alphanumeric (with _ or -)");
 
 export type NotesSnapshotEntry = {
   injuryNotes: string | null;
@@ -68,6 +78,8 @@ export const xNewsItemSchema = z
     published_at: z.string().datetime(),
     signal: z.string().min(1).max(80).optional(),
     score: z.number().int().min(0).max(100).optional(),
+    /** Optional tags such as `["dynasty"]` for dynasty-only posts. */
+    tags: z.array(newsTagSchema).max(5).optional(),
   })
   .refine((item) => Boolean(item.player_id || item.player_name), {
     message: "Each item needs player_id or player_name (prefer player_id).",
@@ -85,6 +97,21 @@ export function retentionCutoff(now = new Date()): Date {
 
 export function stableNewsId(parts: string[]): string {
   return createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 32);
+}
+
+/** Normalize optional ingest tags: lowercase, trim, dedupe, cap at 5. */
+export function normalizeNewsTags(tags: readonly string[] | null | undefined): string[] {
+  if (!tags || tags.length === 0) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of tags) {
+    const tag = raw.trim().toLowerCase();
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    out.push(tag);
+    if (out.length >= 5) break;
+  }
+  return out;
 }
 
 /**
@@ -195,6 +222,7 @@ export function buildInjuryStatusDraft(input: {
     publishedAt: input.checkedAt,
     signal: "injury",
     score: null,
+    tags: [],
   };
 }
 
@@ -231,6 +259,7 @@ export function buildInjuryNotesDraft(input: {
     publishedAt,
     signal: "injury_notes",
     score: null,
+    tags: [],
   };
 }
 
@@ -509,6 +538,7 @@ export function buildXNewsDraft(
     publishedAt: new Date(item.published_at),
     signal: item.signal?.trim() || null,
     score: item.score ?? null,
+    tags: normalizeNewsTags(item.tags),
   };
 }
 
