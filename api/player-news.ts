@@ -9,6 +9,7 @@ import {
 import { resolveSleeperUserId } from "./_lib/auth.js";
 import { db, schema } from "./_lib/db.js";
 import {
+  DYNASTY_NEWS_TAG,
   isSleeperTimestampOnlyNews,
   takeNewsRowsForPostLimit,
 } from "./_lib/player-news-filters.js";
@@ -95,10 +96,18 @@ export type PlayerNews = {
       source: "sleeper" | "x" | "nflverse";
       signal: string | null;
       score: number | null;
+      /** e.g. `["dynasty"]` — redraft clients hide dynasty-tagged rows. */
+      tags: string[];
     }>;
   }>;
   emptyReason: string | null;
 };
+
+/** Redraft (default) hides dynasty-tagged rows at query time. */
+function dynastyTagVisibilitySql(isDynastyContext: boolean) {
+  if (isDynastyContext) return undefined;
+  return sql`NOT (${DYNASTY_NEWS_TAG} = ANY(${schema.sharedPlayerNews.tags}))`;
+}
 
 function playerLabel(player: SleeperPlayer): string {
   return player.full_name ?? [player.first_name, player.last_name].filter(Boolean).join(" ");
@@ -160,6 +169,7 @@ async function insertSharedDrafts(drafts: SharedNewsDraft[]): Promise<number> {
       publishedAt: draft.publishedAt,
       signal: draft.signal,
       score: draft.score,
+      tags: draft.tags,
       createdAt: new Date(),
     }));
     const result = await db
@@ -174,21 +184,25 @@ async function insertSharedDrafts(drafts: SharedNewsDraft[]): Promise<number> {
   return inserted;
 }
 
-async function readStoredNews(): Promise<Response> {
+async function readStoredNews(isDynastyContext: boolean): Promise<Response> {
   const cutoff = retentionCutoff();
+  const tagVisibility = dynastyTagVisibilitySql(isDynastyContext);
   const rows = await db
     .select()
     .from(schema.sharedPlayerNews)
     .where(
-      or(
-        and(
-          sql`${schema.sharedPlayerNews.publishedAt} is not null`,
-          gt(schema.sharedPlayerNews.publishedAt, cutoff),
+      and(
+        or(
+          and(
+            sql`${schema.sharedPlayerNews.publishedAt} is not null`,
+            gt(schema.sharedPlayerNews.publishedAt, cutoff),
+          ),
+          and(
+            isNull(schema.sharedPlayerNews.publishedAt),
+            gt(schema.sharedPlayerNews.createdAt, cutoff),
+          ),
         ),
-        and(
-          isNull(schema.sharedPlayerNews.publishedAt),
-          gt(schema.sharedPlayerNews.createdAt, cutoff),
-        ),
+        ...(tagVisibility ? [tagVisibility] : []),
       ),
     )
     .orderBy(
@@ -222,6 +236,7 @@ async function readStoredNews(): Promise<Response> {
     source: item.source as "sleeper" | "x" | "nflverse",
     signal: item.signal,
     score: item.score,
+    tags: item.tags ?? [],
   }));
 
   return json({
@@ -392,7 +407,11 @@ export async function GET(req: Request): Promise<Response> {
     }
     const sleeperUserId = await resolveSleeperUserId(req);
     if (!sleeperUserId) return unauthorized("Sign in required.");
-    return await readStoredNews();
+    // ?dynasty=1 → dynasty league context (include dynasty-tagged rows).
+    // Missing / other values → redraft (default when no league context).
+    const url = new URL(req.url, "https://localhost");
+    const isDynastyContext = url.searchParams.get("dynasty") === "1";
+    return await readStoredNews(isDynastyContext);
   } catch (err) {
     return internalError(err);
   }

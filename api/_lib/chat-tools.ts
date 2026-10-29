@@ -9,7 +9,7 @@ import { weeklyOpponentRosterId } from "./opponent-roster.js";
 import type { Dashboard } from "./dashboard-schemas.js";
 import { loadOrBuildUserDashboard, readUserDashboardCache } from "./dashboard-build.js";
 import { db, schema } from "./db.js";
-import { isSleeperTimestampOnlyNews } from "./player-news-filters.js";
+import { DYNASTY_NEWS_TAG, isSleeperTimestampOnlyNews } from "./player-news-filters.js";
 import { retentionCutoff } from "./player-news-shared.js";
 import {
   BOOM_BUST_SEASONS,
@@ -383,7 +383,7 @@ async function toolGetMyLeagues(ctx: ChatToolContext, args: { leagueId?: string 
   };
 }
 
-async function loadPlayerNews(playerId: string, limit = 8) {
+async function loadPlayerNews(playerId: string, isDynastyContext: boolean, limit = 8) {
   try {
     const cutoff = retentionCutoff();
     const rows = await db
@@ -415,6 +415,9 @@ async function loadPlayerNews(playerId: string, limit = 8) {
               gt(schema.sharedPlayerNews.createdAt, cutoff),
             ),
           ),
+          ...(isDynastyContext
+            ? []
+            : [sql`NOT (${DYNASTY_NEWS_TAG} = ANY(${schema.sharedPlayerNews.tags}))`]),
         ),
       )
       .orderBy(desc(sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`))
@@ -598,7 +601,10 @@ async function toolGetPlayerCard(
       })
       : { status: "unavailable" as const, reason: "Boom/Bust needs a skill position and league context." };
 
-  const news = await loadPlayerNews(playerId);
+  const news = await loadPlayerNews(
+    playerId,
+    Boolean(league?.seasonLongFormat.isDynasty),
+  );
 
   return {
     ok: true as const,

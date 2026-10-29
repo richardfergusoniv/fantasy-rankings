@@ -131,7 +131,8 @@ export const api = {
     week: number;
   }): Promise<MatchupBoxScore> => request(`/api/box-score${buildQuery(args)}`),
 
-  getPlayerNews: (_args?: EmptyArgs): Promise<PlayerNews> => request("/api/player-news"),
+  getPlayerNews: (args?: { dynasty?: boolean }): Promise<PlayerNews> =>
+    request(`/api/player-news${args?.dynasty ? "?dynasty=1" : ""}`),
 
   getChatAvailability: async (_args?: EmptyArgs): Promise<{ available: boolean }> => {
     const token = await getAccessToken();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT } from "../../api/_lib/player-news-filters";
+import { DYNASTY_NEWS_TAG, SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT } from "../../api/_lib/player-news-filters";
 import { rosterNewsForTicker } from "./roster-news";
 import type { PlayerNews } from "./dashboard-types";
 
@@ -11,6 +11,7 @@ function news(items: Array<{
   sourceUrl?: string;
   externalId?: string | null;
   source?: "sleeper" | "x" | "nflverse";
+  tags?: string[];
 }>): PlayerNews {
   return {
     lastCheckedAt: null,
@@ -37,6 +38,7 @@ function news(items: Array<{
         source: item.source ?? ("sleeper" as const),
         signal: null,
         score: null,
+        tags: item.tags ?? [],
       })),
     }],
   };
@@ -95,5 +97,16 @@ describe("rosterNewsForTicker", () => {
     ]);
     const items = rosterNewsForTicker(feed, new Set(["a", "b"]));
     expect(items.map((item) => item.id)).toEqual(["x-a"]);
+  });
+
+  it("hides dynasty-tagged rows in redraft and shows them in dynasty; untagged always show", () => {
+    const feed = news([
+      { id: "dynasty", playerId: "a", change: "Dynasty note", tags: [DYNASTY_NEWS_TAG] },
+      { id: "plain", playerId: "a", change: "Untagged note" },
+    ]);
+    expect(rosterNewsForTicker(feed, new Set(["a"])).map((item) => item.id)).toEqual(["plain"]);
+    expect(
+      rosterNewsForTicker(feed, new Set(["a"]), { isDynastyContext: true }).map((item) => item.id),
+    ).toEqual(["dynasty", "plain"]);
   });
 });

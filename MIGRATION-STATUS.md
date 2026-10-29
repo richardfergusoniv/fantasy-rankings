@@ -175,6 +175,10 @@ with `api/_lib/schema.ts` (it predates `0010` onward), so `npm run db:generate`
 would emit duplicates of migrations that already exist. Don't use it; write
 the next numbered SQL file and journal entry instead.
 
+`0014_shared_player_news_per_player` changes uniqueness to `(post, player)`.
+`0015_shared_player_news_tags` adds `tags text[]` for dynasty-only X posts.
+Apply both (in order) before deploying code that writes or filters on tags.
+
 `0002` is safe to re-run (`IF EXISTS` / `IF NOT EXISTS`). `0003` is not — its
 `CREATE POLICY` statements have no existence check. `0004` creates the
 `saved_chart_views` owner policy but never enables RLS on that table; `0013`

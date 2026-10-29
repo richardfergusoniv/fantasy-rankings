@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  DYNASTY_NEWS_TAG,
   isSleeperTimestampOnlyNews,
   newsPostDedupeKey,
+  newsVisibleInContext,
   SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT,
   takeNewsRowsForPostLimit,
 } from "./player-news-filters.js";
@@ -14,6 +16,7 @@ import {
   dedupeKey,
   filterDuplicateDrafts,
   isLastNameOnlyKey,
+  normalizeNewsTags,
   normalizeNewsUpdated,
   normalizePlayerNameKey,
   parseNotesSnapshot,
@@ -70,6 +73,56 @@ describe("xNewsItemSchema / xNewsBatchSchema", () => {
     expect(xNewsItemSchema.safeParse({ ...validItem, source_url: "javascript:alert(1)" }).success).toBe(false);
     expect(xNewsItemSchema.safeParse({ ...validItem, source_url: "data:text/html,hi" }).success).toBe(false);
     expect(xNewsItemSchema.safeParse({ ...validItem, source_url: "file:///tmp/x" }).success).toBe(false);
+  });
+
+  it("accepts optional tags and rejects invalid tag shapes", () => {
+    expect(xNewsItemSchema.safeParse({ ...validItem, tags: ["dynasty"] }).success).toBe(true);
+    expect(xNewsItemSchema.safeParse({ ...validItem, tags: ["Dynasty"] }).success).toBe(false);
+    expect(xNewsItemSchema.safeParse({
+      ...validItem,
+      tags: ["a", "b", "c", "d", "e", "f"],
+    }).success).toBe(false);
+  });
+});
+
+describe("normalizeNewsTags + dynasty visibility", () => {
+  it("stores normalized tags on X drafts and defaults missing tags to []", () => {
+    const draft = buildXNewsDraft(
+      {
+        player_id: "1",
+        text: "Dynasty note",
+        author_handle: "dynastyacct",
+        source_url: "https://x.com/d/status/9",
+        post_id: "9",
+        published_at: "2026-10-10T18:00:00.000Z",
+        tags: ["dynasty", "dynasty", "  "],
+      },
+      { playerId: "1", player: "A", team: "MIN" },
+    );
+    expect(draft.tags).toEqual(["dynasty"]);
+    expect(normalizeNewsTags(["Dynasty", "FOO", "foo"])).toEqual(["dynasty", "foo"]);
+    const untagged = buildXNewsDraft(
+      {
+        player_id: "1",
+        text: "National note",
+        author_handle: "reporter",
+        source_url: "https://x.com/r/status/10",
+        post_id: "10",
+        published_at: "2026-10-10T18:00:00.000Z",
+      },
+      { playerId: "1", player: "A", team: "MIN" },
+    );
+    expect(untagged.tags).toEqual([]);
+  });
+
+  it("hides dynasty-tagged rows in redraft and shows them in dynasty", () => {
+    const dynastyRow = { tags: [DYNASTY_NEWS_TAG] };
+    const plainRow = { tags: [] as string[] };
+    expect(newsVisibleInContext(dynastyRow, false)).toBe(false);
+    expect(newsVisibleInContext(dynastyRow, true)).toBe(true);
+    expect(newsVisibleInContext(plainRow, false)).toBe(true);
+    expect(newsVisibleInContext(plainRow, true)).toBe(true);
+    expect(newsVisibleInContext({}, false)).toBe(true);
   });
 });
 
