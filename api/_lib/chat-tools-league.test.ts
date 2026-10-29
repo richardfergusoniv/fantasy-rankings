@@ -174,13 +174,14 @@ describe("league chat tools", () => {
     const result = (await dispatchChatTool("get_playoff_odds", { leagueId: "lg1" }, ctx())) as {
       ok: true;
       regularSeasonEndsWeek: number;
-      you: { playoffPct: number; remainingOpponents: Array<{ opponent: string }>; finalWinScenarios: Array<{ finalWins: number }> };
+      you: { playoffPct: number; remainingGames: Array<{ opponentName: string; winProbability: number }>; finalWinScenarios: Array<{ finalWins: number }> };
       teams: unknown[];
     };
     expect(result.ok).toBe(true);
     expect(result.regularSeasonEndsWeek).toBe(10);
-    expect(result.you.remainingOpponents.length).toBeGreaterThan(0);
-    expect(result.you.remainingOpponents[0]!.opponent).toBe("Rival");
+    expect(result.you.remainingGames.length).toBeGreaterThan(0);
+    expect(result.you.remainingGames[0]!.opponentName).toBe("Rival");
+    expect(result.you.remainingGames[0]!.winProbability).toBeGreaterThan(0);
     expect(result.you.playoffPct).toBeGreaterThan(0);
     expect(result.teams).toHaveLength(2);
   });

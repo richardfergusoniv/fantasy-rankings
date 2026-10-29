@@ -35,6 +35,8 @@ export type WinScenario = { finalWins: number; probability: number; playoffPct: 
 export type PlayoffOdds = {
   trials: number;
   gamesRemaining: number;
+  /** Each simulated game with the chance that team `a` wins it (0-1). */
+  games: Array<{ week: number; a: number; b: number; pA: number }>;
   teams: TeamOdds[];
   userScenarios: WinScenario[];
 };
@@ -136,6 +138,9 @@ export function simulatePlayoffOdds(args: {
   return {
     trials,
     gamesRemaining: games.length,
+    games: args.games
+      .filter((game) => index.has(game.a) && index.has(game.b) && game.a !== game.b)
+      .map((game, g) => ({ ...game, pA: Math.round(pCache[g]! * 1000) / 1000 })),
     teams: teams
       .map((team, i) => ({
         rosterId: team.rosterId,

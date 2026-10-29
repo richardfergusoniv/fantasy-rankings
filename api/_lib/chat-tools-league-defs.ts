@@ -77,7 +77,7 @@ export const LEAGUE_CHAT_TOOL_DEFINITIONS: ToolDefinition[] = [
     function: {
       name: "get_playoff_odds",
       description:
-        "Playoff odds for every team from the current standings and the remaining schedule (simulated, not an app score), the user's remaining opponents, and what the user's final win total means for making the playoffs. Use for 'what do I need to make the playoffs' and for deciding whether to play for floor, ceiling or the future.",
+        "Playoff and last-place odds for every team from the current standings and the remaining schedule (simulated, not an app score; the method field says what inputs it uses). For the user: their remaining games with win chances, and what each final win total means for making the playoffs. Use for 'what do I need to make the playoffs', for 'am I in danger of finishing last', and for deciding whether to play for floor, ceiling or the future.",
       parameters: {
         type: "object",
         properties: { leagueId: { type: "string" } },

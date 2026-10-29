@@ -13,8 +13,7 @@ import {
   type ChatToolContext,
 } from "./chat-tools.js";
 import { summarizeLeagueRules } from "./league-rules.js";
-import { simulatePlayoffOdds } from "./playoff-odds.js";
-import { loadScheduleGames } from "./league-outcomes.js";
+import { buildLeagueOutcomes } from "./league-outcomes.js";
 
 type League = Dashboard["leagues"][number];
 const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
@@ -215,71 +214,42 @@ export async function toolGetPlayoffOdds(ctx: ChatToolContext, args: { leagueId:
   const dashboard = await loadDashboard(ctx);
   const league = findLeague(dashboard, args.leagueId);
   if (!league) return { ok: false as const, error: "League not found for this user." };
-  const standings = league.standings ?? [];
-  const playoffTeams = league.playoffs?.teams ?? null;
-  if (standings.length < 2 || !playoffTeams) {
-    return { ok: false as const, error: "Standings or playoff settings are not available for this league." };
-  }
-  const lastRegularWeek = league.playoffs.weekStart ? league.playoffs.weekStart - 1 : 14;
-  const gamesPlayed = Math.max(...standings.map((row) => row.wins + row.losses + row.ties));
-  const firstWeek = gamesPlayed + 1;
-  const weeks = Array.from({ length: Math.max(0, lastRegularWeek - firstWeek + 1) }, (_, i) => firstWeek + i);
+  const outcomes = await buildLeagueOutcomes(league, { season: dashboard.season, week: dashboard.week });
+  if ("error" in outcomes) return { ok: false as const, error: outcomes.error };
 
-  const { games, missingWeeks } = await loadScheduleGames(league.id, weeks);
-  if (weeks.length > 0 && games.length === 0) {
-    return { ok: false as const, error: "The remaining schedule could not be loaded from Sleeper." };
-  }
-
-  const odds = simulatePlayoffOdds({
-    teams: standings.map((row) => ({
-      rosterId: row.rosterId,
-      teamName: row.teamName,
-      isUser: row.isUser,
-      wins: row.wins,
-      losses: row.losses,
-      ties: row.ties,
-      pointsFor: row.pointsFor,
-    })),
-    games,
-    playoffTeams,
-  });
-
-  const me = standings.find((row) => row.isUser) ?? null;
-  const name = new Map(standings.map((row) => [row.rosterId, row]));
-  const ppg = (row: (typeof standings)[number] | undefined) => {
-    const played = row ? row.wins + row.losses + row.ties : 0;
-    return row && played > 0 ? Math.round((row.pointsFor / played) * 10) / 10 : null;
-  };
-  const myGames = me ? games.filter((game) => game.a === me.rosterId || game.b === me.rosterId).sort((a, b) => a.week - b.week) : [];
-  const mine = odds.teams.find((team) => team.isUser) ?? null;
-
+  const mine = outcomes.teams.find((team) => team.isUser) ?? null;
   return {
     ok: true as const,
     leagueId: league.id,
     week: dashboard.week,
-    playoffTeams,
-    regularSeasonEndsWeek: lastRegularWeek,
-    method: `Simulated ${odds.trials} seasons. Each team scores at its points-per-game so far (blended toward the league average early); games are decided by that gap with typical weekly variance. Seeding is wins, then points for. This is an estimate, not an app score.`,
-    caveats: [
-      ...(league.playoffs.positionKnown === false ? ["League has divisions; division winners are not modeled, so odds are approximate."] : []),
-      ...(missingWeeks.length > 0 ? [`Schedule unavailable for week(s) ${missingWeeks.join(", ")}; those games are left out.`] : []),
-      "Assumes every team plays each remaining week and no bye weeks.",
-    ],
+    throughWeek: outcomes.throughWeek,
+    playoffTeams: outcomes.playoffTeams,
+    regularSeasonEndsWeek: outcomes.regularSeasonEndsWeek,
+    method: `${outcomes.method.label}. Simulated ${outcomes.trials} seasons; an estimate, not an app score.`,
+    caveats: outcomes.method.notes,
+    inputsAsOf: outcomes.method.inputsAsOf,
     you: mine
       ? {
         record: mine.record,
         playoffPct: mine.playoffPct,
         topSeedPct: mine.topSeedPct,
+        lastPlacePct: mine.lastPct,
         projectedWins: mine.projectedWins,
+        previousPlayoffPct: mine.previousPlayoffPct,
         status: mine.playoffPct >= 99.9 ? "all but clinched in the model" : mine.playoffPct <= 0.1 ? "all but eliminated in the model" : "in the race",
-        remainingOpponents: myGames.map((game) => {
-          const opp = name.get(game.a === me!.rosterId ? game.b : game.a);
-          return { week: game.week, opponent: opp?.teamName ?? "Unknown", opponentRecord: opp ? `${opp.wins}-${opp.losses}${opp.ties ? `-${opp.ties}` : ""}` : null, opponentPointsPerGame: ppg(opp) };
-        }),
-        finalWinScenarios: odds.userScenarios,
+        remainingGames: outcomes.userSchedule,
+        finalWinScenarios: outcomes.userScenarios,
       }
       : null,
-    teams: odds.teams,
+    teams: outcomes.teams.map((team) => ({
+      teamName: team.teamName,
+      isUser: team.isUser,
+      record: team.record,
+      playoffPct: team.playoffPct,
+      lastPlacePct: team.lastPct,
+      projectedWins: team.projectedWins,
+      weeklyStrength: team.weeklyStrength,
+    })),
   };
 }
 

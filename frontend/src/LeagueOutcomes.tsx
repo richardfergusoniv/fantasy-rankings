@@ -111,7 +111,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
         <span><i className="outcomes-dot now" />After week {data.throughWeek}</span>
       </div>
       <p className="outcomes-note">
-        {formatDecimal(data.trials, 0)} simulations · weeks 1–{data.throughWeek} fixed · {view === "last" ? "last place" : `top ${data.playoffTeams}`} after week {data.regularSeasonEndsWeek} · model estimates{data.divisionsIgnored ? " · divisions not modeled" : ""}
+        {formatDecimal(data.trials, 0)} simulations · {data.method.label.toLowerCase()} · weeks 1–{data.throughWeek} fixed · {view === "last" ? "last place" : `top ${data.playoffTeams}`} after week {data.regularSeasonEndsWeek} · model estimates{data.divisionsIgnored ? " · divisions not modeled" : ""}
       </p>
     </section>
   );

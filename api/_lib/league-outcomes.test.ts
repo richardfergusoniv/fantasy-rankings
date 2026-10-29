@@ -6,6 +6,7 @@ vi.mock("./auth.js", () => ({ resolveSleeperUserId: vi.fn() }));
 vi.mock("./viewer-league-access.js", () => ({ viewerBelongsToLeague: vi.fn() }));
 
 import { buildLeagueOutcomes, rewindWeek, type FetchWeek } from "./league-outcomes.js";
+import { leagueOutcomesSchema } from "./league-outcomes-contract.js";
 
 const row = (rosterId: number, teamName: string, wins: number, losses: number, pointsFor: number, isUser = false) => ({
   rosterId, teamName, isUser, rank: rosterId, wins, losses, ties: 0, pointsFor, pointsAgainst: 0, playoffSeed: null, gamesOutOfPlayoffs: null,
@@ -39,7 +40,7 @@ describe("rewindWeek", () => {
 
 describe("buildLeagueOutcomes", () => {
   it("reports current and previous-week odds for playoffs and last place", async () => {
-    const result = await buildLeagueOutcomes(league, fetchWeek);
+    const result = await buildLeagueOutcomes(league, { fetchWeek });
     if ("error" in result) throw new Error(result.error);
     expect(result.throughWeek).toBe(5);
     expect(result.previousWeek).toBe(4);
@@ -51,12 +52,18 @@ describe("buildLeagueOutcomes", () => {
     const a = result.teams.find((t) => t.teamName === "A")!;
     const d = result.teams.find((t) => t.teamName === "D")!;
     expect(a.previousPlayoffPct).not.toBeNull();
+    expect(result.previousSource).toBe("rewound");
+    expect(result.method.engine).toBe("pace-v1");
+    expect(leagueOutcomesSchema.safeParse(result).success).toBe(true);
+    expect(result.userSchedule.map((g) => g.week)).toEqual([6, 7]);
+    expect(result.userSchedule[0]!.opponentName).toBe("B");
+    expect(result.userScenarios.length).toBeGreaterThan(0);
     expect(a.playoffPct).toBeGreaterThan(d.playoffPct);
     expect(d.lastPct).toBeGreaterThan(a.lastPct);
   });
 
   it("errors without playoff settings", async () => {
     const bare = { ...league, playoffs: { teams: null, weekStart: null } } as unknown as Dashboard["leagues"][number];
-    expect(await buildLeagueOutcomes(bare, fetchWeek)).toHaveProperty("error");
+    expect(await buildLeagueOutcomes(bare, { fetchWeek })).toHaveProperty("error");
   });
 });
