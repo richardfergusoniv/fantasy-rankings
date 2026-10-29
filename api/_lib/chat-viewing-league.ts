@@ -9,6 +9,7 @@
  * membership-checked) so tools and the prompt keep a default.
  */
 import { readUserDashboardCache } from "./dashboard-build.js";
+import { leagueRulesPromptLine, summarizeLeagueRules } from "./league-rules.js";
 import { isDynasticalPpfdLeague, seasonLongFormatForLeague } from "./sleeper.js";
 import { readUserLeagues } from "./user-leagues.js";
 
@@ -17,6 +18,8 @@ export type ViewingLeague = {
   name: string;
   scoringLabel: string;
   isDynasty: boolean;
+  /** One-line rules summary (slots, scoring, playoffs, waivers); absent on a cold dashboard cache. */
+  rules?: string;
 };
 
 function scoringLabelForSleeperLeague(
@@ -27,6 +30,14 @@ function scoringLabelForSleeperLeague(
   if (format.ppr === 1) return "PPR";
   if (format.ppr === 0.5) return "Half PPR";
   return "Standard";
+}
+
+function rulesLine(league: Parameters<typeof summarizeLeagueRules>[0]): string | undefined {
+  try {
+    return leagueRulesPromptLine(summarizeLeagueRules(league));
+  } catch {
+    return undefined;
+  }
 }
 
 export async function resolveViewingLeague(
@@ -43,6 +54,7 @@ export async function resolveViewingLeague(
         name: league.name,
         scoringLabel: league.scoringLabel,
         isDynasty: league.seasonLongFormat.isDynasty,
+        rules: rulesLine(league),
       };
     }
   } catch {
@@ -74,6 +86,7 @@ export function viewingLeaguePromptLines(league: ViewingLeague): string {
   const format = `${league.scoringLabel}, ${league.isDynasty ? "dynasty" : "redraft"}`;
   return [
     `The user is currently viewing the league "${promptSafeLeagueName(league.name)}" (${format}; league id ${league.id}).`,
+    ...(league.rules ? [league.rules.replace(/[\r\n]+/g, " ")] : []),
     `When they say "this team", "my team", or "this league" without naming a league, they mean this league: use league id ${league.id} for tool calls unless they name a different league.`,
   ].join("\n");
 }

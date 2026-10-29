@@ -29,6 +29,8 @@ import { scoreTrade } from "./move-scoring.js";
 import { redraftTwinFormat } from "./season-long-format.js";
 import { loadActiveScoringWeights } from "./scoring-jobs.js";
 import { loadHistoricalTrades } from "./trades.js";
+import { LEAGUE_CHAT_TOOL_DEFINITIONS } from "./chat-tools-league-defs.js";
+import { dispatchLeagueChatTool } from "./chat-tools-league.js";
 import {
   dispatchPreferenceChatTool,
   PREFERENCE_CHAT_TOOL_DEFINITIONS,
@@ -198,6 +200,7 @@ export const CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     },
   },
   ...EXTENDED_CHAT_TOOL_DEFINITIONS,
+  ...LEAGUE_CHAT_TOOL_DEFINITIONS,
   ...PREFERENCE_CHAT_TOOL_DEFINITIONS,
 ];
 
@@ -1073,6 +1076,8 @@ export async function dispatchChatTool(
       if (preference !== null) return preference;
       const extended = await dispatchExtendedChatTool(name, args, ctx);
       if (extended !== null) return extended;
+      const leagueTool = await dispatchLeagueChatTool(name, args, ctx);
+      if (leagueTool !== null) return leagueTool;
       return { ok: false, error: `Unknown tool: ${name}` };
     }
   }

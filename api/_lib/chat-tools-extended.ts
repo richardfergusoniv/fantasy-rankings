@@ -26,6 +26,8 @@ import {
   retentionCutoff,
 } from "./player-news-shared.js";
 import { VALUE_HISTORY_CHART_MIN_DATE } from "./player-value-history.js";
+import { suggestFaabBid } from "./faab-bid.js";
+import type { WaiverLabel } from "./scoring/labels.js";
 import { loadPropLineWeek } from "./prop-line-week.js";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 import { PLAYER_NEWS_SNAPSHOT_KEY } from "./sleeper.js";
@@ -143,7 +145,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "suggest_waivers",
       description:
-        "Best available free agents in my league, plus the user's waiver status (FAAB budget remaining, waiver position). Returns deterministic move-scoring labels (Must add / Add / Watch / Pass) per window — explain them, never change them. Pass is hidden from lists unless asked.",
+        "Best available free agents in my league, plus the user's waiver status (FAAB budget remaining, waiver position). Returns deterministic move-scoring labels (Must add / Add / Watch / Pass) per window — explain them, never change them — plus a suggested FAAB bid range (or priority note) per player: a heuristic, say so. Pass is hidden from lists unless asked.",
       parameters: {
         type: "object",
         properties: {
@@ -973,7 +975,15 @@ export async function toolSuggestWaivers(
     waivers: league.waivers ?? null,
     note: "Labels and scores are from move-scoring. Explain them; do not re-rank. Pass adds are omitted from lists unless nothing stronger is available or the user asks.",
     weakPositions,
-    suggestions: visible,
+    suggestions: visible.map((row) => ({
+      ...row,
+      bid: suggestFaabBid({
+        label: row.primaryLabel as WaiverLabel,
+        waivers: league.waivers ?? null,
+        weeksLeft: league.playoffs?.weekStart ? Math.max(0, league.playoffs.weekStart - dashboard.week) : null,
+        trendingAdds: dashboard.playerTrending[row.playerId]?.adds ?? null,
+      }),
+    })),
   };
 }
 
