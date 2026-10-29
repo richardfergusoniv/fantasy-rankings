@@ -32,9 +32,10 @@ import {
   runScoringWeightsRefit,
   snapshotSleeperTrendingWeekly,
 } from "../_lib/scoring-jobs.js";
+import { loadXProducerPrioritySet } from "../_lib/x-producer-priority.js";
 
 /**
- * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-player-insights | refresh-nfl-players | backfill-value-history | backfill-pick-value-history | finalize-accuracy | snapshot-sleeper-trending | scoring-decision-snapshot | scoring-weights-refit
+ * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-player-insights | refresh-nfl-players | backfill-value-history | backfill-pick-value-history | finalize-accuracy | snapshot-sleeper-trending | scoring-decision-snapshot | scoring-weights-refit | x-producer-priority
  *
  * One function for the scheduled jobs (Vercel's 12-function budget).
  * Vercel Cron invokes with GET; auth is `Authorization: Bearer <CRON_SECRET>`
@@ -79,6 +80,9 @@ import {
  *   keyed sleeper-trending:{season}-w{week} (168h lookback).
  * - scoring-decision-snapshot: Saturday decision-time marker / snapshot hook.
  * - scoring-weights-refit: Tuesday-night candidate weights + promote guardrails.
+ * - x-producer-priority: returns the X push producer priority player_id set
+ *   (owner-league roster ids ∪ active search_rank ≤ 300). Read-only; for the
+ *   external X ingest routine. Prefer sending Sleeper player_id on ingest.
  */
 
 async function handleRebuildDashboard(): Promise<Response> {
@@ -208,6 +212,23 @@ async function handleScoringWeightsRefit(): Promise<Response> {
   return json({ job: "scoring-weights-refit", ...result });
 }
 
+async function handleXProducerPriority(url: URL): Promise<Response> {
+  const fresh = url.searchParams.get("fresh") === "1";
+  const result = await loadXProducerPrioritySet({ freshLeagues: fresh });
+  return json({
+    ok: true,
+    job: "x-producer-priority",
+    count: result.playerIds.length,
+    ...result,
+    contract: {
+      ingest: "POST /api/ingest/player-news-x",
+      preferPlayerId: true,
+      unresolvedSamples: "ingest response includes unresolvedSamples (up to 10)",
+      weekdayVolumeFloorHint: "alert if weekday X rows collapse (e.g. < 20)",
+    },
+  });
+}
+
 export async function GET(req: Request): Promise<Response> {
   if (!hasCronSecret(req)) return forbidden("Invalid or missing cron secret.");
   const url = new URL(req.url, "https://localhost");
@@ -226,8 +247,9 @@ export async function GET(req: Request): Promise<Response> {
     if (job === "snapshot-sleeper-trending") return await handleSnapshotSleeperTrending();
     if (job === "scoring-decision-snapshot") return await handleScoringDecisionSnapshot();
     if (job === "scoring-weights-refit") return await handleScoringWeightsRefit();
+    if (job === "x-producer-priority") return await handleXProducerPriority(url);
     return badRequest(
-      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, refresh-player-insights, refresh-nfl-players, backfill-value-history, backfill-pick-value-history, finalize-accuracy, snapshot-sleeper-trending, scoring-decision-snapshot, or scoring-weights-refit.",
+      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, refresh-player-insights, refresh-nfl-players, backfill-value-history, backfill-pick-value-history, finalize-accuracy, snapshot-sleeper-trending, scoring-decision-snapshot, scoring-weights-refit, or x-producer-priority.",
     );
   } catch (err) {
     await captureServerError(err, { route: "cron/jobs", job: job ?? "unknown" });

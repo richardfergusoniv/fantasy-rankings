@@ -70,7 +70,7 @@ export const xNewsItemSchema = z
     score: z.number().int().min(0).max(100).optional(),
   })
   .refine((item) => Boolean(item.player_id || item.player_name), {
-    message: "Each item needs player_id or player_name.",
+    message: "Each item needs player_id or player_name (prefer player_id).",
   });
 
 export const xNewsBatchSchema = z.object({

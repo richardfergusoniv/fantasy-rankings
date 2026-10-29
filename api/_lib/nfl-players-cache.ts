@@ -44,6 +44,8 @@ export type NflPlayerRosterEntry = {
   /** Sleeper news stamp — epoch seconds/ms or ISO string when present. */
   news_updated?: string | number | null;
   years_exp?: number | null;
+  /** Sleeper search relevance rank (lower = more searched / relevant). */
+  search_rank?: number | null;
 };
 
 export type NflPlayersCacheSnapshot = {
@@ -99,6 +101,7 @@ export function compactSleeperPlayers(
         ? undefined
         : (typeof newsUpdated === "string" || typeof newsUpdated === "number" ? newsUpdated : null),
       years_exp: asOptionalNumber(player.years_exp),
+      search_rank: asOptionalNumber(player.search_rank),
     };
   }
   return compact;
@@ -116,6 +119,7 @@ export function rosterEntryToSleeperPlayer(entry: NflPlayerRosterEntry): Sleeper
     injury_notes: entry.injury_notes,
     news_updated: entry.news_updated,
     years_exp: entry.years_exp,
+    search_rank: entry.search_rank,
   };
 }
 

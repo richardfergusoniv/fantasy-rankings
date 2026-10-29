@@ -36,6 +36,7 @@ describe("compactSleeperPlayers", () => {
         position: "WR",
         injury_status: null,
         years_exp: 2,
+        search_rank: 42,
         hashtag: "#marvinharrison-NFL-HOU-18",
         metadata: { channel_id: "x", rookie_year: "2024" },
         sportradar_id: "e8da21a8-796d-48a2-b644-57d08983ae01",
@@ -51,6 +52,7 @@ describe("compactSleeperPlayers", () => {
       last_name: "Harrison",
       injury_status: null,
       years_exp: 2,
+      search_rank: 42,
     });
     expect(compact["11628"]).not.toHaveProperty("hashtag");
     expect(compact["11628"]).not.toHaveProperty("metadata");
@@ -121,9 +123,11 @@ describe("rosterEntryToSleeperPlayer", () => {
       full_name: "Younghoe Koo",
       injury_status: null,
       years_exp: 8,
+      search_rank: 210,
     });
     expect(sleeper.team).toBeNull();
     expect(sleeper.status).toBe("Active");
+    expect(sleeper.search_rank).toBe(210);
     expect(resolvePlayerTeam(sleeper, "ATL")).toBeNull();
     expect(isActiveNflRosterPlayer(sleeper)).toBe(false);
   });

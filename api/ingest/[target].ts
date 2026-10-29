@@ -401,6 +401,15 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     )
     .returning({ id: schema.sharedPlayerNews.id });
 
+  const unresolvedSamples = unresolved.slice(0, 10);
+  if (unresolvedSamples.length > 0) {
+    console.warn(
+      "[ingest/player-news-x] unresolved samples",
+      unresolved.length,
+      unresolvedSamples,
+    );
+  }
+
   return json({
     ok: true,
     status: "committed",
@@ -409,7 +418,7 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     inserted,
     duplicates: Math.max(0, unique.length - inserted),
     unresolved: unresolved.length,
-    unresolvedSamples: unresolved.slice(0, 10),
+    unresolvedSamples,
     purged: purged.length,
   });
 }
