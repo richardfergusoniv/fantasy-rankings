@@ -19,7 +19,7 @@ import {
   scoreWaiver,
 } from "./move-scoring.js";
 import { readChartExtrasSnapshot } from "./nflverse-chart-extras.js";
-import { isSleeperTimestampOnlyNews } from "./player-news-filters.js";
+import { isSleeperTimestampOnlyNews, newsPostDedupeKey } from "./player-news-filters.js";
 import {
   PLAYER_NEWS_NOTES_SNAPSHOT_KEY,
   parseNotesSnapshot,
@@ -274,54 +274,84 @@ export async function toolGetPlayerNews(
 
   const limit = Math.min(30, Math.max(1, Math.floor(args.limit ?? 15)));
   const cutoff = retentionCutoff();
-  const shared = await db
-    .select({
-      id: schema.sharedPlayerNews.id,
-      playerId: schema.sharedPlayerNews.playerId,
-      player: schema.sharedPlayerNews.player,
-      team: schema.sharedPlayerNews.team,
-      change: schema.sharedPlayerNews.change,
-      newsType: schema.sharedPlayerNews.newsType,
-      roleContext: schema.sharedPlayerNews.roleContext,
-      sourceLabel: schema.sharedPlayerNews.sourceLabel,
-      sourceUrl: schema.sharedPlayerNews.sourceUrl,
-      publishedAt: schema.sharedPlayerNews.publishedAt,
-      createdAt: schema.sharedPlayerNews.createdAt,
-      source: schema.sharedPlayerNews.source,
-    })
-    .from(schema.sharedPlayerNews)
-    .where(
+  const pageSize = scope === "player"
+    ? Math.max(limit * 2, 16)
+    : Math.max(limit * 4, 32);
+  // Bound scanned rows so roundup fan-out cannot exhaust the query budget.
+  const maxScan = scope === "player"
+    ? pageSize
+    : Math.max(limit * 20, 100);
+  const newsWhere = and(
+    inArray(schema.sharedPlayerNews.playerId, ids),
+    or(
       and(
-        inArray(schema.sharedPlayerNews.playerId, ids),
-        or(
-          and(
-            sql`${schema.sharedPlayerNews.publishedAt} is not null`,
-            gte(schema.sharedPlayerNews.publishedAt, cutoff),
-          ),
-          and(
-            sql`${schema.sharedPlayerNews.publishedAt} is null`,
-            gte(schema.sharedPlayerNews.createdAt, cutoff),
-          ),
-        ),
+        sql`${schema.sharedPlayerNews.publishedAt} is not null`,
+        gte(schema.sharedPlayerNews.publishedAt, cutoff),
       ),
-    )
-    .orderBy(desc(sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`))
-    .limit(Math.max(limit * 2, 16));
+      and(
+        sql`${schema.sharedPlayerNews.publishedAt} is null`,
+        gte(schema.sharedPlayerNews.createdAt, cutoff),
+      ),
+    ),
+  );
 
-  const items = shared
-    .filter((row) => !isSleeperTimestampOnlyNews(row))
-    .slice(0, limit)
-    .map((row) => ({
-      playerId: row.playerId,
-      player: row.player,
-      team: row.team,
-      change: row.change,
-      newsType: row.newsType,
-      sourceLabel: row.sourceLabel,
-      sourceUrl: row.sourceUrl,
-      publishedAt: (row.publishedAt ?? row.createdAt).toISOString(),
-      source: row.source,
-    }));
+  const seenPost = new Set<string>();
+  const items = [];
+  let scanned = 0;
+  while (items.length < limit && scanned < maxScan) {
+    const page = await db
+      .select({
+        id: schema.sharedPlayerNews.id,
+        playerId: schema.sharedPlayerNews.playerId,
+        player: schema.sharedPlayerNews.player,
+        team: schema.sharedPlayerNews.team,
+        change: schema.sharedPlayerNews.change,
+        newsType: schema.sharedPlayerNews.newsType,
+        roleContext: schema.sharedPlayerNews.roleContext,
+        sourceLabel: schema.sharedPlayerNews.sourceLabel,
+        sourceUrl: schema.sharedPlayerNews.sourceUrl,
+        externalId: schema.sharedPlayerNews.externalId,
+        publishedAt: schema.sharedPlayerNews.publishedAt,
+        createdAt: schema.sharedPlayerNews.createdAt,
+        source: schema.sharedPlayerNews.source,
+      })
+      .from(schema.sharedPlayerNews)
+      .where(newsWhere)
+      // Roundup rows share timestamps. Keep offset page boundaries deterministic.
+      .orderBy(
+        desc(sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`),
+        desc(schema.sharedPlayerNews.id),
+      )
+      .limit(Math.min(pageSize, maxScan - scanned))
+      .offset(scanned);
+
+    if (page.length === 0) break;
+    scanned += page.length;
+
+    for (const row of page) {
+      if (isSleeperTimestampOnlyNews(row)) continue;
+      // Player-scoped reads keep every row for that player; global scopes
+      // collapse a multi-player X roundup to one chat item.
+      if (scope !== "player") {
+        const postKey = newsPostDedupeKey(row);
+        if (seenPost.has(postKey)) continue;
+        seenPost.add(postKey);
+      }
+      items.push({
+        playerId: row.playerId,
+        player: row.player,
+        team: row.team,
+        change: row.change,
+        newsType: row.newsType,
+        sourceLabel: row.sourceLabel,
+        sourceUrl: row.sourceUrl,
+        publishedAt: (row.publishedAt ?? row.createdAt).toISOString(),
+        source: row.source,
+      });
+      if (items.length >= limit) break;
+    }
+    if (page.length < pageSize) break;
+  }
 
   const injuryRaw = await readSourceCacheValue(PLAYER_NEWS_SNAPSHOT_KEY);
   const notesPayloadRows = await db

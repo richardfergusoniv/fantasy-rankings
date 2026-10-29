@@ -1,4 +1,4 @@
-import { isSleeperTimestampOnlyNews } from "../../api/_lib/player-news-filters";
+import { isSleeperTimestampOnlyNews, newsPostDedupeKey } from "../../api/_lib/player-news-filters";
 import type { PlayerNews, PlayerNewsItem } from "./dashboard-types";
 
 /** Latest shared news for players on the selected-league roster (ticker). */
@@ -6,13 +6,17 @@ export function rosterNewsForTicker(
   news: PlayerNews | undefined,
   rosterPlayerIds: Set<string>,
 ): PlayerNewsItem[] {
-  const seen = new Set<string>();
+  const seenPost = new Set<string>();
+  const seenText = new Set<string>();
   return (news?.runs ?? [])
     .flatMap((run) => run.items)
     .filter((item) => {
       if (isSleeperTimestampOnlyNews(item)) return false;
-      if (!rosterPlayerIds.has(item.playerId) || seen.has(item.change)) return false;
-      seen.add(item.change);
+      if (!rosterPlayerIds.has(item.playerId)) return false;
+      const postKey = newsPostDedupeKey(item);
+      if (seenPost.has(postKey) || seenText.has(item.change)) return false;
+      seenPost.add(postKey);
+      seenText.add(item.change);
       return true;
     });
 }

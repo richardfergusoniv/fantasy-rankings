@@ -7,7 +7,7 @@ const selectResults: unknown[][] = [];
 function chainable(result: unknown[] = []) {
   const api: Record<string, unknown> = {};
   const resolve = () => Promise.resolve(result);
-  for (const key of ["from", "where", "orderBy", "limit", "innerJoin", "leftJoin"]) {
+  for (const key of ["from", "where", "orderBy", "limit", "offset", "innerJoin", "leftJoin"]) {
     api[key] = () => api;
   }
   Object.assign(api, {
@@ -581,9 +581,40 @@ describe("extended chat tools", () => {
           roleContext: "",
           sourceLabel: "Sleeper",
           sourceUrl: "https://example.com/1",
+          externalId: "injury-status:p1:Out",
           publishedAt: new Date("2026-10-20T12:00:00Z"),
           createdAt: new Date("2026-10-20T12:00:00Z"),
           source: "sleeper",
+        },
+        {
+          id: "n2",
+          playerId: "p2",
+          player: "Beta Back",
+          team: "KC",
+          change: "Practice roundup naming several players",
+          newsType: "roster",
+          roleContext: "Posted by @beat on X.",
+          sourceLabel: "@beat",
+          sourceUrl: "https://x.com/beat/status/2115569505300811921",
+          externalId: "2115569505300811921",
+          publishedAt: new Date("2026-10-20T11:00:00Z"),
+          createdAt: new Date("2026-10-20T11:00:00Z"),
+          source: "x",
+        },
+        {
+          id: "n3",
+          playerId: "p1",
+          player: "Alpha Receiver",
+          team: "KC",
+          change: "Practice roundup naming several players (Alpha)",
+          newsType: "roster",
+          roleContext: "Posted by @beat on X.",
+          sourceLabel: "@beat",
+          sourceUrl: "https://x.com/beat/status/2115569505300811921",
+          externalId: "2115569505300811921",
+          publishedAt: new Date("2026-10-20T11:00:00Z"),
+          createdAt: new Date("2026-10-20T11:00:00Z"),
+          source: "x",
         },
       ],
       [],
@@ -595,9 +626,31 @@ describe("extended chat tools", () => {
       leagueId: "lg1",
       scope: "roster",
       limit: 10,
-    }) as { ok: boolean; items: Array<{ change: string }> };
+    }) as { ok: boolean; items: Array<{ change: string; playerId: string }> };
     expect(result.ok).toBe(true);
-    expect(result.items[0]?.change).toBe("Cleared to play");
+    expect(result.items.map((row) => row.change)).toEqual([
+      "Cleared to play",
+      "Practice roundup naming several players",
+    ]);
+  });
+
+  it("fills roster news from another page when a roundup fills the first page", async () => {
+    const row = {
+      id: "n1", playerId: "p1", player: "Alpha Receiver", team: "KC",
+      change: "Practice roundup", newsType: "roster", roleContext: "Posted on X.",
+      sourceLabel: "@beat", sourceUrl: "https://x.com/beat/status/1", externalId: "1",
+      publishedAt: new Date("2026-10-20T12:00:00Z"),
+      createdAt: new Date("2026-10-20T12:00:00Z"), source: "x",
+    };
+    selectResults.push(
+      Array.from({ length: 32 }, (_, index) => ({ ...row, id: `n${index}` })),
+      [row, { ...row, id: "older", externalId: "2", sourceUrl: "https://x.com/beat/status/2", change: "Another post" }],
+      [], [], [],
+    );
+    const result = await toolGetPlayerNews(ctxWithDashboard(), {
+      leagueId: "lg1", scope: "roster", limit: 2,
+    }) as { items: Array<{ change: string }> };
+    expect(result.items.map((item) => item.change)).toEqual(["Practice roundup", "Another post"]);
   });
 
   it("get_player_advanced returns analytics and insights", async () => {

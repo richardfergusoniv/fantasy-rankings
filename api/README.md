@@ -41,8 +41,9 @@ exposes a priority list the producer can refresh.
    `api/_lib/x-producer-priority.ts`.
 2. **Always send `player_id`** on `POST /api/ingest/player-news-x`. Name
    matching is exact-key fallback only; prefer Sleeper ids from the priority
-   list. Response includes `unresolved` + `unresolvedSamples` (≤10); unresolved
-   samples are also `console.warn`’d.
+   list. One X post may be sent once per player (`post_id` + `player_id` is
+   unique). Response includes `unresolved` + `unresolvedSamples` (≤10);
+   unresolved samples are also `console.warn`’d.
 3. **Beat + national accounts** stay in the producer (Schefter, Rapoport,
    team beats for under-covered clubs). No scraper lives here.
 4. **Alert** if weekday X volume collapses (e.g. &lt; ~20 rows on a weekday).

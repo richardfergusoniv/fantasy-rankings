@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   isSleeperTimestampOnlyNews,
+  newsPostDedupeKey,
   SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT,
+  takeNewsRowsForPostLimit,
 } from "./player-news-filters.js";
 import {
   buildInjuryNotesDraft,
@@ -72,12 +74,14 @@ describe("xNewsItemSchema / xNewsBatchSchema", () => {
 });
 
 describe("dedupe + filterDuplicateDrafts", () => {
-  it("prefers source+externalId over URL", () => {
-    expect(dedupeKey("x", "123", "https://x.com/a")).toBe("x:123");
-    expect(dedupeKey("sleeper", null, "https://sleeper.app/a")).toBe("url:https://sleeper.app/a");
+  it("prefers source+externalId+playerId over URL+playerId", () => {
+    expect(dedupeKey("x", "123", "https://x.com/a", "4046")).toBe("x:123:4046");
+    expect(dedupeKey("sleeper", null, "https://sleeper.app/a", "1")).toBe(
+      "url:https://sleeper.app/a:1",
+    );
   });
 
-  it("drops duplicate post ids in a batch", () => {
+  it("drops the same post+player twice in a batch", () => {
     const base = buildXNewsDraft(
       {
         player_id: "1",
@@ -101,6 +105,35 @@ describe("dedupe + filterDuplicateDrafts", () => {
       { playerId: "1", player: "A", team: "MIN" },
     );
     expect(filterDuplicateDrafts([base, dup])).toHaveLength(1);
+  });
+
+  it("keeps the same post attached to two different players", () => {
+    const forA = buildXNewsDraft(
+      {
+        player_id: "1",
+        text: "Wednesday practice: Amon-Ra DNP, Gibbs limited.",
+        author_handle: "reporter",
+        source_url: "https://x.com/r/status/2115569505300811921",
+        post_id: "2115569505300811921",
+        published_at: "2026-10-10T18:00:00.000Z",
+      },
+      { playerId: "1", player: "Amon-Ra St. Brown", team: "DET" },
+    );
+    const forB = buildXNewsDraft(
+      {
+        player_id: "2",
+        text: "Wednesday practice: Amon-Ra DNP, Gibbs limited.",
+        author_handle: "reporter",
+        source_url: "https://x.com/r/status/2115569505300811921",
+        post_id: "2115569505300811921",
+        published_at: "2026-10-10T18:00:00.000Z",
+      },
+      { playerId: "2", player: "Jahmyr Gibbs", team: "DET" },
+    );
+    const unique = filterDuplicateDrafts([forA, forB]);
+    expect(unique).toHaveLength(2);
+    expect(unique.map((d) => d.playerId).sort()).toEqual(["1", "2"]);
+    expect(unique[0]!.id).not.toBe(unique[1]!.id);
   });
 });
 
@@ -199,6 +232,35 @@ describe("isSleeperTimestampOnlyNews", () => {
     expect(isSleeperTimestampOnlyNews({
       roleContext: "Posted by @AdamSchefter on X.",
     })).toBe(false);
+  });
+});
+
+describe("newsPostDedupeKey", () => {
+  it("groups by source+externalId when present, else by sourceUrl", () => {
+    expect(newsPostDedupeKey({
+      source: "x",
+      externalId: "2115569505300811921",
+      sourceUrl: "https://x.com/r/status/2115569505300811921",
+    })).toBe("x:2115569505300811921");
+    expect(newsPostDedupeKey({
+      source: "sleeper",
+      externalId: null,
+      sourceUrl: "https://sleeper.app/players/nfl/1?news=a",
+    })).toBe("url:https://sleeper.app/players/nfl/1?news=a");
+  });
+});
+
+describe("takeNewsRowsForPostLimit", () => {
+  it("keeps every player row for the newest N distinct posts", () => {
+    const rows = [
+      { id: "a1", source: "x", externalId: "post-a", sourceUrl: "https://x.com/a", playerId: "1" },
+      { id: "a2", source: "x", externalId: "post-a", sourceUrl: "https://x.com/a", playerId: "2" },
+      { id: "b1", source: "x", externalId: "post-b", sourceUrl: "https://x.com/b", playerId: "3" },
+      { id: "c1", source: "x", externalId: "post-c", sourceUrl: "https://x.com/c", playerId: "4" },
+      { id: "a3", source: "x", externalId: "post-a", sourceUrl: "https://x.com/a", playerId: "5" },
+    ];
+    const kept = takeNewsRowsForPostLimit(rows, 2);
+    expect(kept.map((row) => row.id)).toEqual(["a1", "a2", "b1", "a3"]);
   });
 });
 
