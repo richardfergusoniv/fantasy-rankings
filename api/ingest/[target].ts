@@ -471,16 +471,16 @@ async function handlePropLineSnapshots(req: Request): Promise<Response> {
     return badRequest("Invalid prop-line-snapshots payload.", parsed.error.issues);
   }
 
-  let index: Awaited<ReturnType<typeof loadPlayerNameIndex>>;
+  let nameIndex: Awaited<ReturnType<typeof loadPlayerNameIndex>>["index"];
   try {
-    index = await loadPlayerNameIndex();
+    ({ index: nameIndex } = await loadPlayerNameIndex());
   } catch {
     return json({ ok: false, error: "Sleeper player data is temporarily unavailable." }, 502);
   }
 
   const { rows, unresolved, skippedDuplicates } = toPropLineSnapshotRows(
     parsed.data,
-    index.byName,
+    nameIndex.byName,
   );
 
   let inserted = 0;

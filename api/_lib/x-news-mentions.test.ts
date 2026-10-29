@@ -82,10 +82,6 @@ describe("x-news mention → player_id expansion", () => {
       {
         player_id: "7564",
         text: "Ja'Marr Chase DNP. Amon-Ra St. Brown also DNP. Jahmyr Gibbs limited.",
-        author_handle: "beat",
-        source_url: "https://x.com/b/status/1",
-        post_id: "1",
-        published_at: "2026-10-29T12:00:00.000Z",
       },
       index,
       needles,
@@ -99,10 +95,6 @@ describe("x-news mention → player_id expansion", () => {
       {
         player_name: "Amon-Ra",
         text: "Amon-Ra DNP for the Lions on Wednesday.",
-        author_handle: "beat",
-        source_url: "https://x.com/b/status/2",
-        post_id: "2",
-        published_at: "2026-10-29T12:00:00.000Z",
       },
       index,
       needles,
