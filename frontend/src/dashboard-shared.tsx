@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import { ToolLinks, type ToolLinkItem } from "./tool-links";
+import { CrossToolBadge, ToolLinks, type CrossToolLink, type ToolLinkItem } from "./tool-links";
+import { formatImpliedTotal } from "./lib/game-line-matchup-link";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -489,7 +490,7 @@ function kickoffDateLabel(row: { weekday: string; gameday: string }): string | n
   return `${row.weekday.slice(0, 3)}, ${date}`;
 }
 
-export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, toolLinks, gameLines, suspended = false }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; toolLinks?: ToolLinkItem[]; gameLines?: readonly TeamGameLineLike[]; suspended?: boolean }) {
+export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, toolLinks, gameLines, gameLinesLink, suspended = false }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; toolLinks?: ToolLinkItem[]; gameLines?: readonly TeamGameLineLike[]; /** Badge that opens this game in Tools → Game lines. */ gameLinesLink?: CrossToolLink | null; suspended?: boolean }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const [pairingTab, setPairingTab] = useState<"team-offense" | "team-defense">("team-offense");
   useDialogFocusTrap(dialogRef, onClose, !suspended);
@@ -544,6 +545,15 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   const lineSummary = teamCode && opponentCode && !isFinalGame
     ? gameLineSummary(gameLines ?? [], teamCode, opponentCode)
     : null;
+  const myLine = teamCode && opponentCode
+    ? (gameLines ?? []).find((line) => line.team === teamCode && line.opponent === opponentCode) ?? null
+    : null;
+  const theirLine = teamCode && opponentCode
+    ? (gameLines ?? []).find((line) => line.team === opponentCode && line.opponent === teamCode) ?? null
+    : null;
+  const showImpliedStrip = !isFinalGame && (
+    myLine?.impliedPoints != null || theirLine?.impliedPoints != null || myLine?.spread != null || myLine?.total != null
+  );
   const findRow = (table: PfnTable | null, code: string | null) => table?.rows.find((row) => canonicalNflTeam(row.team) === code);
   const teamRows = {
     offense: findRow(offense, teamCode),
@@ -610,9 +620,42 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
             </div>
             <span aria-hidden="true" />
           </div>
-          {kickoffLabel ? <p className="matchup-kickoff-label">{kickoffLabel}</p> : null}
+          {gameLinesLink ? (
+            <div className="matchup-game-lines-badge-row">
+              <CrossToolBadge
+                link={gameLinesLink}
+                label={kickoffLabel ? `Game lines · ${kickoffLabel}` : "Game lines"}
+                ariaLabel={`Open ${matchup.team} vs ${matchup.opponent} in Game lines`}
+                className="matchup-game-lines-badge"
+              />
+            </div>
+          ) : kickoffLabel ? (
+            <p className="matchup-kickoff-label">{kickoffLabel}</p>
+          ) : null}
+          {showImpliedStrip ? (
+            <section className="matchup-implied-strip" aria-label="Weekly implied totals">
+              <div className="matchup-implied-team">
+                <span>{matchup.team}</span>
+                <strong>{formatImpliedTotal(myLine?.impliedPoints ?? null)}</strong>
+              </div>
+              <div className="matchup-implied-market">
+                {myLine?.spread != null ? (
+                  <span>
+                    {myLine.spread === 0
+                      ? "PK"
+                      : `${myLine.spread < 0 ? matchup.team : matchup.opponent} −${formatImpliedTotal(Math.abs(myLine.spread))}`}
+                  </span>
+                ) : null}
+                {myLine?.total != null ? <span>O/U {formatImpliedTotal(myLine.total)}</span> : null}
+              </div>
+              <div className="matchup-implied-team is-opponent">
+                <span>{matchup.opponent}</span>
+                <strong>{formatImpliedTotal(theirLine?.impliedPoints ?? null)}</strong>
+              </div>
+            </section>
+          ) : null}
           {toolLinks ? <ToolLinks ariaLabel={`Open ${matchup.team} and ${matchup.opponent} in a tool`} links={toolLinks} /> : null}
-          {lineSummary ? <p className="matchup-game-line"><span>Line</span> {lineSummary}</p> : null}
+          {lineSummary && !showImpliedStrip ? <p className="matchup-game-line"><span>Line</span> {lineSummary}</p> : null}
 
           {isFinalGame ? (
             scoreQuery.isPending ? <div className="matchup-card-status" role="status"><RefreshIcon spinning /> Loading box score…</div>
