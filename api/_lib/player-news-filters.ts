@@ -28,3 +28,24 @@ export function newsPostDedupeKey(item: {
   }
   return `url:${item.sourceUrl.trim()}`;
 }
+
+/**
+ * Keep every player-row for the newest `postLimit` distinct posts (order
+ * preserved). Rows for a selected post that appear later in `rows` stay so
+ * player pages still see every attachment; posts beyond the limit are dropped.
+ */
+export function takeNewsRowsForPostLimit<T extends {
+  source?: string | null;
+  externalId?: string | null;
+  sourceUrl: string;
+}>(rows: readonly T[], postLimit: number): T[] {
+  if (postLimit <= 0 || rows.length === 0) return [];
+  const selected = new Set<string>();
+  for (const row of rows) {
+    const key = newsPostDedupeKey(row);
+    if (selected.has(key)) continue;
+    if (selected.size >= postLimit) break;
+    selected.add(key);
+  }
+  return rows.filter((row) => selected.has(newsPostDedupeKey(row)));
+}

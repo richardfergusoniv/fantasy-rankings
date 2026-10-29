@@ -3,6 +3,7 @@ import {
   isSleeperTimestampOnlyNews,
   newsPostDedupeKey,
   SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT,
+  takeNewsRowsForPostLimit,
 } from "./player-news-filters.js";
 import {
   buildInjuryNotesDraft,
@@ -246,6 +247,20 @@ describe("newsPostDedupeKey", () => {
       externalId: null,
       sourceUrl: "https://sleeper.app/players/nfl/1?news=a",
     })).toBe("url:https://sleeper.app/players/nfl/1?news=a");
+  });
+});
+
+describe("takeNewsRowsForPostLimit", () => {
+  it("keeps every player row for the newest N distinct posts", () => {
+    const rows = [
+      { id: "a1", source: "x", externalId: "post-a", sourceUrl: "https://x.com/a", playerId: "1" },
+      { id: "a2", source: "x", externalId: "post-a", sourceUrl: "https://x.com/a", playerId: "2" },
+      { id: "b1", source: "x", externalId: "post-b", sourceUrl: "https://x.com/b", playerId: "3" },
+      { id: "c1", source: "x", externalId: "post-c", sourceUrl: "https://x.com/c", playerId: "4" },
+      { id: "a3", source: "x", externalId: "post-a", sourceUrl: "https://x.com/a", playerId: "5" },
+    ];
+    const kept = takeNewsRowsForPostLimit(rows, 2);
+    expect(kept.map((row) => row.id)).toEqual(["a1", "a2", "b1", "a3"]);
   });
 });
 

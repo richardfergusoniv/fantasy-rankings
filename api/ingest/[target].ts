@@ -380,12 +380,10 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     const result = await db
       .insert(schema.sharedPlayerNews)
       .values(chunk)
-      // Match unique (source_url, player_id). Bare ON CONFLICT also covers
-      // (source, external_id, player_id); target the URL composite because
-      // every row has source_url.
-      .onConflictDoNothing({
-        target: [schema.sharedPlayerNews.sourceUrl, schema.sharedPlayerNews.playerId],
-      })
+      // Bare ON CONFLICT skips rows that hit either unique index
+      // ((source_url, player_id) or (source, external_id, player_id)), so a
+      // resent post with a rewritten URL still counts as a duplicate.
+      .onConflictDoNothing()
       .returning({ id: schema.sharedPlayerNews.id });
     inserted += result.length;
   }

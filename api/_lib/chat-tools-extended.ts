@@ -274,68 +274,79 @@ export async function toolGetPlayerNews(
 
   const limit = Math.min(30, Math.max(1, Math.floor(args.limit ?? 15)));
   const cutoff = retentionCutoff();
-  // Multi-player scopes may collapse roundup posts; over-fetch then dedupe.
-  const fetchCap = scope === "player"
+  const pageSize = scope === "player"
     ? Math.max(limit * 2, 16)
     : Math.max(limit * 4, 32);
-  const shared = await db
-    .select({
-      id: schema.sharedPlayerNews.id,
-      playerId: schema.sharedPlayerNews.playerId,
-      player: schema.sharedPlayerNews.player,
-      team: schema.sharedPlayerNews.team,
-      change: schema.sharedPlayerNews.change,
-      newsType: schema.sharedPlayerNews.newsType,
-      roleContext: schema.sharedPlayerNews.roleContext,
-      sourceLabel: schema.sharedPlayerNews.sourceLabel,
-      sourceUrl: schema.sharedPlayerNews.sourceUrl,
-      externalId: schema.sharedPlayerNews.externalId,
-      publishedAt: schema.sharedPlayerNews.publishedAt,
-      createdAt: schema.sharedPlayerNews.createdAt,
-      source: schema.sharedPlayerNews.source,
-    })
-    .from(schema.sharedPlayerNews)
-    .where(
+  // Bound scanned rows so roundup fan-out cannot exhaust the query budget.
+  const maxScan = scope === "player"
+    ? pageSize
+    : Math.max(limit * 20, 100);
+  const newsWhere = and(
+    inArray(schema.sharedPlayerNews.playerId, ids),
+    or(
       and(
-        inArray(schema.sharedPlayerNews.playerId, ids),
-        or(
-          and(
-            sql`${schema.sharedPlayerNews.publishedAt} is not null`,
-            gte(schema.sharedPlayerNews.publishedAt, cutoff),
-          ),
-          and(
-            sql`${schema.sharedPlayerNews.publishedAt} is null`,
-            gte(schema.sharedPlayerNews.createdAt, cutoff),
-          ),
-        ),
+        sql`${schema.sharedPlayerNews.publishedAt} is not null`,
+        gte(schema.sharedPlayerNews.publishedAt, cutoff),
       ),
-    )
-    .orderBy(desc(sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`))
-    .limit(fetchCap);
+      and(
+        sql`${schema.sharedPlayerNews.publishedAt} is null`,
+        gte(schema.sharedPlayerNews.createdAt, cutoff),
+      ),
+    ),
+  );
 
   const seenPost = new Set<string>();
   const items = [];
-  for (const row of shared) {
-    if (isSleeperTimestampOnlyNews(row)) continue;
-    // Player-scoped reads keep every row for that player; global scopes
-    // collapse a multi-player X roundup to one chat item.
-    if (scope !== "player") {
-      const postKey = newsPostDedupeKey(row);
-      if (seenPost.has(postKey)) continue;
-      seenPost.add(postKey);
+  let scanned = 0;
+  while (items.length < limit && scanned < maxScan) {
+    const page = await db
+      .select({
+        id: schema.sharedPlayerNews.id,
+        playerId: schema.sharedPlayerNews.playerId,
+        player: schema.sharedPlayerNews.player,
+        team: schema.sharedPlayerNews.team,
+        change: schema.sharedPlayerNews.change,
+        newsType: schema.sharedPlayerNews.newsType,
+        roleContext: schema.sharedPlayerNews.roleContext,
+        sourceLabel: schema.sharedPlayerNews.sourceLabel,
+        sourceUrl: schema.sharedPlayerNews.sourceUrl,
+        externalId: schema.sharedPlayerNews.externalId,
+        publishedAt: schema.sharedPlayerNews.publishedAt,
+        createdAt: schema.sharedPlayerNews.createdAt,
+        source: schema.sharedPlayerNews.source,
+      })
+      .from(schema.sharedPlayerNews)
+      .where(newsWhere)
+      .orderBy(desc(sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`))
+      .limit(Math.min(pageSize, maxScan - scanned))
+      .offset(scanned);
+
+    if (page.length === 0) break;
+    scanned += page.length;
+
+    for (const row of page) {
+      if (isSleeperTimestampOnlyNews(row)) continue;
+      // Player-scoped reads keep every row for that player; global scopes
+      // collapse a multi-player X roundup to one chat item.
+      if (scope !== "player") {
+        const postKey = newsPostDedupeKey(row);
+        if (seenPost.has(postKey)) continue;
+        seenPost.add(postKey);
+      }
+      items.push({
+        playerId: row.playerId,
+        player: row.player,
+        team: row.team,
+        change: row.change,
+        newsType: row.newsType,
+        sourceLabel: row.sourceLabel,
+        sourceUrl: row.sourceUrl,
+        publishedAt: (row.publishedAt ?? row.createdAt).toISOString(),
+        source: row.source,
+      });
+      if (items.length >= limit) break;
     }
-    items.push({
-      playerId: row.playerId,
-      player: row.player,
-      team: row.team,
-      change: row.change,
-      newsType: row.newsType,
-      sourceLabel: row.sourceLabel,
-      sourceUrl: row.sourceUrl,
-      publishedAt: (row.publishedAt ?? row.createdAt).toISOString(),
-      source: row.source,
-    });
-    if (items.length >= limit) break;
+    if (page.length < pageSize) break;
   }
 
   const injuryRaw = await readSourceCacheValue(PLAYER_NEWS_SNAPSHOT_KEY);

@@ -8,7 +8,10 @@ import {
 } from "./_lib/api-utils.js";
 import { resolveSleeperUserId } from "./_lib/auth.js";
 import { db, schema } from "./_lib/db.js";
-import { isSleeperTimestampOnlyNews } from "./_lib/player-news-filters.js";
+import {
+  isSleeperTimestampOnlyNews,
+  takeNewsRowsForPostLimit,
+} from "./_lib/player-news-filters.js";
 import {
   PLAYER_NEWS_NOTES_SNAPSHOT_KEY,
   buildInjuryNotesDraft,
@@ -49,6 +52,10 @@ import { readNflState } from "./_lib/user-leagues.js";
 
 const PLAYER_NEWS_CHECK_KEY = "player-news-last-check-v1";
 const FANTASY_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
+/** Distinct posts returned to signed-in clients (player rows for those posts stay). */
+const SHARED_NEWS_POST_LIMIT = 500;
+/** Row scan cap so multi-player roundups do not shrink the post window too far. */
+const SHARED_NEWS_ROW_SCAN = 2500;
 
 type InjuryPlayer = {
   playerId: string;
@@ -158,9 +165,9 @@ async function insertSharedDrafts(drafts: SharedNewsDraft[]): Promise<number> {
     const result = await db
       .insert(schema.sharedPlayerNews)
       .values(chunk)
-      .onConflictDoNothing({
-        target: [schema.sharedPlayerNews.sourceUrl, schema.sharedPlayerNews.playerId],
-      })
+      // Bare ON CONFLICT covers both (source_url, player_id) and
+      // (source, external_id, player_id) unique indexes.
+      .onConflictDoNothing()
       .returning({ id: schema.sharedPlayerNews.id });
     inserted += result.length;
   }
@@ -187,32 +194,35 @@ async function readStoredNews(): Promise<Response> {
     .orderBy(
       desc(sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`),
     )
-    .limit(500);
+    .limit(SHARED_NEWS_ROW_SCAN);
 
   const lastCheckedAt = await readLastCheckedAt();
   const checkedAt = lastCheckedAt ?? new Date().toISOString();
-  const items = rows
-    .filter((item) => !isSleeperTimestampOnlyNews(item))
-    .map((item) => ({
-      id: item.id,
-      playerId: item.playerId,
-      player: item.player,
-      team: item.team,
-      change: item.change,
-      leagueIds: [] as string[],
-      newsType: item.newsType as "roster" | "waiver" | "headline",
-      leagues: [] as string[],
-      availability: [] as PlayerNews["runs"][number]["items"][number]["availability"],
-      roleContext: item.roleContext,
-      sourceLabel: item.sourceLabel,
-      sourceUrl: item.sourceUrl,
-      sourcePublishedAt: item.publishedAt?.toISOString() ?? item.createdAt.toISOString(),
-      author: item.author,
-      externalId: item.externalId,
-      source: item.source as "sleeper" | "x" | "nflverse",
-      signal: item.signal,
-      score: item.score,
-    }));
+  // Bound by distinct posts so a 15-player roundup does not crowd older news
+  // out of the 500-post window; keep every player row for selected posts.
+  const items = takeNewsRowsForPostLimit(
+    rows.filter((item) => !isSleeperTimestampOnlyNews(item)),
+    SHARED_NEWS_POST_LIMIT,
+  ).map((item) => ({
+    id: item.id,
+    playerId: item.playerId,
+    player: item.player,
+    team: item.team,
+    change: item.change,
+    leagueIds: [] as string[],
+    newsType: item.newsType as "roster" | "waiver" | "headline",
+    leagues: [] as string[],
+    availability: [] as PlayerNews["runs"][number]["items"][number]["availability"],
+    roleContext: item.roleContext,
+    sourceLabel: item.sourceLabel,
+    sourceUrl: item.sourceUrl,
+    sourcePublishedAt: item.publishedAt?.toISOString() ?? item.createdAt.toISOString(),
+    author: item.author,
+    externalId: item.externalId,
+    source: item.source as "sleeper" | "x" | "nflverse",
+    signal: item.signal,
+    score: item.score,
+  }));
 
   return json({
     lastCheckedAt,

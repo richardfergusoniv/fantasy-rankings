@@ -7,7 +7,7 @@ const selectResults: unknown[][] = [];
 function chainable(result: unknown[] = []) {
   const api: Record<string, unknown> = {};
   const resolve = () => Promise.resolve(result);
-  for (const key of ["from", "where", "orderBy", "limit", "innerJoin", "leftJoin"]) {
+  for (const key of ["from", "where", "orderBy", "limit", "offset", "innerJoin", "leftJoin"]) {
     api[key] = () => api;
   }
   Object.assign(api, {
