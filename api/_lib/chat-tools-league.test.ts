@@ -201,6 +201,15 @@ describe("league chat tools", () => {
     expect(result.teams).toHaveLength(2);
   });
 
+  it("get_playoff_odds refuses leagues without playoff settings instead of inventing a berth", async () => {
+    const noPlayoffs = {
+      ...dashboard,
+      leagues: [{ ...dashboard.leagues[0]!, playoffs: { teams: null, weekStart: 11, positionKnown: true } }],
+    } as unknown as Dashboard;
+    const result = await dispatchChatTool("get_playoff_odds", { leagueId: "lg1" }, { ...ctx(), dashboardPromise: Promise.resolve(noPlayoffs) });
+    expect(result).toEqual({ ok: false, error: "Playoff settings are not available for this league." });
+  });
+
   it("uses dynasty power rows for dynasty leagues and season-long rows otherwise", () => {
     const base = dashboard.leagues[0]!;
     const dynasty = { ...base, seasonLongFormat: { ...base.seasonLongFormat, isDynasty: true }, powerRankingsDynasty: [power(1, "My Team", true, 9000, 9000)] };

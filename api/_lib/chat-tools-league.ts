@@ -231,6 +231,9 @@ export async function toolGetPlayoffOdds(ctx: ChatToolContext, args: { leagueId:
   if (!league) return { ok: false as const, error: "League not found for this user." };
   const projected = await loadProjectedStandings(league, dashboard.season, dashboard.week);
   if ("error" in projected) return { ok: false as const, error: projected.error };
+  if (projected.playoffTeams < 1) {
+    return { ok: false as const, error: "Playoff settings are not available for this league." };
+  }
   // The simulation decides head-to-head games only; a median league's extra results are not modeled.
   if (projected.medianMatchup) {
     return { ok: false as const, error: "Playoff odds are not available for leagues that also play the weekly median." };
