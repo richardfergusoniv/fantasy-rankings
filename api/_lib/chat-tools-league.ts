@@ -14,8 +14,8 @@ import {
   type ChatToolContext,
 } from "./chat-tools.js";
 import { summarizeLeagueRules } from "./league-rules.js";
-import { buildLeagueOutcomes } from "./league-outcomes.js";
-import { loadLeagueAverageMatch, loadProjectedStandings } from "./projected-standings.js";
+import { playoffOddsFromProjections } from "./projected-playoff-odds.js";
+import { loadProjectedStandings } from "./projected-standings.js";
 
 type League = Dashboard["leagues"][number];
 const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
@@ -229,28 +229,26 @@ export async function toolGetPlayoffOdds(ctx: ChatToolContext, args: { leagueId:
   const dashboard = await loadDashboard(ctx);
   const league = findLeague(dashboard, args.leagueId);
   if (!league) return { ok: false as const, error: "League not found for this user." };
-  try {
-    // The scoring-pace model counts one result per week and has no median-matchup mode.
-    if (await loadLeagueAverageMatch(league.id)) {
-      return { ok: false as const, error: "Playoff odds are not available for leagues that also play the weekly median." };
-    }
-  } catch {
-    return { ok: false as const, error: "League settings could not be loaded from Sleeper." };
+  const projected = await loadProjectedStandings(league, dashboard.season, dashboard.week);
+  if ("error" in projected) return { ok: false as const, error: projected.error };
+  // The simulation decides head-to-head games only; a median league's extra results are not modeled.
+  if (projected.medianMatchup) {
+    return { ok: false as const, error: "Playoff odds are not available for leagues that also play the weekly median." };
   }
-  const outcomes = await buildLeagueOutcomes(league, { season: dashboard.season, week: dashboard.week });
-  if ("error" in outcomes) return { ok: false as const, error: outcomes.error };
-
-  const mine = outcomes.teams.find((team) => team.isUser) ?? null;
+  const odds = playoffOddsFromProjections(projected);
+  const mine = odds.teams.find((team) => team.isUser) ?? null;
   return {
     ok: true as const,
     leagueId: league.id,
     week: dashboard.week,
-    throughWeek: outcomes.throughWeek,
-    playoffTeams: outcomes.playoffTeams,
-    regularSeasonEndsWeek: outcomes.regularSeasonEndsWeek,
-    method: `${outcomes.method.label}. Simulated ${outcomes.trials} seasons; an estimate, not an app score.`,
-    caveats: outcomes.method.notes,
-    inputsAsOf: outcomes.method.inputsAsOf,
+    throughWeek: projected.throughWeek,
+    playoffTeams: projected.playoffTeams,
+    regularSeasonEndsWeek: projected.regularSeasonEndsWeek,
+    method: `Simulated ${odds.trials} seasons from the Projected standings: each remaining game is decided by the two teams' projected lineup scores that week (the current week from the app's projections, later weeks from Sleeper's, which include injury timelines and byes) with typical weekly variance. An estimate built on projections, not an app score. Future roster moves and lineup choices would change it.`,
+    caveats: [
+      ...(odds.divisionsIgnored ? ["League has divisions; division winners are not modeled, so odds are approximate."] : []),
+      "Seeding is wins, then points for.",
+    ],
     you: mine
       ? {
         record: mine.record,
@@ -258,20 +256,18 @@ export async function toolGetPlayoffOdds(ctx: ChatToolContext, args: { leagueId:
         topSeedPct: mine.topSeedPct,
         lastPlacePct: mine.lastPct,
         projectedWins: mine.projectedWins,
-        previousPlayoffPct: mine.previousPlayoffPct,
         status: mine.playoffPct >= 99.9 ? "all but clinched in the model" : mine.playoffPct <= 0.1 ? "all but eliminated in the model" : "in the race",
-        remainingGames: outcomes.userSchedule,
-        finalWinScenarios: outcomes.userScenarios,
+        remainingGames: odds.userGames,
+        finalWinScenarios: odds.userScenarios,
       }
       : null,
-    teams: outcomes.teams.map((team) => ({
+    teams: odds.teams.map((team) => ({
       teamName: team.teamName,
       isUser: team.isUser,
       record: team.record,
       playoffPct: team.playoffPct,
       lastPlacePct: team.lastPct,
       projectedWins: team.projectedWins,
-      weeklyStrength: team.weeklyStrength,
     })),
   };
 }
