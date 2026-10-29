@@ -956,7 +956,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                   <span className="player-search-name">
                     <strong>{row.name}</strong>
                     {isSelected ? <span className="player-selected-chip">Selected</span> : null}
-                    {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
+                    {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} tone="warning" /> : null}
                   </span>
                   <span className="player-search-meta"><span>{row.position}</span><MatchupTag team={row.team} opponent={row.opponent} isAway={row.isAway} isBye={row.isBye} position={row.position} entry={sosEntry} onClick={row.team && row.opponent && onOpenMatchup ? (event) => { event.stopPropagation(); onOpenMatchup({ team: row.team ?? "", opponent: row.opponent ?? "", isAway: row.isAway, gamePhase: row.gamePhase ?? null }); } : undefined} /></span>
                 </span>
@@ -1010,7 +1010,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                       <strong>{row.name}</strong>
                       {isSelected ? <span className="player-selected-chip">Selected</span> : null}
                       {row.isRookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" /> : null}
-                      {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
+                      {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} tone="warning" /> : null}
                     </span>
                     <span className="ranking-meta-line">
                       {isSeasonLong ? (

@@ -4,7 +4,6 @@
 .draft-source-caption { margin: 0; color: var(--dim); font-size: var(--type-caption); }
 .draft-source-warning { display: grid; gap: 5px; color: var(--text); font-size: var(--type-caption); }
 .draft-source-warning strong { color: var(--warning); }
-.draft-source-warning strong::before { content: "⚠ "; }
 .draft-source-warning ul { margin: 0; padding-left: 18px; }
 .draft-source-warning li + li { margin-top: 3px; }
 .draft-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }

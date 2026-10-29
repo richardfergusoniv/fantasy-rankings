@@ -1,0 +1,101 @@
+/* Badges. Three jobs, three looks:
+   - link badges open something: amber outline pill, chevron inside, 44px tap area;
+   - status badges say what state something is in: filled, never tappable, an icon on warnings;
+   - descriptor tags describe a player or slot: hairline outline, no chevron.
+   Link badges keep the older `matchup-reference-*` class names. */
+
+.matchup-reference-button.matchup-reference-tag {
+  position: relative;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--link);
+  text-decoration: none;
+  cursor: pointer;
+}
+.matchup-reference-button .matchup-reference-button-label {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 24px 0 10px;
+  border: 1px solid var(--link);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--link);
+  font-size: var(--type-caption);
+  font-weight: 600;
+  line-height: 1;
+}
+.matchup-reference-button .matchup-reference-arrow {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: inherit;
+  font-size: var(--type-body);
+  font-weight: 700;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.matchup-reference-button:focus-visible .matchup-reference-button-label {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Matchup ease stays a link: the word, the triangle and the color agree. */
+.matchup-reference-button.sos-soft .matchup-reference-button-label {
+  border-color: var(--ease-fg);
+  background: var(--ease-bg);
+  color: var(--ease-fg);
+}
+.matchup-reference-button.sos-tough .matchup-reference-button-label {
+  border-color: var(--tough-fg);
+  background: var(--tough-bg);
+  color: var(--tough-fg);
+}
+.matchup-reference-button.sos-soft .matchup-reference-arrow { color: var(--ease-fg); }
+.matchup-reference-button.sos-tough .matchup-reference-arrow { color: var(--tough-fg); }
+.matchup-reference-tag.sos-soft:not(.matchup-reference-button) { background: var(--ease-bg); color: var(--ease-fg); }
+.matchup-reference-tag.sos-tough:not(.matchup-reference-button) { background: var(--tough-bg); color: var(--tough-fg); }
+.matchup-reference-tag.sos-soft:not(.matchup-reference-button)::before,
+.matchup-reference-button.sos-soft .matchup-reference-button-label::before,
+.matchup-reference-tag.sos-tough:not(.matchup-reference-button)::before,
+.matchup-reference-button.sos-tough .matchup-reference-button-label::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin: 0 3px 0 0;
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+  font-size: inherit;
+}
+.matchup-reference-tag.sos-soft:not(.matchup-reference-button)::before,
+.matchup-reference-button.sos-soft .matchup-reference-button-label::before { border-bottom: 6px solid currentColor; }
+.matchup-reference-tag.sos-tough:not(.matchup-reference-button)::before,
+.matchup-reference-button.sos-tough .matchup-reference-button-label::before { border-top: 6px solid currentColor; }
+
+/* Status badges: a warning is a filled coral badge with a line icon. */
+.injury { min-height: 20px; height: auto; padding: 0 6px; gap: 3px; border-radius: var(--radius-xs); }
+.injury svg { width: 11px; height: 11px; flex: none; }
+
+/* Descriptor tags share one height with the status badges. */
+.depth-chart-tag { min-height: 20px; }
+
+/* Warning prefixes draw the line icon instead of a text glyph. */
+.draft-source-warning strong::before,
+.chat-error::before {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: .35em;
+  vertical-align: -.12em;
+  background-color: var(--warning);
+  -webkit-mask: var(--warning-icon) center / contain no-repeat;
+  mask: var(--warning-icon) center / contain no-repeat;
+}

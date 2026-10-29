@@ -176,7 +176,7 @@ export function LeagueRosterList({
                 <span className="league-roster-name">
                   <strong>{row.shortName}</strong>
                   {row.isRookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" /> : null}
-                  {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} /> : null}
+                  {row.injuryStatus ? <DesignationBadge code={sleeperInjuryTag(row.injuryStatus)} label={`Injury status: ${row.injuryStatus}`} title={row.injuryStatus} tone="warning" /> : null}
                 </span>
               </span>
               <span className="league-roster-meta">

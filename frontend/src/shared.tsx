@@ -260,8 +260,12 @@ export function MatchupTag({
   className?: string;
   onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
-  const label = opponent ? `${team ?? "FA"} ${isAway ? "@" : "vs"} ${opponent}` : isBye ? "BYE" : "—";
-  const tagClassName = `matchup-reference-tag${matchupTone(entry, opponent, position)}${className ? ` ${className}` : ""}`;
+  const base = opponent ? `${team ?? "FA"} ${isAway ? "@" : "vs"} ${opponent}` : isBye ? "BYE" : "—";
+  const tone = matchupTone(entry, opponent, position);
+  // The word, the triangle and the color agree, so ease never rests on color alone.
+  const word = tone === " sos-soft" ? "Easy" : tone === " sos-tough" ? "Tough" : null;
+  const label = word ? `${word} · ${base}` : base;
+  const tagClassName = `matchup-reference-tag${tone}${className ? ` ${className}` : ""}`;
   if (!onClick || !team || !opponent) return <span className={tagClassName}>{label}</span>;
   return (
     <button type="button" className={`${tagClassName} matchup-reference-button`} onClick={(event) => onClick?.(event)} aria-label={label} aria-description="View matchup data" aria-haspopup="dialog">
