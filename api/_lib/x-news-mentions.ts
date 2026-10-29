@@ -7,16 +7,43 @@ import {
 
 /**
  * In-repo half of Richard’s X → player-news-x producer contract:
- * expand post text into every uniquely resolvable Sleeper `player_id`.
- * The external pusher may still send a single extract; ingest attaches all
- * mentioned priority/roster names so roundups do not drop Amon-Ra et al.
+ * expand post text into uniquely resolvable Sleeper `player_id`s, subject to
+ * attach caps (ranking mega-lists stay on the explicit extract only).
  */
 
-/** Soft cap so a viral mega-list cannot fan out unbounded rows. */
-export const X_NEWS_MENTION_PLAYER_LIMIT = 20;
+/** Max players (explicit + text mentions) before text expansion is skipped. */
+export const X_NEWS_ATTACH_PLAYER_CAP_DEFAULT = 6;
+
+/** Higher attach cap when the post looks like a practice / injury report. */
+export const X_NEWS_ATTACH_PLAYER_CAP_PRACTICE_REPORT = 15;
+
+/**
+ * Scan ceiling when collecting mention candidates. Cap checks need at most
+ * {@link X_NEWS_ATTACH_PLAYER_CAP_PRACTICE_REPORT} + 1 distinct ids.
+ */
+export const X_NEWS_MENTION_SCAN_LIMIT = X_NEWS_ATTACH_PLAYER_CAP_PRACTICE_REPORT + 1;
 
 /** Minimum tokens for a mention needle (blocks bare surnames like "Brown"). */
 export const X_NEWS_MENTION_MIN_TOKENS = 2;
+
+/**
+ * Case-insensitive practice / injury markers. Matched as whole tokens / phrases
+ * against {@link normalizeTextForMentions} output (space-bounded).
+ */
+export const X_NEWS_PRACTICE_INJURY_MARKERS = [
+  "did not practice",
+  "full participant",
+  "injury report",
+  "practice report",
+  "dnp",
+  "limited",
+  "lp",
+  "fp",
+  "questionable",
+  "doubtful",
+  "out",
+  "estimated",
+] as const;
 
 export type XNewsMentionNeedle = {
   /** Space-separated lowercase key (no alias expansion). */
@@ -54,6 +81,27 @@ export function normalizeTextForMentions(text: string): string {
     collapsed.push(run);
   }
   return collapsed.join(" ");
+}
+
+/**
+ * True when post text looks like a practice / injury report (raises the
+ * attach cap to {@link X_NEWS_ATTACH_PLAYER_CAP_PRACTICE_REPORT}).
+ */
+export function looksLikeXNewsPracticeOrInjuryReport(text: string): boolean {
+  const haystack = ` ${normalizeTextForMentions(text)} `;
+  if (haystack.trim().length === 0) return false;
+  for (const marker of X_NEWS_PRACTICE_INJURY_MARKERS) {
+    const needle = ` ${normalizeTextForMentions(marker)} `;
+    if (haystack.includes(needle)) return true;
+  }
+  return false;
+}
+
+/** Attach cap for this post text (default vs practice / injury report). */
+export function xNewsAttachPlayerCap(text: string): number {
+  return looksLikeXNewsPracticeOrInjuryReport(text)
+    ? X_NEWS_ATTACH_PLAYER_CAP_PRACTICE_REPORT
+    : X_NEWS_ATTACH_PLAYER_CAP_DEFAULT;
 }
 
 function addNeedle(
@@ -117,7 +165,7 @@ export function buildXNewsMentionNeedles(
 export function findMentionedPlayerIds(
   text: string,
   needles: ReadonlyArray<XNewsMentionNeedle>,
-  limit = X_NEWS_MENTION_PLAYER_LIMIT,
+  limit = X_NEWS_MENTION_SCAN_LIMIT,
 ): string[] {
   if (!text.trim() || needles.length === 0 || limit <= 0) return [];
 
@@ -160,8 +208,12 @@ export function findMentionedPlayerIds(
 }
 
 /**
- * Union of the explicit resolve target (if any) and every text mention.
- * Dedupes; explicit id stays even when absent from the text.
+ * Union of the explicit resolve target (if any) and text mentions, subject to
+ * attach caps:
+ * - Explicit `player_id` / name extract always attaches when resolvable.
+ * - Text expansion runs only when |explicit ∪ mentions| ≤ cap (6, or 15 for
+ *   practice / injury reports). Above the cap, skip expansion entirely —
+ *   do not truncate to the first N mentions.
  */
 export function resolveXNewsPlayerIdsForItem(
   item: { player_id?: string; player_name?: string; team?: string; text: string },
@@ -171,23 +223,30 @@ export function resolveXNewsPlayerIdsForItem(
     item: { player_id?: string; player_name?: string; team?: string },
     index: PlayerNewsNameIndex,
   ) => { playerId: string } | null,
-  limit = X_NEWS_MENTION_PLAYER_LIMIT,
 ): string[] {
-  const ids: string[] = [];
+  const cap = xNewsAttachPlayerCap(item.text);
+
+  const explicit: string[] = [];
   const seen = new Set<string>();
-  const push = (playerId: string) => {
-    if (seen.has(playerId) || ids.length >= limit) return;
+  const push = (playerId: string, into: string[]) => {
+    if (seen.has(playerId)) return;
     if (!index.byId.has(playerId)) return;
     seen.add(playerId);
-    ids.push(playerId);
+    into.push(playerId);
   };
 
   const primary = resolvePrimary(item, index);
-  if (primary) push(primary.playerId);
+  if (primary) push(primary.playerId, explicit);
 
-  for (const playerId of findMentionedPlayerIds(item.text, needles, limit)) {
-    push(playerId);
+  // Need cap+1 distinct candidates in the union to know expansion would overflow.
+  const mentioned = findMentionedPlayerIds(item.text, needles, cap + 1);
+  const union = [...explicit];
+  for (const playerId of mentioned) {
+    push(playerId, union);
   }
 
-  return ids;
+  if (union.length > cap) {
+    return explicit;
+  }
+  return union;
 }
