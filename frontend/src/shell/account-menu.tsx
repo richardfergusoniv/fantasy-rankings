@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "../Auth";
+import { authErrorMessage } from "../lib/auth-error-message";
 import { getAccessToken, supabase } from "../supabase";
 
 const SUPPORT_EMAIL = "richard.ferguson.iv@gmail.com";
@@ -49,7 +50,7 @@ function AccountMenuDialog({
       if (resetError) throw resetError;
       setNotice("Check your email for a password reset link.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setError(authErrorMessage(err));
     } finally {
       setBusy(null);
     }
@@ -70,7 +71,7 @@ function AccountMenuDialog({
       await refreshConnection();
       setOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setError(authErrorMessage(err));
     } finally {
       setBusy(null);
     }
