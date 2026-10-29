@@ -634,6 +634,25 @@ describe("extended chat tools", () => {
     ]);
   });
 
+  it("fills roster news from another page when a roundup fills the first page", async () => {
+    const row = {
+      id: "n1", playerId: "p1", player: "Alpha Receiver", team: "KC",
+      change: "Practice roundup", newsType: "roster", roleContext: "Posted on X.",
+      sourceLabel: "@beat", sourceUrl: "https://x.com/beat/status/1", externalId: "1",
+      publishedAt: new Date("2026-10-20T12:00:00Z"),
+      createdAt: new Date("2026-10-20T12:00:00Z"), source: "x",
+    };
+    selectResults.push(
+      Array.from({ length: 32 }, (_, index) => ({ ...row, id: `n${index}` })),
+      [row, { ...row, id: "older", externalId: "2", sourceUrl: "https://x.com/beat/status/2", change: "Another post" }],
+      [], [], [],
+    );
+    const result = await toolGetPlayerNews(ctxWithDashboard(), {
+      leagueId: "lg1", scope: "roster", limit: 2,
+    }) as { items: Array<{ change: string }> };
+    expect(result.items.map((item) => item.change)).toEqual(["Practice roundup", "Another post"]);
+  });
+
   it("get_player_advanced returns analytics and insights", async () => {
     const result = await toolGetPlayerAdvanced(ctxWithDashboard(), { playerId: "p1", leagueId: "lg1" }) as {
       ok: boolean;

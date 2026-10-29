@@ -317,7 +317,11 @@ export async function toolGetPlayerNews(
       })
       .from(schema.sharedPlayerNews)
       .where(newsWhere)
-      .orderBy(desc(sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`))
+      // Roundup rows share timestamps. Keep offset page boundaries deterministic.
+      .orderBy(
+        desc(sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`),
+        desc(schema.sharedPlayerNews.id),
+      )
       .limit(Math.min(pageSize, maxScan - scanned))
       .offset(scanned);
 
