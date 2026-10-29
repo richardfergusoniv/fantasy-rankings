@@ -608,8 +608,9 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                 ) : <strong>{matchup.opponent}</strong>}
               </div>
             </div>
-            {kickoffLabel ? <span className="matchup-kickoff-label">{kickoffLabel}</span> : <span aria-hidden="true" />}
+            <span aria-hidden="true" />
           </div>
+          {kickoffLabel ? <p className="matchup-kickoff-label">{kickoffLabel}</p> : null}
           {toolLinks ? <ToolLinks ariaLabel={`Open ${matchup.team} and ${matchup.opponent} in a tool`} links={toolLinks} /> : null}
           {lineSummary ? <p className="matchup-game-line"><span>Line</span> {lineSummary}</p> : null}
 
