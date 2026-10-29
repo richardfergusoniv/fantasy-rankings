@@ -63,28 +63,47 @@
     border: 1px solid var(--hairline);
     border-radius: var(--radius-xl);
   }
+  /* Content-sized so the body scrollport can reach zoom controls, inspector, and key. */
   .monitor-chart-expand-card .monitor-expanded-chart {
-    display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    min-height: 0;
+    height: auto;
+  }
+  .monitor-chart-expand-card .chart-result-body {
+    max-height: none;
+  }
+  .monitor-chart-expand-card .monitor-expanded-chart .scatter-chart-shell,
+  .monitor-chart-expand-card .monitor-expanded-chart .monitor-value-chart {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    min-height: 0;
+    height: auto;
+    max-height: none;
+  }
+  .monitor-chart-expand-card .monitor-expanded-chart .scatter-axis-rail {
+    flex: none;
+    height: min(55dvh, 420px);
+    min-height: 220px;
+  }
+  .monitor-chart-expand-card .monitor-expanded-chart .scatter-frame {
     flex: 1 1 auto;
     min-height: 0;
     height: 100%;
   }
-  .monitor-chart-expand-card .monitor-expanded-chart .scatter-chart-shell,
-  .monitor-chart-expand-card .monitor-expanded-chart .scatter-frame,
-  .monitor-chart-expand-card .monitor-expanded-chart .monitor-value-chart {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
+  .monitor-chart-expand-card .monitor-expanded-chart > .scatter-frame {
+    flex: none;
+    height: min(55dvh, 420px);
     min-height: 220px;
-    height: auto;
-    max-height: none;
   }
   .monitor-chart-expand-card .monitor-expanded-chart .chart-key {
     flex: none;
     padding-top: 8px;
   }
   .monitor-chart-expand-card .scatter-zoom-controls {
+    flex: none;
     padding-bottom: 6px;
   }
 }

@@ -74,29 +74,51 @@
   outline-offset: 2px;
   border-radius: var(--radius);
 }
+/* Size to content so Zoom in/Reset + inspector + key can scroll inside the dialog.
+   A fixed 70dvh height clipped those controls when the plot filled the box. */
 .monitor-expanded-chart {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   position: relative;
   width: 100%;
   min-width: 0;
-  height: min(70dvh, 560px);
-  align-content: stretch;
+  height: auto;
+  min-height: min(70dvh, 560px);
 }
 .monitor-expanded-chart .scatter-chart-shell,
-.monitor-expanded-chart .scatter-frame,
 .monitor-expanded-chart .fpa-heatmap,
 .monitor-expanded-chart .tier-cliff-list,
 .monitor-expanded-chart .boom-bust-range-list,
 .monitor-expanded-chart .monitor-value-chart {
-  flex: 1 1 auto;
+  flex: none;
   min-height: 0;
   height: auto;
   max-height: none;
   margin: 0;
 }
+/* Give Recharts a definite plot height; shell itself stays content-sized. */
 .monitor-expanded-chart .scatter-axis-rail {
+  flex: none;
+  height: min(58dvh, 480px);
+  min-height: 240px;
+}
+.monitor-expanded-chart .scatter-frame {
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+}
+/* Snap Share has no axis rail; its ResponsiveContainer also needs a definite height. */
+.monitor-expanded-chart > .scatter-frame {
+  flex: none;
+  height: min(58dvh, 480px);
+  min-height: 240px;
+}
+.monitor-expanded-chart .fpa-heatmap,
+.monitor-expanded-chart .tier-cliff-list,
+.monitor-expanded-chart .boom-bust-range-list {
+  height: min(70dvh, 560px);
 }
 .monitor-expanded-chart .chart-key {
   flex: none;
@@ -120,6 +142,10 @@
   font-size: var(--type-body);
 }
 .monitor-chart-expand-card .chart-result-body {
+  max-height: min(80dvh, 720px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 10px 14px 14px;
 }
 .monitor-value-chart-field select {
