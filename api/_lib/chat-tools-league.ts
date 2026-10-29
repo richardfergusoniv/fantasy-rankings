@@ -57,8 +57,18 @@ function median(values: number[]): number {
 
 type PositionProfile = { strengths: string[]; needs: string[] };
 
+/**
+ * Power rows on the same value board as the player values we report: dynasty
+ * leagues use the dynasty table (which also carries future pick value);
+ * redraft leagues use the season-long table, else the weekly one.
+ */
+export function powerRowsFor(league: League): League["powerRankingsSeasonLong"] {
+  if (league.seasonLongFormat.isDynasty && league.powerRankingsDynasty.length > 0) return league.powerRankingsDynasty;
+  return league.powerRankingsSeasonLong.length > 0 ? league.powerRankingsSeasonLong : league.powerRankingsWeek;
+}
+
 function positionProfiles(league: League): Map<number, PositionProfile & { values: Record<string, number> }> {
-  const rows = league.powerRankingsSeasonLong.length > 0 ? league.powerRankingsSeasonLong : league.powerRankingsWeek;
+  const rows = powerRowsFor(league);
   const medians = Object.fromEntries(POSITIONS.map((pos) => [pos, median(rows.map((row) => row.positionValues[pos]))]));
   const out = new Map<number, PositionProfile & { values: Record<string, number> }>();
   for (const row of rows) {
@@ -90,7 +100,7 @@ export async function toolGetLeagueTeams(ctx: ChatToolContext, args: { leagueId:
     .map((team) => {
       const profile = profiles.get(team.rosterId);
       const standing = (league.standings ?? []).find((row) => row.rosterId === team.rosterId) ?? null;
-      const power = [...league.powerRankingsSeasonLong, ...league.powerRankingsWeek].find((row) => row.rosterId === team.rosterId);
+      const power = powerRowsFor(league).find((row) => row.rosterId === team.rosterId);
       const assets = team.players
         .map((player) => ({
           playerId: player.playerId,
@@ -149,7 +159,12 @@ export async function toolSearchPlayers(ctx: ChatToolContext, args: z.infer<type
   const season = new Map(leagueAssets(dashboard, league.id).filter((row) => row.position !== "PICK").map((row) => [row.playerId, row]));
   const owner = new Map(league.rosterAssignments.map((row) => [row.playerId, row]));
   const rostered = new Set(league.rosteredPlayerIds);
-  const mineIds = new Set([...league.starters, ...league.bench].map((player) => player.playerId));
+  // Reserve and taxi players are not in starters/bench, so also use the full roster and the owner map.
+  const mineIds = new Set([
+    ...[...league.starters, ...league.bench].map((player) => player.playerId),
+    ...(league.tradeTeams.find((team) => team.isUser)?.players ?? []).map((player) => player.playerId),
+    ...league.rosterAssignments.filter((row) => row.isUser).map((row) => row.playerId),
+  ]);
 
   const rows = [...new Set([...weekly.keys(), ...season.keys()])].map((playerId) => {
     const w = weekly.get(playerId);

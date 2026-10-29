@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Dashboard } from "./dashboard-schemas.js";
 import { dispatchChatTool, CHAT_TOOL_NAMES, type ChatToolContext } from "./chat-tools.js";
 import { leagueRulesPromptLine, summarizeLeagueRules } from "./league-rules.js";
+import { powerRowsFor } from "./chat-tools-league.js";
 
 vi.mock("./db.js", () => ({ db: {}, schema: {} }));
 vi.mock("./sleeper.js", async (importOriginal) => {
@@ -184,6 +185,30 @@ describe("league chat tools", () => {
     expect(result.you.remainingGames[0]!.winProbability).toBeGreaterThan(0);
     expect(result.you.playoffPct).toBeGreaterThan(0);
     expect(result.teams).toHaveLength(2);
+  });
+
+  it("uses dynasty power rows for dynasty leagues and season-long rows otherwise", () => {
+    const base = dashboard.leagues[0]!;
+    const dynasty = { ...base, seasonLongFormat: { ...base.seasonLongFormat, isDynasty: true }, powerRankingsDynasty: [power(1, "My Team", true, 9000, 9000)] };
+    expect(powerRowsFor(dynasty as never)[0]!.positionValues.RB).toBe(9000);
+    expect(powerRowsFor({ ...dynasty, powerRankingsDynasty: [] } as never)).toBe(base.powerRankingsSeasonLong);
+    expect(powerRowsFor(base as never)).toBe(base.powerRankingsSeasonLong);
+  });
+
+  it("search_players finds the user's reserve and taxi players as 'mine'", async () => {
+    const base = dashboard.leagues[0]!;
+    const withReserve = {
+      ...dashboard,
+      leagues: [{
+        ...base,
+        tradeTeams: base.tradeTeams.map((team) => team.isUser ? { ...team, players: [...team.players, player("p3", "Free Agent WR", "WR")] } : team),
+        rosterAssignments: [...base.rosterAssignments, { playerId: "p3", teamName: "My Team", isUser: true }],
+        rosteredPlayerIds: [...base.rosteredPlayerIds, "p3"],
+      }],
+    } as unknown as Dashboard;
+    const reserveCtx: ChatToolContext = { userId: "u", sleeperUserId: "s", dashboardPromise: Promise.resolve(withReserve), defaultLeagueId: "lg1" };
+    const result = (await dispatchChatTool("search_players", { availability: "mine" }, reserveCtx)) as { players: Array<{ playerId: string; owner: string }> };
+    expect(result.players.find((row) => row.playerId === "p3")?.owner).toBe("you");
   });
 
   it("rejects bad arguments and unknown leagues", async () => {

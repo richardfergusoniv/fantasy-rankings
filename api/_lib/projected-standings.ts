@@ -84,6 +84,33 @@ export function projectedPlayerPoints(
   return scored ?? fallback ?? 0;
 }
 
+/**
+ * Best lineup total for the current week from the app's own numbers, the same
+ * way the app's lineup totals work: the app's blended pregame projection for
+ * players who have not played, and actual points for players whose games have
+ * started (locked starters stay in their slots). Bye and unavailable players
+ * count as zero until their game locks.
+ */
+export function currentWeekLineupTotal(players: readonly RosterPlayer[], slots: readonly string[]): number {
+  const optimizable: OptimizablePlayer[] = players
+    .filter((player) => player.playerId !== "0")
+    .map((player) => ({
+      playerId: player.playerId,
+      position: player.position,
+      lineupSlot: player.lineupSlot,
+      isStarter: player.isStarter,
+      projection: player.isBye || isUnavailableStatus(player.injuryStatus) ? 0 : player.projection ?? 0,
+      actual: player.actual,
+      gamePhase: player.gamePhase,
+      gameTime: player.gameTime,
+      gamePeriod: player.gamePeriod,
+      gameClockSeconds: player.gameClockSeconds,
+      injuryStatus: player.injuryStatus,
+      isBye: player.isBye,
+    }));
+  return optimizeTradeRoster(optimizable, [...slots]).score;
+}
+
 export type PointsOf = (player: RosterPlayer) => number;
 
 export function sleeperWeekPoints(
@@ -93,11 +120,7 @@ export function sleeperWeekPoints(
   return (player) => projectedPlayerPoints(player, week.players.get(player.playerId), league);
 }
 
-/** The app's blended projection for the current week; 0 on bye or when the app already treats the player as out. */
-export const appWeekPoints: PointsOf = (player) =>
-  player.isBye || isUnavailableStatus(player.injuryStatus) ? 0 : player.projection ?? 0;
-
-/** Best projected lineup total for one roster in one week. */
+/** Best projected lineup total for one roster in one future week. */
 export function bestLineupTotal(
   players: readonly RosterPlayer[],
   slots: readonly string[],
@@ -134,14 +157,14 @@ export function buildProjectedStandings(args: {
 
   const weekTotals = new Map<string, number>();
   const scoredWeeks = new Set<number>(weeks.keys());
-  const weekPoints = (week: number): PointsOf | null =>
-    week === args.appWeek ? appWeekPoints : weeks.has(week) ? sleeperWeekPoints(weeks.get(week)!, league) : null;
   if (args.appWeek != null) scoredWeeks.add(args.appWeek);
   for (const week of scoredWeeks) {
-    const pointsOf = weekPoints(week);
-    if (!pointsOf) continue;
+    const projections = weeks.get(week);
     for (const [rosterId, players] of rosters) {
-      weekTotals.set(`${week}:${rosterId}`, bestLineupTotal(players, slots, pointsOf));
+      const total = week === args.appWeek
+        ? currentWeekLineupTotal(players, slots)
+        : projections ? bestLineupTotal(players, slots, sleeperWeekPoints(projections, league)) : null;
+      if (total != null) weekTotals.set(`${week}:${rosterId}`, total);
     }
   }
   const teamAverage = (rosterId: number) => {
@@ -243,6 +266,8 @@ export async function loadProjectedStandings(
     else missingWeeks.add(sleeperWeeks[i]!);
   });
   if (sleeperWeeks.length > 0 && weeks.size === 0) return { error: "Sleeper projections could not be loaded." };
+  // A missing matchup week would silently shorten every team's record, so withhold the table instead.
+  if (schedule.missingWeeks.length > 0) return { error: "The remaining schedule could not be fully loaded from Sleeper." };
   if (remaining.length > 0 && schedule.games.length === 0) return { error: "The remaining schedule could not be loaded from Sleeper." };
 
   return buildProjectedStandings({

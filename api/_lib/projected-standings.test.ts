@@ -7,7 +7,7 @@ vi.mock("./auth.js", () => ({ resolveSleeperUserId: vi.fn() }));
 vi.mock("./viewer-league-access.js", () => ({ viewerBelongsToLeague: vi.fn() }));
 
 import {
-  appWeekPoints,
+  currentWeekLineupTotal,
   bestLineupTotal,
   buildProjectedStandings,
   loadProjectedStandings,
@@ -71,13 +71,22 @@ describe("compactWeekProjections", () => {
   });
 });
 
-describe("appWeekPoints", () => {
-  it("uses the app's blended projection and zeroes bye and out players", () => {
-    expect(appWeekPoints(player("a", "WR", null, 12.5))).toBe(12.5);
-    expect(appWeekPoints(player("a", "WR", null, null))).toBe(0);
-    expect(appWeekPoints(player("a", "WR", null, 12.5, true))).toBe(0);
-    expect(appWeekPoints(player("a", "WR", "Out", 12.5))).toBe(0);
-    expect(appWeekPoints(player("a", "WR", "Questionable", 12.5))).toBe(12.5);
+describe("currentWeekLineupTotal", () => {
+  const slots = ["WR", "TE"];
+
+  it("uses the app's projection for players who have not played", () => {
+    expect(currentWeekLineupTotal([player("w", "WR", null, 12.5), player("t", "TE", null, 7)], slots)).toBe(19.5);
+  });
+
+  it("zeroes bye and unavailable players, and treats missing projections as zero", () => {
+    expect(currentWeekLineupTotal([player("w", "WR", null, 12.5, true), player("t", "TE", "Out", 7)], slots)).toBe(0);
+    expect(currentWeekLineupTotal([player("w", "WR", null, null)], slots)).toBe(0);
+  });
+
+  it("counts actual points for a starter whose game is final, not the pregame projection", () => {
+    const scored = { ...player("w", "WR", null, 8), isStarter: true, lineupSlot: "WR", gamePhase: "final" as const, actual: 35 };
+    const total = currentWeekLineupTotal([scored, player("t", "TE", null, 7)], slots);
+    expect(total).toBe(42);
   });
 });
 
@@ -197,6 +206,14 @@ describe("loadProjectedStandings", () => {
     expect(result.throughWeek).toBe(4);
     expect(result.regularSeasonEndsWeek).toBe(6);
     expect(result.games.map((g) => g.week)).toEqual([5, 6]);
+  });
+
+  it("withholds the table when a matchup week cannot be loaded", async () => {
+    const result = await loadProjectedStandings(league, 2026, 5, {
+      fetchWeek: async (_id, w) => { if (w === 6) throw new Error("down"); return fetchWeek(_id, w); },
+      loadProjections: async (_s, w) => week(w, WK),
+    });
+    expect(result).toEqual({ error: "The remaining schedule could not be fully loaded from Sleeper." });
   });
 
   it("degrades per week and fails only when nothing loads", async () => {
