@@ -312,6 +312,13 @@ describe("normalizePlayerNameKey hardening", () => {
     expect(normalizePlayerNameKey("Wandale Robinson")).toBe("wan dale robinson");
   });
 
+  it("maps short Amon-Ra extracts to full Sleeper key", () => {
+    expect(normalizePlayerNameKey("Amon-Ra")).toBe("amon ra st brown");
+    expect(normalizePlayerNameKey("Amon Ra")).toBe("amon ra st brown");
+    expect(normalizePlayerNameKey("Amon-Ra St. Brown")).toBe("amon ra st brown");
+    expect(normalizePlayerNameKey("Amon Ra St. Brown")).toBe("amon ra st brown");
+  });
+
   it("detects last-name-only keys", () => {
     expect(isLastNameOnlyKey(normalizePlayerNameKey("Jefferson"))).toBe(true);
     expect(isLastNameOnlyKey(normalizePlayerNameKey("Justin Jefferson"))).toBe(false);
@@ -388,6 +395,34 @@ describe("resolveXNewsPlayer matching", () => {
       { player_name: "Same Name", team: "DAL" },
       ambiguous,
     )).toBeNull();
+  });
+
+  it("resolves Amon-Ra short names and St. Brown+team via first/last index", () => {
+    const lions = buildPlayerNewsNameIndex([
+      {
+        playerId: "7547",
+        player: "Amon-Ra St. Brown",
+        team: "DET",
+        firstName: "Amon-Ra",
+        lastName: "St. Brown",
+      },
+      {
+        playerId: "5323",
+        player: "Equanimeous St. Brown",
+        team: "FA",
+        firstName: "Equanimeous",
+        lastName: "St. Brown",
+      },
+      { playerId: "9221", player: "Jahmyr Gibbs", team: "DET" },
+    ]);
+    expect(resolveXNewsPlayer({ player_name: "Amon-Ra" }, lions)?.playerId).toBe("7547");
+    expect(resolveXNewsPlayer({ player_name: "Amon Ra St. Brown" }, lions)?.playerId)
+      .toBe("7547");
+    expect(resolveXNewsPlayer({ player_name: "St. Brown", team: "DET" }, lions)?.playerId)
+      .toBe("7547");
+    expect(resolveXNewsPlayer({ player_name: "St. Brown" }, lions)).toBeNull();
+    expect(resolveXNewsPlayer({ player_name: "Brown", team: "DET" }, lions)?.playerId)
+      .toBe("7547");
   });
 
   it("routes last-name-only through byLastNameTeam, not byNameTeam", () => {

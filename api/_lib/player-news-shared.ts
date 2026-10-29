@@ -262,7 +262,8 @@ const GENERATIONAL_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
 export const PLAYER_NAME_KEY_ALIASES: Readonly<Record<string, string>> = {
   // Wan'Dale → "wan dale …"; producers often emit "Wandale …".
   "wandale robinson": "wan dale robinson",
-  // Practice / roundup extracts often send just "Amon-Ra".
+  // Practice reports / roundups often extract just "Amon-Ra" (→ "amon ra"),
+  // which would otherwise miss Sleeper's "Amon-Ra St. Brown".
   "amon ra": "amon ra st brown",
 };
 
@@ -347,16 +348,26 @@ export type PlayerNewsNameIndexEntry = {
   playerId: string;
   player: string;
   team: string;
-  /** Optional Sleeper first_name — used by X mention → player_id expansion. */
+  /** Optional Sleeper first_name — multi-token firsts (e.g. Amon-Ra) index too. */
   firstName?: string | null;
-  /** Optional Sleeper last_name — reserved for compound-surname matching. */
+  /** Optional Sleeper last_name — compound lasts (e.g. St. Brown) index too. */
   lastName?: string | null;
 };
+
+function pushHit(map: Map<string, string[]>, key: string, playerId: string): void {
+  if (!key) return;
+  const ids = map.get(key) ?? [];
+  ids.push(playerId);
+  map.set(key, ids);
+}
 
 /**
  * Build lookup maps from roster rows. Ambiguous names are left out of
  * `byName` / `byNameTeam` / `byLastNameTeam` so callers cannot silently pick
  * the wrong player; use `player_id` or a unique name(+team) match instead.
+ *
+ * Also indexes unique multi-token first names (Amon-Ra → "amon ra") and
+ * compound last names (St. Brown → "st brown"|team) when provided.
  */
 export function buildPlayerNewsNameIndex(
   entries: ReadonlyArray<PlayerNewsNameIndexEntry>,
@@ -370,20 +381,27 @@ export function buildPlayerNewsNameIndex(
     const team = normalizeNewsTeam(entry.team) ?? "FA";
     byId.set(entry.playerId, { player: entry.player, team });
     const nameKey = normalizePlayerNameKey(entry.player);
-    if (!nameKey) continue;
-    const ids = nameHits.get(nameKey) ?? [];
-    ids.push(entry.playerId);
-    nameHits.set(nameKey, ids);
-    const nameTeam = nameTeamKey(nameKey, team);
-    const nameTeamIds = nameTeamHits.get(nameTeam) ?? [];
-    nameTeamIds.push(entry.playerId);
-    nameTeamHits.set(nameTeam, nameTeamIds);
-    const last = lastNameFromKey(nameKey);
-    if (!last) continue;
-    const lastKey = nameTeamKey(last, team);
-    const lastIds = lastTeamHits.get(lastKey) ?? [];
-    lastIds.push(entry.playerId);
-    lastTeamHits.set(lastKey, lastIds);
+    if (nameKey) {
+      pushHit(nameHits, nameKey, entry.playerId);
+      pushHit(nameTeamHits, nameTeamKey(nameKey, team), entry.playerId);
+      const last = lastNameFromKey(nameKey);
+      if (last) pushHit(lastTeamHits, nameTeamKey(last, team), entry.playerId);
+    }
+
+    // Hyphenated / multi-token first names appear alone in beat reports.
+    const firstKey = entry.firstName ? normalizePlayerNameKey(entry.firstName) : "";
+    if (firstKey && playerNameTokenCount(firstKey) >= 2 && firstKey !== nameKey) {
+      pushHit(nameHits, firstKey, entry.playerId);
+      pushHit(nameTeamHits, nameTeamKey(firstKey, team), entry.playerId);
+    }
+
+    // Compound surnames (St. Brown) need the full last-name key, not only
+    // the final token ("brown"), so "St. Brown"+DET resolves uniquely.
+    const lastKeyFull = entry.lastName ? normalizePlayerNameKey(entry.lastName) : "";
+    if (lastKeyFull && playerNameTokenCount(lastKeyFull) >= 2) {
+      pushHit(lastTeamHits, nameTeamKey(lastKeyFull, team), entry.playerId);
+      pushHit(nameTeamHits, nameTeamKey(lastKeyFull, team), entry.playerId);
+    }
   }
 
   const byName = new Map<string, string>();
@@ -451,6 +469,13 @@ export function resolveXNewsPlayer(
     if (withTeam) {
       const meta = index.byId.get(withTeam);
       if (meta) return { playerId: withTeam, player: meta.player, team: meta.team };
+    }
+    // Compound surnames (e.g. "St. Brown") are multi-token but still live in
+    // byLastNameTeam under the full last-name key when indexed from Sleeper.
+    const compoundLast = index.byLastNameTeam.get(nameTeamKey(nameKey, team));
+    if (compoundLast) {
+      const meta = index.byId.get(compoundLast);
+      if (meta) return { playerId: compoundLast, player: meta.player, team: meta.team };
     }
   }
 
