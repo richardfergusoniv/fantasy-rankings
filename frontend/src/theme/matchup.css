@@ -94,11 +94,12 @@
    exactly where the in-flow row put it) so the kickoff row starts at the
    top of the card instead of below an empty header band. */
 .matchup-data-header.matchup-data-header-minimal { position: absolute; top: 18px; right: 18px; justify-content: flex-end; }
-/* The card's top row: kickoff date/time at the left, the two team badges
-   centered on the same row. */
-.matchup-kickoff-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
+/* The card's top row: team badges centered, kickoff date/time in the gap
+   before the absolute close button. padding-right reserves the 44px close hit
+   target so the right column is exactly that DET-to-X gap. */
+.matchup-kickoff-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 44px 8px 0; border-bottom: 1px solid var(--hairline); }
 .matchup-kickoff-row .matchup-stat-columns { padding: 0; border-bottom: 0; }
-.matchup-kickoff-label { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.matchup-kickoff-label { justify-self: end; max-width: 100%; color: var(--dim); font-size: var(--type-caption); font-weight: 600; line-height: 1.25; text-align: right; }
 .matchup-reference-button.matchup-team-open .matchup-reference-button-label { min-height: 40px; padding: 6px 14px 5px; border-radius: var(--radius-sm); font-size: var(--type-section); }
 .matchup-team-open .matchup-reference-arrow { font-size: var(--type-section); }
 .matchup-reference-arrow { color: var(--link); font-size: var(--type-body, 1rem); font-weight: 700; line-height: 1; }

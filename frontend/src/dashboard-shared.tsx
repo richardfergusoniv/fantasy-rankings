@@ -588,7 +588,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
             <button type="button" onClick={onClose} aria-label="Close matchup data">×</button>
           </div>
           <div className="matchup-kickoff-row">
-            {kickoffLabel ? <span className="matchup-kickoff-label">{kickoffLabel}</span> : <span aria-hidden="true" />}
+            <span aria-hidden="true" />
             <div className="matchup-stat-columns" role="group" aria-label={`${matchup.team} versus ${matchup.opponent}`}>
               <div className="matchup-stat-team">
                 {onOpenTeam ? (
@@ -608,7 +608,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                 ) : <strong>{matchup.opponent}</strong>}
               </div>
             </div>
-            <span aria-hidden="true" />
+            {kickoffLabel ? <span className="matchup-kickoff-label">{kickoffLabel}</span> : <span aria-hidden="true" />}
           </div>
           {toolLinks ? <ToolLinks ariaLabel={`Open ${matchup.team} and ${matchup.opponent} in a tool`} links={toolLinks} /> : null}
           {lineSummary ? <p className="matchup-game-line"><span>Line</span> {lineSummary}</p> : null}
