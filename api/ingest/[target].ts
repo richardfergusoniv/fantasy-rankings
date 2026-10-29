@@ -319,6 +319,8 @@ async function loadPlayerNameIndex() {
       playerId,
       player: name,
       team: player.team ?? "FA",
+      firstName: player.first_name ?? null,
+      lastName: player.last_name ?? null,
     });
   }
   return buildPlayerNewsNameIndex(entries);
