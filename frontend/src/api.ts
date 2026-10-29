@@ -15,7 +15,7 @@ import type { Dashboard, DashboardSection } from "../../api/_lib/dashboard-schem
 import type { DraftCenter } from "../../api/draft-center";
 import type { PfnTables, TeamWeekStats } from "../../api/_lib/pfn-tables";
 import type { PlayerNews } from "../../api/player-news";
-import type { LeagueOutcomes } from "../../api/_lib/league-outcomes";
+import type { ProjectedStandings } from "../../api/_lib/projected-standings";
 import type { HistoricalTrades } from "../../api/_lib/trades";
 import type { ValueHistory } from "../../api/_lib/value-history";
 import { getAccessToken } from "./supabase";
@@ -111,8 +111,8 @@ export const api = {
     season?: number;
   }): Promise<HistoricalTrades> => request(`/api/trades/history${buildQuery(args)}`),
 
-  getLeagueOutcomes: (args: { leagueId: string }): Promise<LeagueOutcomes> =>
-    request(`/api/data/league-outcomes${buildQuery(args)}`),
+  getProjectedStandings: (args: { leagueId: string }): Promise<ProjectedStandings> =>
+    request(`/api/data/projected-standings${buildQuery(args)}`),
 
   listSavedChartViews: (_args?: EmptyArgs): Promise<{ views: SavedChartView[] }> => request("/api/chart-views"),
 

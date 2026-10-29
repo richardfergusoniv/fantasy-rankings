@@ -75,6 +75,20 @@ export const LEAGUE_CHAT_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "get_projected_standings",
+      description:
+        "The app's Projected standings: each team's best lineup from its current roster for every remaining week, using Sleeper's projections in this league's scoring; the higher projected score wins each matchup. Returns projected final records and points, the playoff cut, and every remaining game with both teams' projected scores. Players currently out are left out of every remaining week and future roster moves are not reflected. Third-party projections added up, not a probability; use it as the base for your own forecast.",
+      parameters: {
+        type: "object",
+        properties: { leagueId: { type: "string" } },
+        required: ["leagueId"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_playoff_odds",
       description:
         "Playoff and last-place odds for every team from the current standings and the remaining schedule (simulated, not an app score; the method field says what inputs it uses). For the user: their remaining games with win chances, and what each final win total means for making the playoffs. Use for 'what do I need to make the playoffs', for 'am I in danger of finishing last', and for deciding whether to play for floor, ceiling or the future.",

@@ -14,6 +14,7 @@ import {
 } from "./chat-tools.js";
 import { summarizeLeagueRules } from "./league-rules.js";
 import { buildLeagueOutcomes } from "./league-outcomes.js";
+import { loadProjectedStandings } from "./projected-standings.js";
 
 type League = Dashboard["leagues"][number];
 const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
@@ -253,6 +254,27 @@ export async function toolGetPlayoffOdds(ctx: ChatToolContext, args: { leagueId:
   };
 }
 
+export async function toolGetProjectedStandings(ctx: ChatToolContext, args: { leagueId: string }) {
+  const dashboard = await loadDashboard(ctx);
+  const league = findLeague(dashboard, args.leagueId);
+  if (!league) return { ok: false as const, error: "League not found for this user." };
+  const result = await loadProjectedStandings(league, dashboard.season);
+  if ("error" in result) return { ok: false as const, error: result.error };
+  const names = new Map(result.teams.map((team) => [team.rosterId, team.teamName]));
+  return {
+    ok: true as const,
+    ...result,
+    games: result.games.map((game) => ({
+      week: game.week,
+      teamA: names.get(game.rosterIdA) ?? "Unknown",
+      projectedA: game.projectedA,
+      teamB: names.get(game.rosterIdB) ?? "Unknown",
+      projectedB: game.projectedB,
+    })),
+    note: "Sleeper projections for current rosters' best lineups, scored in this league's rules. Players currently out are excluded from every remaining week; future roster moves and actual lineup choices would change results. Not a probability.",
+  };
+}
+
 export async function dispatchLeagueChatTool(
   name: string,
   rawArgs: unknown,
@@ -272,6 +294,10 @@ export async function dispatchLeagueChatTool(
     case "search_players": {
       const parsed = searchSchema.safeParse(args);
       return parsed.success ? toolSearchPlayers(ctx, parsed.data) : invalid(parsed.error.issues);
+    }
+    case "get_projected_standings": {
+      const parsed = leagueOnly.safeParse(args);
+      return parsed.success ? toolGetProjectedStandings(ctx, parsed.data) : invalid(parsed.error.issues);
     }
     case "get_playoff_odds": {
       const parsed = leagueOnly.safeParse(args);

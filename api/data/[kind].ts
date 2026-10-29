@@ -1,14 +1,14 @@
 import { json, methodNotAllowed } from "../_lib/api-utils.js";
 import { handleBoxScore } from "../_lib/box-score.js";
 import { kindFromPath } from "../_lib/data-kind.js";
-import { handleLeagueOutcomes } from "../_lib/league-outcomes.js";
 import { handlePfnTables } from "../_lib/pfn-tables.js";
+import { handleProjectedStandings } from "../_lib/projected-standings.js";
 import { handleTradesHistory } from "../_lib/trades-history.js";
 import { handleValueHistory } from "../_lib/value-history.js";
 
 /**
  * GET /api/data/:kind
- *   kind = box-score | pfn-tables | value-history | trades-history | league-outcomes
+ *   kind = box-score | pfn-tables | value-history | trades-history | projected-standings
  *
  * Single function for five read-only routes so the project stays
  * inside Vercel's Hobby function budget. Old URLs are rewritten in
@@ -34,8 +34,8 @@ export async function GET(req: Request): Promise<Response> {
       return handleValueHistory(req);
     case "trades-history":
       return handleTradesHistory(req);
-    case "league-outcomes":
-      return handleLeagueOutcomes(req);
+    case "projected-standings":
+      return handleProjectedStandings(req);
     default: {
       const _exhaustive: never = kind;
       return json({ ok: false, error: `Unhandled data kind: ${_exhaustive}` }, 500);

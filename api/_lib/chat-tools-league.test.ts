@@ -105,7 +105,7 @@ describe("league chat tools", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("registers the new tools", () => {
-    for (const name of ["get_league_rules", "get_league_teams", "search_players", "get_playoff_odds"]) {
+    for (const name of ["get_league_rules", "get_league_teams", "search_players", "get_projected_standings", "get_playoff_odds"]) {
       expect(CHAT_TOOL_NAMES).toContain(name);
     }
   });
