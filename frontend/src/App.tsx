@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
 import { playerWeeklyRank } from "./player-card-state";
 import { newsVisibleInContext } from "../../api/_lib/player-news-filters";
+import { isDynastyNewsContext } from "./player-news-context";
 import { newsForTicker, PROMINENT_OVERALL_RANK_LIMIT, tickerItemKind } from "./ticker-news";
 import type {
   Dashboard,
@@ -821,7 +822,7 @@ export function App() {
   const league = dashboard?.leagues.find((item) => item.id === selectedLeagueId) ?? dashboard?.leagues[0];
   // Same effective league as the rendered dashboard (cached + streamed meta).
   // No league yet → redraft (exclude dynasty-tagged rows) per product default.
-  const leagueIsDynasty = Boolean(league?.seasonLongFormat.isDynasty);
+  const leagueIsDynasty = isDynastyNewsContext(dashboard?.leagues, selectedLeagueId);
   const newsQuery = useQuery({
     queryKey: personalQueryKey(viewer, "player-news", leagueIsDynasty ? "dynasty" : "redraft"),
     queryFn: async () => {
