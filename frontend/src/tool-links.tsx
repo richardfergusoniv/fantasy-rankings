@@ -58,3 +58,40 @@ export function PlayerNameLink({ link, className, label, children }: { link: Too
     </a>
   );
 }
+
+export type CrossToolLink = {
+  href: string;
+  onOpen: () => void;
+};
+
+/**
+ * Compact badge that deep-links another dashboard surface (Game lines ↔ matchup).
+ * Real anchor for open-in-new-tab; primary click stays in-app.
+ */
+export function CrossToolBadge({
+  link,
+  label,
+  ariaLabel,
+  className = "",
+}: {
+  link: CrossToolLink;
+  label: string;
+  ariaLabel: string;
+  className?: string;
+}) {
+  return (
+    <a
+      href={link.href}
+      className={`matchup-reference-tag matchup-reference-button cross-tool-badge${className ? ` ${className}` : ""}`}
+      aria-label={ariaLabel}
+      onClick={(event: ReactMouseEvent<HTMLAnchorElement>) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        link.onOpen();
+      }}
+    >
+      <span className="matchup-reference-button-label">{label}</span>
+      <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+    </a>
+  );
+}

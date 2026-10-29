@@ -43,6 +43,10 @@ export type GameLineCard = {
   moneylines: string;
   /** Implied team totals (away / home), or final score once played. */
   totalsOrScore: string;
+  /** Away team's implied points (null when line missing or final). */
+  awayImplied: number | null;
+  /** Home team's implied points (null when line missing or final). */
+  homeImplied: number | null;
   awayTeam: string;
   homeTeam: string;
   /** UTC epoch ms; null when kickoff cannot be parsed. */
@@ -260,6 +264,8 @@ export function formatMatchup(awayTeam: string, homeTeam: string, location: stri
 
 export function toGameLineCard(row: NflverseGameRow): GameLineCard {
   const kickoff = etWallTimeToUtc(row.gameday, row.gametime);
+  const isFinal = row.awayScore !== null && row.homeScore !== null;
+  const implied = isFinal ? null : impliedTeamTotals(row.totalLine, row.spreadLine);
   return {
     gameId: row.gameId,
     matchup: formatMatchup(row.awayTeam, row.homeTeam, row.location),
@@ -268,10 +274,12 @@ export function toGameLineCard(row: NflverseGameRow): GameLineCard {
     total: formatTotalLine(row.totalLine),
     moneylines: formatMoneylines(row.awayMoneyline, row.homeMoneyline),
     totalsOrScore: formatTotalsOrScore(row),
+    awayImplied: implied ? implied[0] : null,
+    homeImplied: implied ? implied[1] : null,
     awayTeam: row.awayTeam,
     homeTeam: row.homeTeam,
     kickoffAtMs: kickoff?.getTime() ?? null,
-    isFinal: row.awayScore !== null && row.homeScore !== null,
+    isFinal,
   };
 }
 

@@ -244,6 +244,8 @@ describe("gameLineCardsForWeek", () => {
       total: "O/U 40.5",
       moneylines: "-148 / +124",
       totalsOrScore: "21.5 / 19",
+      awayImplied: 21.5,
+      homeImplied: 19,
       awayTeam: "SEA",
       homeTeam: "DEN",
       kickoffAtMs,
@@ -255,11 +257,15 @@ describe("gameLineCardsForWeek", () => {
       total: "—",
       moneylines: "—",
       totalsOrScore: "—",
+      awayImplied: null,
+      homeImplied: null,
     });
     const played = toGameLineCard(parseGamesCsv(SAMPLE_CSV).find((row) => row.gameId === "2026_05_DAL_PHI")!);
     expect(played.totalsOrScore).toBe("20 / 24");
     expect(played.spread).toBe("PHI -8.5");
     expect(played.isFinal).toBe(true);
+    expect(played.awayImplied).toBeNull();
+    expect(played.homeImplied).toBeNull();
   });
 });
 

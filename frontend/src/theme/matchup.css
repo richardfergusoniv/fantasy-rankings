@@ -101,7 +101,55 @@
 /* Kickoff sits in the mid-band under the team chips (between the team-row
    hairline and the matchup-stat-groups hairline above the OFF/DEF tabs). */
 .matchup-kickoff-label { margin: 0; padding: 10px 8px 2px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; line-height: 1.25; text-align: center; }
-.matchup-data-card:has(> .matchup-kickoff-label) .matchup-grade-section { margin-top: 10px; }
+.matchup-game-lines-badge-row { display: flex; justify-content: center; padding: 10px 8px 2px; }
+.matchup-game-lines-badge { text-decoration: none; }
+.matchup-game-lines-badge .matchup-reference-button-label {
+  min-height: 28px;
+  padding: 4px 10px 3px;
+  border-radius: var(--radius-sm);
+  font-size: var(--type-caption);
+}
+.matchup-implied-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.matchup-implied-team { display: grid; gap: 2px; min-width: 0; }
+.matchup-implied-team.is-opponent { justify-items: end; text-align: right; }
+.matchup-implied-team > span {
+  color: var(--dim);
+  font-size: var(--type-caption);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.matchup-implied-team > strong {
+  font-size: var(--type-display);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1;
+}
+.matchup-implied-market {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  color: var(--dim);
+  font-size: var(--type-caption);
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+.matchup-data-card:has(> .matchup-kickoff-label) .matchup-grade-section,
+.matchup-data-card:has(> .matchup-game-lines-badge-row) .matchup-grade-section,
+.matchup-data-card:has(> .matchup-implied-strip) .matchup-grade-section { margin-top: 10px; }
+.cross-tool-badge { text-decoration: none; color: inherit; }
 .matchup-reference-button.matchup-team-open .matchup-reference-button-label { min-height: 40px; padding: 6px 14px 5px; border-radius: var(--radius-sm); font-size: var(--type-section); }
 .matchup-team-open .matchup-reference-arrow { font-size: var(--type-section); }
 .matchup-reference-arrow { color: var(--link); font-size: var(--type-body, 1rem); font-weight: 700; line-height: 1; }

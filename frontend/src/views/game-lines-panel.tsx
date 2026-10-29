@@ -39,11 +39,14 @@ import {
 import { api } from "../api";
 import { missingPropWeekLabel, propHistoryRefreshOptions } from "../lib/prop-history-state";
 import { SectionError } from "../dashboard-shared";
+import { formatImpliedTotal, matchupSelectionForGameLine } from "../lib/game-line-matchup-link";
 import { SegmentedControl } from "../shared";
-import type { League } from "../dashboard-types";
+import type { League, MatchupSelection } from "../dashboard-types";
 import { formatDecimal } from "../lib/format-number";
-import { PlayerNameLink } from "../tool-links";
+import { CrossToolBadge, PlayerNameLink, type CrossToolLink } from "../tool-links";
 import type { PlayerLinkResolver } from "../tool-player-link";
+
+export type GameLineMatchupLink = (matchup: MatchupSelection) => CrossToolLink | null;
 
 
 
@@ -156,35 +159,105 @@ function rosterMatchKeys(league: League): Set<string> {
 
 const EMPTY_COVER = { wins: 0, losses: 0, pushes: 0 };
 
-function GameLineCardBlock({
-  card,
-  awayRecord,
-  homeRecord,
+function GameBoardTeam({
+  team,
+  implied,
+  record,
+  align,
+  matchupLink,
+  finalScore,
 }: {
-  card: GameLineCard;
-  awayRecord: TeamSeasonRecords | null;
-  homeRecord: TeamSeasonRecords | null;
+  team: string;
+  implied: number | null;
+  record: TeamSeasonRecords | null;
+  align: "away" | "home";
+  matchupLink: CrossToolLink | null;
+  /** When the game is final, show the actual score instead of implied. */
+  finalScore: number | null;
 }) {
-  const side = (team: string, record: TeamSeasonRecords | null, align: "away" | "home") => (
+  const impliedLabel = finalScore !== null
+    ? String(finalScore)
+    : formatImpliedTotal(implied);
+  const impliedCaption = finalScore !== null ? "Score" : "Implied";
+  return (
     <div className={`game-board-team is-${align}`}>
-      <strong>{team}</strong>
+      {matchupLink ? (
+        <CrossToolBadge
+          link={matchupLink}
+          label={team}
+          ariaLabel={`Open ${team} matchup card`}
+          className="game-board-team-link"
+        />
+      ) : (
+        <strong>{team}</strong>
+      )}
+      <p className="game-board-implied">
+        <span>{impliedCaption}</span>
+        <strong>{impliedLabel}</strong>
+      </p>
       <dl>
         <div><dt>ATS</dt><dd>{formatCoverRecord(record?.ats ?? EMPTY_COVER)}</dd></div>
         <div><dt>O/U</dt><dd>{formatCoverRecord(record?.ou ?? EMPTY_COVER)}</dd></div>
       </dl>
     </div>
   );
+}
+
+function GameLineCardBlock({
+  card,
+  awayRecord,
+  homeRecord,
+  matchupLinkFor,
+}: {
+  card: GameLineCard;
+  awayRecord: TeamSeasonRecords | null;
+  homeRecord: TeamSeasonRecords | null;
+  matchupLinkFor?: GameLineMatchupLink;
+}) {
+  const awayLink = matchupLinkFor?.(matchupSelectionForGameLine({
+    awayTeam: card.awayTeam,
+    homeTeam: card.homeTeam,
+    isFinal: card.isFinal,
+    focusTeam: card.awayTeam,
+  })) ?? null;
+  const homeLink = matchupLinkFor?.(matchupSelectionForGameLine({
+    awayTeam: card.awayTeam,
+    homeTeam: card.homeTeam,
+    isFinal: card.isFinal,
+    focusTeam: card.homeTeam,
+  })) ?? null;
+  // Final scores are encoded in totalsOrScore as "away / home"; implied fields are null then.
+  const finalScores = card.isFinal
+    ? card.totalsOrScore.split(" / ").map((part) => {
+        const value = Number(part);
+        return Number.isFinite(value) ? value : null;
+      })
+    : null;
   return (
     <section className="game-board" aria-label={`${card.matchup}, ${card.kickoffPt}`}>
-      {side(card.awayTeam, awayRecord, "away")}
+      <GameBoardTeam
+        team={card.awayTeam}
+        implied={card.awayImplied}
+        record={awayRecord}
+        align="away"
+        matchupLink={awayLink}
+        finalScore={finalScores?.[0] ?? null}
+      />
       <div className="game-board-market">
-        <span className="game-board-kickoff">{card.kickoffPt}</span>
         <dl>
           <div><dt>Spread</dt><dd>{card.spread}</dd></div>
           <div><dt>Total</dt><dd>{card.total}</dd></div>
         </dl>
+        <span className="game-board-kickoff">{card.kickoffPt}</span>
       </div>
-      {side(card.homeTeam, homeRecord, "home")}
+      <GameBoardTeam
+        team={card.homeTeam}
+        implied={card.homeImplied}
+        record={homeRecord}
+        align="home"
+        matchupLink={homeLink}
+        finalScore={finalScores?.[1] ?? null}
+      />
     </section>
   );
 }
@@ -196,10 +269,12 @@ function GameSlate({
   cards,
   selectedId,
   onSelect,
+  matchupLinkFor,
 }: {
   cards: GameLineCard[];
   selectedId: string;
   onSelect: (id: string) => void;
+  matchupLinkFor?: GameLineMatchupLink;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -238,19 +313,46 @@ function GameSlate({
         >
           <strong>All games</strong>
         </button>
-        {cards.map((card) => (
-          <button
-            key={card.gameId}
-            type="button"
-            className="game-slate-tile"
-            aria-pressed={selectedId === card.gameId}
-            onClick={() => onSelect(card.gameId)}
-          >
-            <strong>{card.matchup}</strong>
-            <span className="game-slate-kickoff">{card.kickoffPt}</span>
-            <span className="game-slate-lines">{card.spread} · {card.total}</span>
-          </button>
-        ))}
+        {cards.map((card) => {
+          const matchupLink = matchupLinkFor?.(matchupSelectionForGameLine({
+            awayTeam: card.awayTeam,
+            homeTeam: card.homeTeam,
+            isFinal: card.isFinal,
+          })) ?? null;
+          const selected = selectedId === card.gameId;
+          return (
+            <div
+              key={card.gameId}
+              className="game-slate-tile"
+              data-selected={selected || undefined}
+            >
+              {matchupLink ? (
+                <CrossToolBadge
+                  link={matchupLink}
+                  label={card.matchup}
+                  ariaLabel={`Open ${card.matchup} matchup card`}
+                  className="game-slate-matchup-link"
+                />
+              ) : (
+                <strong className="game-slate-matchup-label">{card.matchup}</strong>
+              )}
+              <button
+                type="button"
+                className="game-slate-pick"
+                aria-pressed={selected}
+                aria-label={`Select ${card.matchup}`}
+                onClick={() => onSelect(card.gameId)}
+              >
+                <span className="game-slate-kickoff">{card.kickoffPt}</span>
+                <span className="game-slate-lines">
+                  {card.awayImplied !== null && card.homeImplied !== null
+                    ? `${formatImpliedTotal(card.awayImplied)}–${formatImpliedTotal(card.homeImplied)} · ${card.total}`
+                    : `${card.spread} · ${card.total}`}
+                </span>
+              </button>
+            </div>
+          );
+        })}
       </div>
       <span className="game-slate-more" aria-hidden="true">›</span>
     </div>
@@ -266,6 +368,7 @@ export function GameLinesPanel({
   initialTeam = null,
   onSelectionChange,
   playerLink,
+  matchupLinkFor,
 }: {
   league: League;
   season: number;
@@ -276,6 +379,8 @@ export function GameLinesPanel({
   onSelectionChange?: (patch: GameLinesSelection) => void;
   /** Resolves a prop row's player to their card; rows that don't resolve stay plain text. */
   playerLink?: PlayerLinkResolver;
+  /** Builds a deep link from a Game lines card into the matchup dialog. */
+  matchupLinkFor?: GameLineMatchupLink;
 }) {
   const [position, setPosition] = useState<PropPosition | "ALL">("ALL");
   const [statId, setStatId] = useState<string>("ALL");
@@ -640,6 +745,7 @@ export function GameLinesPanel({
           <GameSlate
             cards={gameLineCards}
             selectedId={selectedGameId}
+            matchupLinkFor={matchupLinkFor}
             onSelect={(id) => {
               setUserGameId(id);
               if (initialTeam) onSelectionChange?.({ gameLinesTeam: null });
@@ -651,6 +757,7 @@ export function GameLinesPanel({
               card={selectedGame}
               awayRecord={teamRecords.get(normalizeGameLineTeam(selectedGame.awayTeam)) ?? null}
               homeRecord={teamRecords.get(normalizeGameLineTeam(selectedGame.homeTeam)) ?? null}
+              matchupLinkFor={matchupLinkFor}
             />
           ) : null}
 

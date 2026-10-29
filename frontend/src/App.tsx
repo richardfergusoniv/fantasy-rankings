@@ -43,7 +43,7 @@ import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPos
 import { withStreamedAnalytics } from "./dashboard-analytics";
 import { isSectionWaiting, sectionBuildFailed, shouldShowProgressiveShell } from "./dashboard-loading";
 import { FeatureErrorBoundary } from "./error-boundary";
-import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, waiversSearchPreservingContext } from "./dashboard-url";
+import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
 import { createPlayerResolver, type DashboardPlayerRow, type PlayerLinkResolver } from "./tool-player-link";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
 import { leaguePowerTeamForPlayer } from "./league-roster";
@@ -1423,6 +1423,10 @@ export function App() {
                 initialTeam={dashboardUrl.state.gameLinesTeam}
                 onSelectionChange={dashboardUrl.commit}
                 playerLink={toolPlayerLink}
+                matchupLinkFor={(matchup) => ({
+                  href: toolLinkSearch(dashboardUrl.state, { matchup }),
+                  onOpen: () => setSelectedMatchup(matchup),
+                })}
               />
             )
             : tab === "team-stats" ? (
@@ -1487,7 +1491,28 @@ export function App() {
       </div>
       {!inspectorDocked ? playerSheet : null}
       {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
-      {selectedMatchup ? <MatchupDataModal matchup={selectedMatchup} season={dashboard.season} week={dashboard.week} gameLines={dashboard.gameLines} onClose={() => setSelectedMatchup(null)} onOpenTeam={setTeamCardTeam} suspended={teamCardTeam !== null} /> : null}
+      {selectedMatchup ? (
+        <MatchupDataModal
+          matchup={selectedMatchup}
+          season={dashboard.season}
+          week={dashboard.week}
+          gameLines={dashboard.gameLines}
+          onClose={() => setSelectedMatchup(null)}
+          onOpenTeam={setTeamCardTeam}
+          suspended={teamCardTeam !== null}
+          gameLinesLink={{
+            href: toolLinkSearch(dashboardUrl.state, { tab: "monitor", gameLinesTeam: selectedMatchup.team }),
+            onOpen: () => {
+              dashboardUrl.commit({
+                ...CLEARED_TOOL_SELECTIONS,
+                tab: "monitor",
+                gameLinesTeam: selectedMatchup.team,
+                matchup: null,
+              });
+            },
+          }}
+        />
+      ) : null}
       {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
       {rosterCardTeam ? (
         <LeagueTeamCard
