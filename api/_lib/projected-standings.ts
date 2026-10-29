@@ -19,6 +19,7 @@ import { scoreSleeperPlayerProjection } from "./player-projection-merge.js";
 import { isUnavailableStatus, optimizeTradeRoster, type OptimizablePlayer } from "./lineup-optimizer.js";
 import { DEFAULT_LAST_REGULAR_WEEK, loadScheduleGames } from "./outcomes-engine-pace.js";
 import type { FetchWeek } from "./league-outcomes-contract.js";
+import { fetchJson, SLEEPER_BASE } from "./sleeper.js";
 import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projections.js";
 import { viewerBelongsToLeague } from "./viewer-league-access.js";
 
@@ -143,8 +144,33 @@ export function bestLineupTotal(
   return optimizeTradeRoster(optimizable, [...slots]).score;
 }
 
+type LeagueSettingsResponse = { settings?: { league_average_match?: number } };
+
+/**
+ * True when the league also scores each team against the weekly median, which
+ * adds a second result per team per week. Throws if Sleeper cannot say.
+ */
+export async function loadLeagueAverageMatch(
+  leagueId: string,
+  fetchLeague: (leagueId: string) => Promise<LeagueSettingsResponse> = (id) =>
+    fetchJson<LeagueSettingsResponse>(`${SLEEPER_BASE}/league/${id}`),
+): Promise<boolean> {
+  const response = await fetchLeague(leagueId);
+  return response?.settings?.league_average_match === 1;
+}
+
+/** Median of the teams' totals; with an even count, the mean of the middle two. */
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  if (sorted.length === 0) return 0;
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
 export function buildProjectedStandings(args: {
   league: League;
+  /** League also plays each team against the weekly median (an extra win or loss per week). */
+  medianMatchup?: boolean;
   weeks: ReadonlyMap<number, WeekProjections>;
   /** Week scored from the app's own projections instead of Sleeper's. */
   appWeek?: number | null;
@@ -206,6 +232,20 @@ export function buildProjectedStandings(args: {
     projectedGames.push({ week: game.week, rosterIdA: game.a, rosterIdB: game.b, projectedA: round2(pa), projectedB: round2(pb) });
   }
 
+  if (args.medianMatchup) {
+    for (const week of [...new Set(games.map((game) => game.week))]) {
+      const totals = [...table.keys()].map((rosterId) => projectedFor(week, rosterId));
+      const mid = median(totals);
+      for (const rosterId of table.keys()) {
+        const entry = table.get(rosterId)!;
+        const total = projectedFor(week, rosterId);
+        if (round2(total) === round2(mid)) entry.ties += 1;
+        else if (total > mid) entry.wins += 1;
+        else entry.losses += 1;
+      }
+    }
+  }
+
   const winPct = (t: { wins: number; losses: number; ties: number }) => {
     const played = t.wins + t.losses + t.ties;
     return played === 0 ? 0 : (t.wins + t.ties / 2) / played;
@@ -241,6 +281,7 @@ export function buildProjectedStandings(args: {
 
 export type LoadProjectedStandingsOptions = {
   fetchWeek?: FetchWeek;
+  fetchLeague?: (leagueId: string) => Promise<LeagueSettingsResponse>;
   loadProjections?: (season: number, week: number) => Promise<WeekProjections>;
 };
 
@@ -253,7 +294,15 @@ export async function loadProjectedStandings(
   const standings = league.standings ?? [];
   if (standings.length < 2) return { error: "Standings are not available for this league." };
   const regularSeasonEndsWeek = league.playoffs?.weekStart ? league.playoffs.weekStart - 1 : DEFAULT_LAST_REGULAR_WEEK;
-  const throughWeek = Math.max(...standings.map((row) => row.wins + row.losses + row.ties));
+  let medianMatchup: boolean;
+  try {
+    medianMatchup = await loadLeagueAverageMatch(league.id, options.fetchLeague);
+  } catch {
+    // Without knowing, completed weeks (and the extra median results) cannot be counted correctly.
+    return { error: "League settings could not be loaded from Sleeper." };
+  }
+  // A median league records two results per completed week.
+  const throughWeek = Math.floor(Math.max(...standings.map((row) => row.wins + row.losses + row.ties)) / (medianMatchup ? 2 : 1));
   const remaining = Array.from({ length: Math.max(0, regularSeasonEndsWeek - throughWeek) }, (_, i) => throughWeek + 1 + i);
 
   const loadProjections = options.loadProjections ?? loadWeekProjections;
@@ -284,6 +333,7 @@ export async function loadProjectedStandings(
 
   return buildProjectedStandings({
     league,
+    medianMatchup,
     weeks,
     appWeek,
     games: schedule.games,

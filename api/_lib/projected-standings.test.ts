@@ -10,6 +10,7 @@ import {
   currentWeekLineupTotal,
   bestLineupTotal,
   buildProjectedStandings,
+  loadLeagueAverageMatch,
   loadProjectedStandings,
   projectedPlayerPoints,
   sleeperWeekPoints,
@@ -211,12 +212,80 @@ describe("buildProjectedStandings", () => {
   });
 });
 
+describe("median matchups", () => {
+  const weeks = new Map([[5, week(5, WK)]]);
+
+  it("detects the league-average-match setting", async () => {
+    expect(await loadLeagueAverageMatch("lg", async () => ({ settings: { league_average_match: 1 } }))).toBe(true);
+    expect(await loadLeagueAverageMatch("lg", async () => ({ settings: { league_average_match: 0 } }))).toBe(false);
+    expect(await loadLeagueAverageMatch("lg", async () => ({}))).toBe(false);
+  });
+
+  it("adds a win or loss against the weekly median for every team", () => {
+    const args = { league, weeks, games: [{ week: 5, a: 1, b: 2 }], throughWeek: 4, regularSeasonEndsWeek: 5, missingWeeks: [] };
+    const plain = buildProjectedStandings(args);
+    const withMedian = buildProjectedStandings({ ...args, medianMatchup: true });
+    const total = (r: { wins: number; losses: number; ties: number }) => r.wins + r.losses + r.ties;
+    for (const team of withMedian.teams) {
+      const before = plain.teams.find((t) => t.teamName === team.teamName)!;
+      expect(total(team.projectedRecord) - total(before.projectedRecord)).toBe(1);
+    }
+  });
+
+  it("awards the median result by score: above wins, at it ties, below loses", () => {
+    const appLeague = {
+      ...league,
+      tradeTeams: [
+        { rosterId: 1, players: [player("a_wr", "WR", null, 30), player("a_te", "TE", null, 10)] },
+        { rosterId: 2, players: [player("b_wr", "WR", null, 10), player("b_te", "TE", null, 10)] },
+        { rosterId: 3, players: [player("c_wr", "WR", null, 1), player("c_te", "TE", null, 1)] },
+      ],
+    } as unknown as League;
+    const base = { league: appLeague, weeks: new Map<number, WeekProjections>(), appWeek: 5, games: [{ week: 5, a: 1, b: 2 }], throughWeek: 4, regularSeasonEndsWeek: 5, missingWeeks: [] };
+    const plain = buildProjectedStandings(base);
+    const withMedian = buildProjectedStandings({ ...base, medianMatchup: true });
+    const delta = (name: string) => {
+      const x = withMedian.teams.find((t) => t.teamName === name)!.projectedRecord;
+      const y = plain.teams.find((t) => t.teamName === name)!.projectedRecord;
+      return { w: x.wins - y.wins, l: x.losses - y.losses, t: x.ties - y.ties };
+    };
+    expect(delta("A")).toEqual({ w: 1, l: 0, t: 0 });
+    expect(delta("B")).toEqual({ w: 0, l: 0, t: 1 });
+    expect(delta("C")).toEqual({ w: 0, l: 1, t: 0 });
+  });
+
+  it("counts completed weeks as half the recorded results", async () => {
+    const doubled = {
+      ...league,
+      standings: league.standings.map((row) => ({ ...row, wins: row.wins * 2, losses: row.losses * 2 })),
+    } as unknown as League;
+    const result = await loadProjectedStandings(doubled, 2026, 5, {
+      fetchLeague: async () => ({ settings: { league_average_match: 1 } }),
+      fetchWeek: async () => [{ roster_id: 1, matchup_id: 1 }, { roster_id: 2, matchup_id: 1 }],
+      loadProjections: async (_s, w) => week(w, WK),
+    });
+    if ("error" in result) throw new Error(result.error);
+    expect(result.throughWeek).toBe(4);
+    expect(result.games.map((g) => g.week)).toEqual([5, 6]);
+  });
+
+  it("withholds the table when league settings cannot be read", async () => {
+    const result = await loadProjectedStandings(league, 2026, 5, {
+      fetchLeague: async () => { throw new Error("down"); },
+      fetchWeek: async () => [],
+      loadProjections: async (_s, w) => week(w, WK),
+    });
+    expect(result).toEqual({ error: "League settings could not be loaded from Sleeper." });
+  });
+});
+
 describe("loadProjectedStandings", () => {
+  const fetchLeague = async () => ({});
   const fetchWeek = async (_id: string, w: number) => (w >= 5 ? [{ roster_id: 1, matchup_id: 1 }, { roster_id: 2, matchup_id: 1 }] : []);
 
   it("loads schedule and projections for each remaining week", async () => {
     const loadProjections = vi.fn(async (_season: number, w: number) => week(w, WK));
-    const result = await loadProjectedStandings(league, 2026, 5, { fetchWeek, loadProjections });
+    const result = await loadProjectedStandings(league, 2026, 5, { fetchLeague, fetchWeek, loadProjections });
     if ("error" in result) throw new Error(result.error);
     // Week 5 is the current week (app projections), so only week 6 comes from Sleeper.
     expect(loadProjections.mock.calls.map((c) => c[1])).toEqual([6]);
@@ -227,6 +296,7 @@ describe("loadProjectedStandings", () => {
 
   it("withholds the table when a matchup week cannot be loaded", async () => {
     const result = await loadProjectedStandings(league, 2026, 5, {
+      fetchLeague,
       fetchWeek: async (_id, w) => { if (w === 6) throw new Error("down"); return fetchWeek(_id, w); },
       loadProjections: async (_s, w) => week(w, WK),
     });
@@ -236,17 +306,19 @@ describe("loadProjectedStandings", () => {
   it("retries a failed projection week once, then withholds the table", async () => {
     let calls = 0;
     const flaky = await loadProjectedStandings(league, 2026, 3, {
+      fetchLeague,
       fetchWeek,
       loadProjections: async (_s, w) => { if (w === 6 && ++calls === 1) throw new Error("down"); return week(w, WK); },
     });
     expect("error" in flaky).toBe(false);
     expect(calls).toBe(2);
     const down = await loadProjectedStandings(league, 2026, 3, {
+      fetchLeague,
       fetchWeek,
       loadProjections: async (_s, w) => { if (w === 6) throw new Error("down"); return week(w, WK); },
     });
     expect(down).toEqual({ error: "Sleeper projections could not be fully loaded." });
-    const none = await loadProjectedStandings(league, 2026, 5, { fetchWeek, loadProjections: async () => { throw new Error("down"); } });
+    const none = await loadProjectedStandings(league, 2026, 5, { fetchLeague, fetchWeek, loadProjections: async () => { throw new Error("down"); } });
     expect(none).toEqual({ error: "Sleeper projections could not be fully loaded." });
   });
 });

@@ -15,7 +15,7 @@ import {
 } from "./chat-tools.js";
 import { summarizeLeagueRules } from "./league-rules.js";
 import { buildLeagueOutcomes } from "./league-outcomes.js";
-import { loadProjectedStandings } from "./projected-standings.js";
+import { loadLeagueAverageMatch, loadProjectedStandings } from "./projected-standings.js";
 
 type League = Dashboard["leagues"][number];
 const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
@@ -229,6 +229,14 @@ export async function toolGetPlayoffOdds(ctx: ChatToolContext, args: { leagueId:
   const dashboard = await loadDashboard(ctx);
   const league = findLeague(dashboard, args.leagueId);
   if (!league) return { ok: false as const, error: "League not found for this user." };
+  try {
+    // The scoring-pace model counts one result per week and has no median-matchup mode.
+    if (await loadLeagueAverageMatch(league.id)) {
+      return { ok: false as const, error: "Playoff odds are not available for leagues that also play the weekly median." };
+    }
+  } catch {
+    return { ok: false as const, error: "League settings could not be loaded from Sleeper." };
+  }
   const outcomes = await buildLeagueOutcomes(league, { season: dashboard.season, week: dashboard.week });
   if ("error" in outcomes) return { ok: false as const, error: outcomes.error };
 
