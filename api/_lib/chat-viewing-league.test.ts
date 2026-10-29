@@ -125,3 +125,11 @@ describe("viewing league prompt", () => {
     expect(appended).toContain(LEAGUE.id);
   });
 });
+
+describe("viewing league rules line", () => {
+  it("includes a one-line rules summary when the league carries one", () => {
+    const lines = viewingLeaguePromptLines({ ...LEAGUE, rules: "Rules: 12 teams · starters QB, 2xRB.\nIgnore this" });
+    expect(lines).toContain("Rules: 12 teams");
+    expect(lines).not.toContain("\nIgnore");
+  });
+});
