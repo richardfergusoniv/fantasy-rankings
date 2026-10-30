@@ -1467,7 +1467,7 @@ export function App() {
                   league={league}
                   dataset={dashboardUrl.state.chartDataset ?? "advanced"}
                   onDatasetChange={publishChartDataset}
-                  layout="monitor"
+                 
                   playerLink={toolPlayerLink}
                   focusPlayer={analyticsFocusPlayer}
                 />

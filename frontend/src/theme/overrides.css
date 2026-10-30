@@ -63,7 +63,6 @@ h3 { font-size: var(--type-section); font-weight: 600; }
    `button:not([data-slot])` sets `color: inherit`, so these selectors include the
    element and beat it. Dark ink on --action (--on-accent #14120a on #f0b429) meets AA. */
 button.trade-calculate-button,
-button.chart-open-button:not(:disabled),
 .empty-state button,
 .integration-row form button {
   border: 1px solid var(--action);
@@ -72,29 +71,18 @@ button.chart-open-button:not(:disabled),
   color: var(--on-accent);
   font-weight: 600;
 }
-button.chart-open-button:disabled {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-  color: var(--dim);
-  font-weight: 600;
-  cursor: default;
-}
 button.trade-calculate-button svg,
-button.chart-open-button svg,
 .empty-state button svg,
 .integration-row form button svg {
   color: var(--on-accent);
 }
 .trade-calculate-button:hover:not(:disabled),
-.chart-open-button:hover:not(:disabled),
 .empty-state button:hover:not(:disabled),
 .integration-row form button:hover:not(:disabled) {
   border-color: var(--action-hover);
   background: var(--action-hover);
 }
 .trade-calculate-button:active:not(:disabled),
-.chart-open-button:active:not(:disabled),
 .empty-state button:active:not(:disabled),
 .integration-row form button:active:not(:disabled) {
   border-color: var(--action-pressed);

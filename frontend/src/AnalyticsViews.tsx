@@ -544,7 +544,6 @@ type ChartHandoff = { position: ChartPosition; preset?: ChartPreset; savedView?:
 
 type ChartPickerMode = "blank" | "derived";
 
-type ChartLayout = "page" | "monitor";
 
 type SavedViewControlsProps = {
   dataset: ToolDataset;
@@ -563,10 +562,9 @@ type SavedViewControlsProps = {
   advancedOpen: boolean;
   onAdvancedOpenChange: (open: boolean) => void;
   children: ReactNode;
-  layout?: ChartLayout;
 };
 
-function SavedViewControls({ dataset, presets, validPositions, config, pickerMode, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, otherPresets = [], onSwitchDataset, canSave = true, advancedOpen, onAdvancedOpenChange, children, layout = "page" }: SavedViewControlsProps) {
+function SavedViewControls({ dataset, presets, validPositions, config, pickerMode, selectedSavedViewId, onSelectedSavedViewIdChange, onApplySavedView, onApplyBuiltIn, otherPresets = [], onSwitchDataset, canSave = true, advancedOpen, onAdvancedOpenChange, children }: SavedViewControlsProps) {
   const queryClient = useQueryClient();
   const [isNaming, setIsNaming] = useState(false);
   const [name, setName] = useState("");
@@ -733,26 +731,9 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
 
   return (
     <>
-    {layout === "monitor" ? (
       <label className="monitor-value-chart-field">
         {savedViewSelect}
       </label>
-    ) : (
-      <div className="saved-view-block">
-        <div className="saved-view-row">
-          <label className="chart-preset-select">
-            {savedViewSelect}
-          </label>
-        </div>
-        {pickerMode === "derived" && matchingPreset?.research ? (
-          <div className="chart-research-note">
-            <p>{matchingPreset.research.insight}</p>
-            <a href={matchingPreset.research.sourceUrl} target="_blank" rel="noreferrer">Research: {matchingPreset.research.source} ↗<span className="sr-only"> (opens in a new tab)</span></a>
-          </div>
-        ) : null}
-      </div>
-    )}
-    {layout === "monitor" ? (
       <button
         type="button"
         className="monitor-chart-advanced-trigger"
@@ -761,9 +742,6 @@ function SavedViewControls({ dataset, presets, validPositions, config, pickerMod
       >
         Advanced chart controls
       </button>
-    ) : (
-      <Button type="button" variant="outline" className="chart-advanced-trigger" aria-haspopup="dialog" onClick={() => onAdvancedOpenChange(true)}>Advanced chart controls</Button>
-    )}
     <Dialog open={advancedOpen} onOpenChange={onAdvancedOpenChange}>
       <DialogContent className="chart-advanced-dialog">
         <DialogHeader>
@@ -1391,16 +1369,6 @@ function fantasyTeamName(league: League): string {
     ?? "My team";
 }
 
-function OmittedChartLabels({ omittedNames }: { omittedNames: string[] }) {
-  if (omittedNames.length === 0) return null;
-  return (
-    <details className="omitted-chart-labels">
-      <summary>{omittedNames.length} plotted players without labels</summary>
-      <p>{omittedNames.join(" · ")}</p>
-    </details>
-  );
-}
-
 export function AdvancedStats({ dashboard, league, selectedPlayer, onSelectedPlayerChange }: { dashboard: Dashboard; league: League; selectedPlayer: PlayerSelection | null; onSelectedPlayerChange: (player: PlayerSelection | null) => void }) {
   const [window, setWindow] = useState<AnalyticsWindow>("season");
   const [playerQuery, setPlayerQuery] = useState("");
@@ -1571,13 +1539,13 @@ export function AdvancedStats({ dashboard, league, selectedPlayer, onSelectedPla
   );
 }
 
-function AnalyticsChart({ dashboard, league, layout = "page", initialView = null, onSwitchDataset, playerLink, focusPlayer }: { dashboard: Dashboard; league: League; layout?: ChartLayout; initialView?: ChartHandoff | null; onSwitchDataset?: (dataset: ToolDataset, handoff: ChartHandoff) => void; playerLink?: PlayerLinkResolver; focusPlayer?: AnalyticsFocusPlayer | null }) {
+function AnalyticsChart({ dashboard, league, initialView = null, onSwitchDataset, playerLink, focusPlayer }: { dashboard: Dashboard; league: League; initialView?: ChartHandoff | null; onSwitchDataset?: (dataset: ToolDataset, handoff: ChartHandoff) => void; playerLink?: PlayerLinkResolver; focusPlayer?: AnalyticsFocusPlayer | null }) {
   const monitorDefaultPreset = sharedSkillPresets.find((preset) => preset.label === "Usage vs Production") ?? sharedSkillPresets[0]!;
   const [position, setPosition] = useState<ChartPosition>("RB");
   const [window, setWindow] = useState<AnalyticsWindow>("season");
-  const [xMetric, setXMetric] = useState(layout === "monitor" ? monitorDefaultPreset.x : defaultAnalyticsAxes.RB[0]);
-  const [yMetric, setYMetric] = useState(layout === "monitor" ? monitorDefaultPreset.y : defaultAnalyticsAxes.RB[1]);
-  const [chartKind, setChartKind] = useState<ChartKind>(layout === "monitor" ? (monitorDefaultPreset.kind ?? "scatter") : "scatter");
+  const [xMetric, setXMetric] = useState(monitorDefaultPreset.x);
+  const [yMetric, setYMetric] = useState(monitorDefaultPreset.y);
+  const [chartKind, setChartKind] = useState<ChartKind>(monitorDefaultPreset.kind ?? "scatter");
   const [plotLimit, setPlotLimit] = useState<PlotLimit>("40");
   const [showQuadrants, setShowQuadrants] = useState(true);
   const [xPercentile, setXPercentile] = useState(50);
@@ -1586,7 +1554,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
   // Shareable chart links only carry the dataset (`?chart=`). Axes and saved
   // views are not in the URL, so the picker stays blank until the user chooses.
   // Monitor defaults into Usage vs Production so the inline chart matches Value chart.
-  const [pickerMode, setPickerMode] = useState<ChartPickerMode>(layout === "monitor" ? "derived" : "blank");
+  const [pickerMode, setPickerMode] = useState<ChartPickerMode>("derived");
   const [isChartOpen, setIsChartOpen] = useState(false);
   // The card must not open underneath the expanded-chart dialog, so following the link closes it first.
   const chartPlayerLink: PlayerLinkResolver | undefined = playerLink
@@ -1619,33 +1587,23 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
   }
 
   function choosePosition(nextPosition: ChartPosition) {
-    if (layout === "monitor") {
-      const nextPresets = chartAnalyticsPresets(nextPosition);
-      const preferred = nextPresets.find((preset) => preset.label === "Usage vs Production") ?? nextPresets[0];
-      setPosition(nextPosition);
-      if (preferred) {
-        setXMetric(preferred.x);
-        setYMetric(preferred.y);
-        setChartKind(preferred.kind ?? "scatter");
-        setSelectedSavedViewId(null);
-        setPickerMode("derived");
-      } else {
-        const [nextX, nextY] = chartAnalyticsAxes(nextPosition);
-        setXMetric(nextX);
-        setYMetric(nextY);
-        setChartKind("scatter");
-        setSelectedSavedViewId(null);
-        setPickerMode("blank");
-      }
-      return;
-    }
-    const [nextX, nextY] = chartAnalyticsAxes(nextPosition);
+    const nextPresets = chartAnalyticsPresets(nextPosition);
+    const preferred = nextPresets.find((preset) => preset.label === "Usage vs Production") ?? nextPresets[0];
     setPosition(nextPosition);
-    setXMetric(nextX);
-    setYMetric(nextY);
-    setChartKind("scatter");
-    setSelectedSavedViewId(null);
-    setPickerMode("blank");
+    if (preferred) {
+      setXMetric(preferred.x);
+      setYMetric(preferred.y);
+      setChartKind(preferred.kind ?? "scatter");
+      setSelectedSavedViewId(null);
+      setPickerMode("derived");
+    } else {
+      const [nextX, nextY] = chartAnalyticsAxes(nextPosition);
+      setXMetric(nextX);
+      setYMetric(nextY);
+      setChartKind("scatter");
+      setSelectedSavedViewId(null);
+      setPickerMode("blank");
+    }
   }
 
   // When the league changes and the current position is no longer valid (e.g. a
@@ -1801,25 +1759,6 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
   const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered");
   const unknownPlayers = chartData.filter((row) => row.ownership === "unknown");
   const labelData = plotLimit === "all" ? selectedTeamPlayers : chartData;
-  const labeledIds = new Set(labelData.map((row) => row.id));
-  const omittedNames = chartData.filter((row) => !labeledIds.has(row.id)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
-
-  const chartCount = (() => {
-    switch (chartKind) {
-      case "scatter":
-        return chartData.length;
-      case "snap-trend":
-        return snapTrendSeries.length;
-      case "heatmap":
-        return Object.keys(sosEntry?.table ?? {}).length;
-      case "team-scatter":
-        return teamScatterData.length;
-      default: {
-        const _exhaustive: never = chartKind;
-        return _exhaustive;
-      }
-    }
-  })();
 
   // A link into the tool (a player's "Advanced stats"): open on their position with them selected in the expanded chart.
   const focusEntityId = focusPlayer
@@ -1828,7 +1767,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
     : null;
   const handledFocusId = useRef<string | null>(null);
   useEffect(() => {
-    if (!focusPlayer || layout !== "monitor" || handledFocusId.current === focusPlayer.id) return;
+    if (!focusPlayer || handledFocusId.current === focusPlayer.id) return;
     const nextPosition = validPositions.find((item) => item === focusPlayer.position);
     if (!nextPosition) return;
     handledFocusId.current = focusPlayer.id;
@@ -1836,13 +1775,13 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
     setChartKind("scatter");
     setPlotLimit("all");
     setIsChartOpen(true);
-  }, [focusPlayer, layout, validPositions]);
+  }, [focusPlayer, validPositions]);
 
   // The monitor keeps its toolbar with no stats, so This week views stay reachable.
   const hasStats = dashboard.analytics.entities.length > 0;
-  if (!selectedX || !selectedY || (!hasStats && layout !== "monitor" && !isTeamChart)) {
+  if (!selectedX || !selectedY) {
     return (
-      <section className={layout === "monitor" ? "monitor-builder-chart-empty" : "analytics-view"}>
+      <section className="monitor-builder-chart-empty">
         <div className="analytics-empty">
           <strong>No advanced stats yet.</strong>
           <span>Refresh after nflverse publishes the next weekly file.</span>
@@ -1865,7 +1804,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
       ) : null}
       {chartKind === "team-scatter" ? (
         teamScatterData.length > 0
-          ? <TeamScatterPlot data={teamScatterData} xShort="Plays/g" yShort="PROE" ariaLabel="Team pace versus pass rate over expected" showLabels={showLabels} compact={!showLabels && layout === "monitor"} />
+          ? <TeamScatterPlot data={teamScatterData} xShort="Plays/g" yShort="PROE" ariaLabel="Team pace versus pass rate over expected" showLabels={showLabels} compact={!showLabels} />
           : <div className="analytics-empty"><strong>No pace or PROE data yet.</strong></div>
       ) : null}
       {chartKind === "scatter" && selectedX && selectedY ? (
@@ -1885,12 +1824,11 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
             xCutoff={xCutoff}
             yCutoff={yCutoff}
             ariaLabel={`${chartPositionLabel(position)} scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
-            compact={!showLabels && layout === "monitor"}
+            compact={!showLabels}
             playerLink={chartPlayerLink}
             focusRequestId={showLabels ? focusEntityId : null}
           />
           <ChartKey teamName={fantasyTeamName(league)} hasUnknown={unknownPlayers.length > 0} />
-          {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
         </>
       ) : null}
     </>
@@ -1912,7 +1850,6 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
       canSave={position !== "FLEX"}
       advancedOpen={advancedOpen}
       onAdvancedOpenChange={setAdvancedOpen}
-      layout={layout}
     >
       <SegmentedControl
         className="lineup-mode-toggle analytics-window-toggle"
@@ -1932,88 +1869,57 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
     </SavedViewControls>
   );
 
-  if (layout === "monitor") {
-    return (
-      <div className="monitor-builder-chart">
-        <div className="monitor-value-chart-controls">
-          {/* Team charts plot every team, so the position row would do nothing. */}
-          {isTeamChart ? null : (
-            <SegmentedControl
-              className="monitor-chart-position"
-              value={position}
-              onChange={choosePosition}
-              label="Chart position"
-              options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))}
-            />
-          )}
-          {advancedControls}
-        </div>
-        {pickerMode === "blank" ? (
-          <EmptyState title="Choose a saved view or preset" detail="The chart appears once a view is selected." />
-        ) : !hasStats && !isTeamChart ? (
-          // Team charts read matchup and team usage data, not player stats, and have their own empty states.
-          <div className="analytics-empty">
-            <strong>No advanced stats yet.</strong>
-            <span>Refresh after nflverse publishes the next weekly file.</span>
-          </div>
-        ) : (
-          <div
-            className="monitor-value-chart monitor-chart-expand-target"
-            role="button"
-            tabIndex={0}
-            aria-label="Open Analytics"
-            onClick={() => setIsChartOpen(true)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                setIsChartOpen(true);
-              }
-            }}
-          >
-            {chartPlot(false)}
-          </div>
-        )}
-        <ChartDialog
-          isOpen={isChartOpen}
-          onClose={() => setIsChartOpen(false)}
-          title={`${chartPositionLabel(position)} · ${selectedX.label} vs ${selectedY.label}`}
-          showCount={false}
-          closeLabel="Close chart"
-          className="monitor-chart-expand-card"
-        >
-          <div className="monitor-expanded-chart">{chartPlot(true)}</div>
-        </ChartDialog>
-      </div>
-    );
-  }
-
   return (
-    <section className="analytics-view">
-      {isTeamChart ? null : (
-        <SegmentedControl
-          className="analytics-position-tabs"
-          value={position}
-          onChange={choosePosition}
-          label="Chart position"
-          options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))}
-        />
+    <div className="monitor-builder-chart">
+      <div className="monitor-value-chart-controls">
+        {/* Team charts plot every team, so the position row would do nothing. */}
+        {isTeamChart ? null : (
+          <SegmentedControl
+            className="monitor-chart-position"
+            value={position}
+            onChange={choosePosition}
+            label="Chart position"
+            options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))}
+          />
+        )}
+        {advancedControls}
+      </div>
+      {pickerMode === "blank" ? (
+        <EmptyState title="Choose a saved view or preset" detail="The chart appears once a view is selected." />
+      ) : !hasStats && !isTeamChart ? (
+        // Team charts read matchup and team usage data, not player stats, and have their own empty states.
+        <div className="analytics-empty">
+          <strong>No advanced stats yet.</strong>
+          <span>Refresh after nflverse publishes the next weekly file.</span>
+        </div>
+      ) : (
+        <div
+          className="monitor-value-chart monitor-chart-expand-target"
+          role="button"
+          tabIndex={0}
+          aria-label="Open Analytics"
+          onClick={() => setIsChartOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setIsChartOpen(true);
+            }
+          }}
+        >
+          {chartPlot(false)}
+        </div>
       )}
-
-      {advancedControls}
-
-      <button type="button" className="chart-open-button" disabled={pickerMode === "blank"} aria-disabled={pickerMode === "blank"} onClick={() => { if (pickerMode !== "blank") setIsChartOpen(true); }}>View chart</button>
       <ChartDialog
         isOpen={isChartOpen}
         onClose={() => setIsChartOpen(false)}
-        title={chartKind === "heatmap" ? "FPA" : chartKind === "team-scatter" ? "Pace x PROE" : chartKind === "snap-trend" ? "Snap share" : `${chartPositionLabel(position)} field`}
-        subtitle={chartKind === "scatter" ? `${window === "season" ? `${dashboard.season} games so far` : "Each player’s latest 17 games"} · per-game averages` : undefined}
-        count={chartCount}
-        countLabel={chartKind === "heatmap" || chartKind === "team-scatter" ? "teams" : position === "DEF" ? "teams" : "players"}
-        showCount={chartKind !== "heatmap"}
+        title={`${chartPositionLabel(position)} · ${selectedX.label} vs ${selectedY.label}`}
+        showCount={false}
+        closeLabel="Close chart"
+        className="monitor-chart-expand-card"
       >
-        {chartPlot(true)}
+        <div className="monitor-expanded-chart">{chartPlot(true)}</div>
       </ChartDialog>
-    </section>
+    </div>
   );
 }
 
@@ -2164,14 +2070,14 @@ function BoomBustRangePlot({ data, entities }: { data: ChartDatum[]; entities: W
   );
 }
 
-function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onSelectedPlayerChange, layout = "page", initialView = null, onSwitchDataset, playerLink }: { dashboard: Dashboard; league: League; view: "charts" | "percentiles"; selectedPlayer?: PlayerSelection | null; onSelectedPlayerChange?: (player: PlayerSelection | null) => void; layout?: ChartLayout; initialView?: ChartHandoff | null; onSwitchDataset?: (dataset: ToolDataset, handoff: ChartHandoff) => void; playerLink?: PlayerLinkResolver }) {
+function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onSelectedPlayerChange, initialView = null, onSwitchDataset, playerLink }: { dashboard: Dashboard; league: League; view: "charts" | "percentiles"; selectedPlayer?: PlayerSelection | null; onSelectedPlayerChange?: (player: PlayerSelection | null) => void; initialView?: ChartHandoff | null; onSwitchDataset?: (dataset: ToolDataset, handoff: ChartHandoff) => void; playerLink?: PlayerLinkResolver }) {
   const entities = useMemo(() => buildWeeklyEntities(dashboard, league), [dashboard, league.id]);
   const sosEntry = dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id);
   const [playerQuery, setPlayerQuery] = useState("");
   const monitorDefaultPreset = projectionPresets[0]!;
   const [position, setPosition] = useState<ChartPosition>("RB");
-  const [xMetric, setXMetric] = useState(layout === "monitor" ? monitorDefaultPreset.x : chartWeeklyAxes("RB")[0]);
-  const [yMetric, setYMetric] = useState(layout === "monitor" ? monitorDefaultPreset.y : chartWeeklyAxes("RB")[1]);
+  const [xMetric, setXMetric] = useState(monitorDefaultPreset.x);
+  const [yMetric, setYMetric] = useState(monitorDefaultPreset.y);
   const [plotLimit, setPlotLimit] = useState<PlotLimit>("40");
   const [showQuadrants, setShowQuadrants] = useState(true);
   const [xPercentile, setXPercentile] = useState(50);
@@ -2179,7 +2085,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   const [selectedSavedViewId, setSelectedSavedViewId] = useState<string | null>(null);
   // Shareable chart links only carry the dataset (`?chart=`). Axes and saved
   // views are not in the URL, so the picker stays blank until the user chooses.
-  const [pickerMode, setPickerMode] = useState<ChartPickerMode>(layout === "monitor" ? "derived" : "blank");
+  const [pickerMode, setPickerMode] = useState<ChartPickerMode>("derived");
   const [isChartOpen, setIsChartOpen] = useState(false);
   // The card must not open underneath the expanded-chart dialog, so following the link closes it first.
   const chartPlayerLink: PlayerLinkResolver | undefined = playerLink
@@ -2268,30 +2174,21 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   }
 
   function choosePosition(nextPosition: ChartPosition) {
-    if (layout === "monitor") {
-      const nextPresets = chartWeeklyPresets(nextPosition);
-      const preferred = preferredWeeklyPreset(nextPosition, nextPresets, entities);
-      setPosition(nextPosition);
-      if (preferred) {
-        setXMetric(preferred.x);
-        setYMetric(preferred.y);
-        setSelectedSavedViewId(null);
-        setPickerMode("derived");
-      } else {
-        const [nextX, nextY] = chartWeeklyAxes(nextPosition, entities);
-        setXMetric(nextX);
-        setYMetric(nextY);
-        setSelectedSavedViewId(null);
-        setPickerMode("blank");
-      }
-      return;
-    }
-    const [nextX, nextY] = chartWeeklyAxes(nextPosition, entities);
+    const nextPresets = chartWeeklyPresets(nextPosition);
+    const preferred = preferredWeeklyPreset(nextPosition, nextPresets, entities);
     setPosition(nextPosition);
-    setXMetric(nextX);
-    setYMetric(nextY);
-    setSelectedSavedViewId(null);
-    setPickerMode("blank");
+    if (preferred) {
+      setXMetric(preferred.x);
+      setYMetric(preferred.y);
+      setSelectedSavedViewId(null);
+      setPickerMode("derived");
+    } else {
+      const [nextX, nextY] = chartWeeklyAxes(nextPosition, entities);
+      setXMetric(nextX);
+      setYMetric(nextY);
+      setSelectedSavedViewId(null);
+      setPickerMode("blank");
+    }
   }
 
   // When the league changes and the current position is no longer valid, reset
@@ -2378,11 +2275,9 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
   const rosteredPlayers = chartData.filter((row) => row.ownership === "rostered");
   const unknownPlayers = chartData.filter((row) => row.ownership === "unknown");
   const labelData = plotLimit === "all" ? selectedTeamPlayers : chartData;
-  const labeledIds = new Set(labelData.map((row) => row.id));
-  const omittedNames = chartData.filter((row) => !labeledIds.has(row.id)).map((row) => row.name).sort((a, b) => a.localeCompare(b));
 
   const hasProjections = entities.length > 0;
-  if (!selectedX || !selectedY || (!hasProjections && layout !== "monitor")) {
+  if (!selectedX || !selectedY) {
     return <section className="weekly-projections-view"><div className="analytics-empty"><strong>No weekly projections yet.</strong><span>Refresh to check the latest Vegas lines and nflverse usage data.</span></div></section>;
   }
 
@@ -2485,11 +2380,10 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
               xCutoff={xCutoff}
               yCutoff={yCutoff}
               ariaLabel={`${chartPositionLabel(position)} weekly projection scatter plot comparing ${selectedX.label} and ${selectedY.label}`}
-              compact={!showLabels && layout === "monitor"}
+              compact={!showLabels}
               playerLink={chartPlayerLink}
             />
             <ChartKey teamName={fantasyTeamName(league)} hasUnknown={unknownPlayers.length > 0} />
-            {layout === "page" && showLabels ? <OmittedChartLabels omittedNames={omittedNames} /> : null}
             </>
           )
         );
@@ -2509,7 +2403,6 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
             canSave={position !== "FLEX"}
             advancedOpen={advancedOpen}
             onAdvancedOpenChange={setAdvancedOpen}
-            layout={layout}
           >
             <div className="analytics-selectors advanced-only-selectors">
               <label><span>X axis</span><select aria-label="Choose weekly horizontal axis" value={selectedX.key} onChange={(event) => { setXMetric(event.target.value); setSelectedSavedViewId(null); setPickerMode("derived"); }}>{metrics.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label>
@@ -2522,77 +2415,57 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
           </SavedViewControls>
         );
 
-        if (layout === "monitor") {
-          return (
-            <div className="monitor-builder-chart">
-              <div className="monitor-value-chart-controls">
-                <SegmentedControl
-                  className="monitor-chart-position"
-                  value={position}
-                  onChange={choosePosition}
-                  label="Weekly chart position"
-                  options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))}
-                />
-                {weeklyControls}
-              </div>
-              {pickerMode === "blank" ? (
-                <EmptyState title="Choose a saved view or preset" detail="The chart appears once a view is selected." />
-              ) : !hasProjections ? (
-                <div className="analytics-empty"><strong>No weekly projections yet.</strong><span>Refresh to check the latest Vegas lines and nflverse usage data.</span></div>
-              ) : (
-                <div
-                  className="monitor-value-chart monitor-chart-expand-target"
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Open Analytics"
-                  onClick={() => setIsChartOpen(true)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      setIsChartOpen(true);
-                    }
-                  }}
-                >
-                  {weeklyPlot(false)}
-                </div>
-              )}
-              <ChartDialog
-                isOpen={isChartOpen}
-                onClose={() => setIsChartOpen(false)}
-                title={`${chartPositionLabel(position)} · ${selectedX.label} vs ${selectedY.label}`}
-                showCount={false}
-                closeLabel="Close chart"
-                className="monitor-chart-expand-card"
-              >
-                <div className="monitor-expanded-chart">{weeklyPlot(true)}</div>
-              </ChartDialog>
-            </div>
-          );
-        }
-
         return (
-          <>
-            <SegmentedControl className="analytics-position-tabs" value={position} onChange={choosePosition} label="Weekly chart position" options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))} />
-            {weeklyControls}
-            <button type="button" className="chart-open-button" disabled={pickerMode === "blank"} aria-disabled={pickerMode === "blank"} onClick={() => { if (pickerMode !== "blank") setIsChartOpen(true); }}>View chart</button>
+          <div className="monitor-builder-chart">
+            <div className="monitor-value-chart-controls">
+              <SegmentedControl
+                className="monitor-chart-position"
+                value={position}
+                onChange={choosePosition}
+                label="Weekly chart position"
+                options={positionOptions.map((item) => ({ value: item, label: chartPositionLabel(item) }))}
+              />
+              {weeklyControls}
+            </div>
+            {pickerMode === "blank" ? (
+              <EmptyState title="Choose a saved view or preset" detail="The chart appears once a view is selected." />
+            ) : !hasProjections ? (
+              <div className="analytics-empty"><strong>No weekly projections yet.</strong><span>Refresh to check the latest Vegas lines and nflverse usage data.</span></div>
+            ) : (
+              <div
+                className="monitor-value-chart monitor-chart-expand-target"
+                role="button"
+                tabIndex={0}
+                aria-label="Open Analytics"
+                onClick={() => setIsChartOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setIsChartOpen(true);
+                  }
+                }}
+              >
+                {weeklyPlot(false)}
+              </div>
+            )}
             <ChartDialog
               isOpen={isChartOpen}
               onClose={() => setIsChartOpen(false)}
-              title={`${chartPositionLabel(position)} field`}
-              subtitle={`Week ${dashboard.week} projections`}
-              count={chartData.length}
-              countLabel={position === "DEF" ? "teams" : "players"}
+              title={`${chartPositionLabel(position)} · ${selectedX.label} vs ${selectedY.label}`}
+              showCount={false}
+              closeLabel="Close chart"
+              className="monitor-chart-expand-card"
             >
-              {weeklyPlot(true)}
+              <div className="monitor-expanded-chart">{weeklyPlot(true)}</div>
             </ChartDialog>
-          </>
+          </div>
         );
       })() : null}
     </section>
   );
 }
 
-export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange, playerLink, focusPlayer }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; layout?: ChartLayout; playerLink?: PlayerLinkResolver; focusPlayer?: AnalyticsFocusPlayer | null }) {
+export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetChange, playerLink, focusPlayer }: { dashboard: Dashboard; league: League; dataset?: ToolDataset; onDatasetChange?: (dataset: ToolDataset) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; playerLink?: PlayerLinkResolver; focusPlayer?: AnalyticsFocusPlayer | null }) {
   // One Saved view list covers both datasets; picking a view from the other one
   // switches charts and hands over the position and the view.
   const [handoff, setHandoff] = useState<ChartHandoff | null>(null);
@@ -2614,8 +2487,8 @@ export function ChartsTool({ dashboard, league, dataset = "advanced", onDatasetC
         <h2>Analytics</h2>
       </header>
       {dataset === "advanced"
-        ? <AnalyticsChart dashboard={dashboard} league={league} layout="monitor" initialView={handoff} onSwitchDataset={switchDataset} playerLink={playerLink} focusPlayer={focusPlayer} />
-        : <WeeklyProjections dashboard={dashboard} league={league} view="charts" layout="monitor" initialView={handoff} onSwitchDataset={switchDataset} playerLink={playerLink} />}
+        ? <AnalyticsChart dashboard={dashboard} league={league} initialView={handoff} onSwitchDataset={switchDataset} playerLink={playerLink} focusPlayer={focusPlayer} />
+        : <WeeklyProjections dashboard={dashboard} league={league} view="charts" initialView={handoff} onSwitchDataset={switchDataset} playerLink={playerLink} />}
     </section>
   );
 }
