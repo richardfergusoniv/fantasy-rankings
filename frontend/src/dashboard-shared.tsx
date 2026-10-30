@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { CrossToolBadge, ToolLinks, type CrossToolLink, type ToolLinkItem } from "./tool-links";
 import { formatImpliedTotal } from "./lib/game-line-matchup-link";
 import { useQuery } from "@tanstack/react-query";
@@ -26,7 +26,7 @@ import type {
   RosterPlayer,
   TradeAsset,
 } from "./dashboard-types";
-import { RankStrip } from "./components/rank-strip";
+import { EdgeStrip } from "./components/edge-strip";
 import { RefreshIcon, SectionError } from "./section-error";
 import { dashboardFreshness } from "./dashboard-freshness";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
@@ -433,16 +433,14 @@ export function pfnDateLabel(value: string): string {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date);
 }
 
+/** The six rows on the matchup card: PFN's grade and scoring, the pass and run grades, and the two efficiency rates. */
 export const matchupStatConfigs: ReadonlyArray<MatchupStatConfig> = [
-  { label: "Grade", offKey: "grade", defKey: "grade", format: (value) => formatDecimal(value, 2), offHigher: true, defHigher: true },
-  { label: "Scoring", offKey: "ppg", defKey: "pts_allowed_per_game", format: (value) => formatPoints(value), offHigher: true, defHigher: false },
-  { label: "Pass", offKey: "pass", defKey: "pass", format: (value) => formatDecimal(value, 2), offHigher: true, defHigher: true },
-  { label: "Run", offKey: "run", defKey: "run", format: (value) => formatDecimal(value, 2), offHigher: true, defHigher: true },
-  { label: "EPA/Play", offKey: "epa_per_play", defKey: "epa_per_play", format: (value) => formatDecimal(value, 2, { sign: "always" }), offHigher: true, defHigher: false },
-  { label: "Yds/Play", offKey: "yds_per_play", defKey: "yds_per_play", format: (value) => formatDecimal(value, 2), offHigher: true, defHigher: false },
-  { label: "Success%", offKey: "success_pct", defKey: "success_pct", format: (value) => formatPercent(value), offHigher: true, defHigher: false },
-  { label: "Expl%", offKey: "expl_pct", defKey: "expl_pct", format: (value) => formatPercent(value), offHigher: true, defHigher: false },
-  { label: "SOS", offKey: "sos", defKey: "sos", format: (value) => formatDecimal(value, 2), offHigher: true, defHigher: true },
+  { label: "Grade", offKey: "grade", defKey: "grade", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: true },
+  { label: "Points / G", offKey: "ppg", defKey: "pts_allowed_per_game", format: (value) => formatPoints(value), offHigher: true, defHigher: false },
+  { label: "Pass grade", offKey: "pass", defKey: "pass", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: true },
+  { label: "Run grade", offKey: "run", defKey: "run", format: (value) => formatDecimal(value, 1), offHigher: true, defHigher: true },
+  { label: "EPA / play", offKey: "epa_per_play", defKey: "epa_per_play", format: (value) => formatDecimal(value, 2, { sign: "always" }), offHigher: true, defHigher: false },
+  { label: "Success rate", offKey: "success_pct", defKey: "success_pct", format: (value) => formatPercent(value), offHigher: true, defHigher: false },
 ];
 
 export function matchupGrade(table: PfnTable | null, row: PfnRow | undefined, key = "grade", higherIsBetter = true): MatchupGrade {
@@ -454,25 +452,28 @@ export function matchupGrade(table: PfnTable | null, row: PfnRow | undefined, ke
 
 type MatchupPairing = { leftUnit: string; rightUnit: string; leftLabel: string; rightLabel: string };
 
-/** One stat: the two units' ranks on one #1-to-32 line, with the gap in ranks beside the name. */
+/** How far one side leads the other in league rank: positive when the left side is ahead. */
+function matchupEdge(left: MatchupGrade, right: MatchupGrade): number | null {
+  return left.rank !== null && right.rank !== null ? right.rank - left.rank : null;
+}
+
+/** One stat: the two units' ranks on one #1-to-32 line, with the edge in ranks beside the name. */
 function MatchupStatRow({ stat, pairing, left, right }: { stat: MatchupStatConfig; pairing: MatchupPairing; left: MatchupGrade; right: MatchupGrade }) {
   const leftValue = left.value === null ? "—" : stat.format(left.value);
   const rightValue = right.value === null ? "—" : stat.format(right.value);
-  const leftRank = left.rank;
-  const rightRank = right.rank;
-  const gap = leftRank !== null && rightRank !== null ? Math.abs(leftRank - rightRank) : 0;
-  const leftLeads = leftRank !== null && rightRank !== null && leftRank < rightRank;
+  const edge = matchupEdge(left, right);
+  const allowed = (unit: string) => (stat.label === "Points / G" && unit === "DEF" ? " allowed" : "");
   return (
     <div className="matchup-stat-row">
       <div className="matchup-stat-row-head">
         <strong>{stat.label}</strong>
-        {gap > 0 ? <strong className={`matchup-stat-gap ${leftLeads ? "is-for" : "is-against"}`}>+{gap}</strong> : null}
+        {edge !== null && edge !== 0 ? <strong className={`matchup-stat-gap ${edge > 0 ? "is-for" : "is-against"}`}>{edge > 0 ? "+" : "−"}{Math.abs(edge)}</strong> : null}
       </div>
-      {leftRank !== null && rightRank !== null ? (
-        <RankStrip
-          first={{ label: `${pairing.leftUnit} #${leftRank} · ${leftValue}`, rank: leftRank }}
-          second={{ label: `${pairing.rightUnit} #${rightRank} · ${rightValue}`, rank: rightRank }}
-          ariaLabel={`${stat.label}: ${pairing.leftLabel} ranks ${leftRank} (${leftValue}), ${pairing.rightLabel} ranks ${rightRank} (${rightValue})${gap > 0 ? `, ${leftLeads ? pairing.leftLabel : pairing.rightLabel} has the edge by ${gap} ranks` : ""}`}
+      {left.rank !== null && right.rank !== null ? (
+        <EdgeStrip
+          first={{ label: `${pairing.leftUnit} #${left.rank} · ${leftValue}${allowed(pairing.leftUnit)}`, rank: left.rank }}
+          second={{ label: `${pairing.rightUnit} #${right.rank} · ${rightValue}${allowed(pairing.rightUnit)}`, rank: right.rank }}
+          ariaLabel={`${stat.label}: ${pairing.leftLabel} ranks ${left.rank} (${leftValue}), ${pairing.rightLabel} ranks ${right.rank} (${rightValue})${edge ? `, ${edge > 0 ? pairing.leftLabel : pairing.rightLabel} has the edge by ${Math.abs(edge)} ranks` : ""}`}
         />
       ) : (
         <div className="matchup-stat-unranked">{pairing.leftUnit} {leftValue} · {pairing.rightUnit} {rightValue}</div>
@@ -537,6 +538,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   // nflverse card knows whether the game is final, so derive finality
   // here and every entry point renders the same card for the same game.
   const isFinalGame = matchup.gamePhase === "final" || gameCard?.isFinal === true;
+  const gameStatusLabel = isFinalGame ? "Final" : matchup.gamePhase === "live" ? "Live" : matchup.gamePhase === "pregame" ? "Not started" : null;
   const scoreQuery = useQuery({
     queryKey: ["nfl-matchup-box-score", matchup.team, matchup.opponent, season, week],
     queryFn: () => api.getMatchupBoxScore({ team: matchup.team, opponent: matchup.opponent, season, week }),
@@ -556,6 +558,10 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   const showImpliedStrip = !isFinalGame && (
     myLine?.impliedPoints != null || theirLine?.impliedPoints != null || myLine?.spread != null || myLine?.total != null
   );
+  const impliedTotal = (myLine?.impliedPoints ?? 0) + (theirLine?.impliedPoints ?? 0);
+  const impliedSplit = myLine?.impliedPoints != null && theirLine?.impliedPoints != null && impliedTotal > 0
+    ? { team: Math.round((myLine.impliedPoints / impliedTotal) * 100), opponent: 100 - Math.round((myLine.impliedPoints / impliedTotal) * 100) }
+    : null;
   const findRow = (table: PfnTable | null, code: string | null) => table?.rows.find((row) => canonicalNflTeam(row.team) === code);
   const teamRows = {
     offense: findRow(offense, teamCode),
@@ -599,61 +605,61 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
             <h2 id="matchup-card-title" className="sr-only">{matchup.team} {matchup.isAway ? "@" : "vs"} {matchup.opponent}</h2>
             <button type="button" onClick={onClose} aria-label="Close matchup data">×</button>
           </div>
-          <div className="matchup-kickoff-row">
-            <span aria-hidden="true" />
-            <div className="matchup-stat-columns" role="group" aria-label={`${matchup.team} versus ${matchup.opponent}`}>
-              <div className="matchup-stat-team">
+          <p className="matchup-eyebrow">Week {week} · NFL</p>
+          <div className="matchup-title-row" role="group" aria-label={`${matchup.team} versus ${matchup.opponent}`}>
+            {[matchup.team, matchup.opponent].map((name, index) => (
+              <Fragment key={name}>
+                {index === 1 ? <span className="matchup-title-at" aria-hidden="true">{matchup.isAway ? "@" : "vs"}</span> : null}
                 {onOpenTeam ? (
-                  <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.team} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.team)}>
-                    <span className="matchup-reference-button-label">{matchup.team}</span>
-                    <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+                  <button type="button" className="matchup-team-title" aria-label={`View ${name} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(name)}>
+                    {name}<i aria-hidden="true">›</i>
                   </button>
-                ) : <strong>{matchup.team}</strong>}
-              </div>
-              <span className="matchup-versus" aria-hidden="true">vs</span>
-              <div className="matchup-stat-team">
-                {onOpenTeam ? (
-                  <button type="button" className="matchup-reference-tag matchup-reference-button matchup-team-open" aria-label={`View ${matchup.opponent} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(matchup.opponent)}>
-                    <span className="matchup-reference-button-label">{matchup.opponent}</span>
-                    <span className="matchup-reference-arrow" aria-hidden="true">›</span>
-                  </button>
-                ) : <strong>{matchup.opponent}</strong>}
-              </div>
-            </div>
-            <span aria-hidden="true" />
+                ) : <strong className="matchup-team-title">{name}</strong>}
+              </Fragment>
+            ))}
           </div>
-          {gameLinesLink ? (
-            <div className="matchup-game-lines-badge-row">
+          <div className="matchup-chip-row">
+            {gameLinesLink ? (
               <CrossToolBadge
                 link={gameLinesLink}
                 label={kickoffLabel ? `Game lines · ${kickoffLabel}` : "Game lines"}
                 ariaLabel={`Open ${matchup.team} vs ${matchup.opponent} in Game lines`}
                 className="matchup-game-lines-badge"
               />
-            </div>
-          ) : kickoffLabel ? (
-            <p className="matchup-kickoff-label">{kickoffLabel}</p>
-          ) : null}
+            ) : kickoffLabel ? <span className="depth-chart-tag">{kickoffLabel}</span> : null}
+            {gameStatusLabel ? <Badge variant="secondary" size="compact" className="injury">{gameStatusLabel}</Badge> : null}
+          </div>
           {showImpliedStrip ? (
-            <section className="matchup-implied-strip" aria-label="Weekly implied totals">
-              <div className="matchup-implied-team">
-                <span>{matchup.team}</span>
-                <strong>{formatImpliedTotal(myLine?.impliedPoints ?? null)}</strong>
+            <section className="matchup-implied" aria-label="Weekly implied totals">
+              <div className="matchup-implied-grid">
+                <div className="matchup-implied-team">
+                  <span>{matchup.team} implied</span>
+                  <strong>{formatImpliedTotal(myLine?.impliedPoints ?? null)}</strong>
+                </div>
+                <div className="matchup-implied-market">
+                  {myLine?.spread != null ? (
+                    <span>
+                      {myLine.spread === 0
+                        ? "PK"
+                        : `${myLine.spread < 0 ? matchup.team : matchup.opponent} −${formatImpliedTotal(Math.abs(myLine.spread))}`}
+                    </span>
+                  ) : null}
+                  {myLine?.total != null ? <span>O/U {formatImpliedTotal(myLine.total)}</span> : null}
+                </div>
+                <div className="matchup-implied-team is-opponent">
+                  <span>{matchup.opponent} implied</span>
+                  <strong>{formatImpliedTotal(theirLine?.impliedPoints ?? null)}</strong>
+                </div>
               </div>
-              <div className="matchup-implied-market">
-                {myLine?.spread != null ? (
-                  <span>
-                    {myLine.spread === 0
-                      ? "PK"
-                      : `${myLine.spread < 0 ? matchup.team : matchup.opponent} −${formatImpliedTotal(Math.abs(myLine.spread))}`}
-                  </span>
-                ) : null}
-                {myLine?.total != null ? <span>O/U {formatImpliedTotal(myLine.total)}</span> : null}
-              </div>
-              <div className="matchup-implied-team is-opponent">
-                <span>{matchup.opponent}</span>
-                <strong>{formatImpliedTotal(theirLine?.impliedPoints ?? null)}</strong>
-              </div>
+              {impliedSplit ? (
+                <>
+                  <div className="matchup-implied-split" role="img" aria-label={`Implied points split, ${impliedSplit.team} percent ${matchup.team}`}>
+                    <i style={{ flex: impliedSplit.team }} />
+                    <i style={{ flex: impliedSplit.opponent }} />
+                  </div>
+                  <p className="matchup-implied-caption">Implied points split <b>{impliedSplit.team} / {impliedSplit.opponent}</b></p>
+                </>
+              ) : null}
             </section>
           ) : null}
           {toolLinks ? <ToolLinks ariaLabel={`Open ${matchup.team} and ${matchup.opponent} in a tool`} links={toolLinks} /> : null}
@@ -709,23 +715,44 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                       <TabsTrigger id="matchup-team-defense-tab" value="team-defense" aria-controls="matchup-team-defense-panel">{teamCodeLabel} {matchupPairings[1].leftUnit} vs {opponentCodeLabel} {matchupPairings[1].rightUnit}</TabsTrigger>
                     </TabsList>
                   </Tabs>
-                  {matchupPairings.filter((pairing) => pairing.id === pairingTab).map((pairing) => (
-                    <section className="matchup-pairing" key={pairing.id} id={`matchup-${pairing.id}-panel`} role="tabpanel" aria-labelledby={`matchup-${pairing.id}-tab`}>
-                      {matchupStatConfigs.map((stat) => (
-                        <MatchupStatRow
-                          key={stat.label}
-                          stat={stat}
-                          pairing={pairing}
-                          left={pairing.leftSide === "offense"
-                            ? matchupGrade(offense, pairing.leftRow, stat.offKey, stat.offHigher)
-                            : matchupGrade(defense, pairing.leftRow, stat.defKey, stat.defHigher)}
-                          right={pairing.rightSide === "offense"
-                            ? matchupGrade(offense, pairing.rightRow, stat.offKey, stat.offHigher)
-                            : matchupGrade(defense, pairing.rightRow, stat.defKey, stat.defHigher)}
-                        />
-                      ))}
-                    </section>
-                  ))}
+                  {matchupPairings.filter((pairing) => pairing.id === pairingTab).map((pairing) => {
+                    const rows = matchupStatConfigs.map((stat) => ({
+                      stat,
+                      left: pairing.leftSide === "offense"
+                        ? matchupGrade(offense, pairing.leftRow, stat.offKey, stat.offHigher)
+                        : matchupGrade(defense, pairing.leftRow, stat.defKey, stat.defHigher),
+                      right: pairing.rightSide === "offense"
+                        ? matchupGrade(offense, pairing.rightRow, stat.offKey, stat.offHigher)
+                        : matchupGrade(defense, pairing.rightRow, stat.defKey, stat.defHigher),
+                    }));
+                    const edges = rows.map((row) => matchupEdge(row.left, row.right)).filter((edge): edge is number => edge !== null);
+                    const leftEdges = edges.filter((edge) => edge > 0).length;
+                    const rightEdges = edges.filter((edge) => edge < 0).length;
+                    return (
+                      <section className="matchup-pairing" key={pairing.id} id={`matchup-${pairing.id}-panel`} role="tabpanel" aria-labelledby={`matchup-${pairing.id}-tab`}>
+                        {edges.length > 0 ? (
+                          <div className="matchup-edge-summary">
+                            <strong className="matchup-edge-count">{leftEdges}<span>–</span>{rightEdges}</strong>
+                            <div>
+                              <p>{pairing.leftLabel} has the edge in {leftEdges} of {edges.length}</p>
+                              <div className="matchup-edge-segments" role="img" aria-label={`${leftEdges} edges to ${pairing.leftLabel}, ${rightEdges} to ${pairing.rightLabel}`}>
+                                {edges.map((edge, index) => <i key={index} className={edge > 0 ? "is-for" : edge < 0 ? "is-against" : "is-even"} />)}
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                        <p className="matchup-edge-legend">
+                          <span><i className="is-first" aria-hidden="true" />{pairing.leftLabel}, label above</span>
+                          <span><i className="is-second" aria-hidden="true" />{pairing.rightLabel}, label below</span>
+                        </p>
+                        {rows.map(({ stat, left, right }) => (
+                          <MatchupStatRow key={stat.label} stat={stat} pairing={pairing} left={left} right={right} />
+                        ))}
+                        <div className="matchup-edge-scale" aria-hidden="true"><span>#1 · better</span><span>League rank of 32</span><span>#32</span></div>
+                        <p className="matchup-edge-note">Edge is the gap in league rank. Plus means {pairing.leftLabel} is ahead, minus means {pairing.rightLabel} is.</p>
+                      </section>
+                    );
+                  })}
                 </div>
               </section>
               {!offense || !defense ? <SectionError title="PFN matchup data is incomplete." onRetry={() => { void tablesQuery.refetch(); }} retrying={tablesQuery.isFetching} compact /> : null}

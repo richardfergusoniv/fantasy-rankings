@@ -30,6 +30,7 @@
   font-size: var(--type-caption);
   font-weight: 600;
   line-height: 1;
+  text-decoration: none;
 }
 .matchup-reference-button .matchup-reference-arrow {
   position: absolute;
@@ -41,6 +42,8 @@
   pointer-events: none;
   transform: translateY(-50%);
 }
+/* Beats the global underline on a[href]; the badge is not underlined text. */
+a[href].matchup-reference-button.matchup-reference-tag { text-decoration: none; }
 .matchup-reference-button:focus-visible .matchup-reference-button-label {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
