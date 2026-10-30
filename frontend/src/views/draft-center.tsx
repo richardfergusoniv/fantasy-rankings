@@ -250,7 +250,7 @@ export function DraftCenter({
   const kickerRows: DraftRow[] = !isRookieBoard && league.rankingPositions.includes("K")
     ? dashboard.rankings
       .filter((row) => row.leagueId === league.id && row.position === "K")
-      .sort((a, b) => (b.leagueProjection ?? -1) - (a.leagueProjection ?? -1) || a.leagueRank - b.leagueRank)
+      .sort((a, b) => (b.leagueProjection ?? -Infinity) - (a.leagueProjection ?? -Infinity) || a.leagueRank - b.leagueRank)
       .map((row) => ({
         format: league.seasonLongFormat.key,
         pool: "all" as const,
@@ -282,7 +282,7 @@ export function DraftCenter({
   const defenseRows: DraftRow[] = !isRookieBoard && league.rankingPositions.includes("DEF")
     ? dashboard.defenses
       .filter((row) => row.leagueId === league.id)
-      .sort((a, b) => (b.displayProjection ?? -1) - (a.displayProjection ?? -1) || a.team.localeCompare(b.team))
+      .sort((a, b) => (b.displayProjection ?? -Infinity) - (a.displayProjection ?? -Infinity) || a.team.localeCompare(b.team))
       .map((row) => ({
         format: league.seasonLongFormat.key,
         pool: "all" as const,

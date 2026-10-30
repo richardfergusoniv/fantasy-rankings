@@ -292,7 +292,7 @@ export async function toolGetProjectedStandings(ctx: ChatToolContext, args: { le
       teamB: names.get(game.rosterIdB) ?? "Unknown",
       projectedB: game.projectedB,
     })),
-    note: "Best lineups from current rosters. The current week uses the app's blended projections; later weeks use Sleeper's projections scored in this league's rules, which already include injury timelines and byes. Future roster moves and actual lineup choices would change results. Not a probability.",
+    note: "Current week: the lineup each team has set, scored as in the Matchup view. Later weeks: best lineups from current rosters, using Sleeper's projections scored in this league's rules, which already include injury timelines and byes. Future roster moves and lineup changes would change results. Not a probability.",
   };
 }
 
