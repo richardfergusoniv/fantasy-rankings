@@ -85,7 +85,8 @@
 .draft-better-row.draft-table-head { padding-block: 5px; }
 .draft-better-row.draft-table-head > span:nth-child(n+2) { justify-content: flex-start; text-align: left; }
 .draft-better-cell { min-width: 0; color: var(--dim); font-size: var(--player-name-size); font-weight: 600; }
-.draft-better-open { display: grid; gap: 2px; width: 100%; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.draft-better-open { display: grid; gap: 2px; width: 100%; padding: 0; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.draft-better-row .draft-better-open, .draft-better-row strong { color: var(--text); }
 .draft-better-row strong { overflow: visible; font-size: var(--player-name-size); font-weight: 700; line-height: var(--player-name-leading); text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
 .draft-better-row small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 

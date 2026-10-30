@@ -9,7 +9,7 @@ function BetterCell({ label, better, secondaryOf, onOpenPlayer }: {
   secondaryOf: (playerId: string, position: string) => string | null;
   onOpenPlayer: (playerId: string) => void;
 }) {
-  if (!better) return <div className="draft-better-cell"><span className="sr-only">{label}: best available taken</span><span aria-hidden="true">—</span></div>;
+  if (!better) return <div className="draft-better-cell"><span className="sr-only">{label}: no better pick</span><span aria-hidden="true">—</span></div>;
   const secondary = secondaryOf(better.playerId, better.position);
   return (
     <div className="draft-better-cell">
@@ -30,7 +30,8 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
 }) {
   const query = useDraftGrade(leagueId);
   const byId = new Map(players.map((player) => [player.playerId, player]));
-  const entries = (query.data?.grade?.picks ?? []).filter((entry) => byId.has(entry.playerId));
+  // Kickers and defenses have no value to compare, so they carry no grade and are left out.
+  const entries = (query.data?.grade?.picks ?? []).filter((entry) => byId.has(entry.playerId) && (entry.draftDay !== null || entry.today !== null));
 
   return (
     <section className="draft-my-team">
