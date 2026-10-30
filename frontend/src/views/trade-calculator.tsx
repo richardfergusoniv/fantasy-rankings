@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogCloseButton, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { CardHero } from "../components/card-hero";
 import { api } from "../api";
 import { powerRankingsAfterTrade, type PowerRankingRow, type PowerShiftRow } from "../lib/trade-power";
 import type {
@@ -293,6 +294,8 @@ export function TradeValueDialog({
   powerRankingsAfter,
   /** YYYY-MM-DD; historical trades pin the graph to bar totals on this day. */
   valueAnchorDate = null,
+  /** The side the viewer is on, so the headline can say "You win". Historical trades have none. */
+  viewerSide = null,
 }: {
   give: TradeAsset[];
   get: TradeAsset[];
@@ -307,6 +310,7 @@ export function TradeValueDialog({
   title?: string;
   subtitle?: ReactNode;
   valueAnchorDate?: string | null;
+  viewerSide?: "give" | null;
 }) {
   const [panel, setPanel] = useState<TradeValuePanel>("bars");
   const giveTotal = tradeTotal(give);
@@ -316,6 +320,20 @@ export function TradeValueDialog({
   const getAdjustedTotal = getTotal + adjustment.get;
   const outcome = tradeSideOutcome(giveAdjustedTotal, getAdjustedTotal);
   const maxTotal = Math.max(giveAdjustedTotal, getAdjustedTotal, 1);
+  // The party that sends the give side receives the get side, so it comes out ahead when get is worth more.
+  const receivedGap = getAdjustedTotal - giveAdjustedTotal;
+  const gapSize = Math.abs(receivedGap);
+  const gapPercent = gapSize > 0 ? (gapSize / Math.max(Math.min(giveAdjustedTotal, getAdjustedTotal), 1)) * 100 : 0;
+  const giveWins = receivedGap > 0;
+  const verdict = receivedGap === 0
+    ? { text: "Even trade", tone: undefined }
+    : viewerSide === "give"
+      ? { text: `You ${giveWins ? "win" : "lose"} by ${formatWhole(gapSize)}`, tone: giveWins ? "good" as const : "bad" as const }
+      : getLabel === "You get" && giveLabel !== "You give"
+        // Multi-team trade: no single counterpart, so judge the selected team only.
+        ? { text: `${giveLabel} ${giveWins ? "gains" : "loses"} ${formatWhole(gapSize)}`, tone: undefined }
+        : { text: `${giveWins ? giveLabel : getLabel} wins by ${formatWhole(gapSize)}`, tone: undefined };
+  const sideHeading = (label: string, fallback: string) => (label === fallback ? label : `${label} sends`);
   const columnHeight = (total: number, count: number): number => {
     if (count === 0) return 48;
     const floor = count * 48 + (count - 1) * 2;
@@ -455,10 +473,19 @@ export function TradeValueDialog({
       <DialogContent className="league-trade-dialog">
         <DialogCloseButton label="Close trade value" />
         <DialogHeader className="league-trade-dialog-heading">
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="league-trade-dialog-eyebrow">{title}</DialogTitle>
+          <p className={`league-trade-verdict${verdict.tone ? ` is-${verdict.tone}` : ""}`}>{verdict.text}</p>
           {subtitle ? <span className="league-trade-dialog-subtitle">{subtitle}</span> : null}
         </DialogHeader>
         <div className="league-trade-dialog-body" ref={bodyRef}>
+          <CardHero
+            ariaLabel="Trade totals"
+            items={[
+              { label: sideHeading(giveLabel, "You give"), value: formatWhole(giveAdjustedTotal), sub: `${give.length} ${give.length === 1 ? "asset" : "assets"}` },
+              { label: sideHeading(getLabel, "You get"), value: formatWhole(getAdjustedTotal), sub: adjustment.get > 0 ? `incl. ${formatWhole(adjustment.get)} adj.` : `${get.length} ${get.length === 1 ? "asset" : "assets"}`, valueTone: viewerSide === "give" && receivedGap > 0 ? "good" : undefined },
+              { label: "Difference", value: receivedGap === 0 ? "0" : `${receivedGap > 0 ? "+" : "−"}${formatWhole(gapSize)}`, sub: receivedGap === 0 ? "Even" : `${receivedGap > 0 ? "+" : "−"}${gapPercent.toFixed(1)}%`, valueTone: viewerSide === "give" && receivedGap !== 0 ? (receivedGap > 0 ? "good" : "bad") : undefined },
+            ]}
+          />
           <SegmentedControl
             className="trade-value-panel-tabs"
             value={panel}
@@ -604,6 +631,7 @@ export function LeagueAdjustedTrade({
           get={get}
           giveLabel={mine.teamName}
           getLabel={theirs.teamName}
+          viewerSide="give"
           formatKey={formatKey}
           marketAssets={[...assetById.values()]}
           powerRankingsAfter={powerRankingsAfter}
@@ -1150,6 +1178,7 @@ export function TradeCalculator({
               get={get}
               formatKey={marketFormatKey}
               marketAssets={marketAssets}
+              viewerSide="give"
               onClose={() => setIsResultOpen(false)}
             />
           ) : null}

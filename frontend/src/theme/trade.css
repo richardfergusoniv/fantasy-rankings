@@ -367,3 +367,9 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-aggregate-key i.get { background: var(--dim); }
 .trade-aggregate-key i.is-winner { background: var(--winner-fill); }
 .trade-aggregate > p { margin: 9px 2px 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.4; }
+/* Trade card header: a small label, then the verdict in the amber (win), coral (loss) or plain (neutral). */
+.league-trade-dialog-eyebrow { color: var(--dim); font-size: var(--type-caption); font-weight: 600; letter-spacing: 0; line-height: 1.2; }
+.league-trade-verdict { margin: 2px 0 0; font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: lining-nums tabular-nums; }
+.league-trade-verdict.is-good { color: var(--link); }
+.league-trade-verdict.is-bad { color: var(--warning); }
+.league-trade-dialog .card-hero { margin-top: 0; }
