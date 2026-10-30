@@ -34,7 +34,7 @@
 .draft-row button.draft-player-open { display: grid; min-width: 0; width: 100%; height: auto; align-self: stretch; grid-template-rows: auto; align-content: center; align-items: center; justify-items: stretch; gap: 2px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text); text-align: left; }
 .draft-row .draft-player-name-line { display: flex; width: 100%; min-width: 0; max-width: 100%; min-height: 0; align-items: center; gap: 5px; margin: 0; padding: 0; overflow: hidden; }
 .draft-row .draft-player-name-line strong { flex: 0 1 auto; min-width: 0; margin: 0; overflow: hidden; color: var(--text); font-size: var(--player-name-size); font-weight: 600; line-height: var(--player-name-leading); text-overflow: ellipsis; }
-.draft-row .draft-player-name-line .injury { flex: none; }
+.draft-row .draft-player-name-line .status-badge { flex: none; }
 .draft-row .draft-player-meta { display: flex; min-width: 0; min-height: 0; margin: 0; padding-top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; align-items: center; font-size: var(--type-caption); line-height: 1; }
 .draft-row-actions { display: flex; align-items: center; justify-content: flex-end; }
 .draft-row-actions .draft-icon-button { position: relative; display: grid; width: 44px; height: 44px; flex: none; place-items: center; padding: 0; border: 0; background: transparent; color: var(--link); cursor: pointer; }

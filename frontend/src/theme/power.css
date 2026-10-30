@@ -163,7 +163,7 @@
 .proj-team > strong { display: block; min-width: 0; }
 /* `.power-team > span` would otherwise block-clip the move mark and the Yours pill. */
 .power-team.proj-team > .proj-move { display: inline-flex; margin-top: 0; overflow: visible; }
-.power-team.proj-team > .injury { display: inline-flex; margin-top: 0; overflow: visible; }
+.power-team.proj-team > .status-badge { display: inline-flex; margin-top: 0; overflow: visible; }
 .proj-move { display: inline-flex; flex: none; align-items: center; gap: 2px; font-size: var(--type-caption); font-weight: 700; }
 .proj-move i { width: 0; height: 0; border-right: 4px solid transparent; border-left: 4px solid transparent; }
 .proj-move.is-up { color: var(--positive); }
@@ -181,7 +181,7 @@
 .proj-win.is-up strong { color: var(--positive); }
 .proj-win strong { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; }
 .proj-win.is-down strong { color: var(--negative); }
-.injury.is-you { background: var(--roster-highlight); color: var(--on-roster-highlight); }
+.status-badge.is-you { background: var(--roster-highlight); color: var(--on-roster-highlight); }
 .power-team-card-intro { padding: 4px 16px 16px; }
 .power-team-card-intro .card-hero { margin-top: 12px; }
 .power-team-card-win { margin-top: 12px; }

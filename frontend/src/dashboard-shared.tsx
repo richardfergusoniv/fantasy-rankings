@@ -334,7 +334,7 @@ export function DesignationBadge({
   tone?: "neutral" | "positive" | "warning";
 }) {
   return (
-    <Badge variant={tone === "positive" ? "positive" : tone === "warning" ? "warning" : "secondary"} size="compact" className="injury" aria-label={label} title={title}>
+    <Badge variant={tone === "positive" ? "positive" : tone === "warning" ? "warning" : "secondary"} size="compact" className="status-badge" aria-label={label} title={title}>
       {code}
     </Badge>
   );
@@ -626,7 +626,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                 className="matchup-game-lines-badge"
               />
             ) : kickoffLabel ? <span className="depth-chart-tag">{kickoffLabel}</span> : null}
-            {gameStatusLabel ? <Badge variant="secondary" size="compact" className="injury">{gameStatusLabel}</Badge> : null}
+            {gameStatusLabel ? <Badge variant="secondary" size="compact" className="status-badge">{gameStatusLabel}</Badge> : null}
           </div>
           {showImpliedStrip ? (
             <section className="matchup-implied" aria-label="Weekly implied totals">

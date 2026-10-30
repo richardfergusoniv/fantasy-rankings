@@ -84,7 +84,7 @@ a[href].matchup-reference-button.matchup-reference-tag { text-decoration: none; 
 .matchup-reference-button.sos-tough .matchup-reference-button-label::before { border-top: 6px solid currentColor; }
 
 /* Status badges: a warning is a filled coral pill. */
-.injury { min-height: var(--badge-height); height: auto; padding: 0 8px; gap: 3px; border-radius: var(--radius-pill); }
+.status-badge { min-height: var(--badge-height); height: auto; padding: 0 8px; gap: 3px; border-radius: var(--radius-pill); }
 
 /* Descriptor tags share one height with the status badges. */
 .depth-chart-tag { min-height: var(--badge-height); }
