@@ -97,11 +97,33 @@ export function getCacheMetricsSnapshot(): CacheMetricsSnapshot {
   };
 }
 
+// Personalized Runtime Cache operations were removed in the cache overhaul;
+// any `dashboard.runtime.*` counter above zero is a regression (or legacy
+// pointer traffic resurfacing) and trips a distinct alert line so log drains
+// can page on it without parsing the full snapshot.
+const PERSONALIZED_RUNTIME_COUNTERS = [
+  "dashboard.runtime.get",
+  "dashboard.runtime.set",
+  "dashboard.runtime.delete",
+  "dashboard.runtime.pointer.probe",
+  "dashboard.runtime.pointer.publish",
+] as const;
+
 /** Emit one structured log line with everything aggregated since the last flush. */
 export function flushCacheMetrics(): void {
   if (counters.size === 0 && byteSamples.size === 0) return;
   const snapshot = getCacheMetricsSnapshot();
   console.log("[cache-metrics]", JSON.stringify(snapshot));
+  let personalizedOps = 0;
+  for (const name of PERSONALIZED_RUNTIME_COUNTERS) {
+    personalizedOps += snapshot.counters[name] ?? 0;
+  }
+  if (personalizedOps > 0) {
+    console.error("[cache-alert] personalized-runtime-traffic", JSON.stringify({
+      ops: personalizedOps,
+      instanceId: snapshot.instanceId,
+    }));
+  }
   counters.clear();
   byteSamples.clear();
 }

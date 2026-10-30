@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   estimateRuntimeUnits,
   countCacheMetric,
@@ -33,5 +33,30 @@ describe("cache-metrics", () => {
     expect(estimateRuntimeUnits(8_000)).toBe(1);
     expect(estimateRuntimeUnits(8_001)).toBe(2);
     expect(estimateRuntimeUnits(1_800_000)).toBe(225);
+  });
+});
+
+describe("personalized-runtime-traffic alert", () => {
+  it("emits a distinct alert line when a personalized runtime counter is nonzero", async () => {
+    const { flushCacheMetrics } = await import("./cache-metrics.js");
+    resetCacheMetricsForTests();
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    countCacheMetric("dashboard.runtime.get");
+    flushCacheMetrics();
+    expect(errSpy).toHaveBeenCalledWith(
+      "[cache-alert] personalized-runtime-traffic",
+      expect.stringContaining('"ops":1'),
+    );
+
+    // Shared-board traffic alone must not trip it.
+    errSpy.mockClear();
+    countCacheMetric("shared_board.cache.hit");
+    flushCacheMetrics();
+    expect(errSpy).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });
