@@ -228,6 +228,10 @@ a:active { color: var(--link-active); }
 .draft-board {
   --player-row-height: 56px;
 }
+/* Rankings and Waivers share these rows; give the name, meta and badges room. */
+.rankings-view {
+  --player-row-height: 68px;
+}
 
 .rankings-view {
   --player-box-height: var(--player-row-height);

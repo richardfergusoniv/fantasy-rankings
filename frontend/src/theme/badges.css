@@ -24,7 +24,7 @@
   gap: 4px;
   padding: 0 24px 0 10px;
   border: 1px solid var(--link);
-  border-radius: 14px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--link);
   font-size: var(--type-caption);
@@ -49,21 +49,21 @@ a[href].matchup-reference-button.matchup-reference-tag { text-decoration: none; 
   outline-offset: 2px;
 }
 
-/* Matchup ease stays a link: the word, the triangle and the color agree. */
+/* Matchup ease stays a link: green for easy, red for tough, with the triangle. */
 .matchup-reference-button.sos-soft .matchup-reference-button-label {
-  border-color: var(--ease-fg);
-  background: var(--ease-bg);
-  color: var(--ease-fg);
+  border-color: var(--stat-strength-readable);
+  background: var(--stat-strength-soft);
+  color: var(--stat-strength-readable);
 }
 .matchup-reference-button.sos-tough .matchup-reference-button-label {
-  border-color: var(--tough-fg);
-  background: var(--tough-bg);
-  color: var(--tough-fg);
+  border-color: var(--stat-weakness-readable);
+  background: var(--stat-weakness-soft);
+  color: var(--stat-weakness-readable);
 }
-.matchup-reference-button.sos-soft .matchup-reference-arrow { color: var(--ease-fg); }
-.matchup-reference-button.sos-tough .matchup-reference-arrow { color: var(--tough-fg); }
-.matchup-reference-tag.sos-soft:not(.matchup-reference-button) { background: var(--ease-bg); color: var(--ease-fg); }
-.matchup-reference-tag.sos-tough:not(.matchup-reference-button) { background: var(--tough-bg); color: var(--tough-fg); }
+.matchup-reference-button.sos-soft .matchup-reference-arrow { color: var(--stat-strength-readable); }
+.matchup-reference-button.sos-tough .matchup-reference-arrow { color: var(--stat-weakness-readable); }
+.matchup-reference-tag.sos-soft:not(.matchup-reference-button) { background: var(--stat-strength-soft); color: var(--stat-strength-readable); }
+.matchup-reference-tag.sos-tough:not(.matchup-reference-button) { background: var(--stat-weakness-soft); color: var(--stat-weakness-readable); }
 .matchup-reference-tag.sos-soft:not(.matchup-reference-button)::before,
 .matchup-reference-button.sos-soft .matchup-reference-button-label::before,
 .matchup-reference-tag.sos-tough:not(.matchup-reference-button)::before,
@@ -82,9 +82,8 @@ a[href].matchup-reference-button.matchup-reference-tag { text-decoration: none; 
 .matchup-reference-tag.sos-tough:not(.matchup-reference-button)::before,
 .matchup-reference-button.sos-tough .matchup-reference-button-label::before { border-top: 6px solid currentColor; }
 
-/* Status badges: a warning is a filled coral badge with a line icon. */
-.injury { min-height: 20px; height: auto; padding: 0 6px; gap: 3px; border-radius: var(--radius-xs); }
-.injury svg { width: 11px; height: 11px; flex: none; }
+/* Status badges: a warning is a filled coral pill. */
+.injury { min-height: 20px; height: auto; padding: 0 8px; gap: 3px; border-radius: var(--radius-pill); }
 
 /* Descriptor tags share one height with the status badges. */
 .depth-chart-tag { min-height: 20px; }

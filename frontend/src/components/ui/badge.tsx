@@ -16,8 +16,8 @@ const badgeVariants = cva(
         accent: "border-transparent bg-[var(--accent-soft)] text-[var(--ui-accent-foreground)]",
       },
       size: {
-        default: "rounded-md px-2 py-0.5 text-xs font-medium",
-        compact: "inline flex-none rounded-[var(--radius-sm)] border-0 px-1 py-[2px] text-[length:var(--type-caption)] font-bold",
+        default: "rounded-[var(--radius-pill)] px-2 py-0.5 text-xs font-medium",
+        compact: "inline flex-none rounded-[var(--radius-pill)] border-0 px-1 py-[2px] text-[length:var(--type-caption)] font-bold",
       },
     },
     defaultVariants: {

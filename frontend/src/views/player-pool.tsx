@@ -324,8 +324,8 @@ export function TeamDataModal({
             {matchupInfo?.kind === "game" ? (
               <CrossToolBadge
                 link={{ href: matchupInfo.href, onOpen: matchupInfo.onOpen }}
-                label={`${matchupInfo.tone === "soft" ? "Easy · " : matchupInfo.tone === "tough" ? "Tough · " : ""}Wk ${matchupInfo.week} ${matchupInfo.isAway ? "@" : "vs"} ${matchupInfo.opponent}`}
-                ariaLabel={`Open ${teamName} ${matchupInfo.isAway ? "at" : "versus"} ${matchupInfo.opponent} matchup card`}
+                label={`Wk ${matchupInfo.week} ${matchupInfo.isAway ? "@" : "vs"} ${matchupInfo.opponent}`}
+                ariaLabel={`Open ${teamName} ${matchupInfo.isAway ? "at" : "versus"} ${matchupInfo.opponent} matchup card${matchupInfo.tone === "soft" ? ", easy matchup" : matchupInfo.tone === "tough" ? ", tough matchup" : ""}`}
                 className={matchupInfo.tone ? `sos-${matchupInfo.tone}` : ""}
               />
             ) : matchupInfo?.kind === "bye" ? <Badge variant="secondary" size="compact" className="injury">Bye · Wk {matchupInfo.week}</Badge> : null}

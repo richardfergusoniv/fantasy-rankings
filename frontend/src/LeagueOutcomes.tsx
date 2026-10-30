@@ -4,7 +4,7 @@ import { api } from "./api";
 import { CardHero } from "./components/card-hero";
 import { SectionError } from "./section-error";
 import { formatDecimal, formatWhole } from "./lib/format-number";
-import { nextGamesForTeam, ordinal, placesMoved, recordLabel, winChanceLabel } from "./projected-standings-view";
+import { nextGamesForTeam, ordinal, placesMoved, recordLabel } from "./projected-standings-view";
 
 function MoveMark({ moved }: { moved: number }) {
   if (moved === 0) return null;
@@ -37,78 +37,76 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
   const { teams, games } = query.data;
   const me = teams.find((team) => team.isUser) ?? null;
   const topPoints = Math.max(...teams.map((team) => team.projectedPointsFor), 1);
-  const pointsRank = (team: (typeof teams)[number]) => teams.filter((other) => other.projectedPointsFor > team.projectedPointsFor).length + 1;
   const teamName = (rosterId: number) => teams.find((team) => team.rosterId === rosterId)?.teamName ?? "Opponent";
   const nextGames = me ? nextGamesForTeam(games, me.rosterId) : [];
-  const asOf = query.data.projectionsAsOf
-    ? new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(query.data.projectionsAsOf))
-    : null;
   const moved = me ? placesMoved(me.currentRank, me.rank) : 0;
+  const showPlayoffs = !query.data.divisionsIgnored && query.data.playoffTeams > 0;
 
   return (
-    <section className="proj-view" aria-label="Projected standings">
+    <section className="power-view proj-view" aria-label="Projected standings">
       {me ? (
         <>
-          <p className="card-eyebrow" style={{ marginTop: 0 }}>Your projected finish</p>
           <div className="proj-finish">
             <h2>{ordinal(me.rank)} of {teams.length}</h2>
-            {query.data.divisionsIgnored || query.data.playoffTeams <= 0 ? null : <Badge variant={me.inPlayoffs ? "positive" : "secondary"} size="compact" className="injury">{me.inPlayoffs ? "In playoffs" : "Outside the cut"}</Badge>}
+            {showPlayoffs ? <Badge variant={me.inPlayoffs ? "positive" : "secondary"} size="compact" className="injury">{me.inPlayoffs ? "In playoffs" : "Outside the cut"}</Badge> : null}
           </div>
           <CardHero
             ariaLabel="Your projection"
             items={[
-              { label: "Proj. record", value: recordLabel(me.projectedRecord), sub: `${recordLabel(me.record)} now` },
-              { label: "Moves", value: moved === 0 ? "—" : <MoveMark moved={moved} />, sub: `from ${ordinal(me.currentRank)} today` },
-              { label: "Proj. points", value: formatWhole(me.projectedPointsFor), sub: `${ordinal(pointsRank(me))} in league` },
+              { label: "Proj. record", value: recordLabel(me.projectedRecord) },
+              { label: "Moves", value: moved === 0 ? "—" : <MoveMark moved={moved} /> },
+              { label: "Proj. points", value: formatWhole(me.projectedPointsFor) },
             ]}
           />
         </>
       ) : null}
-      <p className="proj-caption">
-        Through week {query.data.throughWeek} of {query.data.regularSeasonEndsWeek}
-        {query.data.playoffTeams > 0 && !query.data.divisionsIgnored ? ` · top ${query.data.playoffTeams} make the playoffs` : ""}
-        {query.data.divisionsIgnored ? " · no playoff line, divisions are not modeled" : ""}
-        {asOf ? ` · projections as of ${asOf}` : ""}
-        {query.data.missingWeeks.length > 0 ? ` · weeks ${query.data.missingWeeks.join(", ")} used each team's average` : ""}
-      </p>
 
-      <div className="proj-table" role="table" aria-label="Projected standings">
-        <div className="proj-row proj-head" role="row">
-          <span role="columnheader">#</span>
-          <span role="columnheader">Team</span>
-          <span role="columnheader">Proj. PF</span>
-          <span role="columnheader">Proj.</span>
+      <section className="power-table-section" aria-labelledby="proj-standings-heading">
+        <div className="section-heading power-section-heading">
+          <h2 id="proj-standings-heading">Projected standings</h2>
         </div>
-        {teams.map((team, index) => (
-          <div key={team.rosterId}>
-            <div className={`proj-row${team.isUser ? " is-user" : ""}`} role="row">
-              <span className="proj-rank" role="cell">{team.rank}</span>
-              <div className="proj-team" role="cell">
-                <div className="proj-team-name"><strong>{team.teamName}</strong>{team.isUser ? <Badge variant="secondary" size="compact" className="injury is-you">Yours</Badge> : null}</div>
-                <div className="proj-team-sub">{recordLabel(team.record)} now <MoveMark moved={placesMoved(team.currentRank, team.rank)} /></div>
-              </div>
-              <div className="proj-pf" role="cell">
-                <span>{formatDecimal(team.projectedPointsFor, 0)}</span>
-                <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round((team.projectedPointsFor / topPoints) * 100)}%` }} /></div>
-              </div>
-              <b className="proj-record" role="cell">{recordLabel(team.projectedRecord)}</b>
-            </div>
-            {team.inPlayoffs && !teams[index + 1]?.inPlayoffs && index < teams.length - 1 ? <div className="proj-cut" role="separator" aria-label="Playoff cut">Playoff cut</div> : null}
+        <div className="power-table" role="table" aria-label="Projected standings">
+          <div className="power-row proj-row proj-head" role="row">
+            <span role="columnheader">#</span>
+            <span role="columnheader">Team</span>
+            <span role="columnheader">Proj. PF</span>
+            <span role="columnheader">Record</span>
           </div>
-        ))}
-      </div>
+          {teams.map((team, index) => (
+            <div className="power-list-item" key={team.rosterId}>
+              <div className={`power-row proj-row${team.isUser ? " is-user" : ""}`} role="row">
+                <strong className="power-rank" role="cell">{team.rank}</strong>
+                <div className="power-team proj-team" role="cell">
+                  <strong>{team.teamName}</strong>
+                  {team.isUser ? <Badge variant="secondary" size="compact" className="injury is-you">Yours</Badge> : null}
+                  <MoveMark moved={placesMoved(team.currentRank, team.rank)} />
+                </div>
+                <div className="power-total proj-pf" role="cell">
+                  <strong>{formatDecimal(team.projectedPointsFor, 0)}</strong>
+                  <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round((team.projectedPointsFor / topPoints) * 100)}%` }} /></div>
+                </div>
+                <div className="power-total" role="cell"><strong>{recordLabel(team.projectedRecord)}</strong></div>
+              </div>
+              {showPlayoffs && team.inPlayoffs && !teams[index + 1]?.inPlayoffs && index < teams.length - 1 ? <div className="proj-cut" role="separator" aria-label="Playoff cut">Playoff cut</div> : null}
+            </div>
+          ))}
+        </div>
+      </section>
 
       {nextGames.length > 0 ? (
-        <section aria-label="Your next games">
-          <div className="proj-games-head"><h3>Your next games</h3><span>Win chance</span></div>
+        <section className="power-table-section" aria-labelledby="proj-games-heading">
+          <div className="section-heading power-section-heading proj-games-head">
+            <h2 id="proj-games-heading">Your next games</h2>
+            <span>Win chance</span>
+          </div>
           {nextGames.map((game) => (
-            <div className="proj-game" key={game.week}>
-              <span className="proj-game-week">Wk {game.week}</span>
-              <div>
+            <div className="power-row proj-game" key={game.week}>
+              <strong className="power-rank">Wk {game.week}</strong>
+              <div className="power-team">
                 <strong>vs {teamName(game.opponentRosterId)}</strong>
-                <div className="proj-team-sub">{formatDecimal(game.mine, 1)} – {formatDecimal(game.theirs, 1)} proj.</div>
+                <span>{formatDecimal(game.mine, 1)} – {formatDecimal(game.theirs, 1)}</span>
               </div>
-              <div className={`proj-win ${game.winPercent >= 55 ? "is-up" : game.winPercent <= 45 ? "is-down" : ""}`}>{game.winPercent}%<small>{winChanceLabel(game.winPercent)}</small></div>
+              <div className={`power-total proj-win ${game.winPercent >= 55 ? "is-up" : game.winPercent <= 45 ? "is-down" : ""}`}><strong>{game.winPercent}%</strong></div>
             </div>
           ))}
         </section>

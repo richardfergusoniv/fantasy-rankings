@@ -35,15 +35,6 @@ export function projectedWinPercent(mine: number, theirs: number): number {
   return Math.min(99, Math.max(1, Math.round(cdf * 100)));
 }
 
-/** Plain words for a win chance. */
-export function winChanceLabel(percent: number): string {
-  if (percent >= 75) return "Likely win";
-  if (percent >= 55) return "Lean win";
-  if (percent > 45) return "Toss-up";
-  if (percent > 25) return "Lean loss";
-  return "Likely loss";
-}
-
 export type NextGame = { week: number; opponentRosterId: number; mine: number; theirs: number; winPercent: number };
 
 /** The team's next games in week order, each with both projected totals and the team's win chance. */

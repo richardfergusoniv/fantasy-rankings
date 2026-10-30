@@ -74,7 +74,7 @@
 .ranking-football-meta { min-width: 0; overflow: visible; white-space: nowrap; }
 .season-team-pill { flex: none; }
 .ranking-row .season-team-pill:not(.matchup-reference-button),
-.ranking-row .season-team-pill .matchup-reference-button-label { overflow: hidden; border-radius: var(--radius-xs); }
+.ranking-row .season-team-pill .matchup-reference-button-label { overflow: hidden; border-radius: var(--radius-pill); }
 .ranking-row .season-team-pill.matchup-reference-button { min-height: 32px; align-items: flex-start; }
 .ranking-row .season-team-pill .matchup-reference-button-label { font-size: var(--type-caption); font-weight: 700; }
 .ranking-row .season-team-pill.oline-strong:not(.matchup-reference-button),
@@ -82,7 +82,7 @@
 .ranking-row .season-team-pill.oline-weak:not(.matchup-reference-button),
 .ranking-row .season-team-pill.oline-weak .matchup-reference-button-label { border-color: color-mix(in srgb, var(--stat-weakness) 18%, var(--hairline)); background: color-mix(in srgb, var(--stat-weakness-soft) 56%, var(--surface)); color: var(--stat-weakness-readable); }
 .ranking-player-context { flex: none; color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
-.roster-owner-tag { display: block; max-width: 112px; flex: none; overflow: hidden; padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 700; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.roster-owner-tag { display: block; max-width: 112px; flex: none; overflow: hidden; padding: 1px 5px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 700; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .roster-owner-tag.is-user { background: var(--roster-highlight); color: var(--on-roster-highlight); letter-spacing: .025em; }
 .ranking-proj { text-align: right; }
 .ranking-proj strong { display: block; color: var(--text); font-size: var(--type-body); font-weight: 700; }
@@ -117,7 +117,7 @@
 .news-card-header > div { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 7px; }
 .news-card-header time { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .news-card-header button { flex: none; display: grid; width: 44px; height: 44px; margin: -7px -7px 0 0; place-items: center; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface-2); color: var(--dim); font-size: var(--type-section); line-height: 1; cursor: pointer; }
-.news-card-modal .news-severity { padding: 3px 6px; border-radius: var(--radius-xs); background: var(--surface-2); color: var(--dim); font-weight: 700; }
+.news-card-modal .news-severity { padding: 3px 6px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--dim); font-weight: 700; }
 .news-card-modal .news-severity.headline { background: var(--breaking-soft); color: var(--stat-weakness-readable); }
 .news-card-headline { display: block; margin-top: 15px; font-size: var(--type-display); line-height: 1.2; letter-spacing: -.02em; }
 .news-card-modal > p { margin: 10px 0 0; color: var(--dim); font-size: var(--type-body); line-height: 1.5; }
@@ -266,7 +266,7 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .tool-links a.tool-link[href] { display: inline-flex; min-height: 44px; align-items: center; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--link); font-size: var(--type-tab); font-weight: 600; text-decoration: none; }
 .tool-links a.tool-link[href]:hover { color: var(--link-hover); }
 .player-detail-header .player-roster-badge .matchup-reference-button-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
-.player-detail-injury { padding: 2px 6px; border-radius: var(--radius-xs); background: var(--stat-weakness-soft); color: var(--negative); font-weight: 700; }
+.player-detail-injury { padding: 2px 6px; border-radius: var(--radius-pill); background: var(--stat-weakness-soft); color: var(--negative); font-weight: 700; }
 .player-team-context { margin-top: 16px; }
 .player-team-context .section-heading { position: static; min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .player-team-context .section-heading h3 { margin: 0; font-size: var(--type-section); }
@@ -327,7 +327,7 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
   box-shadow: var(--shadow-modal);
 }
 /* Latest depth-chart rank (nflverse); a quiet outlined chip beside the matchup tag. */
-.depth-chart-tag { display: inline-flex; flex: none; align-items: center; padding: 0 5px; border: 1px solid var(--hairline); border-radius: var(--radius-xs); color: var(--dim); font-size: var(--type-caption); font-weight: 700; line-height: 16px; white-space: nowrap; }
+.depth-chart-tag { display: inline-flex; flex: none; align-items: center; padding: 0 5px; border: 1px solid var(--hairline); border-radius: var(--radius-pill); color: var(--dim); font-size: var(--type-caption); font-weight: 700; line-height: 16px; white-space: nowrap; }
 /* Player card: this week's prop lines. */
 .player-props-section { margin-top: 16px; }
 .player-props-grid { border-top: 1px solid var(--hairline); }
