@@ -24,6 +24,7 @@ import {
   dashboardViewResponseHeaders,
   loadCachedDashboardView,
   remainingDashboardTtlSeconds,
+  type DashboardOriginResult,
   type DashboardViewLoad,
 } from "./_lib/dashboard-response-cache.js";
 import { waitUntil } from "@vercel/functions";
@@ -147,7 +148,11 @@ function makeSectionLoadOrigin(
   section: DashboardCacheSection,
   retryBuild: boolean,
 ) {
-  return async () => {
+  return async (): Promise<DashboardOriginResult<{
+    section: DashboardCacheSection;
+    data: unknown;
+    build?: unknown;
+  }>> => {
       const resolved = await sectionDashboardForViewer({
         sleeperUserId: viewer.sleeperUserId,
         viewerUserId: viewer.userId,
