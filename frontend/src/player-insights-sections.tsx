@@ -6,6 +6,7 @@ import type { AnalyticsEntity, PlayerSearchResult } from "./dashboard-types";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { sortPropLines } from "./lib/prop-line-order";
 import { TEAM_WEEK_STATS_STALE_MS } from "../../api/_lib/nflverse-team-week-stats";
+import { EmptyState } from "./components/state-blocks";
 import {
   buildPropHistory,
   indexPlayedWeeks,
@@ -91,9 +92,9 @@ export function PlayerPropsSection({ player, season, week }: { player: PlayerSea
   const recentWeeks = useMemo(() => Array.from({ length: Math.min(5, Math.max(0, week - 1)) }, (_, index) => week - Math.min(5, week - 1) + index), [week]);
 
   if (lines.length === 0) {
-    if (pfnQuery.isPending) return <div className="player-tab-empty"><strong>Loading props…</strong></div>;
-    if (pfnQuery.isError) return <div className="player-tab-empty"><strong>Props didn’t load</strong><span>Try again in a minute.</span></div>;
-    return <div className="player-tab-empty"><strong>No props posted</strong><span>{player.name} has no lines for week {week} yet.</span></div>;
+    if (pfnQuery.isPending) return <EmptyState title="Loading props…" />;
+    if (pfnQuery.isError) return <EmptyState title="Props didn’t load" detail="Try again in a minute." />;
+    return <EmptyState title="No props posted" detail={`${player.name} has no lines for week ${week} yet.`} />;
   }
   return (
     <section className="player-props-section" aria-label={`${player.name} props`}>

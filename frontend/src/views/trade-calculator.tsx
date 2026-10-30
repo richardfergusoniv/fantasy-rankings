@@ -42,6 +42,7 @@ import { clearTradeSide, removeTradePlayer, restoreTradePlayer } from "../undo";
 import { useUnsavedLeaveWarning } from "../unsaved-input";
 import { formatWhole } from "../lib/format-number";
 import { CloseGlyph, MoveTriangle } from "../components/glyphs";
+import { EmptyState } from "../components/state-blocks";
 
 export function TradeAssetRow({ asset, onRemove, onOpenPlayer }: { asset: TradeAsset; onRemove: () => void; onOpenPlayer: (playerId: string) => void }) {
   return (
@@ -123,7 +124,7 @@ export function TradeSide({ title, assets, availableAssets, onAdd, onRemove, onC
                   <b>{formatWhole(asset.value)}</b>
                 </button>
               ))}
-              {matches.length === 0 ? <div className="trade-search-empty">No eligible assets match “{query.trim()}”.</div> : null}
+              {matches.length === 0 ? <EmptyState title={`No eligible assets match “${query.trim()}”`} /> : null}
             </div>
           ) : null}
         </div>
@@ -158,7 +159,7 @@ export function LeagueRosterList({
   onToggle: (id: string) => void;
   listLabel: string;
 }) {
-  if (rows.length === 0) return <p className="league-roster-empty">No players on this roster.</p>;
+  if (rows.length === 0) return <EmptyState title="No players on this roster" />;
   return (
     <ul className="league-roster-list" aria-label={listLabel}>
       {rows.map((row) => {
@@ -595,7 +596,7 @@ export function LeagueAdjustedTrade({
           </LeagueRosterCard>
         ) : (
           <LeagueRosterCard label="Trade partners" title="Trade partner">
-            {partners.length === 0 ? <p className="league-roster-empty">No other teams in this league.</p> : (
+            {partners.length === 0 ? <EmptyState title="No other teams in this league" /> : (
               <ul className="league-roster-list" aria-label="League teams">
                 {partners.map((team) => {
                   const record = team.record ?? recordByRosterId.get(team.rosterId);

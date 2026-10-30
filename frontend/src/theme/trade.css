@@ -138,7 +138,6 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-roster-meta { display: flex; grid-column: 2; grid-row: 2; min-width: 0; align-items: center; justify-content: space-between; gap: 4px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .league-roster-meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .league-roster-meta b { flex: none; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
-.league-roster-empty { margin: 0; padding: 10px 8px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .league-roster-row:focus-within { outline: 2px solid var(--link); outline-offset: -2px; }
 .league-roster-row input:focus-visible { outline: none; }
 /* The position badge sets the first line of a player row. Match that so team rows stay the same height. */
@@ -256,7 +255,6 @@ button.league-partner-change:active { color: var(--link-active); }
 .row-toggle-state:disabled { opacity: .35; cursor: default; }
 .trade-picker-picks { margin-top: 15px; border-top: 1px solid var(--border); }
 .trade-picker-picks h3 { margin: 0; padding: 11px 10px 8px; font-size: var(--type-section); font-weight: 700; }
-.trade-search-empty { padding: 16px 9px; color: var(--dim); text-align: center; font-size: var(--type-caption); }
 .trade-asset-block { border-bottom: 1px solid var(--hairline); }
 .trade-asset-block:last-child { border-bottom: 0; }
 .trade-asset-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; column-gap: 4px; align-items: center; box-sizing: border-box; height: var(--league-roster-row-height); min-height: var(--league-roster-row-height); max-height: var(--league-roster-row-height); padding: 0 0 0 6px; border-bottom: 0; }

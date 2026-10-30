@@ -151,7 +151,6 @@
 }
 .power-roster-player { font-variant-numeric: tabular-nums; }
 .power-slot-chip { flex: none; max-width: 74px; overflow: hidden; padding: 2px 4px 1px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); line-height: 1.2; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.power-roster-empty { padding: 22px 12px; color: var(--dim); text-align: center; font-size: var(--type-caption); line-height: 1.4; }
 .power-note { margin: 12px 2px 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.45; }
 
 /* Projected standings (League > Projected). */

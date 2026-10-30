@@ -235,6 +235,21 @@ describe("Roster highlight", () => {
   });
 });
 
+describe("Style ownership", () => {
+  it("does not define more selectors across three or more theme files than it does today", () => {
+    const owners = new Map<string, Set<string>>();
+    for (const m of readFileSync(themeEntryPath, "utf8").matchAll(/@import\s+"\.\/(theme\/[\w-]+\.css)";/g)) {
+      const css = readFileSync(join(srcDir, m[1]!), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      for (const sel of new Set([...css.matchAll(/^\.([\w-]+)/gm)].map((hit) => hit[1]!))) {
+        owners.set(sel, (owners.get(sel) ?? new Set()).add(m[1]!));
+      }
+    }
+    const scattered = [...owners].filter(([, files]) => files.size >= 3).map(([sel]) => sel).sort();
+    // Lower this number as selectors are merged into the file for their view; it should never go up.
+    expect(scattered.length, scattered.join(", ")).toBeLessThanOrEqual(28);
+  });
+});
+
 describe("Radius tokens", () => {
   it("keeps small-tag radii on --radius-xs instead of a bare 4px", () => {
     const css = readTheme();
@@ -290,7 +305,7 @@ describe("Light theme contrast", () => {
   it("keeps borders and chart series visible against the panel", () => {
     expect(contrastRatio(light("--border"), panel)).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(light("--row-divider"), panel)).toBeGreaterThanOrEqual(2.6);
-    for (const name of ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5"]) {
+    for (const name of ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5", "--chart-6", "--chart-7", "--chart-8"]) {
       expect(contrastRatio(light(name), panel), `${name} on panel`).toBeGreaterThanOrEqual(3);
     }
   });
