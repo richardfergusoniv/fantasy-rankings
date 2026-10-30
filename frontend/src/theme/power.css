@@ -38,11 +38,11 @@
 .power-total { min-width: 0; text-align: right; }
 .power-total strong { display: block; font-size: var(--type-body); font-weight: 700; }
 .power-total span { display: block; margin-top: 2px; overflow: hidden; color: var(--dim); font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.power-team-card-backdrop { position: fixed; z-index: 990; inset: 0; display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--overlay); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: backdropIn .12s ease-out both; }
+.power-team-card-backdrop { z-index: 990; }
 .power-team-card-backdrop.is-above-player { z-index: 1040; }
 .power-team-card-backdrop.is-above-player.is-obscured { z-index: 990; }
 .power-team-card-backdrop.is-obscured { pointer-events: none; }
-.power-team-card { width: min(100%, 560px); max-height: min(88dvh, 760px); overflow-y: auto; overscroll-behavior-y: contain; border: 1px solid var(--hairline); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-modal); animation: newsCardIn .14s cubic-bezier(.2,.7,.2,1) both; -webkit-overflow-scrolling: touch; }
+.power-team-card { width: min(100%, 560px); max-height: min(88dvh, 760px); }
 .power-team-card-header { position: sticky; z-index: 2; top: 0; display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 9px 16px; border-bottom: 1px solid var(--hairline); background: var(--surface); }
 .power-team-card-header h2 { min-width: 0; margin: 0; overflow: hidden; font-size: var(--type-display); line-height: 1.12; font-weight: 700; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
 .power-team-card-header h2.is-user { color: var(--roster-highlight); }
