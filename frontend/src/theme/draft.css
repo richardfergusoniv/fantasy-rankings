@@ -30,6 +30,8 @@
 .draft-row > span:nth-child(n+2) { display: flex; align-items: center; justify-content: flex-end; text-align: right; font-size: var(--player-name-size); font-weight: 600; }
 .draft-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--player-name-size); font-weight: 600; line-height: var(--player-name-leading); }
 .draft-row > span strong { font-size: var(--player-name-size); font-weight: 700; line-height: 1; }
+/* K and DEF show a weekly projection, labeled PROJ under the number like ranking rows. */
+.draft-row > span.ranking-proj { flex-direction: column; align-items: flex-end; justify-content: center; gap: 2px; }
 .draft-row small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .draft-row button.draft-player-open { display: grid; min-width: 0; width: 100%; height: auto; align-self: stretch; grid-template-rows: auto; align-content: center; align-items: center; justify-items: stretch; gap: 2px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text); text-align: left; }
 .draft-row .draft-player-name-line { display: flex; width: 100%; min-width: 0; max-width: 100%; min-height: 0; align-items: center; gap: 5px; margin: 0; padding: 0; overflow: hidden; }
@@ -71,7 +73,7 @@
 .trending-drop { color: var(--negative); }
 
 @media (min-width: 760px) {
-  .draft-center { max-width: 860px; }
+  .draft-center { max-width: var(--content-width); }
   .draft-controls { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr) auto; }
   .draft-controls > label { grid-column: auto; }
   .draft-row { grid-template-columns: minmax(0, 1fr) 48px 80px 96px; }

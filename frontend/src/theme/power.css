@@ -32,6 +32,12 @@
 .power-row.is-opponent .power-rank, .power-row.is-opponent .power-team > strong, .power-row.is-opponent .power-total strong { color: var(--foreground); }
 .power-row.is-average .power-rank, .power-row.is-average .power-team > strong, .power-row.is-average .power-total strong { color: var(--dim); }
 .power-team { min-width: 0; }
+/* Power rows carry a You / Opp tag beside the name (the button's aria-label already says it). */
+.power-row-toggle .power-team { display: flex; align-items: center; gap: 6px; }
+.power-row-toggle .power-team > strong { min-width: 0; }
+.power-radar-key { justify-content: center; }
+.power-radar-key i.radar-key-team { background: var(--chart-team); }
+.power-radar-key i.radar-key-average { background: var(--dim); }
 .power-team > strong { display: block; overflow: hidden; font-size: var(--type-body); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .power-team-record { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .power-team > span { display: block; margin-top: 2px; overflow: hidden; color: var(--dim); font-size: var(--type-caption); line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }

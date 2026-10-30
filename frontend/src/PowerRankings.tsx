@@ -154,6 +154,10 @@ export function PowerRankings({
             })}
           </svg>
         </div>
+        <div className="chart-key power-radar-key" aria-hidden="true">
+          <span><i className="radar-key-team" /> You</span>
+          <span><i className="radar-key-average" /> League average</span>
+        </div>
         <p className="power-position-table-label">League average</p>
         <div className="power-position-values" role="list" aria-label="League average value by position">
           {radarData.map((row) => (
@@ -185,7 +189,8 @@ export function PowerRankings({
                   <strong className="power-rank">{team.rank}</strong>
                   <span className="power-team">
                     <strong>{team.teamName}<span className="power-team-record"> · {formatRecord(team.record)}</span></strong>
-                    {isOpponent ? <span className="sr-only">This week's opponent</span> : null}
+                    {team.isUser ? <span className="roster-owner-tag is-user" aria-hidden="true">You</span> : null}
+                    {isOpponent ? <span className="roster-owner-tag" aria-hidden="true">Opp</span> : null}
                   </span>
                   <span className="power-total"><strong>{isWeekly ? points(team.totalValue) : formatWhole(team.totalValue)}</strong></span>
                 </button>

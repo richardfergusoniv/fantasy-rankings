@@ -250,7 +250,7 @@ export function DraftCenter({
   const kickerRows: DraftRow[] = !isRookieBoard && league.rankingPositions.includes("K")
     ? dashboard.rankings
       .filter((row) => row.leagueId === league.id && row.position === "K")
-      .sort((a, b) => a.leagueRank - b.leagueRank)
+      .sort((a, b) => (b.leagueProjection ?? -1) - (a.leagueProjection ?? -1) || a.leagueRank - b.leagueRank)
       .map((row) => ({
         format: league.seasonLongFormat.key,
         pool: "all" as const,
@@ -282,7 +282,7 @@ export function DraftCenter({
   const defenseRows: DraftRow[] = !isRookieBoard && league.rankingPositions.includes("DEF")
     ? dashboard.defenses
       .filter((row) => row.leagueId === league.id)
-      .sort((a, b) => (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER) || a.team.localeCompare(b.team))
+      .sort((a, b) => (b.displayProjection ?? -1) - (a.displayProjection ?? -1) || a.team.localeCompare(b.team))
       .map((row) => ({
         format: league.seasonLongFormat.key,
         pool: "all" as const,
@@ -329,10 +329,14 @@ export function DraftCenter({
   const myTeamIdSet = useMemo(() => new Set(myTeamIds), [myTeamIds]);
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.toLowerCase();
-    return rows
+    const available = rows
       .filter((row) => !draftedIds.has(row.playerId ?? "") && !myTeamIdSet.has(row.playerId ?? ""))
       .filter((row) => (effectiveDraftPosition === "ALL" || (effectiveDraftPosition === "ROOKIES" ? row.rookie : row.position === effectiveDraftPosition)) && row.name.toLowerCase().includes(normalizedQuery));
-  }, [draftedIds, effectiveDraftPosition, myTeamIdSet, query, rows]);
+    // Once the league has drafted, ADP order is stale: list valued players by market value
+    // (stable sort keeps K and DEF, which have no market value, after them in projection order).
+    if (!completedDraft || liveDraft) return available;
+    return available.sort((a, b) => (b.marketValue ?? -1) - (a.marketValue ?? -1));
+  }, [completedDraft, draftedIds, effectiveDraftPosition, liveDraft, myTeamIdSet, query, rows]);
   const draftPositionIsEligible = (value: string) => value !== "K" && value !== "DEF" || league.rankingPositions.includes(value as "K" | "DEF");
   const seenOwnPickIds = new Set<string>();
   const ownPicks = syncedLeagueDrafts.flatMap((draft) => draft.ownRosterId === null ? [] : draft.picks.filter((pick) => pick.rosterId === draft.ownRosterId)).filter((pick) => {
@@ -450,7 +454,7 @@ export function DraftCenter({
               {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
             </button>
             <span><span className="sr-only">Position </span>{row.position === "DEF" ? "DST" : row.position}</span>
-            <span><strong>{isSpecialist ? <><span className="sr-only">Weekly projection </span>{formatProjectionPoints(row.weeklyProjection, row.projectionSource)}</> : row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{formatWhole(row.marketValue)}</>}</strong></span>
+            <span className={isSpecialist ? "ranking-proj" : undefined}><strong>{isSpecialist ? <><span className="sr-only">Weekly projection </span>{formatProjectionPoints(row.weeklyProjection, row.projectionSource)}</> : row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{formatWhole(row.marketValue)}</>}</strong>{isSpecialist ? <span aria-hidden="true">PROJ</span> : null}</span>
             <span className="draft-row-actions">
               <button type="button" className="draft-icon-button" disabled={!row.playerId} onClick={() => row.playerId && addToMyTeam(row.playerId)} aria-label={`Add ${row.name} to my team`} title="Add to my team"><Plus aria-hidden="true" /></button>
               {liveDraft ? null : <button type="button" className="draft-icon-button draft-taken-button" disabled={!row.playerId} onClick={() => row.playerId && markTaken(row.playerId)} aria-label={`Drafted by another team, ${row.name}`} title="Drafted by another team"><UserX aria-hidden="true" /></button>}
