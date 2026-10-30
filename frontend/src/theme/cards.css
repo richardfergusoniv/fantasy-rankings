@@ -1,0 +1,25 @@
+/* Card anatomy shared by the team, trade and league cards: identity header, hero numbers, then detail. */
+.card-title { margin: 14px 0 0; font-size: 30px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+.card-eyebrow { margin: 14px 0 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.card-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.card-hero { display: grid; margin-top: 14px; border-block: 1px solid var(--hairline); font-variant-numeric: lining-nums tabular-nums; }
+.card-hero > div { min-width: 0; padding: 12px 0 12px 12px; border-left: 1px solid var(--hairline); }
+.card-hero > div:first-child { padding-left: 0; border-left: 0; }
+.card-hero-k { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.card-hero-v { margin-top: 2px; font-size: var(--type-display); font-weight: 600; line-height: 1.2; }
+.card-hero-v.is-good { color: var(--link); }
+.card-hero-v.is-bad { color: var(--warning); }
+.card-hero-s { margin-top: 2px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.card-hero-s.is-good { color: var(--link); }
+.card-section-title { margin: 22px 0 8px; font-size: var(--type-body); font-weight: 600; }
+.card-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.card-caption { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+/* One stat per row: name, value, league rank, and a bar as long as the rank is good. */
+.stat-bar-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 34px 92px; align-items: center; gap: 8px; min-height: 44px; border-bottom: 1px solid var(--hairline); font-size: var(--type-control); font-variant-numeric: lining-nums tabular-nums; }
+.stat-bar-row .val { font-weight: 600; text-align: right; }
+.stat-bar-row .rk { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.stat-bar-row .rk.is-top { color: var(--link); }
+.stat-bar { position: relative; height: 4px; overflow: hidden; border-radius: 2px; background: var(--segment-track); }
+.stat-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--dim); }
+.stat-bar i.is-top { background: var(--action); }
+.card-note { margin: 10px 0 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.45; }

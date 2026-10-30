@@ -27,6 +27,7 @@ import type {
 export type { League, MatchupSelection } from "./dashboard-types";
 import {
   BROWSER_DASHBOARD_CACHE_KEY,
+  canonicalNflTeam,
   DashboardPartialNotes,
   MatchupDataModal,
   NewsCardModal,
@@ -596,6 +597,13 @@ export function App() {
     else closeMatchup();
   }, [commitDashboardUrl, closeMatchup]);
   const [teamCardTeam, setTeamCardTeam] = useState<string | null>(null);
+  // From a team card, open the team's game. If that game's card is already open behind this one, just go back to it.
+  const openMatchupFromTeamCard = useCallback((matchup: MatchupSelection) => {
+    setTeamCardTeam(null);
+    const pair = (m: MatchupSelection) => [m.team, m.opponent].map((name) => canonicalNflTeam(name) ?? name).sort().join("|");
+    if (selectedMatchup && pair(selectedMatchup) === pair(matchup)) return;
+    setSelectedMatchup(matchup);
+  }, [selectedMatchup, setSelectedMatchup]);
   const [rosterCardRosterId, setRosterCardRosterId] = useState<number | null>(null);
   const [commandBarOpen, setCommandBarOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -1519,7 +1527,7 @@ export function App() {
           }}
         />
       ) : null}
-      {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
+      {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onOpenMatchup={openMatchupFromTeamCard} matchupHref={(matchup) => toolLinkSearch(dashboardUrl.state, { matchup })} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
       {rosterCardTeam ? (
         <LeagueTeamCard
           team={rosterCardTeam}

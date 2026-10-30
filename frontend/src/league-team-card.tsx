@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { Badge } from "@/components/ui/badge";
+import { CardHero } from "./components/card-hero";
 import type { Dashboard, League, MatchupSelection } from "./dashboard-types";
 import { compareByFantasyPosition } from "./fantasy-position-order";
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { DepthChangeMark, MatchupTag, ModalPortal, depthChange, leagueRank, points, useDialogFocusTrap } from "./shared";
 import { formatWhole } from "./lib/format-number";
 import { displayedMatchupPoints } from "../../api/_lib/lineup-optimizer";
+import { teamOutlook, winPercent, winProbability } from "./views/win-probability";
 
 type RosterPlayer = League["tradeTeams"][number]["players"][number];
 type SeasonRow = Dashboard["seasonLongRankings"][number];
@@ -95,6 +98,12 @@ export function LeagueTeamCard({
     () => league.tradeTeams.find((candidate) => candidate.rosterId === team.rosterId) ?? null,
     [league.tradeTeams, team.rosterId],
   );
+  const [nowMs] = useState(() => Date.now());
+  const userPowerTeam = powerRankings.find((candidate) => candidate.isUser) ?? null;
+  // Win chance only means something against the team you play this week.
+  const myOutlook = isOpponent && scope === "week" ? teamOutlook(league.starters, nowMs) : null;
+  const theirOutlook = isOpponent && scope === "week" && league.opponentTeam?.starters ? teamOutlook(league.opponentTeam.starters, nowMs) : null;
+  const winChance = myOutlook && theirOutlook ? winPercent(winProbability(myOutlook, theirOutlook)) : null;
   const matchupSlotOrder = useMemo(
     () => league.starters.map((player) => player.lineupSlot ?? player.position),
     [league.starters],
@@ -201,17 +210,33 @@ export function LeagueTeamCard({
           <div className="power-team-card-header">
             <div className="power-team-card-heading">
               <h2 id={`power-team-card-title-${team.rosterId}`} className={team.isUser ? "is-user" : ""}>{team.teamName}</h2>
-              <span>{formatRecord(team.record)}{isOpponent ? " · Your opponent this week" : ""}</span>
             </div>
             <button type="button" onClick={onClose} aria-label={`Close ${team.teamName} team card`}>×</button>
           </div>
-          <div className={`power-team-card-summary${activeMode === "dynasty" && team.futurePickValue > 0 ? " has-picks" : ""}`}>
-            <div><span>Power rank</span><strong>#{team.rank}</strong></div>
-            <div>
-              <span>{scope === "week" ? "Projection" : "Roster value"}</span>
-              <strong>{scope === "week" ? points(team.totalValue) : formatWhole(team.totalValue - team.futurePickValue)}</strong>
+          <div className="power-team-card-intro">
+            <div className="card-chips" style={{ marginTop: 0 }}>
+              <span className="depth-chart-tag">{formatRecord(team.record)}</span>
+              {team.isUser ? <Badge variant="secondary" size="compact" className="injury is-you">Yours</Badge> : null}
+              {isOpponent ? <Badge variant="secondary" size="compact" className="injury">Opponent this week</Badge> : null}
             </div>
-            {activeMode === "dynasty" && team.futurePickValue > 0 ? <div><span>Future picks</span><strong>+{formatWhole(team.futurePickValue)}</strong></div> : null}
+            <CardHero
+              ariaLabel={`${team.teamName} headline numbers`}
+              items={[
+                { label: "Power rank", value: `#${team.rank}`, valueTone: team.rank <= 3 ? "good" : undefined, sub: `of ${powerRankings.length} teams` },
+                scope === "week"
+                  ? { label: `Week ${dashboard.week} proj.`, value: points(team.totalValue), sub: !team.isUser && userPowerTeam ? `Yours ${points(userPowerTeam.totalValue)}` : undefined }
+                  : { label: "Roster value", value: formatWhole(team.totalValue - team.futurePickValue) },
+                activeMode === "dynasty" && team.futurePickValue > 0
+                  ? { label: "Future picks", value: `+${formatWhole(team.futurePickValue)}` }
+                  : { label: scope === "week" ? "Roster value" : "Positions", value: scope === "week" ? formatWhole(roster?.players.reduce((sum, player) => sum + (seasonRowsByPlayerId.get(player.playerId)?.value ?? 0), 0) ?? 0) : String(positions.length) },
+              ]}
+            />
+            {winChance === null ? null : (
+              <div className="power-team-card-win">
+                <div><span className="is-you">You · {winChance}% to win</span><span>Them · {Math.round((100 - winChance) * 10) / 10}%</span></div>
+                <div className="power-team-card-win-bar" role="img" aria-label={`Your win chance ${winChance} percent`}><i style={{ flex: winChance }} /><i style={{ flex: 100 - winChance }} /></div>
+              </div>
+            )}
           </div>
           <div className="power-team-card-positions" role="list" aria-label={`${team.teamName} position values`}>
             {positions.map((position) => {

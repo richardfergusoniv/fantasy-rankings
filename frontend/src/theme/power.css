@@ -169,3 +169,12 @@
 .outcomes-now, .outcomes-pf { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .outcomes-proj { font-size: var(--type-body); }
 @media (min-width: 900px) { .outcomes-view { max-width: 920px; } .outcomes-row { grid-template-columns: 32px minmax(0, 1fr) 80px 80px 96px; } }
+.power-team-card-intro { padding: 4px 16px 16px; }
+.power-team-card-intro .card-hero { margin-top: 12px; }
+.power-team-card-win { margin-top: 12px; }
+.power-team-card-win > div:first-child { display: flex; justify-content: space-between; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.power-team-card-win .is-you { color: var(--link); }
+.power-team-card-win-bar { display: flex; gap: 3px; margin-top: 6px; }
+.power-team-card-win-bar i { height: 4px; border-radius: 2px; background: var(--dim); }
+.power-team-card-win-bar i:first-child { background: var(--action); }
+.injury.is-you { background: var(--roster-highlight); color: var(--on-roster-highlight); }
