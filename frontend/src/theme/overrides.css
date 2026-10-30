@@ -185,7 +185,6 @@ a:active { color: var(--link-active); }
 
 /* Matchup's deliberately flat row hierarchy is retained; only its tokens change. */
 .matchup-page .score-team.mine .score-line strong { color: var(--text); }
-.matchup-data-card { box-shadow: var(--shadow-modal); }
 
 /* Player names stay semibold in every section; numeric values keep their existing emphasis. */
 .matchup-page .matchup-name-line strong,

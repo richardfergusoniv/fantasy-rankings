@@ -111,8 +111,7 @@
 .player-search-value strong, .player-search-value small { display: block; }
 .player-search-value strong { font-size: var(--type-body); font-weight: 700; }
 .player-search-value small { margin-top: 2px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.news-card-backdrop { position: fixed; z-index: 1000; inset: 0; display: flex; align-items: center; justify-content: center; padding-block: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-bottom)); background: var(--overlay); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: backdropIn .12s ease-out both; }
-.news-card-modal { width: min(calc(100% - 48px), 480px); max-height: calc(100dvh - 48px); overflow-y: auto; overscroll-behavior: contain; padding: 18px; border: 1px solid var(--hairline); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-modal); animation: newsCardIn .14s cubic-bezier(.2,.7,.2,1) both; }
+.news-card-modal { width: min(calc(100% - 48px), 480px); max-height: calc(100dvh - 48px); overscroll-behavior: contain; padding: 16px; }
 .news-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .news-card-header > div { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 7px; }
 .news-card-header time { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
@@ -124,8 +123,7 @@
 .news-card-modal > a { display: inline-flex; min-height: 44px; align-items: center; margin-top: 15px; color: var(--link); font-size: var(--type-control); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 @keyframes newsCardIn { from { transform: translateY(6px); opacity: .88; } }
 
-.matchup-card-backdrop { position: fixed; z-index: 1000; inset: 0; display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--overlay); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: backdropIn .12s ease-out both; }
-.matchup-data-card { position: relative; width: min(100%, 520px); max-height: min(88dvh, 720px); overflow-y: auto; overscroll-behavior-y: contain; padding: 18px; border: 1px solid var(--hairline); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-modal); animation: newsCardIn .14s cubic-bezier(.2,.7,.2,1) both; }
+.matchup-data-card { position: relative; width: min(100%, 520px); max-height: min(88dvh, 720px); padding: 16px; }
 .matchup-data-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .matchup-data-header h2 { margin: 0; font-size: var(--type-display); line-height: 1.1; letter-spacing: -.02em; }
 .matchup-data-header span { display: block; margin-top: 5px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
@@ -164,8 +162,7 @@
 .matchup-card-status { display: flex; min-height: 44px; align-items: center; gap: 8px; margin-top: 14px; padding: 12px 0; border-block: 1px solid var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 
 @keyframes backdropIn { from { opacity: 0; } }
-.player-detail-backdrop { position: fixed; z-index: 1000; inset: 0; display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--overlay); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: backdropIn .12s ease-out both; }
-.player-detail-sheet { width: min(100%, 560px); max-height: min(88dvh, 760px); overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; touch-action: pan-y pinch-zoom; padding: 18px; border: 1px solid var(--hairline); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-modal); animation: newsCardIn .14s cubic-bezier(.2,.7,.2,1) both; -webkit-overflow-scrolling: touch; will-change: transform; }
+.player-detail-sheet { width: min(100%, 560px); max-height: min(88dvh, 760px); overflow-x: hidden; touch-action: pan-y pinch-zoom; padding: 16px; will-change: transform; }
 .player-selected-chip {
   flex: none;
   display: inline-flex;

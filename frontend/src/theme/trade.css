@@ -91,8 +91,7 @@
 .trade-calculate-button:disabled { border-color: var(--border); background: var(--surface-2); color: var(--dim); cursor: default; }
 .trade-calculate-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .trade-calculate-wrap > span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.trade-result-backdrop { position: fixed; z-index: 1000; inset: 0; display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--overlay); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: backdropIn .12s ease-out both; }
-.trade-result-card { width: min(100%, 620px); max-height: min(88dvh, 820px); overflow-y: auto; overscroll-behavior-y: contain; border: 1px solid var(--hairline); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-modal); animation: newsCardIn .14s cubic-bezier(.2,.7,.2,1) both; -webkit-overflow-scrolling: touch; }
+.trade-result-card { width: min(100%, 620px); max-height: min(88dvh, 820px); }
 .trade-result-header { position: sticky; z-index: 2; top: 0; display: flex; min-height: 62px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 18px; border-bottom: 1px solid var(--hairline); background: var(--surface); }
 .trade-result-header h2 { margin: 0; font-size: var(--type-display); line-height: 1.08; font-weight: 700; letter-spacing: -.02em; }
 .trade-result-header span { display: block; margin-top: 3px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
@@ -100,8 +99,7 @@
 .trade-result-body { padding: 16px 18px 20px; }
 .chart-open-button { display: block; width: 100%; min-height: var(--compact-control-height); margin: 16px 0 0; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); color: var(--dim); font: inherit; font-size: var(--type-control); font-weight: 600; line-height: 1; cursor: pointer; }
 .chart-open-button:disabled { background: var(--surface-2); color: var(--dim); cursor: default; }
-.chart-result-backdrop { position: fixed; z-index: 1000; inset: 0; display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--overlay); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: backdropIn .12s ease-out both; }
-.chart-result-card { width: min(100%, 920px); max-height: min(92dvh, 860px); overflow-y: auto; overscroll-behavior-y: contain; border: 1px solid var(--hairline); border-radius: var(--radius-xl); background: var(--surface); box-shadow: var(--shadow-modal); animation: newsCardIn .14s cubic-bezier(.2,.7,.2,1) both; -webkit-overflow-scrolling: touch; }
+.chart-result-card { width: min(100%, 920px); max-height: min(92dvh, 860px); }
 .chart-result-header { position: sticky; z-index: 2; top: 0; display: flex; min-height: 62px; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 18px; border-bottom: 1px solid var(--hairline); background: var(--surface); }
 .chart-result-header h2 { margin: 0; font-size: var(--type-display); line-height: 1.08; font-weight: 700; letter-spacing: -.02em; }
 .chart-result-header > div:first-child > span { display: block; margin-top: 3px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
