@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { CrossToolBadge, ToolLinks, type CrossToolLink, type ToolLinkItem } from "./tool-links";
 import { formatImpliedTotal } from "./lib/game-line-matchup-link";
 import { useQuery } from "@tanstack/react-query";
@@ -32,7 +32,7 @@ import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { gameLineSummary, type TeamGameLineLike } from "./game-line-summary";
 import { GAME_LINES_STALE_MS, loadNflverseGameLines } from "../../api/_lib/nflverse-game-lines";
-import { ModalPortal, useDialogFocusTrap } from "./shared";
+import { ModalCard } from "./components/modal-card";
 import {
   TRADE_REMOVE_TOAST_ID,
   UNDO_DURATION_MS,
@@ -493,9 +493,7 @@ function kickoffDateLabel(row: { weekday: string; gameday: string }): string | n
 }
 
 export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, toolLinks, gameLines, gameLinesLink, suspended = false }: { matchup: MatchupSelection; season: number; week: number; onClose: () => void; onOpenTeam?: (team: string) => void; toolLinks?: ToolLinkItem[]; gameLines?: readonly TeamGameLineLike[]; /** Badge that opens this game in Tools → Game lines. */ gameLinesLink?: CrossToolLink | null; suspended?: boolean }) {
-  const dialogRef = useRef<HTMLElement | null>(null);
   const [pairingTab, setPairingTab] = useState<"team-offense" | "team-defense">("team-offense");
-  useDialogFocusTrap(dialogRef, onClose, !suspended);
   const tablesQuery = useQuery({
     queryKey: ["pfn-tables"],
     queryFn: () => api.getPfnTables({}),
@@ -597,9 +595,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   const score = scoreQuery.data;
 
   return (
-    <ModalPortal>
-      <div className="matchup-card-backdrop" onClick={onClose}>
-        <article ref={dialogRef} className="matchup-data-card" role="dialog" aria-modal="true" aria-labelledby="matchup-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
+    <ModalCard onClose={onClose} enabled={!suspended} labelledBy="matchup-card-title" backdropClassName="matchup-card-backdrop" className="matchup-data-card">
           <div className="matchup-data-header matchup-data-header-minimal">
             <h2 id="matchup-card-title" className="sr-only">{matchup.team} {matchup.isAway ? "@" : "vs"} {matchup.opponent}</h2>
             <button type="button" onClick={onClose} aria-label="Close matchup data"><CloseGlyph /></button>
@@ -757,9 +753,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
               {!offense || !defense ? <SectionError title="PFN matchup data is incomplete." onRetry={() => { void tablesQuery.refetch(); }} retrying={tablesQuery.isFetching} compact /> : null}
             </>
           )}
-        </article>
-      </div>
-    </ModalPortal>
+    </ModalCard>
   );
 }
 

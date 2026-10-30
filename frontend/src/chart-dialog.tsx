@@ -1,5 +1,6 @@
-import { useRef, type ReactNode } from "react";
-import { ModalPortal, useDialogFocusTrap } from "./shared";
+import type { ReactNode } from "react";
+import { CloseGlyph } from "./components/glyphs";
+import { ModalCard } from "./components/modal-card";
 
 export function ChartDialog({
   isOpen,
@@ -24,22 +25,10 @@ export function ChartDialog({
   className?: string;
   children: ReactNode;
 }) {
-  const dialogRef = useRef<HTMLElement | null>(null);
-  useDialogFocusTrap(dialogRef, onClose, isOpen);
   if (!isOpen) return null;
 
   return (
-    <ModalPortal>
-      <div className="chart-result-backdrop" onClick={onClose}>
-        <article
-          ref={dialogRef}
-          className={["chart-result-card", className].filter(Boolean).join(" ")}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="chart-result-title"
-          tabIndex={-1}
-          onClick={(event) => event.stopPropagation()}
-        >
+    <ModalCard onClose={onClose} labelledBy="chart-result-title" backdropClassName="chart-result-backdrop" className={["chart-result-card", className].filter(Boolean).join(" ")}>
           <div className="chart-result-header">
             <div>
               <h2 id="chart-result-title">{title}</h2>
@@ -52,13 +41,11 @@ export function ChartDialog({
                 </span>
               ) : null}
               <button type="button" onClick={onClose} aria-label={closeLabel}>
-                ×
+                <CloseGlyph />
               </button>
             </div>
           </div>
           <div className="chart-result-body">{children}</div>
-        </article>
-      </div>
-    </ModalPortal>
+    </ModalCard>
   );
 }
