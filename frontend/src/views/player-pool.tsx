@@ -55,6 +55,7 @@ import { leaguePowerTeamForPlayer } from "../league-roster";
 import { WindowVirtualList } from "../virtual-list";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
+import { ListPagination } from "../components/state-blocks";
 
 /** Compact rankings/waivers row height (matches former density=compact). */
 export const RANKINGS_ROW_HEIGHT = 56;
@@ -1114,9 +1115,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             }}
             </WindowVirtualList>
             {rows.length > 0 && visibleRowCount < rows.length ? (
-              <div className="list-pagination-row">
-                <button type="button" onClick={() => setVisibleRowCount((count) => count + 120)}>Show more</button>
-              </div>
+              <ListPagination shown={visibleRowCount} total={rows.length} step={120} onMore={() => setVisibleRowCount((count) => count + 120)} />
             ) : null}
           </div>
           {rows.length === 0 ? (

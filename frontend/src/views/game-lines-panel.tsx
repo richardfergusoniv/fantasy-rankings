@@ -46,6 +46,7 @@ import { formatDecimal } from "../lib/format-number";
 import { Badge } from "@/components/ui/badge";
 import { CrossToolBadge, PlayerNameLink, type CrossToolLink } from "../tool-links";
 import type { PlayerLinkResolver } from "../tool-player-link";
+import { EmptyState, LoadingBlock } from "../components/state-blocks";
 
 export type GameLineMatchupLink = (matchup: MatchupSelection) => CrossToolLink | null;
 
@@ -836,11 +837,9 @@ export function GameLinesPanel({
               compact
             />
           ) : propsLoading ? (
-            <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading props…">
-              <span>Loading…</span>
-            </section>
+            <LoadingBlock label="Loading props…" />
           ) : propRows.length === 0 ? (
-            <p className="monitor-empty">No props</p>
+            <EmptyState title="No props posted for this game yet" detail="Books usually post player props a few days before kickoff." />
           ) : (
             <div className="props-scroll">
               <table className="props-table" role="table">

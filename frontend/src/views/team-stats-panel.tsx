@@ -29,6 +29,7 @@ import { formatPercent, formatPoints, formatWhole } from "../lib/format-number";
 import { SegmentedControl } from "../shared";
 import { PlayerNameLink } from "../tool-links";
 import type { PlayerLinkResolver } from "../tool-player-link";
+import { EmptyState, LoadingBlock } from "../components/state-blocks";
 
 /**
  * Cell shading for the usage grid: one blue scale (green and red stay
@@ -540,11 +541,9 @@ export function TeamStatsPanel({
           compact
         />
       ) : loading ? (
-        <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading Team stats…">
-          <span>Loading…</span>
-        </section>
+        <LoadingBlock label="Loading team stats…" />
       ) : rows.length === 0 ? (
-        <p className="monitor-empty">No players</p>
+        <EmptyState title="No stats for this team yet" detail="Stats appear after the team's first game." />
       ) : (
         <>
           <div className="team-stats-chart-card">
