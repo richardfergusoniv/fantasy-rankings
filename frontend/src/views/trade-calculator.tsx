@@ -329,7 +329,10 @@ export function TradeValueDialog({
     ? { text: "Even trade", tone: undefined }
     : viewerSide === "give"
       ? { text: `You ${giveWins ? "win" : "lose"} by ${formatWhole(gapSize)}`, tone: giveWins ? "good" as const : "bad" as const }
-      : { text: `${giveWins ? giveLabel : getLabel} wins by ${formatWhole(gapSize)}`, tone: undefined };
+      : getLabel === "You get" && giveLabel !== "You give"
+        // Multi-team trade: no single counterpart, so judge the selected team only.
+        ? { text: `${giveLabel} ${giveWins ? "gains" : "loses"} ${formatWhole(gapSize)}`, tone: undefined }
+        : { text: `${giveWins ? giveLabel : getLabel} wins by ${formatWhole(gapSize)}`, tone: undefined };
   const sideHeading = (label: string, fallback: string) => (label === fallback ? label : `${label} sends`);
   const columnHeight = (total: number, count: number): number => {
     if (count === 0) return 48;
