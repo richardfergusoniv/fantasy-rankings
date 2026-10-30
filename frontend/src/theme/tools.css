@@ -909,25 +909,24 @@
   scroll-snap-align: start;
   display: grid;
   align-content: center;
-  gap: 4px;
+  gap: 2px;
   min-height: 76px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
   font: inherit;
   text-align: left;
+  cursor: pointer;
 }
 .game-slate-tile.is-all {
-  cursor: pointer;
   place-content: center;
 }
 .game-slate-tile:hover {
   border-color: var(--border);
 }
-.game-slate-tile:focus-within,
-.game-slate-tile.is-all:focus-visible {
+.game-slate-tile:focus-visible {
   outline: 2px solid var(--link);
   outline-offset: 2px;
 }
@@ -944,28 +943,6 @@
   line-height: 1.2;
   white-space: nowrap;
 }
-.game-slate-matchup-link {
-  justify-self: start;
-  min-height: 26px;
-  text-decoration: none;
-}
-.game-slate-matchup-link .matchup-reference-button-label {
-  min-height: 20px;
-  padding: 1px 5px 0;
-  font-size: var(--type-caption);
-}
-.game-slate-pick {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
 .game-slate-kickoff,
 .game-slate-lines {
   color: var(--dim);
@@ -975,6 +952,7 @@
   white-space: nowrap;
   font-variant-numeric: lining-nums tabular-nums;
 }
+.game-slate-tile[data-selected] .game-slate-kickoff,
 .game-slate-tile[data-selected] .game-slate-lines {
   color: var(--text);
 }
@@ -985,20 +963,28 @@
 }
 .game-board {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
+  gap: 14px;
   padding: 16px 20px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
   background: var(--surface);
   font-variant-numeric: lining-nums tabular-nums;
 }
-.game-board dl {
-  margin: 0;
-}
+.game-board dl,
 .game-board dd {
   margin: 0;
+}
+.game-board-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.game-board-teams {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
 }
 .game-board-team {
   display: grid;
@@ -1010,35 +996,45 @@
   text-align: right;
 }
 .game-board-team strong,
-.game-board-team-link .matchup-reference-button-label {
+.game-board .game-board-team-link .matchup-reference-button-label {
   font-size: var(--type-display);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -.02em;
   line-height: 1;
 }
 .game-board-team-link {
-  min-height: 0;
+  justify-self: start;
+  min-height: 44px;
   text-decoration: none;
 }
-.game-board-team-link .matchup-reference-button-label {
-  min-height: 36px;
-  padding: 6px 10px 5px;
-  border-radius: var(--radius-sm);
+/* The big team name is the link: plain text with the amber chevron beside it. */
+.game-board .game-board-team-link .matchup-reference-button-label {
+  min-height: 44px;
+  padding: 0 24px 0 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+}
+.game-board .game-board-team-link .matchup-reference-arrow {
+  right: 0;
+  color: var(--link);
+  font-size: var(--type-section);
+  font-weight: 500;
 }
 .game-board-team.is-home .game-board-team-link {
   justify-self: end;
 }
+.game-board .game-board-team.is-home .game-board-team-link .matchup-reference-button-label {
+  padding: 0 24px 0 0;
+}
 .game-board-implied {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
+  display: grid;
+  gap: 2px;
   margin: 0;
 }
-.game-board-team.is-home .game-board-implied {
-  justify-content: flex-end;
-}
-.game-board-implied > span {
+.game-board-implied > span,
+.game-board dt {
   color: var(--dim);
   font-size: var(--type-caption);
   font-weight: 700;
@@ -1046,62 +1042,63 @@
   text-transform: uppercase;
 }
 .game-board-implied > strong {
-  font-size: var(--type-section);
+  font-size: 32px;
   font-weight: 800;
   letter-spacing: -.02em;
-  line-height: 1;
+  line-height: 1.05;
 }
-.game-board-team dl {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 12px;
-}
-.game-board-team.is-home dl {
-  justify-content: flex-end;
-}
-.game-board-team dl div,
-.game-board-market dl div {
-  display: flex;
-  gap: 5px;
-  align-items: baseline;
-}
-.game-board dt {
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 700;
-  letter-spacing: .02em;
-}
-.game-board-team dd {
-  font-size: var(--type-control);
-  font-weight: 600;
+.game-board-implied > strong.is-leading {
+  color: var(--action);
 }
 .game-board-market {
   display: grid;
   justify-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding-top: 50px;
   text-align: center;
 }
-.game-board-kickoff {
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 600;
-}
-.game-board-market dl {
-  display: flex;
-  gap: 20px;
-}
-.game-board-market dl div {
-  flex-direction: column;
-  align-items: center;
+.game-board-market div {
+  display: grid;
   gap: 2px;
 }
-.game-board-market dt {
-  text-transform: uppercase;
-}
 .game-board-market dd {
-  font-size: var(--type-section);
+  font-size: var(--type-body);
   font-weight: 700;
   white-space: nowrap;
+}
+.game-board-split {
+  display: flex;
+  gap: 3px;
+}
+.game-board-split i {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--action);
+}
+.game-board-split i + i {
+  background: var(--dim);
+}
+.game-board-compares {
+  border-bottom: 1px solid var(--hairline);
+}
+.game-board-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  border-top: 1px solid var(--hairline);
+  font-size: var(--type-body);
+  font-weight: 600;
+}
+.game-board-compare b {
+  color: var(--dim);
+  font-size: var(--type-caption);
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.game-board-compare span:last-child {
+  text-align: right;
 }
 @media (max-width: 759px) {
   /* The rail runs edge to edge on a phone; its chevron gutter stays on screen. */
@@ -1128,27 +1125,11 @@
     background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%;
   }
   .game-board {
-    gap: 8px;
-    padding: 14px 12px;
+    padding: 14px 16px;
   }
   .game-board-team strong,
-  .game-board-team-link .matchup-reference-button-label {
-    font-size: 20px;
-  }
-  .game-board-implied > strong {
-    font-size: var(--type-body);
-  }
-  .game-board-team dl {
-    flex-direction: column;
-  }
-  .game-board-team.is-home dl div {
-    justify-content: flex-end;
-  }
-  .game-board-market dl {
-    gap: 12px;
-  }
-  .game-board-market dd {
-    font-size: var(--type-body);
+  .game-board .game-board-team-link .matchup-reference-button-label {
+    font-size: 24px;
   }
 }
 
