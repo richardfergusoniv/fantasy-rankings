@@ -1037,13 +1037,11 @@
 .game-board dt {
   color: var(--dim);
   font-size: var(--type-caption);
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  font-weight: 600;
 }
 .game-board-implied > strong {
-  font-size: 32px;
-  font-weight: 800;
+  font-size: var(--type-display);
+  font-weight: 700;
   letter-spacing: -.02em;
   line-height: 1.05;
 }
@@ -1129,7 +1127,7 @@
   }
   .game-board-team strong,
   .game-board .game-board-team-link .matchup-reference-button-label {
-    font-size: 24px;
+    font-size: var(--type-display);
   }
 }
 

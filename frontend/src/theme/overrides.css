@@ -44,9 +44,8 @@ h3 { font-size: var(--type-section); font-weight: 600; }
 .scatter-frame,
 .power-radar,
 .news-status {
-  border-color: var(--border);
+  border-color: var(--hairline);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-control);
 }
 .news-card-modal,
 .matchup-data-card,

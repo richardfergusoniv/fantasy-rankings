@@ -1229,7 +1229,7 @@ function ScatterPlot({
 }
 
 // Omit --chart-1 so rostered snap lines stay distinct from the waiver amber series.
-const SNAP_TREND_COLORS = ["var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "#c4b5fd", "#f9a8d4", "#67e8f9"];
+const SNAP_TREND_COLORS = ["var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-6)", "var(--chart-7)", "var(--chart-8)"];
 
 function SnapShareTrendChart({
   series,
