@@ -55,6 +55,7 @@ import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-f
 import { perGame, perGameRank } from "./team-per-game";
 import { ListPagination } from "../components/state-blocks";
 import { ChevronGlyph, CloseGlyph } from "../components/glyphs";
+import { ModalCard } from "../components/modal-card";
 
 /** Compact rankings/waivers row height (matches former density=compact). */
 export const RANKINGS_ROW_HEIGHT = 56;
