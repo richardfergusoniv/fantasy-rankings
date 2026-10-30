@@ -9,9 +9,9 @@
  *   payload validator — dashboard-derived objects are not eligible just
  *   because they contain shared fields.
  * - Scopes are slug-like (`2026:9`, `current`), never user identifiers; keys
- *   are `shared:<dataset>:<scope>`.
- * - Writes are serialized per key and monotonic in source age: an older
- *   pipeline run cannot overwrite a newer publication.
+ *   are `shared:<dataset>:<scope>:<source-version>`.
+ * - Immutable source-version keys prevent older jobs overwriting newer boards.
+ *   Readers obtain the current version from a tiny durable metadata lookup.
  * - Runtime Cache is ephemeral and byte-billed, so every operation is
  *   nonfatal: the Postgres `source_cache` row written by the ingest handler
  *   remains the durable source, and reads fall back to it (counted as
@@ -70,7 +70,6 @@ export function sharedBoardDatasetIds(): string[] {
 type RuntimeSharedCache = {
   get(key: string): Promise<unknown>;
   set(key: string, value: unknown, options: { ttl: number; name: string }): Promise<unknown>;
-  delete?(key: string): Promise<unknown>;
 };
 
 function defaultRuntimeSharedCache(): RuntimeSharedCache {
@@ -80,9 +79,6 @@ function defaultRuntimeSharedCache(): RuntimeSharedCache {
     },
     async set(key, value, options) {
       await getCache({ namespace: SHARED_CACHE_NAMESPACE }).set(key, value, options);
-    },
-    async delete(key) {
-      await getCache({ namespace: SHARED_CACHE_NAMESPACE }).delete(key);
     },
   };
 }
@@ -118,18 +114,14 @@ function l1Set(key: string, envelope: SharedBoardEnvelope, bytes: number): void 
   }
 }
 
-// --- serialized writes --------------------------------------------------------
-// A per-key promise chain serializes publications so two pipeline runs for the
-// same board cannot interleave their read-check-write sequence.
-const writeChains = new Map<string, Promise<unknown>>();
-
-export function sharedBoardCacheKey(dataset: string, scope: string): string {
-  return `shared:${dataset}:${scope}`;
+/** Immutable blobs; the durable row, not a process-local pointer, chooses the version. */
+export function sharedBoardCacheKey(dataset: string, scope: string, sourceAgeMs: number): string {
+  return `shared:${dataset}:${scope}:${sourceAgeMs}`;
 }
 
 export type SharedBoardPublishResult =
   | { published: true; key: string; encodedBytes: number }
-  | { published: false; key: string; reason: "unknown_dataset" | "invalid_scope" | "invalid_payload" | "oversized" | "stale_source" | "preview" | "runtime_error" };
+  | { published: false; key: string; reason: "unknown_dataset" | "invalid_scope" | "invalid_payload" | "oversized" | "preview" | "runtime_error" };
 
 /**
  * Publish a shared board into Runtime Cache after its durable write committed.
@@ -142,13 +134,13 @@ export async function publishSharedBoard(
   sourceAgeMs: number,
   runtime: RuntimeSharedCache = defaultRuntimeSharedCache(),
 ): Promise<SharedBoardPublishResult> {
-  const key = sharedBoardCacheKey(datasetId, scope);
+  const key = sharedBoardCacheKey(datasetId, scope, sourceAgeMs);
   const dataset = sharedBoardDatasets.get(datasetId);
   if (!dataset) return { published: false, key, reason: "unknown_dataset" };
   if (!SCOPE_PATTERN.test(scope) || scope.toLowerCase().includes("user")) {
     return { published: false, key, reason: "invalid_scope" };
   }
-  if (!dataset.validate(payload)) {
+  if (!Number.isFinite(sourceAgeMs) || !dataset.validate(payload)) {
     countCacheMetric("shared_board.publish_rejected");
     return { published: false, key, reason: "invalid_payload" };
   }
@@ -161,43 +153,22 @@ export async function publishSharedBoard(
     publishedAtMs: Date.now(),
     payload,
   };
-  const encodedBytes = JSON.stringify(envelope).length;
+  const encodedBytes = Buffer.byteLength(JSON.stringify(envelope), "utf8");
   if (encodedBytes > dataset.maxEncodedBytes || encodedBytes > RUNTIME_ITEM_HARD_CAP_BYTES) {
     countCacheMetric("shared_board.publish_rejected");
     return { published: false, key, reason: "oversized" };
   }
 
-  const previous = writeChains.get(key) ?? Promise.resolve();
-  const work = previous.catch(() => undefined).then(async (): Promise<SharedBoardPublishResult> => {
-    try {
-      // Monotonic in source age: an older job must not replace newer state.
-      const existing = await runtime.get(key).catch(() => null);
-      if (existing && typeof existing === "object") {
-        const age = (existing as Partial<SharedBoardEnvelope>).sourceAgeMs;
-        if (typeof age === "number" && age >= envelope.sourceAgeMs) {
-          return { published: false, key, reason: "stale_source" };
-        }
-      }
-      await runtime.set(key, envelope, { ttl: dataset.ttlSeconds, name: `shared-board-${datasetId}` });
-      countCacheMetric("shared_board.publish");
-      sampleCacheBytes("shared_board.publish_bytes", encodedBytes);
-      l1Set(key, envelope, encodedBytes);
-      return { published: true, key, encodedBytes };
-    } catch {
-      countCacheMetric("shared_board.cache.error");
-      // The durable row is already newer than whatever the cache holds. Drop
-      // the cached copy so readers fall back to that row instead of serving
-      // the previous board until its TTL runs out.
-      l1.delete(key);
-      await runtime.delete?.(key).catch(() => undefined);
-      return { published: false, key, reason: "runtime_error" };
-    }
-  });
-  writeChains.set(key, work);
-  void work.finally(() => {
-    if (writeChains.get(key) === work) writeChains.delete(key);
-  });
-  return work;
+  try {
+    await runtime.set(key, envelope, { ttl: dataset.ttlSeconds, name: `shared-board-${datasetId}` });
+    countCacheMetric("shared_board.publish");
+    sampleCacheBytes("shared_board.publish_bytes", encodedBytes);
+    l1Set(key, envelope, encodedBytes);
+    return { published: true, key, encodedBytes };
+  } catch {
+    countCacheMetric("shared_board.cache.error");
+    return { published: false, key, reason: "runtime_error" };
+  }
 }
 
 export type SharedBoardReadResult = {
@@ -208,7 +179,7 @@ export type SharedBoardReadResult = {
 /**
  * Read a shared board: L1 → Runtime Cache → the caller's durable fallback
  * (typically the `source_cache` row the ingest handler wrote). The durable
- * fallback is the intended eviction path — it is bounded (one row lookup) and
+ * fallback is the intended eviction path — it is bounded (one payload lookup after the metadata probe) and
  * its result repopulates L1 only, so a cold instance never amplifies runtime
  * writes on the read path.
  */
@@ -216,27 +187,34 @@ export async function readSharedBoard(
   datasetId: string,
   scope: string,
   durableLoad: () => Promise<{ payload: unknown; sourceAgeMs: number } | null>,
+  durableVersion: () => Promise<number | null>,
   runtime: RuntimeSharedCache = defaultRuntimeSharedCache(),
 ): Promise<SharedBoardReadResult> {
   const dataset = sharedBoardDatasets.get(datasetId);
   if (!dataset) return { envelope: null, source: "miss" };
-  const key = sharedBoardCacheKey(datasetId, scope);
-
-  const local = l1Get(key);
-  if (local) {
-    countCacheMetric("shared_board.cache.hit");
-    return { envelope: local, source: "l1" };
-  }
-
+  // A failed/evicted publication cannot hide a newer committed durable board.
+  // Read metadata first; do not use a stale process-local latest-version pointer.
   try {
-    const remote = await runtime.get(key);
-    if (remote && typeof remote === "object" && dataset.validate((remote as SharedBoardEnvelope).payload)) {
-      const envelope = remote as SharedBoardEnvelope;
-      countCacheMetric("shared_board.cache.hit");
-      l1Set(key, envelope, JSON.stringify(envelope).length);
-      return { envelope, source: "runtime" };
+    const version = await durableVersion();
+    if (version !== null && Number.isFinite(version)) {
+      const key = sharedBoardCacheKey(datasetId, scope, version);
+      const local = l1Get(key);
+      if (local) {
+        countCacheMetric("shared_board.cache.hit");
+        return { envelope: local, source: "l1" };
+      }
+      const remote = runtimePreviewDisabled() ? null : await runtime.get(key);
+      if (remote && typeof remote === "object") {
+        const envelope = remote as SharedBoardEnvelope;
+        if (envelope.dataset === datasetId && envelope.scope === scope
+          && envelope.sourceAgeMs === version && dataset.validate(envelope.payload)) {
+          countCacheMetric("shared_board.cache.hit");
+          l1Set(key, envelope, Buffer.byteLength(JSON.stringify(envelope), "utf8"));
+          return { envelope, source: "runtime" };
+        }
+      }
+      countCacheMetric("shared_board.cache.miss");
     }
-    countCacheMetric("shared_board.cache.miss");
   } catch {
     countCacheMetric("shared_board.cache.error");
   }
@@ -254,7 +232,7 @@ export async function readSharedBoard(
       publishedAtMs: Date.now(),
       payload: durable.payload,
     };
-    l1Set(key, envelope, JSON.stringify(envelope).length);
+    l1Set(sharedBoardCacheKey(datasetId, scope, durable.sourceAgeMs), envelope, Buffer.byteLength(JSON.stringify(envelope), "utf8"));
     return { envelope, source: "durable" };
   } catch {
     return { envelope: null, source: "miss" };
@@ -263,5 +241,4 @@ export async function readSharedBoard(
 
 export function resetSharedBoardCachesForTests(): void {
   l1.clear();
-  writeChains.clear();
 }

@@ -34,8 +34,9 @@ client ──► GET /api/dashboard[ /section]
   (allowlisted `id`, `ttlSeconds`, `maxEncodedBytes`, schema validator).
   Currently: `sleeper-picks`.
 - Publish path: `POST /api/ingest/sleeper-picks` → durable `source_cache`
-  upsert → `publishSharedBoard` (CRON_SECRET auth, serialized per key,
-  monotonic in `sourceAgeMs`, skipped on `VERCEL_ENV=preview`).
+  monotonic upsert → `publishSharedBoard` (CRON_SECRET auth, immutable
+  source-version keys, skipped on `VERCEL_ENV=preview`). Readers first query
+  durable version metadata so failed cache publications cannot hide newer data.
 - Read path: L1 → Runtime Cache → one `source_cache` row (counted as
   `shared_board.fallback_read`). Runtime failures are nonfatal everywhere.
 - To add a board: register the dataset, publish from its ingest handler

@@ -135,6 +135,12 @@ async function loadSleeperPickBoard(
     const board = parseStoredSleeperPicks(decodeSourceCachePayload(row.payload));
     if (!board) return null;
     return { payload: board, sourceAgeMs: new Date(board.pulledAt).getTime() };
+  }, async () => {
+    const rows = await db.select({ fetchedAt: schema.sourceCache.fetchedAt })
+      .from(schema.sourceCache)
+      .where(eq(schema.sourceCache.cacheKey, sleeperPicksCacheKey(season, week)))
+      .limit(1);
+    return rows[0]?.fetchedAt.getTime() ?? null;
   });
   const board = envelope ? parseStoredSleeperPicks(envelope.payload) : null;
   if (!board) return { byKey: new Map(), pulledAt: null };

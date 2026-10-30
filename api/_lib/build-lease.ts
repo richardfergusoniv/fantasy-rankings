@@ -126,6 +126,29 @@ export class BuildLeaseLostError extends Error {
   }
 }
 
+export type BuildPublicationTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Lock ownership through commit: a takeover cannot interleave with publication. */
+export async function publishUnderBuildLease<T>(
+  resource: string,
+  holder: string,
+  publish: (tx: BuildPublicationTransaction) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    const rows = await tx.execute(sql`
+      SELECT resource FROM build_leases
+      WHERE resource = ${resource} AND holder = ${holder}
+        AND status = 'running' AND expires_at > clock_timestamp()
+      FOR UPDATE
+    `);
+    if (rows.length === 0) {
+      countCacheMetric("build_lease.lost_before_publish");
+      throw new BuildLeaseLostError(resource, holder);
+    }
+    return publish(tx);
+  });
+}
+
 /** True while `row` is a live lease still owned by `holder`. */
 export function leaseIsHeld(
   row: BuildLeaseRow | null,

@@ -75,4 +75,33 @@ maybe("build_leases against real Postgres", () => {
     expect((await drizzleBuildLeaseStore.read(r4))?.status).toBe("failed");
     expect((await drizzleBuildLeaseStore.read(r4))?.lastError).toBe("boom");
   });
+  it("holds off takeover through publication, even after TTL expiry", async () => {
+    const { drizzleBuildLeaseStore, publishUnderBuildLease } = await import("./build-lease.js");
+    const { sql } = await import("drizzle-orm");
+    const key = `${resource}-publish`;
+    await drizzleBuildLeaseStore.claim(key, "old", 60_000);
+    let release!: () => void;
+    let locked!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const entered = new Promise<void>((resolve) => { locked = resolve; });
+    const publication = publishUnderBuildLease(key, "old", async (tx) => {
+      // Expire while holding the row lock. Another holder must wait for commit.
+      await tx.execute(sql`UPDATE build_leases SET expires_at = clock_timestamp() - interval '1 second' WHERE resource = ${key}`);
+      locked();
+      await gate;
+      return "published";
+    });
+    await entered;
+    let claimed = false;
+    const takeover = drizzleBuildLeaseStore.claim(key, "new", 60_000).then((value) => { claimed = value; return value; });
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    expect(claimed).toBe(false);
+    release();
+    expect(await publication).toBe("published");
+    expect(await takeover).toBe(true);
+    let wrote = false;
+    await expect(publishUnderBuildLease(key, "old", async () => { wrote = true; })).rejects.toThrow("build lease lost");
+    expect(wrote).toBe(false);
+  });
+
 });
