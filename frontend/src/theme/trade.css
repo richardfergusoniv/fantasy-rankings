@@ -40,7 +40,7 @@
 .historical-deal-player:hover { color: var(--link); text-decoration-color: currentColor; }
 .historical-deal-player:focus-visible { color: var(--link); outline: 2px solid var(--ring); outline-offset: 2px; text-decoration-color: currentColor; }
 .historical-deal-asset small { margin-top: 2px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.historical-deal-asset em { width: fit-content; margin-top: 4px; padding: 2px 5px; border-radius: var(--radius-xs); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-style: normal; font-weight: 700; }
+.historical-deal-asset em { width: fit-content; margin-top: 4px; padding: 2px 5px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-style: normal; font-weight: 700; }
 .historical-deal-asset > b { font-size: var(--type-body); font-variant-numeric: tabular-nums; }
 .historical-deal-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 2px 0; border-top: 1px solid var(--border); }
 .historical-deal-total span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
