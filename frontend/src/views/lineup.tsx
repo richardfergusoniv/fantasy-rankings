@@ -81,11 +81,6 @@ export function MatchupPlayer({
         <span className="matchup-name-line">
           <strong>{player.name}</strong>
           {selected ? <span className="player-selected-chip">Selected</span> : null}
-          {isSwappedIn || isDemoted ? (
-            <span className={`matchup-substitution-tag ${isSwappedIn ? "in" : "out"}`} aria-hidden="true">
-              {isSwappedIn ? "IN" : "OUT"}
-            </span>
-          ) : null}
           {player.injuryStatus ? (
             <DesignationBadge code={sleeperInjuryTag(player.injuryStatus)} label={`Injury status: ${player.injuryStatus}`} title={player.injuryStatus} tone="warning" />
           ) : null}
