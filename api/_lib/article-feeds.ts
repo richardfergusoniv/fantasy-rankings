@@ -1333,9 +1333,10 @@ export async function refreshArticleFeeds(options?: {
           remainingMs: deadline - Date.now(),
           signal: options?.signal,
         });
-        if (premium.failed && !premium.fetched) {
-          // Budget exhausted before the page fetch — keep prior validators so
-          // the next poll re-reads the feed instead of 304-skipping forever.
+        if (premium.failed) {
+          // Budget exhausted or page fetch failed — keep prior validators so
+          // the next poll re-reads the feed and retries the item instead of
+          // 304-skipping forever after a transient failure.
           premiumDeferred = true;
           premiumSkipped += 1;
           continue;
