@@ -434,7 +434,6 @@ export function PlayerDetailSheet({
   leagueId,
   formatKey,
   leagueSize,
-  mode,
   analytics,
   analyticsLoading = false,
   newsItems,
@@ -442,7 +441,6 @@ export function PlayerDetailSheet({
   newsLoading = false,
   newsError = false,
   onRetryNews,
-  onModeChange,
   onOpenTeam,
   onBack,
   canGoBack,
@@ -467,7 +465,6 @@ export function PlayerDetailSheet({
   leagueSize?: number;
   /** Starter this running back backs up on the depth chart, when he is a handcuff. */
   handcuffTo?: string | null;
-  mode: "details" | "chart";
   analytics: Dashboard["analytics"];
   analyticsLoading?: boolean;
   newsItems: PlayerNewsItem[];
@@ -475,7 +472,6 @@ export function PlayerDetailSheet({
   newsLoading?: boolean;
   newsError?: boolean;
   onRetryNews?: () => void;
-  onModeChange?: (mode: "details" | "chart") => void;
   /** Open this player's NFL team card. */
   onOpenTeam?: (team: string) => void;
   onBack: () => void;
@@ -682,8 +678,6 @@ export function PlayerDetailSheet({
   });
   const valueHistory = historyQuery.data?.series.find((series) => series.playerId === player.playerId);
 
-  const weeklyWidth = player.weeklyProjection === null ? 0 : Math.min(100, Math.max(4, player.weeklyProjection / 30 * 100));
-  const valueWidth = player.seasonValue === null ? 0 : Math.min(100, Math.max(4, player.seasonValue / 10_000 * 100));
   const positionLabel = player.position === "DEF" ? "DST" : player.position;
   const tierLabel = positionTierLabel(player.position, player.weeklyRank, leagueSize);
   const profileLabel = useProfileTag(leagueId, player.playerId, player.position);
@@ -750,39 +744,23 @@ export function PlayerDetailSheet({
           </TabsList>
         </Tabs>
         {activeTab === "overview" ? <div id="player-detail-overview-panel" role="tabpanel" aria-labelledby="player-detail-overview-tab">
-        {onModeChange ? (
-          <SegmentedControl
-            className="player-detail-mode-toggle"
-            value={mode}
-            onChange={onModeChange}
-            label={`${player.name} detail view`}
-            options={[{ value: "details", label: "Details" }, { value: "chart", label: "Chart" }]}
-          />
-        ) : null}
-        {mode === "chart" ? (
-          <div className="player-chart-peek">
-            <div><span>Week {week} {playerPointsLabel(player)}</span><i><b style={{ width: `${weeklyWidth}%` }} /></i><strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong></div>
-            <div><span>Season-long market value</span><i><b style={{ width: `${valueWidth}%` }} /></i><strong>{player.seasonValue === null ? "—" : formatWhole(player.seasonValue)}</strong></div>
-          </div>
-        ) : (
-          <div className="player-detail-values">
-            <div>
-              <span>Week {week} {playerPointsLabel(player)}</span>
-              <div className="player-detail-value-row">
-                <strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong>
-                <small>{player.weeklyProjection === null ? "No weekly projection" : player.weeklyRank === null ? "No weekly rank" : <>{positionLabel} <span className={rankToneClassName(player.weeklyRank)}>#{player.weeklyRank}</span></>}</small>
-              </div>
-            </div>
-            <div>
-              <span>Season-long value</span>
-              <div className="player-detail-value-row">
-                <strong>{player.seasonValue === null ? "—" : formatWhole(player.seasonValue)}</strong>
-                {player.seasonValue !== null && player.movement30Day !== null ? <span className={`player-detail-delta ${player.movement30Day < 0 ? "is-down" : player.movement30Day > 0 ? "is-up" : ""}`} title={movementLabel(player.movement30Day)}>{player.movement30Day !== 0 ? <MoveTriangle direction={player.movement30Day < 0 ? "down" : "up"} /> : null}{Number.isFinite(player.movement30Day) ? formatPercent(Math.abs(player.movement30Day)) : "from 0"}</span> : player.seasonValue !== null ? <span className="player-detail-delta">{movementLabel(null)}</span> : null}
-                <small>{player.seasonRank === null ? "No season rank" : <>{positionLabel} <span className={rankToneClassName(player.seasonRank)}>#{player.seasonRank}</span></>}</small>
-              </div>
+        <div className="player-detail-values">
+          <div>
+            <span>Week {week} {playerPointsLabel(player)}</span>
+            <div className="player-detail-value-row">
+              <strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong>
+              <small>{player.weeklyProjection === null ? "No weekly projection" : player.weeklyRank === null ? "No weekly rank" : <>{positionLabel} <span className={rankToneClassName(player.weeklyRank)}>#{player.weeklyRank}</span></>}</small>
             </div>
           </div>
-        )}
+          <div>
+            <span>Season-long value</span>
+            <div className="player-detail-value-row">
+              <strong>{player.seasonValue === null ? "—" : formatWhole(player.seasonValue)}</strong>
+              {player.seasonValue !== null && player.movement30Day !== null ? <span className={`player-detail-delta ${player.movement30Day < 0 ? "is-down" : player.movement30Day > 0 ? "is-up" : ""}`} title={movementLabel(player.movement30Day)}>{player.movement30Day !== 0 ? <MoveTriangle direction={player.movement30Day < 0 ? "down" : "up"} /> : null}{Number.isFinite(player.movement30Day) ? formatPercent(Math.abs(player.movement30Day)) : "from 0"}</span> : player.seasonValue !== null ? <span className="player-detail-delta">{movementLabel(null)}</span> : null}
+              <small>{player.seasonRank === null ? "No season rank" : <>{positionLabel} <span className={rankToneClassName(player.seasonRank)}>#{player.seasonRank}</span></>}</small>
+            </div>
+          </div>
+        </div>
         {trending && (trending.adds !== null || trending.drops !== null) ? (
           <div className="player-trending" aria-label="Sleeper adds and drops">
             <div><span>Adds</span><strong className="is-up">{trending.adds === null ? "—" : `+${formatCompactCount(trending.adds)}`}</strong></div>

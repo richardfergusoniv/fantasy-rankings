@@ -70,7 +70,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 
 @media (prefers-reduced-motion: reduce) {
   .spin, .animate-spin, .animate-pulse, .loading-shimmer::after, .player-detail-backdrop, .player-detail-sheet, .player-detail-content, .news-card-backdrop, .news-card-modal, .matchup-card-backdrop, .matchup-data-card, .trade-result-backdrop, .trade-result-card, .chart-result-backdrop, .chart-result-card, .power-team-card-backdrop, .power-team-card, .ticker-track, [data-slot="dialog-overlay"], [data-slot="dialog-content"] { animation: none; }
-  .segment-thumb, .matchup-row, .player-detail-sheet, .player-detail-content, .player-chart-peek i b, .bench-section summary svg, .trade-balance-track span, .percentile-bar > i, .comparison-bar > i { transition: none; }
+  .segment-thumb, .matchup-row, .player-detail-sheet, .player-detail-content, .bench-section summary svg, .trade-balance-track span, .percentile-bar > i, .comparison-bar > i { transition: none; }
   .ticker-viewport { overflow-x: auto; scrollbar-width: none; }
   .ticker-viewport::-webkit-scrollbar { display: none; }
   .ticker-copy { display: none; }

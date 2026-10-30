@@ -337,7 +337,7 @@ describe("Data marks on light surfaces", () => {
 
   it("does not draw data marks with the fixed accent amber", () => {
     const css = readTheme();
-    const marks = [".tier-cliff-bar i", ".boom-bust-projection", ".player-chart-peek i b", ".boom-bust-median-mark"];
+    const marks = [".tier-cliff-bar i", ".boom-bust-projection", ".boom-bust-median-mark"];
     for (const selector of marks) {
       const rule = css.split("\n").find((line) => line.startsWith(selector));
       expect(rule, selector).toBeDefined();

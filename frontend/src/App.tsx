@@ -1293,7 +1293,6 @@ export function App() {
       formatKey={league.seasonLongFormat.key}
       leagueSize={league.seasonLongFormat.numTeams}
       handcuffTo={sheetHandcuffTo}
-      mode="details"
       analytics={dashboard.analytics}
       analyticsLoading={analyticsLoading}
       sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)}
