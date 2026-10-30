@@ -46,8 +46,8 @@ import { formatDecimal } from "../lib/format-number";
 import { Badge } from "@/components/ui/badge";
 import { CrossToolBadge, PlayerNameLink, type CrossToolLink } from "../tool-links";
 import type { PlayerLinkResolver } from "../tool-player-link";
-import { ChevronGlyph, SortGlyph } from "../components/glyphs";
 import { EmptyState, LoadingBlock } from "../components/state-blocks";
+import { ChevronGlyph, SortGlyph } from "../components/glyphs";
 
 export type GameLineMatchupLink = (matchup: MatchupSelection) => CrossToolLink | null;
 

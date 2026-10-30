@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { api } from "./api";
 import { MoveTriangle } from "./components/glyphs";
 import { CardHero } from "./components/card-hero";
@@ -50,7 +51,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
   return (
     <section className="power-view proj-view" aria-label="Projected standings">
       {me ? (
-        <>
+        <Card className="proj-hero gap-0 py-0 shadow-sm">
           <div className="proj-finish">
             <h2>{ordinal(me.rank)} of {teams.length}</h2>
             {showPlayoffs ? <Badge variant={me.inPlayoffs ? "positive" : "secondary"} size="compact" className="injury">{me.inPlayoffs ? "In playoffs" : "Outside the cut"}</Badge> : null}
@@ -63,7 +64,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
               { label: "Proj. points", value: formatWhole(me.projectedPointsFor) },
             ]}
           />
-        </>
+        </Card>
       ) : null}
 
       <section className="power-table-section" aria-labelledby="proj-standings-heading">
