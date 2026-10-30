@@ -604,8 +604,7 @@ export function LeagueAdjustedTrade({
                     <li key={team.rosterId}>
                       <label className="league-roster-row league-team-row">
                         <input
-                          type="radio"
-                          name="trade-partner"
+                          type="checkbox"
                           checked={false}
                           onChange={() => onPartnerChange(team.rosterId)}
                           aria-label={record ? `Trade with ${team.teamName}, ${recordLabel}` : `Trade with ${team.teamName}`}

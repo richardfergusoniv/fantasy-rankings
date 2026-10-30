@@ -189,8 +189,7 @@ export function PowerRankings({
                   <strong className="power-rank">{team.rank}</strong>
                   <span className="power-team">
                     <strong>{team.teamName}<span className="power-team-record"> · {formatRecord(team.record)}</span></strong>
-                    {team.isUser ? <span className="roster-owner-tag is-user" aria-hidden="true">You</span> : null}
-                    {isOpponent ? <span className="roster-owner-tag" aria-hidden="true">Opp</span> : null}
+                    {isOpponent ? <span className="sr-only">This week's opponent</span> : null}
                   </span>
                   <span className="power-total"><strong>{isWeekly ? points(team.totalValue) : formatWhole(team.totalValue)}</strong></span>
                 </button>
