@@ -1976,9 +1976,9 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
         <ChartDialog
           isOpen={isChartOpen}
           onClose={() => setIsChartOpen(false)}
-          title="Analytics"
+          title={`${chartPositionLabel(position)} · ${selectedX.label} vs ${selectedY.label}`}
           showCount={false}
-          closeLabel="Close"
+          closeLabel="Close chart"
           className="monitor-chart-expand-card"
         >
           <div className="monitor-expanded-chart">{chartPlot(true)}</div>
@@ -2559,9 +2559,9 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
               <ChartDialog
                 isOpen={isChartOpen}
                 onClose={() => setIsChartOpen(false)}
-                title="Analytics"
+                title={`${chartPositionLabel(position)} · ${selectedX.label} vs ${selectedY.label}`}
                 showCount={false}
-                closeLabel="Close"
+                closeLabel="Close chart"
                 className="monitor-chart-expand-card"
               >
                 <div className="monitor-expanded-chart">{weeklyPlot(true)}</div>

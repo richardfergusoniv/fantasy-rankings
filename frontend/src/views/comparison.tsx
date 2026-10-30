@@ -645,7 +645,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
               {section.headline ? <ComparisonMetricRow row={section.headline} leftName={left.name} rightName={right.name} headline /> : null}
               {section.groups.map(({ group, rows: groupRows }) => (
                 <section className="comparison-group" key={group} aria-label={group}>
-                  <h4>{group}</h4>
+                  <div className="section-heading"><h3>{group}</h3></div>
                   {groupRows.map((row) => <ComparisonMetricRow key={row.metric.key} row={row} leftName={left.name} rightName={right.name} />)}
                 </section>
               ))}

@@ -340,7 +340,7 @@ export function TeamDataModal({
             ]}
           />
 
-          <Tabs value={tab} onValueChange={(value) => setTab(value as "overview" | "advanced")} className="team-card-tabs" style={{ marginTop: 16 }}>
+          <Tabs value={tab} onValueChange={(value) => setTab(value as "overview" | "advanced")} className="team-card-tabs">
             <TabsList aria-label="Team data">
               <TabsTrigger id="team-card-overview-tab" value="overview" aria-controls="team-card-overview-panel">Offense</TabsTrigger>
               <TabsTrigger id="team-card-advanced-tab" value="advanced" aria-controls="team-card-advanced-panel">Analytics</TabsTrigger>
@@ -399,9 +399,9 @@ export function TeamDataModal({
                 <span className="val">{usage ? `${formatPercent(usage.runPct)} / ${formatPercent(usage.passPct)}` : "—"}</span>
                 <span />
                 {usage ? (
-                  <div role="img" aria-label={`${formatPercent(usage.runPct)} run, ${formatPercent(usage.passPct)} pass`} style={{ display: "flex", gap: 2 }}>
-                    <i style={{ flex: Math.max(usage.runPct, 1), height: 4, borderRadius: 2, background: "var(--dim)" }} />
-                    <i style={{ flex: Math.max(usage.passPct, 1), height: 4, borderRadius: 2, background: "var(--segment-track)" }} />
+                  <div role="img" aria-label={`${formatPercent(usage.runPct)} run, ${formatPercent(usage.passPct)} pass`} className="team-card-split">
+                    <i className="is-run" style={{ flex: Math.max(usage.runPct, 1) }} />
+                    <i style={{ flex: Math.max(usage.passPct, 1) }} />
                   </div>
                 ) : <span />}
               </div>

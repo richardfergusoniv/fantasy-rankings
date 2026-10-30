@@ -433,7 +433,7 @@ export function TradeValueDialog({
     case "table":
       panelBody = powerRankingsAfter && powerRankingsAfter.length > 0 ? (
         <section className="trade-power" aria-label="Power rankings after this trade">
-          <h3>Power Rankings</h3>
+          <h3>Power rankings after trade</h3>
           <table className="trade-power-table">
             <thead>
               <tr><th scope="col">#</th><th scope="col">Team</th><th scope="col" className="trade-power-num">Power</th><th scope="col" className="trade-power-num">Change</th></tr>

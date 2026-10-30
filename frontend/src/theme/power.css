@@ -13,7 +13,7 @@
 .radar-average { fill: var(--dim); fill-opacity: .06; stroke: var(--dim); stroke-width: 1.5; }
 .radar-team { fill: var(--chart-team); fill-opacity: .16; stroke: var(--chart-team); stroke-width: 2.2; }
 .radar-dot { fill: var(--chart-team); stroke: var(--surface); stroke-width: 1.5; }
-.power-position-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 8px; overflow: clip; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--hairline); }
+.power-position-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 8px; overflow: clip; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--hairline); }
 .power-position-values > div { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 7px; min-width: 0; padding: 8px 9px; background: var(--surface); }
 .power-position-values > .power-position-total { grid-column: 1 / -1; }
 .power-position-values > .power-position-total-highlight { background: var(--roster-highlight-bg); }
@@ -181,6 +181,7 @@
 .proj-games-head span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .proj-game { grid-template-columns: 44px minmax(0, 1fr) 52px; }
 .proj-win.is-up strong { color: var(--positive); }
+.proj-win strong { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; }
 .proj-win.is-down strong { color: var(--negative); }
 .injury.is-you { background: var(--roster-highlight); color: var(--on-roster-highlight); }
 .power-team-card-intro { padding: 4px 16px 16px; }
