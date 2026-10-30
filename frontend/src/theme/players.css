@@ -81,7 +81,7 @@
 .ranking-row .season-team-pill.oline-strong .matchup-reference-button-label { border-color: color-mix(in srgb, var(--stat-strength) 18%, var(--hairline)); background: color-mix(in srgb, var(--stat-strength-soft) 56%, var(--surface)); color: var(--stat-strength-readable); }
 .ranking-row .season-team-pill.oline-weak:not(.matchup-reference-button),
 .ranking-row .season-team-pill.oline-weak .matchup-reference-button-label { border-color: color-mix(in srgb, var(--stat-weakness) 18%, var(--hairline)); background: color-mix(in srgb, var(--stat-weakness-soft) 56%, var(--surface)); color: var(--stat-weakness-readable); }
-.ranking-player-context { flex: none; color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
+.ranking-player-context { flex: none; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .roster-owner-tag { display: block; max-width: 112px; flex: none; overflow: hidden; padding: 1px 5px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 700; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .roster-owner-tag.is-user { background: var(--roster-highlight); color: var(--on-roster-highlight); letter-spacing: .025em; }
 .ranking-proj { text-align: right; }
@@ -131,7 +131,7 @@
 .matchup-data-header span { display: block; margin-top: 5px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .matchup-data-header button { flex: none; display: grid; width: 44px; height: 44px; margin: -7px -7px 0 0; place-items: center; padding: 0; border: 0; border-radius: var(--radius); background: var(--surface-2); color: var(--dim); font-size: var(--type-section); line-height: 1; cursor: pointer; }
 .matchup-box-score { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 3px 10px; margin-top: 14px; padding: 11px 12px; border-block: 1px solid var(--hairline); }
-.matchup-box-score > span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; text-transform: uppercase; }
+.matchup-box-score > span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .matchup-box-score > strong { text-align: right; font-size: var(--type-section); font-variant-numeric: tabular-nums; line-height: 1.1; }
 .matchup-box-score-table { grid-column: 1 / -1; width: 100%; margin-top: 8px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .matchup-box-score-table th, .matchup-box-score-table td { padding: 3px 6px; text-align: right; font-size: var(--type-caption); font-weight: 400; }
@@ -160,7 +160,7 @@
 .matchup-battle > div { display: grid; grid-template-columns: minmax(0, 1fr) 88px; min-height: 24px; align-items: center; gap: 8px; }
 .matchup-battle > div > span:first-child { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .matchup-game-line { margin: 12px 0 0; color: var(--text); font-size: var(--type-caption); font-weight: 600; overflow-wrap: anywhere; }
-.matchup-game-line > span { margin-right: 6px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
+.matchup-game-line > span { margin-right: 6px; color: var(--dim); }
 .matchup-card-status { display: flex; min-height: 44px; align-items: center; gap: 8px; margin-top: 14px; padding: 12px 0; border-block: 1px solid var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 
 @keyframes backdropIn { from { opacity: 0; } }
@@ -262,7 +262,7 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .matchup-data-card .tool-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
 .matchup-data-card .tool-links-label { grid-column: 1 / -1; }
 .matchup-data-card .tool-links a.tool-link[href] { justify-content: center; padding: 0 8px; text-align: center; white-space: nowrap; }
-.tool-links-label { color: var(--dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.tool-links-label { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .tool-links a.tool-link[href] { display: inline-flex; min-height: 44px; align-items: center; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--link); font-size: var(--type-tab); font-weight: 600; text-decoration: none; }
 .tool-links a.tool-link[href]:hover { color: var(--link-hover); }
 .player-detail-header .player-roster-badge .matchup-reference-button-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }

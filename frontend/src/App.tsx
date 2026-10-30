@@ -1338,7 +1338,7 @@ export function App() {
             onNews={setTickerNews}
           />
           <div className="week-line">
-            <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
+            <div><span className="live-dot" /> NFL {dashboard.season} · Week {dashboard.week}</div>
             <div className="week-actions">
             <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />
             {supabase ? <AccountMenu /> : null}

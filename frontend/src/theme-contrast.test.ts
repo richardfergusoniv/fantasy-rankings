@@ -240,6 +240,11 @@ describe("Radius tokens", () => {
     const css = readTheme();
     expect(css.match(/border-radius\s*:\s*4px\s*(?:!important\s*)?(?=[;}])/g) ?? []).toEqual([]);
   });
+
+  it("writes no bare 3 to 8px corner radius; fields and cards use the radius tokens", () => {
+    const css = readTheme().replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(css.match(/border-radius\s*:\s*[3-8]px\b/g) ?? []).toEqual([]);
+  });
 });
 
 describe("Light theme contrast", () => {

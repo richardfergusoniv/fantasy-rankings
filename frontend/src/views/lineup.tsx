@@ -228,7 +228,7 @@ export function Lineup({
             </small>
           </div>
         </div>
-        <div className="versus">VS</div>
+        <div className="versus">vs</div>
         <div className="score-team theirs">
           {opponentRosterId !== null && onOpenLeagueTeam ? (
             <button

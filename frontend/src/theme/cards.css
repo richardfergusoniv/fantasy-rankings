@@ -1,5 +1,5 @@
 /* Card anatomy shared by the team, trade and league cards: identity header, hero numbers, then detail. */
-.card-title { margin: 14px 0 0; font-size: 30px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
+.card-title { margin: 14px 0 0; font-size: var(--type-display); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
 .card-eyebrow { margin: 14px 0 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .card-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .card-hero { display: grid; margin-top: 14px; border-block: 1px solid var(--hairline); font-variant-numeric: lining-nums tabular-nums; }

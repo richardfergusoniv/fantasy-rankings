@@ -56,7 +56,7 @@
 .market-pulse { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--hairline); }
 .market-list { display: grid; gap: 0; }
 .market-list article { display: grid; grid-template-columns: 78px minmax(0,1fr); gap: 3px 8px; padding: 9px 0; border-top: 1px solid var(--hairline); }
-.market-list article > span { grid-row: 1 / span 2; color: var(--dim); font-size: var(--type-caption); font-weight: 700; text-transform: uppercase; }
+.market-list article > span { grid-row: 1 / span 2; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .market-list strong { font-size: var(--type-body); }
 .market-list small { color: var(--dim); font-size: var(--type-caption); }
 .player-news-section { margin-top: 16px; padding-top: 4px; border-top: 1px solid var(--hairline); }
