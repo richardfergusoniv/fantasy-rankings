@@ -233,7 +233,7 @@ export function LeagueTeamCard({
             />
             {winChance === null ? null : (
               <div className="power-team-card-win">
-                <div><span className="is-you">You · {winChance}% to win</span><span>Them · {100 - winChance}%</span></div>
+                <div><span className="is-you">You · {winChance}% to win</span><span>Them · {Math.round((100 - winChance) * 10) / 10}%</span></div>
                 <div className="power-team-card-win-bar" role="img" aria-label={`Your win chance ${winChance} percent`}><i style={{ flex: winChance }} /><i style={{ flex: 100 - winChance }} /></div>
               </div>
             )}
