@@ -38,7 +38,7 @@ import { useProfileTag } from "./lib/use-profile-tag";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
 import { ModalPortal, ProfileChips, SegmentedControl, positionalSosRank, rankAgainst, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
-import { BackGlyph, ChevronGlyph, CloseGlyph, MoveTriangle } from "./components/glyphs";
+import { BackGlyph, CloseGlyph, MoveTriangle } from "./components/glyphs";
 import { EmptyState, LoadingBlock } from "./components/state-blocks";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
@@ -379,7 +379,7 @@ function PlayerTeamBadge({ team, onOpen }: { team: string | null; onOpen?: () =>
       aria-haspopup="dialog"
       onClick={onOpen}
     >
-      <span className="matchup-reference-button-label">{team}<span className="matchup-reference-arrow" aria-hidden="true"><ChevronGlyph /></span></span>
+      <span className="matchup-reference-button-label">{team}</span>
     </button>
   );
 }

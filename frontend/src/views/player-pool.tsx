@@ -54,7 +54,7 @@ import { WindowVirtualList } from "../virtual-list";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
 import { ListPagination } from "../components/state-blocks";
-import { ChevronGlyph, CloseGlyph } from "../components/glyphs";
+import { CloseGlyph } from "../components/glyphs";
 import { ModalCard } from "../components/modal-card";
 
 /** Compact rankings/waivers row height (matches former density=compact). */
@@ -132,7 +132,7 @@ export function SeasonTeamPill({ team, lineRank, onOpen }: { team: string | null
       aria-haspopup="dialog"
       title={lineRank === null ? `${teamLabel} team data` : `${teamLabel} offensive line rank #${lineRank}`}
     >
-      <span className="matchup-reference-button-label">{teamLabel}<span className="matchup-reference-arrow" aria-hidden="true"><ChevronGlyph /></span></span>
+      <span className="matchup-reference-button-label">{teamLabel}</span>
     </button>
   );
 }

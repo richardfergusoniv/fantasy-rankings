@@ -23,7 +23,7 @@
   min-height: var(--badge-height);
   align-items: center;
   gap: 3px;
-  padding: 0 19px 0 8px;
+  padding: 0 8px;
   border: 1px solid var(--link);
   border-radius: var(--radius-pill);
   background: transparent;
@@ -33,16 +33,6 @@
   line-height: 1;
   text-decoration: none;
 }
-.matchup-reference-button .matchup-reference-arrow {
-  position: absolute;
-  top: 50%;
-  right: 8px;
-  color: inherit;
-  font-size: var(--type-control);
-  font-weight: 700;
-  pointer-events: none;
-  transform: translateY(-50%);
-}
 /* Beats the global underline on a[href]; the badge is not underlined text. */
 a[href].matchup-reference-button.matchup-reference-tag { text-decoration: none; }
 .matchup-reference-button:focus-visible .matchup-reference-button-label {
@@ -50,7 +40,7 @@ a[href].matchup-reference-button.matchup-reference-tag { text-decoration: none; 
   outline-offset: 2px;
 }
 
-/* Matchup ease stays a link: green for easy, red for tough, with the triangle. */
+/* Matchup ease stays a link: green for easy, red for tough. The colors carry the meaning, so there are no arrows. */
 .matchup-reference-button.sos-soft .matchup-reference-button-label {
   border-color: var(--stat-strength-readable);
   background: var(--stat-strength-soft);
@@ -61,27 +51,8 @@ a[href].matchup-reference-button.matchup-reference-tag { text-decoration: none; 
   background: var(--stat-weakness-soft);
   color: var(--stat-weakness-readable);
 }
-.matchup-reference-button.sos-soft .matchup-reference-arrow { color: var(--stat-strength-readable); }
-.matchup-reference-button.sos-tough .matchup-reference-arrow { color: var(--stat-weakness-readable); }
 .matchup-reference-tag.sos-soft:not(.matchup-reference-button) { background: var(--stat-strength-soft); color: var(--stat-strength-readable); }
 .matchup-reference-tag.sos-tough:not(.matchup-reference-button) { background: var(--stat-weakness-soft); color: var(--stat-weakness-readable); }
-.matchup-reference-tag.sos-soft:not(.matchup-reference-button)::before,
-.matchup-reference-button.sos-soft .matchup-reference-button-label::before,
-.matchup-reference-tag.sos-tough:not(.matchup-reference-button)::before,
-.matchup-reference-button.sos-tough .matchup-reference-button-label::before {
-  content: "";
-  display: inline-block;
-  width: 0;
-  height: 0;
-  margin: 0 3px 0 0;
-  border-right: 4px solid transparent;
-  border-left: 4px solid transparent;
-  font-size: inherit;
-}
-.matchup-reference-tag.sos-soft:not(.matchup-reference-button)::before,
-.matchup-reference-button.sos-soft .matchup-reference-button-label::before { border-bottom: 6px solid currentColor; }
-.matchup-reference-tag.sos-tough:not(.matchup-reference-button)::before,
-.matchup-reference-button.sos-tough .matchup-reference-button-label::before { border-top: 6px solid currentColor; }
 
 /* Status badges: a warning is a filled coral pill. */
 .status-badge { min-height: var(--badge-height); height: auto; padding: 0 8px; gap: 3px; border-radius: var(--radius-pill); }

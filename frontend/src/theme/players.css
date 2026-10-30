@@ -64,9 +64,6 @@
   font-size: var(--type-caption);
   font-weight: 600;
 }
-.ranking-row .matchup-reference-arrow {
-  color: var(--link);
-}
 .ranking-row .matchup-reference-button.sos-soft,
 .ranking-row .matchup-reference-button.sos-tough {
   background: transparent;

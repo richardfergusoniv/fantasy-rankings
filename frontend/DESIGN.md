@@ -20,7 +20,7 @@ Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-bod
 Three jobs, three looks (`theme/badges.css`). One meaning per color.
 
 - Every badge, tag and chip, in all three families below, is one height (`--badge-height`, 20px) so they line up side by side in a row.
-- **Link badges** open something: amber outline pill, chevron inside, 44px tap area. A matchup link shows only the matchup ("KC vs LV"), with a drawn triangle and green (`--stat-strength-*`) for easy or red (`--stat-weakness-*`) for tough; the quality is in the aria-label. A neutral matchup is the plain amber link.
+- **Link badges** open something: amber outline pill, 44px tap area, no arrow or chevron. A matchup link shows only the matchup ("KC vs LV"), with green (`--stat-strength-*`) for easy or red (`--stat-weakness-*`) for tough; the quality is in the aria-label. A neutral matchup is the plain amber link.
 - **Status badges** say what state something is in: filled, never tappable. Warnings are coral (`--warning`, `--warning-bg`) pills; injury badges carry no icon.
 - **Descriptor tags** describe a player, team or slot: hairline outline, no chevron.
 - Selected tabs are gray (`--segment-selected`) with normal text; amber is for links and your side's edge.
@@ -52,7 +52,7 @@ Three jobs, three looks (`theme/badges.css`). One meaning per color.
 ## Rules
 
 - No raw hex colors in `theme/*.css` outside `:root` (enforced by the token-hygiene test).
-- Don't encode meaning in hue alone; pair color with a glyph or label.
+- Matchup quality (soft or tough) is carried by color alone, with no arrow; the soft/tough wording stays in the aria-label. Elsewhere, don't encode meaning in hue alone: pair color with a glyph or label.
 
 ## History
 
