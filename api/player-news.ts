@@ -95,7 +95,7 @@ export type PlayerNews = {
       author: string | null;
       /** X post_id / Sleeper external id — used by global feeds to group roundups. */
       externalId: string | null;
-      source: "sleeper" | "x" | "nflverse";
+      source: "sleeper" | "x" | "nflverse" | "article";
       signal: string | null;
       score: number | null;
       /** e.g. `["dynasty"]` — redraft clients hide dynasty-tagged rows. */
@@ -259,7 +259,7 @@ async function readStoredNews(isDynastyContext: boolean): Promise<Response> {
     sourcePublishedAt: item.publishedAt?.toISOString() ?? item.createdAt.toISOString(),
     author: item.author,
     externalId: item.externalId,
-    source: item.source as "sleeper" | "x" | "nflverse",
+    source: item.source as "sleeper" | "x" | "nflverse" | "article",
     signal: item.signal,
     score: item.score,
     tags: item.tags ?? [],

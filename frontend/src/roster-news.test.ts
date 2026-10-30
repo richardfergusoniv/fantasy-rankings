@@ -10,7 +10,7 @@ function news(items: Array<{
   roleContext?: string;
   sourceUrl?: string;
   externalId?: string | null;
-  source?: "sleeper" | "x" | "nflverse";
+  source?: "sleeper" | "x" | "nflverse" | "article";
   tags?: string[];
 }>): PlayerNews {
   return {

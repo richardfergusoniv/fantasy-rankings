@@ -33,9 +33,10 @@ import {
   snapshotSleeperTrendingWeekly,
 } from "../_lib/scoring-jobs.js";
 import { loadXProducerPrioritySet } from "../_lib/x-producer-priority.js";
+import { refreshArticleFeeds } from "../_lib/article-feeds.js";
 
 /**
- * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-player-insights | refresh-nfl-players | backfill-value-history | backfill-pick-value-history | finalize-accuracy | snapshot-sleeper-trending | scoring-decision-snapshot | scoring-weights-refit | x-producer-priority
+ * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-player-insights | refresh-nfl-players | backfill-value-history | backfill-pick-value-history | finalize-accuracy | snapshot-sleeper-trending | scoring-decision-snapshot | scoring-weights-refit | x-producer-priority | refresh-article-feeds
  *
  * One function for the scheduled jobs (Vercel's 12-function budget).
  * Vercel Cron invokes with GET; auth is `Authorization: Bearer <CRON_SECRET>`
@@ -83,6 +84,9 @@ import { loadXProducerPrioritySet } from "../_lib/x-producer-priority.js";
  * - x-producer-priority: returns the X push producer priority player_id set
  *   (owner-league roster ids ∪ active search_rank ≤ 300). Read-only; for the
  *   external X ingest routine. Prefer sending Sleeper player_id on ingest.
+ * - refresh-article-feeds: polls configured RSS/Atom feeds, filters headlines,
+ *   matches players, and writes source='article' rows to shared_player_news.
+ *   Idempotent (ETag + unique indexes). Scheduled from GitHub Actions.
  */
 
 async function handleRebuildDashboard(): Promise<Response> {
@@ -229,6 +233,11 @@ async function handleXProducerPriority(url: URL): Promise<Response> {
   });
 }
 
+async function handleRefreshArticleFeeds(): Promise<Response> {
+  const result = await refreshArticleFeeds();
+  return json(result);
+}
+
 export async function GET(req: Request): Promise<Response> {
   if (!hasCronSecret(req)) return forbidden("Invalid or missing cron secret.");
   const url = new URL(req.url, "https://localhost");
@@ -248,8 +257,9 @@ export async function GET(req: Request): Promise<Response> {
     if (job === "scoring-decision-snapshot") return await handleScoringDecisionSnapshot();
     if (job === "scoring-weights-refit") return await handleScoringWeightsRefit();
     if (job === "x-producer-priority") return await handleXProducerPriority(url);
+    if (job === "refresh-article-feeds") return await handleRefreshArticleFeeds();
     return badRequest(
-      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, refresh-player-insights, refresh-nfl-players, backfill-value-history, backfill-pick-value-history, finalize-accuracy, snapshot-sleeper-trending, scoring-decision-snapshot, scoring-weights-refit, or x-producer-priority.",
+      "Unknown or missing `job` param. Expected rebuild-dashboard, refresh-fantasycalc, read-dashboard-snapshot, refresh-team-situational, refresh-chart-extras, refresh-player-insights, refresh-nfl-players, backfill-value-history, backfill-pick-value-history, finalize-accuracy, snapshot-sleeper-trending, scoring-decision-snapshot, scoring-weights-refit, x-producer-priority, or refresh-article-feeds.",
     );
   } catch (err) {
     await captureServerError(err, { route: "cron/jobs", job: job ?? "unknown" });

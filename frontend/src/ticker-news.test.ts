@@ -12,7 +12,7 @@ function item(partial: {
   roleContext?: string;
   sourceUrl?: string;
   externalId?: string | null;
-  source?: "sleeper" | "x" | "nflverse";
+  source?: "sleeper" | "x" | "nflverse" | "article";
   tags?: string[];
   scope?: "player" | "team" | "league";
   player?: string;

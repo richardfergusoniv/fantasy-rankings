@@ -1,0 +1,64 @@
+name: Article feeds
+
+# Timer for RSS/Atom article-feed ingest. The work lives in the app's
+# /api/cron/jobs?job=refresh-article-feeds endpoint; this workflow only
+# calls it on schedule with the CRON_SECRET bearer header. Writes filtered
+# articles into shared_player_news (source=article). API-side ETag + unique
+# indexes make repeated runs safe. Manual dispatches always run.
+#
+# Cadence (Pacific, covering PDT and PST via overlapping UTC windows):
+# - Thu / Sun / Mon: every 15 minutes, roughly 6 AM–11 PM
+# - Tue / Wed / Fri / Sat: every 30 minutes, roughly 6 AM–11 PM
+
+on:
+  schedule:
+    # Game days (Sun=0, Mon=1, Thu=4): every 15 min
+    # Pacific ~06–23 → UTC 13–06 (PDT) and 14–07 (PST)
+    - cron: "*/15 13-23 * * 0,1,4"
+    - cron: "*/15 0-7 * * 1,2,5"
+    # Other days (Tue=2, Wed=3, Fri=5, Sat=6): every 30 min
+    - cron: "0,30 13-23 * * 2,3,5,6"
+    - cron: "0,30 0-7 * * 0,3,4,6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: article-feeds
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call article-feeds refresh
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-ten.vercel.app' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET is missing; cannot refresh article feeds."
+            exit 1
+          fi
+          HTTP=$(curl -sS --max-time 90 -o /tmp/article-feeds.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$APP_BASE_URL/api/cron/jobs?job=refresh-article-feeds")
+          echo "HTTP $HTTP"
+          cat /tmp/article-feeds.json
+          echo
+          python3 - <<'EOF'
+          import json, sys
+          result = json.load(open("/tmp/article-feeds.json"))
+          if result.get("ok") is not True:
+              raise SystemExit(f"article-feeds not ok: {result}")
+          if result.get("worked") is not True:
+              raise SystemExit(f"article-feeds did no work: {result}")
+          if result.get("job") != "refresh-article-feeds":
+              raise SystemExit(f"unexpected job: {result}")
+          feeds = result.get("feeds") or []
+          print(f"article-feeds verified: {len(feeds)} feeds, inserted={result.get('inserted')}, durationMs={result.get('durationMs')}")
+          EOF
+          test "$HTTP" = "200"

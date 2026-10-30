@@ -759,9 +759,13 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
 }
 
 export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose: () => void }) {
+  const isArticle = item.source === "article";
   const severity = item.newsType === "headline"
     ? item.playerId === "league" ? "Breaking" : "League news"
     : item.newsType === "waiver" ? "Waiver signal" : "Roster update";
+  const outletLabel = item.author && !isArticle
+    ? `${item.sourceLabel} · ${item.author}`
+    : item.sourceLabel;
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -769,16 +773,22 @@ export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose
         <DialogCloseButton label="Close news card" />
         <DialogHeader className="news-card-header pr-8">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={item.newsType === "headline" ? "negative" : "secondary"}>{severity}</Badge>
+            {!isArticle ? (
+              <Badge variant={item.newsType === "headline" ? "negative" : "secondary"}>{severity}</Badge>
+            ) : (
+              <span className="text-xs font-semibold text-muted-foreground">{item.sourceLabel}</span>
+            )}
             <time className="text-xs text-muted-foreground">{item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent"}</time>
           </div>
         </DialogHeader>
         <DialogTitle id="ticker-news-headline" className="news-card-headline">{item.change}</DialogTitle>
-        <DialogDescription className="text-sm leading-relaxed text-muted-foreground">{item.roleContext}</DialogDescription>
+        {item.roleContext ? (
+          <DialogDescription className="text-sm leading-relaxed text-muted-foreground">{item.roleContext}</DialogDescription>
+        ) : null}
         {isHttpOrHttpsUrl(item.sourceUrl) ? (
-          <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel}<span className="sr-only"> (opens in a new tab)</span></a>
+          <a href={item.sourceUrl} target="_blank" rel="noreferrer">{outletLabel}<span className="sr-only"> (opens in a new tab)</span></a>
         ) : (
-          <span>{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel}</span>
+          <span>{outletLabel}</span>
         )}
       </DialogContent>
     </Dialog>
