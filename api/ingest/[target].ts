@@ -45,6 +45,7 @@ import {
   type SleeperPicksBoard,
 } from "../_lib/sleeper-picks.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/source-cache-payload.js";
+import { publishSharedBoard } from "../_lib/shared-board-cache.js";
 import { writePfnWeeklyCopies } from "../_lib/scoring-jobs.js";
 import { readNflState } from "../_lib/user-leagues.js";
 
@@ -540,6 +541,15 @@ async function handleSleeperPicks(req: Request): Promise<Response> {
       set: { payload: encoded, fetchedAt },
     });
 
+  // Runtime Cache publication happens only after the durable row committed;
+  // a cache failure can never fail the ingest.
+  const published = await publishSharedBoard(
+    "sleeper-picks",
+    `${payload.season}:${payload.week}`,
+    board,
+    fetchedAt.getTime(),
+  );
+
   return json({
     ok: true,
     status: "committed",
@@ -547,6 +557,7 @@ async function handleSleeperPicks(req: Request): Promise<Response> {
     week: payload.week,
     received: payload.lines.length,
     stored: lines.length,
+    sharedCache: published.published ? "published" : published.reason,
   });
 }
 
