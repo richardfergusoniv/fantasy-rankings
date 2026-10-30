@@ -230,7 +230,6 @@ export async function readSharedBoard(
 
   try {
     const remote = await runtime.get(key);
-    countCacheMetric("dashboard.runtime.get");
     if (remote && typeof remote === "object" && dataset.validate((remote as SharedBoardEnvelope).payload)) {
       const envelope = remote as SharedBoardEnvelope;
       countCacheMetric("shared_board.cache.hit");

@@ -45,9 +45,10 @@ import { flushCacheMetrics } from "./_lib/cache-metrics.js";
  *   for that owner. Every signed-out read, including force=false, is 401
  *   with `Cache-Control: private, no-store`.
  *
- *   Fresh responses are reused from the runtime cache for the snapshot
- *   version (`asOf`) until that version's TTL (10 min, or 150s while live).
- *   A new snapshot moves the version pointer; nothing is purged by hand.
+ *   Fresh responses are served from a bounded instance-local L1 over the
+ *   canonical per-user `source_cache` snapshot rows (600s normal, 150s while
+ *   live). Personalized data never enters Runtime Cache — a new snapshot is
+ *   just a new Postgres row version; nothing is purged by hand.
  *   The HTTP cache stays private — Vercel will not CDN-cache an
  *   Authorization request, and a shared entry would leak across users.
  *
@@ -57,6 +58,12 @@ import { flushCacheMetrics } from "./_lib/cache-metrics.js";
  *   gap with the owner snapshot unless the caller is the scheduled owner.
  *   Section reads prefer slim per-section `source_cache` rows and fall back
  *   to the legacy full dashboard row when those are missing.
+ *
+ * GET /api/dashboard/section?sections=meta,team,players,league
+ *   Same as the single-section read but returns all requested sections in
+ *   one `{sections, snapshotVersion}` response — the client bootstrap call.
+ *   `snapshotVersion` is the shared `asOf` when every section came from the
+ *   same snapshot, else null. A 401 on any section fails the batch.
  */
 
 function dashboardJson<T>(loaded: DashboardViewLoad<T>): Response {
