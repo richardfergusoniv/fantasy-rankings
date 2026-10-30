@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bestAvailable,
   draftSurplusByTeam,
   expectedValue,
   GRADE_LETTERS,
@@ -128,6 +129,34 @@ describe("pickGrades", () => {
   });
 });
 
+describe("bestAvailable", () => {
+  it("is null at every pick that took the best player left", () => {
+    expect([...bestAvailable({ picks: fair, rosterId: 1, values: marketBoard }).values()]).toEqual([null, null]);
+  });
+
+  it("names the best player still undrafted at the pick, never one taken earlier", () => {
+    // Team 1 takes p2 first, so p1 is there to have taken; at pick 2 team 2 takes p1 and has no better option.
+    const swapped = [pick(1, 1, "p2"), pick(2, 2, "p1"), ...fair.slice(2)];
+    expect(bestAvailable({ picks: swapped, rosterId: 1, values: marketBoard }).get("p2")).toBe("p1");
+    expect(bestAvailable({ picks: swapped, rosterId: 2, values: marketBoard }).get("p1")).toBeNull();
+    // Team 3 took p3 at pick 3 with p1 and p2 gone: nobody better remains.
+    expect(bestAvailable({ picks: swapped, rosterId: 3, values: marketBoard }).get("p3")).toBeNull();
+  });
+
+  it("uses the values it is given, so hindsight can find a player who has since risen", () => {
+    const today = board([...marketBoard].map(([id, value]) => [id, id === "p8" ? 5000 : value] as [string, number]));
+    const better = bestAvailable({ picks: fair, rosterId: 4, values: today });
+    expect(better.get("p4")).toBe("p8");
+    // By pick 8 the risen player has been taken (by team 1, the drafter who took him).
+    expect(bestAvailable({ picks: fair, rosterId: 1, values: today }).get("p8")).toBeNull();
+  });
+
+  it("has nothing better for a kicker or defense pick", () => {
+    const picks = [pick(1, 1, "k1", "K"), pick(2, 1, "p1")];
+    expect(bestAvailable({ picks, rosterId: 1, values: marketBoard }).get("k1")).toBeNull();
+  });
+});
+
 describe("gradeDraft", () => {
   const options = { ownRosterId: 2, minBoardPlayers: 1 };
 
@@ -152,8 +181,8 @@ describe("gradeDraft", () => {
     const today = board([...marketBoard].map(([id, value]) => [id, id === "p2" ? 450 : value] as [string, number]));
     const grades = gradeDraft({ ...options, picks: [...fair].reverse(), draftDayBoard: marketBoard, todayBoard: today });
     expect(grades.picks).toEqual([
-      { playerId: "p2", draftDay: { letter: "A+", percent: 100 }, today: { letter: "F", percent: 50 } },
-      { playerId: "p7", draftDay: { letter: "A+", percent: 100 }, today: { letter: "A+", percent: 100 } },
+      { playerId: "p2", pickNo: 2, draftDay: { letter: "A+", percent: 100 }, today: { letter: "F", percent: 50 }, betterIds: { draftDay: null, today: "p3" } },
+      { playerId: "p7", pickNo: 7, draftDay: { letter: "A+", percent: 100 }, today: { letter: "A+", percent: 100 }, betterIds: { draftDay: null, today: null } },
     ]);
   });
 
@@ -196,6 +225,23 @@ describe("loadDraftGrade", () => {
       ["redraft-1qb-10t-0.5ppr", "2026-10-30", 14],
     ]);
     expect(grade).toMatchObject({ draftId: "d1", draftDay: { of: 4 }, today: { of: 4 } });
+  });
+
+  it("names the better players on draft day and today for the user's own picks", async () => {
+    const today = board([...marketBoard].map(([id, value]) => [id, id === "p1" ? 100 : value] as [string, number]));
+    const labelCalls: string[][] = [];
+    const grade = await loadDraftGrade(league, 1, {
+      fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }),
+      loadBoard: async (_format, _date, windowDays) => (windowDays === 14 ? today : marketBoard),
+      loadLabels: async (_format, ids) => { labelCalls.push([...ids]); return new Map(ids.map((id) => [id, { name: `Name ${id}`, position: "WR" }])); },
+      minBoardPlayers: 1,
+    });
+    // Team 1 took p1 (pick 1) and p8 (pick 8). Today p1 has fallen, so p2 was the better first pick.
+    expect(grade?.picks.map((entry) => [entry.playerId, entry.pickNo, entry.better])).toEqual([
+      ["p1", 1, { draftDay: null, today: { playerId: "p2", name: "Name p2", position: "WR" } }],
+      ["p8", 8, { draftDay: null, today: null }],
+    ]);
+    expect(labelCalls).toEqual([["p2"]]);
   });
 
   it("returns null when no draft is complete, or the only one is an auction", async () => {

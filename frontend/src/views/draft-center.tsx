@@ -22,7 +22,9 @@ import { formatWhole } from "../lib/format-number";
 import { Badge } from "@/components/ui/badge";
 import { CloseGlyph } from "../components/glyphs";
 import { DraftGradeCard } from "./draft-grade-card";
+import { DraftBetterPicks } from "./draft-better-picks";
 import { DraftRecap } from "./draft-recap";
+import { leagueDraftIsFinal } from "../draft-final";
 import { LoadingBlock, ListPagination } from "../components/state-blocks";
 
 type DraftRow = DraftCenterData["adp"][number] & {
@@ -94,7 +96,7 @@ export function DraftCenter({
   // presenting veterans as eligible in an established league.
   const draftBoardMode = league.seasonLongFormat.isDynasty ? (syncedBoardMode === "startup" ? "startup" : "rookie") : "redraft";
   const isRookieBoard = draftBoardMode === "rookie";
-  const [mode, setMode] = useState<"board" | "myTeam">(draftRoom ?? "board");
+  const [mode, setMode] = useState<DraftRoom>(draftRoom ?? "board");
   const [position, setPosition] = useState<"ALL" | "QB" | "RB" | "WR" | "TE" | "K" | "DEF" | "ROOKIES">(draftPosition ?? "ALL");
   const [query, setQuery] = useState(draftQuery ?? "");
   const [visibleDraftCount, setVisibleDraftCount] = useState(160);
@@ -118,7 +120,7 @@ export function DraftCenter({
   useEffect(() => { setPosition(draftPosition ?? "ALL"); }, [draftPosition]);
   useEffect(() => { setQuery(draftQuery ?? ""); }, [draftQuery]);
 
-  function publishDraftFilters(next: { position?: typeof position; query?: string; room?: "board" | "myTeam" }) {
+  function publishDraftFilters(next: { position?: typeof position; query?: string; room?: DraftRoom }) {
     const nextPosition = next.position ?? effectiveDraftPosition;
     const nextQuery = next.query ?? query;
     const nextRoom = next.room ?? mode;
@@ -347,7 +349,7 @@ export function DraftCenter({
     return true;
   });
   // Once the league's draft is complete the team is set: My team becomes a graded recap with nothing to remove.
-  const draftIsFinal = !liveDraft && completedDraft !== null && completedDraft.ownRosterId !== null;
+  const draftIsFinal = leagueDraftIsFinal(data?.drafts, league.id);
   const recapPicks = [...ownPicks]
     .sort((a, b) => a.pickNo - b.pickNo)
     .map((pick) => ({ playerId: pick.playerId, name: pick.playerName, secondary: draftSecondaryLine(pick.position, pick.team) }));
@@ -487,6 +489,13 @@ export function DraftCenter({
           {draftFilters}
           {draftBoard}
         </div>
+      ) : draftIsFinal && mode === "betterPicks" ? (
+        <DraftBetterPicks
+          leagueId={league.id}
+          players={recapPicks}
+          secondaryOf={(playerId, position) => draftSecondaryLine(position, seasonByPlayer.get(playerId)?.team)}
+          onOpenPlayer={onOpenLinkedPlayer}
+        />
       ) : draftIsFinal ? (
         <>
           <DraftGradeCard leagueId={league.id} />

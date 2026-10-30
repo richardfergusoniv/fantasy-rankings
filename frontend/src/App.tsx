@@ -67,6 +67,7 @@ import { GameLinesPanel } from "./views/game-lines-panel";
 import { Lineup } from "./views/lineup";
 import { TeamStatsPanel } from "./views/team-stats-panel";
 import { MoveTriangle } from "./components/glyphs";
+import { leagueDraftIsFinal } from "./draft-final";
 
 const DOCKABLE_INSPECTOR_TABS = new Set<Tab>(["team", "rankings", "waivers", "draft", "power", "monitor", "team-stats", "analytics"]);
 
@@ -1116,6 +1117,9 @@ export function App() {
   const tradeWaiverError = tradeWaiverActive && (tradeWaiverQuery.isError || sectionBuildFailed(tradeWaiverQuery.data));
   const tradeSectionError = !hasCompleteDashboard && (tradeQuery.isError || sectionBuildFailed(tradeQuery.data) || tradeWaiverError);
   const draftSectionError = draftQuery.isError && !draftQuery.data;
+  // Better picks only exists once the league's draft is final; a link to it before then lands on My team.
+  const draftIsFinal = leagueDraftIsFinal(draftQuery.data?.drafts, league?.id);
+  const draftRoomShown = dashboardUrl.state.draftRoom === "betterPicks" && !draftIsFinal ? "myTeam" : dashboardUrl.state.draftRoom ?? "board";
   const newsLoading = newsQuery.isPending && !newsQuery.data;
   const newsError = newsQuery.isError && !newsQuery.data;
   const retryNews = () => { void newsQuery.refetch(); };
@@ -1408,10 +1412,11 @@ export function App() {
           </Tabs>
         ) : null}
         {primaryPage === "draft" ? (
-          <Tabs value={dashboardUrl.state.draftRoom ?? "board"} onValueChange={(value) => dashboardUrl.commit({ draftRoom: value === "board" ? null : (value as DraftRoom) })} className="subview-tabs draft-subview-tabs">
+          <Tabs value={draftRoomShown} onValueChange={(value) => dashboardUrl.commit({ draftRoom: value === "board" ? null : (value as DraftRoom) })} className="subview-tabs draft-subview-tabs">
             <TabsList aria-label="Draft views">
               <TabsTrigger value="board">Board</TabsTrigger>
               <TabsTrigger value="myTeam">My team</TabsTrigger>
+              {draftIsFinal ? <TabsTrigger value="betterPicks">Better picks</TabsTrigger> : null}
             </TabsList>
           </Tabs>
         ) : null}
