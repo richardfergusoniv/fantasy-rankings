@@ -744,7 +744,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                           <MatchupStatRow key={stat.label} stat={stat} pairing={pairing} left={left} right={right} />
                         ))}
                         <div className="matchup-edge-scale" aria-hidden="true"><span>#1 · better</span><span>League rank of 32</span><span>#32</span></div>
-                        <p className="matchup-edge-note">Edge is the gap in league rank. Plus means {pairing.leftLabel} is ahead, minus means {pairing.rightLabel} is.</p>
                       </section>
                     );
                   })}
