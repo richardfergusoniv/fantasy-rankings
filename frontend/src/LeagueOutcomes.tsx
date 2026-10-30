@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
 import { api } from "./api";
 import { CardHero } from "./components/card-hero";
@@ -41,6 +42,9 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
   const nextGames = me ? nextGamesForTeam(games, me.rosterId) : [];
   const moved = me ? placesMoved(me.currentRank, me.rank) : 0;
   const showPlayoffs = !query.data.divisionsIgnored && query.data.playoffTeams > 0;
+  // Two tables with the playoff line between them; one table when there is no line.
+  const cutAfter = teams.findIndex((team, index) => team.inPlayoffs && !teams[index + 1]?.inPlayoffs && index < teams.length - 1);
+  const groups = cutAfter >= 0 ? [teams.slice(0, cutAfter + 1), teams.slice(cutAfter + 1)] : [teams];
 
   return (
     <section className="power-view proj-view" aria-label="Projected standings">
@@ -65,32 +69,30 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
         <div className="section-heading power-section-heading">
           <h2 id="proj-standings-heading">Projected standings</h2>
         </div>
-        <div className="power-table" role="table" aria-label="Projected standings">
-          <div className="power-row proj-row proj-head" role="row">
-            <span role="columnheader">#</span>
-            <span role="columnheader">Team</span>
-            <span role="columnheader">Proj. PF</span>
-            <span role="columnheader">Proj. record</span>
-          </div>
-          {teams.map((team, index) => (
-            <div className="power-list-item" key={team.rosterId}>
-              <div className={`power-row proj-row${team.isUser ? " is-user" : ""}`} role="row">
-                <strong className="power-rank" role="cell">{team.rank}</strong>
-                <div className="power-team proj-team" role="cell">
-                  <strong>{team.teamName}</strong>
-                  {team.isUser ? <Badge variant="secondary" size="compact" className="injury is-you">Yours</Badge> : null}
-                  <MoveMark moved={placesMoved(team.currentRank, team.rank)} />
+        {groups.map((group, groupIndex) => (
+          <Fragment key={group[0]?.rosterId ?? groupIndex}>
+            {groupIndex > 0 ? <div className="proj-cut" role="separator" aria-label="Playoff cut">Playoff cut</div> : null}
+            <div className="power-table" role="table" aria-label={groups.length > 1 ? (groupIndex === 0 ? "Projected playoff teams" : "Projected teams outside the cut") : "Projected standings"}>
+              {group.map((team) => (
+                <div className="power-list-item" key={team.rosterId}>
+                  <div className={`power-row proj-row${team.isUser ? " is-user" : ""}`} role="row">
+                    <strong className="power-rank" role="cell">{team.rank}</strong>
+                    <div className="power-team proj-team" role="cell">
+                      <strong>{team.teamName}</strong>
+                      {team.isUser ? <Badge variant="secondary" size="compact" className="injury is-you">Yours</Badge> : null}
+                      <MoveMark moved={placesMoved(team.currentRank, team.rank)} />
+                    </div>
+                    <div className="power-total proj-pf" role="cell">
+                      <strong>{formatDecimal(team.projectedPointsFor, 0)}</strong>
+                      <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round((team.projectedPointsFor / topPoints) * 100)}%` }} /></div>
+                    </div>
+                    <div className="power-total" role="cell"><strong>{recordLabel(team.projectedRecord)}</strong></div>
+                  </div>
                 </div>
-                <div className="power-total proj-pf" role="cell">
-                  <strong>{formatDecimal(team.projectedPointsFor, 0)}</strong>
-                  <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round((team.projectedPointsFor / topPoints) * 100)}%` }} /></div>
-                </div>
-                <div className="power-total" role="cell"><strong>{recordLabel(team.projectedRecord)}</strong></div>
-              </div>
-              {team.inPlayoffs && !teams[index + 1]?.inPlayoffs && index < teams.length - 1 ? <div className="proj-cut" role="separator" aria-label="Playoff cut">Playoff cut</div> : null}
+              ))}
             </div>
-          ))}
-        </div>
+          </Fragment>
+        ))}
       </section>
 
       {nextGames.length > 0 ? (
