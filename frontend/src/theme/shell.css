@@ -1,6 +1,7 @@
 /* App shell: ticker, league picker, bottom bar, segmented controls and sub-tabs. */
 .app-shell { min-height: 100vh; padding-bottom: calc(70px + env(safe-area-inset-bottom)); background: var(--bg); }
-.control-deck { position: relative; z-index: 12; }
+/* One below .league-sticky so the sub-tabs scroll under the sticky header, not over it. */
+.control-deck { position: relative; z-index: 11; }
 .ticker-strip { height: 44px; margin: -10px -16px 6px; overflow: hidden; border-bottom: 1px solid var(--ticker-divider); background: var(--ticker-bg); color: var(--ticker-text); }
 .ticker-viewport { width: 100%; height: 44px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
 .ticker-viewport::-webkit-scrollbar { display: none; }

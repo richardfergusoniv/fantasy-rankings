@@ -1,7 +1,7 @@
 /**
- * Projected standings: each team's best lineup from its current roster for
- * every remaining week. The current week uses the app's blended projections
- * (what the rest of the app shows); later weeks use Sleeper's per-week
+ * Projected standings for every remaining week. The current week scores the
+ * lineup each team has set, the same total the Matchup view shows; later weeks
+ * use each team's best lineup from its current roster with Sleeper's per-week
  * projections rescored in the league's rules. The higher projected score wins
  * the matchup. No simulation and no probabilities: projections added up.
  *
@@ -16,7 +16,7 @@ import { readUserDashboardCache } from "./dashboard-build.js";
 import type { Dashboard } from "./dashboard-schemas.js";
 import { scoreProjectedDefenseStats } from "./defense-scoring.js";
 import { scoreSleeperPlayerProjection } from "./player-projection-merge.js";
-import { isUnavailableStatus, optimizeTradeRoster, type OptimizablePlayer } from "./lineup-optimizer.js";
+import { isUnavailableStatus, optimizeTradeRoster, sumLiveForecast, type OptimizablePlayer } from "./lineup-optimizer.js";
 import { DEFAULT_LAST_REGULAR_WEEK, loadScheduleGames, type FetchWeek } from "./league-schedule.js";
 import { fetchJson, SLEEPER_BASE } from "./sleeper.js";
 import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projections.js";
@@ -91,13 +91,24 @@ export function projectedPlayerPoints(
 }
 
 /**
- * Best lineup total for the current week from the app's own numbers, the same
- * way the app's lineup totals work: the app's blended pregame projection for
- * players who have not played, and actual points for players whose games have
- * started (locked starters stay in their slots). Bye and unavailable players
- * count as zero until their game locks.
+ * Current-week total for one roster: the lineup the team has set, forecast the
+ * same way as the Matchup view (actual points once final, live pace while
+ * playing, the app's projection before kickoff; bye counts zero). A roster with
+ * no starters set falls back to its best lineup.
  */
-export function currentWeekLineupTotal(players: readonly RosterPlayer[], slots: readonly string[]): number {
+export function currentWeekLineupTotal(players: readonly RosterPlayer[], slots: readonly string[], now = Date.now()): number {
+  const starters = players.filter((player) => player.isStarter);
+  if (starters.length > 0) return sumLiveForecast(starters, now) ?? 0;
+  return bestCurrentWeekLineupTotal(players, slots);
+}
+
+/**
+ * Best lineup total for the current week from the app's own numbers: the app's
+ * blended pregame projection for players who have not played, and actual points
+ * for players whose games have started (locked starters stay in their slots).
+ * Bye and unavailable players count as zero until their game locks.
+ */
+function bestCurrentWeekLineupTotal(players: readonly RosterPlayer[], slots: readonly string[]): number {
   const optimizable: OptimizablePlayer[] = players
     .filter((player) => player.playerId !== "0")
     .map((player) => ({

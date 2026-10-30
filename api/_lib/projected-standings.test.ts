@@ -86,8 +86,15 @@ describe("currentWeekLineupTotal", () => {
 
   it("counts actual points for a starter whose game is final, not the pregame projection", () => {
     const scored = { ...player("w", "WR", null, 8), isStarter: true, lineupSlot: "WR", gamePhase: "final" as const, actual: 35 };
-    const total = currentWeekLineupTotal([scored, player("t", "TE", null, 7)], slots);
+    const total = currentWeekLineupTotal([scored, { ...player("t", "TE", null, 7), isStarter: true, lineupSlot: "TE", gamePhase: "pregame" as const }], slots);
     expect(total).toBe(42);
+  });
+
+  it("scores the lineup a team has set, not its best lineup, like the Matchup view", () => {
+    const starter = { ...player("w", "WR", null, 5), isStarter: true, lineupSlot: "WR", gamePhase: "pregame" as const };
+    const byeStarter = { ...player("t", "TE", null, 9, true), isStarter: true, lineupSlot: "TE" };
+    const benchStar = player("w2", "WR", null, 20);
+    expect(currentWeekLineupTotal([starter, byeStarter, benchStar], slots)).toBe(5);
   });
 });
 

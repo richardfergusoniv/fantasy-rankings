@@ -34,6 +34,7 @@ Three jobs, three looks (`theme/badges.css`). One meaning per color.
 - `--radius` is 12px; `sm`/`md`/`xl` derive from it. Small tags, chips and skeleton lines use `--radius-xs` (4px, derived from `--radius`); never write a bare `4px` radius. Flat list rows, dividers and full-bleed frames use `0` on purpose.
 - 4px spacing steps. Touch targets default to 44px.
 - One primary layout breakpoint at 760px, with additional responsive rules at max-width 420px and max-width 759px.
+- On desktop, the page tabs, sub-tabs and every view share one content width (`--content-width`), so they end at the same right edge.
 
 ## Tools
 
