@@ -236,6 +236,9 @@ async function handleSection(
     sleeperUserId: viewer.sleeperUserId,
     view: section,
     requestedVersion: url.searchParams.get("v"),
+    // A Retry must reach its own origin load (which restarts the build), not
+    // join a plain poll's or be answered from L1.
+    force: retryBuild,
     loadOrigin: makeSectionLoadOrigin(viewer, section, retryBuild),
   });
   return dashboardJson(loaded);
@@ -274,6 +277,7 @@ async function handleSections(
       sleeperUserId: viewer.sleeperUserId,
       view: section,
       requestedVersion,
+      force: retryBuild,
       loadOrigin: makeSectionLoadOrigin(viewer, section, retryBuild),
     }),
   })));
