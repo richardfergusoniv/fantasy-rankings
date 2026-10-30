@@ -121,7 +121,7 @@ export function flushCacheMetrics(): void {
   if (personalizedOps > 0) {
     console.error("[cache-alert] personalized-runtime-traffic", JSON.stringify({
       ops: personalizedOps,
-      instanceId: snapshot.instanceId,
+      instanceId: snapshot.processInstanceId,
     }));
   }
   counters.clear();
