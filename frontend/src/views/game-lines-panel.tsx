@@ -43,6 +43,7 @@ import { formatImpliedTotal, matchupSelectionForGameLine } from "../lib/game-lin
 import { SegmentedControl } from "../shared";
 import type { League, MatchupSelection } from "../dashboard-types";
 import { formatDecimal } from "../lib/format-number";
+import { Badge } from "@/components/ui/badge";
 import { CrossToolBadge, PlayerNameLink, type CrossToolLink } from "../tool-links";
 import type { PlayerLinkResolver } from "../tool-player-link";
 
@@ -162,22 +163,21 @@ const EMPTY_COVER = { wins: 0, losses: 0, pushes: 0 };
 function GameBoardTeam({
   team,
   implied,
-  record,
   align,
   matchupLink,
   finalScore,
+  leads,
 }: {
   team: string;
   implied: number | null;
-  record: TeamSeasonRecords | null;
   align: "away" | "home";
   matchupLink: CrossToolLink | null;
   /** When the game is final, show the actual score instead of implied. */
   finalScore: number | null;
+  /** The side with the higher implied points or score, drawn in the accent color. */
+  leads: boolean;
 }) {
-  const impliedLabel = finalScore !== null
-    ? String(finalScore)
-    : formatImpliedTotal(implied);
+  const impliedLabel = finalScore !== null ? String(finalScore) : formatImpliedTotal(implied);
   const impliedCaption = finalScore !== null ? "Score" : "Implied";
   return (
     <div className={`game-board-team is-${align}`}>
@@ -193,12 +193,19 @@ function GameBoardTeam({
       )}
       <p className="game-board-implied">
         <span>{impliedCaption}</span>
-        <strong>{impliedLabel}</strong>
+        <strong className={leads ? "is-leading" : undefined}>{impliedLabel}</strong>
       </p>
-      <dl>
-        <div><dt>ATS</dt><dd>{formatCoverRecord(record?.ats ?? EMPTY_COVER)}</dd></div>
-        <div><dt>O/U</dt><dd>{formatCoverRecord(record?.ou ?? EMPTY_COVER)}</dd></div>
-      </dl>
+    </div>
+  );
+}
+
+/** One comparison row: away record, the label, home record. */
+function GameBoardCompare({ label, away, home }: { label: string; away: string; home: string }) {
+  return (
+    <div className="game-board-compare">
+      <span>{away}</span>
+      <b>{label}</b>
+      <span>{home}</span>
     </div>
   );
 }
@@ -233,31 +240,54 @@ function GameLineCardBlock({
         return Number.isFinite(value) ? value : null;
       })
     : null;
+  const awayPoints = finalScores?.[0] ?? card.awayImplied;
+  const homePoints = finalScores?.[1] ?? card.homeImplied;
+  const hasPoints = awayPoints !== null && homePoints !== null && awayPoints + homePoints > 0;
+  const awayShare = hasPoints ? Math.round((awayPoints / (awayPoints + homePoints)) * 100) : null;
+  // Only claim "not started" when the kickoff time is known and still ahead.
+  const status = card.isFinal ? "Final" : card.kickoffAtMs !== null && card.kickoffAtMs > Date.now() ? "Not started" : null;
   return (
     <section className="game-board" aria-label={`${card.matchup}, ${card.kickoffPt}`}>
-      <GameBoardTeam
-        team={card.awayTeam}
-        implied={card.awayImplied}
-        record={awayRecord}
-        align="away"
-        matchupLink={awayLink}
-        finalScore={finalScores?.[0] ?? null}
-      />
-      <div className="game-board-market">
-        <dl>
+      <div className="game-board-chips">
+        <Badge variant="secondary" size="compact" className="injury">{card.kickoffPt}</Badge>
+        {status ? <Badge variant="secondary" size="compact" className="injury">{status}</Badge> : null}
+      </div>
+      <div className="game-board-teams">
+        <GameBoardTeam
+          team={card.awayTeam}
+          implied={card.awayImplied}
+          align="away"
+          matchupLink={awayLink}
+          finalScore={finalScores?.[0] ?? null}
+          leads={hasPoints && awayPoints > homePoints}
+        />
+        <dl className="game-board-market">
           <div><dt>Spread</dt><dd>{card.spread}</dd></div>
           <div><dt>Total</dt><dd>{card.total}</dd></div>
         </dl>
-        <span className="game-board-kickoff">{card.kickoffPt}</span>
+        <GameBoardTeam
+          team={card.homeTeam}
+          implied={card.homeImplied}
+          align="home"
+          matchupLink={homeLink}
+          finalScore={finalScores?.[1] ?? null}
+          leads={hasPoints && homePoints > awayPoints}
+        />
       </div>
-      <GameBoardTeam
-        team={card.homeTeam}
-        implied={card.homeImplied}
-        record={homeRecord}
-        align="home"
-        matchupLink={homeLink}
-        finalScore={finalScores?.[1] ?? null}
-      />
+      {awayShare === null ? null : (
+        <div
+          className="game-board-split"
+          role="img"
+          aria-label={`${card.isFinal ? "Final" : "Implied"} points split, ${awayShare} percent ${card.awayTeam}`}
+        >
+          <i style={{ flex: awayShare }} />
+          <i style={{ flex: 100 - awayShare }} />
+        </div>
+      )}
+      <div className="game-board-compares">
+        <GameBoardCompare label="ATS" away={formatCoverRecord(awayRecord?.ats ?? EMPTY_COVER)} home={formatCoverRecord(homeRecord?.ats ?? EMPTY_COVER)} />
+        <GameBoardCompare label="O/U" away={formatCoverRecord(awayRecord?.ou ?? EMPTY_COVER)} home={formatCoverRecord(homeRecord?.ou ?? EMPTY_COVER)} />
+      </div>
     </section>
   );
 }
@@ -269,12 +299,10 @@ function GameSlate({
   cards,
   selectedId,
   onSelect,
-  matchupLinkFor,
 }: {
   cards: GameLineCard[];
   selectedId: string;
   onSelect: (id: string) => void;
-  matchupLinkFor?: GameLineMatchupLink;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -312,45 +340,24 @@ function GameSlate({
           onClick={() => onSelect(ALL_GAMES_PICKER_ID)}
         >
           <strong>All games</strong>
+          <span className="game-slate-kickoff">{cards.length} {cards.length === 1 ? "game" : "games"}</span>
         </button>
         {cards.map((card) => {
-          const matchupLink = matchupLinkFor?.(matchupSelectionForGameLine({
-            awayTeam: card.awayTeam,
-            homeTeam: card.homeTeam,
-            isFinal: card.isFinal,
-          })) ?? null;
           const selected = selectedId === card.gameId;
           return (
-            <div
+            <button
               key={card.gameId}
+              type="button"
               className="game-slate-tile"
+              aria-pressed={selected}
+              aria-label={`Select ${card.matchup}`}
               data-selected={selected || undefined}
+              onClick={() => onSelect(card.gameId)}
             >
-              {matchupLink ? (
-                <CrossToolBadge
-                  link={matchupLink}
-                  label={card.matchup}
-                  ariaLabel={`Open ${card.matchup} matchup card`}
-                  className="game-slate-matchup-link"
-                />
-              ) : (
-                <strong className="game-slate-matchup-label">{card.matchup}</strong>
-              )}
-              <button
-                type="button"
-                className="game-slate-pick"
-                aria-pressed={selected}
-                aria-label={`Select ${card.matchup}`}
-                onClick={() => onSelect(card.gameId)}
-              >
-                <span className="game-slate-kickoff">{card.kickoffPt}</span>
-                <span className="game-slate-lines">
-                  {card.awayImplied !== null && card.homeImplied !== null
-                    ? `${formatImpliedTotal(card.awayImplied)}–${formatImpliedTotal(card.homeImplied)} · ${card.total}`
-                    : `${card.spread} · ${card.total}`}
-                </span>
-              </button>
-            </div>
+              <strong className="game-slate-matchup-label">{card.matchup}</strong>
+              <span className="game-slate-kickoff">{card.kickoffPt}</span>
+              <span className="game-slate-lines">{card.spread} · {card.total}</span>
+            </button>
           );
         })}
       </div>
@@ -745,7 +752,6 @@ export function GameLinesPanel({
           <GameSlate
             cards={gameLineCards}
             selectedId={selectedGameId}
-            matchupLinkFor={matchupLinkFor}
             onSelect={(id) => {
               setUserGameId(id);
               if (initialTeam) onSelectionChange?.({ gameLinesTeam: null });
