@@ -437,8 +437,9 @@ export type DashboardCacheWrite = {
 };
 
 /**
- * Build every `source_cache` write for a dashboard (section rows + optional
- * full-row key). Pure — used by `writeUserDashboardCache` and unit tests.
+ * Build every `source_cache` write for a dashboard. Per-user keys write the
+ * seven section rows only; non-user keys (the owner snapshot) write the full
+ * row. Pure — used by `writeUserDashboardCache` and unit tests.
  */
 export function buildDashboardCacheWrites(args: {
   cacheKey: string;
@@ -478,6 +479,11 @@ export function buildDashboardCacheWrites(args: {
           fetchedAt,
         });
       }
+      // Per-user keys write section rows only: the legacy full
+      // `dashboard:user:<id>` row duplicated every section byte a second
+      // time (roughly 2x snapshot egress on reads of it). Reads still fall
+      // back to older full rows; new writes no longer produce one.
+      return writes;
     }
   }
 
