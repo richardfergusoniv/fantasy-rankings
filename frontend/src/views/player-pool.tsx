@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -42,11 +42,9 @@ import {
   SOS_POSITIONS,
   fantasySosRanksForTeam,
   MatchupTag,
-  ModalPortal,
   SegmentedControl,
   leagueRank,
   rankToneClassName,
-  useDialogFocusTrap,
   type SegmentOption,
   type StrengthOfScheduleEntryLike,
 } from "../shared";
@@ -57,6 +55,7 @@ import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-f
 import { perGame, perGameRank } from "./team-per-game";
 import { ListPagination } from "../components/state-blocks";
 import { ChevronGlyph, CloseGlyph } from "../components/glyphs";
+import { ModalCard } from "../components/modal-card";
 
 /** Compact rankings/waivers row height (matches former density=compact). */
 export const RANKINGS_ROW_HEIGHT = 56;
@@ -192,8 +191,6 @@ export function TeamDataModal({
   onRetry: () => void;
   onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLElement | null>(null);
-  useDialogFocusTrap(dialogRef, onClose);
   const [tab, setTab] = useState<"overview" | "advanced">("overview");
   const teamCode = canonicalNflTeam(selection.team);
   const lineRow = offensiveLine?.rows.find((row) => canonicalNflTeam(row.team) === teamCode);
@@ -312,9 +309,7 @@ export function TeamDataModal({
   const turnoversPerGame = perGameStat((row) => row.turnovers, false);
 
   return (
-    <ModalPortal>
-      <div className="matchup-card-backdrop" onClick={onClose}>
-        <article ref={dialogRef} className="matchup-data-card team-data-card" role="dialog" aria-modal="true" aria-labelledby="team-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
+    <ModalCard onClose={onClose} labelledBy="team-card-title" backdropClassName="matchup-card-backdrop" className="matchup-data-card team-data-card">
           <div className="matchup-data-header matchup-data-header-minimal">
             <button type="button" onClick={onClose} aria-label="Close team data"><CloseGlyph /></button>
           </div>
@@ -494,9 +489,7 @@ export function TeamDataModal({
             </div>
           )}
           {loadError ? <SectionError title="Team data didn’t load." onRetry={onRetry} compact /> : null}
-        </article>
-      </div>
-    </ModalPortal>
+    </ModalCard>
   );
 }
 
