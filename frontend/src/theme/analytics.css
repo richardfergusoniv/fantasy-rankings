@@ -1,6 +1,5 @@
 /* Analytics: saved views, charts, scatter plots and the FPA heatmap. */
 .analytics-window-toggle { margin-bottom: 10px; }
-.analytics-position-tabs { margin-bottom: 10px; }
 .weekly-page-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 2px 2px 12px; }
 .weekly-page-intro h2, .tool-section-heading h2 { margin: 0; font-size: var(--type-display); line-height: 1.05; font-weight: 700; letter-spacing: -.02em; }
 .weekly-page-intro span, .tool-section-heading span { color: var(--dim); text-align: right; font-size: var(--type-caption); font-weight: 600; }
@@ -8,18 +7,17 @@
 .trade-view > .tool-section-heading,
 .charts-tool > .tool-section-heading { margin: 0 0 16px; padding: 0 0 8px; border-top: 0; }
 .trade-view + .charts-tool { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--hairline); }
-.analytics-selectors { display: grid; gap: 8px; margin-top: 2px; padding: 10px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
-.analytics-selectors label { min-width: 0; }
-.analytics-selectors label > span { display: block; margin: 0 0 4px 1px; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.analytics-selectors select, .chart-preset-only select { width: 100%; min-height: 44px; padding: 0 26px 0 10px; border: 1px solid var(--border); border-radius: var(--radius); background-color: var(--surface); color: var(--text); font-size: 16px; font-weight: 600; cursor: pointer; }
+/* Advanced controls use the same pill fields as the Tools toolbars. */
+.analytics-selectors { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; padding: 10px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+.analytics-selectors label { display: inline-flex; min-width: 0; max-width: 100%; min-height: 44px; align-items: center; padding: 0 0 0 12px; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); }
+.analytics-selectors label:hover { border-color: var(--border); }
+.analytics-selectors label:focus-within { border-color: var(--link); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
+.analytics-selectors label > span { flex: none; margin: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; line-height: 1.2; white-space: nowrap; }
+.analytics-selectors select { flex: 1 1 auto; width: auto; min-width: 0; max-width: 100%; min-height: 42px; padding: 0 30px 0 6px; border: 0; border-radius: var(--radius); background-color: transparent; background-image: var(--select-arrow); background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; color: var(--text); font: inherit; font-size: var(--type-control); font-weight: 600; text-overflow: ellipsis; cursor: pointer; appearance: none; }
+.analytics-selectors select:focus { outline: none; }
+.chart-preset-only select { width: 100%; min-height: 44px; padding: 0 26px 0 10px; border: 1px solid var(--border); border-radius: var(--radius); background-color: var(--surface); color: var(--text); font-size: 16px; font-weight: 600; cursor: pointer; }
 .chart-preset-only { padding: 2px 0 0; }
 .chart-preset-only label > span { display: block; margin: 0 0 4px 1px; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.saved-view-block { padding-top: 2px; }
-.saved-view-row { display: grid; gap: 8px; }
-.saved-view-row .chart-preset-select { display: grid; min-width: 0; }
-.saved-view-row .chart-preset-select > span { display: block; margin: 0 0 2px 1px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.saved-view-row .chart-preset-select select { width: 100%; min-height: var(--compact-control-height); padding: 0 26px 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background-color: var(--surface); color: var(--text); font: inherit; font-size: var(--type-control); font-weight: 600; cursor: pointer; }
-.saved-view-row .chart-preset-select select:focus-visible { border-color: var(--link); box-shadow: 0 0 0 2px color-mix(in srgb, var(--link) 28%, transparent); outline: none; }
 .saved-view-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .saved-view-actions button, .saved-view-form button { min-height: 44px; border: 0; border-radius: var(--radius); font-size: var(--type-control); font-weight: 700; cursor: pointer; }
 .saved-view-save-trigger { padding: 0 12px; }
@@ -32,14 +30,12 @@
 .saved-view-form input:focus-visible { outline: 2px solid var(--link); outline-offset: 1px; border-color: var(--link); }
 .saved-view-form button { padding: 0 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
 .saved-view-status { min-height: 17px; margin: 6px 1px 0; color: var(--dim); font-size: var(--type-caption); }
-.chart-research-note { margin-top: 9px; padding: 9px 10px; border-block: 1px solid var(--hairline); background: var(--surface); }
-.chart-research-note p { margin: 0; color: var(--text); font-size: var(--type-caption); line-height: 1.4; }
-.chart-research-note a { display: inline-block; margin-top: 5px; color: var(--link); font-size: var(--type-control); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 .chart-checkbox { display: inline-flex; min-height: 44px; align-items: center; gap: 8px; margin-top: 7px; color: var(--text); font-size: var(--type-caption); font-weight: 700; cursor: pointer; }
-.chart-checkbox input { width: 24px; height: 24px; margin: 0; accent-color: var(--action); }
-.chart-advanced-trigger { display: flex; width: 100%; min-height: var(--compact-control-height); height: var(--compact-control-height); margin-top: 12px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font-size: var(--type-caption); font-weight: 600; line-height: 1; cursor: pointer; }
-.chart-advanced-trigger:hover { background: var(--surface-2); }
-.chart-advanced-trigger:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.chart-checkbox input { position: relative; flex: none; width: 34px; height: 20px; margin: 0; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--segment-track); appearance: none; cursor: pointer; transition: background .12s ease-out, border-color .12s ease-out; }
+.chart-checkbox input::after { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--dim); content: ""; transition: transform .12s ease-out, background .12s ease-out; }
+.chart-checkbox input:checked { border-color: var(--action); background: var(--action); }
+.chart-checkbox input:checked::after { background: var(--on-accent); transform: translateX(14px); }
+.chart-checkbox input:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 .chart-advanced-dialog { width: min(calc(100% - 32px), 440px); gap: 12px; padding: 16px 16px 18px; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--surface); color: var(--text); box-shadow: var(--shadow-modal); }
 .chart-advanced-dialog [data-slot="dialog-header"] { min-height: 44px; justify-content: center; padding-right: 44px; }
 .chart-advanced-dialog [data-slot="dialog-title"] { margin: 0; font-size: var(--type-section); font-weight: 700; line-height: 1.2; letter-spacing: -.02em; }
@@ -48,7 +44,6 @@
 .chart-advanced-dialog .saved-view-actions button,
 .chart-advanced-dialog .saved-view-form button,
 .chart-advanced-dialog .saved-view-form input,
-.chart-advanced-dialog .analytics-selectors select,
 .chart-advanced-dialog .chart-checkbox {
   min-height: var(--compact-control-height);
   height: auto;
@@ -59,16 +54,10 @@
   margin-bottom: 10px;
 }
 .chart-advanced-dialog .analytics-selectors { gap: 6px; padding-top: 6px; }
-.chart-advanced-dialog .analytics-selectors label > span,
 .chart-advanced-dialog .saved-view-form > label { margin-bottom: 2px; font-size: var(--type-caption); font-weight: 600; }
-.chart-advanced-dialog .analytics-selectors select {
-  padding: 0 26px 0 8px;
-  font-size: var(--type-control);
-}
 .chart-advanced-dialog .saved-view-form { margin-top: 0; margin-bottom: 8px; padding: 8px; }
 .chart-advanced-dialog .saved-view-form input { min-height: var(--compact-control-height); font-size: 16px; }
 .chart-advanced-dialog .chart-checkbox { gap: 6px; margin-top: 4px; font-weight: 600; }
-.chart-advanced-dialog .chart-checkbox input { width: 16px; height: 16px; }
 .chart-heading { position: sticky; top: var(--sticky-offset); z-index: 7; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 18px; padding: 9px 2px 7px; border-bottom: 1px solid var(--hairline); background: var(--bg); }
 .chart-heading h2 { margin: 0; font-size: var(--type-display); line-height: 1; font-weight: 700; letter-spacing: -.02em; }
 .chart-heading > div:first-child > span, .chart-count span { display: block; margin-top: 4px; color: var(--dim); font-size: var(--type-caption); }
@@ -99,7 +88,7 @@
   align-self: center;
   justify-self: center;
   color: var(--dim);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 700;
   letter-spacing: .02em;
   white-space: nowrap;
@@ -110,7 +99,7 @@
   grid-row: 2;
   grid-column: 2;
   color: var(--dim);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 700;
   letter-spacing: .02em;
   text-align: center;
@@ -217,11 +206,11 @@
   outline: 2px solid var(--link);
   outline-offset: 2px;
 }
-.adaptive-chart-label { fill: var(--text); stroke: var(--surface); stroke-width: 2.5px; paint-order: stroke fill; font-size: 10px; font-weight: 600; pointer-events: none; }
+.adaptive-chart-label { fill: var(--text); stroke: var(--surface); stroke-width: 2.5px; paint-order: stroke fill; font-size: var(--type-caption); font-weight: 600; pointer-events: none; }
 .adaptive-chart-label.leader { fill: var(--text); font-weight: 600; }
 .adaptive-chart-label.selected-team { fill: var(--chart-team); font-weight: 700; }
 .scatter-frame.is-compact .adaptive-chart-label.selected-team {
-  font-size: 11px;
+  font-size: var(--type-caption);
   stroke-width: 3.5px;
 }
 .adaptive-chart-label-box { fill: var(--surface); stroke: var(--text); stroke-width: 1px; }
@@ -232,9 +221,6 @@
 .chart-key i.selected-team-dot { width: 8px; height: 8px; border-radius: 1px; background: var(--roster-highlight); transform: rotate(45deg); }
 .chart-key i.rostered-dot { background: var(--chart-2); }
 .chart-key i.waiver-dot { background: var(--chart-1); }
-.omitted-chart-labels { margin-top: 10px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
-.omitted-chart-labels summary { padding: 10px 1px; color: var(--link); font-size: var(--type-control); font-weight: 700; cursor: pointer; }
-.omitted-chart-labels p { margin: 0; padding: 0 1px 11px; color: var(--dim); font-size: var(--type-caption); line-height: 1.5; }
 .quadrant-summary { margin-top: 18px; }
 .quadrant-list > div { display: grid; grid-template-columns: minmax(0, 1fr) 66px 66px; gap: 7px; min-height: 50px; align-items: center; padding: 0 10px; border-bottom: 1px solid var(--hairline); }
 .quadrant-list > div > span:first-child { min-width: 0; }
