@@ -44,6 +44,7 @@ import {
   type DashboardTeamApiData,
 } from "./dashboard-section-cache.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
+import { countCacheMetric, sampleCacheBytes } from "./cache-metrics.js";
 import {
   pointDashboardViewAtVersion,
   remainingDashboardTtlSeconds,
@@ -2332,6 +2333,7 @@ async function upsertSourceCacheRow(
   payload: string,
   fetchedAt: Date,
 ): Promise<void> {
+  sampleCacheBytes("dashboard.snapshot.write.bytes", Buffer.byteLength(payload, "utf8"));
   await db
     .insert(schema.sourceCache)
     .values({ cacheKey, payload, fetchedAt })
@@ -2489,6 +2491,8 @@ async function readFullUserDashboardRow(
     .limit(1);
   const row = rows[0];
   if (!row) return null;
+  countCacheMetric("dashboard.snapshot.payload_read");
+  sampleCacheBytes("dashboard.snapshot.read.bytes", Buffer.byteLength(row.payload, "utf8"));
   const dashboard = parseUsableDashboard(row.payload);
   if (!dashboard) return null;
   return {
@@ -2508,6 +2512,10 @@ export async function readAllUserDashboardSections(
     .select()
     .from(schema.sourceCache)
     .where(inArray(schema.sourceCache.cacheKey, keys));
+  countCacheMetric("dashboard.snapshot.payload_read");
+  for (const row of rows) {
+    sampleCacheBytes("dashboard.snapshot.read.bytes", Buffer.byteLength(row.payload, "utf8"));
+  }
   return dashboardFromSectionRows({
     sleeperUserId,
     rows,
@@ -2562,6 +2570,10 @@ export async function readUserDashboardSection<S extends DashboardCacheSection>(
     .from(schema.sourceCache)
     .where(eq(schema.sourceCache.cacheKey, sectionKey))
     .limit(1);
+  countCacheMetric("dashboard.snapshot.payload_read");
+  for (const row of rows) {
+    sampleCacheBytes("dashboard.snapshot.read.bytes", Buffer.byteLength(row.payload, "utf8"));
+  }
   const fromSection = resolveSectionHitFromRows({
     section,
     sectionRow: rows[0] ?? null,
@@ -2610,6 +2622,7 @@ async function buildUserDashboardUnderLease(
   cachedFetchedAtMs: number,
 ): Promise<Dashboard> {
   const resource = dashboardBuildLeaseResource(sleeperUserId);
+  countCacheMetric("dashboard.build.start");
   const outcome = await runWithBuildLease(
     drizzleBuildLeaseStore,
     resource,
@@ -2628,8 +2641,12 @@ async function buildUserDashboardUnderLease(
     // can't start a second build alongside it.
     { deadlineMs: BUILD_DEADLINE_MS },
   );
-  if (outcome.status === "built") return outcome.result;
+  if (outcome.status === "built") {
+    countCacheMetric("dashboard.build.done");
+    return outcome.result;
+  }
   if (outcome.status === "failed") {
+    countCacheMetric("dashboard.build.failed");
     waitUntil(outcome.released);
     throw outcome.error;
   }
@@ -2666,6 +2683,7 @@ async function waitForFreshDashboardCache(
       if (cached?.fresh && cached.fetchedAtMs > sinceMs) {
         return cached.dashboard;
       }
+      countCacheMetric("dashboard.snapshot.metadata_read");
       const lease = await drizzleBuildLeaseStore.read(resource);
       if (!lease || lease.status !== "running") {
         // The holder writes the cache, then releases: re-read once so a

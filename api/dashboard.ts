@@ -28,6 +28,7 @@ import {
 } from "./_lib/dashboard-response-cache.js";
 import { waitUntil } from "@vercel/functions";
 import { z } from "zod";
+import { flushCacheMetrics } from "./_lib/cache-metrics.js";
 
 /**
  * /api/dashboard  and  /api/dashboard/section
@@ -237,10 +238,11 @@ export async function GET(req: Request): Promise<Response> {
     const url = new URL(req.url, "https://localhost");
     // /api/dashboard/section is rewritten to /api/dashboard?__section=1
     // (see vercel.json) so both paths share this one function.
-    if (url.searchParams.has("__section")) {
-      return await handleSection(req, viewer);
-    }
-    return await handleDashboard(req, viewer);
+    const response = url.searchParams.has("__section")
+      ? await handleSection(req, viewer)
+      : await handleDashboard(req, viewer);
+    flushCacheMetrics();
+    return response;
   } catch (err) {
     await captureServerError(err, { route: "dashboard", requestId });
     console.error("[dashboard] request failed", { requestId, error: err });
