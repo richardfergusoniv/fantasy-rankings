@@ -122,7 +122,7 @@ describe("publishSharedBoard", () => {
     expect(rt.store.get(sharedBoardCacheKey("sleeper-picks", "2026:9", newerAge))).toMatchObject({ sourceAgeMs: newerAge });
   });
 
-  it("drops the cached board when a newer publish fails, so reads fall back to the durable row", async () => {
+  it("selects the newer durable board when its cache publication fails", async () => {
     const rt = runtimeDouble();
     await publishSharedBoard("sleeper-picks", "2026:9", board, SOURCE_AGE, rt);
     const newer = { ...board, pulledAt: "2026-10-29T13:00:00.000Z" };
@@ -130,7 +130,7 @@ describe("publishSharedBoard", () => {
     rt.failSet = true;
     const result = await publishSharedBoard("sleeper-picks", "2026:9", newer, newerAge, rt);
     expect(result).toMatchObject({ published: false, reason: "runtime_error" });
-    const read = await readSharedBoard("sleeper-picks", "2026:9", async () => ({ payload: newer, sourceAgeMs: newerAge }), rt);
+    const read = await readSharedBoard("sleeper-picks", "2026:9", async () => ({ payload: newer, sourceAgeMs: newerAge }), async () => newerAge, rt);
     expect(read.source).toBe("durable");
     expect(read.envelope?.payload).toEqual(newer);
   });
