@@ -192,7 +192,6 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-trade-total strong { display: block; margin-top: 2px; font-size: var(--type-section); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums lining-nums; }
 .league-trade-segment.is-adjustment { background-image: repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.22) 0 6px, transparent 6px 12px); }
 .league-trade-dialog .trade-aggregate .section-heading { position: static; z-index: auto; min-height: 0; padding: 0 0 6px; background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
-.trade-power h3 { margin: 0 0 6px; font-size: var(--type-body); font-weight: 700; }
 .trade-power-table { width: 100%; border-collapse: collapse; font-size: var(--type-body); }
 .trade-power-table th { padding: 4px 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: left; }
 .trade-power-table td { padding: 6px; border-top: 1px solid var(--hairline); font-variant-numeric: tabular-nums lining-nums; }
