@@ -35,8 +35,8 @@ import {
 } from "./lib/weekly-implied-totals";
 import { scatterAxisDomain } from "./scatter-zoom";
 import { shouldWarnBeforeLeave, useUnsavedLeaveWarning } from "./unsaved-input";
-import { CloseGlyph } from "./components/glyphs";
 import { EmptyState } from "./components/state-blocks";
+import { CloseGlyph } from "./components/glyphs";
 
 export type Dashboard = ApiResponse<typeof api, "getDashboard">;
 export type League = Dashboard["leagues"][number];

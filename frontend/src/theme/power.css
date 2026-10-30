@@ -156,7 +156,9 @@
 
 /* Projected standings (League > Projected). */
 .proj-view { padding-bottom: 24px; font-variant-numeric: lining-nums tabular-nums; }
-.proj-finish { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 12px 0 0; }
+.proj-hero { padding: 12px; }
+.proj-finish { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; }
+.proj-hero .card-hero { margin-top: 10px; border-bottom: 0; }
 .proj-finish h2 { margin: 0; font-size: var(--type-display); font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
 .proj-row { grid-template-columns: 26px minmax(0, 1fr) 76px 52px; }
 .proj-team { display: flex; align-items: center; gap: 6px; }
