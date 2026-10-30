@@ -433,8 +433,9 @@ describe("PFF premium detection", () => {
 });
 
 describe("stripHtml / decodeXmlEntities", () => {
-  it("strips script blocks even when the closing tag has whitespace", () => {
+  it("strips script blocks even with junk in the closing tag", () => {
     expect(stripHtml("safe<script>alert(1)</script >text")).toBe("safe text");
+    expect(stripHtml("safe<script>alert(1)</script\t\n bar>text")).toBe("safe text");
   });
 
   it("decodes entities in a single pass without double-unescaping", () => {

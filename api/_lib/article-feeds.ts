@@ -322,11 +322,11 @@ export function decodeXmlEntities(value: string): string {
 
 export function stripHtml(value: string): string {
   // Remove script/style before entity decoding so encoded tags stay inert.
-  // Allow whitespace before `>` in closing tags (`</script >`) for CodeQL.
+  // Closing tags use \b[^>]* so junk like `</script\t\n bar>` still matches (CodeQL).
   return decodeXmlEntities(
     value
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ")
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, " ")
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, " ")
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, " ")
       .replace(/<[^>]+>/g, " "),
   )
     .replace(/\s+/g, " ")
