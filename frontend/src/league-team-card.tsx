@@ -218,7 +218,7 @@ export function LeagueTeamCard({
             <div className="card-chips">
               <span className="depth-chart-tag">{formatRecord(team.record)}</span>
               {team.isUser ? <span className="roster-owner-tag is-user">You</span> : null}
-              {isOpponent ? <Badge variant="secondary" size="compact" className="injury">Opponent this week</Badge> : null}
+              {isOpponent ? <Badge variant="secondary" size="compact" className="status-badge">Opponent this week</Badge> : null}
             </div>
             <CardHero
               ariaLabel={`${team.teamName} headline numbers`}

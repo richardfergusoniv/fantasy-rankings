@@ -54,7 +54,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
         <Card className="proj-hero gap-0 py-0 shadow-sm">
           <div className="proj-finish">
             <h2>{ordinal(me.rank)} of {teams.length}</h2>
-            {showPlayoffs ? <Badge variant={me.inPlayoffs ? "positive" : "secondary"} size="compact" className="injury">{me.inPlayoffs ? "In playoffs" : "Outside the cut"}</Badge> : null}
+            {showPlayoffs ? <Badge variant={me.inPlayoffs ? "positive" : "secondary"} size="compact" className="status-badge">{me.inPlayoffs ? "In playoffs" : "Outside the cut"}</Badge> : null}
           </div>
           <CardHero
             ariaLabel="Your projection"

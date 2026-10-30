@@ -262,8 +262,8 @@ function GameLineCardBlock({
   return (
     <section className="game-board" aria-label={`${card.matchup}, ${card.kickoffPt}`}>
       <div className="game-board-chips">
-        <Badge variant="secondary" size="compact" className="injury">{card.kickoffPt}</Badge>
-        {status ? <Badge variant="secondary" size="compact" className="injury">{status}</Badge> : null}
+        <Badge variant="secondary" size="compact" className="status-badge">{card.kickoffPt}</Badge>
+        {status ? <Badge variant="secondary" size="compact" className="status-badge">{status}</Badge> : null}
       </div>
       <div className="game-board-teams">
         <GameBoardTeam

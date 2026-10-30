@@ -329,7 +329,7 @@ export function TeamDataModal({
                 ariaLabel={`Open ${teamName} ${matchupInfo.isAway ? "at" : "versus"} ${matchupInfo.opponent} matchup card${matchupInfo.tone === "soft" ? ", easy matchup" : matchupInfo.tone === "tough" ? ", tough matchup" : ""}`}
                 className={matchupInfo.tone ? `sos-${matchupInfo.tone}` : ""}
               />
-            ) : matchupInfo?.kind === "bye" ? <Badge variant="secondary" size="compact" className="injury">Bye · Wk {matchupInfo.week}</Badge> : null}
+            ) : matchupInfo?.kind === "bye" ? <Badge variant="secondary" size="compact" className="status-badge">Bye · Wk {matchupInfo.week}</Badge> : null}
           </div>
           <CardHero
             ariaLabel={`${teamName} headline numbers`}
