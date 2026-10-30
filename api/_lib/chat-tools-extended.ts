@@ -293,6 +293,7 @@ export async function toolGetPlayerNews(
     : Math.max(limit * 20, 100);
   const newsWhere = and(
     inArray(schema.sharedPlayerNews.playerId, ids),
+    eq(schema.sharedPlayerNews.scope, "player"),
     or(
       and(
         sql`${schema.sharedPlayerNews.publishedAt} is not null`,

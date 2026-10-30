@@ -39,6 +39,7 @@ function news(items: Array<{
         signal: null,
         score: null,
         tags: item.tags ?? [],
+        scope: "player" as const,
       })),
     }],
   };

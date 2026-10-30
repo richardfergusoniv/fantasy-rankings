@@ -1,5 +1,7 @@
 import {
+  isPlayerScopedNews,
   isSleeperTimestampOnlyNews,
+  isTeamOrLeagueNews,
   newsPostDedupeKey,
   newsVisibleInContext,
 } from "../../api/_lib/player-news-filters";
@@ -42,7 +44,7 @@ function isProminentItem(
   prominentPlayerIds: Set<string>,
   highScore: number,
 ): boolean {
-  if (prominentPlayerIds.has(item.playerId)) return true;
+  if (item.playerId && prominentPlayerIds.has(item.playerId)) return true;
   return (item.score ?? -1) >= highScore;
 }
 
@@ -50,7 +52,8 @@ function isProminentItem(
  * Ordered player-news feed for the ticker:
  * 1) selected-league roster news,
  * 2) current-week opponent roster news,
- * 3) remaining prominent shared news (top season-long ranks or high score).
+ * 3) team- and league-scoped X items,
+ * 4) remaining prominent shared news (top season-long ranks or high score).
  * Dedupes by post id (or source URL / identical change text) so a multi-player
  * X roundup appears once, and caps at `limit`.
  */
@@ -83,20 +86,32 @@ export function newsForTicker(
 
   take(
     all
-      .filter((item) => rosterPlayerIds.has(item.playerId))
-      .sort(compareNewsPriority),
-  );
-
-  take(
-    all
-      .filter((item) => opponentPlayerIds.has(item.playerId) && !rosterPlayerIds.has(item.playerId))
+      .filter((item) => item.playerId != null && rosterPlayerIds.has(item.playerId))
       .sort(compareNewsPriority),
   );
 
   take(
     all
       .filter((item) => (
-        !rosterPlayerIds.has(item.playerId)
+        item.playerId != null
+        && opponentPlayerIds.has(item.playerId)
+        && !rosterPlayerIds.has(item.playerId)
+      ))
+      .sort(compareNewsPriority),
+  );
+
+  take(
+    all
+      .filter((item) => isTeamOrLeagueNews(item))
+      .sort(compareNewsPriority),
+  );
+
+  take(
+    all
+      .filter((item) => (
+        isPlayerScopedNews(item)
+        && item.playerId != null
+        && !rosterPlayerIds.has(item.playerId)
         && !opponentPlayerIds.has(item.playerId)
         && isProminentItem(item, prominentPlayerIds, highScore)
       ))

@@ -19,7 +19,7 @@ export function rosterNewsForTicker(
     .filter((item) => {
       if (isSleeperTimestampOnlyNews(item)) return false;
       if (!newsVisibleInContext(item, isDynastyContext)) return false;
-      if (!rosterPlayerIds.has(item.playerId)) return false;
+      if (!item.playerId || !rosterPlayerIds.has(item.playerId)) return false;
       const postKey = newsPostDedupeKey(item);
       if (seenPost.has(postKey) || seenText.has(item.change)) return false;
       seenPost.add(postKey);

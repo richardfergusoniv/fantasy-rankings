@@ -74,9 +74,11 @@ export type PlayerNews = {
     checkedAt: string;
     items: Array<{
       id: string;
-      playerId: string;
+      /** Null for team/league-scoped X rows. */
+      playerId: string | null;
       player: string;
-      team: string;
+      /** Null for league-scoped X rows. */
+      team: string | null;
       change: string;
       leagueIds: string[];
       newsType: "roster" | "waiver" | "headline";
@@ -98,6 +100,8 @@ export type PlayerNews = {
       score: number | null;
       /** e.g. `["dynasty"]` — redraft clients hide dynasty-tagged rows. */
       tags: string[];
+      /** player (default) | team | league. */
+      scope: "player" | "team" | "league";
     }>;
   }>;
   emptyReason: string | null;
@@ -170,6 +174,7 @@ async function insertSharedDrafts(drafts: SharedNewsDraft[]): Promise<number> {
       signal: draft.signal,
       score: draft.score,
       tags: draft.tags,
+      scope: draft.scope,
       createdAt: new Date(),
     }));
     const result = await db
@@ -188,7 +193,26 @@ async function readStoredNews(isDynastyContext: boolean): Promise<Response> {
   const cutoff = retentionCutoff();
   const tagVisibility = dynastyTagVisibilitySql(isDynastyContext);
   const rows = await db
-    .select()
+    .select({
+      id: schema.sharedPlayerNews.id,
+      playerId: schema.sharedPlayerNews.playerId,
+      player: schema.sharedPlayerNews.player,
+      team: schema.sharedPlayerNews.team,
+      change: schema.sharedPlayerNews.change,
+      newsType: schema.sharedPlayerNews.newsType,
+      roleContext: schema.sharedPlayerNews.roleContext,
+      sourceLabel: schema.sharedPlayerNews.sourceLabel,
+      sourceUrl: schema.sharedPlayerNews.sourceUrl,
+      publishedAt: schema.sharedPlayerNews.publishedAt,
+      createdAt: schema.sharedPlayerNews.createdAt,
+      author: schema.sharedPlayerNews.author,
+      externalId: schema.sharedPlayerNews.externalId,
+      source: schema.sharedPlayerNews.source,
+      signal: schema.sharedPlayerNews.signal,
+      score: schema.sharedPlayerNews.score,
+      tags: schema.sharedPlayerNews.tags,
+      scope: schema.sharedPlayerNews.scope,
+    })
     .from(schema.sharedPlayerNews)
     .where(
       and(
@@ -214,6 +238,8 @@ async function readStoredNews(isDynastyContext: boolean): Promise<Response> {
   const checkedAt = lastCheckedAt ?? new Date().toISOString();
   // Bound by distinct posts so a 15-player roundup does not crowd older news
   // out of the 500-post window; keep every player row for selected posts.
+  // Team/league X rows are included for the ticker; player cards filter by
+  // player_id / scope client-side.
   const items = takeNewsRowsForPostLimit(
     rows.filter((item) => !isSleeperTimestampOnlyNews(item)),
     SHARED_NEWS_POST_LIMIT,
@@ -237,6 +263,7 @@ async function readStoredNews(isDynastyContext: boolean): Promise<Response> {
     signal: item.signal,
     score: item.score,
     tags: item.tags ?? [],
+    scope: (item.scope ?? "player") as "player" | "team" | "league",
   }));
 
   return json({

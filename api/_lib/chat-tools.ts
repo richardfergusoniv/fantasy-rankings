@@ -409,6 +409,7 @@ async function loadPlayerNews(playerId: string, isDynastyContext: boolean, limit
       .where(
         and(
           eq(schema.sharedPlayerNews.playerId, playerId),
+          eq(schema.sharedPlayerNews.scope, "player"),
           or(
             and(
               sql`${schema.sharedPlayerNews.publishedAt} is not null`,

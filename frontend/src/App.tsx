@@ -181,8 +181,16 @@ function tickerLabel(subject: string, detail: string): string {
 }
 
 function tickerNewsLabel(item: PlayerNewsItem): string {
-  const isLeagueHeadline = item.playerId === "league" || /^league headline$/i.test(item.player);
-  const subject = isLeagueHeadline ? (item.team && item.team !== "NFL" ? item.team : "NFL") : item.player;
+  const scope = item.scope ?? "player";
+  const isTeamScoped = scope === "team";
+  const isLeagueScoped = scope === "league"
+    || item.playerId === "league"
+    || /^league headline$/i.test(item.player);
+  const subject = isTeamScoped
+    ? (item.team && item.team !== "NFL" ? item.team : item.player)
+    : isLeagueScoped
+      ? (item.team && item.team !== "NFL" ? item.team : "NFL")
+      : item.player;
   const escapedNames = [item.player, item.player.split(/\s+/).at(-1), item.team]
     .filter((value): value is string => Boolean(value) && !/^league headline$|^nfl$/i.test(value ?? ""))
     .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));

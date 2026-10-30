@@ -39,18 +39,26 @@ repo**. Player-id attachment for mentions lives **in this app** on ingest.
    `search_rank` ≤ 300 (from `nfl-players-roster-v1`; run
    `refresh-nfl-players` so ranks are present). Helper:
    `api/_lib/x-producer-priority.ts`.
-2. **Ingest expands mentions** — `POST /api/ingest/player-news-x` still
-   accepts one extract per item, but `api/_lib/x-news-mentions.ts` scans
-   `text` for uniquely resolvable names (full names, aliases, multi-token
-   first names like Amon-Ra) and writes one row per `player_id` (`post_id` +
-   `player_id` unique). Explicit producer `player_id`s always attach; text
-   expansion runs only when total resolved players ≤ 6 (≤ 15 for practice /
-   injury reports). Above the cap, expansion is skipped entirely (explicit
-   only — not truncated to N). Prefer sending `player_id` when known; name
-   matching remains a fallback. Optional `tags` (≤5 lowercase strings); use
-   `["dynasty"]` for dynasty-only posts — redraft feeds hide those rows.
-   Response includes `unresolved` + `unresolvedSamples`. One-off cleanup for
-   legacy over-cap rows: `docs/x-news-over-cap-cleanup.sql`.
+2. **Ingest expands mentions** — `POST /api/ingest/player-news-x` accepts
+   items with optional `scope` (`player` default | `team` | `league`).
+   - **player** (default): `api/_lib/x-news-mentions.ts` scans `text` for
+     uniquely resolvable names and writes one row per `player_id`
+     (`post_id` + `player_id` unique). Explicit producer `player_id`s always
+     attach; text expansion runs only when total resolved players ≤ 6
+     (≤ 15 for practice / injury reports). Above the cap, expansion is
+     skipped entirely (explicit only — not truncated to N). Prefer
+     `player_id` when known; name matching remains a fallback.
+   - **team**: requires a valid NFL `team` code (JAC→JAX, LA→LAR, WSH→WAS,
+     …). No player resolve — one row with `player_id` null, deduped by
+     `post_id` + team.
+   - **league**: no player and no team — one row with both null, deduped by
+     `post_id`. Team/league rows appear in the app ticker only.
+   Optional `tags` (≤5 lowercase strings); use `["dynasty"]` for
+   dynasty-only posts — redraft feeds hide those rows. Response includes
+   `unresolved` + `unresolvedSamples` plus `resolvedPlayer` /
+   `resolvedTeam` / `resolvedLeague` and matching `inserted*` counts.
+   One-off cleanup for legacy over-cap rows:
+   `docs/x-news-over-cap-cleanup.sql`.
 3. **Beat + national accounts** stay in the external fetcher (Schefter,
    Rapoport, team beats). No X scraper lives here.
 4. **Alert** if weekday X volume collapses (e.g. &lt; ~20 rows on a weekday).

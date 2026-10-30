@@ -354,6 +354,8 @@ export function groupNewsItemsByPlayer(news: PlayerNews | undefined): Map<string
   const itemsByPlayer = new Map<string, PlayerNewsItem[]>();
   for (const run of news?.runs ?? []) {
     for (const item of run.items) {
+      // Team/league X rows have null player_id — never attach to player cards.
+      if (!item.playerId || item.scope === "team" || item.scope === "league") continue;
       const items = itemsByPlayer.get(item.playerId);
       if (items) items.push(item);
       else itemsByPlayer.set(item.playerId, [item]);

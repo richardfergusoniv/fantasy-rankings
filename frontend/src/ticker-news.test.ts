@@ -5,7 +5,7 @@ import { newsForTicker, TICKER_NEWS_LIMIT } from "./ticker-news";
 
 function item(partial: {
   id: string;
-  playerId: string;
+  playerId: string | null;
   change: string;
   score?: number | null;
   sourcePublishedAt?: string | null;
@@ -14,12 +14,16 @@ function item(partial: {
   externalId?: string | null;
   source?: "sleeper" | "x" | "nflverse";
   tags?: string[];
+  scope?: "player" | "team" | "league";
+  player?: string;
+  team?: string | null;
 }): PlayerNewsItem {
+  const scope = partial.scope ?? "player";
   return {
     id: partial.id,
     playerId: partial.playerId,
-    player: "Player",
-    team: "MIN",
+    player: partial.player ?? (scope === "league" ? "NFL" : scope === "team" ? (partial.team ?? "DET") : "Player"),
+    team: partial.team === undefined ? (scope === "league" ? null : "MIN") : partial.team,
     change: partial.change,
     leagueIds: [],
     newsType: "roster",
@@ -39,6 +43,7 @@ function item(partial: {
     signal: null,
     score: partial.score ?? null,
     tags: partial.tags ?? [],
+    scope,
   };
 }
 
@@ -206,5 +211,45 @@ describe("newsForTicker", () => {
       newsForTicker(news, new Set(["a"]), new Set(), new Set(), { isDynastyContext: true })
         .map((row) => row.id),
     ).toEqual(["dynasty", "plain"]);
+  });
+
+  it("includes team and league scoped X items after roster/opponent tiers", () => {
+    const news = feed([
+      item({ id: "r1", playerId: "roster-a", change: "Roster note", score: 20 }),
+      item({
+        id: "team-1",
+        playerId: null,
+        scope: "team",
+        team: "DET",
+        change: "Lions defense vs WR pace",
+        score: 40,
+        source: "x",
+        externalId: "team-post",
+        sourceUrl: "https://x.com/r/status/team-post",
+      }),
+      item({
+        id: "league-1",
+        playerId: null,
+        scope: "league",
+        team: null,
+        change: "League-wide route tree note",
+        score: 55,
+        source: "x",
+        externalId: "league-post",
+        sourceUrl: "https://x.com/r/status/league-post",
+      }),
+      item({ id: "prom", playerId: "prom-a", change: "Prom note", score: 90 }),
+      // Low-score non-roster player news stays out unless prominent.
+      item({ id: "noise", playerId: "bench", change: "Noise", score: 10 }),
+    ]);
+
+    const items = newsForTicker(
+      news,
+      new Set(["roster-a"]),
+      new Set(),
+      new Set(["prom-a"]),
+      { limit: 10 },
+    );
+    expect(items.map((row) => row.id)).toEqual(["r1", "league-1", "team-1", "prom"]);
   });
 });
