@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CardHero } from "../components/card-hero";
+import { CrossToolBadge } from "../tool-links";
 import { api } from "../api";
 import type {
   Dashboard,
@@ -143,6 +146,10 @@ function DepthGridStatus({ status }: { status: string }) {
   return <span className={`depth-grid-status ${out ? "is-out" : "is-questionable"}`} title={status}>{out ? (code === "O" ? "Out" : code) : code}</span>;
 }
 
+export type TeamMatchupInfo =
+  | { kind: "game"; week: number; opponent: string; isAway: boolean | null; tone: "soft" | "tough" | null; onOpen: () => void }
+  | { kind: "bye"; week: number };
+
 export function TeamDataModal({
   selection,
   offensiveLine,
@@ -157,6 +164,7 @@ export function TeamDataModal({
   situationalLeague = [],
   depthChart = [],
   sosEntry,
+  matchupInfo = null,
   loading,
   loadError,
   onRetry,
@@ -176,6 +184,8 @@ export function TeamDataModal({
   /** QB, RB, WR and TE three deep, when the depth chart is known. */
   depthChart?: readonly DepthChartRow[];
   sosEntry?: StrengthOfScheduleEntryLike;
+  /** This week's game for the team: a link to its matchup card, or a bye. */
+  matchupInfo?: TeamMatchupInfo | null;
   loading: boolean;
   loadError: boolean;
   onRetry: () => void;
@@ -260,13 +270,13 @@ export function TeamDataModal({
     missing ? <span className="sr-only">{text}</span> : null
   );
   type PerGameStatus = "missing" | "no-games" | "ready";
-  const perGameStat = (read: (row: TeamUsage) => number, higherIsBetter = true) => {
+  const perGameStat = (read: (row: TeamUsage) => number, higherIsBetter = true, digits = 1) => {
     if (!usage) return { text: "—", rank: null, status: "missing" as const };
     const total = read(usage);
     const rate = perGame(total, usage.games);
     if (rate === null) return { text: "—", rank: null, status: "no-games" as const };
     return {
-      text: formatDecimal(rate, 2),
+      text: formatDecimal(rate, digits),
       rank: perGameRank(
         usageLeague.map((row) => ({ total: read(row), games: row.games })),
         total,
@@ -290,10 +300,13 @@ export function TeamDataModal({
       }
     }
   };
+  const leagueTeams = Math.max(usageLeague.length, 2);
+  const barShare = (rank: number | null) => (rank === null ? 0 : Math.max(4, Math.round(((leagueTeams - rank + 1) / leagueTeams) * 100)));
+  const playsRank = usageRank((row) => row.playsPerGame);
   const pointsPerGame = perGameStat((row) => row.pointsScored);
-  const totalYardsPerGame = perGameStat((row) => row.totalYards);
-  const passingYardsPerGame = perGameStat((row) => row.passingYards);
-  const rushingYardsPerGame = perGameStat((row) => row.rushingYards);
+  const totalYardsPerGame = perGameStat((row) => row.totalYards, true, 0);
+  const passingYardsPerGame = perGameStat((row) => row.passingYards, true, 0);
+  const rushingYardsPerGame = perGameStat((row) => row.rushingYards, true, 0);
   const touchdownsPerGame = perGameStat((row) => row.offensiveTouchdowns);
   const turnoversPerGame = perGameStat((row) => row.turnovers, false);
 
@@ -301,14 +314,32 @@ export function TeamDataModal({
     <ModalPortal>
       <div className="matchup-card-backdrop" onClick={onClose}>
         <article ref={dialogRef} className="matchup-data-card team-data-card" role="dialog" aria-modal="true" aria-labelledby="team-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
-          <div className="matchup-data-header">
-            <div>
-              <h2 id="team-card-title">{teamName}</h2>
-            </div>
+          <div className="matchup-data-header matchup-data-header-minimal">
             <button type="button" onClick={onClose} aria-label="Close team data">×</button>
           </div>
+          <h2 id="team-card-title" className="card-title">{teamName}</h2>
+          <div className="card-chips">
+            {recordLabel === "—" ? null : <span className="depth-chart-tag" title={recordRank === null ? undefined : `Record ranks #${recordRank} of ${leagueTeams}`}>{recordLabel}</span>}
+            {overallRank === null ? null : <span className="depth-chart-tag">PFN overall #{overallRank}</span>}
+            {matchupInfo?.kind === "game" ? (
+              <CrossToolBadge
+                link={{ href: "#", onOpen: matchupInfo.onOpen }}
+                label={`${matchupInfo.tone === "soft" ? "Easy · " : matchupInfo.tone === "tough" ? "Tough · " : ""}Wk ${matchupInfo.week} ${matchupInfo.isAway ? "@" : "vs"} ${matchupInfo.opponent}`}
+                ariaLabel={`Open ${teamName} ${matchupInfo.isAway ? "at" : "versus"} ${matchupInfo.opponent} matchup card`}
+                className={matchupInfo.tone ? `sos-${matchupInfo.tone}` : ""}
+              />
+            ) : matchupInfo?.kind === "bye" ? <Badge variant="secondary" size="compact" className="injury">Bye · Wk {matchupInfo.week}</Badge> : null}
+          </div>
+          <CardHero
+            ariaLabel={`${teamName} headline numbers`}
+            items={[
+              { label: "Points / G", value: pointsPerGame.text, sub: pointsPerGame.rank === null ? undefined : `#${pointsPerGame.rank} of ${leagueTeams}`, tone: pointsPerGame.rank !== null && pointsPerGame.rank <= 8 ? "good" : undefined },
+              { label: "Total yds / G", value: totalYardsPerGame.text, sub: totalYardsPerGame.rank === null ? undefined : `#${totalYardsPerGame.rank} of ${leagueTeams}`, tone: totalYardsPerGame.rank !== null && totalYardsPerGame.rank <= 8 ? "good" : undefined },
+              { label: "Plays / G", value: usage ? formatDecimal(usage.playsPerGame, 1) : "—", sub: playsRank === null ? undefined : `#${playsRank} of ${leagueTeams}`, tone: playsRank !== null && playsRank <= 8 ? "good" : undefined },
+            ]}
+          />
 
-          <Tabs value={tab} onValueChange={(value) => setTab(value as "overview" | "advanced")} className="team-card-tabs">
+          <Tabs value={tab} onValueChange={(value) => setTab(value as "overview" | "advanced")} className="team-card-tabs" style={{ marginTop: 16 }}>
             <TabsList aria-label="Team data">
               <TabsTrigger id="team-card-overview-tab" value="overview" aria-controls="team-card-overview-panel">Offense</TabsTrigger>
               <TabsTrigger id="team-card-advanced-tab" value="advanced" aria-controls="team-card-advanced-panel">Analytics</TabsTrigger>
@@ -318,7 +349,7 @@ export function TeamDataModal({
             <div id="team-card-overview-panel" role="tabpanel" aria-labelledby="team-card-overview-tab">
           {depthChart.length > 0 ? (
             <section className="team-card-stat-section" aria-label="Depth chart">
-              <h4 className="team-card-section-heading">Depth</h4>
+              <div className="card-section-head"><h3 className="card-section-title">Depth chart</h3><span className="card-caption">Week projection</span></div>
               <table className="depth-grid">
                 <thead>
                   <tr><th scope="col"><span className="sr-only">Position</span></th><th scope="col">1st</th><th scope="col">2nd</th><th scope="col">3rd</th></tr>
@@ -347,54 +378,33 @@ export function TeamDataModal({
             </section>
           ) : null}
 
-          <section className="team-card-stat-section" aria-label="Stats">
-              <h4 className="team-card-section-heading">Stats</h4>
-              <div className="team-card-metrics">
-                <div>
-                  <span>Points/G</span>
-                  {coloredStat(pointsPerGame.text, pointsPerGame.rank)}
-                  <span className="sr-only">{perGameNote(pointsPerGame.status, "Points scored per game")}</span>
+          <section className="team-card-stat-section" aria-label="How they score">
+              <h3 className="card-section-title">How they score</h3>
+              {[
+                { label: "Pass yds / G", stat: passingYardsPerGame, note: "Passing yards per game" },
+                { label: "Rush yds / G", stat: rushingYardsPerGame, note: "Rushing yards per game" },
+                { label: "TD / G", stat: touchdownsPerGame, note: "Offensive touchdowns per game, pass catches and rushes" },
+                { label: "Giveaways / G", stat: turnoversPerGame, note: "Turnovers per game, interceptions and fumbles lost" },
+              ].map(({ label, stat, note }) => (
+                <div className="stat-bar-row" key={label}>
+                  <span>{label}<span className="sr-only">. {perGameNote(stat.status, note)}</span></span>
+                  <span className="val">{stat.text}</span>
+                  <span className={`rk${stat.rank !== null && stat.rank <= 8 ? " is-top" : ""}`}>{stat.rank === null ? "" : `#${stat.rank}`}</span>
+                  <div className="stat-bar" aria-hidden="true"><i className={stat.rank !== null && stat.rank <= 8 ? "is-top" : undefined} style={{ width: `${barShare(stat.rank)}%` }} /></div>
                 </div>
-                <div>
-                  <span>Total yds/G</span>
-                  {coloredStat(totalYardsPerGame.text, totalYardsPerGame.rank)}
-                  <span className="sr-only">{perGameNote(totalYardsPerGame.status, "Total yards per game")}</span>
-                </div>
-                <div>
-                  <span>Pass yds/G</span>
-                  {coloredStat(passingYardsPerGame.text, passingYardsPerGame.rank)}
-                  <span className="sr-only">{perGameNote(passingYardsPerGame.status, "Passing yards per game")}</span>
-                </div>
-                <div>
-                  <span>Rush yds/G</span>
-                  {coloredStat(rushingYardsPerGame.text, rushingYardsPerGame.rank)}
-                  <span className="sr-only">{perGameNote(rushingYardsPerGame.status, "Rushing yards per game")}</span>
-                </div>
-                <div>
-                  <span>Win–loss record</span>
-                  {coloredStat(recordLabel, recordLabel === "—" ? null : recordRank)}
-                </div>
-                <div>
-                  <span>TD/G</span>
-                  {coloredStat(touchdownsPerGame.text, touchdownsPerGame.rank)}
-                  <span className="sr-only">{perGameNote(touchdownsPerGame.status, "Offensive touchdowns per game, pass catches and rushes")}</span>
-                </div>
-                <div>
-                  <span>TO/G</span>
-                  {coloredStat(turnoversPerGame.text, turnoversPerGame.rank)}
-                  <span className="sr-only">{perGameNote(turnoversPerGame.status, "Turnovers per game, interceptions and fumbles lost")}</span>
-                </div>
-                <div>
-                  <span>Pace of play</span>
-                  {coloredStat(usage ? formatDecimal(usage.playsPerGame, 2) : "—", usageRank((row) => row.playsPerGame))}
-                  {missingNote(!usage, "nflverse unavailable")}
-                </div>
-                <div>
-                  <span>Run / pass split</span>
-                  <strong>{usage ? `${formatPercent(usage.runPct)} / ${formatPercent(usage.passPct)}` : "—"}</strong>
-                  {missingNote(!usage, "nflverse unavailable")}
-                </div>
+              ))}
+              <div className="stat-bar-row">
+                <span>Run / pass split{missingNote(!usage, "nflverse unavailable")}</span>
+                <span className="val">{usage ? `${formatPercent(usage.runPct)} / ${formatPercent(usage.passPct)}` : "—"}</span>
+                <span />
+                {usage ? (
+                  <div role="img" aria-label={`${formatPercent(usage.runPct)} run, ${formatPercent(usage.passPct)} pass`} style={{ display: "flex", gap: 2 }}>
+                    <i style={{ flex: Math.max(usage.runPct, 1), height: 4, borderRadius: 2, background: "var(--dim)" }} />
+                    <i style={{ flex: Math.max(usage.passPct, 1), height: 4, borderRadius: 2, background: "var(--segment-track)" }} />
+                  </div>
+                ) : <span />}
               </div>
+              <p className="card-note">Bars show league rank, longer is better. Amber marks a top 8 rank.</p>
           </section>
 
             </div>
@@ -493,11 +503,14 @@ export function ConnectedTeamCard({
   team,
   dashboard,
   leagueId,
+  onOpenMatchup,
   onClose,
 }: {
   team: string;
   dashboard: Dashboard;
   leagueId: string;
+  /** Open this team's game for the week. The caller closes this card first. */
+  onOpenMatchup?: (matchup: MatchupSelection) => void;
   onClose: () => void;
 }) {
   const pfnTablesQuery = useQuery({
@@ -517,9 +530,29 @@ export function ConnectedTeamCard({
     depthPrevious: dashboard.playerInsights?.depthPrevious ?? {},
     canonical: canonicalNflTeam,
   }), [dashboard.playerInsights, dashboard.rankings, dashboard.seasonLongRankings, leagueId, team]);
+  const weekRow = dashboard.rankings.find((row) => row.leagueId === leagueId && (canonicalNflTeam(row.team) ?? row.team) === teamCode) ?? null;
+  const matchupInfo = useMemo((): TeamMatchupInfo | null => {
+    if (!weekRow) return null;
+    if (weekRow.isBye || !weekRow.opponent) return { kind: "bye", week: dashboard.week };
+    // Easy means the opponent's defense ranks in the bottom third of the PFN table; tough, the top third.
+    const defenseRows = tables?.defense?.rows ?? [];
+    const opponentCode = canonicalNflTeam(weekRow.opponent) ?? weekRow.opponent;
+    const defenseRank = defenseRows.find((row) => (canonicalNflTeam(row.team) ?? row.team) === opponentCode)?.rank ?? null;
+    const tone = defenseRank === null || defenseRows.length < 3 ? null : defenseRank > (defenseRows.length * 2) / 3 ? "soft" : defenseRank <= defenseRows.length / 3 ? "tough" : null;
+    const opponent = weekRow.opponent;
+    return {
+      kind: "game",
+      week: dashboard.week,
+      opponent,
+      isAway: weekRow.isAway,
+      tone,
+      onOpen: () => onOpenMatchup?.({ team, opponent, isAway: weekRow.isAway, gamePhase: weekRow.gamePhase }),
+    };
+  }, [dashboard.week, onOpenMatchup, tables?.defense?.rows, team, weekRow]);
   return (
     <TeamDataModal
       selection={{ team }}
+      matchupInfo={onOpenMatchup ? matchupInfo : matchupInfo?.kind === "bye" ? matchupInfo : null}
       depthChart={depthChart}
       offensiveLine={tables?.["offensive-line"] ?? null}
       defense={tables?.defense ?? null}
