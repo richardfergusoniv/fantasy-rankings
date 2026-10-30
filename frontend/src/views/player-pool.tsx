@@ -53,9 +53,8 @@ import { leaguePowerTeamForPlayer } from "../league-roster";
 import { WindowVirtualList } from "../virtual-list";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
-import { ChevronGlyph, CloseGlyph } from "../components/glyphs";
 import { ListPagination } from "../components/state-blocks";
-import { ModalCard } from "../components/modal-card";
+import { ChevronGlyph, CloseGlyph } from "../components/glyphs";
 
 /** Compact rankings/waivers row height (matches former density=compact). */
 export const RANKINGS_ROW_HEIGHT = 56;
