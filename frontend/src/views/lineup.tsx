@@ -81,17 +81,12 @@ export function MatchupPlayer({
         <span className="matchup-name-line">
           <strong>{player.name}</strong>
           {selected ? <span className="player-selected-chip">Selected</span> : null}
-          {isSwappedIn || isDemoted ? (
-            <span className={`matchup-substitution-tag ${isSwappedIn ? "in" : "out"}`} aria-hidden="true">
-              {isSwappedIn ? "IN" : "OUT"}
-            </span>
-          ) : null}
           {player.injuryStatus ? (
             <DesignationBadge code={sleeperInjuryTag(player.injuryStatus)} label={`Injury status: ${player.injuryStatus}`} title={player.injuryStatus} tone="warning" />
           ) : null}
         </span>
       </button>
-      <div className="matchup-meta">
+      <div className={`matchup-meta${isSwappedIn || isDemoted ? " has-substitution" : ""}`}>
         <MatchupTag
           team={player.team}
           opponent={player.opponent}
@@ -101,6 +96,11 @@ export function MatchupPlayer({
           entry={sosEntry}
           onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase }) : undefined}
         />
+        {isSwappedIn || isDemoted ? (
+          <span className={`matchup-substitution-tag ${isSwappedIn ? "in" : "out"}`} aria-hidden="true">
+            {isSwappedIn ? "IN" : "OUT"}
+          </span>
+        ) : null}
       </div>
       <button type="button" className={matchupProjectionClassName({ scoreLabel: score.label })} onClick={openPlayer} tabIndex={-1} aria-hidden="true">
         <b>{formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)}</b>
