@@ -392,7 +392,9 @@ export async function loadCachedDashboardView<T>(args: {
     }
   }
 
-  const flightKey = `${sleeperUserId}:${args.view}`;
+  // A forced load must not join a plain one: its origin rebuilds (or restarts
+  // a failed build), which the plain load's origin never does.
+  const flightKey = `${sleeperUserId}:${args.view}${args.force ? ":force" : ""}`;
   const existing = inFlightViewLoads.get(flightKey);
   if (existing) {
     countCacheMetric("dashboard.singleflight.joined");
