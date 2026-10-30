@@ -8,6 +8,7 @@ import { DepthChangeMark, MatchupTag, ModalPortal, depthChange, leagueRank, poin
 import { formatWhole } from "./lib/format-number";
 import { displayedMatchupPoints } from "../../api/_lib/lineup-optimizer";
 import { teamOutlook, winPercent, winProbability } from "./views/win-probability";
+import { CloseGlyph } from "./components/glyphs";
 
 type RosterPlayer = League["tradeTeams"][number]["players"][number];
 type SeasonRow = Dashboard["seasonLongRankings"][number];
@@ -211,7 +212,7 @@ export function LeagueTeamCard({
             <div className="power-team-card-heading">
               <h2 id={`power-team-card-title-${team.rosterId}`} className={team.isUser ? "is-user" : ""}>{team.teamName}</h2>
             </div>
-            <button type="button" onClick={onClose} aria-label={`Close ${team.teamName} team card`}>×</button>
+            <button type="button" onClick={onClose} aria-label={`Close ${team.teamName} team card`}><CloseGlyph /></button>
           </div>
           <div className="power-team-card-intro">
             <div className="card-chips" style={{ marginTop: 0 }}>

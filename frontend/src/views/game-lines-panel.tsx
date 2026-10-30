@@ -46,6 +46,7 @@ import { formatDecimal } from "../lib/format-number";
 import { Badge } from "@/components/ui/badge";
 import { CrossToolBadge, PlayerNameLink, type CrossToolLink } from "../tool-links";
 import type { PlayerLinkResolver } from "../tool-player-link";
+import { ChevronGlyph, SortGlyph } from "../components/glyphs";
 
 export type GameLineMatchupLink = (matchup: MatchupSelection) => CrossToolLink | null;
 
@@ -372,7 +373,7 @@ function GameSlate({
           );
         })}
       </div>
-      <span className="game-slate-more" aria-hidden="true">›</span>
+      <span className="game-slate-more" aria-hidden="true"><ChevronGlyph /></span>
     </div>
   );
 }
@@ -727,7 +728,7 @@ export function GameLinesPanel({
       <button type="button" className="props-sort-button" onClick={() => toggleSort(key)}>
         {label}
         <span aria-hidden="true" className="props-sort-arrow">
-          {sortKey === key ? (sortAsc ? "▲" : "▼") : ""}
+          {sortKey === key ? <SortGlyph ascending={sortAsc} /> : null}
         </span>
       </button>
     </th>

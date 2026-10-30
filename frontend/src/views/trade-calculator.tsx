@@ -41,6 +41,7 @@ import { redraftTwinFormat } from "../../../api/_lib/season-long-format";
 import { clearTradeSide, removeTradePlayer, restoreTradePlayer } from "../undo";
 import { useUnsavedLeaveWarning } from "../unsaved-input";
 import { formatWhole } from "../lib/format-number";
+import { CloseGlyph, MoveTriangle } from "../components/glyphs";
 
 export function TradeAssetRow({ asset, onRemove, onOpenPlayer }: { asset: TradeAsset; onRemove: () => void; onOpenPlayer: (playerId: string) => void }) {
   return (
@@ -54,7 +55,7 @@ export function TradeAssetRow({ asset, onRemove, onOpenPlayer }: { asset: TradeA
           <span>{asset.position === "PICK" ? "Dynasty draft pick" : asset.team ?? "Free agent"}</span>
         </div>
         <div className="trade-asset-value"><strong>{formatWhole(asset.value)}</strong></div>
-        <button className="remove-asset" onClick={onRemove} aria-label={`Remove ${asset.name}`} title={`Remove ${asset.name}`}>×</button>
+        <button className="remove-asset" onClick={onRemove} aria-label={`Remove ${asset.name}`} title={`Remove ${asset.name}`}><CloseGlyph /></button>
       </div>
     </div>
   );
@@ -111,7 +112,7 @@ export function TradeSide({ title, assets, availableAssets, onAdd, onRemove, onC
               autoCapitalize="none"
               spellCheck={false}
             />
-            {query ? <button className="search-clear" type="button" onClick={() => setQuery("")} aria-label={`Clear ${title.toLowerCase()} asset search`}>×</button> : null}
+            {query ? <button className="search-clear" type="button" onClick={() => setQuery("")} aria-label={`Clear ${title.toLowerCase()} asset search`}><CloseGlyph /></button> : null}
           </div>
           {needle ? (
             <div className="trade-side-search-results inline-search-results" role="region" aria-label={`Assets available for ${title.toLowerCase()}`} aria-live="polite">
@@ -447,11 +448,11 @@ export function TradeValueDialog({
                     {!row.isParty ? (
                       <span className="trade-power-same">—</span>
                     ) : row.rank < row.previousRank ? (
-                      <span className="trade-power-up">▲{row.previousRank - row.rank}</span>
+                      <span className="trade-power-up"><MoveTriangle direction="up" />{row.previousRank - row.rank}</span>
                     ) : row.rank > row.previousRank ? (
-                      <span className="trade-power-down">▼{row.rank - row.previousRank}</span>
+                      <span className="trade-power-down"><MoveTriangle direction="down" />{row.rank - row.previousRank}</span>
                     ) : (
-                      <span className="trade-power-flat">{row.totalValue >= row.previousTotalValue ? "▲0" : "▼0"}</span>
+                      <span className="trade-power-same">—</span>
                     )}
                   </td>
                 </tr>

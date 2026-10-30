@@ -11,6 +11,7 @@ import { useProfileTag } from "../lib/use-profile-tag";
 import { formatCompactCount } from "../lib/format-number";
 import { DepthChangeMark, depthChange, MatchupTag, ProfileChips, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 import { isHiddenHalfPointPropStat, propStatDef } from "../../../api/_lib/prop-line-reads";
+import { CloseGlyph } from "../components/glyphs";
 import {
   analyticsMetricsForLeague,
   basePositionOrder,
@@ -378,7 +379,7 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
               autoCapitalize="none"
               spellCheck={false}
             />
-            {query ? <button className="search-clear" type="button" onClick={() => setQuery("")} aria-label={`Clear player ${slot} search`}>×</button> : null}
+            {query ? <button className="search-clear" type="button" onClick={() => setQuery("")} aria-label={`Clear player ${slot} search`}><CloseGlyph /></button> : null}
           </div>
         </>
       ) : player ? (
@@ -387,7 +388,7 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
             <strong>{player.name}</strong>
             <span>{comparisonPickMeta(player)}</span>
           </button>
-          <button type="button" className="comparison-pick-clear" onClick={() => { restoreFocus.current = "input"; onClear(); stopEditing(); }} aria-label={`Clear player ${slot}`}>×</button>
+          <button type="button" className="comparison-pick-clear" onClick={() => { restoreFocus.current = "input"; onClear(); stopEditing(); }} aria-label={`Clear player ${slot}`}><CloseGlyph /></button>
         </div>
       ) : null}
       {showSearch && needle ? (

@@ -43,6 +43,7 @@ import {
 } from "./undo";
 
 import { supabase } from "./supabase";
+import { ChevronGlyph, CloseGlyph } from "./components/glyphs";
 
 export const BROWSER_DASHBOARD_CACHE_KEY = "fantasy-rankings-dashboard-v7";
 
@@ -601,7 +602,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
         <article ref={dialogRef} className="matchup-data-card" role="dialog" aria-modal="true" aria-labelledby="matchup-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
           <div className="matchup-data-header matchup-data-header-minimal">
             <h2 id="matchup-card-title" className="sr-only">{matchup.team} {matchup.isAway ? "@" : "vs"} {matchup.opponent}</h2>
-            <button type="button" onClick={onClose} aria-label="Close matchup data">×</button>
+            <button type="button" onClick={onClose} aria-label="Close matchup data"><CloseGlyph /></button>
           </div>
           <p className="matchup-eyebrow">Week {week} · NFL</p>
           <div className="matchup-title-row" role="group" aria-label={`${matchup.team} versus ${matchup.opponent}`}>
@@ -610,7 +611,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                 {index === 1 ? <span className="matchup-title-at" aria-hidden="true">{matchup.isAway ? "@" : "vs"}</span> : null}
                 {onOpenTeam ? (
                   <button type="button" className="matchup-team-title" aria-label={`View ${name} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(name)}>
-                    {name}<i aria-hidden="true">›</i>
+                    {name}<i aria-hidden="true"><ChevronGlyph /></i>
                   </button>
                 ) : <strong className="matchup-team-title">{name}</strong>}
               </Fragment>
