@@ -162,6 +162,9 @@
 .proj-row { grid-template-columns: 26px minmax(0, 1fr) 76px 52px; }
 .proj-team { display: flex; align-items: center; gap: 6px; }
 .proj-team > strong { display: block; min-width: 0; }
+/* `.power-team > span` would otherwise block-clip the move mark and the Yours pill. */
+.power-team.proj-team > .proj-move { display: inline-flex; margin-top: 0; overflow: visible; }
+.power-team.proj-team > .injury { display: inline-flex; margin-top: 0; overflow: visible; }
 .proj-move { display: inline-flex; flex: none; align-items: center; gap: 2px; font-size: var(--type-caption); font-weight: 700; }
 .proj-move i { width: 0; height: 0; border-right: 4px solid transparent; border-left: 4px solid transparent; }
 .proj-move.is-up { color: var(--positive); }
