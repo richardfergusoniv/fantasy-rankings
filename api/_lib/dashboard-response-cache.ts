@@ -1,29 +1,30 @@
-import { gunzipSync, gzipSync } from "node:zlib";
-import { getCache } from "@vercel/functions";
 import { SIGN_IN_REQUIRED } from "./dashboard-access.js";
-import { SOURCE_CACHE_GZIP_PREFIX } from "./source-cache-payload.js";
 import { countCacheMetric, sampleCacheBytes } from "./cache-metrics.js";
 import type { DashboardCacheSection } from "./dashboard-section-cache.js";
 
 /**
- * Response cache for dashboard views.
+ * Response cache for dashboard views — per-user, instance-local only (L1).
+ *
+ * Personalized dashboard bodies used to be mirrored into Vercel Runtime
+ * Cache behind a pointer/lane layer. Runtime Cache is byte-metered at
+ * 8 KB/write-unit and roughly 1.5 GB/month of personalized writes exhausted
+ * the Hobby allowance, so that layer is gone: Postgres `source_cache` rows
+ * are the canonical snapshot store and every cross-instance read loads
+ * from Postgres. What remains is a bounded, byte-capped LRU inside this
+ * isolate that absorbs repeat reads on a warm instance — plus a
+ * scope-level single-flight so concurrent requests on one instance share
+ * a single Postgres load.
+ *
+ * `DASHBOARD_L1_BYPASS=1` turns the L1 into a pass-through (no reads or
+ * writes) without restoring any shared-cache lane protocol. There is no
+ * code path back to Runtime Cache for personalized views.
  *
  * Successful dashboard bodies are per-user. Vercel's CDN will not store a
- * response whose request carries `Authorization` (the dashboard client always
- * sends the Supabase JWT), and a shared CDN entry is keyed only by URL — so
- * `s-maxage` would hand one viewer's roster to the next caller, including a
- * signed-out visitor once the function is skipped. These responses stay
- * `private` / CDN `no-store`.
- *
- * Repeat reads are served from Vercel Runtime Cache (regional, shared across
- * isolates) keyed by sleeper user + view + snapshot version (`asOf`). A new
- * snapshot writes a new version key and moves the `latest` pointer, so the
- * previous entry is simply no longer read. No purge. Live snapshots use the
- * same 150s budget as the live refresh; other snapshots use the 10 minute
- * dashboard TTL. Neither window is extended with stale-while-revalidate.
- *
- * The in-process map is only a fallback when Runtime Cache is unavailable
- * (local tests, or a runtime-cache rejection such as the 2 MB item cap).
+ * response whose request carries `Authorization` (the dashboard client
+ * always sends the Supabase JWT), and a shared CDN entry is keyed only by
+ * URL — so `s-maxage` would hand one viewer's roster to the next caller,
+ * including a signed-out visitor once the function is skipped. These
+ * responses stay `private` / CDN `no-store`.
  */
 
 /** Same duration as `USER_DASHBOARD_CACHE_MS` in dashboard-build. */
@@ -31,11 +32,12 @@ export const DASHBOARD_VIEW_FRESH_TTL_SECONDS = 10 * 60;
 /** Same duration as `LIVE_DASHBOARD_CACHE_MS`. Do not cache live views longer. */
 export const DASHBOARD_VIEW_LIVE_TTL_SECONDS = 150;
 
-/** Stay under the Runtime Cache 2 MB item limit. */
-const RUNTIME_CACHE_MAX_BYTES = 1_800_000;
-/** Cap a poisoned or corrupt gzip entry. A dashboard view is well under this. */
-const RUNTIME_CACHE_MAX_JSON_BYTES = 8_000_000;
-const CACHE_NAMESPACE = "fr-dashboard-v2";
+/**
+ * L1 byte budget per isolate. A dashboard view body is typically
+ * 100–500 KB; 8 MiB bounds a handful of users' views without risking
+ * the function's memory headroom.
+ */
+export const DASHBOARD_L1_DEFAULT_MAX_BYTES = 8 * 1024 * 1024;
 const VERSION_MAX_LENGTH = 64;
 
 export type DashboardResponseView = DashboardCacheSection | "full";
@@ -47,24 +49,14 @@ export type DashboardViewCacheEntry = {
   body: unknown;
 };
 
-type LatestPointer = {
-  version: string;
-  expiresAtMs: number;
-};
-
 export type DashboardViewStore = {
   get(key: string): Promise<unknown | null>;
   /**
-   * Store `value`. Returns true when other instances can read it.
-   * A memory-only store returns true. The shared tier returns false when
-   * that write fails or the body does not fit; the local copy is still kept.
+   * Store `value` until `ttlSeconds` from now. Returns false when the store
+   * is bypassed or the value could not be admitted; the read path must not
+   * depend on `set` succeeding.
    */
   set(key: string, value: unknown, ttlSeconds: number): Promise<boolean>;
-  /**
-   * Write this instance only. Used so a shared `latest` pointer is not
-   * published when the versioned body never reached the shared cache.
-   */
-  setLocal?(key: string, value: unknown, ttlSeconds: number): Promise<void>;
 };
 
 export function dashboardResponseTtlSeconds(live: boolean): number {
@@ -114,55 +106,8 @@ export function responseCacheFetchedAtMs(
 export function dashboardViewCacheKey(
   sleeperUserId: string,
   view: DashboardResponseView,
-  version: string,
 ): string {
-  return `v1:${sleeperUserId}:${view}:${version}`;
-}
-
-export function dashboardViewLatestKey(
-  sleeperUserId: string,
-  view: DashboardResponseView,
-): string {
-  return `v1:${sleeperUserId}:${view}:latest`;
-}
-
-/** Fixed lanes so a publish does not overwrite every copy of a newer version. */
-const DASHBOARD_VIEW_LANE_COUNT = 16;
-/**
- * One pointer copy per publish (was four). Recall takes the greatest
- * version across all lanes, so a single copy stays correct; the extra
- * copies only multiplied Runtime Cache writes, which are quota-capped.
- */
-const DASHBOARD_VIEW_LANE_COPIES = 1;
-
-export function dashboardViewLaneKey(
-  sleeperUserId: string,
-  view: DashboardResponseView,
-  lane: number,
-): string {
-  return `v1:${sleeperUserId}:${view}:lane:${lane}`;
-}
-
-function laneIndex(version: string, salt: number): number {
-  let hash = 2166136261;
-  const input = `${salt}:${version}`;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) % DASHBOARD_VIEW_LANE_COUNT;
-}
-
-/** Several lanes per version. An older publish cannot cover all of them. */
-function lanesForVersion(version: string): number[] {
-  const lanes: number[] = [];
-  let salt = 0;
-  while (lanes.length < DASHBOARD_VIEW_LANE_COPIES && salt < DASHBOARD_VIEW_LANE_COUNT * 2) {
-    const lane = laneIndex(version, salt);
-    if (!lanes.includes(lane)) lanes.push(lane);
-    salt += 1;
-  }
-  return lanes;
+  return `v1:${sleeperUserId}:${view}`;
 }
 
 /** Drop blank or oversized caller-supplied versions. They are a hint, not auth. */
@@ -216,200 +161,9 @@ export function dashboardViewResponseHeaders(args: {
   return headers;
 }
 
-export function encodeForRuntime(
-  entry: DashboardViewCacheEntry,
-  maxBytes: number = RUNTIME_CACHE_MAX_BYTES,
-): unknown | null {
-  const plain = JSON.stringify(entry);
-  if (Buffer.byteLength(plain, "utf8") <= maxBytes) return entry;
-  const gz = SOURCE_CACHE_GZIP_PREFIX + gzipSync(Buffer.from(JSON.stringify(entry.body))).toString("base64");
-  const packed = {
-    version: entry.version,
-    live: entry.live,
-    expiresAtMs: entry.expiresAtMs,
-    bodyGz: gz,
-  };
-  if (Buffer.byteLength(JSON.stringify(packed), "utf8") > maxBytes) return null;
-  return packed;
-}
-
-function ungzipJson(payload: string): unknown {
-  if (!payload.startsWith(SOURCE_CACHE_GZIP_PREFIX)) {
-    throw new Error("expected gz1 payload");
-  }
-  const json = gunzipSync(Buffer.from(payload.slice(SOURCE_CACHE_GZIP_PREFIX.length), "base64"), {
-    maxOutputLength: RUNTIME_CACHE_MAX_JSON_BYTES,
-  }).toString("utf8");
-  return JSON.parse(json) as unknown;
-}
-
-export function decodeStoredEntry(value: unknown, nowMs: number): DashboardViewCacheEntry | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  if (typeof record.version !== "string" || typeof record.expiresAtMs !== "number") return null;
-  if (record.expiresAtMs <= nowMs) return null;
-  if (typeof record.bodyGz === "string") {
-    try {
-      const body = ungzipJson(record.bodyGz);
-      return {
-        version: record.version,
-        live: record.live === true,
-        expiresAtMs: record.expiresAtMs,
-        body,
-      };
-    } catch {
-      return null;
-    }
-  }
-  if (!("body" in record) || typeof record.live !== "boolean") return null;
-  return {
-    version: record.version,
-    live: record.live,
-    expiresAtMs: record.expiresAtMs,
-    body: record.body,
-  };
-}
-
-function decodePointer(value: unknown): LatestPointer | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  if (typeof record.version !== "string" || typeof record.expiresAtMs !== "number") return null;
-  // A full entry also has `body`. Lane pointers do not.
-  if ("body" in record || "bodyGz" in record) return null;
-  return { version: record.version, expiresAtMs: record.expiresAtMs };
-}
-
-export function createMemoryDashboardViewStore(now: () => number = Date.now): DashboardViewStore {
-  const rows = new Map<string, { value: unknown; expiresAtMs: number }>();
-  return {
-    async get(key) {
-      const row = rows.get(key);
-      if (!row) return null;
-      if (row.expiresAtMs <= now()) {
-        rows.delete(key);
-        return null;
-      }
-      return row.value;
-    },
-    async set(key, value, ttlSeconds) {
-      if (ttlSeconds <= 0) {
-        rows.delete(key);
-        return true;
-      }
-      rows.set(key, { value, expiresAtMs: now() + ttlSeconds * 1000 });
-      return true;
-    },
-  };
-}
-
-function unpackRuntimeValue(value: unknown): unknown {
-  if (!value || typeof value !== "object" || !("bodyGz" in value)) return value;
-  const record = value as Record<string, unknown>;
-  if (typeof record.bodyGz !== "string" || typeof record.version !== "string") return null;
-  if (typeof record.expiresAtMs !== "number") return null;
-  try {
-    return {
-      version: record.version,
-      live: record.live === true,
-      expiresAtMs: record.expiresAtMs,
-      body: ungzipJson(record.bodyGz),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function peekLatestVersion(value: unknown): string | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  if (typeof record.version !== "string" || typeof record.expiresAtMs !== "number") return null;
-  if ("body" in record || "bodyGz" in record) return null;
-  return record.version;
-}
-
-/**
- * A publish writes this isolate's memory first, then Runtime Cache. If the
- * runtime write fails, memory is newer and must win. If this isolate has no
- * copy, the runtime value is what other isolates published.
- */
-function preferCachedValue(local: unknown, remote: unknown): unknown {
-  const localVersion = peekLatestVersion(local);
-  const remoteVersion = peekLatestVersion(remote);
-  if (localVersion && remoteVersion) {
-    return localVersion >= remoteVersion ? local : remote;
-  }
-  return local ?? remote;
-}
-
-type RuntimeViewCache = {
-  get(key: string): Promise<unknown>;
-  set(key: string, value: unknown, options: { ttl: number; name: string }): Promise<unknown>;
-  delete(key: string): Promise<void>;
-};
-
-function defaultRuntimeViewCache(): RuntimeViewCache {
-  return {
-    async get(key) {
-      return getCache({ namespace: CACHE_NAMESPACE }).get(key);
-    },
-    async set(key, value, options) {
-      await getCache({ namespace: CACHE_NAMESPACE }).set(key, value, options);
-    },
-    async delete(key) {
-      await getCache({ namespace: CACHE_NAMESPACE }).delete(key);
-    },
-  };
-}
-
-export function createTieredDashboardViewStore(
-  runtime: RuntimeViewCache = defaultRuntimeViewCache(),
-  maxBytes: number = RUNTIME_CACHE_MAX_BYTES,
-): DashboardViewStore {
-  const memory = createMemoryDashboardViewStore();
-  return {
-    async get(key) {
-      const local = await memory.get(key);
-      if (local != null) countCacheMetric("dashboard.memory.hit");
-      countCacheMetric(key.includes(":lane:") ? "dashboard.runtime.pointer.probe" : "dashboard.runtime.get");
-      let remote: unknown = null;
-      try {
-        const cached = await runtime.get(key);
-        if (cached != null) remote = unpackRuntimeValue(cached);
-      } catch (error) {
-        countCacheMetric("dashboard.runtime.error");
-        console.error("[dashboard-cache] runtime get failed", error);
-      }
-      return preferCachedValue(local, remote);
-    },
-    async set(key, value, ttlSeconds) {
-      await memory.set(key, value, ttlSeconds);
-      if (ttlSeconds <= 0) {
-        try {
-          countCacheMetric("dashboard.runtime.delete");
-          await runtime.delete(key);
-        } catch (error) {
-          countCacheMetric("dashboard.runtime.error");
-          console.error("[dashboard-cache] runtime delete failed", error);
-        }
-        return true;
-      }
-      try {
-        const payload = isCacheEntry(value) ? encodeForRuntime(value, maxBytes) : value;
-        if (payload == null) return false;
-        countCacheMetric("dashboard.runtime.set");
-        sampleCacheBytes("dashboard.runtime.set.bytes", Buffer.byteLength(JSON.stringify(payload), "utf8"));
-        await runtime.set(key, payload, { ttl: ttlSeconds, name: "dashboard-view" });
-        return true;
-      } catch (error) {
-        countCacheMetric("dashboard.runtime.error");
-        console.error("[dashboard-cache] runtime set failed", error);
-        return false;
-      }
-    },
-    async setLocal(key, value, ttlSeconds) {
-      await memory.set(key, value, ttlSeconds);
-    },
-  };
+/** True while `expiresAtMs` is strictly in the future (deadline is absolute). */
+function entryIsLive(entry: DashboardViewCacheEntry, nowMs: number): boolean {
+  return entry.expiresAtMs > nowMs;
 }
 
 function isCacheEntry(value: unknown): value is DashboardViewCacheEntry {
@@ -418,14 +172,106 @@ function isCacheEntry(value: unknown): value is DashboardViewCacheEntry {
   return typeof record.version === "string"
     && typeof record.live === "boolean"
     && typeof record.expiresAtMs === "number"
-    && "body" in record
-    && !("bodyGz" in record);
+    && "body" in record;
+}
+
+function approxEntryBytes(entry: DashboardViewCacheEntry): number {
+  try {
+    return Buffer.byteLength(JSON.stringify(entry.body), "utf8") + 256;
+  } catch {
+    return 64 * 1024; // unstringifiable bodies count against a fixed share
+  }
+}
+
+/**
+ * Bounded, byte-capped LRU kept in this isolate. Insertion-ordered Map gives
+ * LRU by refreshing recency on hit; eviction walks from oldest. Never serves
+ * an expired entry, and a set never rewrites an existing entry's deadline
+ * (a near-expiry refresh stores the new value under its own expiry, it does
+ * not extend the old one — expiry is stamped at write time from the
+ * caller's remaining-TTL computation).
+ */
+export function createL1DashboardViewStore(options: {
+  maxBytes?: number;
+  bypass?: boolean;
+  now?: () => number;
+} = {}): DashboardViewStore {
+  const maxBytes = options.maxBytes ?? DASHBOARD_L1_DEFAULT_MAX_BYTES;
+  const bypass = options.bypass ?? false;
+  const now = options.now ?? Date.now;
+  const rows = new Map<string, { entry: DashboardViewCacheEntry; bytes: number }>();
+  let totalBytes = 0;
+
+  function evict(): void {
+    for (const [key, row] of rows) {
+      if (totalBytes <= maxBytes) break;
+      rows.delete(key);
+      totalBytes -= row.bytes;
+      countCacheMetric("dashboard.l1.evicted");
+    }
+  }
+
+  return {
+    async get(key) {
+      if (bypass) {
+        countCacheMetric("dashboard.l1.bypassed");
+        return null;
+      }
+      const row = rows.get(key);
+      if (!row) {
+        countCacheMetric("dashboard.l1.miss");
+        return null;
+      }
+      if (!entryIsLive(row.entry, now())) {
+        rows.delete(key);
+        totalBytes -= row.bytes;
+        countCacheMetric("dashboard.l1.miss");
+        return null;
+      }
+      // Refresh recency.
+      rows.delete(key);
+      rows.set(key, row);
+      countCacheMetric("dashboard.l1.hit");
+      return row.entry;
+    },
+    async set(key, value, ttlSeconds) {
+      if (bypass) {
+        countCacheMetric("dashboard.l1.bypassed");
+        return false;
+      }
+      if (ttlSeconds <= 0 || !isCacheEntry(value)) return false;
+      const existing = rows.get(key);
+      if (existing) {
+        rows.delete(key);
+        totalBytes -= existing.bytes;
+      }
+      const bytes = approxEntryBytes(value);
+      if (bytes > maxBytes) {
+        countCacheMetric("dashboard.l1.miss"); // never admit oversized bodies
+        return false;
+      }
+      // The store stamps the deadline itself from the caller's remaining TTL
+      // — a stored expiry is absolute for this isolate and is never extended
+      // by a later set (a new value simply carries its own deadline).
+      rows.set(key, { entry: { ...value, expiresAtMs: now() + ttlSeconds * 1000 }, bytes });
+      totalBytes += bytes;
+      evict();
+      countCacheMetric("dashboard.l1.write");
+      sampleCacheBytes("dashboard.l1.entry.bytes", bytes);
+      return true;
+    },
+  };
 }
 
 let productionStore: DashboardViewStore | null = null;
 
 export function getDashboardViewStore(): DashboardViewStore {
-  productionStore ??= createTieredDashboardViewStore();
+  productionStore ??= createL1DashboardViewStore({
+    maxBytes: process.env.DASHBOARD_L1_MAX_BYTES
+      ? Number(process.env.DASHBOARD_L1_MAX_BYTES)
+      : undefined,
+    bypass: process.env.DASHBOARD_L1_BYPASS === "1",
+  });
   return productionStore;
 }
 
@@ -437,170 +283,43 @@ function resolveStore(store: DashboardViewStore | undefined): DashboardViewStore
   return store ?? getDashboardViewStore();
 }
 
-async function readLanePointers(
-  store: DashboardViewStore,
-  sleeperUserId: string,
-  view: DashboardResponseView,
-): Promise<Array<LatestPointer & { lane: number }>> {
-  const values = await Promise.all(
-    Array.from({ length: DASHBOARD_VIEW_LANE_COUNT }, (_, lane) =>
-      store.get(dashboardViewLaneKey(sleeperUserId, view, lane)),
-    ),
-  );
-  const pointers: Array<LatestPointer & { lane: number }> = [];
-  for (let lane = 0; lane < values.length; lane += 1) {
-    const pointer = decodePointer(values[lane]);
-    if (pointer) pointers.push({ ...pointer, lane });
-  }
-  return pointers;
-}
-
-function greatestPointer(pointers: readonly LatestPointer[]): LatestPointer | null {
-  let best: LatestPointer | null = null;
-  for (const pointer of pointers) {
-    if (!best || pointer.version > best.version) best = pointer;
-  }
-  return best;
-}
-
-async function clearLaneVersion(
-  store: DashboardViewStore,
-  sleeperUserId: string,
-  view: DashboardResponseView,
-  lane: number,
-  version: string,
-): Promise<void> {
-  const key = dashboardViewLaneKey(sleeperUserId, view, lane);
-  const current = decodePointer(await store.get(key));
-  if (!current || current.version !== version) return;
-  await store.set(key, current, 0);
-}
-
-export async function recallDashboardView(args: {
+/** Serve the L1 entry for this user+view, honoring a requested version. */
+async function recallDashboardView(args: {
   sleeperUserId: string;
   view: DashboardResponseView;
   requestedVersion: string | null;
-  nowMs?: number;
-  store?: DashboardViewStore;
+  nowMs: number;
+  store: DashboardViewStore;
 }): Promise<DashboardViewCacheEntry | null> {
-  const nowMs = args.nowMs ?? Date.now();
-  const store = resolveStore(args.store);
   const requestedVersion = normalizeRequestedSnapshotVersion(args.requestedVersion);
-  const latest = greatestPointer(await readLanePointers(store, args.sleeperUserId, args.view));
-  if (!latest || latest.expiresAtMs <= nowMs) return null;
-  if (requestedVersion && requestedVersion !== latest.version) return null;
-  return decodeStoredEntry(
-    await store.get(dashboardViewCacheKey(args.sleeperUserId, args.view, latest.version)),
-    nowMs,
-  );
+  const stored = await args.store.get(dashboardViewCacheKey(args.sleeperUserId, args.view));
+  if (!isCacheEntry(stored)) return null;
+  if (!entryIsLive(stored, args.nowMs)) return null;
+  if (requestedVersion && requestedVersion !== stored.version) return null;
+  return stored;
 }
 
-export async function rememberDashboardView(args: {
+/** Write this user+view's latest snapshot body into L1. */
+async function rememberDashboardView(args: {
   sleeperUserId: string;
   view: DashboardResponseView;
   version: string;
   live: boolean;
   body: unknown;
   ttlSeconds: number;
-  nowMs?: number;
-  store?: DashboardViewStore;
+  nowMs: number;
+  store: DashboardViewStore;
 }): Promise<void> {
   if (args.ttlSeconds <= 0) return;
   const version = normalizeRequestedSnapshotVersion(args.version);
   if (!version) return;
-  const nowMs = args.nowMs ?? Date.now();
-  const store = resolveStore(args.store);
-  const expiresAtMs = nowMs + args.ttlSeconds * 1000;
-  const pointer = { version, expiresAtMs } satisfies LatestPointer;
-  const ownLanes = lanesForVersion(version);
-
-  const visible = greatestPointer(await readLanePointers(store, args.sleeperUserId, args.view));
-  if (visible && visible.version > version) {
-    for (const lane of ownLanes) {
-      await clearLaneVersion(store, args.sleeperUserId, args.view, lane, version);
-    }
-    return;
-  }
-
   const entry: DashboardViewCacheEntry = {
     version,
     live: args.live,
-    expiresAtMs,
+    expiresAtMs: args.nowMs + args.ttlSeconds * 1000,
     body: args.body,
   };
-  const entryStored = await store.set(
-    dashboardViewCacheKey(args.sleeperUserId, args.view, version),
-    entry,
-    args.ttlSeconds,
-  );
-  // A shared pointer without the body makes every other instance miss.
-  if (entryStored === false && store.setLocal) {
-    for (const lane of ownLanes) {
-      await store.setLocal(
-        dashboardViewLaneKey(args.sleeperUserId, args.view, lane),
-        pointer,
-        args.ttlSeconds,
-      );
-    }
-    return;
-  }
-
-  for (const lane of ownLanes) {
-    const key = dashboardViewLaneKey(args.sleeperUserId, args.view, lane);
-    const current = decodePointer(await store.get(key));
-    if (current && current.version > version) continue;
-    await store.set(key, pointer, args.ttlSeconds);
-  }
-
-  const after = await readLanePointers(store, args.sleeperUserId, args.view);
-  const best = greatestPointer(after);
-  if (best && best.version > version) {
-    for (const lane of ownLanes) {
-      await clearLaneVersion(store, args.sleeperUserId, args.view, lane, version);
-    }
-    return;
-  }
-  for (const lanePointer of after) {
-    if (lanePointer.version < version) {
-      await clearLaneVersion(store, args.sleeperUserId, args.view, lanePointer.lane, lanePointer.version);
-    }
-  }
-}
-
-/**
- * Move a view's latest pointers to a snapshot version WITHOUT storing a
- * body. Builds call this for every view: the snapshot body stays in
- * Postgres, the next read of the view misses on the new version, serves
- * the fresh row, and remembers the body itself. One pointer write per
- * view keeps Runtime Cache writes proportional to builds, not bodies —
- * while still making a refresh move every view to the new snapshot
- * immediately (the regression PR #150 introduced by publishing nothing).
- */
-export async function pointDashboardViewAtVersion(args: {
-  sleeperUserId: string;
-  view: DashboardResponseView;
-  version: string;
-  ttlSeconds: number;
-  nowMs?: number;
-  store?: DashboardViewStore;
-}): Promise<void> {
-  if (args.ttlSeconds <= 0) return;
-  const version = normalizeRequestedSnapshotVersion(args.version);
-  if (!version) return;
-  const nowMs = args.nowMs ?? Date.now();
-  const store = resolveStore(args.store);
-  const pointer = { version, expiresAtMs: nowMs + args.ttlSeconds * 1000 } satisfies LatestPointer;
-
-  const visible = greatestPointer(await readLanePointers(store, args.sleeperUserId, args.view));
-  if (visible && visible.version > version) return;
-
-  countCacheMetric("dashboard.runtime.pointer.publish");
-  for (const lane of lanesForVersion(version)) {
-    const key = dashboardViewLaneKey(args.sleeperUserId, args.view, lane);
-    const current = decodePointer(await store.get(key));
-    if (current && current.version > version) continue;
-    await store.set(key, pointer, args.ttlSeconds);
-  }
+  await args.store.set(dashboardViewCacheKey(args.sleeperUserId, args.view), entry, args.ttlSeconds);
 }
 
 export type DashboardOriginResult<T> =
@@ -619,10 +338,20 @@ export type DashboardViewLoad<T> =
     };
 
 /**
+ * Scope-level single-flight: concurrent requests on this isolate for the
+ * same user+view share one origin load. The entry is always deleted on
+ * settle — a rejection is never cached and a resolved load is only "in
+ * flight" dedupe, not a second cache tier (the L1 store is populated from
+ * the load's result inside the shared path below).
+ */
+const inFlightViewLoads = new Map<string, Promise<unknown>>();
+
+/**
  * Signed-out callers get 401 before any cache or origin read. A hit is the
- * latest snapshot for this sleeper user only. `force`, expiry, and a
- * caller-supplied version that doesn't match `latest` all miss so a new
- * snapshot is read from origin and then stored under its own version.
+ * latest snapshot for this sleeper user only, from the isolate-local L1.
+ * `force`, expiry, and a caller-supplied version that doesn't match all
+ * miss so a new snapshot is read from the Postgres rows (canonical store)
+ * and then stored in L1.
  */
 export async function loadCachedDashboardView<T>(args: {
   sleeperUserId: string | null;
@@ -663,33 +392,48 @@ export async function loadCachedDashboardView<T>(args: {
     }
   }
 
-  const origin = await args.loadOrigin();
-  if (origin.kind === "deny") {
-    return { ok: false, status: 401, error: SIGN_IN_REQUIRED };
+  const flightKey = `${sleeperUserId}:${args.view}`;
+  const existing = inFlightViewLoads.get(flightKey);
+  if (existing) {
+    countCacheMetric("dashboard.singleflight.joined");
+    return existing as Promise<DashboardViewLoad<T>>;
   }
-  const cacheable = origin.ttlSeconds > 0 && normalizeRequestedSnapshotVersion(origin.version) != null;
-  if (cacheable) {
-    try {
-      await rememberDashboardView({
-        sleeperUserId,
-        view: args.view,
-        version: origin.version,
-        live: origin.live,
-        body: origin.body,
-        ttlSeconds: origin.ttlSeconds,
-        nowMs,
-        store,
-      });
-    } catch (error) {
-      console.error("[dashboard-cache] remember failed", error);
+
+  const work = (async (): Promise<DashboardViewLoad<T>> => {
+    const origin = await args.loadOrigin();
+    if (origin.kind === "deny") {
+      return { ok: false, status: 401, error: SIGN_IN_REQUIRED };
     }
+    const cacheable = origin.ttlSeconds > 0 && normalizeRequestedSnapshotVersion(origin.version) != null;
+    if (cacheable) {
+      try {
+        await rememberDashboardView({
+          sleeperUserId,
+          view: args.view,
+          version: origin.version,
+          live: origin.live,
+          body: origin.body,
+          ttlSeconds: origin.ttlSeconds,
+          nowMs,
+          store,
+        });
+      } catch (error) {
+        console.error("[dashboard-cache] remember failed", error);
+      }
+    }
+    return {
+      ok: true,
+      body: origin.body,
+      cache: "MISS",
+      version: normalizeRequestedSnapshotVersion(origin.version),
+      live: origin.live,
+      cacheable,
+    };
+  })();
+  inFlightViewLoads.set(flightKey, work);
+  try {
+    return await work;
+  } finally {
+    inFlightViewLoads.delete(flightKey);
   }
-  return {
-    ok: true,
-    body: origin.body,
-    cache: "MISS",
-    version: normalizeRequestedSnapshotVersion(origin.version),
-    live: origin.live,
-    cacheable,
-  };
 }

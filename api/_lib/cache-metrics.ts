@@ -16,10 +16,17 @@
  */
 
 export type CacheMetricName =
-  // Local (in-process) dashboard view cache.
-  | "dashboard.memory.hit"
-  | "dashboard.memory.miss"
-  // Runtime Cache operations on the personalized dashboard store.
+  // Instance-local (L1) dashboard view cache.
+  | "dashboard.l1.hit"
+  | "dashboard.l1.miss"
+  | "dashboard.l1.write"
+  | "dashboard.l1.evicted"
+  | "dashboard.l1.bypassed"
+  // Scope-level single-flight dedupe inside one isolate.
+  | "dashboard.singleflight.joined"
+  // Runtime Cache operations — personalized dashboard views must NEVER emit
+  // these again (the lane/pointer layer was removed); they exist only so a
+  // regression is visible in the flush, and for shared-board writes.
   | "dashboard.runtime.get"
   | "dashboard.runtime.set"
   | "dashboard.runtime.delete"

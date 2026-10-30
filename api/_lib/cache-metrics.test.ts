@@ -11,13 +11,13 @@ import {
 describe("cache-metrics", () => {
   it("aggregates counters and byte samples with estimated 8 KB units", () => {
     resetCacheMetricsForTests();
-    countCacheMetric("dashboard.runtime.pointer.probe", 16);
+    countCacheMetric("dashboard.l1.miss", 16);
     countCacheMetric("dashboard.snapshot.payload_read");
     sampleCacheBytes("dashboard.runtime.set.bytes", 8_000);
     sampleCacheBytes("dashboard.runtime.set.bytes", 8_001);
 
     const snapshot = getCacheMetricsSnapshot();
-    expect(snapshot.counters["dashboard.runtime.pointer.probe"]).toBe(16);
+    expect(snapshot.counters["dashboard.l1.miss"]).toBe(16);
     expect(snapshot.counters["dashboard.snapshot.payload_read"]).toBe(1);
     expect(snapshot.bytes["dashboard.runtime.set.bytes"]).toEqual({
       count: 2,
