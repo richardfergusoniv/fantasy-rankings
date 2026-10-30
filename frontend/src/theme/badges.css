@@ -18,6 +18,7 @@
   cursor: pointer;
 }
 .matchup-reference-button .matchup-reference-button-label {
+  position: relative;
   display: inline-flex;
   min-height: 24px;
   align-items: center;

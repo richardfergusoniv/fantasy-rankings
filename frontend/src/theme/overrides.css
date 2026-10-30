@@ -229,7 +229,7 @@ a:active { color: var(--link-active); }
 }
 /* Rankings and Waivers share these rows; give the name, meta and badges room. */
 .rankings-view {
-  --player-row-height: 60px;
+  --player-row-height: 56px;
 }
 
 .rankings-view {
@@ -242,7 +242,7 @@ a:active { color: var(--link-active); }
   min-height: var(--player-row-height);
 }
 .rankings-view .ranking-row {
-  padding-block: 8px;
+  padding-block: 4px;
 }
 
 .rankings-view .ranking-row .ranking-player {
