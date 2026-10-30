@@ -90,8 +90,7 @@ export function CrossToolBadge({
         link.onOpen();
       }}
     >
-      <span className="matchup-reference-button-label">{label}</span>
-      <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+      <span className="matchup-reference-button-label">{label}<span className="matchup-reference-arrow" aria-hidden="true">›</span></span>
     </a>
   );
 }

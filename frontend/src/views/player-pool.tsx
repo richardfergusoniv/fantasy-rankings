@@ -131,8 +131,7 @@ export function SeasonTeamPill({ team, lineRank, onOpen }: { team: string | null
       aria-haspopup="dialog"
       title={lineRank === null ? `${teamLabel} team data` : `${teamLabel} offensive line rank #${lineRank}`}
     >
-      <span className="matchup-reference-button-label">{teamLabel}</span>
-      <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+      <span className="matchup-reference-button-label">{teamLabel}<span className="matchup-reference-arrow" aria-hidden="true">›</span></span>
     </button>
   );
 }

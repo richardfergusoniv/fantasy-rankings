@@ -377,8 +377,7 @@ function PlayerTeamBadge({ team, onOpen }: { team: string | null; onOpen?: () =>
       aria-haspopup="dialog"
       onClick={onOpen}
     >
-      <span className="matchup-reference-button-label">{team}</span>
-      <span className="matchup-reference-arrow" aria-hidden="true">›</span>
+      <span className="matchup-reference-button-label">{team}<span className="matchup-reference-arrow" aria-hidden="true">›</span></span>
     </button>
   );
 }
