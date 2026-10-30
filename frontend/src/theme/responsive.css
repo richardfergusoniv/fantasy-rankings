@@ -277,8 +277,8 @@
 .team-card-overview { display: grid; grid-template-columns: minmax(84px, .65fr) minmax(0, 1.35fr); margin: 12px 0 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface-2); }
 .team-card-overview > div { display: flex; min-width: 0; min-height: 64px; flex-direction: column; justify-content: center; gap: 2px; padding: 9px 12px; }
 .team-card-overview > div + div { border-left: 1px solid var(--hairline); }
-.team-card-overview span, .team-card-overview small { color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
-.team-card-overview strong { overflow: hidden; color: var(--text); font-size: var(--type-section); font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.team-card-overview span, .team-card-overview small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.team-card-overview strong { overflow: hidden; color: var(--text); font-size: var(--type-section); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .team-card-tabs { margin: 12px 0 0; }
 .team-card-stat-section { margin-top: 14px; }
 .team-card-stat-section + .team-card-stat-section { margin-top: 18px; }
@@ -297,8 +297,8 @@
 .team-card-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--hairline); }
 .team-card-metrics > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; padding: 8px 8px 8px 0; border-bottom: 1px solid var(--hairline); }
 .team-card-metrics > div:nth-child(even) { padding-right: 0; padding-left: 12px; border-left: 1px solid var(--hairline); }
-.team-card-metrics span { color: var(--dim); font-size: var(--type-caption); font-weight: 650; }
-.team-card-metrics strong { color: var(--text); font-size: var(--type-section); font-weight: 750; font-variant-numeric: tabular-nums; }
+.team-card-metrics span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.team-card-metrics strong { color: var(--text); font-size: var(--type-section); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 @media (min-width: 760px) {
   .matchup-page .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }

@@ -13,7 +13,6 @@
 .radar-average { fill: var(--dim); fill-opacity: .06; stroke: var(--dim); stroke-width: 1.5; }
 .radar-team { fill: var(--chart-team); fill-opacity: .16; stroke: var(--chart-team); stroke-width: 2.2; }
 .radar-dot { fill: var(--chart-team); stroke: var(--surface); stroke-width: 1.5; }
-.power-position-table-label { margin: 10px 1px 0; color: var(--accent-hover); font-size: var(--type-eyebrow); font-weight: 600; letter-spacing: .045em; text-transform: uppercase; }
 .power-position-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 8px; overflow: clip; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--hairline); }
 .power-position-values > div { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 7px; min-width: 0; padding: 8px 9px; background: var(--surface); }
 .power-position-values > .power-position-total { grid-column: 1 / -1; }
@@ -29,7 +28,7 @@
 .power-row-toggle { cursor: pointer; touch-action: pan-y; }
 .power-row-toggle:active { background: var(--surface-2); }
 .power-rank { color: var(--dim); font-size: var(--type-body); font-weight: 700; }
-.power-row.is-user .power-rank, .power-row.is-user .power-team > strong, .power-row.is-user .power-total strong { color: var(--link); }
+.power-row.is-user .power-rank, .power-row.is-user .power-team > strong, .power-row.is-user .power-total strong { color: var(--roster-highlight); }
 .power-row.is-opponent .power-rank, .power-row.is-opponent .power-team > strong, .power-row.is-opponent .power-total strong { color: var(--foreground); }
 .power-row.is-average .power-rank, .power-row.is-average .power-team > strong, .power-row.is-average .power-total strong { color: var(--dim); }
 .power-team { min-width: 0; }

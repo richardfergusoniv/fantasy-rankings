@@ -63,7 +63,7 @@
   One theme. shadcn utilities read the --color-* tokens. Existing screen CSS
   keeps reading the legacy names, which alias the same values.
   Type scale: 12 / 14 / 15 / 16 / 18 / 20 / 24 / 30.
-  Spacing scale: 4px steps. Radius: 8px, with sm/md/lg/xl derived from it.
+  Spacing scale: 4px steps. Radius: 12px, with xs/sm/md/xl derived from it.
 */
 @theme {
   --font-sans: "Fira Sans", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
@@ -147,6 +147,9 @@
   --chart-3: light-dark(#15803d, #4ade80);
   --chart-4: light-dark(#b91c1c, #fca5a5);
   --chart-5: light-dark(#1d4ed8, #60a5fa);
+  --chart-6: light-dark(#6d28d9, #c4b5fd);
+  --chart-7: light-dark(#be185d, #f9a8d4);
+  --chart-8: light-dark(#0e7490, #67e8f9);
   --radius: 12px;
 
   --bg: var(--background);

@@ -87,7 +87,7 @@
 .trade-balance-track > i.is-tie { background: var(--dim); }
 .trade-balance p { margin: 8px 0 0; color: var(--dim); font-size: var(--type-caption); }
 .trade-calculate-wrap { display: grid; gap: 8px; margin-top: 16px; text-align: center; }
-.trade-calculate-button { min-height: var(--compact-control-height); width: 100%; padding: 0 12px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font: inherit; font-size: var(--type-control); font-weight: 600; line-height: 1; cursor: pointer; }
+.trade-calculate-button { min-height: var(--compact-control-height); width: 100%; padding: 0 12px; border: 0; border-radius: var(--radius-sm); background: var(--accent); color: var(--on-accent); font: inherit; font-size: var(--type-control); font-weight: 600; line-height: 1; cursor: pointer; }
 .trade-calculate-button:disabled { border-color: var(--border); background: var(--surface-2); color: var(--dim); cursor: default; }
 .trade-calculate-button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .trade-calculate-wrap > span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
@@ -164,7 +164,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-trade-column.mine .league-trade-name { align-items: flex-end; text-align: right; }
 .league-trade-name strong { max-width: 100%; overflow: hidden; font-size: var(--type-caption); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .league-trade-name small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.league-trade-segment { align-items: center; border-radius: 3px; color: var(--on-accent); font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
+.league-trade-segment { align-items: center; border-radius: var(--radius-xs); color: var(--on-accent); font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
 .league-trade-segment span { max-width: 100%; overflow: hidden; padding: 0 2px; text-overflow: ellipsis; white-space: nowrap; }
 .league-trade-column .league-trade-segment,
 .league-trade-column .league-trade-bar.is-empty {
@@ -190,7 +190,7 @@ button.league-partner-change:active { color: var(--link-active); }
   background: var(--chart-2);
   color: var(--on-accent);
 }
-.league-trade-bar.is-empty { align-items: center; justify-content: center; border-radius: 3px; font-size: var(--type-caption); font-weight: 700; }
+.league-trade-bar.is-empty { align-items: center; justify-content: center; border-radius: var(--radius-xs); font-size: var(--type-caption); font-weight: 700; }
 .league-trade-total { margin-top: 8px; }
 .league-trade-side:last-child .league-trade-total { text-align: right; }
 .league-trade-total span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
@@ -204,8 +204,8 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-power-table .trade-power-num { text-align: right; }
 .trade-power-rank { width: 28px; color: var(--dim); }
 .trade-power-team { font-weight: 600; }
-.trade-power-table tr.is-user td { background: color-mix(in srgb, var(--winner) 8%, transparent); }
-.trade-power-table tr.is-user .trade-power-team { color: var(--winner); }
+.trade-power-table tr.is-user td { background: var(--roster-highlight-bg); }
+.trade-power-table tr.is-user .trade-power-team { color: var(--roster-highlight); }
 .trade-power-table tr.is-partner td { background: var(--opponent-row); }
 .trade-power-up { color: var(--positive); white-space: nowrap; }
 .trade-power-down { color: var(--negative); white-space: nowrap; }
@@ -244,7 +244,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-picker-scroll { overflow-y: auto; overscroll-behavior: contain; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
 .trade-picker-table { background: var(--surface); }
 .trade-picker-columns, .trade-picker-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 28px; gap: 6px; align-items: center; font-variant-numeric: tabular-nums; }
-.trade-picker-columns { position: sticky; top: 0; z-index: 1; min-height: 29px; padding: 0 10px; border-bottom: 1px solid var(--hairline); background: var(--surface); color: var(--dim); font-size: var(--type-caption); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.trade-picker-columns { position: sticky; top: 0; z-index: 1; min-height: 29px; padding: 0 10px; border-bottom: 1px solid var(--hairline); background: var(--surface); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .trade-picker-columns span:nth-child(n+2) { text-align: right; }
 .trade-picker-row { width: 100%; min-height: 52px; padding: 5px 10px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .trade-picker-row:active:not(:disabled) { background: var(--surface-2); }
@@ -369,7 +369,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-aggregate > p { margin: 9px 2px 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.4; }
 /* Trade card header: a small label, then the verdict in the amber (win), coral (loss) or plain (neutral). */
 .league-trade-dialog-eyebrow { color: var(--dim); font-size: var(--type-caption); font-weight: 600; letter-spacing: 0; line-height: 1.2; }
-.league-trade-verdict { margin: 2px 0 0; font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: lining-nums tabular-nums; }
+.league-trade-verdict { margin: 2px 0 0; font-size: var(--type-display); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: lining-nums tabular-nums; }
 .league-trade-verdict.is-good { color: var(--link); }
 .league-trade-verdict.is-bad { color: var(--warning); }
 .league-trade-dialog .card-hero { margin-top: 0; }
