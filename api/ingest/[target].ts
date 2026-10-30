@@ -533,13 +533,18 @@ async function handleSleeperPicks(req: Request): Promise<Response> {
   const cacheKey = sleeperPicksCacheKey(payload.season, payload.week);
   const fetchedAt = new Date(payload.pulled_at);
   const encoded = encodeSourceCachePayload(board);
-  await db
+  const committed = await db
     .insert(schema.sourceCache)
     .values({ cacheKey, payload: encoded, fetchedAt })
     .onConflictDoUpdate({
       target: schema.sourceCache.cacheKey,
       set: { payload: encoded, fetchedAt },
-    });
+      setWhere: sql`${schema.sourceCache.fetchedAt} < ${fetchedAt}`,
+    })
+    .returning({ cacheKey: schema.sourceCache.cacheKey });
+  if (committed.length === 0) {
+    return json({ ok: true, status: "skipped", reason: "stale_source", season: payload.season, week: payload.week });
+  }
 
   // Runtime Cache publication happens only after the durable row committed;
   // a cache failure can never fail the ingest.

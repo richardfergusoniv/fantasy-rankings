@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextGamesForTeam, ordinal, placesMoved, projectedWinPercent, recordLabel } from "./projected-standings-view";
+import { nextGamesForTeam, ordinal, placesMoved, recordLabel } from "./projected-standings-view";
 
 describe("recordLabel", () => {
   it("shows ties only when there are some", () => {
@@ -19,15 +19,6 @@ describe("projected standings helpers", () => {
     expect(placesMoved(6, 6)).toBe(0);
   });
 
-  it("turns two projected totals into a win chance", () => {
-    expect(projectedWinPercent(100, 100)).toBe(50);
-    expect(projectedWinPercent(120, 100)).toBeGreaterThan(70);
-    expect(projectedWinPercent(120, 100)).toBeLessThan(85);
-    expect(projectedWinPercent(100, 120)).toBe(100 - projectedWinPercent(120, 100));
-    expect(projectedWinPercent(300, 100)).toBe(99);
-    expect(projectedWinPercent(100, 300)).toBe(1);
-  });
-
   it("lists a team's next games in week order from either side of the pairing", () => {
     const games = [
       { week: 10, rosterIdA: 3, rosterIdB: 1, projectedA: 90, projectedB: 110 },
@@ -36,7 +27,9 @@ describe("projected standings helpers", () => {
     ];
     const next = nextGamesForTeam(games, 1, 3);
     expect(next.map((game) => [game.week, game.opponentRosterId, game.mine, game.theirs])).toEqual([[9, 2, 120, 100], [10, 3, 110, 90]]);
-    expect(next[0]!.winPercent).toBeGreaterThan(50);
+    expect(next[0]).toMatchObject({ result: "W", margin: 20 });
+    expect(nextGamesForTeam(games, 2)[0]).toMatchObject({ result: "L", margin: -20 });
+    expect(nextGamesForTeam(games, 4)[0]).toMatchObject({ result: "T", margin: 0 });
     expect(nextGamesForTeam(games, 1, 1)).toHaveLength(1);
   });
 });

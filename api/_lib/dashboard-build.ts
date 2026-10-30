@@ -117,10 +117,10 @@ import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./playe
 import { buildStandings, waiverStatus } from "./league-standings.js";
 import { loadTeamGameLines, type TeamGameLine } from "./team-game-lines.js";
 import {
-  BuildLeaseLostError,
   dashboardBuildLeaseResource,
   drizzleBuildLeaseStore,
-  leaseIsHeld,
+  publishUnderBuildLease,
+  type BuildPublicationTransaction,
   runWithBuildLease,
 } from "./build-lease.js";
 import { createDashboardBuildTracker, type DashboardBuildState } from "./dashboard-build-status.js";
@@ -2336,9 +2336,10 @@ async function upsertSourceCacheRow(
   cacheKey: string,
   payload: string,
   fetchedAt: Date,
+  writer: Pick<BuildPublicationTransaction, "insert"> = db,
 ): Promise<void> {
   sampleCacheBytes("dashboard.snapshot.write.bytes", Buffer.byteLength(payload, "utf8"));
-  await db
+  await writer
     .insert(schema.sourceCache)
     .values({ cacheKey, payload, fetchedAt })
     .onConflictDoUpdate({
@@ -2405,7 +2406,9 @@ export function sectionCacheTtlMs(live: boolean): number {
   return sectionTtlMs(live);
 }
 
-async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): Promise<void> {
+async function writeUserDashboardCache(
+  cacheKey: string, dashboard: Dashboard, lease?: { resource: string; holder: string },
+): Promise<void> {
   const fetchedAt = new Date();
   const live = dashboardSnapshotIsLive(dashboard);
   const writes = buildDashboardCacheWrites({
@@ -2416,11 +2419,13 @@ async function writeUserDashboardCache(cacheKey: string, dashboard: Dashboard): 
     encode: encodeSourceCachePayload,
     serializeFull: serializeDashboardForCache,
   });
-  await Promise.all(writes.map((row) => upsertSourceCacheRow(row.cacheKey, row.payload, row.fetchedAt)));
-  // The Postgres rows above are the only publication a build performs.
-  // Personalized response bodies no longer go anywhere near Runtime Cache
-  // (byte-metered); the request path's isolate-local L1 is populated from
-  // the load result when the next read serves these rows.
+  const persist = async (tx: BuildPublicationTransaction) => {
+    for (const row of writes) await upsertSourceCacheRow(row.cacheKey, row.payload, row.fetchedAt, tx);
+  };
+  if (lease) await publishUnderBuildLease(lease.resource, lease.holder, persist);
+  else await db.transaction(persist);
+  // Postgres is canonical; personalized bodies are never published to Runtime Cache.
+
 }
 
 /**
@@ -2675,17 +2680,8 @@ async function buildUserDashboardUnderLease(
       // Align soft actuals waits with this lease wait (same budget window).
       const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
       const dashboard = await buildUserDashboard(sleeperUserId, force, { deadlineAtMs });
-      // Fenced publication: the lease must still be ours before persisting —
-      // a builder that lost it (expiry/takeover) discards its result rather
-      // than overwriting the new owner's write.
-      countCacheMetric("dashboard.snapshot.metadata_read");
-      if (!leaseIsHeld(await drizzleBuildLeaseStore.read(resource), holder)) {
-        countCacheMetric("build_lease.lost_before_publish");
-        throw new BuildLeaseLostError(resource, holder);
-      }
-      // Publish inside the lease: a joiner polls for this row, so the lease
-      // must still be held when it lands (CodeRabbit, PR #282).
-      await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
+      // Ownership is locked and all section writes commit atomically.
+      await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard, { resource, holder });
       return { dashboard, fetchedAtMs: Date.now(), recheck: false };
     },
     // On timeout the build keeps the lease until it settles, so a retry
@@ -2794,14 +2790,7 @@ export function kickUserDashboardBuild(
           }
           const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
           const dashboard = await buildUserDashboard(sleeperUserId, false, { deadlineAtMs });
-          // Fenced publication (see buildUserDashboardUnderLease).
-          countCacheMetric("dashboard.snapshot.metadata_read");
-          if (!leaseIsHeld(await drizzleBuildLeaseStore.read(resource), holder)) {
-            countCacheMetric("build_lease.lost_before_publish");
-            throw new BuildLeaseLostError(resource, holder);
-          }
-          // Publish inside the lease (see buildUserDashboardUnderLease).
-          await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
+          await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard, { resource, holder });
           return dashboard;
         },
         { deadlineMs: BUILD_DEADLINE_MS },

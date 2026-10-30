@@ -101,7 +101,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
         <section className="power-table-section" aria-labelledby="proj-games-heading">
           <div className="section-heading power-section-heading proj-games-head">
             <h2 id="proj-games-heading">Your next games</h2>
-            <span>Win chance</span>
+            <span>Proj. result</span>
           </div>
           {nextGames.map((game) => (
             <div className="power-row proj-game" key={game.week}>
@@ -110,7 +110,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
                 <strong>vs {teamName(game.opponentRosterId)}</strong>
                 <span>{formatDecimal(game.mine, 1)} – {formatDecimal(game.theirs, 1)}</span>
               </div>
-              <div className={`power-total proj-win ${game.winPercent >= 55 ? "is-up" : game.winPercent <= 45 ? "is-down" : ""}`}><strong>{game.winPercent >= 55 ? <MoveTriangle direction="up" /> : game.winPercent <= 45 ? <MoveTriangle direction="down" /> : null}{game.winPercent}%<span className="sr-only">{game.winPercent >= 55 ? ", favored" : game.winPercent <= 45 ? ", underdog" : ""}</span></strong></div>
+              <div className={`power-total proj-win ${game.result === "W" ? "is-up" : game.result === "L" ? "is-down" : ""}`}><strong>{game.result}</strong><span>{formatDecimal(game.margin, 2, { sign: "always" })} pts</span></div>
             </div>
           ))}
         </section>

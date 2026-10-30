@@ -56,8 +56,8 @@ describe("publishSharedBoard", () => {
   it("publishes an allowlisted dataset with a finite TTL and source-age envelope", async () => {
     const rt = runtimeDouble();
     const result = await publishSharedBoard("sleeper-picks", "2026:9", board, SOURCE_AGE, rt);
-    expect(result).toEqual({ published: true, key: "shared:sleeper-picks:2026:9", encodedBytes: expect.any(Number) });
-    const stored = rt.store.get("shared:sleeper-picks:2026:9") as { sourceAgeMs: number; payload: unknown };
+    expect(result).toEqual({ published: true, key: `shared:sleeper-picks:2026:9:${SOURCE_AGE}`, encodedBytes: expect.any(Number) });
+    const stored = rt.store.get(`shared:sleeper-picks:2026:9:${SOURCE_AGE}`) as { sourceAgeMs: number; payload: unknown };
     expect(stored.sourceAgeMs).toBe(SOURCE_AGE);
     expect(stored.payload).toEqual(board);
   });
@@ -65,7 +65,7 @@ describe("publishSharedBoard", () => {
   it("rejects datasets outside the allowlist", async () => {
     const rt = runtimeDouble();
     const result = await publishSharedBoard("user-dashboard", "u1", board, SOURCE_AGE, rt);
-    expect(result).toEqual({ published: false, key: "shared:user-dashboard:u1", reason: "unknown_dataset" });
+    expect(result).toEqual({ published: false, key: `shared:user-dashboard:u1:${SOURCE_AGE}`, reason: "unknown_dataset" });
     expect(rt.store.size).toBe(0);
   });
 
@@ -107,7 +107,7 @@ describe("publishSharedBoard", () => {
     expect(rt.store.size).toBe(0);
   });
 
-  it("serializes writes: an older source cannot overwrite a newer publication", async () => {
+  it("stores old and new publications under different immutable keys", async () => {
     const rt = runtimeDouble();
     const newer = { ...board, pulledAt: "2026-10-29T13:00:00.000Z" };
     const newerAge = new Date(newer.pulledAt).getTime();
@@ -116,9 +116,10 @@ describe("publishSharedBoard", () => {
     const older = publishSharedBoard("sleeper-picks", "2026:9", board, SOURCE_AGE, rt);
     const [newerResult, olderResult] = await Promise.all([slowNewer, older]);
     expect(newerResult).toMatchObject({ published: true });
-    expect(olderResult).toMatchObject({ published: false, reason: "stale_source" });
-    const stored = rt.store.get("shared:sleeper-picks:2026:9") as { sourceAgeMs: number };
-    expect(stored.sourceAgeMs).toBe(newerAge);
+    expect(olderResult).toMatchObject({ published: true });
+    const stored = rt.store.get(`shared:sleeper-picks:2026:9:${SOURCE_AGE}`) as { sourceAgeMs: number };
+    expect(stored.sourceAgeMs).toBe(SOURCE_AGE);
+    expect(rt.store.get(sharedBoardCacheKey("sleeper-picks", "2026:9", newerAge))).toMatchObject({ sourceAgeMs: newerAge });
   });
 
   it("drops the cached board when a newer publish fails, so reads fall back to the durable row", async () => {
@@ -150,7 +151,7 @@ describe("readSharedBoard", () => {
     const read1 = await readSharedBoard("sleeper-picks", "2026:9", async () => {
       durableCalls += 1;
       return null;
-    }, rt);
+    }, async () => SOURCE_AGE, rt);
     // Fresh publish already populated L1.
     expect(read1.source).toBe("l1");
     expect(read1.envelope?.payload).toEqual(board);
@@ -160,7 +161,7 @@ describe("readSharedBoard", () => {
     const read2 = await readSharedBoard("sleeper-picks", "2026:9", async () => {
       durableCalls += 1;
       return null;
-    }, rt);
+    }, async () => SOURCE_AGE, rt);
     expect(read2.source).toBe("runtime");
     expect(durableCalls).toBe(0);
   });
@@ -170,7 +171,7 @@ describe("readSharedBoard", () => {
     const read = await readSharedBoard("sleeper-picks", "2026:9", async () => ({
       payload: board,
       sourceAgeMs: SOURCE_AGE,
-    }), rt);
+    }), async () => SOURCE_AGE, rt);
     expect(read.source).toBe("durable");
     expect(read.envelope?.payload).toEqual(board);
     expect(read.envelope?.sourceAgeMs).toBe(SOURCE_AGE);
@@ -178,7 +179,7 @@ describe("readSharedBoard", () => {
 
   it("misses cleanly when nothing is stored anywhere", async () => {
     const rt = runtimeDouble();
-    const read = await readSharedBoard("sleeper-picks", "2026:9", async () => null, rt);
+    const read = await readSharedBoard("sleeper-picks", "2026:9", async () => null, async () => SOURCE_AGE, rt);
     expect(read).toEqual({ envelope: null, source: "miss" });
   });
 
@@ -188,12 +189,37 @@ describe("readSharedBoard", () => {
     const read = await readSharedBoard("sleeper-picks", "2026:9", async () => ({
       payload: board,
       sourceAgeMs: SOURCE_AGE,
-    }), rt);
+    }), async () => SOURCE_AGE, rt);
     expect(read.source).toBe("durable");
     expect(read.envelope?.payload).toEqual(board);
   });
 
+  it("reads the durable version when an older instance publishes last", async () => {
+    vi.resetModules();
+    const otherInstance = await import("./shared-board-cache.js");
+    const rt = runtimeDouble();
+    const newerAge = SOURCE_AGE + 1000;
+    const newer = { ...board, pulledAt: new Date(newerAge).toISOString() };
+    await publishSharedBoard("sleeper-picks", "2026:9", newer, newerAge, rt);
+    await otherInstance.publishSharedBoard("sleeper-picks", "2026:9", board, SOURCE_AGE, rt);
+    resetSharedBoardCachesForTests();
+    const read = await readSharedBoard("sleeper-picks", "2026:9", async () => null, async () => newerAge, rt);
+    expect(read.source).toBe("runtime");
+    expect(read.envelope?.payload).toEqual(newer);
+  });
+
+  it("does not hide a new durable board behind an older cached board after publication fails", async () => {
+    const rt = runtimeDouble();
+    await publishSharedBoard("sleeper-picks", "2026:9", board, SOURCE_AGE, rt);
+    const newerAge = SOURCE_AGE + 1000;
+    const newer = { ...board, pulledAt: new Date(newerAge).toISOString() };
+    const read = await readSharedBoard("sleeper-picks", "2026:9",
+      async () => ({ payload: newer, sourceAgeMs: newerAge }), async () => newerAge, rt);
+    expect(read.source).toBe("durable");
+    expect(read.envelope?.payload).toEqual(newer);
+  });
+
   it("shared keys carry no user identifiers", () => {
-    expect(sharedBoardCacheKey("sleeper-picks", "2026:9")).toBe("shared:sleeper-picks:2026:9");
+    expect(sharedBoardCacheKey("sleeper-picks", "2026:9", SOURCE_AGE)).toBe(`shared:sleeper-picks:2026:9:${SOURCE_AGE}`);
   });
 });
