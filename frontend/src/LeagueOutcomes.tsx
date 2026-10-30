@@ -70,7 +70,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
             <span role="columnheader">#</span>
             <span role="columnheader">Team</span>
             <span role="columnheader">Proj. PF</span>
-            <span role="columnheader">Record</span>
+            <span role="columnheader">Proj. record</span>
           </div>
           {teams.map((team, index) => (
             <div className="power-list-item" key={team.rosterId}>
@@ -87,7 +87,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
                 </div>
                 <div className="power-total" role="cell"><strong>{recordLabel(team.projectedRecord)}</strong></div>
               </div>
-              {showPlayoffs && team.inPlayoffs && !teams[index + 1]?.inPlayoffs && index < teams.length - 1 ? <div className="proj-cut" role="separator" aria-label="Playoff cut">Playoff cut</div> : null}
+              {team.inPlayoffs && !teams[index + 1]?.inPlayoffs && index < teams.length - 1 ? <div className="proj-cut" role="separator" aria-label="Playoff cut">Playoff cut</div> : null}
             </div>
           ))}
         </div>

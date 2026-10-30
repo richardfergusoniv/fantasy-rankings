@@ -317,7 +317,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-asset-open:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .trade-asset-open strong { overflow: hidden; font-size: var(--type-caption); font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .trade-asset-main > span { display: block; min-height: 0; margin: 0; overflow: hidden; color: var(--dim); font-size: var(--type-caption); font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
-.asset-position { flex: none; padding: 2px 4px 1px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.asset-position { flex: none; padding: 2px 6px 1px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .asset-position.pick { background: var(--surface-2); color: var(--dim); }
 .trade-asset-value { display: flex; align-items: center; justify-content: flex-end; text-align: right; }
 .trade-asset-value strong { display: block; color: var(--text); font-size: var(--type-caption); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums lining-nums; }

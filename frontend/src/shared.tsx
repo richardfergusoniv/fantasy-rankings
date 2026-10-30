@@ -264,13 +264,12 @@ export function MatchupTag({
   const tone = matchupTone(entry, opponent, position);
   // The label is just the matchup; the triangle and color carry ease visually, the aria-label in words.
   const quality = tone === " sos-soft" ? "easy matchup" : tone === " sos-tough" ? "tough matchup" : null;
-  const label = base;
   const ariaLabel = quality ? `${base}, ${quality}` : base;
   const tagClassName = `matchup-reference-tag${tone}${className ? ` ${className}` : ""}`;
-  if (!onClick || !team || !opponent) return <span className={tagClassName} aria-label={quality ? ariaLabel : undefined}>{label}</span>;
+  if (!onClick || !team || !opponent) return <span className={tagClassName}>{base}{quality ? <span className="sr-only">, {quality}</span> : null}</span>;
   return (
     <button type="button" className={`${tagClassName} matchup-reference-button`} onClick={(event) => onClick?.(event)} aria-label={ariaLabel} aria-description="View matchup data" aria-haspopup="dialog">
-      <span className="matchup-reference-button-label">{label}</span><span className="matchup-reference-arrow" aria-hidden="true">›</span>
+      <span className="matchup-reference-button-label">{base}</span><span className="matchup-reference-arrow" aria-hidden="true">›</span>
     </button>
   );
 }

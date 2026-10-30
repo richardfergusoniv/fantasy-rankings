@@ -59,6 +59,7 @@ describe("ticker and matchup accessible names", () => {
 
   it("names the matchup button with its visible label plus the matchup quality", () => {
     expect(sharedTsx).toMatch(/const ariaLabel = quality \? `\$\{base\}, \$\{quality\}` : base;/);
+    expect(sharedTsx).toMatch(/<span className="sr-only">, \{quality\}<\/span>/);
     expect(sharedTsx).toMatch(/aria-label=\{ariaLabel\} aria-description="View matchup data"/);
   });
 });
