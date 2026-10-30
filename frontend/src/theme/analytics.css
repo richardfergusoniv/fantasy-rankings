@@ -243,6 +243,6 @@
 .quadrant-list > div > span:not(:first-child) { color: var(--dim); text-align: right; font-size: var(--type-caption); font-weight: 600; }
 .quadrant-list b { display: block; color: var(--text); font-size: var(--type-body); font-weight: 700; }
 .analytics-note { margin: 14px 2px 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.45; }
-.analytics-empty { display: grid; gap: 5px; padding: 38px 16px; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface); text-align: center; }
-.analytics-empty strong { font-size: var(--type-body); }
-.analytics-empty span { color: var(--dim); font-size: var(--type-caption); }
+.analytics-empty, .state-empty { display: grid; justify-items: center; gap: 4px; padding: 28px 16px; text-align: center; }
+.analytics-empty strong, .state-empty strong { font-size: var(--type-body); font-weight: 600; }
+.analytics-empty span, .state-empty span { color: var(--dim); font-size: var(--type-caption); }

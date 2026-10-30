@@ -36,6 +36,7 @@ import {
 import { scatterAxisDomain } from "./scatter-zoom";
 import { shouldWarnBeforeLeave, useUnsavedLeaveWarning } from "./unsaved-input";
 import { CloseGlyph } from "./components/glyphs";
+import { EmptyState } from "./components/state-blocks";
 
 export type Dashboard = ApiResponse<typeof api, "getDashboard">;
 export type League = Dashboard["leagues"][number];
@@ -1948,7 +1949,7 @@ function AnalyticsChart({ dashboard, league, layout = "page", initialView = null
           {advancedControls}
         </div>
         {pickerMode === "blank" ? (
-          <p className="monitor-empty">Choose a view</p>
+          <EmptyState title="Choose a saved view or preset" detail="The chart appears once a view is selected." />
         ) : !hasStats && !isTeamChart ? (
           // Team charts read matchup and team usage data, not player stats, and have their own empty states.
           <div className="analytics-empty">
@@ -2535,7 +2536,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
                 {weeklyControls}
               </div>
               {pickerMode === "blank" ? (
-                <p className="monitor-empty">Choose a view</p>
+                <EmptyState title="Choose a saved view or preset" detail="The chart appears once a view is selected." />
               ) : !hasProjections ? (
                 <div className="analytics-empty"><strong>No weekly projections yet.</strong><span>Refresh to check the latest Vegas lines and nflverse usage data.</span></div>
               ) : (

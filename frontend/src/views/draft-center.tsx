@@ -20,6 +20,7 @@ import { SegmentedControl } from "../shared";
 import { markDraftPlayerTaken, undoDraftPlayerTaken } from "../undo";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { formatWhole } from "../lib/format-number";
+import { LoadingBlock, ListPagination } from "../components/state-blocks";
 
 type DraftRow = DraftCenterData["adp"][number] & {
   adpSource: "ffc" | "fantasycalc" | "projection";
@@ -426,7 +427,7 @@ export function DraftCenter({
     </div>
   );
 
-  const draftBoard = loading ? <div className="empty-inline">Loading draft values…</div> : filteredRows.length > 0 ? (
+  const draftBoard = loading ? <LoadingBlock label="Loading draft values…" /> : filteredRows.length > 0 ? (
     <div className="draft-board data-table-frame" role="list" aria-label="Draft player board">
       <div className="draft-row draft-table-head" aria-hidden="true">
         <span aria-hidden="true">Player</span>
@@ -457,10 +458,7 @@ export function DraftCenter({
           </div>
         );
       })}
-      <div className="list-pagination-row draft-list-pagination" role="listitem">
-        <span aria-live="polite">showing {Math.min(visibleDraftCount, filteredRows.length)} of {filteredRows.length}</span>
-        {visibleDraftCount < filteredRows.length ? <button type="button" onClick={() => setVisibleDraftCount((count) => count + 160)}>Show more</button> : null}
-      </div>
+      <div role="listitem"><ListPagination className="draft-list-pagination" shown={visibleDraftCount} total={filteredRows.length} step={160} onMore={() => setVisibleDraftCount((count) => count + 160)} /></div>
     </div>
   ) : <div className="empty-inline">No available players match these filters.</div>;
 
