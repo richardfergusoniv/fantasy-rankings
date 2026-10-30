@@ -6,11 +6,11 @@ export type BetterPicksPlayer = { playerId: string; name: string; secondary: str
 function BetterCell({ label, better, secondaryOf, onOpenPlayer }: {
   label: string;
   better: BetterPick | null;
-  secondaryOf: (playerId: string, position: string) => string | null;
+  secondaryOf: (position: string, team: string | null) => string | null;
   onOpenPlayer: (playerId: string) => void;
 }) {
   if (!better) return <div className="draft-better-cell"><span className="sr-only">{label}: no better pick</span><span aria-hidden="true">—</span></div>;
-  const secondary = secondaryOf(better.playerId, better.position);
+  const secondary = secondaryOf(better.position, better.team);
   return (
     <div className="draft-better-cell">
       <button type="button" className="draft-better-open" onClick={() => onOpenPlayer(better.playerId)} aria-label={`${label}: view ${better.name} details and news`}>
@@ -25,7 +25,7 @@ function BetterCell({ label, better, secondaryOf, onOpenPlayer }: {
 export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer }: {
   leagueId: string;
   players: readonly BetterPicksPlayer[];
-  secondaryOf: (playerId: string, position: string) => string | null;
+  secondaryOf: (position: string, team: string | null) => string | null;
   onOpenPlayer: (playerId: string) => void;
 }) {
   const query = useDraftGrade(leagueId);

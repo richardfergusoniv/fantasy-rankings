@@ -493,7 +493,7 @@ export function DraftCenter({
         <DraftBetterPicks
           leagueId={league.id}
           players={recapPicks}
-          secondaryOf={(playerId, position) => draftSecondaryLine(position, seasonByPlayer.get(playerId)?.team)}
+          secondaryOf={draftSecondaryLine}
           onOpenPlayer={onOpenLinkedPlayer}
         />
       ) : draftIsFinal ? (

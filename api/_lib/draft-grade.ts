@@ -16,10 +16,11 @@
  * the player was worth (value / expected value): 100% on draft day means he went exactly where
  * the market had him, so Draft day and Today read as report-card scores.
  *
- * For each of those picks it also names a better pick: the player still undrafted at that slot who
- * would have added the most to the team's starting lineup, given the players it had already taken.
- * That is judged on draft-day values and again on today's, so hindsight shows who to have taken.
- * A position already filled adds little, so the answer depends on the picks before it.
+ * For each of those picks it also names a better pick, using the league's own draft order for
+ * realism: among the players other teams took in the next round of picks (so he was still available
+ * and went soon after), the one worth the most, if more than the player taken. That is judged on
+ * draft-day values and again on today's, so hindsight shows who to have taken. A player the league
+ * let fall further than a round, or never drafted, is not suggested.
  *
  * Kickers and defenses have no FantasyCalc value and are not scored, and they do not use up a
  * slot: a skill pick's slot is its place among the draft's QB/RB/WR/TE picks. A player with no
@@ -31,7 +32,6 @@ import { badRequest, forbidden, internalError, json, unauthorized } from "./api-
 import { resolveSleeperUserId } from "./auth.js";
 import { readUserDashboardCache } from "./dashboard-build.js";
 import { db, schema } from "./db.js";
-import { optimizeTradeRoster, type OptimizablePlayer } from "./lineup-optimizer.js";
 import { pacificDateKey, resolveFantasyCalcSnapshotFormatKey } from "./player-value-history.js";
 import { fetchJson, SLEEPER_BASE, type SleeperDraft, type SleeperDraftPick } from "./sleeper.js";
 import { viewerBelongsToLeague } from "./viewer-league-access.js";
@@ -51,16 +51,16 @@ const TODAY_WINDOW_DAYS = 14;
 /** Player id → FantasyCalc value, for QB/RB/WR/TE. */
 export type ValueBoard = ReadonlyMap<string, number>;
 
-export type GradedPick = { pickNo: number; rosterId: number; playerId: string; position: string };
+export type GradedPick = { pickNo: number; rosterId: number; playerId: string; position: string; name?: string; team?: string | null };
 
 export type DraftGradeResult = { letter: string; rank: number; of: number };
 
 /** A pick's school grade and the percentage of its slot's value behind it. */
 export type PickGrade = { letter: string; percent: number };
 
-export type BetterPick = { playerId: string; name: string; position: string };
+export type BetterPick = { playerId: string; name: string; position: string; team: string | null };
 
-/** The best player still available at a pick, on draft day and today; null when the pick was already the best. */
+/** A better player taken in the next round of the league's draft, on draft day and today; null when there was none. */
 export type BetterPicks = { draftDay: BetterPick | null; today: BetterPick | null };
 
 export type OwnPickGrade = {
@@ -70,8 +70,6 @@ export type OwnPickGrade = {
   today: PickGrade | null;
   better: BetterPicks;
 };
-
-type PlayerLabel = { name: string; position: string };
 
 export type DraftGrade = {
   draftId: string;
@@ -170,61 +168,33 @@ export function pickGrades(args: {
   return out;
 }
 
-/** Lineup value of a roster on `values`: its best starting lineup for `slots`, each player counting his board value. */
-function lineupValue(roster: ReadonlyArray<{ playerId: string; position: string }>, slots: readonly string[], values: ValueBoard, floor: number): number {
-  const players: OptimizablePlayer[] = roster.map((player) => ({
-    playerId: player.playerId,
-    position: player.position,
-    lineupSlot: null,
-    isStarter: false,
-    projection: values.get(player.playerId) ?? floor,
-    actual: null,
-  }));
-  return optimizeTradeRoster(players, [...slots]).score;
-}
-
 /**
- * For each of one team's skill picks, the undrafted player on `values` who would have added the most
- * to its starting lineup, given the skill players it had already taken; null when the pick added the
- * most (or nobody would have added more). Only the best available player at each position can win,
- * because a higher value at the same position never adds less.
+ * For each of one team's skill picks, a better pick: among the players other teams took in the next
+ * `window` picks (a round of the league's own draft), the one worth the most on `values`, if he is
+ * worth more than the player taken. Those players were still available and went soon after, so they
+ * were realistic alternatives. The team's own later picks are skipped.
  */
 export function betterPicks(args: {
   picks: readonly GradedPick[];
   rosterId: number;
   values: ValueBoard;
-  /** Position of every player on the board. */
-  positions: ReadonlyMap<string, string>;
-  starterSlots: readonly string[];
-}): Map<string, string | null> {
-  const slots = args.starterSlots.filter((slot) => slot !== "K" && slot !== "DEF");
+  window: number;
+}): Map<string, GradedPick | null> {
   const floor = floorValue(args.values);
-  const byPosition = new Map<string, Array<[string, number]>>(SKILL_POSITIONS.map((position) => [position, []]));
-  for (const [playerId, value] of args.values) byPosition.get(args.positions.get(playerId) ?? "")?.push([playerId, value]);
-  for (const list of byPosition.values()) list.sort((a, b) => b[1] - a[1]);
-
-  const taken = new Set<string>();
-  const roster: Array<{ playerId: string; position: string }> = [];
-  const out = new Map<string, string | null>();
-  for (const pick of [...args.picks].sort((a, b) => a.pickNo - b.pickNo)) {
-    if (pick.rosterId === args.rosterId) {
-      if (!isSkill(pick.position)) {
-        out.set(pick.playerId, null);
-      } else {
-        const base = lineupValue(roster, slots, args.values, floor);
-        const mine = lineupValue([...roster, pick], slots, args.values, floor) - base;
-        let best: { playerId: string; gain: number; value: number } | null = null;
-        for (const [position, list] of byPosition) {
-          const top = list.find(([playerId]) => !taken.has(playerId));
-          if (!top || top[0] === pick.playerId) continue;
-          const gain = lineupValue([...roster, { playerId: top[0], position }], slots, args.values, floor) - base;
-          if (!best || gain > best.gain || (gain === best.gain && top[1] > best.value)) best = { playerId: top[0], gain, value: top[1] };
-        }
-        out.set(pick.playerId, best && best.gain > mine ? best.playerId : null);
-        roster.push(pick);
-      }
+  const ordered = [...args.picks].sort((a, b) => a.pickNo - b.pickNo);
+  const out = new Map<string, GradedPick | null>();
+  for (const pick of ordered) {
+    if (pick.rosterId !== args.rosterId) continue;
+    if (!isSkill(pick.position)) { out.set(pick.playerId, null); continue; }
+    let best: GradedPick | null = null;
+    let bestValue = args.values.get(pick.playerId) ?? floor;
+    for (const later of ordered) {
+      if (later.pickNo <= pick.pickNo || later.pickNo > pick.pickNo + args.window) continue;
+      if (later.rosterId === args.rosterId || !isSkill(later.position) || !later.name) continue;
+      const value = args.values.get(later.playerId);
+      if (value !== undefined && value > bestValue) { best = later; bestValue = value; }
     }
-    taken.add(pick.playerId);
+    out.set(pick.playerId, best);
   }
   return out;
 }
@@ -235,19 +205,13 @@ function resultFor(totals: ReadonlyMap<number, number>, ownRosterId: number): Dr
   return { letter: gradeLetter(rank, totals.size), rank, of: totals.size };
 }
 
-/** A pick's grades with the better players as ids, before their names are looked up. */
-export type GradedOwnPick = Omit<OwnPickGrade, "better"> & { betterIds: { draftDay: string | null; today: string | null } };
-
 export function gradeDraft(args: {
   picks: readonly GradedPick[];
   ownRosterId: number;
   draftDayBoard: ValueBoard;
   todayBoard: ValueBoard;
-  /** Position of every player on either board. */
-  positions: ReadonlyMap<string, string>;
-  starterSlots: readonly string[];
   minBoardPlayers?: number;
-}): { draftDay: DraftGradeResult | null; today: DraftGradeResult | null; picks: GradedOwnPick[] } {
+}): { draftDay: DraftGradeResult | null; today: DraftGradeResult | null; picks: OwnPickGrade[] } {
   const min = args.minBoardPlayers ?? MIN_BOARD_PLAYERS;
   // Today is measured against draft-day slots, so without the draft-day board neither grade exists.
   if (args.draftDayBoard.size < min) return { draftDay: null, today: null, picks: [] };
@@ -260,15 +224,20 @@ export function gradeDraft(args: {
   const onDraftDay = pickGrades({ picks: args.picks, rosterId: args.ownRosterId, slotBoard, values: args.draftDayBoard });
   const sinceThen = hasToday ? pickGrades({ picks: args.picks, rosterId: args.ownRosterId, slotBoard, values: args.todayBoard }) : null;
   const pickNoOf = new Map(args.picks.filter((pick) => pick.rosterId === args.ownRosterId).map((pick) => [pick.playerId, pick.pickNo]));
-  const better = (values: ValueBoard) => betterPicks({ picks: args.picks, rosterId: args.ownRosterId, values, positions: args.positions, starterSlots: args.starterSlots });
+  // The window is one round: as many picks as there are teams in the draft.
+  const window = new Set(args.picks.map((pick) => pick.rosterId)).size;
+  const better = (values: ValueBoard) => betterPicks({ picks: args.picks, rosterId: args.ownRosterId, values, window });
   const betterOnDraftDay = better(args.draftDayBoard);
   const betterToday = hasToday ? better(args.todayBoard) : null;
+  const named = (pick: GradedPick | null | undefined): BetterPick | null => (
+    pick ? { playerId: pick.playerId, name: pick.name ?? "", position: pick.position, team: pick.team ?? null } : null
+  );
   const picks = [...onDraftDay].map(([playerId, grade]) => ({
     playerId,
     pickNo: pickNoOf.get(playerId) ?? 0,
     draftDay: grade,
     today: sinceThen?.get(playerId) ?? null,
-    betterIds: { draftDay: betterOnDraftDay.get(playerId) ?? null, today: betterToday?.get(playerId) ?? null },
+    better: { draftDay: named(betterOnDraftDay.get(playerId)), today: named(betterToday?.get(playerId)) },
   }));
   return { draftDay, today, picks };
 }
@@ -296,22 +265,9 @@ export async function loadValueBoard(formatKey: string, asOfDateKey: string, win
   return new Map(rows.map((row) => [row.playerId, row.value]));
 }
 
-/** Name and position for the given players, from their latest stored snapshot row. */
-export async function loadPlayerLabels(formatKey: string, playerIds: readonly string[]): Promise<ReadonlyMap<string, PlayerLabel>> {
-  if (playerIds.length === 0) return new Map();
-  const table = schema.playerValueSnapshots;
-  const rows = await db
-    .selectDistinctOn([table.playerId], { playerId: table.playerId, name: table.playerName, position: table.position })
-    .from(table)
-    .where(and(eq(table.formatKey, formatKey), inArray(table.playerId, [...playerIds])))
-    .orderBy(table.playerId, desc(table.snapshotDate));
-  return new Map(rows.map((row) => [row.playerId, { name: row.name, position: row.position }]));
-}
-
 export type LoadDraftGradeDeps = {
   fetchJson?: <T>(url: string) => Promise<T>;
   loadBoard?: (formatKey: string, asOfDateKey: string, windowDays: number) => Promise<ValueBoard>;
-  loadLabels?: (formatKey: string, playerIds: readonly string[]) => Promise<ReadonlyMap<string, PlayerLabel>>;
   now?: () => Date;
   minBoardPlayers?: number;
 };
@@ -321,19 +277,19 @@ function gradedPicks(picks: readonly SleeperDraftPick[]): GradedPick[] {
     const rosterId = pick.roster_id;
     const playerId = pick.player_id ?? pick.metadata?.player_id;
     if (typeof pick.pick_no !== "number" || typeof rosterId !== "number" || !playerId) return [];
-    return [{ pickNo: pick.pick_no, rosterId, playerId, position: pick.metadata?.position ?? "" }];
+    const name = [pick.metadata?.first_name, pick.metadata?.last_name].filter(Boolean).join(" ");
+    return [{ pickNo: pick.pick_no, rosterId, playerId, position: pick.metadata?.position ?? "", name: name || undefined, team: pick.metadata?.team ?? null }];
   });
 }
 
 /** Grades the league's completed draft for one team; null when there is nothing to grade. */
 export async function loadDraftGrade(
-  league: { id: string; seasonLongFormat: { key: string }; starterSlots: readonly string[] },
+  league: { id: string; seasonLongFormat: { key: string } },
   ownRosterId: number,
   deps: LoadDraftGradeDeps = {},
 ): Promise<DraftGrade | null> {
   const get = deps.fetchJson ?? fetchJson;
   const loadBoard = deps.loadBoard ?? loadValueBoard;
-  const loadLabels = deps.loadLabels ?? loadPlayerLabels;
   const drafts = await get<SleeperDraft[]>(`${SLEEPER_BASE}/league/${league.id}/drafts`);
   // Auction picks are not made in value order, so a slot has no meaning there.
   const complete = (Array.isArray(drafts) ? drafts : []).filter((draft) => draft.draft_id && draft.status === "complete" && draft.type !== "auction");
@@ -354,18 +310,9 @@ export async function loadDraftGrade(
     loadBoard(formatKey, pacificDateKey(new Date(startedAt)), DRAFT_DAY_WINDOW_DAYS),
     loadBoard(formatKey, pacificDateKey(deps.now?.() ?? new Date()), TODAY_WINDOW_DAYS),
   ]);
-  // Names and positions for everyone on either board: positions decide who fits the lineup, names label the answers.
-  const labels = await loadLabels(formatKey, [...new Set([...draftDayBoard.keys(), ...todayBoard.keys()])]);
-  const positions = new Map([...labels].map(([playerId, label]) => [playerId, label.position]));
-  const grades = gradeDraft({ picks: best.picks, ownRosterId, draftDayBoard, todayBoard, positions, starterSlots: league.starterSlots, minBoardPlayers: deps.minBoardPlayers });
+  const grades = gradeDraft({ picks: best.picks, ownRosterId, draftDayBoard, todayBoard, minBoardPlayers: deps.minBoardPlayers });
   if (!grades.draftDay && !grades.today) return null;
-
-  const better = (playerId: string | null): BetterPick | null => {
-    const label = playerId === null ? undefined : labels.get(playerId);
-    return playerId !== null && label ? { playerId, ...label } : null;
-  };
-  const picks = grades.picks.map(({ betterIds: ids, ...pick }) => ({ ...pick, better: { draftDay: better(ids.draftDay), today: better(ids.today) } }));
-  return { draftId: best.draft.draft_id ?? "", draftDay: grades.draftDay, today: grades.today, picks };
+  return { draftId: best.draft.draft_id ?? "", ...grades };
 }
 
 const querySchema = z.object({ leagueId: z.string().min(1) });
@@ -388,8 +335,7 @@ export async function handleDraftGrade(req: Request): Promise<Response> {
 
     const ownRosterId = (league.standings ?? []).find((row) => row.isUser)?.rosterId ?? null;
     if (ownRosterId === null) return json({ grade: null });
-    const starterSlots = league.tradeStarterSlots.length > 0 ? league.tradeStarterSlots : league.starters.map((player) => player.lineupSlot ?? player.position);
-    return json({ grade: await loadDraftGrade({ id: league.id, seasonLongFormat: league.seasonLongFormat, starterSlots }, ownRosterId) });
+    return json({ grade: await loadDraftGrade(league, ownRosterId) });
   } catch (err) {
     return internalError(err);
   }
