@@ -210,7 +210,7 @@ export const sharedPlayerNews = pgTable(
       .notNull()
       .default("roster"),
     roleContext: text("role_context").notNull().default(""),
-    source: text("source", { enum: ["sleeper", "x", "nflverse"] }).notNull(),
+    source: text("source", { enum: ["sleeper", "x", "nflverse", "article"] }).notNull(),
     sourceLabel: text("source_label").notNull(),
     sourceUrl: text("source_url").notNull(),
     author: text("author"),

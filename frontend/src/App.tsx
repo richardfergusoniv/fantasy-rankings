@@ -8,6 +8,7 @@ import { playerWeeklyRank } from "./player-card-state";
 import { newsVisibleInContext } from "../../api/_lib/player-news-filters";
 import { isDynastyNewsContext } from "./player-news-context";
 import { newsForTicker, PROMINENT_OVERALL_RANK_LIMIT, tickerItemKind } from "./ticker-news";
+import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import type {
   Dashboard,
   DashboardSection,
@@ -228,15 +229,24 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
       opponentPlayerIds,
       prominentPlayerIds,
       { isDynastyContext },
-    ).map((item) => ({
-      key: `news:${item.id}`,
-      source: item.newsType === "headline" && item.playerId === "league" ? "BREAKING" : "NEWS",
-      label: tickerNewsLabel(item),
-      quote: null,
-      move: null,
-      tone: "neutral" as const,
-      newsItem: item,
-    }));
+    ).map((item) => {
+      const isArticle = item.source === "article" && isHttpOrHttpsUrl(item.sourceUrl);
+      return {
+        key: `news:${item.id}`,
+        source: isArticle
+          ? item.sourceLabel
+          : item.newsType === "headline" && item.playerId === "league"
+            ? "BREAKING"
+            : "NEWS",
+        label: tickerNewsLabel(item),
+        quote: null,
+        move: null,
+        tone: "neutral" as const,
+        ...(isArticle
+          ? { href: item.sourceUrl }
+          : { newsItem: item }),
+      };
+    });
 
     if (headlineItems.length > 0) return headlineItems;
 

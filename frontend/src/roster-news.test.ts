@@ -10,7 +10,7 @@ function news(items: Array<{
   roleContext?: string;
   sourceUrl?: string;
   externalId?: string | null;
-  source?: "sleeper" | "x" | "nflverse";
+  source?: "sleeper" | "x" | "nflverse" | "article";
   tags?: string[];
 }>): PlayerNews {
   return {
@@ -109,5 +109,21 @@ describe("rosterNewsForTicker", () => {
     expect(
       rosterNewsForTicker(feed, new Set(["a"]), { isDynastyContext: true }).map((item) => item.id),
     ).toEqual(["dynasty", "plain"]);
+  });
+
+  it("keeps article news for selected-league roster players", () => {
+    const feed = news([
+      {
+        id: "article",
+        playerId: "a",
+        change: "Article headline",
+        source: "article",
+        externalId: "article-hash",
+        sourceUrl: "https://example.com/story",
+      },
+      { id: "other", playerId: "b", change: "B out" },
+    ]);
+    const items = rosterNewsForTicker(feed, new Set(["a"]));
+    expect(items.map((item) => item.id)).toEqual(["article"]);
   });
 });

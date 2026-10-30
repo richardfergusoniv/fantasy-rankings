@@ -18,7 +18,7 @@ export {
 export const PLAYER_NEWS_RETENTION_DAYS = 30;
 export const PLAYER_NEWS_NOTES_SNAPSHOT_KEY = "player-news-notes-snapshot-v1";
 
-export type PlayerNewsSource = "sleeper" | "x" | "nflverse";
+export type PlayerNewsSource = "sleeper" | "x" | "nflverse" | "article";
 export type PlayerNewsKind = "roster" | "waiver" | "headline";
 export type PlayerNewsScope = "player" | "team" | "league";
 
@@ -75,7 +75,7 @@ export type NotesSnapshotEntry = {
 export type NotesSnapshot = Record<string, NotesSnapshotEntry>;
 
 const newsTypeSchema = z.enum(["roster", "waiver", "headline"]);
-const sourceSchema = z.enum(["sleeper", "x", "nflverse"]);
+const sourceSchema = z.enum(["sleeper", "x", "nflverse", "article"]);
 
 const xNewsScopeSchema = z.enum(["player", "team", "league"]);
 

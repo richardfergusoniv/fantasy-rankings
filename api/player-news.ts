@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lt, ne, or, sql } from "drizzle-orm";
 import {
   forbidden,
   hasCronSecret,
@@ -95,7 +95,7 @@ export type PlayerNews = {
       author: string | null;
       /** X post_id / Sleeper external id — used by global feeds to group roundups. */
       externalId: string | null;
-      source: "sleeper" | "x" | "nflverse";
+      source: "sleeper" | "x" | "nflverse" | "article";
       signal: string | null;
       score: number | null;
       /** e.g. `["dynasty"]` — redraft clients hide dynasty-tagged rows. */
@@ -192,47 +192,63 @@ async function insertSharedDrafts(drafts: SharedNewsDraft[]): Promise<number> {
 async function readStoredNews(isDynastyContext: boolean): Promise<Response> {
   const cutoff = retentionCutoff();
   const tagVisibility = dynastyTagVisibilitySql(isDynastyContext);
-  const rows = await db
-    .select({
-      id: schema.sharedPlayerNews.id,
-      playerId: schema.sharedPlayerNews.playerId,
-      player: schema.sharedPlayerNews.player,
-      team: schema.sharedPlayerNews.team,
-      change: schema.sharedPlayerNews.change,
-      newsType: schema.sharedPlayerNews.newsType,
-      roleContext: schema.sharedPlayerNews.roleContext,
-      sourceLabel: schema.sharedPlayerNews.sourceLabel,
-      sourceUrl: schema.sharedPlayerNews.sourceUrl,
-      publishedAt: schema.sharedPlayerNews.publishedAt,
-      createdAt: schema.sharedPlayerNews.createdAt,
-      author: schema.sharedPlayerNews.author,
-      externalId: schema.sharedPlayerNews.externalId,
-      source: schema.sharedPlayerNews.source,
-      signal: schema.sharedPlayerNews.signal,
-      score: schema.sharedPlayerNews.score,
-      tags: schema.sharedPlayerNews.tags,
-      scope: schema.sharedPlayerNews.scope,
-    })
-    .from(schema.sharedPlayerNews)
-    .where(
+  const newsSelect = {
+    id: schema.sharedPlayerNews.id,
+    playerId: schema.sharedPlayerNews.playerId,
+    player: schema.sharedPlayerNews.player,
+    team: schema.sharedPlayerNews.team,
+    change: schema.sharedPlayerNews.change,
+    newsType: schema.sharedPlayerNews.newsType,
+    roleContext: schema.sharedPlayerNews.roleContext,
+    sourceLabel: schema.sharedPlayerNews.sourceLabel,
+    sourceUrl: schema.sharedPlayerNews.sourceUrl,
+    publishedAt: schema.sharedPlayerNews.publishedAt,
+    createdAt: schema.sharedPlayerNews.createdAt,
+    author: schema.sharedPlayerNews.author,
+    externalId: schema.sharedPlayerNews.externalId,
+    source: schema.sharedPlayerNews.source,
+    signal: schema.sharedPlayerNews.signal,
+    score: schema.sharedPlayerNews.score,
+    tags: schema.sharedPlayerNews.tags,
+    scope: schema.sharedPlayerNews.scope,
+  };
+  const retentionWhere = and(
+    or(
       and(
-        or(
-          and(
-            sql`${schema.sharedPlayerNews.publishedAt} is not null`,
-            gt(schema.sharedPlayerNews.publishedAt, cutoff),
-          ),
-          and(
-            isNull(schema.sharedPlayerNews.publishedAt),
-            gt(schema.sharedPlayerNews.createdAt, cutoff),
-          ),
-        ),
-        ...(tagVisibility ? [tagVisibility] : []),
+        sql`${schema.sharedPlayerNews.publishedAt} is not null`,
+        gt(schema.sharedPlayerNews.publishedAt, cutoff),
       ),
-    )
-    .orderBy(
-      desc(sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`),
-    )
-    .limit(SHARED_NEWS_ROW_SCAN);
+      and(
+        isNull(schema.sharedPlayerNews.publishedAt),
+        gt(schema.sharedPlayerNews.createdAt, cutoff),
+      ),
+    ),
+    ...(tagVisibility ? [tagVisibility] : []),
+  );
+  const orderByRecency = desc(
+    sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt})`,
+  );
+  // Scan article rows separately so high article volume cannot push Sleeper/X
+  // posts out of the shared recency window.
+  const [primaryRows, articleRows] = await Promise.all([
+    db
+      .select(newsSelect)
+      .from(schema.sharedPlayerNews)
+      .where(and(retentionWhere, ne(schema.sharedPlayerNews.source, "article")))
+      .orderBy(orderByRecency)
+      .limit(SHARED_NEWS_ROW_SCAN),
+    db
+      .select(newsSelect)
+      .from(schema.sharedPlayerNews)
+      .where(and(retentionWhere, eq(schema.sharedPlayerNews.source, "article")))
+      .orderBy(orderByRecency)
+      .limit(SHARED_NEWS_ROW_SCAN),
+  ]);
+  const rows = [...primaryRows, ...articleRows].sort((a, b) => {
+    const aMs = (a.publishedAt ?? a.createdAt).getTime();
+    const bMs = (b.publishedAt ?? b.createdAt).getTime();
+    return bMs - aMs;
+  });
 
   const lastCheckedAt = await readLastCheckedAt();
   const checkedAt = lastCheckedAt ?? new Date().toISOString();
@@ -259,7 +275,7 @@ async function readStoredNews(isDynastyContext: boolean): Promise<Response> {
     sourcePublishedAt: item.publishedAt?.toISOString() ?? item.createdAt.toISOString(),
     author: item.author,
     externalId: item.externalId,
-    source: item.source as "sleeper" | "x" | "nflverse",
+    source: item.source as "sleeper" | "x" | "nflverse" | "article",
     signal: item.signal,
     score: item.score,
     tags: item.tags ?? [],

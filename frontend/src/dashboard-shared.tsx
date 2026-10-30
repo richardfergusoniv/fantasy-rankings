@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
+import { useMinuteNow } from "./use-minute-now";
 import { CrossToolBadge, ToolLinks, type CrossToolLink, type ToolLinkItem } from "./tool-links";
 import { formatImpliedTotal } from "./lib/game-line-matchup-link";
 import { useQuery } from "@tanstack/react-query";
@@ -28,6 +29,7 @@ import type {
 import { EdgeStrip } from "./components/edge-strip";
 import { RefreshIcon, SectionError } from "./section-error";
 import { dashboardFreshness } from "./dashboard-freshness";
+import { newsAbsoluteTimeLabel, newsItemTimeLabel, newsRelativeTimeLabel } from "./news-time";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { gameLineSummary, type TeamGameLineLike } from "./game-line-summary";
@@ -340,15 +342,8 @@ export function DesignationBadge({
   );
 }
 
-export function newsTimeLabel(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
+export const newsTimeLabel = newsAbsoluteTimeLabel;
+export { newsItemTimeLabel, newsRelativeTimeLabel };
 
 export function groupNewsItemsByPlayer(news: PlayerNews | undefined): Map<string, PlayerNewsItem[]> {
   const itemsByPlayer = new Map<string, PlayerNewsItem[]>();
@@ -759,26 +754,40 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
 }
 
 export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose: () => void }) {
+  const isArticle = item.source === "article";
+  const nowMs = useMinuteNow(isArticle);
   const severity = item.newsType === "headline"
     ? item.playerId === "league" ? "Breaking" : "League news"
     : item.newsType === "waiver" ? "Waiver signal" : "Roster update";
+  const outletLabel = item.author && !isArticle
+    ? `${item.sourceLabel} · ${item.author}`
+    : item.sourceLabel;
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="news-card-modal">
+      <DialogContent
+        className="news-card-modal"
+        {...(!item.roleContext ? { "aria-describedby": undefined } : {})}
+      >
         <DialogCloseButton label="Close news card" />
         <DialogHeader className="news-card-header pr-8">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={item.newsType === "headline" ? "negative" : "secondary"}>{severity}</Badge>
-            <time className="text-xs text-muted-foreground">{item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent"}</time>
+            {!isArticle ? (
+              <Badge variant={item.newsType === "headline" ? "negative" : "secondary"}>{severity}</Badge>
+            ) : (
+              <span className="text-xs font-semibold text-muted-foreground">{item.sourceLabel}</span>
+            )}
+            <time className="text-xs text-muted-foreground">{newsItemTimeLabel(item, nowMs)}</time>
           </div>
         </DialogHeader>
         <DialogTitle id="ticker-news-headline" className="news-card-headline">{item.change}</DialogTitle>
-        <DialogDescription className="text-sm leading-relaxed text-muted-foreground">{item.roleContext}</DialogDescription>
+        {item.roleContext ? (
+          <DialogDescription className="text-sm leading-relaxed text-muted-foreground">{item.roleContext}</DialogDescription>
+        ) : null}
         {isHttpOrHttpsUrl(item.sourceUrl) ? (
-          <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel}<span className="sr-only"> (opens in a new tab)</span></a>
+          <a href={item.sourceUrl} target="_blank" rel="noreferrer">{outletLabel}<span className="sr-only"> (opens in a new tab)</span></a>
         ) : (
-          <span>{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel}</span>
+          <span>{outletLabel}</span>
         )}
       </DialogContent>
     </Dialog>

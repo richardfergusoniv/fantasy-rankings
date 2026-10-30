@@ -113,6 +113,13 @@
       "when": 1763400000000,
       "tag": "0016_shared_player_news_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1763600000000,
+      "tag": "0017_shared_player_news_article_source",
+      "breakpoints": true
     }
   ]
 }

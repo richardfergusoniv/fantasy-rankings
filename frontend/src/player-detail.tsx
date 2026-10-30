@@ -24,7 +24,7 @@ import {
   formatProjectionPoints,
   isBoomBustPosition,
   movementLabel,
-  newsTimeLabel,
+  newsItemTimeLabel,
   pfnNumber,
   pfnRankForRow,
   projectionComponentsForPlayer,
@@ -38,6 +38,7 @@ import { useProfileTag } from "./lib/use-profile-tag";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
 import { ModalPortal, ProfileChips, SegmentedControl, positionalSosRank, rankAgainst, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { useMinuteNow } from "./use-minute-now";
 import { BackGlyph, CloseGlyph, MoveTriangle } from "./components/glyphs";
 import { EmptyState, LoadingBlock } from "./components/state-blocks";
 
@@ -514,6 +515,7 @@ export function PlayerDetailSheet({
   const [settling, setSettling] = useState(false);
   const [contentDirection, setContentDirection] = useState<"back" | "none">("none");
   const [activeTab, setActiveTab] = useState<PlayerDetailTab>("overview");
+  const newsNowMs = useMinuteNow(newsItems.some((item) => item.source === "article"));
   useDialogFocusTrap(sheetRef, onClose, isModal && !suspended);
   useEffect(() => {
     if (isModal || suspended) return;
@@ -777,17 +779,42 @@ export function PlayerDetailSheet({
             <div className="empty-inline compact">Loading news…</div>
           ) : newsItems.length > 0 ? (
             <>
-              {newsItems.slice(0, showAllNews ? 8 : 3).map((item) => (
-                <article className="player-news-item" key={item.id}>
-                  <div><span className={`news-severity ${item.newsType}`}>{item.newsType === "headline" ? "League news" : item.newsType === "waiver" ? "Waiver signal" : "Roster update"}</span><time>{item.author ? `${item.sourceLabel} · ${item.author}` : item.sourceLabel} · {item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent"}</time></div>
-                  {isHttpOrHttpsUrl(item.sourceUrl) ? (
-                    <a className="player-news-headline" href={item.sourceUrl} target="_blank" rel="noreferrer"><strong>{item.change}</strong><span className="sr-only"> (opens in a new tab)</span></a>
-                  ) : (
-                    <span className="player-news-headline"><strong>{item.change}</strong></span>
-                  )}
-                  <p>{item.roleContext}</p>
-                </article>
-              ))}
+              {newsItems.slice(0, showAllNews ? 8 : 3).map((item) => {
+                const isArticle = item.source === "article";
+                const outletLabel = item.author && !isArticle
+                  ? `${item.sourceLabel} · ${item.author}`
+                  : item.sourceLabel;
+                const timeLabel = newsItemTimeLabel(item, newsNowMs);
+                const header = (
+                  <div>
+                    {!isArticle ? (
+                      <span className={`news-severity ${item.newsType}`}>
+                        {item.newsType === "headline" ? "League news" : item.newsType === "waiver" ? "Waiver signal" : "Roster update"}
+                      </span>
+                    ) : null}
+                    <time>{outletLabel} · {timeLabel}</time>
+                  </div>
+                );
+                const body = (
+                  <>
+                    {header}
+                    {isArticle || !isHttpOrHttpsUrl(item.sourceUrl) ? (
+                      <span className="player-news-headline"><strong>{item.change}</strong></span>
+                    ) : (
+                      <a className="player-news-headline" href={item.sourceUrl} target="_blank" rel="noreferrer"><strong>{item.change}</strong><span className="sr-only"> (opens in a new tab)</span></a>
+                    )}
+                    {item.roleContext ? <p>{item.roleContext}</p> : null}
+                  </>
+                );
+                return isArticle && isHttpOrHttpsUrl(item.sourceUrl) ? (
+                  <a className="player-news-item" key={item.id} href={item.sourceUrl} target="_blank" rel="noreferrer">
+                    {body}
+                    <span className="sr-only"> (opens in a new tab)</span>
+                  </a>
+                ) : (
+                  <article className="player-news-item" key={item.id}>{body}</article>
+                );
+              })}
               {!showAllNews && newsItems.length > 3 ? (
                 <button type="button" className="player-news-more" onClick={() => setNewsExpandedFor(player.playerId)}>Show {Math.min(newsItems.length, 8) - 3} more</button>
               ) : null}
