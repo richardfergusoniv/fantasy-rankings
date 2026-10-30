@@ -76,7 +76,7 @@ const SCHOOL_SCALE: ReadonlyArray<readonly [number, string]> = [
   [97, "A+"], [93, "A"], [90, "A\u2212"],
   [87, "B+"], [83, "B"], [80, "B\u2212"],
   [77, "C+"], [73, "C"], [70, "C\u2212"],
-  [67, "D+"], [63, "D"], [60, "D\u2212"],
+  [67, "D+"], [65, "D"],
 ];
 
 export function schoolGrade(percent: number): string {
