@@ -244,8 +244,19 @@ function GameLineCardBlock({
   const homePoints = finalScores?.[1] ?? card.homeImplied;
   const hasPoints = awayPoints !== null && homePoints !== null && awayPoints + homePoints > 0;
   const awayShare = hasPoints ? Math.round((awayPoints / (awayPoints + homePoints)) * 100) : null;
-  // Only claim "not started" when the kickoff time is known and still ahead.
-  const status = card.isFinal ? "Final" : card.kickoffAtMs !== null && card.kickoffAtMs > Date.now() ? "Not started" : null;
+  // Only claim "not started" when the kickoff time is known and still ahead; flip at kickoff without a re-render from elsewhere.
+  const kickoffAtMs = card.kickoffAtMs;
+  const [beforeKickoff, setBeforeKickoff] = useState(() => kickoffAtMs !== null && kickoffAtMs > Date.now());
+  useEffect(() => {
+    if (kickoffAtMs === null || kickoffAtMs <= Date.now()) {
+      setBeforeKickoff(false);
+      return undefined;
+    }
+    setBeforeKickoff(true);
+    const timer = window.setTimeout(() => setBeforeKickoff(false), Math.min(kickoffAtMs - Date.now(), 2 ** 31 - 1));
+    return () => window.clearTimeout(timer);
+  }, [kickoffAtMs]);
+  const status = card.isFinal ? "Final" : beforeKickoff ? "Not started" : null;
   return (
     <section className="game-board" aria-label={`${card.matchup}, ${card.kickoffPt}`}>
       <div className="game-board-chips">
