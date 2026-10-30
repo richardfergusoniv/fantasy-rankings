@@ -2,6 +2,7 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import { getCache } from "@vercel/functions";
 import { SIGN_IN_REQUIRED } from "./dashboard-access.js";
 import { SOURCE_CACHE_GZIP_PREFIX } from "./source-cache-payload.js";
+import { countCacheMetric, sampleCacheBytes } from "./cache-metrics.js";
 import type { DashboardCacheSection } from "./dashboard-section-cache.js";
 
 /**
@@ -368,11 +369,14 @@ export function createTieredDashboardViewStore(
   return {
     async get(key) {
       const local = await memory.get(key);
+      if (local != null) countCacheMetric("dashboard.memory.hit");
+      countCacheMetric(key.includes(":lane:") ? "dashboard.runtime.pointer.probe" : "dashboard.runtime.get");
       let remote: unknown = null;
       try {
         const cached = await runtime.get(key);
         if (cached != null) remote = unpackRuntimeValue(cached);
       } catch (error) {
+        countCacheMetric("dashboard.runtime.error");
         console.error("[dashboard-cache] runtime get failed", error);
       }
       return preferCachedValue(local, remote);
@@ -381,8 +385,10 @@ export function createTieredDashboardViewStore(
       await memory.set(key, value, ttlSeconds);
       if (ttlSeconds <= 0) {
         try {
+          countCacheMetric("dashboard.runtime.delete");
           await runtime.delete(key);
         } catch (error) {
+          countCacheMetric("dashboard.runtime.error");
           console.error("[dashboard-cache] runtime delete failed", error);
         }
         return true;
@@ -390,9 +396,12 @@ export function createTieredDashboardViewStore(
       try {
         const payload = isCacheEntry(value) ? encodeForRuntime(value, maxBytes) : value;
         if (payload == null) return false;
+        countCacheMetric("dashboard.runtime.set");
+        sampleCacheBytes("dashboard.runtime.set.bytes", Buffer.byteLength(JSON.stringify(payload), "utf8"));
         await runtime.set(key, payload, { ttl: ttlSeconds, name: "dashboard-view" });
         return true;
       } catch (error) {
+        countCacheMetric("dashboard.runtime.error");
         console.error("[dashboard-cache] runtime set failed", error);
         return false;
       }
@@ -585,6 +594,7 @@ export async function pointDashboardViewAtVersion(args: {
   const visible = greatestPointer(await readLanePointers(store, args.sleeperUserId, args.view));
   if (visible && visible.version > version) return;
 
+  countCacheMetric("dashboard.runtime.pointer.publish");
   for (const lane of lanesForVersion(version)) {
     const key = dashboardViewLaneKey(args.sleeperUserId, args.view, lane);
     const current = decodePointer(await store.get(key));

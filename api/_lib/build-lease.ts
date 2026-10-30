@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "./db.js";
+import { countCacheMetric } from "./cache-metrics.js";
 
 /**
  * Deployment-wide build lease (audit finding #9).
@@ -52,6 +53,7 @@ export const drizzleBuildLeaseStore: BuildLeaseStore = {
            OR build_leases.expires_at <= now()
       RETURNING resource
     `)) as unknown as Array<{ resource: string }>;
+    countCacheMetric(rows.length > 0 ? "build_lease.claimed" : "build_lease.joined");
     return rows.length > 0;
   },
   async finish(resource, holder, error) {
@@ -143,6 +145,7 @@ export async function runWithBuildLease<T>(
   try {
     if (!(await store.claim(resource, holder, ttlMs))) return { status: "joined" };
   } catch (claimError) {
+    countCacheMetric("build_lease.claim_error");
     console.error("[build-lease] claim failed; building without a lease", claimError);
     leased = false;
   }
