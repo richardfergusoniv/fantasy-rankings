@@ -242,7 +242,12 @@ export type ArticleFeedsCachePayload = {
   feeds: Record<string, FeedValidator>;
   /** guid or canonical URL → true when premium (skip), false when free. */
   pffPremium: Record<string, boolean>;
+  /** Next feed index for rotating the poll start under the job budget. */
+  nextFeedIndex?: number;
 };
+
+/** Cap stored PFF verdicts so the source-cache row cannot grow without bound. */
+export const MAX_PFF_PREMIUM_CACHE_ENTRIES = 2_000;
 
 export function emptyArticleFeedsCache(): ArticleFeedsCachePayload {
   return { feeds: {}, pffPremium: {} };
@@ -253,7 +258,7 @@ export function parseArticleFeedsCache(raw: string | null | undefined): ArticleF
   try {
     const value: unknown = decodeSourceCachePayload(raw);
     if (!value || typeof value !== "object" || Array.isArray(value)) return emptyArticleFeedsCache();
-    const record = value as { feeds?: unknown; pffPremium?: unknown };
+    const record = value as { feeds?: unknown; pffPremium?: unknown; nextFeedIndex?: unknown };
     const feeds: Record<string, FeedValidator> = {};
     if (record.feeds && typeof record.feeds === "object" && !Array.isArray(record.feeds)) {
       for (const [key, entry] of Object.entries(record.feeds as Record<string, unknown>)) {
@@ -271,9 +276,26 @@ export function parseArticleFeedsCache(raw: string | null | undefined): ArticleF
         if (typeof verdict === "boolean") pffPremium[key] = verdict;
       }
     }
-    return { feeds, pffPremium };
+    const nextFeedIndex =
+      typeof record.nextFeedIndex === "number" && Number.isFinite(record.nextFeedIndex)
+        ? Math.max(0, Math.floor(record.nextFeedIndex))
+        : undefined;
+    return { feeds, pffPremium, ...(nextFeedIndex !== undefined ? { nextFeedIndex } : {}) };
   } catch {
     return emptyArticleFeedsCache();
+  }
+}
+
+/** Drop oldest insertion-order keys when the PFF verdict map exceeds the cap. */
+export function prunePffPremiumCache(
+  cache: ArticleFeedsCachePayload,
+  maxEntries = MAX_PFF_PREMIUM_CACHE_ENTRIES,
+): void {
+  const keys = Object.keys(cache.pffPremium);
+  if (keys.length <= maxEntries) return;
+  const drop = keys.length - maxEntries;
+  for (let i = 0; i < drop; i += 1) {
+    delete cache.pffPremium[keys[i]!];
   }
 }
 
@@ -303,11 +325,11 @@ function decodeOneXmlEntity(entity: string): string {
     default: {
       if (/^&#x[0-9a-f]+;$/i.test(entity)) {
         const code = Number.parseInt(entity.slice(3, -1), 16);
-        return Number.isFinite(code) ? String.fromCodePoint(code) : "";
+        return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : "";
       }
       if (/^&#\d+;$/.test(entity)) {
         const code = Number(entity.slice(2, -1));
-        return Number.isFinite(code) ? String.fromCodePoint(code) : "";
+        return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : "";
       }
       return entity;
     }
@@ -379,6 +401,30 @@ export function normalizeHeadlineKey(headline: string): string {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** 24h cross-outlet dedupe key: same headline + same player/team/league target. */
+export function articleHeadlineDedupeKey(
+  headline: string,
+  target:
+    | { scope: "player"; playerId: string }
+    | { scope: "team"; team: string }
+    | { scope: "league" },
+): string | null {
+  const key = normalizeHeadlineKey(headline);
+  if (!key) return null;
+  switch (target.scope) {
+    case "player":
+      return `${key}::player::${target.playerId}`;
+    case "team":
+      return `${key}::team::${target.team}`;
+    case "league":
+      return `${key}::league`;
+    default: {
+      const _exhaustive: never = target;
+      return _exhaustive;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -508,7 +554,7 @@ function tagText(block: string, tag: string): string {
 function tagAttr(block: string, tag: string, attr: string): string {
   const re = new RegExp(`<${tag}\\b[^>]*\\b${attr}\\s*=\\s*["']([^"']+)["'][^>]*/?>`, "i");
   const match = block.match(re);
-  return match?.[1]?.trim() ?? "";
+  return decodeXmlEntities(match?.[1] ?? "").trim();
 }
 
 function parseRssCategories(block: string): string[] {
@@ -538,7 +584,8 @@ function parseRssItem(block: string): ParsedFeedItem | null {
   const pubDate = tagText(block, "pubDate") || tagText(block, "dc:date");
   const description = tagText(block, "description") || tagText(block, "content:encoded");
   if (!title || !link) return null;
-  const url = canonicalArticleUrl(link) ?? link.trim();
+  const url = canonicalArticleUrl(link);
+  if (!url) return null;
   return {
     title,
     url,
@@ -554,14 +601,14 @@ function parseAtomEntry(block: string): ParsedFeedItem | null {
   // Prefer rel="alternate" even when a rel="self"/enclosure link appears first.
   const alternate = block.match(/<link\b[^>]*\brel\s*=\s*["']alternate["'][^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>/i)
     ?? block.match(/<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*\brel\s*=\s*["']alternate["'][^>]*>/i);
-  let link = alternate?.[1]?.trim() ?? "";
+  let link = alternate?.[1] ? decodeXmlEntities(alternate[1]).trim() : "";
   if (!link) {
     for (const match of block.matchAll(/<link\b([^>]*)>/gi)) {
       const attrs = match[1] ?? "";
       if (/\brel\s*=\s*["'](?:self|enclosure|related|via)["']/i.test(attrs)) continue;
       const href = attrs.match(/\bhref\s*=\s*["']([^"']+)["']/i);
       if (href?.[1]) {
-        link = href[1].trim();
+        link = decodeXmlEntities(href[1]).trim();
         break;
       }
     }
@@ -571,7 +618,8 @@ function parseAtomEntry(block: string): ParsedFeedItem | null {
   const published = tagText(block, "published") || tagText(block, "updated");
   const summary = tagText(block, "summary") || tagText(block, "content");
   if (!title || !link) return null;
-  const url = canonicalArticleUrl(link) ?? link.trim();
+  const url = canonicalArticleUrl(link);
+  if (!url) return null;
   return {
     title,
     url,
@@ -716,9 +764,6 @@ export function detectArticleTeam(
   text: string,
   options?: { teamHint?: NflNewsTeamCode | null; url?: string },
 ): NflNewsTeamCode | null {
-  if (options?.teamHint && isValidNflNewsTeam(options.teamHint)) {
-    return options.teamHint;
-  }
   const haystack = `${text} ${options?.url ?? ""}`;
   const codes = new Set<string>();
 
@@ -744,6 +789,10 @@ export function detectArticleTeam(
   }
 
   if (codes.size === 1) return [...codes][0] as NflNewsTeamCode;
+  // Feed teamHint only when the article text/URL name no team (not when ambiguous).
+  if (codes.size === 0 && options?.teamHint && isValidNflNewsTeam(options.teamHint)) {
+    return options.teamHint;
+  }
   return null;
 }
 
@@ -995,7 +1044,12 @@ async function writeFeedsCache(payload: ArticleFeedsCachePayload): Promise<void>
 async function loadRecentHeadlineKeys(now: Date): Promise<Set<string>> {
   const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const rows = await db
-    .select({ change: schema.sharedPlayerNews.change })
+    .select({
+      change: schema.sharedPlayerNews.change,
+      playerId: schema.sharedPlayerNews.playerId,
+      team: schema.sharedPlayerNews.team,
+      scope: schema.sharedPlayerNews.scope,
+    })
     .from(schema.sharedPlayerNews)
     .where(
       and(
@@ -1016,8 +1070,16 @@ async function loadRecentHeadlineKeys(now: Date): Promise<Set<string>> {
     .limit(2_000);
   const keys = new Set<string>();
   for (const row of rows) {
-    const key = normalizeHeadlineKey(row.change);
-    if (key) keys.add(key);
+    const scope = row.scope ?? "player";
+    let dedupe: string | null = null;
+    if (scope === "player" && row.playerId) {
+      dedupe = articleHeadlineDedupeKey(row.change, { scope: "player", playerId: row.playerId });
+    } else if (scope === "team" && row.team) {
+      dedupe = articleHeadlineDedupeKey(row.change, { scope: "team", team: row.team });
+    } else if (scope === "league") {
+      dedupe = articleHeadlineDedupeKey(row.change, { scope: "league" });
+    }
+    if (dedupe) keys.add(dedupe);
   }
   return keys;
 }
@@ -1099,7 +1161,8 @@ async function resolvePffPremium(input: {
     signal: input.signal,
   });
   if (!page.ok || !page.body) {
-    input.cache.pffPremium[cacheKey] = true; // fail closed: skip, don't refetch forever
+    // Fail closed for this run only — do not cache a fetch failure as premium,
+    // or a transient timeout permanently suppresses a free article.
     return { premium: true, fetched: true, failed: true };
   }
   const premium = detectPffPremiumFromHtml(page.body);
@@ -1129,7 +1192,19 @@ export async function refreshArticleFeeds(options?: {
   const feedStatuses: ArticleFeedRunStatus[] = [];
   let insertedTotal = 0;
 
-  for (const source of sources) {
+  // Rotate start index so later feeds are not starved when the budget runs out.
+  const feedCount = sources.length;
+  const startIndex = feedCount > 0
+    ? ((cache.nextFeedIndex ?? 0) % feedCount + feedCount) % feedCount
+    : 0;
+  const orderedSources = feedCount === 0 || startIndex === 0
+    ? [...sources]
+    : [...sources.slice(startIndex), ...sources.slice(0, startIndex)];
+  if (feedCount > 0) {
+    cache.nextFeedIndex = (startIndex + 1) % feedCount;
+  }
+
+  for (const source of orderedSources) {
     const remaining = deadline - Date.now();
     if (remaining < ARTICLE_FEED_TIMEOUT_MS + 1_000) {
       feedStatuses.push({
@@ -1235,9 +1310,6 @@ export async function refreshArticleFeeds(options?: {
       const canonical = canonicalArticleUrl(item.url) ?? item.url;
       if (seenUrls.has(canonical)) continue;
 
-      const headlineKey = normalizeHeadlineKey(title);
-      if (headlineKey && recentHeadlines.has(headlineKey)) continue;
-
       const textBlob = `${title} ${item.summary}`;
       const team = detectArticleTeam(textBlob, { teamHint: source.teamHint, url: item.url });
       const matched = matchArticlePlayers(textBlob, index, needles, team);
@@ -1283,9 +1355,32 @@ export async function refreshArticleFeeds(options?: {
       });
       if (assignment.scope === "drop") continue;
 
+      // 24h headline skip is scoped per target so the same title can land for
+      // a different player/team while still collapsing cross-outlet dupes.
+      let scopedAssignment = assignment;
+      if (assignment.scope === "player") {
+        const remainingIds = assignment.playerIds.filter((playerId) => {
+          const key = articleHeadlineDedupeKey(title, { scope: "player", playerId });
+          return !key || !recentHeadlines.has(key);
+        });
+        if (remainingIds.length === 0) continue;
+        scopedAssignment = { scope: "player", playerIds: remainingIds };
+        for (const playerId of remainingIds) {
+          const key = articleHeadlineDedupeKey(title, { scope: "player", playerId });
+          if (key) recentHeadlines.add(key);
+        }
+      } else if (assignment.scope === "team") {
+        const key = articleHeadlineDedupeKey(title, { scope: "team", team: assignment.team });
+        if (key && recentHeadlines.has(key)) continue;
+        if (key) recentHeadlines.add(key);
+      } else {
+        const key = articleHeadlineDedupeKey(title, { scope: "league" });
+        if (key && recentHeadlines.has(key)) continue;
+        if (key) recentHeadlines.add(key);
+      }
+
       itemsPassed += 1;
       seenUrls.add(canonical);
-      if (headlineKey) recentHeadlines.add(headlineKey);
 
       drafts.push(
         ...buildArticleNewsDrafts({
@@ -1293,7 +1388,7 @@ export async function refreshArticleFeeds(options?: {
           item: { ...item, title, url: canonical },
           headline: title,
           summary: item.summary,
-          assignment,
+          assignment: scopedAssignment,
           playerMeta: (playerId) => index.byId.get(playerId) ?? null,
         }),
       );
@@ -1329,6 +1424,7 @@ export async function refreshArticleFeeds(options?: {
     });
   }
 
+  prunePffPremiumCache(cache);
   await writeFeedsCache(cache);
   const purged = await purgeExpiredArticleNews(now);
 

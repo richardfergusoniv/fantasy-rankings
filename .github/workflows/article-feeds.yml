@@ -59,6 +59,8 @@ jobs:
           if result.get("job") != "refresh-article-feeds":
               raise SystemExit(f"unexpected job: {result}")
           feeds = result.get("feeds") or []
+          if not any(f.get("status") in ("ok", "not_modified") for f in feeds):
+              raise SystemExit(f"article-feeds ingested no feed: {[f.get('status') for f in feeds]}")
           print(f"article-feeds verified: {len(feeds)} feeds, inserted={result.get('inserted')}, durationMs={result.get('durationMs')}")
           EOF
           test "$HTTP" = "200"

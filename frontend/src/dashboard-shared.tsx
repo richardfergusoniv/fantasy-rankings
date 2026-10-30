@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
+import { useMinuteNow } from "./use-minute-now";
 import { CrossToolBadge, ToolLinks, type CrossToolLink, type ToolLinkItem } from "./tool-links";
 import { formatImpliedTotal } from "./lib/game-line-matchup-link";
 import { useQuery } from "@tanstack/react-query";
@@ -754,6 +755,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
 
 export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose: () => void }) {
   const isArticle = item.source === "article";
+  const nowMs = useMinuteNow(isArticle);
   const severity = item.newsType === "headline"
     ? item.playerId === "league" ? "Breaking" : "League news"
     : item.newsType === "waiver" ? "Waiver signal" : "Roster update";
@@ -763,7 +765,10 @@ export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="news-card-modal">
+      <DialogContent
+        className="news-card-modal"
+        {...(!item.roleContext ? { "aria-describedby": undefined } : {})}
+      >
         <DialogCloseButton label="Close news card" />
         <DialogHeader className="news-card-header pr-8">
           <div className="flex flex-wrap items-center gap-2">
@@ -772,7 +777,7 @@ export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose
             ) : (
               <span className="text-xs font-semibold text-muted-foreground">{item.sourceLabel}</span>
             )}
-            <time className="text-xs text-muted-foreground">{newsItemTimeLabel(item)}</time>
+            <time className="text-xs text-muted-foreground">{newsItemTimeLabel(item, nowMs)}</time>
           </div>
         </DialogHeader>
         <DialogTitle id="ticker-news-headline" className="news-card-headline">{item.change}</DialogTitle>

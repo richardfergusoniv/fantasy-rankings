@@ -38,6 +38,7 @@ import { useProfileTag } from "./lib/use-profile-tag";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
 import { ModalPortal, ProfileChips, SegmentedControl, positionalSosRank, rankAgainst, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { useMinuteNow } from "./use-minute-now";
 import { BackGlyph, CloseGlyph, MoveTriangle } from "./components/glyphs";
 import { EmptyState, LoadingBlock } from "./components/state-blocks";
 
@@ -514,6 +515,7 @@ export function PlayerDetailSheet({
   const [settling, setSettling] = useState(false);
   const [contentDirection, setContentDirection] = useState<"back" | "none">("none");
   const [activeTab, setActiveTab] = useState<PlayerDetailTab>("overview");
+  const newsNowMs = useMinuteNow(newsItems.some((item) => item.source === "article"));
   useDialogFocusTrap(sheetRef, onClose, isModal && !suspended);
   useEffect(() => {
     if (isModal || suspended) return;
@@ -782,7 +784,7 @@ export function PlayerDetailSheet({
                 const outletLabel = item.author && !isArticle
                   ? `${item.sourceLabel} · ${item.author}`
                   : item.sourceLabel;
-                const timeLabel = newsItemTimeLabel(item);
+                const timeLabel = newsItemTimeLabel(item, newsNowMs);
                 const header = (
                   <div>
                     {!isArticle ? (

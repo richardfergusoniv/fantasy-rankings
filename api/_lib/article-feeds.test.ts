@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ARTICLE_FEED_SOURCES,
   articleExternalId,
+  articleHeadlineDedupeKey,
   assignArticleScope,
   buildArticleNewsDrafts,
   canonicalArticleUrl,
@@ -13,9 +14,11 @@ import {
   normalizeHeadlineKey,
   parseFeedXml,
   passesHeadlineNoiseFilter,
+  prunePffPremiumCache,
   stripHtml,
   truncateSummary,
   type ArticleFeedSource,
+  type ArticleFeedsCachePayload,
 } from "./article-feeds.js";
 import {
   buildPlayerNewsNameIndex,
@@ -151,6 +154,7 @@ describe("surname false positives", () => {
   const entries: PlayerNewsNameIndexEntry[] = [
     { playerId: "allen-buf", player: "Josh Allen", team: "BUF", firstName: "Josh", lastName: "Allen" },
     { playerId: "allen-lac", player: "Keenan Allen", team: "LAC", firstName: "Keenan", lastName: "Allen" },
+    { playerId: "allen-gb", player: "Jordan Allen", team: "GB", firstName: "Jordan", lastName: "Allen" },
     { playerId: "williams-chi", player: "Caleb Williams", team: "CHI", firstName: "Caleb", lastName: "Williams" },
     { playerId: "williams-gb", player: "Jameson Williams", team: "DET", firstName: "Jameson", lastName: "Williams" },
     { playerId: "brown-phi", player: "A.J. Brown", team: "PHI", firstName: "A.J.", lastName: "Brown" },
@@ -320,8 +324,14 @@ describe("buildArticleNewsDrafts", () => {
 });
 
 describe("detectArticleTeam", () => {
-  it("returns teamHint when provided", () => {
+  it("uses teamHint only when the text names no team", () => {
     expect(detectArticleTeam("random text", { teamHint: "TB" })).toBe("TB");
+  });
+
+  it("prefers a named team in the text over the feed teamHint", () => {
+    expect(
+      detectArticleTeam("Vikings place starter on IR", { teamHint: "GB" }),
+    ).toBe("MIN");
   });
 
   it("detects a unique nickname", () => {
@@ -335,6 +345,18 @@ describe("detectArticleTeam", () => {
 
   it("still matches uppercase bare team codes", () => {
     expect(detectArticleTeam("WAS places starter on IR")).toBe("WAS");
+  });
+});
+
+describe("articleHeadlineDedupeKey", () => {
+  it("scopes the same headline to different targets", () => {
+    const headline = "Injury Update!";
+    expect(articleHeadlineDedupeKey(headline, { scope: "player", playerId: "a" })).not.toBe(
+      articleHeadlineDedupeKey(headline, { scope: "player", playerId: "b" }),
+    );
+    expect(articleHeadlineDedupeKey(headline, { scope: "team", team: "MIN" })).not.toBe(
+      articleHeadlineDedupeKey(headline, { scope: "team", team: "GB" }),
+    );
   });
 });
 
@@ -408,6 +430,34 @@ describe("feed parsing", () => {
     const items = parseFeedXml(xml);
     expect(items[0]!.url).toBe("https://www.acmepackingcompany.com/2026/10/30/depth-chart");
   });
+
+  it("decodes XML entities in Atom href values", () => {
+    const xml = `<?xml version="1.0"?>
+      <feed xmlns="http://www.w3.org/2005/Atom">
+        <entry>
+          <title>Encoded link</title>
+          <link rel="alternate" href="https://www.fantasypros.com/nfl/news/x?id=1&amp;src=rss"/>
+          <id>tag:fp,2026:3</id>
+          <updated>2026-10-30T15:00:00Z</updated>
+          <summary>Body</summary>
+        </entry>
+      </feed>`;
+    const items = parseFeedXml(xml);
+    expect(items[0]!.url).toBe("https://www.fantasypros.com/nfl/news/x?id=1&src=rss");
+  });
+
+  it("drops non-HTTP(S) article links", () => {
+    const xml = `<?xml version="1.0"?>
+      <rss version="2.0"><channel>
+        <item>
+          <title>Bad link</title>
+          <link>javascript:alert(1)</link>
+          <guid>bad-1</guid>
+          <description>Nope</description>
+        </item>
+      </channel></rss>`;
+    expect(parseFeedXml(xml)).toHaveLength(0);
+  });
 });
 
 describe("PFF premium detection", () => {
@@ -442,6 +492,20 @@ describe("stripHtml / decodeXmlEntities", () => {
     expect(decodeXmlEntities("A &amp; B &lt;C&gt;")).toBe("A & B <C>");
     // &amp;#38; stays a single-pass decode of &amp; only (no second numeric pass)
     expect(decodeXmlEntities("&amp;#38;")).toBe("&#38;");
+  });
+
+  it("rejects out-of-range numeric entities instead of throwing", () => {
+    expect(decodeXmlEntities("ok &#1114112; more")).toBe("ok  more");
+    expect(decodeXmlEntities("ok &#x110000; more")).toBe("ok  more");
+  });
+});
+
+describe("prunePffPremiumCache", () => {
+  it("keeps only the newest insertion-order keys up to the cap", () => {
+    const cache: ArticleFeedsCachePayload = { feeds: {}, pffPremium: {} };
+    for (let i = 0; i < 5; i += 1) cache.pffPremium[`k${i}`] = i % 2 === 0;
+    prunePffPremiumCache(cache, 3);
+    expect(Object.keys(cache.pffPremium)).toEqual(["k2", "k3", "k4"]);
   });
 });
 
