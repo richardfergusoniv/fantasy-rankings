@@ -70,6 +70,7 @@ export function sharedBoardDatasetIds(): string[] {
 type RuntimeSharedCache = {
   get(key: string): Promise<unknown>;
   set(key: string, value: unknown, options: { ttl: number; name: string }): Promise<unknown>;
+  delete?(key: string): Promise<unknown>;
 };
 
 function defaultRuntimeSharedCache(): RuntimeSharedCache {
@@ -79,6 +80,9 @@ function defaultRuntimeSharedCache(): RuntimeSharedCache {
     },
     async set(key, value, options) {
       await getCache({ namespace: SHARED_CACHE_NAMESPACE }).set(key, value, options);
+    },
+    async delete(key) {
+      await getCache({ namespace: SHARED_CACHE_NAMESPACE }).delete(key);
     },
   };
 }
@@ -181,6 +185,11 @@ export async function publishSharedBoard(
       return { published: true, key, encodedBytes };
     } catch {
       countCacheMetric("shared_board.cache.error");
+      // The durable row is already newer than whatever the cache holds. Drop
+      // the cached copy so readers fall back to that row instead of serving
+      // the previous board until its TTL runs out.
+      l1.delete(key);
+      await runtime.delete?.(key).catch(() => undefined);
       return { published: false, key, reason: "runtime_error" };
     }
   });

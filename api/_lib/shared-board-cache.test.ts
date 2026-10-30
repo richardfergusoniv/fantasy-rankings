@@ -12,7 +12,9 @@ type RuntimeDouble = {
   store: Map<string, unknown>;
   get: (key: string) => Promise<unknown>;
   set: (key: string, value: unknown, options: { ttl: number; name: string }) => Promise<unknown>;
+  delete: (key: string) => Promise<unknown>;
   fail?: boolean;
+  failSet?: boolean;
 };
 
 function runtimeDouble(): RuntimeDouble {
@@ -23,8 +25,12 @@ function runtimeDouble(): RuntimeDouble {
       return rt.store.get(key);
     },
     async set(key, value) {
-      if (rt.fail) throw new Error("cache down");
+      if (rt.fail || rt.failSet) throw new Error("cache down");
       rt.store.set(key, value);
+    },
+    async delete(key) {
+      if (rt.fail) throw new Error("cache down");
+      rt.store.delete(key);
     },
   };
   return rt;
@@ -113,6 +119,19 @@ describe("publishSharedBoard", () => {
     expect(olderResult).toMatchObject({ published: false, reason: "stale_source" });
     const stored = rt.store.get("shared:sleeper-picks:2026:9") as { sourceAgeMs: number };
     expect(stored.sourceAgeMs).toBe(newerAge);
+  });
+
+  it("drops the cached board when a newer publish fails, so reads fall back to the durable row", async () => {
+    const rt = runtimeDouble();
+    await publishSharedBoard("sleeper-picks", "2026:9", board, SOURCE_AGE, rt);
+    const newer = { ...board, pulledAt: "2026-10-29T13:00:00.000Z" };
+    const newerAge = new Date(newer.pulledAt).getTime();
+    rt.failSet = true;
+    const result = await publishSharedBoard("sleeper-picks", "2026:9", newer, newerAge, rt);
+    expect(result).toMatchObject({ published: false, reason: "runtime_error" });
+    const read = await readSharedBoard("sleeper-picks", "2026:9", async () => ({ payload: newer, sourceAgeMs: newerAge }), rt);
+    expect(read.source).toBe("durable");
+    expect(read.envelope?.payload).toEqual(newer);
   });
 
   it("treats a runtime failure as nonfatal", async () => {
