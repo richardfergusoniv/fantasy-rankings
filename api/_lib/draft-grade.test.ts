@@ -6,7 +6,9 @@ import {
   gradeDraft,
   gradeLetter,
   loadDraftGrade,
+  pickGrades,
   placeOf,
+  schoolGrade,
   shiftDateKey,
   type GradedPick,
   type ValueBoard,
@@ -80,7 +82,49 @@ describe("draftSurplusByTeam", () => {
     const picks = [pick(1, 1, "p1"), pick(2, 1, "k1", "K"), pick(3, 2, "d1", "DEF"), pick(4, 2, "unlisted")];
     const totals = draftSurplusByTeam({ picks, slotBoard: marketBoard, values: marketBoard });
     expect(totals.get(1)).toBe(0);
-    expect(totals.get(2)).toBe(300 - 700);
+    // Kickers and defenses use up no slot, so the unlisted player is the draft's second skill pick.
+    expect(totals.get(2)).toBe(300 - 900);
+  });
+});
+
+describe("schoolGrade", () => {
+  it("follows the usual school scale, with anything over 100% an A+ and under 60% an F", () => {
+    const cases: Array<[number, string]> = [
+      [140, "A+"], [100, "A+"], [97, "A+"], [96.9, "A"], [93, "A"], [92.9, "A−"], [90, "A−"],
+      [89, "B+"], [87, "B+"], [86, "B"], [83, "B"], [82, "B−"], [80, "B−"],
+      [79, "C+"], [77, "C+"], [76, "C"], [73, "C"], [72, "C−"], [70, "C−"],
+      [69, "D+"], [67, "D+"], [66, "D"], [63, "D"], [62, "D−"], [60, "D−"],
+      [59.9, "F"], [1, "F"],
+    ];
+    for (const [percent, letter] of cases) expect(schoolGrade(percent), `${percent}%`).toBe(letter);
+  });
+});
+
+describe("pickGrades", () => {
+  it("grades a pick by the share of its slot's value, so taking a player where the market had him is an A+", () => {
+    const grades = pickGrades({ picks: fair, rosterId: 1, slotBoard: marketBoard, values: marketBoard });
+    expect([...grades.keys()]).toEqual(["p1", "p8"]);
+    expect(grades.get("p1")).toEqual({ letter: "A+", percent: 100 });
+    expect(grades.get("p8")).toEqual({ letter: "A+", percent: 100 });
+  });
+
+  it("drops a pick that has faded since, and rewards one that has risen", () => {
+    const today = board([["p1", 520], ["p2", 900], ["p3", 800], ["p4", 700], ["p5", 600], ["p6", 500], ["p7", 400], ["p8", 450]]);
+    const grades = pickGrades({ picks: fair, rosterId: 1, slotBoard: marketBoard, values: today });
+    expect(grades.get("p1")).toEqual({ letter: "F", percent: 52 });
+    expect(grades.get("p8")).toEqual({ letter: "A+", percent: 150 });
+  });
+
+  it("has no grade for a kicker or defense", () => {
+    const picks = [pick(1, 1, "p1"), pick(2, 1, "k1", "K"), pick(3, 1, "d1", "DEF")];
+    const grades = pickGrades({ picks, rosterId: 1, slotBoard: marketBoard, values: marketBoard });
+    expect(grades.get("k1")).toBeNull();
+    expect(grades.get("d1")).toBeNull();
+  });
+
+  it("measures a skill pick against its place among skill picks, not its overall pick number", () => {
+    const picks = [pick(1, 1, "k1", "K"), pick(2, 1, "p1")];
+    expect(pickGrades({ picks, rosterId: 1, slotBoard: marketBoard, values: marketBoard }).get("p1")).toEqual({ letter: "A+", percent: 100 });
   });
 });
 
@@ -98,10 +142,24 @@ describe("gradeDraft", () => {
 
   it("has no grades without a usable draft-day board, and no Today without today's board", () => {
     const empty = board([]);
-    expect(gradeDraft({ ...options, picks: fair, draftDayBoard: empty, todayBoard: marketBoard })).toEqual({ draftDay: null, today: null });
+    expect(gradeDraft({ ...options, picks: fair, draftDayBoard: empty, todayBoard: marketBoard })).toEqual({ draftDay: null, today: null, picks: [] });
     const noToday = gradeDraft({ ...options, picks: fair, draftDayBoard: marketBoard, todayBoard: empty });
     expect(noToday.draftDay).not.toBeNull();
     expect(noToday.today).toBeNull();
+  });
+
+  it("lists the user's own picks in draft order with a grade for each day", () => {
+    const today = board([...marketBoard].map(([id, value]) => [id, id === "p2" ? 450 : value] as [string, number]));
+    const grades = gradeDraft({ ...options, picks: [...fair].reverse(), draftDayBoard: marketBoard, todayBoard: today });
+    expect(grades.picks).toEqual([
+      { playerId: "p2", draftDay: { letter: "A+", percent: 100 }, today: { letter: "F", percent: 50 } },
+      { playerId: "p7", draftDay: { letter: "A+", percent: 100 }, today: { letter: "A+", percent: 100 } },
+    ]);
+  });
+
+  it("has no Today grades for the picks when today's board is missing", () => {
+    const grades = gradeDraft({ ...options, picks: fair, draftDayBoard: marketBoard, todayBoard: board([]) });
+    expect(grades.picks.every((entry) => entry.draftDay !== null && entry.today === null)).toBe(true);
   });
 
   it("has no grade for a team that made no picks", () => {

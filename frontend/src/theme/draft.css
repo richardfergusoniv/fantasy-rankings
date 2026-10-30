@@ -26,6 +26,8 @@
 .draft-list-pagination { border-bottom: 0; }
 .draft-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px 62px 88px; align-items: center; gap: 4px; min-height: var(--player-row-height); padding: 0 var(--player-box-inline); border-bottom: 1px solid var(--row-divider); background: var(--surface); font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1; }
 .draft-row.draft-my-team-row { grid-template-columns: minmax(0, 1fr) 72px; }
+/* Final draft recap: the player, then a grade for draft day and for today. */
+.draft-row.draft-recap-row { grid-template-columns: minmax(0, 1fr) 72px 72px; }
 .draft-board > .draft-row:last-child { border-bottom: 0; }
 .draft-row > span:nth-child(n+2) { display: flex; align-items: center; justify-content: flex-end; text-align: right; font-size: var(--player-name-size); font-weight: 600; }
 .draft-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--player-name-size); font-weight: 600; line-height: var(--player-name-leading); }

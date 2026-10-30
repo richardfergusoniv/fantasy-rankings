@@ -22,6 +22,7 @@ import { formatWhole } from "../lib/format-number";
 import { Badge } from "@/components/ui/badge";
 import { CloseGlyph } from "../components/glyphs";
 import { DraftGradeCard } from "./draft-grade-card";
+import { DraftRecap } from "./draft-recap";
 import { LoadingBlock, ListPagination } from "../components/state-blocks";
 
 type DraftRow = DraftCenterData["adp"][number] & {
@@ -345,6 +346,11 @@ export function DraftCenter({
     seenOwnPickIds.add(pick.playerId);
     return true;
   });
+  // Once the league's draft is complete the team is set: My team becomes a graded recap with nothing to remove.
+  const draftIsFinal = !liveDraft && completedDraft !== null && completedDraft.ownRosterId !== null;
+  const recapPicks = [...ownPicks]
+    .sort((a, b) => a.pickNo - b.pickNo)
+    .map((pick) => ({ playerId: pick.playerId, name: pick.playerName, secondary: draftSecondaryLine(pick.position, pick.team) }));
   const localMyTeamRows = rows.filter((row) => row.playerId && myTeamIdSet.has(row.playerId) && !sleeperDraftedIds.has(row.playerId));
   const myTeamPlayers = [
     ...ownPicks.filter((pick) => !hiddenLiveTeamIds.includes(pick.playerId)).map((pick) => ({ playerId: pick.playerId, name: pick.playerName, position: pick.position, team: pick.team, livePick: true })),
@@ -481,12 +487,12 @@ export function DraftCenter({
           {draftFilters}
           {draftBoard}
         </div>
-      ) : (
+      ) : draftIsFinal ? (
         <>
-          {completedDraft?.ownRosterId != null ? <DraftGradeCard leagueId={league.id} /> : null}
-          {myTeamSection}
+          <DraftGradeCard leagueId={league.id} />
+          <DraftRecap leagueId={league.id} picks={recapPicks} selectedPlayerId={linkedPlayerId ?? null} onOpenPlayer={onOpenLinkedPlayer} />
         </>
-      )}
+      ) : myTeamSection}
     </section>
   );
 }

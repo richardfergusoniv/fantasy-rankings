@@ -48,6 +48,7 @@ Three jobs, three looks (`theme/badges.css`). One meaning per color.
 - Icons are lucide line icons from `components/glyphs.tsx` (close, back, chevron, plus, sort). Movement is the drawn `MoveTriangle` (rank, value, depth chart, ticker); never a typed ▲ ▼ × ← ›.
 - States come from `components/state-blocks.tsx`: `LoadingBlock` (caption over shimmer rows), `EmptyState` (what is missing, then what to do) and `ListPagination` ("120 of 348 · Show 120 more").
 - Eyebrow labels and column heads are sentence case, 12px, weight 600. The font ships 400, 500, 600, 700 and 800; use 600 for labels and 700 for values.
+- Draft's My team has two forms. During a draft it is the editable list (Remove, Drafted elsewhere). Once the league's draft is complete the team is set: it becomes a read-only recap with the draft grade card above a Player / Draft day / Today table, graded on the school scale (A+ at 97%, A 93, A− 90, B+ 87 ... D− 60, F below) from the percentage of its slot's value each player was worth. Kickers and defenses show —.
 - A status badge (`.status-badge`) names a state such as a bye week, kickoff time or playoff status; injury and designation tags use the same class.
 
 ## Rules

@@ -10,9 +10,15 @@
  *   Today     = each player's value today, minus the same expectation, so a pick that looked
  *               good and faded loses points and a reach that has since risen gains them.
  *
- * Each team's surplus is summed and ranked within its league; the rank sets the letter.
- * Kickers and defenses have no FantasyCalc value and are not scored. A player with no stored
- * row (outside the stored board) is valued at the board's floor.
+ * Each team's surplus is summed and ranked within its league; the rank sets the team's letter.
+ *
+ * Each of the user's own picks also gets a school grade from the percentage of its slot's value
+ * the player was worth (value / expected value): 100% on draft day means he went exactly where
+ * the market had him, so Draft day and Today read as report-card scores.
+ *
+ * Kickers and defenses have no FantasyCalc value and are not scored, and they do not use up a
+ * slot: a skill pick's slot is its place among the draft's QB/RB/WR/TE picks. A player with no
+ * stored row (outside the stored board) is valued at the board's floor.
  */
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { z } from "zod";
@@ -43,12 +49,19 @@ export type GradedPick = { pickNo: number; rosterId: number; playerId: string; p
 
 export type DraftGradeResult = { letter: string; rank: number; of: number };
 
+/** A pick's school grade and the percentage of its slot's value behind it. */
+export type PickGrade = { letter: string; percent: number };
+
+export type OwnPickGrade = { playerId: string; draftDay: PickGrade | null; today: PickGrade | null };
+
 export type DraftGrade = {
   draftId: string;
   /** Null when the value board for the draft's date is missing. */
   draftDay: DraftGradeResult | null;
   /** Null when today's value board is missing. */
   today: DraftGradeResult | null;
+  /** The user's own picks in draft order. */
+  picks: OwnPickGrade[];
 };
 
 export function gradeLetter(rank: number, teams: number): string {
@@ -56,6 +69,19 @@ export function gradeLetter(rank: number, teams: number): string {
   const place = Math.min(Math.max(rank, 1), teams);
   const index = Math.round(((place - 1) / (teams - 1)) * (GRADE_LETTERS.length - 1));
   return GRADE_LETTERS[index] ?? GRADE_LETTERS[GRADE_LETTERS.length - 1]!;
+}
+
+/** The usual school scale: the lowest percentage that earns each letter. */
+const SCHOOL_SCALE: ReadonlyArray<readonly [number, string]> = [
+  [97, "A+"], [93, "A"], [90, "A\u2212"],
+  [87, "B+"], [83, "B"], [80, "B\u2212"],
+  [77, "C+"], [73, "C"], [70, "C\u2212"],
+  [67, "D+"], [63, "D"], [60, "D\u2212"],
+];
+
+export function schoolGrade(percent: number): string {
+  for (const [minimum, letter] of SCHOOL_SCALE) if (percent >= minimum) return letter;
+  return "F";
 }
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -80,6 +106,12 @@ const sortedValues = (board: ValueBoard) => [...board.values()].sort((a, b) => b
 const floorValue = (board: ValueBoard) => (board.size === 0 ? 0 : Math.min(...board.values()));
 const isSkill = (position: string) => (SKILL_POSITIONS as readonly string[]).includes(position);
 
+/** Each QB/RB/WR/TE pick's place among the draft's skill picks, which is the market rank it is measured against. */
+function slotByPick(picks: readonly GradedPick[]): Map<GradedPick, number> {
+  const skill = picks.filter((pick) => isSkill(pick.position)).sort((a, b) => a.pickNo - b.pickNo);
+  return new Map(skill.map((pick, index) => [pick, index + 1]));
+}
+
 /** Each drafting team's total surplus: `values` for the players, measured against `slotBoard`'s slots. */
 export function draftSurplusByTeam(args: {
   picks: readonly GradedPick[];
@@ -90,12 +122,33 @@ export function draftSurplusByTeam(args: {
   const floor = floorValue(args.values);
   const totals = new Map<number, number>();
   for (const pick of args.picks) if (!totals.has(pick.rosterId)) totals.set(pick.rosterId, 0);
-  for (const pick of args.picks) {
-    if (!isSkill(pick.position)) continue;
+  for (const [pick, slot] of slotByPick(args.picks)) {
     const value = args.values.get(pick.playerId) ?? floor;
-    totals.set(pick.rosterId, (totals.get(pick.rosterId) ?? 0) + value - expectedValue(slots, pick.pickNo));
+    totals.set(pick.rosterId, (totals.get(pick.rosterId) ?? 0) + value - expectedValue(slots, slot));
   }
   return totals;
+}
+
+/** One team's picks in draft order, each as a school grade from the percentage of its slot's value. */
+export function pickGrades(args: {
+  picks: readonly GradedPick[];
+  rosterId: number;
+  slotBoard: ValueBoard;
+  values: ValueBoard;
+}): Map<string, PickGrade | null> {
+  const slots = sortedValues(args.slotBoard);
+  const floor = floorValue(args.values);
+  const slotOf = slotByPick(args.picks);
+  const out = new Map<string, PickGrade | null>();
+  for (const pick of [...args.picks].sort((a, b) => a.pickNo - b.pickNo)) {
+    if (pick.rosterId !== args.rosterId) continue;
+    const slot = slotOf.get(pick);
+    const expected = slot === undefined ? 0 : expectedValue(slots, slot);
+    if (expected <= 0) { out.set(pick.playerId, null); continue; }
+    const percent = ((args.values.get(pick.playerId) ?? floor) / expected) * 100;
+    out.set(pick.playerId, { letter: schoolGrade(percent), percent: Math.round(percent) });
+  }
+  return out;
 }
 
 function resultFor(totals: ReadonlyMap<number, number>, ownRosterId: number): DraftGradeResult | null {
@@ -110,15 +163,20 @@ export function gradeDraft(args: {
   draftDayBoard: ValueBoard;
   todayBoard: ValueBoard;
   minBoardPlayers?: number;
-}): { draftDay: DraftGradeResult | null; today: DraftGradeResult | null } {
+}): { draftDay: DraftGradeResult | null; today: DraftGradeResult | null; picks: OwnPickGrade[] } {
   const min = args.minBoardPlayers ?? MIN_BOARD_PLAYERS;
   // Today is measured against draft-day slots, so without the draft-day board neither grade exists.
-  if (args.draftDayBoard.size < min) return { draftDay: null, today: null };
-  const draftDay = resultFor(draftSurplusByTeam({ picks: args.picks, slotBoard: args.draftDayBoard, values: args.draftDayBoard }), args.ownRosterId);
-  const today = args.todayBoard.size < min
-    ? null
-    : resultFor(draftSurplusByTeam({ picks: args.picks, slotBoard: args.draftDayBoard, values: args.todayBoard }), args.ownRosterId);
-  return { draftDay, today };
+  if (args.draftDayBoard.size < min) return { draftDay: null, today: null, picks: [] };
+  const slotBoard = args.draftDayBoard;
+  const hasToday = args.todayBoard.size >= min;
+  const draftDay = resultFor(draftSurplusByTeam({ picks: args.picks, slotBoard, values: args.draftDayBoard }), args.ownRosterId);
+  const today = hasToday
+    ? resultFor(draftSurplusByTeam({ picks: args.picks, slotBoard, values: args.todayBoard }), args.ownRosterId)
+    : null;
+  const onDraftDay = pickGrades({ picks: args.picks, rosterId: args.ownRosterId, slotBoard, values: args.draftDayBoard });
+  const sinceThen = hasToday ? pickGrades({ picks: args.picks, rosterId: args.ownRosterId, slotBoard, values: args.todayBoard }) : null;
+  const picks = [...onDraftDay].map(([playerId, grade]) => ({ playerId, draftDay: grade, today: sinceThen?.get(playerId) ?? null }));
+  return { draftDay, today, picks };
 }
 
 /** `YYYY-MM-DD` moved by whole days (noon UTC keeps it clear of day boundaries). */

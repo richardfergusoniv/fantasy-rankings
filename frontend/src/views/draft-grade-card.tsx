@@ -4,16 +4,20 @@ import { api } from "../api";
 import { CardHero } from "../components/card-hero";
 import { ordinal } from "../projected-standings-view";
 
-/** Raised summary at the top of My team: the draft graded on draft day and again today. Shows nothing until a grade exists. */
-export function DraftGradeCard({ leagueId }: { leagueId: string }) {
-  const query = useQuery({
+/** The league's draft grade for the signed-in team; both the summary card and the recap table read it. */
+export function useDraftGrade(leagueId: string) {
+  return useQuery({
     queryKey: ["draft-grade", leagueId],
     queryFn: () => api.getDraftGrade({ leagueId }),
     staleTime: 30 * 60_000,
     refetchOnWindowFocus: false,
     retry: false,
   });
-  const grade = query.data?.grade;
+}
+
+/** Raised summary at the top of My team: the draft graded on draft day and again today. Shows nothing until a grade exists. */
+export function DraftGradeCard({ leagueId }: { leagueId: string }) {
+  const grade = useDraftGrade(leagueId).data?.grade;
   if (!grade) return null;
 
   const items = [
