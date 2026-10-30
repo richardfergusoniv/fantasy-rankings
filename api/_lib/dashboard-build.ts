@@ -119,8 +119,10 @@ import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./playe
 import { buildStandings, waiverStatus } from "./league-standings.js";
 import { loadTeamGameLines, type TeamGameLine } from "./team-game-lines.js";
 import {
+  BuildLeaseLostError,
   dashboardBuildLeaseResource,
   drizzleBuildLeaseStore,
+  leaseIsHeld,
   runWithBuildLease,
 } from "./build-lease.js";
 import { createDashboardBuildTracker, type DashboardBuildState } from "./dashboard-build-status.js";
@@ -2308,10 +2310,14 @@ export async function loadOrBuildUserDashboard(
   }
 
   try {
-    const dashboard = await buildUserDashboardUnderLease(sleeperUserId, force, cached?.fetchedAtMs ?? 0);
+    const built = await buildUserDashboardUnderLease(sleeperUserId, force, cached?.fetchedAtMs ?? 0);
     return {
-      dashboard,
-      fetchedAtMs: responseCacheFetchedAtMs("built", Date.now()),
+      dashboard: built.dashboard,
+      // A fresh row found at lease recheck keeps its real fetchedAt: stamping
+      // it "now" would restart the absolute freshness deadline.
+      fetchedAtMs: built.recheck
+        ? responseCacheFetchedAtMs("fresh", Date.now(), built.fetchedAtMs)
+        : responseCacheFetchedAtMs("built", Date.now()),
     };
   } catch (error) {
     if (cachedDashboard) {
@@ -2620,22 +2626,37 @@ async function buildUserDashboardUnderLease(
   sleeperUserId: string,
   force: boolean,
   cachedFetchedAtMs: number,
-): Promise<Dashboard> {
+): Promise<{ dashboard: Dashboard; fetchedAtMs: number; recheck: boolean }> {
   const resource = dashboardBuildLeaseResource(sleeperUserId);
+  const holder = crypto.randomUUID();
   countCacheMetric("dashboard.build.start");
   const outcome = await runWithBuildLease(
     drizzleBuildLeaseStore,
     resource,
-    crypto.randomUUID(),
+    holder,
     BUILD_LEASE_TTL_MS,
     async () => {
+      // Recheck after winning the lease: another instance may have written a
+      // fresh row between our first read and the claim.
+      const recheck = await readUserDashboardCache(sleeperUserId);
+      if (!force && recheck?.fresh) {
+        return { dashboard: recheck.dashboard, fetchedAtMs: recheck.fetchedAtMs, recheck: true };
+      }
       // Align soft actuals waits with this lease wait (same budget window).
       const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
       const dashboard = await buildUserDashboard(sleeperUserId, force, { deadlineAtMs });
+      // Fenced publication: the lease must still be ours before persisting —
+      // a builder that lost it (expiry/takeover) discards its result rather
+      // than overwriting the new owner's write.
+      countCacheMetric("dashboard.snapshot.metadata_read");
+      if (!leaseIsHeld(await drizzleBuildLeaseStore.read(resource), holder)) {
+        countCacheMetric("build_lease.lost_before_publish");
+        throw new BuildLeaseLostError(resource, holder);
+      }
       // Publish inside the lease: a joiner polls for this row, so the lease
       // must still be held when it lands (CodeRabbit, PR #282).
       await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
-      return dashboard;
+      return { dashboard, fetchedAtMs: Date.now(), recheck: false };
     },
     // On timeout the build keeps the lease until it settles, so a retry
     // can't start a second build alongside it.
@@ -2652,16 +2673,16 @@ async function buildUserDashboardUnderLease(
   }
   // "joined": another instance is building. Wait for its cache write (it
   // already lands in the cache, so this caller must not rewrite it).
-  const dashboard = await waitForFreshDashboardCache(
+  const joined = await waitForFreshDashboardCache(
     sleeperUserId,
     cachedFetchedAtMs,
     BUILD_DEADLINE_MS,
     resource,
   );
-  if (!dashboard) {
+  if (!joined) {
     throw new Error("dashboard build in progress elsewhere");
   }
-  return dashboard;
+  return { dashboard: joined.dashboard, fetchedAtMs: joined.fetchedAtMs, recheck: true };
 }
 
 /**
@@ -2674,14 +2695,14 @@ async function waitForFreshDashboardCache(
   sinceMs: number,
   deadlineMs: number,
   resource: string,
-): Promise<Dashboard | null> {
+): Promise<{ dashboard: Dashboard; fetchedAtMs: number } | null> {
   const deadlineAt = Date.now() + deadlineMs;
   while (Date.now() < deadlineAt) {
     await new Promise((resolve) => setTimeout(resolve, 1_000));
     try {
       const cached = await readUserDashboardCache(sleeperUserId);
       if (cached?.fresh && cached.fetchedAtMs > sinceMs) {
-        return cached.dashboard;
+        return { dashboard: cached.dashboard, fetchedAtMs: cached.fetchedAtMs };
       }
       countCacheMetric("dashboard.snapshot.metadata_read");
       const lease = await drizzleBuildLeaseStore.read(resource);
@@ -2689,7 +2710,9 @@ async function waitForFreshDashboardCache(
         // The holder writes the cache, then releases: re-read once so a
         // build that landed between the two reads above isn't missed.
         const final = await readUserDashboardCache(sleeperUserId);
-        return final?.fresh && final.fetchedAtMs > sinceMs ? final.dashboard : null;
+        return final?.fresh && final.fetchedAtMs > sinceMs
+          ? { dashboard: final.dashboard, fetchedAtMs: final.fetchedAtMs }
+          : null;
       }
     } catch {
       // Transient read failure; keep polling until the deadline.
@@ -2719,14 +2742,27 @@ export function kickUserDashboardBuild(
   return buildTracker.kick(
     sleeperUserId,
     async () => {
+      const resource = dashboardBuildLeaseResource(sleeperUserId);
+      const holder = crypto.randomUUID();
       const outcome = await runWithBuildLease(
         drizzleBuildLeaseStore,
-        dashboardBuildLeaseResource(sleeperUserId),
-        crypto.randomUUID(),
+        resource,
+        holder,
         BUILD_LEASE_TTL_MS,
         async () => {
+          // Recheck after winning the lease (see buildUserDashboardUnderLease).
+          const recheck = await readUserDashboardCache(sleeperUserId);
+          if (recheck?.fresh) {
+            return recheck.dashboard;
+          }
           const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
           const dashboard = await buildUserDashboard(sleeperUserId, false, { deadlineAtMs });
+          // Fenced publication (see buildUserDashboardUnderLease).
+          countCacheMetric("dashboard.snapshot.metadata_read");
+          if (!leaseIsHeld(await drizzleBuildLeaseStore.read(resource), holder)) {
+            countCacheMetric("build_lease.lost_before_publish");
+            throw new BuildLeaseLostError(resource, holder);
+          }
           // Publish inside the lease (see buildUserDashboardUnderLease).
           await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard);
           return dashboard;
