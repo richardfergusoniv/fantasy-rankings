@@ -40,7 +40,7 @@
 .historical-deal-player:hover { color: var(--link); text-decoration-color: currentColor; }
 .historical-deal-player:focus-visible { color: var(--link); outline: 2px solid var(--ring); outline-offset: 2px; text-decoration-color: currentColor; }
 .historical-deal-asset small { margin-top: 2px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.historical-deal-asset em { width: fit-content; margin-top: 4px; padding: 2px 5px; border-radius: var(--radius-xs); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-style: normal; font-weight: 700; }
+.historical-deal-asset em { width: fit-content; margin-top: 4px; padding: 2px 5px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-style: normal; font-weight: 700; }
 .historical-deal-asset > b { font-size: var(--type-body); font-variant-numeric: tabular-nums; }
 .historical-deal-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 2px 0; border-top: 1px solid var(--border); }
 .historical-deal-total span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
@@ -59,7 +59,7 @@
 .trade-pick-note { color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: right; }
 .trade-adjustments { margin: 0 2px 10px; }
 .trade-adjustment-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.trade-adjustment-chips span { padding: 4px 7px; border-radius: var(--radius-md); background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 700; }
+.trade-adjustment-chips span { padding: 4px 7px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 700; }
 .trade-adjustments p { margin: 5px 1px 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .trade-balance { padding: 12px; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface); }
 .trade-balance-labels { display: flex; justify-content: space-between; gap: 12px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
@@ -317,7 +317,7 @@ button.league-partner-change:active { color: var(--link-active); }
 .trade-asset-open:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .trade-asset-open strong { overflow: hidden; font-size: var(--type-caption); font-weight: 700; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .trade-asset-main > span { display: block; min-height: 0; margin: 0; overflow: hidden; color: var(--dim); font-size: var(--type-caption); font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
-.asset-position { flex: none; padding: 2px 4px 1px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.asset-position { flex: none; padding: 2px 6px 1px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .asset-position.pick { background: var(--surface-2); color: var(--dim); }
 .trade-asset-value { display: flex; align-items: center; justify-content: flex-end; text-align: right; }
 .trade-asset-value strong { display: block; color: var(--text); font-size: var(--type-caption); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums lining-nums; }

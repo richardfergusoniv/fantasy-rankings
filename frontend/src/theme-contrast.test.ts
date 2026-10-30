@@ -180,8 +180,8 @@ describe("Look D theme contrast", () => {
 describe("Badge colors", () => {
   const vars = parseCssVars(extractRootBlock(readTheme()));
   const pairs: Array<[string, string]> = [
-    ["--ease-fg", "--ease-bg"],
-    ["--tough-fg", "--tough-bg"],
+    ["--stat-strength-readable", "--stat-strength-soft"],
+    ["--stat-weakness-readable", "--stat-weakness-soft"],
     ["--warning", "--warning-bg"],
     ["--foreground", "--segment-selected"],
   ];
@@ -193,8 +193,8 @@ describe("Badge colors", () => {
     });
     it(`keeps matchup ease and tough distinct from the amber link in ${mode}`, () => {
       const link = resolveVar(vars, "--link", mode).toLowerCase();
-      expect(resolveVar(vars, "--ease-fg", mode).toLowerCase()).not.toBe(link);
-      expect(resolveVar(vars, "--tough-fg", mode).toLowerCase()).not.toBe(link);
+      expect(resolveVar(vars, "--stat-strength-readable", mode).toLowerCase()).not.toBe(link);
+      expect(resolveVar(vars, "--stat-weakness-readable", mode).toLowerCase()).not.toBe(link);
     });
   }
 });

@@ -19,7 +19,7 @@
 .news-item-topline > div { min-width: 0; display: flex; align-items: baseline; gap: 6px; }
 .news-item-topline strong { overflow: hidden; font-size: var(--type-body); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .news-item-topline span { flex: none; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.news-item-topline .waiver-news-badge { padding: 2px 5px; border-radius: var(--radius-xs); background: var(--accent-soft); color: var(--link); }
+.news-item-topline .waiver-news-badge { padding: 2px 5px; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--link); }
 .waiver-news-item .news-item-topline > div { flex-wrap: wrap; }
 .news-item-topline a { flex: none; color: var(--link); font-size: var(--type-control); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 .news-item > p { margin: 7px 0 0; font-size: var(--type-body); line-height: 1.4; }
@@ -27,13 +27,13 @@
 .news-context > span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .news-context p { margin: 3px 0 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.4; }
 .news-leagues { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.news-leagues span { padding: 3px 6px; border-radius: var(--radius-xs); background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
+.news-leagues span { padding: 3px 6px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
 .news-availability { margin-top: 9px; }
 .news-availability-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .news-availability-heading span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .news-availability-heading strong { color: var(--link); font-size: var(--type-caption); font-weight: 700; }
 .news-availability-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-.news-availability-list > span { padding: 3px 6px; border-radius: var(--radius-xs); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.news-availability-list > span { padding: 3px 6px; border-radius: var(--radius-pill); background: var(--surface-2); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .news-availability-list > .availability-available { background: var(--accent-soft); color: var(--link); }
 .news-availability-list > .availability-your_roster { color: var(--text); }
 .news-availability-list > .availability-unknown { opacity: .72; }

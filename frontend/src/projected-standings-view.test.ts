@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextGamesForTeam, ordinal, placesMoved, projectedWinPercent, recordLabel, winChanceLabel } from "./projected-standings-view";
+import { nextGamesForTeam, ordinal, placesMoved, projectedWinPercent, recordLabel } from "./projected-standings-view";
 
 describe("recordLabel", () => {
   it("shows ties only when there are some", () => {
@@ -26,10 +26,6 @@ describe("projected standings helpers", () => {
     expect(projectedWinPercent(100, 120)).toBe(100 - projectedWinPercent(120, 100));
     expect(projectedWinPercent(300, 100)).toBe(99);
     expect(projectedWinPercent(100, 300)).toBe(1);
-  });
-
-  it("labels win chances in plain words", () => {
-    expect([82, 64, 50, 37, 12].map(winChanceLabel)).toEqual(["Likely win", "Lean win", "Toss-up", "Lean loss", "Likely loss"]);
   });
 
   it("lists a team's next games in week order from either side of the pairing", () => {

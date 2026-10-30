@@ -224,9 +224,12 @@ a:active { color: var(--link-active); }
  * Explorer rankings / waivers and the draft board share one compact row height.
  * Scoped so Matchup, trade, and power keep the root token.
  */
-.rankings-view,
 .draft-board {
   --player-row-height: 56px;
+}
+/* Rankings and Waivers share these rows; give the name, meta and badges room. */
+.rankings-view {
+  --player-row-height: 60px;
 }
 
 .rankings-view {
@@ -237,6 +240,9 @@ a:active { color: var(--link-active); }
 .rankings-view .ranking-row,
 .rankings-view .player-search-result {
   min-height: var(--player-row-height);
+}
+.rankings-view .ranking-row {
+  padding-block: 8px;
 }
 
 .rankings-view .ranking-row .ranking-player {
@@ -369,7 +375,6 @@ a:active { color: var(--link-active); }
 }
 
 .player-row,
-.ranking-row,
 .player-search-result,
 .trade-result-row {
   padding-block: 0;
