@@ -37,6 +37,7 @@ import {
   dashboardTeamCacheSchema,
   dashboardTradeCacheSchema,
   dashboardTradeWaiverCacheSchema,
+  parseSectionEnvelope,
   resolveSectionHitFromRows,
   userDashboardSectionCacheKey,
   type DashboardCacheSection,
@@ -2522,6 +2523,60 @@ export async function readUserDashboardCache(
   };
 }
 
+export type UserDashboardFreshness = {
+  fresh: boolean;
+  live: boolean;
+  fetchedAtMs: number;
+  version: string | null;
+};
+
+/**
+ * Cheap freshness probe: reads the tiny `meta` section row only — no
+ * section payloads — and answers version/live/fetchedAt, which is all a
+ * caller needs to decide between serving and rebuilding. Falls back to a
+ * `fetched_at`-only read of the legacy full key (metadata, no payload);
+ * without an envelope its live flag is unknowable, so it reports
+ * `fresh: false` and lets the caller do the single payload read that then
+ * follows.
+ */
+export async function readUserDashboardFreshness(
+  sleeperUserId: string,
+): Promise<UserDashboardFreshness | null> {
+  const metaRows = await db
+    .select({ payload: schema.sourceCache.payload, fetchedAt: schema.sourceCache.fetchedAt })
+    .from(schema.sourceCache)
+    .where(eq(schema.sourceCache.cacheKey, userDashboardSectionCacheKey(sleeperUserId, "meta")))
+    .limit(1);
+  const meta = metaRows[0];
+  if (meta) {
+    countCacheMetric("dashboard.snapshot.payload_read");
+    sampleCacheBytes("dashboard.snapshot.read.bytes", Buffer.byteLength(meta.payload, "utf8"));
+    try {
+      const envelope = parseSectionEnvelope(decodeSourceCachePayload(meta.payload));
+      if (envelope) {
+        const fetchedAtMs = meta.fetchedAt.getTime();
+        return {
+          fresh: Date.now() - fetchedAtMs < sectionTtlMs(envelope.live),
+          live: envelope.live,
+          fetchedAtMs,
+          version: envelope.version,
+        };
+      }
+    } catch {
+      // Corrupt meta row: fall through to the legacy probe.
+    }
+  }
+  countCacheMetric("dashboard.snapshot.metadata_read");
+  const fullRows = await db
+    .select({ fetchedAt: schema.sourceCache.fetchedAt })
+    .from(schema.sourceCache)
+    .where(eq(schema.sourceCache.cacheKey, userDashboardCacheKey(sleeperUserId)))
+    .limit(1);
+  const full = fullRows[0];
+  if (!full) return null;
+  return { fresh: false, live: false, fetchedAtMs: full.fetchedAt.getTime(), version: null };
+}
+
 export type UserDashboardSectionHit<S extends DashboardCacheSection> = {
   data: S extends "team" ? DashboardTeamApiData : DashboardSectionCacheData[S];
   fresh: boolean;
@@ -2608,10 +2663,14 @@ async function buildUserDashboardUnderLease(
     BUILD_LEASE_TTL_MS,
     async () => {
       // Recheck after winning the lease: another instance may have written a
-      // fresh row between our first read and the claim.
-      const recheck = await readUserDashboardCache(sleeperUserId);
-      if (!force && recheck?.fresh) {
-        return { dashboard: recheck.dashboard, fetchedAtMs: recheck.fetchedAtMs, recheck: true };
+      // fresh row between our first read and the claim. The probe reads the
+      // tiny meta row only — no section payloads — and the full read runs
+      // solely when there is actually a fresh snapshot to return.
+      if (!force && (await readUserDashboardFreshness(sleeperUserId))?.fresh) {
+        const recheck = await readUserDashboardCache(sleeperUserId);
+        if (recheck?.fresh) {
+          return { dashboard: recheck.dashboard, fetchedAtMs: recheck.fetchedAtMs, recheck: true };
+        }
       }
       // Align soft actuals waits with this lease wait (same budget window).
       const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
@@ -2671,9 +2730,14 @@ async function waitForFreshDashboardCache(
   while (Date.now() < deadlineAt) {
     await new Promise((resolve) => setTimeout(resolve, 1_000));
     try {
-      const cached = await readUserDashboardCache(sleeperUserId);
-      if (cached?.fresh && cached.fetchedAtMs > sinceMs) {
-        return { dashboard: cached.dashboard, fetchedAtMs: cached.fetchedAtMs };
+      // Poll the tiny meta row, not the section payloads: the loop runs up
+      // to once a second for the whole deadline.
+      const probe = await readUserDashboardFreshness(sleeperUserId);
+      if (probe?.fresh && probe.fetchedAtMs > sinceMs) {
+        const cached = await readUserDashboardCache(sleeperUserId);
+        if (cached?.fresh && cached.fetchedAtMs > sinceMs) {
+          return { dashboard: cached.dashboard, fetchedAtMs: cached.fetchedAtMs };
+        }
       }
       countCacheMetric("dashboard.snapshot.metadata_read");
       const lease = await drizzleBuildLeaseStore.read(resource);
@@ -2722,9 +2786,11 @@ export function kickUserDashboardBuild(
         BUILD_LEASE_TTL_MS,
         async () => {
           // Recheck after winning the lease (see buildUserDashboardUnderLease).
-          const recheck = await readUserDashboardCache(sleeperUserId);
-          if (recheck?.fresh) {
-            return recheck.dashboard;
+          if ((await readUserDashboardFreshness(sleeperUserId))?.fresh) {
+            const recheck = await readUserDashboardCache(sleeperUserId);
+            if (recheck?.fresh) {
+              return recheck.dashboard;
+            }
           }
           const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
           const dashboard = await buildUserDashboard(sleeperUserId, false, { deadlineAtMs });

@@ -133,7 +133,7 @@ function writesAsRows(writes: ReturnType<typeof buildDashboardCacheWrites>): Sou
 }
 
 describe("writeUserDashboardCache payload set (buildDashboardCacheWrites)", () => {
-  it("writes every section key plus the full-row key", () => {
+  it("writes only the seven section keys for a per-user key (no duplicate full row)", () => {
     const fetchedAt = new Date("2026-10-12T03:00:00.000Z");
     const writes = buildDashboardCacheWrites({
       cacheKey: "dashboard:user:user-1",
@@ -144,11 +144,12 @@ describe("writeUserDashboardCache payload set (buildDashboardCacheWrites)", () =
       serializeFull: serializeDashboardForCache,
     });
     const keys = writes.map((row) => row.cacheKey);
-    expect(keys).toContain("dashboard:user:user-1");
+    // The per-user full row doubled snapshot bytes; it is no longer written.
+    expect(keys).not.toContain("dashboard:user:user-1");
     for (const section of DASHBOARD_CACHE_SECTIONS) {
       expect(keys).toContain(userDashboardSectionCacheKey("user-1", section));
     }
-    expect(writes).toHaveLength(DASHBOARD_CACHE_SECTIONS.length + 1);
+    expect(writes).toHaveLength(DASHBOARD_CACHE_SECTIONS.length);
   });
 
   it("only writes the full key for the global snapshot", () => {
