@@ -3,7 +3,6 @@ import { Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { api } from "./api";
-import { MoveTriangle } from "./components/glyphs";
 import { CardHero } from "./components/card-hero";
 import { SectionError } from "./section-error";
 import { formatDecimal, formatWhole } from "./lib/format-number";
