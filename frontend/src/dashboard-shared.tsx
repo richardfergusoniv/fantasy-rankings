@@ -538,6 +538,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
   // nflverse card knows whether the game is final, so derive finality
   // here and every entry point renders the same card for the same game.
   const isFinalGame = matchup.gamePhase === "final" || gameCard?.isFinal === true;
+  const gameStatusLabel = isFinalGame ? "Final" : matchup.gamePhase === "live" ? "Live" : matchup.gamePhase === "pregame" ? "Not started" : null;
   const scoreQuery = useQuery({
     queryKey: ["nfl-matchup-box-score", matchup.team, matchup.opponent, season, week],
     queryFn: () => api.getMatchupBoxScore({ team: matchup.team, opponent: matchup.opponent, season, week }),
@@ -626,7 +627,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                 className="matchup-game-lines-badge"
               />
             ) : kickoffLabel ? <span className="depth-chart-tag">{kickoffLabel}</span> : null}
-            <Badge variant="secondary" size="compact" className="injury">{isFinalGame ? "Final" : matchup.gamePhase === "live" ? "Live" : "Not started"}</Badge>
+            {gameStatusLabel ? <Badge variant="secondary" size="compact" className="injury">{gameStatusLabel}</Badge> : null}
           </div>
           {showImpliedStrip ? (
             <section className="matchup-implied" aria-label="Weekly implied totals">
