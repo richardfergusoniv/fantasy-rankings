@@ -94,64 +94,32 @@
    exactly where the in-flow row put it) so the team row starts at the
    top of the card instead of below an empty header band. */
 .matchup-data-header.matchup-data-header-minimal { position: absolute; top: 18px; right: 18px; justify-content: flex-end; }
-/* Team badges centered on the top row; equal side columns keep them centered
-   under the absolute close button. */
-.matchup-kickoff-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
-.matchup-kickoff-row .matchup-stat-columns { padding: 0; border-bottom: 0; }
-/* Kickoff sits in the mid-band under the team chips (between the team-row
-   hairline and the matchup-stat-groups hairline above the OFF/DEF tabs). */
-.matchup-kickoff-label { margin: 0; padding: 10px 8px 2px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; line-height: 1.25; text-align: center; }
-.matchup-game-lines-badge-row { display: flex; justify-content: center; padding: 10px 8px 2px; }
+/* Matchup card header: eyebrow, big tappable team names, then the Game lines link and the game's status. */
+.matchup-eyebrow { margin: 14px 0 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.matchup-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.matchup-team-title { display: inline-flex; min-height: 44px; align-items: center; gap: 4px; margin: 0; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 30px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; cursor: pointer; }
+.matchup-team-title i { color: var(--link); font-size: 22px; font-style: normal; font-weight: 500; }
+.matchup-team-title:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--radius-sm); }
+.matchup-title-at { color: var(--dim); font-size: var(--type-body); font-weight: 500; }
+.matchup-chip-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px; }
 .matchup-game-lines-badge { text-decoration: none; }
-.matchup-game-lines-badge .matchup-reference-button-label {
-  min-height: 28px;
-  padding: 4px 10px 3px;
-  border-radius: var(--radius-sm);
-  font-size: var(--type-caption);
-}
-.matchup-implied-strip {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-  padding: 12px 8px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
-  font-variant-numeric: lining-nums tabular-nums;
-}
+
+/* Implied totals: flat between hairlines, with the split of the two teams' implied points. */
+.matchup-implied { margin-top: 16px; padding: 12px 0; border-block: 1px solid var(--hairline); font-variant-numeric: lining-nums tabular-nums; }
+.matchup-implied-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 10px; }
 .matchup-implied-team { display: grid; gap: 2px; min-width: 0; }
 .matchup-implied-team.is-opponent { justify-items: end; text-align: right; }
-.matchup-implied-team > span {
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-.matchup-implied-team > strong {
-  font-size: var(--type-display);
-  font-weight: 800;
-  letter-spacing: -.02em;
-  line-height: 1;
-}
-.matchup-implied-market {
-  display: grid;
-  justify-items: center;
-  gap: 2px;
-  color: var(--dim);
-  font-size: var(--type-caption);
-  font-weight: 700;
-  text-align: center;
-  white-space: nowrap;
-}
-.matchup-data-card:has(> .matchup-kickoff-label) .matchup-grade-section,
-.matchup-data-card:has(> .matchup-game-lines-badge-row) .matchup-grade-section,
-.matchup-data-card:has(> .matchup-implied-strip) .matchup-grade-section { margin-top: 10px; }
+.matchup-implied-team > span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.matchup-implied-team > strong { font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.05; }
+.matchup-implied-team:not(.is-opponent) > strong { color: var(--link); }
+.matchup-implied-market { display: grid; justify-items: center; gap: 2px; color: var(--dim); font-size: var(--type-caption); font-weight: 700; line-height: 1.5; text-align: center; white-space: nowrap; }
+.matchup-implied-split { display: flex; gap: 3px; margin-top: 12px; }
+.matchup-implied-split i { height: 4px; border-radius: 2px; background: var(--dim); }
+.matchup-implied-split i:first-child { background: var(--action); }
+.matchup-implied-caption { margin: 6px 0 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.matchup-implied-caption b { color: var(--text); font-weight: 600; }
+.matchup-grade-section, .matchup-battle-section { margin-top: 14px; }
 .cross-tool-badge { text-decoration: none; color: inherit; }
-.matchup-reference-button.matchup-team-open .matchup-reference-button-label { min-height: 40px; padding: 6px 14px 5px; border-radius: var(--radius-sm); font-size: var(--type-section); }
-.matchup-team-open .matchup-reference-arrow { font-size: var(--type-section); }
 .matchup-reference-arrow { color: var(--link); font-size: var(--type-body, 1rem); font-weight: 700; line-height: 1; }
 .matchup-reference-tag.sos-soft { background: var(--stat-strength-soft); color: var(--stat-strength-readable); font-weight: 700; }
 .matchup-reference-tag.sos-tough { background: var(--stat-weakness-soft); color: var(--stat-weakness-readable); font-weight: 700; }
@@ -218,3 +186,34 @@
 .matchup-win-labels span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
 .matchup-win-bar { display: flex; height: 8px; overflow: hidden; border-radius: var(--radius-xs); background: var(--border); }
 .matchup-win-bar .is-mine { background: var(--roster-highlight); }
+
+/* Matchup card detail: the edge summary, the legend, and one strip per stat. */
+.matchup-edge-summary { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+.matchup-edge-count { color: var(--link); font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: lining-nums tabular-nums; }
+.matchup-edge-count span { color: var(--dim); font-weight: 400; }
+.matchup-edge-summary > div { min-width: 0; flex: 1; }
+.matchup-edge-summary p { margin: 0; font-size: var(--type-control); font-weight: 600; }
+.matchup-edge-segments { display: flex; gap: 3px; margin-top: 6px; }
+.matchup-edge-segments i { flex: 1; height: 4px; border-radius: 2px; background: var(--action); }
+.matchup-edge-segments i.is-against { background: var(--warning); }
+.matchup-edge-segments i.is-even { background: var(--dim); }
+.matchup-edge-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 12px 0 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.matchup-edge-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.matchup-edge-legend i { box-sizing: border-box; width: 10px; height: 10px; border-radius: 50%; }
+.matchup-edge-legend i.is-first { background: var(--action); }
+.matchup-edge-legend i.is-second { border: 2px solid var(--dim); }
+.edge-strip { position: relative; height: 46px; }
+.edge-strip-track, .edge-strip-span { position: absolute; top: 22px; height: 2px; }
+.edge-strip-track { right: 0; left: 0; background: var(--hairline); }
+.edge-strip-span { background: var(--dim); }
+.edge-strip.is-for .edge-strip-span { background: var(--action); }
+.edge-strip.is-against .edge-strip-span { background: var(--warning); }
+.edge-strip-dot { position: absolute; top: 17px; box-sizing: border-box; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; }
+.edge-strip-dot.is-first { border: 2px solid var(--action); background: var(--action); }
+.edge-strip-dot.is-second { border: 2px solid var(--dim); background: var(--card); }
+.edge-strip.is-against .edge-strip-dot.is-first { border-color: var(--warning); background: var(--warning); }
+.edge-strip-label { position: absolute; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+.edge-strip-label.is-first { top: 0; color: var(--link); }
+.edge-strip-label.is-second { top: 31px; }
+.matchup-edge-scale { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hairline); color: var(--dim); font-size: 11px; font-weight: 600; font-variant-numeric: lining-nums tabular-nums; }
+.matchup-edge-note { margin: 10px 0 0; color: var(--dim); font-size: var(--type-caption); line-height: 1.45; }
