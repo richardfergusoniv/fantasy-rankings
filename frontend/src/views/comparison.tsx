@@ -11,6 +11,7 @@ import { useProfileTag } from "../lib/use-profile-tag";
 import { formatCompactCount } from "../lib/format-number";
 import { DepthChangeMark, depthChange, MatchupTag, ProfileChips, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 import { isHiddenHalfPointPropStat, propStatDef } from "../../../api/_lib/prop-line-reads";
+import { EmptyState } from "../components/state-blocks";
 import { CloseGlyph } from "../components/glyphs";
 import {
   analyticsMetricsForLeague,
@@ -654,7 +655,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
             </section>
           ))}
         </section>
-      ) : <div className="empty-inline">Choose two players to compare.</div>}
+      ) : <EmptyState title="Choose two players to compare" detail="Both slots search the same position." />}
     </section>
   );
 }
