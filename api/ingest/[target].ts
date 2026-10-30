@@ -27,10 +27,13 @@ import {
   resolveXNewsPlayer,
   retentionCutoff,
   xNewsBatchSchema,
+  xNewsItemScope,
+  type PlayerNewsNameIndex,
 } from "../_lib/player-news-shared.js";
 import {
   buildXNewsMentionNeedles,
   resolveXNewsPlayerIdsForItem,
+  type XNewsMentionNeedle,
 } from "../_lib/x-news-mentions.js";
 import { loadNflPlayersMap } from "../_lib/nfl-players-cache.js";
 import { type SleeperPlayer } from "../_lib/sleeper.js";
@@ -349,20 +352,37 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     return badRequest("Invalid player-news-x payload.", parsed.error.issues);
   }
 
-  let loaded: Awaited<ReturnType<typeof loadPlayerNameIndex>>;
-  try {
-    loaded = await loadPlayerNameIndex();
-  } catch {
-    return json({ ok: false, error: "Sleeper player data is temporarily unavailable." }, 502);
+  // Team/league scopes do not resolve players — skip the Sleeper index so a
+  // cache miss cannot 502 a team/league-only batch.
+  const needsPlayerIndex = parsed.data.items.some((item) => xNewsItemScope(item) === "player");
+  let index: PlayerNewsNameIndex | null = null;
+  let mentionNeedles: XNewsMentionNeedle[] = [];
+  if (needsPlayerIndex) {
+    try {
+      const loaded = await loadPlayerNameIndex();
+      index = loaded.index;
+      mentionNeedles = loaded.mentionNeedles;
+    } catch {
+      return json({ ok: false, error: "Sleeper player data is temporarily unavailable." }, 502);
+    }
   }
-  const { index, mentionNeedles } = loaded;
 
   // Player scope expands text mentions; team/league write one row each
   // (player_id null) without attach/fan-out.
+  const playerIndex = index;
+  const playerNeedles = mentionNeedles;
   const { drafts, unresolved } = collectXNewsDrafts(
     parsed.data.items,
-    (item) => resolveXNewsPlayerIdsForItem(item, index, mentionNeedles, resolveXNewsPlayer),
-    (playerId) => index.byId.get(playerId) ?? null,
+    (item) => {
+      if (!playerIndex) return [];
+      return resolveXNewsPlayerIdsForItem(
+        item,
+        playerIndex,
+        playerNeedles,
+        resolveXNewsPlayer,
+      );
+    },
+    (playerId) => playerIndex?.byId.get(playerId) ?? null,
   );
 
   const unique = filterDuplicateDrafts(drafts);

@@ -183,6 +183,18 @@ describe("collectXNewsDrafts scope branching", () => {
     expect(drafts[2]).toMatchObject({ playerId: null, team: null, player: "NFL", scope: "league" });
   });
 
+  it("treats omitted scope as player and builds a player draft", () => {
+    const { scope: _scope, ...omittedScope } = playerItem;
+    const { drafts, unresolved } = collectXNewsDrafts(
+      [omittedScope],
+      (item) => (item.player_id ? [item.player_id] : []),
+      (playerId) => (playerId === "1" ? { player: "A", team: "MIN" } : null),
+    );
+    expect(unresolved).toEqual([]);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({ playerId: "1", scope: "player" });
+  });
+
   it("records unresolved player items and still builds team/league drafts", () => {
     const { drafts, unresolved } = collectXNewsDrafts(
       [playerItem, teamItem],

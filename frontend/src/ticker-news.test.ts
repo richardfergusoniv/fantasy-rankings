@@ -216,6 +216,7 @@ describe("newsForTicker", () => {
   it("includes team and league scoped X items after roster/opponent tiers", () => {
     const news = feed([
       item({ id: "r1", playerId: "roster-a", change: "Roster note", score: 20 }),
+      item({ id: "o1", playerId: "opp-a", change: "Opponent note", score: 30 }),
       item({
         id: "team-1",
         playerId: null,
@@ -246,10 +247,10 @@ describe("newsForTicker", () => {
     const items = newsForTicker(
       news,
       new Set(["roster-a"]),
-      new Set(),
+      new Set(["opp-a"]),
       new Set(["prom-a"]),
       { limit: 10 },
     );
-    expect(items.map((row) => row.id)).toEqual(["r1", "league-1", "team-1", "prom"]);
+    expect(items.map((row) => row.id)).toEqual(["r1", "o1", "league-1", "team-1", "prom"]);
   });
 });
