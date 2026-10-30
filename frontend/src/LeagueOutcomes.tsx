@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
 import { api } from "./api";
+import { MoveTriangle } from "./components/glyphs";
 import { CardHero } from "./components/card-hero";
 import { SectionError } from "./section-error";
 import { formatDecimal, formatWhole } from "./lib/format-number";
@@ -79,7 +80,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
                     <strong className="power-rank" role="cell">{team.rank}</strong>
                     <div className="power-team proj-team" role="cell">
                       <strong>{team.teamName}</strong>
-                      {team.isUser ? <Badge variant="secondary" size="compact" className="injury is-you">Yours</Badge> : null}
+                      {team.isUser ? <span className="roster-owner-tag is-user">You</span> : null}
                       <MoveMark moved={placesMoved(team.currentRank, team.rank)} />
                     </div>
                     <div className="power-total proj-pf" role="cell">
@@ -108,7 +109,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
                 <strong>vs {teamName(game.opponentRosterId)}</strong>
                 <span>{formatDecimal(game.mine, 1)} – {formatDecimal(game.theirs, 1)}</span>
               </div>
-              <div className={`power-total proj-win ${game.winPercent >= 55 ? "is-up" : game.winPercent <= 45 ? "is-down" : ""}`}><strong>{game.winPercent}%</strong></div>
+              <div className={`power-total proj-win ${game.winPercent >= 55 ? "is-up" : game.winPercent <= 45 ? "is-down" : ""}`}><strong>{game.winPercent >= 55 ? <MoveTriangle direction="up" /> : game.winPercent <= 45 ? <MoveTriangle direction="down" /> : null}{game.winPercent}%<span className="sr-only">{game.winPercent >= 55 ? ", favored" : game.winPercent <= 45 ? ", underdog" : ""}</span></strong></div>
             </div>
           ))}
         </section>

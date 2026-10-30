@@ -155,4 +155,4 @@ button.comparison-board-name:hover { color: var(--link); }
 .comparison-section-head > .comparison-window-toggle { flex: 0 1 260px; margin: 0; }
 .comparison-section > .empty-inline { margin: 4px 0 10px; }
 .comparison-group { border-top: 1px solid var(--border); }
-.comparison-group > h4 { margin: 0; padding: 14px 0 0; color: var(--text); font-size: var(--type-caption); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.comparison-group > .section-heading { margin-top: 14px; }

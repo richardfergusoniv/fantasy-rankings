@@ -353,3 +353,6 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .depth-change.is-down { color: var(--negative); }
 .player-props-section .section-heading { position: static; min-height: 32px; padding: 5px 2px; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .player-props-section .section-heading h3 { margin: 0; font-size: var(--type-section); }
+.team-card-split { display: flex; gap: 2px; }
+.team-card-split i { height: 4px; border-radius: 2px; background: var(--segment-track); }
+.team-card-split i.is-run { background: var(--dim); }

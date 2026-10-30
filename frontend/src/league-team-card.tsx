@@ -215,9 +215,9 @@ export function LeagueTeamCard({
             <button type="button" onClick={onClose} aria-label={`Close ${team.teamName} team card`}><CloseGlyph /></button>
           </div>
           <div className="power-team-card-intro">
-            <div className="card-chips" style={{ marginTop: 0 }}>
+            <div className="card-chips">
               <span className="depth-chart-tag">{formatRecord(team.record)}</span>
-              {team.isUser ? <Badge variant="secondary" size="compact" className="injury is-you">Yours</Badge> : null}
+              {team.isUser ? <span className="roster-owner-tag is-user">You</span> : null}
               {isOpponent ? <Badge variant="secondary" size="compact" className="injury">Opponent this week</Badge> : null}
             </div>
             <CardHero

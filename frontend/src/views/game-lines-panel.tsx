@@ -780,6 +780,7 @@ export function GameLinesPanel({
             />
           ) : null}
 
+          <div className="section-heading"><h3>Player props</h3></div>
           <div className="monitor-value-chart-controls monitor-props-controls">
             <SegmentedControl
               className="monitor-props-position"

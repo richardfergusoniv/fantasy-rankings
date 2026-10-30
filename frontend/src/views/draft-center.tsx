@@ -10,7 +10,6 @@ import type {
 } from "../dashboard-types";
 import {
   DesignationBadge,
-  RefreshIcon,
   comparablePlayerName,
   formatProjectionPoints,
   showUndoToast,
@@ -20,6 +19,7 @@ import { SegmentedControl } from "../shared";
 import { markDraftPlayerTaken, undoDraftPlayerTaken } from "../undo";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { formatWhole } from "../lib/format-number";
+import { CloseGlyph } from "../components/glyphs";
 import { LoadingBlock, ListPagination } from "../components/state-blocks";
 
 type DraftRow = DraftCenterData["adp"][number] & {
@@ -64,8 +64,6 @@ export function DraftCenter({
   league,
   data,
   loading,
-  onRefresh,
-  refreshing,
   draftPosition,
   draftQuery,
   draftRoom,
@@ -77,8 +75,6 @@ export function DraftCenter({
   league: League;
   data: DraftCenterData | undefined;
   loading: boolean;
-  onRefresh: () => void;
-  refreshing: boolean;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
   draftPosition: DraftPosition | null;
   draftQuery: string | null;
@@ -404,14 +400,18 @@ export function DraftCenter({
             );
           })}
         </div>
-      ) : <div className="empty-inline compact">{syncedDraft ? "Your Sleeper picks will appear here automatically." : "Add players from the Draft Board."}</div>}
+      ) : <div className="empty-inline compact">{syncedDraft ? "Your Sleeper picks will appear here automatically." : "Add players from the board."}</div>}
       {manualDraftedRows.length > 0 ? <details className="drafted-elsewhere"><summary>Drafted elsewhere · {manualDraftedRows.length}</summary><div>{manualDraftedRows.map((player) => <button type="button" key={player.playerId ?? player.name} onClick={() => player.playerId && setManualDraftedIds((current) => current.filter((id) => id !== player.playerId))}><span><strong>{player.name}</strong><small>{player.position}{player.team ? ` · ${player.team}` : ""}</small></span><b>Restore</b></button>)}</div></details> : null}
     </section>
   );
 
   const draftFilters = (
     <div className="draft-controls">
-      <label><span className="sr-only">Search draft players</span><input type="search" name="draft-search" autoComplete="off" spellCheck={false} value={query} onChange={(event) => publishDraftFilters({ query: event.target.value })} placeholder="Search players…" aria-label="Search draft players" /></label>
+      <label className="search-field">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+        <input type="search" name="draft-search" autoComplete="off" spellCheck={false} value={query} onChange={(event) => publishDraftFilters({ query: event.target.value })} onKeyDown={(event) => { if (event.key === "Escape") publishDraftFilters({ query: "" }); }} placeholder="Search players…" aria-label="Search draft players" />
+        {query ? <button className="search-clear" type="button" onClick={() => publishDraftFilters({ query: "" })} aria-label="Clear draft search"><CloseGlyph /></button> : null}
+      </label>
       <SegmentedControl
         className="position-tabs"
         value={effectiveDraftPosition}
@@ -423,7 +423,6 @@ export function DraftCenter({
           ariaLabel: positionFilterTabAriaLabel(item),
         }))}
       />
-      <button className="draft-refresh-button" type="button" onClick={onRefresh} disabled={refreshing} aria-label="Refresh draft data"><RefreshIcon spinning={refreshing} /></button>
     </div>
   );
 
@@ -469,14 +468,14 @@ export function DraftCenter({
 
   return (
     <section className="draft-center">
-      <h2 className="sr-only">Draft Room</h2>
+      <h2 className="sr-only">Draft</h2>
       <SegmentedControl
         className="page-tab-control"
         value={mode}
         onChange={(value) => publishDraftFilters({ room: value })}
         label="Draft room view"
         options={[
-          { value: "board", label: liveDraft ? "Draft Board · Live" : "Draft Board" },
+          { value: "board", label: liveDraft ? "Board · Live" : "Board" },
           { value: "myTeam", label: "My team" },
         ]}
       />

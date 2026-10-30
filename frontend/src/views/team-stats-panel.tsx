@@ -547,6 +547,7 @@ export function TeamStatsPanel({
       ) : (
         <>
           <div className="team-stats-chart-card">
+            <div className="section-heading"><h3>{selectedTeam} · {statLabel}</h3><button type="button" className="team-stats-table-button" onClick={() => setTableOpen(true)}>Week-by-week table</button></div>
             <div
               className="team-stats-chart-open"
               role="button"

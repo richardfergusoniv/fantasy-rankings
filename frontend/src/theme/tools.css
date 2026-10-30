@@ -1526,3 +1526,5 @@ html.ask-sheet-open [data-slot="dialog-overlay"] {
   .chat-panel.is-sheet { display: flex; }
   .chat-panel.is-sheet .chat-sidebar { flex-direction: row; align-items: center; }
 }
+.team-stats-table-button { min-height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; font-size: var(--type-control); font-weight: 600; cursor: pointer; }
+.team-stats-table-button:hover { background: var(--accent-soft); color: var(--link); }
