@@ -221,6 +221,21 @@ describe("loadCachedDashboardView", () => {
     for (const r of [r1, r2, r3]) expect(r).toMatchObject({ ok: true, version: V1 });
   });
 
+  it("does not let a forced load join a plain one in flight", async () => {
+    const store = createL1DashboardViewStore();
+    let resolvePlain!: (v: ReturnType<typeof value>) => void;
+    const plainOrigin = vi.fn(() => new Promise<ReturnType<typeof value>>((r) => { resolvePlain = r; }));
+    const forcedOrigin = vi.fn(async () => value(V2));
+    const base = { sleeperUserId: "u1", view: "full" as const, requestedVersion: null, store };
+    const plain = loadCachedDashboardView({ ...base, loadOrigin: plainOrigin });
+    const forced = loadCachedDashboardView({ ...base, force: true, loadOrigin: forcedOrigin });
+    await new Promise((r) => setTimeout(r, 0));
+    resolvePlain(value(V1));
+    expect(await plain).toMatchObject({ ok: true, version: V1 });
+    expect(await forced).toMatchObject({ ok: true, version: V2 });
+    expect(forcedOrigin).toHaveBeenCalledTimes(1);
+  });
+
   it("does not share single-flight across users or views", async () => {
     const store = createL1DashboardViewStore();
     const loadOrigin = vi.fn(async () => value(V1));
