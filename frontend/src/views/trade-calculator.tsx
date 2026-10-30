@@ -1140,7 +1140,7 @@ export function TradeCalculator({
             ]}
             onChange={setMarketBasis}
             label="Market basis"
-            className="trade-valuation-toggle trade-basis-toggle trade-scope-toggle"
+            className="compact-control"
           />
         ) : null}
       </div>

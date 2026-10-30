@@ -49,7 +49,7 @@
 .trade-grade-grid.single-perspective { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .trade-grade-grid.single-perspective > div { border-right: 1px solid var(--hairline); border-bottom: 0; }
 .trade-grade-grid.single-perspective > div:last-child { border-right: 0; }
-.trade-valuation-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 10px; margin-bottom: 16px; }
+.trade-valuation-controls { display: grid; gap: 8px; margin-bottom: 16px; }
 .trade-valuation-toggle {
   width: 100%;
   flex: none;

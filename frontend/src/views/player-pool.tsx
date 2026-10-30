@@ -1012,7 +1012,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
       ) : (
         <>
           <SegmentedControl
-            className="lineup-mode-toggle rankings-mode-toggle page-tab-control"
+            className="compact-control"
             value={effectiveHorizon}
             onChange={(value) => publishRankingFilters({ horizon: value })}
             label={availableOnly ? "Waiver ranking horizon" : "Ranking horizon"}

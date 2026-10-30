@@ -152,7 +152,6 @@ button.comparison-board-name:hover { color: var(--link); }
 /* Two halves: this week's outlook, then the season so far. */
 .comparison-section-tabs { margin: 0 0 10px; }
 .comparison-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; padding: 14px 0 4px; }
-.comparison-section-head > .comparison-window-toggle { flex: 0 1 260px; margin: 0; }
 .comparison-section > .empty-inline { margin: 4px 0 10px; }
 .comparison-group { border-top: 1px solid var(--border); }
 .comparison-group > .section-heading { margin-top: 14px; }
