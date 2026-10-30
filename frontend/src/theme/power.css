@@ -93,7 +93,7 @@
   display: inline-flex;
   box-sizing: border-box;
   align-items: center;
-  min-height: 18px;
+  min-height: var(--badge-height);
   padding: 0 5px;
   line-height: 1;
   font-size: var(--type-caption);

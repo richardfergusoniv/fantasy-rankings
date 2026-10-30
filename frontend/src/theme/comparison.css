@@ -101,7 +101,7 @@ button.comparison-board-name { cursor: pointer; }
 button.comparison-board-name:hover { color: var(--link); }
 .comparison-board-meta { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .comparison-board-player.is-right .comparison-board-meta { justify-content: flex-end; }
-.comparison-board-meta .matchup-reference-tag { min-height: 20px; line-height: 1; }
+.comparison-board-meta .matchup-reference-tag { min-height: var(--badge-height); line-height: 1; }
 .comparison-trending { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .comparison-trending strong { color: var(--text); font-weight: 700; }
 .comparison-row {

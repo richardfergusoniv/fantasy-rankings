@@ -20,7 +20,7 @@
 .matchup-reference-button .matchup-reference-button-label {
   position: relative;
   display: inline-flex;
-  min-height: 24px;
+  min-height: var(--badge-height);
   align-items: center;
   gap: 3px;
   padding: 0 19px 0 8px;
@@ -84,10 +84,34 @@ a[href].matchup-reference-button.matchup-reference-tag { text-decoration: none; 
 .matchup-reference-button.sos-tough .matchup-reference-button-label::before { border-top: 6px solid currentColor; }
 
 /* Status badges: a warning is a filled coral pill. */
-.injury { min-height: 20px; height: auto; padding: 0 8px; gap: 3px; border-radius: var(--radius-pill); }
+.injury { min-height: var(--badge-height); height: auto; padding: 0 8px; gap: 3px; border-radius: var(--radius-pill); }
 
 /* Descriptor tags share one height with the status badges. */
-.depth-chart-tag { min-height: 20px; }
+.depth-chart-tag { min-height: var(--badge-height); }
+/* The rest of the small tags and chips share the same height. */
+.power-slot-chip,
+.asset-position,
+.news-severity,
+.player-detail-injury,
+.waiver-news-badge,
+.news-leagues span,
+.news-availability-list > span,
+.historical-deal-asset em,
+.advanced-player-name > span,
+.player-selected-chip {
+  display: inline-flex;
+  box-sizing: border-box;
+  min-height: var(--badge-height);
+  align-items: center;
+  padding-block: 0;
+  line-height: 1;
+}
+.roster-owner-tag {
+  box-sizing: border-box;
+  min-height: var(--badge-height);
+  padding-block: 0;
+  line-height: calc(var(--badge-height) - 2px);
+}
 
 /* Warning prefixes draw the line icon instead of a text glyph. */
 .draft-source-warning strong::before,
