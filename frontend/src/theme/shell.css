@@ -183,6 +183,23 @@ span.ticker-item:active { background: transparent; }
   min-height: calc((var(--page-tab-height) / 2) - (2 * var(--tab-track-padding)));
   height: calc((var(--page-tab-height) / 2) - (2 * var(--tab-track-padding)));
 }
+/* Compact filter: content-width, centered, sits under tabs to change how a view is filtered.
+   Doubled class name so it beats the page-tab and trade toggle rules wherever they load. */
+.segmented-control.compact-control.compact-control {
+  width: fit-content;
+  min-height: var(--compact-control-height);
+  height: var(--compact-control-height);
+  margin-inline: auto;
+  border-radius: var(--radius-sm);
+}
+.segmented-control.compact-control .segment-thumb { border-radius: calc(var(--radius-sm) - 2px); }
+.segmented-control.compact-control.compact-control button {
+  min-height: calc(var(--compact-control-height) - (2 * var(--tab-track-padding)));
+  height: calc(var(--compact-control-height) - (2 * var(--tab-track-padding)));
+  padding: 0 12px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  font-size: var(--type-caption);
+}
 /* Every Radix tab row (card tabs, comparison, matchup, team card) uses the same
    track, buttons and active state as the SegmentedControl, at sub-tab size. */
 [data-slot="tabs-list"] {

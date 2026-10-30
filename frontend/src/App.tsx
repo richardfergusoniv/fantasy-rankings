@@ -1392,6 +1392,14 @@ export function App() {
             </TabsList>
           </Tabs>
         ) : null}
+        {primaryPage === "draft" ? (
+          <Tabs value={dashboardUrl.state.draftRoom ?? "board"} onValueChange={(value) => dashboardUrl.commit({ draftRoom: value === "board" ? null : (value as DraftRoom) })} className="subview-tabs draft-subview-tabs">
+            <TabsList aria-label="Draft views">
+              <TabsTrigger value="board">Board</TabsTrigger>
+              <TabsTrigger value="myTeam">My team</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        ) : null}
         {primaryPage === "tools" ? (
           <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)} className="subview-tabs tools-subview-tabs">
             <TabsList aria-label="Tools views">

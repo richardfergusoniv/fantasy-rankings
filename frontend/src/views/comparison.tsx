@@ -639,7 +639,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
             <section className="comparison-section" key={section.dataset} id={`comparison-${section.dataset}-panel`} role="tabpanel" aria-labelledby={`comparison-${section.dataset}-tab`}>
               {section.dataset === "advanced" ? (
                 <header className="comparison-section-head">
-                  <SegmentedControl className="comparison-window-toggle" value={window} onChange={onWindowChange} label="Season stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]} />
+                  <SegmentedControl className="compact-control" value={window} onChange={onWindowChange} label="Season stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]} />
                 </header>
               ) : null}
               {section.headline ? <ComparisonMetricRow row={section.headline} leftName={left.name} rightName={right.name} headline /> : null}

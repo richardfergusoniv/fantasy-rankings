@@ -19,6 +19,7 @@ import { SegmentedControl } from "../shared";
 import { markDraftPlayerTaken, undoDraftPlayerTaken } from "../undo";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { formatWhole } from "../lib/format-number";
+import { Badge } from "@/components/ui/badge";
 import { CloseGlyph } from "../components/glyphs";
 import { LoadingBlock, ListPagination } from "../components/state-blocks";
 
@@ -469,18 +470,9 @@ export function DraftCenter({
   return (
     <section className="draft-center">
       <h2 className="sr-only">Draft</h2>
-      <SegmentedControl
-        className="page-tab-control"
-        value={mode}
-        onChange={(value) => publishDraftFilters({ room: value })}
-        label="Draft room view"
-        options={[
-          { value: "board", label: liveDraft ? "Board · Live" : "Board" },
-          { value: "myTeam", label: "My team" },
-        ]}
-      />
       {mode === "board" ? (
         <div className="draft-board-view">
+          {liveDraft ? <div><Badge variant="positive" size="compact">Live draft</Badge></div> : null}
           {draftFilters}
           {draftBoard}
         </div>
