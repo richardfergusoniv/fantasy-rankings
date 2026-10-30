@@ -36,6 +36,7 @@ import {
 import { scatterAxisDomain } from "./scatter-zoom";
 import { shouldWarnBeforeLeave, useUnsavedLeaveWarning } from "./unsaved-input";
 import { EmptyState } from "./components/state-blocks";
+import { CloseGlyph } from "./components/glyphs";
 
 export type Dashboard = ApiResponse<typeof api, "getDashboard">;
 export type League = Dashboard["leagues"][number];
@@ -1230,7 +1231,7 @@ function ScatterPlot({
 }
 
 // Omit --chart-1 so rostered snap lines stay distinct from the waiver amber series.
-const SNAP_TREND_COLORS = ["var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "#c4b5fd", "#f9a8d4", "#67e8f9"];
+const SNAP_TREND_COLORS = ["var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-6)", "var(--chart-7)", "var(--chart-8)"];
 
 function SnapShareTrendChart({
   series,
@@ -1506,7 +1507,7 @@ export function AdvancedStats({ dashboard, league, selectedPlayer, onSelectedPla
             autoCapitalize="none"
             spellCheck={false}
           />
-          {playerQuery ? <button className="search-clear" type="button" onClick={() => setPlayerQuery("")} aria-label="Clear advanced stats player search">×</button> : null}
+          {playerQuery ? <button className="search-clear" type="button" onClick={() => setPlayerQuery("")} aria-label="Clear advanced stats player search"><CloseGlyph /></button> : null}
         </div>
         {playerQuery.trim() ? (
           <div className="advanced-player-results inline-search-results" aria-label="Matching advanced stats players" aria-live="polite">
@@ -2418,7 +2419,7 @@ function WeeklyProjections({ dashboard, league, view, selectedPlayer = null, onS
             autoCapitalize="none"
             spellCheck={false}
           />
-          {playerQuery ? <button className="search-clear" type="button" onClick={() => setPlayerQuery("")} aria-label="Clear weekly projection player search">×</button> : null}
+          {playerQuery ? <button className="search-clear" type="button" onClick={() => setPlayerQuery("")} aria-label="Clear weekly projection player search"><CloseGlyph /></button> : null}
         </div>
         {playerQuery.trim() ? (
           <div className="advanced-player-results inline-search-results" aria-label="Matching weekly projection players" aria-live="polite">

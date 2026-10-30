@@ -56,6 +56,7 @@ import { WindowVirtualList } from "../virtual-list";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
 import { ListPagination } from "../components/state-blocks";
+import { ChevronGlyph, CloseGlyph } from "../components/glyphs";
 
 /** Compact rankings/waivers row height (matches former density=compact). */
 export const RANKINGS_ROW_HEIGHT = 56;
@@ -132,7 +133,7 @@ export function SeasonTeamPill({ team, lineRank, onOpen }: { team: string | null
       aria-haspopup="dialog"
       title={lineRank === null ? `${teamLabel} team data` : `${teamLabel} offensive line rank #${lineRank}`}
     >
-      <span className="matchup-reference-button-label">{teamLabel}<span className="matchup-reference-arrow" aria-hidden="true">›</span></span>
+      <span className="matchup-reference-button-label">{teamLabel}<span className="matchup-reference-arrow" aria-hidden="true"><ChevronGlyph /></span></span>
     </button>
   );
 }
@@ -315,7 +316,7 @@ export function TeamDataModal({
       <div className="matchup-card-backdrop" onClick={onClose}>
         <article ref={dialogRef} className="matchup-data-card team-data-card" role="dialog" aria-modal="true" aria-labelledby="team-card-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
           <div className="matchup-data-header matchup-data-header-minimal">
-            <button type="button" onClick={onClose} aria-label="Close team data">×</button>
+            <button type="button" onClick={onClose} aria-label="Close team data"><CloseGlyph /></button>
           </div>
           <h2 id="team-card-title" className="card-title">{teamName}</h2>
           <div className="card-chips">
@@ -952,7 +953,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             autoCapitalize="none"
             spellCheck={false}
           />
-          {hasSearch ? <button className="search-clear" type="button" onClick={() => publishRankingFilters({ query: "" })} aria-label="Clear player search">×</button> : null}
+          {hasSearch ? <button className="search-clear" type="button" onClick={() => publishRankingFilters({ query: "" })} aria-label="Clear player search"><CloseGlyph /></button> : null}
         </label>
         {!hasSearch ? (
           <div className="position-filter-row" role="group" aria-label="Position filter">

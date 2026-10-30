@@ -66,6 +66,7 @@ import { Explorer, isExplorerMode } from "./views/explorer";
 import { GameLinesPanel } from "./views/game-lines-panel";
 import { Lineup } from "./views/lineup";
 import { TeamStatsPanel } from "./views/team-stats-panel";
+import { MoveTriangle } from "./components/glyphs";
 
 const DOCKABLE_INSPECTOR_TABS = new Set<Tab>(["team", "rankings", "waivers", "draft", "power", "monitor", "team-stats", "analytics"]);
 
@@ -249,7 +250,7 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
       <span className={`ticker-source ${item.source === "BREAKING" ? "breaking" : ""}`}>{item.source}</span>
       <span className="ticker-label">{item.label}</span>
       {item.quote ? <strong>{item.quote}</strong> : null}
-      {item.move !== null && Math.abs(item.move) >= 0.05 ? <span className={`ticker-move ${item.tone}`}>{item.move > 0 ? "▲" : "▼"}{formatDecimal(Math.abs(item.move), 2)}</span> : null}
+      {item.move !== null && Math.abs(item.move) >= 0.05 ? <span className={`ticker-move ${item.tone}`}><MoveTriangle direction={item.move > 0 ? "up" : "down"} />{formatDecimal(Math.abs(item.move), 2)}</span> : null}
     </>
   );
 
@@ -1337,7 +1338,7 @@ export function App() {
             onNews={setTickerNews}
           />
           <div className="week-line">
-            <div><span className="live-dot" /> NFL {dashboard.season} · WEEK {dashboard.week}</div>
+            <div><span className="live-dot" /> NFL {dashboard.season} · Week {dashboard.week}</div>
             <div className="week-actions">
             <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />
             {supabase ? <AccountMenu /> : null}

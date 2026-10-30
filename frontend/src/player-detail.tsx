@@ -38,6 +38,7 @@ import { useProfileTag } from "./lib/use-profile-tag";
 import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
 import { ModalPortal, ProfileChips, SegmentedControl, positionalSosRank, rankAgainst, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
+import { BackGlyph, ChevronGlyph, CloseGlyph, MoveTriangle } from "./components/glyphs";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
 
@@ -377,7 +378,7 @@ function PlayerTeamBadge({ team, onOpen }: { team: string | null; onOpen?: () =>
       aria-haspopup="dialog"
       onClick={onOpen}
     >
-      <span className="matchup-reference-button-label">{team}<span className="matchup-reference-arrow" aria-hidden="true">›</span></span>
+      <span className="matchup-reference-button-label">{team}<span className="matchup-reference-arrow" aria-hidden="true"><ChevronGlyph /></span></span>
     </button>
   );
 }
@@ -736,8 +737,8 @@ export function PlayerDetailSheet({
             /></p>
           </div>
           <div className="player-detail-actions">
-            {canGoBack ? <button type="button" onClick={navigateBack} aria-label="Previous player">←</button> : null}
-            <button type="button" onClick={onClose} aria-label="Close player details">×</button>
+            {canGoBack ? <button type="button" onClick={navigateBack} aria-label="Previous player"><BackGlyph /></button> : null}
+            <button type="button" onClick={onClose} aria-label="Close player details"><CloseGlyph /></button>
           </div>
         </div>
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as PlayerDetailTab)} className="player-detail-tabs">
@@ -776,7 +777,7 @@ export function PlayerDetailSheet({
               <span>Season-long value</span>
               <div className="player-detail-value-row">
                 <strong>{player.seasonValue === null ? "—" : formatWhole(player.seasonValue)}</strong>
-                {player.seasonValue !== null && player.movement30Day !== null ? <span className={`player-detail-delta ${player.movement30Day < 0 ? "is-down" : player.movement30Day > 0 ? "is-up" : ""}`} title={movementLabel(player.movement30Day)}>{player.movement30Day < 0 ? "▼" : player.movement30Day > 0 ? "▲" : ""} {Number.isFinite(player.movement30Day) ? formatPercent(Math.abs(player.movement30Day)) : "from 0"}</span> : player.seasonValue !== null ? <span className="player-detail-delta">{movementLabel(null)}</span> : null}
+                {player.seasonValue !== null && player.movement30Day !== null ? <span className={`player-detail-delta ${player.movement30Day < 0 ? "is-down" : player.movement30Day > 0 ? "is-up" : ""}`} title={movementLabel(player.movement30Day)}>{player.movement30Day !== 0 ? <MoveTriangle direction={player.movement30Day < 0 ? "down" : "up"} /> : null}{Number.isFinite(player.movement30Day) ? formatPercent(Math.abs(player.movement30Day)) : "from 0"}</span> : player.seasonValue !== null ? <span className="player-detail-delta">{movementLabel(null)}</span> : null}
                 <small>{player.seasonRank === null ? "No season rank" : <>{positionLabel} <span className={rankToneClassName(player.seasonRank)}>#{player.seasonRank}</span></>}</small>
               </div>
             </div>
