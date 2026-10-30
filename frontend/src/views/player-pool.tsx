@@ -400,7 +400,6 @@ export function TeamDataModal({
                   </div>
                 ) : <span />}
               </div>
-              <p className="card-note">Bars show league rank, longer is better. Amber marks a top 8 rank.</p>
           </section>
 
             </div>
