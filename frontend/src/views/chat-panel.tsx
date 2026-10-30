@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CHAT_MAX_HISTORY_MESSAGES, CHAT_MAX_INPUT_CHARS } from "../../../api/_lib/chat-config";
 import { api } from "../api";
 import { getSessionUserId } from "../supabase";
+import { PlusGlyph } from "../components/glyphs";
 
 type ChatRole = "user" | "assistant";
 
@@ -286,7 +287,7 @@ export function ChatPanel({
           onClick={() => { startNewChat(); setHistoryOpen(false); }}
           disabled={sending || loadingChat}
         >
-          <span aria-hidden="true">+</span> New chat
+          <PlusGlyph /> New chat
         </button>
         {isSheet ? (
           <button
