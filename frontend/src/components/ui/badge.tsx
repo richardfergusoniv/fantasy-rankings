@@ -11,6 +11,7 @@ const badgeVariants = cva(
         secondary: "border-transparent bg-secondary text-secondary-foreground",
         outline: "text-foreground",
         positive: "border-transparent bg-[var(--stat-strength-soft)] text-[var(--stat-strength-readable)]",
+        warning: "border-transparent bg-[var(--warning-bg)] text-[var(--warning)]",
         negative: "border-transparent bg-[var(--stat-weakness-soft)] text-[var(--stat-weakness-readable)]",
         accent: "border-transparent bg-[var(--accent-soft)] text-[var(--ui-accent-foreground)]",
       },

@@ -1413,10 +1413,6 @@
   font-size: var(--type-body);
   font-weight: 600;
 }
-.chat-error::before {
-  content: "⚠ ";
-  color: var(--warning);
-}
 @media (prefers-reduced-motion: reduce) {
   .chat-composer {
     transition: none !important;

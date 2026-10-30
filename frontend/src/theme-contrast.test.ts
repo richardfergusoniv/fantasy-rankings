@@ -177,6 +177,28 @@ describe("Look D theme contrast", () => {
   });
 });
 
+describe("Badge colors", () => {
+  const vars = parseCssVars(extractRootBlock(readTheme()));
+  const pairs: Array<[string, string]> = [
+    ["--ease-fg", "--ease-bg"],
+    ["--tough-fg", "--tough-bg"],
+    ["--warning", "--warning-bg"],
+    ["--foreground", "--segment-selected"],
+  ];
+  for (const mode of ["dark", "light"] as const) {
+    it(`keeps badge text readable on its fill in ${mode}`, () => {
+      for (const [fg, bg] of pairs) {
+        expect(contrastRatio(resolveVar(vars, fg, mode), resolveVar(vars, bg, mode)), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+      }
+    });
+    it(`keeps matchup ease and tough distinct from the amber link in ${mode}`, () => {
+      const link = resolveVar(vars, "--link", mode).toLowerCase();
+      expect(resolveVar(vars, "--ease-fg", mode).toLowerCase()).not.toBe(link);
+      expect(resolveVar(vars, "--tough-fg", mode).toLowerCase()).not.toBe(link);
+    });
+  }
+});
+
 describe("Token hygiene", () => {
   it("has no raw hex colors in theme.css outside :root", () => {
     const css = readTheme();

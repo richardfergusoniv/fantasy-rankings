@@ -129,9 +129,8 @@ span.ticker-item:active { background: transparent; }
   bottom: var(--tab-track-padding);
   left: var(--tab-track-padding);
   width: calc((100% - (2 * var(--tab-track-padding))) / var(--segment-count));
-  border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 2px);
-  background: var(--hairline);
+  background: var(--segment-selected);
   box-shadow: var(--shadow-control);
   transform: translateX(calc(var(--segment-index) * 100%));
   transition: transform .16s cubic-bezier(.2, .7, .2, 1), opacity .12s ease-out;
@@ -157,7 +156,7 @@ span.ticker-item:active { background: transparent; }
   cursor: pointer;
   transition: color .12s ease-out;
 }
-.segmented-control button.active { color: var(--link); }
+.segmented-control button.active { color: var(--text); }
 /* Page-level in-page tabs (Matchup, League scope, Draft Board/My Team). */
 .segmented-control.page-tab-control {
   min-height: var(--page-tab-height);
@@ -215,10 +214,9 @@ span.ticker-item:active { background: transparent; }
   cursor: pointer;
 }
 [data-slot="tabs-trigger"][data-state="active"] {
-  border-color: var(--border);
-  background: var(--hairline);
+  background: var(--segment-selected);
   box-shadow: var(--shadow-control);
-  color: var(--link);
+  color: var(--text);
 }
 /* Players / Tools / League subview rows are page-level: page-tab size. */
 .subview-tabs [data-slot="tabs-list"] {

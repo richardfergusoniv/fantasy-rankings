@@ -87,7 +87,7 @@ export function MatchupPlayer({
             </span>
           ) : null}
           {player.injuryStatus ? (
-            <DesignationBadge code={sleeperInjuryTag(player.injuryStatus)} label={`Injury status: ${player.injuryStatus}`} title={player.injuryStatus} />
+            <DesignationBadge code={sleeperInjuryTag(player.injuryStatus)} label={`Injury status: ${player.injuryStatus}`} title={player.injuryStatus} tone="warning" />
           ) : null}
         </span>
       </button>

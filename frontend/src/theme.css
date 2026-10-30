@@ -15,4 +15,5 @@
 @import "./theme/feed.css";
 @import "./theme/draft.css";
 @import "./theme/responsive.css";
+@import "./theme/badges.css";
 @import "./theme/overrides.css";

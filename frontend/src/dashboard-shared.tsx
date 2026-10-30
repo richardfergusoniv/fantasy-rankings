@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { CrossToolBadge, ToolLinks, type CrossToolLink, type ToolLinkItem } from "./tool-links";
 import { formatImpliedTotal } from "./lib/game-line-matchup-link";
 import { useQuery } from "@tanstack/react-query";
+import { TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -330,10 +331,11 @@ export function DesignationBadge({
   code: string;
   label: string;
   title: string;
-  tone?: "neutral" | "positive";
+  tone?: "neutral" | "positive" | "warning";
 }) {
   return (
-    <Badge variant={tone === "positive" ? "positive" : "secondary"} size="compact" className="injury" aria-label={label} title={title}>
+    <Badge variant={tone === "positive" ? "positive" : tone === "warning" ? "warning" : "secondary"} size="compact" className="injury" aria-label={label} title={title}>
+      {tone === "warning" ? <TriangleAlert aria-hidden="true" /> : null}
       {code}
     </Badge>
   );
