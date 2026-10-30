@@ -1,770 +1,353 @@
 import { describe, expect, it, vi } from "vitest";
-import { LIVE_DASHBOARD_CACHE_MS, USER_DASHBOARD_CACHE_MS } from "./dashboard-build.js";
 import {
-  createMemoryDashboardViewStore,
-  createTieredDashboardViewStore,
+  createL1DashboardViewStore,
   dashboardDeniedHeaders,
   dashboardResponseTtlSeconds,
   dashboardViewCacheKey,
-  dashboardViewLatestKey,
   dashboardViewResponseHeaders,
-  decodeStoredEntry,
-  DASHBOARD_VIEW_FRESH_TTL_SECONDS,
-  DASHBOARD_VIEW_LIVE_TTL_SECONDS,
-  encodeForRuntime,
   loadCachedDashboardView,
   normalizeRequestedSnapshotVersion,
-  pointDashboardViewAtVersion,
-  recallDashboardView,
   remainingDashboardTtlSeconds,
-  rememberDashboardView,
   responseCacheFetchedAtMs,
   type DashboardViewStore,
 } from "./dashboard-response-cache.js";
 
+/**
+ * Personalized dashboard views no longer use Vercel Runtime Cache at all:
+ * the store is an instance-local L1 LRU and Postgres `source_cache` is
+ * canonical. These tests pin the L1 contract — absolute deadlines, no
+ * cross-user bleed, single-flight origin loads — and assert the module
+ * contains zero runtime-cache calls.
+ */
+
 const V1 = "2026-10-12T00:00:00.000Z";
 const V2 = "2026-10-12T00:10:00.000Z";
 
-function countingStore(inner: DashboardViewStore): DashboardViewStore & { gets: number; sets: number } {
-  const counts = { gets: 0, sets: 0 };
-  return {
-    get gets() {
-      return counts.gets;
-    },
-    get sets() {
-      return counts.sets;
-    },
-    async get(key) {
-      counts.gets += 1;
-      return inner.get(key);
-    },
-    async set(key, value, ttlSeconds) {
-      counts.sets += 1;
-      return inner.set(key, value, ttlSeconds);
-    },
-  };
-}
-
-describe("dashboard view cache keys", () => {
-  it("changes with the user, the view, and the snapshot version", () => {
-    const base = dashboardViewCacheKey("user-a", "players", V1);
-    expect(base).toBe(dashboardViewCacheKey("user-a", "players", V1));
-    expect(base).not.toBe(dashboardViewCacheKey("user-b", "players", V1));
-    expect(base).not.toBe(dashboardViewCacheKey("user-a", "trade", V1));
-    expect(base).not.toBe(dashboardViewCacheKey("user-a", "players", V2));
-    expect(dashboardViewLatestKey("user-a", "players")).not.toBe(dashboardViewLatestKey("user-b", "players"));
-    expect(dashboardViewLatestKey("user-a", "players")).not.toContain(V1);
-  });
-
-  it("ignores blank or oversized version hints", () => {
-    expect(normalizeRequestedSnapshotVersion(null)).toBeNull();
-    expect(normalizeRequestedSnapshotVersion("  ")).toBeNull();
-    expect(normalizeRequestedSnapshotVersion(`  ${V1}  `)).toBe(V1);
-    expect(normalizeRequestedSnapshotVersion("x".repeat(65))).toBeNull();
-  });
-});
-
-describe("dashboard view TTL", () => {
-  it("matches the dashboard row TTL and does not outlive the live refresh", () => {
-    expect(DASHBOARD_VIEW_LIVE_TTL_SECONDS * 1000).toBe(LIVE_DASHBOARD_CACHE_MS);
-    expect(DASHBOARD_VIEW_FRESH_TTL_SECONDS * 1000).toBe(USER_DASHBOARD_CACHE_MS);
-    expect(dashboardResponseTtlSeconds(true)).toBe(150);
-    expect(dashboardResponseTtlSeconds(true)).toBeLessThanOrEqual(LIVE_DASHBOARD_CACHE_MS / 1000);
-    expect(dashboardResponseTtlSeconds(false)).toBe(600);
-  });
-
-  it("shrinks to the time left on the snapshot and never goes negative", () => {
-    expect(remainingDashboardTtlSeconds({ fetchedAtMs: 0, nowMs: 100_000, live: true })).toBe(50);
-    expect(remainingDashboardTtlSeconds({ fetchedAtMs: 0, nowMs: 150_000, live: true })).toBe(0);
-    expect(remainingDashboardTtlSeconds({ fetchedAtMs: 0, nowMs: 200_000, live: true })).toBe(0);
-    expect(remainingDashboardTtlSeconds({ fetchedAtMs: 1_000, nowMs: 1_000, live: false })).toBe(600);
-  });
-
-  it("does not cache a stale or owner-snapshot fallback as a fresh build", () => {
-    const nowMs = 1_700_000_000_000;
-    const builtAt = responseCacheFetchedAtMs("built", nowMs);
-    const freshAt = responseCacheFetchedAtMs("fresh", nowMs, nowMs - 60_000);
-    const fallbackAt = responseCacheFetchedAtMs("fallback", nowMs);
-    expect(builtAt).toBe(nowMs);
-    expect(freshAt).toBe(nowMs - 60_000);
-    expect(fallbackAt).toBe(0);
-    expect(remainingDashboardTtlSeconds({ fetchedAtMs: builtAt, nowMs, live: false })).toBe(600);
-    expect(remainingDashboardTtlSeconds({ fetchedAtMs: freshAt, nowMs, live: false })).toBe(540);
-    expect(remainingDashboardTtlSeconds({ fetchedAtMs: fallbackAt, nowMs, live: false })).toBe(0);
-    expect(remainingDashboardTtlSeconds({ fetchedAtMs: fallbackAt, nowMs, live: true })).toBe(0);
-  });
-});
-
-describe("snapshot version cache", () => {
-  it("serves a repeat read of the same version and switches when a new snapshot is published", async () => {
-    const store = createMemoryDashboardViewStore(() => 1_000);
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "trade",
-      version: V1,
-      live: false,
-      body: { section: "trade", data: { leagues: ["old"] } },
-      ttlSeconds: 600,
-      nowMs: 1_000,
-      store,
-    });
-    const first = await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "trade",
-      requestedVersion: V1,
-      nowMs: 1_000,
-      store,
-    });
-    expect(first?.body).toEqual({ section: "trade", data: { leagues: ["old"] } });
-
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "trade",
-      version: V2,
-      live: true,
-      body: { section: "trade", data: { leagues: ["new"] } },
-      ttlSeconds: 150,
-      nowMs: 2_000,
-      store,
-    });
-    const second = await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "trade",
-      requestedVersion: null,
-      nowMs: 2_000,
-      store,
-    });
-    expect(second?.version).toBe(V2);
-    expect(second?.live).toBe(true);
-    expect(second?.body).toEqual({ section: "trade", data: { leagues: ["new"] } });
-    // The previous version is no longer the latest pointer, so it is not served.
-    const staleHint = await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "trade",
-      requestedVersion: V1,
-      nowMs: 2_000,
-      store,
-    });
-    expect(staleHint).toBeNull();
-  });
-
-  it("a pointer-only publish moves the view to the new snapshot without a body", async () => {
-    const store = createMemoryDashboardViewStore(() => 1_000);
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "league",
-      version: V1,
-      live: false,
-      body: { section: "league", data: { rosters: ["old"] } },
-      ttlSeconds: 600,
-      nowMs: 1_000,
-      store,
-    });
-
-    // A build lands a new snapshot: pointers move, no body is written.
-    await pointDashboardViewAtVersion({
-      sleeperUserId: "user-a",
-      view: "league",
-      version: V2,
-      ttlSeconds: 600,
-      nowMs: 2_000,
-      store,
-    });
-    // The old body is no longer served (its version is not the latest),
-    // and the new version has no body yet, so the read misses cleanly —
-    // the request path then serves the fresh Postgres row.
-    const missed = await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "league",
-      requestedVersion: null,
-      nowMs: 2_000,
-      store,
-    });
-    expect(missed).toBeNull();
-
-    // The request path remembers the body it served under the new version.
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "league",
-      version: V2,
-      live: false,
-      body: { section: "league", data: { rosters: ["new"] } },
-      ttlSeconds: 600,
-      nowMs: 2_000,
-      store,
-    });
-    const hit = await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "league",
-      requestedVersion: null,
-      nowMs: 2_000,
-      store,
-    });
-    expect(hit?.version).toBe(V2);
-    expect(hit?.body).toEqual({ section: "league", data: { rosters: ["new"] } });
-
-    // A stale build pointing backwards must not regress the view.
-    await pointDashboardViewAtVersion({
-      sleeperUserId: "user-a",
-      view: "league",
-      version: V1,
-      ttlSeconds: 600,
-      nowMs: 3_000,
-      store,
-    });
-    const still = await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "league",
-      requestedVersion: null,
-      nowMs: 3_000,
-      store,
-    });
-    expect(still?.version).toBe(V2);
-  });
-
-  it("does not let an older snapshot replace a newer one", async () => {
-    const store = createMemoryDashboardViewStore();
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "meta",
-      version: V2,
-      live: false,
-      body: { section: "meta", data: "new" },
-      ttlSeconds: 600,
-      nowMs: 5_000,
-      store,
-    });
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "meta",
-      version: V1,
-      live: false,
-      body: { section: "meta", data: "old" },
-      ttlSeconds: 600,
-      nowMs: 6_000,
-      store,
-    });
-    const hit = await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "meta",
-      requestedVersion: null,
-      nowMs: 6_000,
-      store,
-    });
-    expect(hit?.version).toBe(V2);
-    expect(hit?.body).toEqual({ section: "meta", data: "new" });
-  });
-
-  it("keeps a newer snapshot when an older publish already passed its read", async () => {
-    const inner = createMemoryDashboardViewStore(() => 1_000);
-    let pauseStaleReads = true;
-    const waiting: Array<() => void> = [];
-    let markStarted: () => void = () => undefined;
-    const started = new Promise<void>((resolve) => {
-      markStarted = resolve;
-    });
-    const store: DashboardViewStore = {
-      async get(key) {
-        if (pauseStaleReads && key.includes(":lane:")) {
-          if (waiting.length === 0) markStarted();
-          await new Promise<void>((resolve) => {
-            waiting.push(resolve);
-          });
-          return null;
-        }
-        return inner.get(key);
-      },
-      async set(key, value, ttlSeconds) {
-        return inner.set(key, value, ttlSeconds);
-      },
-    };
-    const older = rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "meta",
-      version: V1,
-      live: false,
-      body: { section: "meta", data: "old" },
-      ttlSeconds: 600,
-      nowMs: 1_000,
-      store,
-    });
-    await started;
-    await vi.waitUntil(() => waiting.length === 16);
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "meta",
-      version: V2,
-      live: false,
-      body: { section: "meta", data: "new" },
-      ttlSeconds: 600,
-      nowMs: 1_000,
-      store: inner,
-    });
-    pauseStaleReads = false;
-    for (const release of waiting) release();
-    await older;
-    const hit = await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "meta",
-      requestedVersion: null,
-      nowMs: 1_000,
-      store: inner,
-    });
-    expect(hit?.version).toBe(V2);
-    expect(hit?.body).toEqual({ section: "meta", data: "new" });
-  });
-
-  it("does not serve an older snapshot after the newer one expires", async () => {
-    let now = 10_000;
-    const store = createMemoryDashboardViewStore(() => now);
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "meta",
-      version: V1,
-      live: false,
-      body: { section: "meta", data: "old" },
-      ttlSeconds: 600,
-      nowMs: now,
-      store,
-    });
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "meta",
-      version: V2,
-      live: true,
-      body: { section: "meta", data: "new" },
-      ttlSeconds: 150,
-      nowMs: now,
-      store,
-    });
-    now += 149_000;
-    expect((await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "meta",
-      requestedVersion: null,
-      nowMs: now,
-      store,
-    }))?.version).toBe(V2);
-    now += 1_000;
-    expect(await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "meta",
-      requestedVersion: null,
-      nowMs: now,
-      store,
-    })).toBeNull();
-  });
-
-  it("keeps two users on the same snapshot version apart", async () => {
-    const store = createMemoryDashboardViewStore();
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "players",
-      version: V1,
-      live: false,
-      body: { secret: "a" },
-      ttlSeconds: 600,
-      nowMs: 1_000,
-      store,
-    });
-    await rememberDashboardView({
-      sleeperUserId: "user-b",
-      view: "players",
-      version: V1,
-      live: false,
-      body: { secret: "b" },
-      ttlSeconds: 600,
-      nowMs: 1_000,
-      store,
-    });
-    const a = await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "players",
-      requestedVersion: null,
-      nowMs: 1_000,
-      store,
-    });
-    const b = await recallDashboardView({
-      sleeperUserId: "user-b",
-      view: "players",
-      requestedVersion: null,
-      nowMs: 1_000,
-      store,
-    });
-    expect(a?.body).toEqual({ secret: "a" });
-    expect(b?.body).toEqual({ secret: "b" });
-  });
-
-  it("expires a live entry at the live refresh interval", async () => {
-    let now = 10_000;
-    const store = createMemoryDashboardViewStore(() => now);
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view: "team",
-      version: V1,
-      live: true,
-      body: { section: "team", data: { score: 1 } },
-      ttlSeconds: dashboardResponseTtlSeconds(true),
-      nowMs: now,
-      store,
-    });
-    now += 149_000;
-    expect(await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "team",
-      requestedVersion: null,
-      nowMs: now,
-      store,
-    })).not.toBeNull();
-    now += 1_000;
-    expect(await recallDashboardView({
-      sleeperUserId: "user-a",
-      view: "team",
-      requestedVersion: null,
-      nowMs: now,
-      store,
-    })).toBeNull();
-  });
-});
-
-describe("dashboard view auth path", () => {
-  it("returns 401 for a signed-out caller and does not touch the cache or origin", async () => {
-    const store = countingStore(createMemoryDashboardViewStore());
-    let originReads = 0;
-    const result = await loadCachedDashboardView({
-      sleeperUserId: null,
-      view: "full",
-      requestedVersion: V1,
-      store,
-      loadOrigin: async () => {
-        originReads += 1;
-        return { kind: "value", body: { dashboard: "nope" }, version: V1, live: false, ttlSeconds: 600 };
-      },
-    });
-    expect(result).toEqual({ ok: false, status: 401, error: "Sign in required." });
-    expect(store.gets).toBe(0);
-    expect(store.sets).toBe(0);
-    expect(originReads).toBe(0);
-  });
-
-  it("does not cache an origin denial", async () => {
-    const store = countingStore(createMemoryDashboardViewStore());
-    const result = await loadCachedDashboardView({
-      sleeperUserId: "user-a",
-      view: "meta",
-      requestedVersion: null,
-      store,
-      loadOrigin: async () => ({ kind: "deny" }),
-    });
-    expect(result).toEqual({ ok: false, status: 401, error: "Sign in required." });
-    expect(store.sets).toBe(0);
-  });
-
-  it("serves a second load from cache and skips origin", async () => {
-    const store = countingStore(createMemoryDashboardViewStore());
-    let originReads = 0;
-    const loadOrigin = async () => {
-      originReads += 1;
-      return {
-        kind: "value" as const,
-        body: { section: "league", data: { leagues: [1] } },
-        version: V1,
-        live: false,
-        ttlSeconds: 600,
-      };
-    };
-    const first = await loadCachedDashboardView({
-      sleeperUserId: "user-a",
-      view: "league",
-      requestedVersion: null,
-      nowMs: 1_000,
-      store,
-      loadOrigin,
-    });
-    const second = await loadCachedDashboardView({
-      sleeperUserId: "user-a",
-      view: "league",
-      requestedVersion: V1,
-      nowMs: 2_000,
-      store,
-      loadOrigin,
-    });
-    expect(first).toMatchObject({ ok: true, cache: "MISS" });
-    expect(second).toMatchObject({
-      ok: true,
-      cache: "HIT",
-      version: V1,
-      body: { section: "league", data: { leagues: [1] } },
-    });
-    expect(originReads).toBe(1);
-  });
-
-  it("bypasses the cache on force and when the caller names a newer snapshot", async () => {
-    const store = createMemoryDashboardViewStore();
-    let originReads = 0;
-    const loadOrigin = async () => {
-      originReads += 1;
-      return {
-        kind: "value" as const,
-        body: { dashboard: originReads },
-        version: originReads === 1 ? V1 : V2,
-        live: false,
-        ttlSeconds: 600,
-      };
-    };
-    await loadCachedDashboardView({
-      sleeperUserId: "user-a",
-      view: "full",
-      requestedVersion: null,
-      nowMs: 1_000,
-      store,
-      loadOrigin,
-    });
-    const forced = await loadCachedDashboardView({
-      sleeperUserId: "user-a",
-      view: "full",
-      requestedVersion: null,
-      force: true,
-      nowMs: 2_000,
-      store,
-      loadOrigin,
-    });
-    expect(forced).toMatchObject({ ok: true, cache: "MISS", version: V2 });
-    expect(originReads).toBe(2);
-    const hinted = await loadCachedDashboardView({
-      sleeperUserId: "user-a",
-      view: "full",
-      requestedVersion: V1,
-      nowMs: 3_000,
-      store,
-      loadOrigin,
-    });
-    expect(hinted).toMatchObject({ ok: true, cache: "MISS" });
-    expect(originReads).toBe(3);
-  });
-
-  it("does not store an uncacheable origin result", async () => {
-    const store = countingStore(createMemoryDashboardViewStore());
-    await loadCachedDashboardView({
-      sleeperUserId: "user-a",
-      view: "team",
-      requestedVersion: null,
-      nowMs: 1_000,
-      store,
-      loadOrigin: async () => ({
-        kind: "value",
-        body: { section: "team", data: null },
-        version: "",
-        live: true,
-        ttlSeconds: 0,
-      }),
-    });
-    expect(store.sets).toBe(0);
-  });
-});
-
-describe("dashboard response headers", () => {
-  it("keeps fresh views private and out of the shared CDN", () => {
-    const live = dashboardViewResponseHeaders({
-      cache: "HIT",
-      cacheable: true,
-      version: V1,
-      live: true,
-    });
-    expect(live["Cache-Control"]).toBe("private, max-age=0, must-revalidate");
-    expect(live["Cache-Control"]).not.toContain("s-maxage");
-    expect(live["Cache-Control"]).not.toContain("stale-while-revalidate");
-    expect(live["CDN-Cache-Control"]).toBe("no-store");
-    expect(live["Vercel-CDN-Cache-Control"]).toBe("no-store");
-    expect(live.Vary).toBe("Authorization");
-    expect(live["X-Dashboard-Cache"]).toBe("HIT");
-    expect(live["X-Dashboard-Snapshot"]).toBe(V1);
-    expect(live["X-Dashboard-Cache-Ttl"]).toBe("150");
-    expect(live.ETag).toBe(`"${V1}"`);
-
-    const fresh = dashboardViewResponseHeaders({
-      cache: "MISS",
-      cacheable: true,
-      version: V2,
-      live: false,
-    });
-    expect(fresh["X-Dashboard-Cache-Ttl"]).toBe("600");
-    expect(fresh["Cache-Control"]).not.toContain("s-maxage");
-  });
-
-  it("does not store denials or uncacheable bodies", () => {
-    expect(dashboardDeniedHeaders()["Cache-Control"]).toBe("private, no-store");
-    expect(dashboardDeniedHeaders()["CDN-Cache-Control"]).toBe("no-store");
-    const cold = dashboardViewResponseHeaders({
-      cache: "MISS",
-      cacheable: false,
-      version: null,
-      live: true,
-    });
-    expect(cold["Cache-Control"]).toBe("private, no-store");
-    expect(cold["X-Dashboard-Snapshot"]).toBeUndefined();
-    const injected = dashboardViewResponseHeaders({
-      cache: "HIT",
-      cacheable: true,
-      version: "bad\r\nX-Injected: 1",
-      live: false,
-    });
-    expect(injected["Cache-Control"]).toBe("private, no-store");
-    expect(JSON.stringify(injected)).not.toContain("X-Injected");
-  });
-});
-
-describe("shared cache pointer", () => {
-  const view = "trade" as const;
-  const body = { section: "trade", data: { leagues: ["a"] } };
-
-  function sharedRuntime() {
-    const remote = new Map<string, unknown>();
-    return {
-      remote,
-      runtime: {
-        async get(key: string) {
-          return remote.get(key) ?? null;
-        },
-        async set(key: string, value: unknown) {
-          remote.set(key, value);
-        },
-        async delete(key: string) {
-          remote.delete(key);
-        },
-      },
-    };
-  }
-
-  it("lets another instance read the body when the shared write succeeds", async () => {
-    const { runtime } = sharedRuntime();
-    const writer = createTieredDashboardViewStore(runtime);
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view,
-      version: V1,
-      live: false,
-      body,
-      ttlSeconds: 600,
-      nowMs: 1_000,
-      store: writer,
-    });
-    const reader = createTieredDashboardViewStore(runtime);
-    const hit = await recallDashboardView({
-      sleeperUserId: "user-a",
-      view,
-      requestedVersion: null,
-      nowMs: 1_000,
-      store: reader,
-    });
-    expect(hit?.body).toEqual(body);
-  });
-
-  it("does not publish latest when the shared body write fails", async () => {
-    const remote = new Map<string, unknown>();
-    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const runtime = {
-      async get(key: string) {
-        return remote.get(key) ?? null;
-      },
-      async set() {
-        throw new Error("runtime full");
-      },
-      async delete() {
-        return undefined;
-      },
-    };
-    try {
-      const writer = createTieredDashboardViewStore(runtime);
-      await rememberDashboardView({
-        sleeperUserId: "user-a",
-        view,
-        version: V1,
-        live: false,
-        body,
-        ttlSeconds: 600,
-        nowMs: 1_000,
-        store: writer,
-      });
-      expect([...remote.keys()]).toEqual([]);
-      const local = await recallDashboardView({
-        sleeperUserId: "user-a",
-        view,
-        requestedVersion: null,
-        nowMs: 1_000,
-        store: writer,
-      });
-      expect(local?.version).toBe(V1);
-      const reader = createTieredDashboardViewStore({
-        async get(key: string) {
-          return remote.get(key) ?? null;
-        },
-        async set() {
-          throw new Error("unused");
-        },
-        async delete() {
-          return undefined;
-        },
-      });
-      expect(await recallDashboardView({
-        sleeperUserId: "user-a",
-        view,
-        requestedVersion: null,
-        nowMs: 1_000,
-        store: reader,
-      })).toBeNull();
-    } finally {
-      errors.mockRestore();
+describe("module surface", () => {
+  it("has no dependency on @vercel/functions runtime cache", async () => {
+    const source = await import("node:fs/promises").then((fs) =>
+      fs.readFile(new URL("./dashboard-response-cache.ts", import.meta.url), "utf8"),
+    );
+    expect(source).not.toContain("getCache");
+    expect(source).not.toContain("@vercel/functions");
+    // The lane/pointer protocol identifiers are gone for good.
+    for (const dead of ["dashboardViewLaneKey", "readLanePointers", "pointDashboardViewAtVersion", "lanesForVersion"]) {
+      expect(source).not.toContain(dead);
     }
   });
+});
 
-  it("does not publish latest when the body does not fit the shared cache", async () => {
-    const { remote, runtime } = sharedRuntime();
-    const writer = createTieredDashboardViewStore(runtime, 32);
-    await rememberDashboardView({
-      sleeperUserId: "user-a",
-      view,
-      version: V1,
-      live: true,
-      body: { blob: "y".repeat(2_000) },
-      ttlSeconds: 150,
-      nowMs: 1_000,
-      store: writer,
-    });
-    expect([...remote.keys()]).toEqual([]);
-    const local = await recallDashboardView({
-      sleeperUserId: "user-a",
-      view,
-      requestedVersion: null,
-      nowMs: 1_000,
-      store: writer,
-    });
-    expect(local?.body).toEqual({ blob: "y".repeat(2_000) });
+describe("keys and version hints", () => {
+  it("scopes keys to user + view (no version, no lanes)", () => {
+    const key = dashboardViewCacheKey("user-a", "players");
+    expect(key).toContain("user-a");
+    expect(key).toContain("players");
+    expect(key).not.toBe(dashboardViewCacheKey("user-b", "players"));
+    expect(key).not.toBe(dashboardViewCacheKey("user-a", "trade"));
+  });
+
+  it("normalizes requested versions", () => {
+    expect(normalizeRequestedSnapshotVersion(null)).toBeNull();
+    expect(normalizeRequestedSnapshotVersion("  ")).toBeNull();
+    expect(normalizeRequestedSnapshotVersion(" a ".repeat(30))).toBeNull(); // oversized
+    expect(normalizeRequestedSnapshotVersion(` ${V1} `)).toBe(V1);
   });
 });
 
-describe("runtime cache packing", () => {
-  it("round-trips a body that does not fit the plain item", () => {
-    const entry = {
-      version: V1,
-      live: false,
-      expiresAtMs: 5_000,
-      body: { rankings: "x".repeat(400) },
-    };
-    const packed = encodeForRuntime(entry, 200);
-    expect(packed).not.toBe(entry);
-    expect(packed).toMatchObject({ version: V1, bodyGz: expect.stringContaining("gz1:") });
-    expect(decodeStoredEntry(packed, 4_000)?.body).toEqual(entry.body);
-    expect(decodeStoredEntry(packed, 5_000)).toBeNull();
+describe("TTL arithmetic (absolute deadlines, never extended)", () => {
+  it("caps at the view TTL and the row's own freshness", () => {
+    expect(dashboardResponseTtlSeconds(false)).toBe(600);
+    expect(dashboardResponseTtlSeconds(true)).toBe(150);
+    expect(remainingDashboardTtlSeconds({ fetchedAtMs: 0, nowMs: 0, live: false })).toBe(600);
+    // Half the window elapsed: only the remainder is cacheable.
+    expect(remainingDashboardTtlSeconds({ fetchedAtMs: 0, nowMs: 300_000, live: false })).toBe(300);
+    expect(remainingDashboardTtlSeconds({ fetchedAtMs: 0, nowMs: 600_000, live: false })).toBe(0);
+    // Live snapshot uses the live window even mid-TTL.
+    expect(remainingDashboardTtlSeconds({ fetchedAtMs: 0, nowMs: 300_000, live: true })).toBe(0);
   });
 
-  it("returns null when even the gzip form exceeds the cap", () => {
-    const entry = {
-      version: V1,
-      live: true,
-      expiresAtMs: 5_000,
-      body: { blob: "y".repeat(2_000) },
+  it("stamps fetchedAt by outcome without restarting freshness", () => {
+    expect(responseCacheFetchedAtMs("built", 1_000)).toBe(1_000);
+    expect(responseCacheFetchedAtMs("fresh", 1_000, 500)).toBe(500);
+    expect(responseCacheFetchedAtMs("fallback", 1_000)).toBe(0);
+  });
+});
+
+describe("L1 store", () => {
+  const entry = (over: Record<string, unknown> = {}) => ({
+    version: V1,
+    live: false,
+    expiresAtMs: 10_000,
+    body: { dashboard: "x" },
+    ...over,
+  });
+
+  it("serves entries until their absolute expiry, then never again", async () => {
+    let now = 0;
+    const store = createL1DashboardViewStore({ now: () => now });
+    await store.set("k", entry(), 10); // 10s TTL
+    expect(await store.get("k")).toMatchObject({ version: V1 });
+    now = 9_999;
+    expect(await store.get("k")).not.toBeNull();
+    now = 10_000;
+    expect(await store.get("k")).toBeNull(); // expired entries are not served
+    now = 20_000;
+    expect(await store.get("k")).toBeNull();
+  });
+
+  it("evicts least-recently-used entries past the byte cap", async () => {
+    const store = createL1DashboardViewStore({ maxBytes: 1_000 });
+    const body = { s: "x".repeat(80) }; // ~340 B/entry incl. overhead
+    await store.set("a", entry({ body }), 600);
+    await store.set("b", entry({ body }), 600);
+    await store.set("c", entry({ body }), 600); // pushes past the cap → evicts a
+    expect(await store.get("a")).toBeNull();
+    expect(await store.get("c")).not.toBeNull();
+  });
+
+  it("refreshes recency on hit so hot entries survive eviction", async () => {
+    const store = createL1DashboardViewStore({ maxBytes: 800 });
+    const body = { s: "x".repeat(70) };
+    await store.set("a", entry({ body }), 600);
+    await store.set("b", entry({ body }), 600);
+    await store.get("a"); // a is now hottest
+    await store.set("c", entry({ body }), 600); // evicts b, not a
+    expect(await store.get("a")).not.toBeNull();
+    expect(await store.get("b")).toBeNull();
+  });
+
+  it("rejects bodies that alone exceed the cap", async () => {
+    const store = createL1DashboardViewStore({ maxBytes: 64 });
+    expect(await store.set("big", entry({ body: { s: "x".repeat(1_000) } }), 600)).toBe(false);
+    expect(await store.get("big")).toBeNull();
+  });
+
+  it("passes through entirely when bypassed (DASHBOARD_L1_BYPASS)", async () => {
+    const store = createL1DashboardViewStore({ bypass: true });
+    expect(await store.set("k", entry(), 600)).toBe(false);
+    expect(await store.get("k")).toBeNull();
+  });
+
+  it("never extends a stored expiry on overwrite (a new entry stamps its own deadline)", async () => {
+    let now = 0;
+    const store = createL1DashboardViewStore({ now: () => now });
+    await store.set("k", entry({ version: V1 }), 10);
+    now = 9_999; // near expiry
+    await store.set("k", entry({ version: V2 }), 10);
+    now = 10_001; // old deadline gone; the new entry stamps its own expiry
+    expect(await store.get("k")).toMatchObject({ version: V2, expiresAtMs: 9_999 + 10_000 });
+    now = 20_000;
+    expect(await store.get("k")).toBeNull();
+  });
+});
+
+describe("headers", () => {
+  it("always keeps shared-CDN no-store and private scope", () => {
+    for (const h of [
+      dashboardDeniedHeaders(),
+      dashboardViewResponseHeaders({ cache: "HIT", cacheable: true, version: V1, live: false }),
+      dashboardViewResponseHeaders({ cache: "MISS", cacheable: false, version: null, live: false }),
+    ]) {
+      expect(h["CDN-Cache-Control"]).toBe("no-store");
+      expect(h["Vercel-CDN-Cache-Control"]).toBe("no-store");
+      expect(h["Cache-Control"]).toContain("private");
+    }
+    const hit = dashboardViewResponseHeaders({ cache: "HIT", cacheable: true, version: V1, live: false });
+    expect(hit["Cache-Control"]).toBe("private, max-age=0, must-revalidate");
+    expect(hit["X-Dashboard-Snapshot"]).toBe(V1);
+  });
+});
+
+describe("loadCachedDashboardView", () => {
+  const value = (version: string, ttlSeconds = 600) => ({
+    kind: "value" as const,
+    body: { section: "players", data: 1 },
+    version,
+    live: false,
+    ttlSeconds,
+  });
+
+  it("401s signed-out callers before touching cache or origin", async () => {
+    const store = createL1DashboardViewStore();
+    const loadOrigin = vi.fn();
+    const loaded = await loadCachedDashboardView({
+      sleeperUserId: null,
+      view: "players",
+      requestedVersion: null,
+      store,
+      loadOrigin,
+    });
+    expect(loaded).toMatchObject({ ok: false, status: 401 });
+    expect(loadOrigin).not.toHaveBeenCalled();
+    expect(await store.get(dashboardViewCacheKey("x", "players"))).toBeNull();
+  });
+
+  it("misses cold, loads origin once, then hits L1", async () => {
+    const store = createL1DashboardViewStore();
+    const loadOrigin = vi.fn(async () => value(V1));
+    const args = {
+      sleeperUserId: "u1",
+      view: "players" as const,
+      requestedVersion: null,
+      store,
+      loadOrigin,
     };
-    expect(encodeForRuntime(entry, 32)).toBeNull();
+    const first = await loadCachedDashboardView(args);
+    expect(first).toMatchObject({ ok: true, cache: "MISS", version: V1 });
+    const second = await loadCachedDashboardView(args);
+    expect(second).toMatchObject({ ok: true, cache: "HIT", version: V1 });
+    expect(loadOrigin).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs one origin load for concurrent requests on the same scope", async () => {
+    const store = createL1DashboardViewStore();
+    let resolve!: (v: ReturnType<typeof value>) => void;
+    const loadOrigin = vi.fn(() => new Promise<ReturnType<typeof value>>((r) => { resolve = r; }));
+    const args = {
+      sleeperUserId: "u1",
+      view: "players" as const,
+      requestedVersion: null,
+      store,
+      loadOrigin,
+    };
+    const p1 = loadCachedDashboardView(args);
+    const p2 = loadCachedDashboardView(args);
+    const p3 = loadCachedDashboardView(args);
+    // loadOrigin runs on the microtask after the L1 miss path.
+    await new Promise((r) => setTimeout(r, 0));
+    resolve(value(V1));
+    const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
+    expect(loadOrigin).toHaveBeenCalledTimes(1);
+    for (const r of [r1, r2, r3]) expect(r).toMatchObject({ ok: true, version: V1 });
+  });
+
+  it("does not let a forced load join a plain one in flight", async () => {
+    const store = createL1DashboardViewStore();
+    let resolvePlain!: (v: ReturnType<typeof value>) => void;
+    const plainOrigin = vi.fn(() => new Promise<ReturnType<typeof value>>((r) => { resolvePlain = r; }));
+    const forcedOrigin = vi.fn(async () => value(V2));
+    const base = { sleeperUserId: "u1", view: "full" as const, requestedVersion: null, store };
+    const plain = loadCachedDashboardView({ ...base, loadOrigin: plainOrigin });
+    const forced = loadCachedDashboardView({ ...base, force: true, loadOrigin: forcedOrigin });
+    await new Promise((r) => setTimeout(r, 0));
+    resolvePlain(value(V1));
+    expect(await plain).toMatchObject({ ok: true, version: V1 });
+    expect(await forced).toMatchObject({ ok: true, version: V2 });
+    expect(forcedOrigin).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not share single-flight across users or views", async () => {
+    const store = createL1DashboardViewStore();
+    const loadOrigin = vi.fn(async () => value(V1));
+    const base = { requestedVersion: null, store, loadOrigin };
+    await Promise.all([
+      loadCachedDashboardView({ ...base, sleeperUserId: "u1", view: "players" }),
+      loadCachedDashboardView({ ...base, sleeperUserId: "u2", view: "players" }),
+      loadCachedDashboardView({ ...base, sleeperUserId: "u1", view: "team" }),
+    ]);
+    expect(loadOrigin).toHaveBeenCalledTimes(3);
+  });
+
+  it("isolates entries between users", async () => {
+    const store = createL1DashboardViewStore();
+    const loadOrigin = vi.fn(async () => value(V1));
+    await loadCachedDashboardView({
+      sleeperUserId: "u1",
+      view: "players",
+      requestedVersion: null,
+      store,
+      loadOrigin,
+    });
+    const other = await loadCachedDashboardView({
+      sleeperUserId: "u2",
+      view: "players",
+      requestedVersion: null,
+      store,
+      loadOrigin,
+    });
+    expect(other).toMatchObject({ cache: "MISS" });
+  });
+
+  it("rejects on the origin error path and clears the flight slot (failed promises are removed)", async () => {
+    const store = createL1DashboardViewStore();
+    const loadOrigin = vi.fn()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce(value(V1));
+    const args = {
+      sleeperUserId: "u1",
+      view: "players" as const,
+      requestedVersion: null,
+      store,
+      loadOrigin,
+    };
+    await expect(loadCachedDashboardView(args)).rejects.toThrow("boom");
+    // The rejection was not cached in the flight map or L1: retry loads again.
+    const retry = await loadCachedDashboardView(args);
+    expect(retry).toMatchObject({ ok: true, version: V1 });
+    expect(loadOrigin).toHaveBeenCalledTimes(2);
+  });
+
+  it("a stored entry near expiry keeps its deadline; a new version stores a fresh entry", async () => {
+    const store = createL1DashboardViewStore();
+    const loadOrigin = vi.fn()
+      .mockResolvedValueOnce({ ...value(V1), ttlSeconds: 1 }) // 1s TTL
+      .mockResolvedValueOnce(value(V2, 600));
+    const args = {
+      sleeperUserId: "u1",
+      view: "players" as const,
+      requestedVersion: null,
+      store,
+      loadOrigin,
+    };
+    await loadCachedDashboardView(args);
+    await new Promise((r) => setTimeout(r, 1_100));
+    // Expired entry is not served; the next load re-fetches origin.
+    const next = await loadCachedDashboardView(args);
+    expect(next).toMatchObject({ cache: "MISS", version: V2 });
+    expect(loadOrigin).toHaveBeenCalledTimes(2);
+  });
+
+  it("misses when the requested version differs from the stored one", async () => {
+    const store = createL1DashboardViewStore();
+    const loadOrigin = vi.fn()
+      .mockResolvedValueOnce(value(V1))
+      .mockResolvedValueOnce(value(V2));
+    const args = { sleeperUserId: "u1", view: "players" as const, store, loadOrigin };
+    await loadCachedDashboardView({ ...args, requestedVersion: null });
+    const loaded = await loadCachedDashboardView({ ...args, requestedVersion: V2 });
+    expect(loaded).toMatchObject({ cache: "MISS", version: V2 });
+    expect(loadOrigin).toHaveBeenCalledTimes(2);
+  });
+
+  it("never emits personalized Runtime Cache traffic (store ops are L1-only)", async () => {
+    const ops: string[] = [];
+    const inner = createL1DashboardViewStore();
+    const store: DashboardViewStore = {
+      get: async (k) => { ops.push(`get:${k}`); return inner.get(k); },
+      set: async (k, v, ttl) => { ops.push(`set:${k}`); return inner.set(k, v, ttl); },
+    };
+    await loadCachedDashboardView({
+      sleeperUserId: "u1",
+      view: "players",
+      requestedVersion: null,
+      store,
+      loadOrigin: async () => value(V1),
+    });
+    await loadCachedDashboardView({
+      sleeperUserId: "u1",
+      view: "players",
+      requestedVersion: null,
+      store,
+      loadOrigin: async () => value(V1),
+    });
+    // One versioned-latest key per user+view; no lane probes, no pointer ops,
+    // no version-suffixed body keys.
+    for (const op of ops) {
+      expect(op).not.toContain("lane");
+      expect(op).not.toContain("pointer");
+      expect(op).not.toContain("latest");
+    }
+    expect(ops.filter((o) => o.startsWith("get:"))).toHaveLength(2);
+    expect(ops.filter((o) => o.startsWith("set:"))).toHaveLength(1);
   });
 });

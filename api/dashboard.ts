@@ -158,6 +158,9 @@ async function handleSection(
     sleeperUserId: viewer.sleeperUserId,
     view: section,
     requestedVersion: url.searchParams.get("v"),
+    // A Retry must reach its own origin load (which restarts the build), not
+    // join a plain poll's or be answered from L1.
+    force: retryBuild,
     loadOrigin: async () => {
       const resolved = await sectionDashboardForViewer({
         sleeperUserId: viewer.sleeperUserId,
