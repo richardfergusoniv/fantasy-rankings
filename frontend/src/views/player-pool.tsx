@@ -902,8 +902,8 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
       ? [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season long" }, { value: "dynasty", label: "Dynasty" }]
       : [{ value: "week", label: `Week ${dashboard.week}` }, { value: "ros", label: "Season long" }]
     : league.seasonLongFormat.isDynasty
-      ? [{ value: "week", label: "This Week" }, { value: "ros", label: "Season long" }, { value: "dynasty", label: "Dynasty" }]
-      : [{ value: "week", label: "This Week" }, { value: "ros", label: "Season long" }];
+      ? [{ value: "week", label: "This week" }, { value: "ros", label: "Season long" }, { value: "dynasty", label: "Dynasty" }]
+      : [{ value: "week", label: "This week" }, { value: "ros", label: "Season long" }];
   const prefetchPlayerPanels = (player: PlayerSearchResult) => {
     const position = isBoomBustPosition(player.position) ? player.position : null;
     if (position !== null) {

@@ -90,7 +90,7 @@ export function PowerRankings({
     : totalAverage;
   const scopeToggle = (
     <SegmentedControl
-      className="lineup-mode-toggle power-scope-toggle page-tab-control"
+      className="lineup-mode-toggle power-scope-toggle page-tab-control compact-control"
       value={scope === "week" ? "week" : activeMode === "dynasty" ? "dynasty" : "ros"}
       onChange={(value) => {
         if (value === "week") {
@@ -105,8 +105,8 @@ export function PowerRankings({
       }}
       label="Power ranking horizon"
       options={isDynastyLeague
-        ? [{ value: "week", label: "This Week" }, { value: "ros", label: "Season long" }, { value: "dynasty", label: "Dynasty" }]
-        : [{ value: "week", label: "This Week" }, { value: "ros", label: "Season long" }]}
+        ? [{ value: "week", label: "This week" }, { value: "ros", label: "Season long" }, { value: "dynasty", label: "Dynasty" }]
+        : [{ value: "week", label: "This week" }, { value: "ros", label: "Season long" }]}
     />
   );
 

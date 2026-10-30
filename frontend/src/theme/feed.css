@@ -116,7 +116,8 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   /* First column sizes to the week text plus the Ask/theme/refresh controls so
      the league picker can never overlap them at any width or zoom level. */
   .league-sticky { display: grid; grid-template-columns: max-content minmax(0, 680px); column-gap: 24px; align-items: center; padding: 10px 32px 8px; }
-  .ticker-strip { grid-column: 1 / -1; margin: -10px -32px 4px; }
+  /* Contain the inline size so the scrolling track doesn't stretch the max-content first column (and the page) to its full length. */
+  .ticker-strip { grid-column: 1 / -1; margin: -10px -32px 4px; contain: inline-size; }
   .week-line { min-height: 44px; padding-right: 18px; }
   .data-notes { grid-column: 1 / -1; }
   .league-picker { max-width: 680px; }
@@ -130,7 +131,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .explorer-subview-tabs { width: min(720px, 100%); }
   .league-subview-tabs { width: min(640px, 100%); }
   main { padding: 10px 32px 30px; }
-  .matchup-score, .lineup-section, .bench-section { max-width: 860px; }
+  .matchup-score, .lineup-section, .bench-section, .lineup-mode-toggle { max-width: 860px; }
   .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }
   .rankings-view, .trade-view, .advanced-stats-view, .analytics-view, .weekly-projections-view, .comparison-view, .power-view, .monitor-section { max-width: 920px; }
   .chart-preset-only { max-width: 620px; }
@@ -149,5 +150,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .trade-grade-grid > div:nth-child(-n+2) { border-bottom: 0; }
   .trade-grade-grid > div { border-right: 1px solid var(--hairline); }
   .trade-grade-grid > div:last-child { border-right: 0; }
-  .power-position-values { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+  /* Flex rather than auto-fit grid so a short last row stretches instead of leaving an empty hairline-colored cell. */
+  .power-position-values { display: flex; flex-wrap: wrap; }
+  .power-position-values > div { flex: 1 1 120px; }
 }

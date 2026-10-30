@@ -71,7 +71,7 @@
 .trending-drop { color: var(--negative); }
 
 @media (min-width: 760px) {
-  .draft-center { max-width: 860px; margin-inline: auto; }
+  .draft-center { max-width: 860px; }
   .draft-controls { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr) auto; }
   .draft-controls > label { grid-column: auto; }
   .draft-row { grid-template-columns: minmax(0, 1fr) 48px 80px 96px; }
