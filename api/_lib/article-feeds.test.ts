@@ -6,12 +6,14 @@ import {
   buildArticleNewsDrafts,
   canonicalArticleUrl,
   detectArticleTeam,
+  decodeXmlEntities,
   detectPffPremiumFromHtml,
   filterArticleHeadline,
   matchArticlePlayers,
   normalizeHeadlineKey,
   parseFeedXml,
   passesHeadlineNoiseFilter,
+  stripHtml,
   truncateSummary,
   type ArticleFeedSource,
 } from "./article-feeds.js";
@@ -427,6 +429,18 @@ describe("PFF premium detection", () => {
       {"@type":"NewsArticle","isAccessibleForFree":"True","headline":"Free grades"}
     </script><article>body</article></html>`;
     expect(detectPffPremiumFromHtml(html)).toBe(false);
+  });
+});
+
+describe("stripHtml / decodeXmlEntities", () => {
+  it("strips script blocks even when the closing tag has whitespace", () => {
+    expect(stripHtml("safe<script>alert(1)</script >text")).toBe("safe text");
+  });
+
+  it("decodes entities in a single pass without double-unescaping", () => {
+    expect(decodeXmlEntities("A &amp; B &lt;C&gt;")).toBe("A & B <C>");
+    // &amp;#38; stays a single-pass decode of &amp; only (no second numeric pass)
+    expect(decodeXmlEntities("&amp;#38;")).toBe("&#38;");
   });
 });
 

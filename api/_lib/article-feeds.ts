@@ -281,30 +281,54 @@ export function parseArticleFeedsCache(raw: string | null | undefined): ArticleF
 // Text helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Decode a single XML/HTML entity reference. One pass only — avoids the
+ * CodeQL double-unescape pattern of replacing `&amp;` then numeric entities.
+ */
+function decodeOneXmlEntity(entity: string): string {
+  const lower = entity.toLowerCase();
+  switch (lower) {
+    case "&nbsp;":
+      return " ";
+    case "&amp;":
+      return "&";
+    case "&lt;":
+      return "<";
+    case "&gt;":
+      return ">";
+    case "&quot;":
+      return "\"";
+    case "&apos;":
+      return "'";
+    default: {
+      if (/^&#x[0-9a-f]+;$/i.test(entity)) {
+        const code = Number.parseInt(entity.slice(3, -1), 16);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : "";
+      }
+      if (/^&#\d+;$/.test(entity)) {
+        const code = Number(entity.slice(2, -1));
+        return Number.isFinite(code) ? String.fromCodePoint(code) : "";
+      }
+      return entity;
+    }
+  }
+}
+
 export function decodeXmlEntities(value: string): string {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1")
-    .replace(/&nbsp;|&#160;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&quot;/gi, "\"")
-    .replace(/&#(\d+);/g, (_, n: string) => {
-      const code = Number(n);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : "";
-    })
-    .replace(/&#x([0-9a-f]+);/gi, (_, n: string) => {
-      const code = Number.parseInt(n, 16);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : "";
-    });
+    .replace(/&(#x[0-9a-f]+|#\d+|nbsp|amp|lt|gt|quot|apos);/gi, decodeOneXmlEntity);
 }
 
 export function stripHtml(value: string): string {
-  return decodeXmlEntities(value)
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
+  // Remove script/style before entity decoding so encoded tags stay inert.
+  // Allow whitespace before `>` in closing tags (`</script >`) for CodeQL.
+  return decodeXmlEntities(
+    value
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, " ")
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, " ")
+      .replace(/<[^>]+>/g, " "),
+  )
     .replace(/\s+/g, " ")
     .trim();
 }
