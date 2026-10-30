@@ -1,5 +1,5 @@
 /* Badges. Three jobs, three looks:
-   - link badges open something: amber outline pill, chevron inside, 44px tap area;
+   - link badges open something: amber outline pill (24px tall), chevron inside, 44px tap area;
    - status badges say what state something is in: filled, never tappable, an icon on warnings;
    - descriptor tags describe a player or slot: hairline outline, no chevron.
    Link badges keep the older `matchup-reference-*` class names. */
@@ -19,10 +19,10 @@
 }
 .matchup-reference-button .matchup-reference-button-label {
   display: inline-flex;
-  min-height: 28px;
+  min-height: 24px;
   align-items: center;
-  gap: 4px;
-  padding: 0 24px 0 10px;
+  gap: 3px;
+  padding: 0 19px 0 8px;
   border: 1px solid var(--link);
   border-radius: var(--radius-pill);
   background: transparent;
@@ -35,9 +35,9 @@
 .matchup-reference-button .matchup-reference-arrow {
   position: absolute;
   top: 50%;
-  right: 10px;
+  right: 8px;
   color: inherit;
-  font-size: var(--type-body);
+  font-size: var(--type-control);
   font-weight: 700;
   pointer-events: none;
   transform: translateY(-50%);
