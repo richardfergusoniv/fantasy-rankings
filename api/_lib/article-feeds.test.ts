@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ARTICLE_FEED_SOURCES,
+  articleExternalId,
   assignArticleScope,
   buildArticleNewsDrafts,
   canonicalArticleUrl,
@@ -261,17 +262,43 @@ describe("buildArticleNewsDrafts", () => {
       playerMeta: () => ({ player: "Justin Jefferson", team: "MIN" }),
     });
     expect(drafts).toHaveLength(1);
+    const expectedExternalId = articleExternalId(
+      "https://www.fantasypros.com/nfl/news/jefferson",
+    );
     expect(drafts[0]).toMatchObject({
       source: "article",
       sourceLabel: "FantasyPros",
       change: "Justin Jefferson returns",
       roleContext: "Jefferson was a full participant.",
       sourceUrl: "https://www.fantasypros.com/nfl/news/jefferson",
-      externalId: "guid-1",
+      externalId: expectedExternalId,
       playerId: "4046",
       scope: "player",
       author: null,
     });
+    // external_id must be non-null so team/league partial uniques apply.
+    expect(drafts[0]!.externalId).toBeTruthy();
+  });
+
+  it("uses a canonical-URL hash as external_id (ignores feed guid)", () => {
+    const a = buildArticleNewsDrafts({
+      source,
+      item: { ...item, guid: "guid-a", url: "https://www.fantasypros.com/nfl/news/jefferson?utm_source=x" },
+      headline: item.title,
+      summary: item.summary,
+      assignment: { scope: "league" },
+      playerMeta: () => null,
+    });
+    const b = buildArticleNewsDrafts({
+      source,
+      item: { ...item, guid: "guid-b", url: "https://www.fantasypros.com/nfl/news/jefferson" },
+      headline: item.title,
+      summary: item.summary,
+      assignment: { scope: "league" },
+      playerMeta: () => null,
+    });
+    expect(a[0]!.externalId).toBe(b[0]!.externalId);
+    expect(a[0]!.externalId).toBe(articleExternalId("https://www.fantasypros.com/nfl/news/jefferson"));
   });
 });
 

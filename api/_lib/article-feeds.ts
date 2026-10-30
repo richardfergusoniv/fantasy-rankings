@@ -340,6 +340,15 @@ export function canonicalArticleUrl(rawUrl: string): string | null {
   }
 }
 
+/**
+ * Stable non-null external_id for article rows. Team/league unique indexes from
+ * 0016 are partial on `external_id IS NOT NULL` (no source_url uniques), so every
+ * article row must set this — hash of the canonical URL, not a flaky feed guid.
+ */
+export function articleExternalId(canonicalUrl: string): string {
+  return stableNewsId(["article-url", canonicalUrl]);
+}
+
 export function normalizeHeadlineKey(headline: string): string {
   return headline
     .toLowerCase()
@@ -347,9 +356,6 @@ export function normalizeHeadlineKey(headline: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
-
-// Re-export mention normalizer for tests that import from this module.
-export { normalizeTextForMentions };
 
 // ---------------------------------------------------------------------------
 // Headline filter
@@ -754,8 +760,10 @@ export function buildArticleNewsDrafts(input: {
 }): SharedNewsDraft[] {
   const { source, item, headline, summary, assignment, playerMeta } = input;
   const publishedAt = item.publishedAt;
-  const externalId = item.guid.trim() || item.url;
   const sourceUrl = canonicalArticleUrl(item.url) ?? item.url;
+  // Always set external_id so team/league partial uniques (0016) and the
+  // player (source, external_id, player_id) unique can dedupe on conflict.
+  const externalId = articleExternalId(sourceUrl);
   const base = {
     change: headline,
     newsType: "headline" as const,

@@ -28,6 +28,7 @@ import type {
 import { EdgeStrip } from "./components/edge-strip";
 import { RefreshIcon, SectionError } from "./section-error";
 import { dashboardFreshness } from "./dashboard-freshness";
+import { newsAbsoluteTimeLabel, newsItemTimeLabel, newsRelativeTimeLabel } from "./news-time";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { gameLineSummary, type TeamGameLineLike } from "./game-line-summary";
@@ -340,15 +341,8 @@ export function DesignationBadge({
   );
 }
 
-export function newsTimeLabel(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
+export const newsTimeLabel = newsAbsoluteTimeLabel;
+export { newsItemTimeLabel, newsRelativeTimeLabel };
 
 export function groupNewsItemsByPlayer(news: PlayerNews | undefined): Map<string, PlayerNewsItem[]> {
   const itemsByPlayer = new Map<string, PlayerNewsItem[]>();
@@ -778,7 +772,7 @@ export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose
             ) : (
               <span className="text-xs font-semibold text-muted-foreground">{item.sourceLabel}</span>
             )}
-            <time className="text-xs text-muted-foreground">{item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent"}</time>
+            <time className="text-xs text-muted-foreground">{newsItemTimeLabel(item)}</time>
           </div>
         </DialogHeader>
         <DialogTitle id="ticker-news-headline" className="news-card-headline">{item.change}</DialogTitle>

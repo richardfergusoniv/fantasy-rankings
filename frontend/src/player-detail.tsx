@@ -24,7 +24,7 @@ import {
   formatProjectionPoints,
   isBoomBustPosition,
   movementLabel,
-  newsTimeLabel,
+  newsItemTimeLabel,
   pfnNumber,
   pfnRankForRow,
   projectionComponentsForPlayer,
@@ -782,7 +782,7 @@ export function PlayerDetailSheet({
                 const outletLabel = item.author && !isArticle
                   ? `${item.sourceLabel} · ${item.author}`
                   : item.sourceLabel;
-                const timeLabel = item.sourcePublishedAt ? newsTimeLabel(item.sourcePublishedAt) : "Recent";
+                const timeLabel = newsItemTimeLabel(item);
                 const header = (
                   <div>
                     {!isArticle ? (
