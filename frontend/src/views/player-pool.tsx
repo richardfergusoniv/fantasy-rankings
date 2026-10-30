@@ -147,7 +147,7 @@ function DepthGridStatus({ status }: { status: string }) {
 }
 
 export type TeamMatchupInfo =
-  | { kind: "game"; week: number; opponent: string; isAway: boolean | null; tone: "soft" | "tough" | null; onOpen: () => void }
+  | { kind: "game"; week: number; opponent: string; isAway: boolean | null; tone: "soft" | "tough" | null; href: string; onOpen: () => void }
   | { kind: "bye"; week: number };
 
 export function TeamDataModal({
@@ -323,7 +323,7 @@ export function TeamDataModal({
             {overallRank === null ? null : <span className="depth-chart-tag">PFN overall #{overallRank}</span>}
             {matchupInfo?.kind === "game" ? (
               <CrossToolBadge
-                link={{ href: "#", onOpen: matchupInfo.onOpen }}
+                link={{ href: matchupInfo.href, onOpen: matchupInfo.onOpen }}
                 label={`${matchupInfo.tone === "soft" ? "Easy · " : matchupInfo.tone === "tough" ? "Tough · " : ""}Wk ${matchupInfo.week} ${matchupInfo.isAway ? "@" : "vs"} ${matchupInfo.opponent}`}
                 ariaLabel={`Open ${teamName} ${matchupInfo.isAway ? "at" : "versus"} ${matchupInfo.opponent} matchup card`}
                 className={matchupInfo.tone ? `sos-${matchupInfo.tone}` : ""}
@@ -504,6 +504,7 @@ export function ConnectedTeamCard({
   dashboard,
   leagueId,
   onOpenMatchup,
+  matchupHref,
   onClose,
 }: {
   team: string;
@@ -511,6 +512,8 @@ export function ConnectedTeamCard({
   leagueId: string;
   /** Open this team's game for the week. The caller closes this card first. */
   onOpenMatchup?: (matchup: MatchupSelection) => void;
+  /** Shareable URL for that game, so the badge works as a real link. */
+  matchupHref?: (matchup: MatchupSelection) => string;
   onClose: () => void;
 }) {
   const pfnTablesQuery = useQuery({
@@ -533,22 +536,25 @@ export function ConnectedTeamCard({
   const weekRow = dashboard.rankings.find((row) => row.leagueId === leagueId && (canonicalNflTeam(row.team) ?? row.team) === teamCode) ?? null;
   const matchupInfo = useMemo((): TeamMatchupInfo | null => {
     if (!weekRow) return null;
-    if (weekRow.isBye || !weekRow.opponent) return { kind: "bye", week: dashboard.week };
+    if (weekRow.isBye) return { kind: "bye", week: dashboard.week };
+    if (!weekRow.opponent) return null;
     // Easy means the opponent's defense ranks in the bottom third of the PFN table; tough, the top third.
     const defenseRows = tables?.defense?.rows ?? [];
     const opponentCode = canonicalNflTeam(weekRow.opponent) ?? weekRow.opponent;
     const defenseRank = defenseRows.find((row) => (canonicalNflTeam(row.team) ?? row.team) === opponentCode)?.rank ?? null;
     const tone = defenseRank === null || defenseRows.length < 3 ? null : defenseRank > (defenseRows.length * 2) / 3 ? "soft" : defenseRank <= defenseRows.length / 3 ? "tough" : null;
     const opponent = weekRow.opponent;
+    const selection = { team, opponent, isAway: weekRow.isAway, gamePhase: weekRow.gamePhase };
     return {
       kind: "game",
+      href: matchupHref?.(selection) ?? "#",
       week: dashboard.week,
       opponent,
       isAway: weekRow.isAway,
       tone,
-      onOpen: () => onOpenMatchup?.({ team, opponent, isAway: weekRow.isAway, gamePhase: weekRow.gamePhase }),
+      onOpen: () => onOpenMatchup?.(selection),
     };
-  }, [dashboard.week, onOpenMatchup, tables?.defense?.rows, team, weekRow]);
+  }, [dashboard.week, matchupHref, onOpenMatchup, tables?.defense?.rows, team, weekRow]);
   return (
     <TeamDataModal
       selection={{ team }}

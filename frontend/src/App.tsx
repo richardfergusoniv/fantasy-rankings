@@ -1527,7 +1527,7 @@ export function App() {
           }}
         />
       ) : null}
-      {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onOpenMatchup={openMatchupFromTeamCard} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
+      {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onOpenMatchup={openMatchupFromTeamCard} matchupHref={(matchup) => toolLinkSearch(dashboardUrl.state, { matchup })} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
       {rosterCardTeam ? (
         <LeagueTeamCard
           team={rosterCardTeam}
