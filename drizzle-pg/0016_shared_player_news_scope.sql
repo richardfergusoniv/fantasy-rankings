@@ -26,22 +26,16 @@ BEGIN
 END $$;
 --> statement-breakpoint
 -- One team-scoped row per (source, external_id, team).
+-- Dedupe by external_id (X post_id) only — a source_url unique would drop a
+-- distinct post that reused a non-status URL (blog, box score, etc.).
 CREATE UNIQUE INDEX IF NOT EXISTS "shared_player_news_source_external_team_uidx"
   ON "shared_player_news" ("source", "external_id", "team")
   WHERE "scope" = 'team' AND "external_id" IS NOT NULL;
---> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "shared_player_news_source_url_team_uidx"
-  ON "shared_player_news" ("source_url", "team")
-  WHERE "scope" = 'team';
 --> statement-breakpoint
 -- One league-scoped row per (source, external_id).
 CREATE UNIQUE INDEX IF NOT EXISTS "shared_player_news_source_external_league_uidx"
   ON "shared_player_news" ("source", "external_id")
   WHERE "scope" = 'league' AND "external_id" IS NOT NULL;
---> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "shared_player_news_source_url_league_uidx"
-  ON "shared_player_news" ("source_url")
-  WHERE "scope" = 'league';
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "shared_player_news_scope_idx"
   ON "shared_player_news" ("scope");
