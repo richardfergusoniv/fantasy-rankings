@@ -86,7 +86,7 @@ export function MatchupPlayer({
           ) : null}
         </span>
       </button>
-      <div className={`matchup-meta${isSwappedIn || isDemoted ? " has-substitution" : ""}`}>
+      <div className="matchup-meta">
         <MatchupTag
           team={player.team}
           opponent={player.opponent}
@@ -96,11 +96,6 @@ export function MatchupPlayer({
           entry={sosEntry}
           onClick={player.team && player.opponent && onOpenMatchup ? () => onOpenMatchup({ team: player.team ?? "", opponent: player.opponent ?? "", isAway: player.isAway, gamePhase: player.gamePhase }) : undefined}
         />
-        {isSwappedIn || isDemoted ? (
-          <span className={`matchup-substitution-tag ${isSwappedIn ? "in" : "out"}`} aria-hidden="true">
-            {isSwappedIn ? "IN" : "OUT"}
-          </span>
-        ) : null}
       </div>
       <button type="button" className={matchupProjectionClassName({ scoreLabel: score.label })} onClick={openPlayer} tabIndex={-1} aria-hidden="true">
         <b>{formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)}</b>
