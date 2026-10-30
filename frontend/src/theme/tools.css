@@ -5,12 +5,6 @@
   inset: -14px -4px;
   content: "";
 }
-.monitor-empty {
-  margin: 0;
-  color: var(--dim);
-  font-size: var(--type-body);
-  font-weight: 600;
-}
 .monitor-builder-chart {
   display: flex;
   flex-direction: column;

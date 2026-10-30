@@ -9,6 +9,7 @@ import { formatWhole } from "./lib/format-number";
 import { displayedMatchupPoints } from "../../api/_lib/lineup-optimizer";
 import { teamOutlook, winPercent, winProbability } from "./views/win-probability";
 import { CloseGlyph } from "./components/glyphs";
+import { EmptyState } from "./components/state-blocks";
 
 type RosterPlayer = League["tradeTeams"][number]["players"][number];
 type SeasonRow = Dashboard["seasonLongRankings"][number];
@@ -256,7 +257,7 @@ export function LeagueTeamCard({
           <div className="power-team-card-roster" role="region" aria-label={`${team.teamName} roster`}>
             {rows.length > 0 ? (
               <>{rows.map((row) => renderPlayer(row))}</>
-            ) : <div className="power-roster-empty">No roster values for this format.</div>}
+            ) : <EmptyState title="No roster values for this format" />}
           </div>
         </section>
       </div>

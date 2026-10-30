@@ -273,32 +273,6 @@
 .matchup-battle > div { min-height: 23px; }
 .matchup-battle > div > span:first-child { font-size: var(--type-caption); font-weight: 400; }
 .matchup-card-status { min-height: 40px; margin-top: 10px; padding: 9px 0; font-size: var(--type-caption); font-weight: 600; }
-.team-data-card { padding-bottom: 10px; }
-.team-card-overview { display: grid; grid-template-columns: minmax(84px, .65fr) minmax(0, 1.35fr); margin: 12px 0 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); background: var(--surface-2); }
-.team-card-overview > div { display: flex; min-width: 0; min-height: 64px; flex-direction: column; justify-content: center; gap: 2px; padding: 9px 12px; }
-.team-card-overview > div + div { border-left: 1px solid var(--hairline); }
-.team-card-overview span, .team-card-overview small { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.team-card-overview strong { overflow: hidden; color: var(--text); font-size: var(--type-section); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.team-card-tabs { margin: 12px 0 0; }
-.team-card-stat-section { margin-top: 14px; }
-.team-card-stat-section + .team-card-stat-section { margin-top: 18px; }
-.team-card-section-heading { margin: 0 0 6px; font-size: var(--type-body); font-weight: 700; }
-/* Depth chart: positions down the side, the 1st to 3rd on the chart across. */
-.depth-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.depth-grid th,
-.depth-grid td { padding: 10px 8px 10px 0; border-bottom: 1px solid var(--hairline); text-align: left; vertical-align: top; }
-.depth-grid thead th { padding-top: 6px; padding-bottom: 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.depth-grid thead th:first-child { width: 40px; }
-.depth-grid tbody th { padding-top: 12px; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.depth-grid-name { display: block; overflow: hidden; color: var(--text); font-size: var(--type-control); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.depth-grid-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
-.depth-grid-status.is-out { color: var(--negative); }
-.depth-grid-status.is-questionable { color: var(--warning); }
-.team-card-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--hairline); }
-.team-card-metrics > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; padding: 8px 8px 8px 0; border-bottom: 1px solid var(--hairline); }
-.team-card-metrics > div:nth-child(even) { padding-right: 0; padding-left: 12px; border-left: 1px solid var(--hairline); }
-.team-card-metrics span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.team-card-metrics strong { color: var(--text); font-size: var(--type-section); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 @media (min-width: 760px) {
   .matchup-page .matchup-row { grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); }

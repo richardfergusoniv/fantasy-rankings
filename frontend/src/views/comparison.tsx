@@ -411,7 +411,7 @@ function ComparisonPicker({ slot, player, options, onChoose, onClear }: {
               </span>
             </button>
           ))}
-          {matches.length === 0 ? <div className="trade-search-empty">No players match “{query.trim()}”.</div> : null}
+          {matches.length === 0 ? <EmptyState title={`No players match “${query.trim()}”`} /> : null}
         </div>
       ) : null}
     </div>

@@ -39,6 +39,7 @@ import { peerSeasonRates, seasonRateRows } from "./player-season-rates";
 import { PlayerExpectedPoints, PlayerNextGen, PlayerPropsSection } from "./player-insights-sections";
 import { ModalPortal, ProfileChips, SegmentedControl, positionalSosRank, rankAgainst, rankToneClassName, setPlayerSheetDragLock, useDialogFocusTrap, type StrengthOfScheduleEntryLike } from "./shared";
 import { BackGlyph, ChevronGlyph, CloseGlyph, MoveTriangle } from "./components/glyphs";
+import { EmptyState, LoadingBlock } from "./components/state-blocks";
 
 const LazyPlayerValueTrend = lazy(() => import("./player-charts").then((module) => ({ default: module.PlayerValueTrend })));
 
@@ -270,9 +271,9 @@ export function SeasonGameLog({
   const gameLogRows = buildGameLogRows(games);
 
   if (isLoading && !history) return <div className="player-tab-loading"><span className="loading-shimmer" /><span className="loading-shimmer" /><span className="loading-shimmer" /></div>;
-  if (!isBoomBustPosition(player.position)) return <div className="player-tab-empty"><strong>Season log unavailable</strong><span>Weekly stat logs are currently available for QB, RB, WR, and TE.</span></div>;
-  if (history?.status === "unavailable") return <div className="player-tab-empty"><strong>Season log didn’t load</strong><span>Try again after the next Sleeper data refresh.</span></div>;
-  if (games.length === 0) return <div className="player-tab-empty"><strong>No games yet this season</strong><span>Games appear after Sleeper records participation.</span></div>;
+  if (!isBoomBustPosition(player.position)) return <EmptyState title="Season log unavailable" detail="Weekly stat logs are currently available for QB, RB, WR, and TE." />;
+  if (history?.status === "unavailable") return <EmptyState title="Season log didn’t load" detail="Try again after the next Sleeper data refresh." />;
+  if (games.length === 0) return <EmptyState title="No games yet this season" detail="Games appear after Sleeper records participation." />;
 
   return (
     <div className="player-season-panel">
@@ -357,7 +358,7 @@ export function PlayerAdvancedPanel({ player, analytics, isLoading = false, lead
               </div>
             ))}
           </div>
-        ) : isLoading ? <div className="player-tab-empty compact" role="status"><strong>Loading advanced metrics…</strong></div> : <div className="player-tab-empty compact"><strong>No advanced metrics yet</strong></div>}
+        ) : isLoading ? <LoadingBlock label="Loading advanced metrics…" /> : <EmptyState title="No advanced metrics yet" />}
       </section>
       <PlayerExpectedPoints entity={entity} />
       <PlayerNextGen entity={entity} />
