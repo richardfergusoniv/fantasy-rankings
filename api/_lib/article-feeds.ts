@@ -527,13 +527,22 @@ function parseRssItem(block: string): ParsedFeedItem | null {
 
 function parseAtomEntry(block: string): ParsedFeedItem | null {
   const title = tagText(block, "title");
-  let link = tagAttr(block, "link", "href");
+  // Prefer rel="alternate" even when a rel="self"/enclosure link appears first.
+  const alternate = block.match(/<link\b[^>]*\brel\s*=\s*["']alternate["'][^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>/i)
+    ?? block.match(/<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*\brel\s*=\s*["']alternate["'][^>]*>/i);
+  let link = alternate?.[1]?.trim() ?? "";
   if (!link) {
-    // Prefer rel="alternate"
-    const alt = block.match(/<link\b[^>]*\brel\s*=\s*["']alternate["'][^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>/i)
-      ?? block.match(/<link\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*\brel\s*=\s*["']alternate["'][^>]*>/i);
-    link = alt?.[1]?.trim() ?? tagText(block, "link");
+    for (const match of block.matchAll(/<link\b([^>]*)>/gi)) {
+      const attrs = match[1] ?? "";
+      if (/\brel\s*=\s*["'](?:self|enclosure|related|via)["']/i.test(attrs)) continue;
+      const href = attrs.match(/\bhref\s*=\s*["']([^"']+)["']/i);
+      if (href?.[1]) {
+        link = href[1].trim();
+        break;
+      }
+    }
   }
+  if (!link) link = tagText(block, "link");
   const id = tagText(block, "id") || link;
   const published = tagText(block, "published") || tagText(block, "updated");
   const summary = tagText(block, "summary") || tagText(block, "content");
@@ -635,8 +644,49 @@ export function isArticleEligiblePlayer(
 }
 
 /**
+ * Multi-word / nickname needles for team detection. Word-boundary matched on
+ * normalized text so ordinary words like "was" / "no" are not treated as WAS / NO.
+ */
+const ARTICLE_TEAM_NAME_NEEDLES: ReadonlyArray<{ needle: string; code: NflNewsTeamCode }> = [
+  { needle: "arizona cardinals", code: "ARI" }, { needle: "cardinals", code: "ARI" },
+  { needle: "atlanta falcons", code: "ATL" }, { needle: "falcons", code: "ATL" },
+  { needle: "baltimore ravens", code: "BAL" }, { needle: "ravens", code: "BAL" },
+  { needle: "buffalo bills", code: "BUF" }, { needle: "bills", code: "BUF" },
+  { needle: "carolina panthers", code: "CAR" }, { needle: "panthers", code: "CAR" },
+  { needle: "chicago bears", code: "CHI" }, { needle: "bears", code: "CHI" },
+  { needle: "cincinnati bengals", code: "CIN" }, { needle: "bengals", code: "CIN" },
+  { needle: "cleveland browns", code: "CLE" }, { needle: "browns", code: "CLE" },
+  { needle: "dallas cowboys", code: "DAL" }, { needle: "cowboys", code: "DAL" },
+  { needle: "denver broncos", code: "DEN" }, { needle: "broncos", code: "DEN" },
+  { needle: "detroit lions", code: "DET" }, { needle: "lions", code: "DET" },
+  { needle: "green bay packers", code: "GB" }, { needle: "packers", code: "GB" },
+  { needle: "houston texans", code: "HOU" }, { needle: "texans", code: "HOU" },
+  { needle: "indianapolis colts", code: "IND" }, { needle: "colts", code: "IND" },
+  { needle: "jacksonville jaguars", code: "JAX" }, { needle: "jaguars", code: "JAX" },
+  { needle: "kansas city chiefs", code: "KC" }, { needle: "chiefs", code: "KC" },
+  { needle: "las vegas raiders", code: "LV" }, { needle: "raiders", code: "LV" },
+  { needle: "los angeles chargers", code: "LAC" }, { needle: "chargers", code: "LAC" },
+  { needle: "los angeles rams", code: "LAR" }, { needle: "rams", code: "LAR" },
+  { needle: "miami dolphins", code: "MIA" }, { needle: "dolphins", code: "MIA" },
+  { needle: "minnesota vikings", code: "MIN" }, { needle: "vikings", code: "MIN" },
+  { needle: "new england patriots", code: "NE" }, { needle: "patriots", code: "NE" },
+  { needle: "new orleans saints", code: "NO" }, { needle: "saints", code: "NO" },
+  { needle: "new york giants", code: "NYG" }, { needle: "giants", code: "NYG" },
+  { needle: "new york jets", code: "NYJ" }, { needle: "jets", code: "NYJ" },
+  { needle: "philadelphia eagles", code: "PHI" }, { needle: "eagles", code: "PHI" },
+  { needle: "pittsburgh steelers", code: "PIT" }, { needle: "steelers", code: "PIT" },
+  { needle: "san francisco 49ers", code: "SF" }, { needle: "49ers", code: "SF" },
+  { needle: "seattle seahawks", code: "SEA" }, { needle: "seahawks", code: "SEA" },
+  { needle: "tampa bay buccaneers", code: "TB" }, { needle: "buccaneers", code: "TB" },
+  { needle: "tennessee titans", code: "TEN" }, { needle: "titans", code: "TEN" },
+  { needle: "washington commanders", code: "WAS" }, { needle: "commanders", code: "WAS" },
+];
+
+/**
  * Detect a single NFL team from article text / URL / feed hint.
  * Returns null when zero or multiple teams are mentioned (ambiguous).
+ * Bare abbreviations like WAS/NO are only accepted when written in ALL CAPS
+ * so ordinary words ("was", "no") do not steal the match.
  */
 export function detectArticleTeam(
   text: string,
@@ -647,15 +697,28 @@ export function detectArticleTeam(
   }
   const haystack = `${text} ${options?.url ?? ""}`;
   const codes = new Set<string>();
-  for (const code of sportsTeamCodes(haystack)) {
-    const normalized = normalizeNewsTeam(code);
-    if (isValidNflNewsTeam(normalized)) codes.add(normalized);
+
+  // Longest nickname / full-name needles first.
+  const normalized = ` ${normalizeTextForMentions(haystack)} `;
+  const needles = [...ARTICLE_TEAM_NAME_NEEDLES].sort((a, b) => b.needle.length - a.needle.length);
+  for (const { needle, code } of needles) {
+    if (normalized.includes(` ${needle} `)) codes.add(code);
   }
-  // Also match bare team codes as whole tokens.
-  const normalizedText = ` ${normalizeTextForMentions(haystack)} `;
+
+  // Bare team codes only as uppercase tokens in the original text (not "was"/"no").
   for (const code of NFL_NEWS_TEAM_CODES) {
-    if (normalizedText.includes(` ${code.toLowerCase()} `)) codes.add(code);
+    const re = new RegExp(`(?:^|[^A-Za-z0-9])${code}(?:[^A-Za-z0-9]|$)`);
+    if (re.test(haystack)) codes.add(code);
   }
+
+  // URL path team hints via sportsTeamCodes (short exact codes / names only).
+  if (options?.url) {
+    for (const code of sportsTeamCodes(options.url)) {
+      const normalizedCode = normalizeNewsTeam(code);
+      if (isValidNflNewsTeam(normalizedCode)) codes.add(normalizedCode);
+    }
+  }
+
   if (codes.size === 1) return [...codes][0] as NflNewsTeamCode;
   return null;
 }
@@ -775,7 +838,9 @@ export function buildArticleNewsDrafts(input: {
     externalId,
     publishedAt,
     signal: null,
-    score: source.downrank ? 40 : null,
+    // Explicit scores: null sorts as -1 in the ticker, so a "downrank" value of
+    // 40 would incorrectly outrank ordinary articles. Baseline 55 / downrank 15.
+    score: source.downrank ? 15 : 55,
     tags: [] as string[],
   };
 
@@ -1112,16 +1177,6 @@ export async function refreshArticleFeeds(options?: {
       continue;
     }
 
-    // Update validators on successful fetch.
-    cache.feeds[source.feedUrl] = {
-      ...(response.etag ? { etag: response.etag } : validator.etag ? { etag: validator.etag } : {}),
-      ...(response.lastModified
-        ? { lastModified: response.lastModified }
-        : validator.lastModified
-          ? { lastModified: validator.lastModified }
-          : {}),
-    };
-
     let items: ParsedFeedItem[];
     try {
       items = parseFeedXml(response.body);
@@ -1143,6 +1198,8 @@ export async function refreshArticleFeeds(options?: {
     let itemsPassed = 0;
     let itemsInserted = 0;
     let premiumSkipped = 0;
+    /** True when a PFF page check was skipped for budget — do not advance ETag. */
+    let premiumDeferred = false;
     const drafts: SharedNewsDraft[] = [];
 
     for (const rawItem of items) {
@@ -1180,6 +1237,13 @@ export async function refreshArticleFeeds(options?: {
           remainingMs: deadline - Date.now(),
           signal: options?.signal,
         });
+        if (premium.failed && !premium.fetched) {
+          // Budget exhausted before the page fetch — keep prior validators so
+          // the next poll re-reads the feed instead of 304-skipping forever.
+          premiumDeferred = true;
+          premiumSkipped += 1;
+          continue;
+        }
         if (premium.premium) {
           premiumSkipped += 1;
           continue;
@@ -1216,6 +1280,18 @@ export async function refreshArticleFeeds(options?: {
       insertedTotal += itemsInserted;
     }
 
+    // Only advance ETag/Last-Modified when we fully processed premium checks.
+    if (!premiumDeferred) {
+      cache.feeds[source.feedUrl] = {
+        ...(response.etag ? { etag: response.etag } : validator.etag ? { etag: validator.etag } : {}),
+        ...(response.lastModified
+          ? { lastModified: response.lastModified }
+          : validator.lastModified
+            ? { lastModified: validator.lastModified }
+            : {}),
+      };
+    }
+
     feedStatuses.push({
       name: source.name,
       feedUrl: source.feedUrl,
@@ -1225,6 +1301,7 @@ export async function refreshArticleFeeds(options?: {
       itemsPassed,
       itemsInserted,
       premiumSkipped,
+      ...(premiumDeferred ? { error: "premium checks deferred; validators not advanced" } : {}),
     });
   }
 

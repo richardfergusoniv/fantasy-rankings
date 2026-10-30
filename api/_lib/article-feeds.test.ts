@@ -278,6 +278,21 @@ describe("buildArticleNewsDrafts", () => {
     });
     // external_id must be non-null so team/league partial uniques apply.
     expect(drafts[0]!.externalId).toBeTruthy();
+    expect(drafts[0]!.score).toBe(55);
+  });
+
+  it("downranks flagged sources below the ordinary article baseline", () => {
+    const labs = ARTICLE_FEED_SOURCES.find((s) => s.name === "FantasyLabs")!;
+    const drafts = buildArticleNewsDrafts({
+      source: labs,
+      item,
+      headline: item.title,
+      summary: item.summary,
+      assignment: { scope: "league" },
+      playerMeta: () => null,
+    });
+    expect(drafts[0]!.score).toBe(15);
+    expect(drafts[0]!.score!).toBeLessThan(55);
   });
 
   it("uses a canonical-URL hash as external_id (ignores feed guid)", () => {
@@ -309,6 +324,15 @@ describe("detectArticleTeam", () => {
 
   it("detects a unique nickname", () => {
     expect(detectArticleTeam("The Chiefs activated their star")).toBe("KC");
+  });
+
+  it("does not treat ordinary words like was/no as team abbreviations", () => {
+    expect(detectArticleTeam("Doubs was limited in practice for the Packers")).toBe("GB");
+    expect(detectArticleTeam("There is no update on the Saints")).toBe("NO");
+  });
+
+  it("still matches uppercase bare team codes", () => {
+    expect(detectArticleTeam("WAS places starter on IR")).toBe("WAS");
   });
 });
 
@@ -365,6 +389,22 @@ describe("feed parsing", () => {
       categories: ["NFL"],
     });
     expect(items[0]!.summary).toContain("Jordan Love");
+  });
+
+  it("prefers Atom rel=alternate over an earlier rel=self link", () => {
+    const xml = `<?xml version="1.0"?>
+      <feed xmlns="http://www.w3.org/2005/Atom">
+        <entry>
+          <title>Depth chart</title>
+          <link rel="self" href="https://www.acmepackingcompany.com/rss/index.xml"/>
+          <link rel="alternate" href="https://www.acmepackingcompany.com/2026/10/30/depth-chart"/>
+          <id>tag:acmepackingcompany.com,2026:2</id>
+          <updated>2026-10-30T15:00:00Z</updated>
+          <summary>Love starts.</summary>
+        </entry>
+      </feed>`;
+    const items = parseFeedXml(xml);
+    expect(items[0]!.url).toBe("https://www.acmepackingcompany.com/2026/10/30/depth-chart");
   });
 });
 
