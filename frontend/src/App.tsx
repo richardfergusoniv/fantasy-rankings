@@ -331,11 +331,16 @@ function teamSectionHasLiveGame(data: unknown): boolean {
   });
 }
 
-function pollTeamSection(query: { state: { data?: unknown } }): number | false {
-  const building = pollWhileSectionBuilding(query);
-  if (building) return building;
-  return teamSectionHasLiveGame(query.state.data) ? LIVE_LINEUP_REFETCH_MS : false;
+function pollBootstrapSections(query: { state: { data?: { sections?: Record<string, unknown> } } }): number | false {
+  const sections = query.state.data?.sections;
+  for (const section of BOOTSTRAP_SECTION_NAMES) {
+    const poll = pollWhileSectionBuilding({ state: { data: sections?.[section] } });
+    if (poll) return poll;
+  }
+  return teamSectionHasLiveGame(sections?.team) ? LIVE_LINEUP_REFETCH_MS : false;
 }
+
+const BOOTSTRAP_SECTION_NAMES = ["meta", "team", "players", "league"] as const;
 
 function dashboardTimestamp(dashboard: Dashboard | undefined): number {
   if (!dashboard) return 0;
@@ -624,58 +629,52 @@ export function App() {
   const retryBuildSections = useRef(new Set<DashboardSection["section"]>());
   const loadDashboardSection = (section: DashboardSection["section"], deadlineMs: number) => {
     const retryBuild = retryBuildSections.current.delete(section) || undefined;
-    return withSignIn(withClientDeadline(api.getDashboardSection({ section, retryBuild }), deadlineMs));
+    // Pin lazy section loads to the bootstrap snapshot version when known so
+    // every view comes from the same dashboard snapshot.
+    const v = bootstrapQuery.data?.snapshotVersion ?? undefined;
+    return withSignIn(withClientDeadline(api.getDashboardSection({ section, retryBuild, v }), deadlineMs));
   };
   const retrySection = (query: { data?: unknown; refetch: () => Promise<unknown> }, section: DashboardSection["section"]) => {
     if (sectionBuildFailed(query.data)) retryBuildSections.current.add(section);
     void query.refetch();
   };
-  const metaQuery = useQuery({
-    queryKey: personalQueryKey(viewer, "dashboard-section", "meta"),
-    queryFn: () => loadDashboardSection("meta", 20_000),
+  // Bootstrap: the four always-needed sections in ONE request (was four
+  // parallel /section calls). trade / trade-waiver / analytics stay lazy
+  // single-section loads below.
+  const BOOTSTRAP_SECTIONS = BOOTSTRAP_SECTION_NAMES;
+  const bootstrapQuery = useQuery({
+    queryKey: personalQueryKey(viewer, "dashboard-section", "bootstrap"),
+    queryFn: () => {
+      const retryBuild = BOOTSTRAP_SECTIONS.some((s) => retryBuildSections.current.delete(s)) || undefined;
+      return withSignIn(withClientDeadline(
+        api.getDashboardSections({ sections: [...BOOTSTRAP_SECTIONS], retryBuild }),
+        20_000,
+      ));
+    },
     staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
     refetchOnWindowFocus: false,
     refetchOnMount: true,
     retry: 2,
     retryDelay: (attempt) => 1_000 * (attempt + 1),
-    refetchInterval: pollWhileSectionBuilding,
+    refetchInterval: pollBootstrapSections,
   });
-  const teamQuery = useQuery({
-    queryKey: personalQueryKey(viewer, "dashboard-section", "team"),
-    queryFn: () => loadDashboardSection("team", 20_000),
-    staleTime: (query) => (query.state.status === "error" ? 0 : 90_000),
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-    retry: 2,
-    retryDelay: (attempt) => 1_000 * (attempt + 1),
-    // Matchup/lineup: poll while building, then about every 150s while any game is live.
-    refetchInterval: pollTeamSection,
+  // Per-section facades over the batched response keep the rest of the app
+  // reading `xxxQuery.data` exactly as before; a facade refetch re-runs the
+  // whole bootstrap call, which is still one request.
+  const sectionQueryFacade = (section: DashboardSection["section"]) => ({
+    data: bootstrapQuery.data?.sections?.[section],
+    isError: bootstrapQuery.isError,
+    isPending: bootstrapQuery.isPending,
+    isFetching: bootstrapQuery.isFetching,
+    isSuccess: bootstrapQuery.isSuccess,
+    refetch: bootstrapQuery.refetch,
   });
+  const metaQuery = sectionQueryFacade("meta");
+  const teamQuery = sectionQueryFacade("team");
+  const playersQuery = sectionQueryFacade("players");
+  const leagueQuery = sectionQueryFacade("league");
   // Matchup player cards need fantasy SOS for Team context ranks.
   // The Tools market views reuse the same players + analytics section queries as the chart builder (no per-panel fetches).
-  const playerSectionActive = MARKET_TOOL_TABS.has(tab) || tab === "team" || tab === "rankings" || tab === "waivers" || tab === "draft" || tab === "trade" || tab === "power" || tab === "outcomes" || tab === "comparison";
-  const playersQuery = useQuery({
-    queryKey: personalQueryKey(viewer, "dashboard-section", "players"),
-    queryFn: () => loadDashboardSection("players", 8_000),
-    staleTime: 90_000,
-    refetchOnWindowFocus: false,
-    retry: false,
-    enabled: playerSectionActive,
-    refetchInterval: pollWhileSectionBuilding,
-  });
-  const leagueQuery = useQuery({
-    queryKey: personalQueryKey(viewer, "dashboard-section", "league"),
-    queryFn: () => loadDashboardSection("league", 8_000),
-    staleTime: 90_000,
-    refetchOnWindowFocus: false,
-    retry: false,
-    // The Tools market views keep the league section so the shell player
-    // inspector can resolve roster-card teams via leaguePowerTeamForPlayer.
-    // Rankings and Waivers need it too: their roster badges resolve the
-    // power team (label and card lookup) from powerRankingsWeek.
-    enabled: MARKET_TOOL_TABS.has(tab) || tab === "power" || tab === "outcomes" || tab === "rankings" || tab === "waivers",
-    refetchInterval: pollWhileSectionBuilding,
-  });
   const analyticsQuery = useQuery({
     queryKey: personalQueryKey(viewer, "dashboard-section", "analytics"),
     queryFn: () => loadDashboardSection("analytics", 8_000),

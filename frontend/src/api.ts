@@ -70,8 +70,23 @@ export const api = {
     section: DashboardSection["section"];
     /** Restart a failed background build instead of reporting the failure again. */
     retryBuild?: boolean;
+    /** Snapshot version hint (`asOf`) — a mismatch misses server cache. */
+    v?: string;
   }): Promise<DashboardSection> => request(
     `/api/dashboard/section${buildQuery(args)}`,
+    { cache: "no-store" },
+  ),
+
+  /** One request for many sections: the bootstrap fan-in for the dashboard. */
+  getDashboardSections: (args: {
+    sections: DashboardSection["section"][];
+    retryBuild?: boolean;
+    v?: string;
+  }): Promise<{
+    sections: Partial<Record<DashboardSection["section"], DashboardSection>>;
+    snapshotVersion: string | null;
+  }> => request(
+    `/api/dashboard/section${buildQuery({ sections: args.sections.join(","), retryBuild: args.retryBuild, v: args.v })}`,
     { cache: "no-store" },
   ),
 

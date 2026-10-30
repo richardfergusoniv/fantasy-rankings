@@ -141,24 +141,13 @@ async function handleDashboard(
 
 const sectionParam = z.enum(["meta", "team", "players", "league", "analytics", "trade", "trade-waiver"]);
 
-async function handleSection(
-  req: Request,
+/** Origin loader for one section — shared by the single and batched reads. */
+function makeSectionLoadOrigin(
   viewer: { userId: string; sleeperUserId: string },
-): Promise<Response> {
-  const url = new URL(req.url, "https://localhost");
-  const parsed = sectionParam.safeParse(url.searchParams.get("section"));
-  if (!parsed.success) {
-    return badRequest("Invalid or missing `section` query param.", parsed.error.issues);
-  }
-  const section = parsed.data as DashboardCacheSection;
-  // Set by the client's Retry on a failed build; plain polls never restart one.
-  const retryBuild = queryBool(url, "retryBuild", false);
-
-  const loaded = await loadCachedDashboardView<{ section: DashboardCacheSection; data: unknown }>({
-    sleeperUserId: viewer.sleeperUserId,
-    view: section,
-    requestedVersion: url.searchParams.get("v"),
-    loadOrigin: async () => {
+  section: DashboardCacheSection,
+  retryBuild: boolean,
+) {
+  return async () => {
       const resolved = await sectionDashboardForViewer({
         sleeperUserId: viewer.sleeperUserId,
         viewerUserId: viewer.userId,
@@ -222,9 +211,97 @@ async function handleSection(
         live: payload.live,
         ttlSeconds,
       };
-    },
+  };
+}
+
+async function handleSection(
+  req: Request,
+  viewer: { userId: string; sleeperUserId: string },
+): Promise<Response> {
+  const url = new URL(req.url, "https://localhost");
+  const parsed = sectionParam.safeParse(url.searchParams.get("section"));
+  if (!parsed.success) {
+    return badRequest("Invalid or missing `section` query param.", parsed.error.issues);
+  }
+  const section = parsed.data as DashboardCacheSection;
+  // Set by the client's Retry on a failed build; plain polls never restart one.
+  const retryBuild = queryBool(url, "retryBuild", false);
+
+  const loaded = await loadCachedDashboardView<{ section: DashboardCacheSection; data: unknown }>({
+    sleeperUserId: viewer.sleeperUserId,
+    view: section,
+    requestedVersion: url.searchParams.get("v"),
+    loadOrigin: makeSectionLoadOrigin(viewer, section, retryBuild),
   });
   return dashboardJson(loaded);
+}
+
+/**
+ * `?sections=meta,team,players` — one call returning every requested
+ * section body, so the client's bootstrap is a single request instead of a
+ * per-section fan-out. Each section goes through the same
+ * `loadCachedDashboardView` path as the single-section route (L1 +
+ * Postgres + lease join), in parallel. `snapshotVersion` is the common
+ * `asOf` when all returned sections agree on one snapshot.
+ */
+async function handleSections(
+  req: Request,
+  viewer: { userId: string; sleeperUserId: string },
+): Promise<Response> {
+  const url = new URL(req.url, "https://localhost");
+  const parsed = z.array(sectionParam).min(1).max(10).safeParse(
+    (url.searchParams.get("sections") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+  );
+  if (!parsed.success) {
+    return badRequest("Invalid or missing `sections` query param.", parsed.error.issues);
+  }
+  const retryBuild = queryBool(url, "retryBuild", false);
+  const requestedVersion = url.searchParams.get("v");
+  const unique = [...new Set(parsed.data)] as DashboardCacheSection[];
+
+  const loaded = await Promise.all(unique.map(async (section) => ({
+    section,
+    result: await loadCachedDashboardView<{
+      section: DashboardCacheSection;
+      data: unknown;
+      build?: unknown;
+    }>({
+      sleeperUserId: viewer.sleeperUserId,
+      view: section,
+      requestedVersion,
+      loadOrigin: makeSectionLoadOrigin(viewer, section, retryBuild),
+    }),
+  })));
+
+  // A 401 on any section means the caller's access changed mid-request.
+  const denied = loaded.find(({ result }) => !result.ok);
+  if (denied) {
+    return json(
+      { ok: false, error: SIGN_IN_REQUIRED },
+      401,
+      dashboardDeniedHeaders(),
+    );
+  }
+
+  const sections: Record<string, unknown> = {};
+  const versions = new Set<string>();
+  for (const { section, result } of loaded) {
+    if (!result.ok) continue; // narrowed by `denied` above
+    sections[section] = result.body;
+    if (result.version) versions.add(result.version);
+  }
+  // Mixed-version or uncacheable responses stay private,no-store: there is
+  // no single ETag that could describe the batch.
+  return json(
+    { sections, snapshotVersion: versions.size === 1 ? [...versions][0] : null },
+    200,
+    dashboardViewResponseHeaders({
+      cache: loaded.every(({ result }) => result.ok && result.cache === "HIT") ? "HIT" : "MISS",
+      cacheable: false,
+      version: null,
+      live: false,
+    }),
+  );
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -239,7 +316,9 @@ export async function GET(req: Request): Promise<Response> {
     // /api/dashboard/section is rewritten to /api/dashboard?__section=1
     // (see vercel.json) so both paths share this one function.
     const response = url.searchParams.has("__section")
-      ? await handleSection(req, viewer)
+      ? url.searchParams.has("sections")
+        ? await handleSections(req, viewer)
+        : await handleSection(req, viewer)
       : await handleDashboard(req, viewer);
     flushCacheMetrics();
     return response;
