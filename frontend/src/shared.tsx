@@ -1,7 +1,7 @@
 import { useEffect, useRef, type CSSProperties, type MouseEvent, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { formatPoints } from "./lib/format-number";
-import { ChevronGlyph, MoveTriangle } from "./components/glyphs";
+import { MoveTriangle } from "./components/glyphs";
 
 export function ModalPortal({ children }: { children: ReactNode }) {
   return createPortal(children, document.body);
@@ -270,7 +270,7 @@ export function MatchupTag({
   if (!onClick || !team || !opponent) return <span className={tagClassName}>{base}{quality ? <span className="sr-only">, {quality}</span> : null}</span>;
   return (
     <button type="button" className={`${tagClassName} matchup-reference-button`} onClick={(event) => onClick?.(event)} aria-label={ariaLabel} aria-description="View matchup data" aria-haspopup="dialog">
-      <span className="matchup-reference-button-label">{base}<span className="matchup-reference-arrow" aria-hidden="true"><ChevronGlyph /></span></span>
+      <span className="matchup-reference-button-label">{base}</span>
     </button>
   );
 }

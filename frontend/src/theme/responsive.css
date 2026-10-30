@@ -185,7 +185,6 @@
   font-size: var(--type-caption);
   font-weight: 600;
 }
-.matchup-page .matchup-reference-arrow { color: var(--link); }
 .matchup-page .matchup-number {
   color: var(--dim);
   font-size: var(--type-body);

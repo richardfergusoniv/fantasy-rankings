@@ -27,5 +27,5 @@
 .move-tri.is-up { border-bottom: 6px solid currentColor; }
 .move-tri.is-down { border-top: 6px solid currentColor; }
 .ticker-move, .player-detail-delta, .depth-change, .trade-power-up, .trade-power-down { display: inline-flex; align-items: center; gap: 3px; }
-.matchup-reference-arrow, .search-clear, .props-sort-arrow, .game-slate-more, .matchup-team-title i { display: inline-flex; align-items: center; justify-content: center; }
-.matchup-reference-arrow svg, .matchup-team-title i svg { width: 1em; height: 1em; }
+.search-clear, .props-sort-arrow, .game-slate-more, .matchup-team-title i { display: inline-flex; align-items: center; justify-content: center; }
+.matchup-team-title i svg { width: 1em; height: 1em; }

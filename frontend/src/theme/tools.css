@@ -1010,12 +1010,6 @@
   background: transparent;
   color: var(--text);
 }
-.game-board .game-board-team-link .matchup-reference-arrow {
-  right: 0;
-  color: var(--link);
-  font-size: var(--type-section);
-  font-weight: 500;
-}
 .game-board-team.is-home .game-board-team-link {
   justify-self: end;
 }
@@ -1127,3 +1121,4 @@
 
 .team-stats-table-button { min-height: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; font-size: var(--type-control); font-weight: 600; cursor: pointer; }
 .team-stats-table-button:hover { background: var(--accent-soft); color: var(--link); }
+.team-stats-chart-card > .section-heading { position: static; padding: 10px 12px; border-radius: var(--radius) var(--radius) 0 0; background: transparent; }

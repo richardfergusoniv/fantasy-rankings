@@ -1,6 +1,5 @@
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { ToolPlayerLink } from "./tool-player-link";
-import { ChevronGlyph } from "./components/glyphs";
 
 export type ToolLinkItem = {
   key: string;
@@ -91,7 +90,7 @@ export function CrossToolBadge({
         link.onOpen();
       }}
     >
-      <span className="matchup-reference-button-label">{label}<span className="matchup-reference-arrow" aria-hidden="true"><ChevronGlyph /></span></span>
+      <span className="matchup-reference-button-label">{label}</span>
     </a>
   );
 }
