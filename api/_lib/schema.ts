@@ -190,18 +190,21 @@ export const playerNewsItems = pgTable(
 );
 
 /**
- * User-agnostic player news (one row per source URL / post id + player).
+ * User-agnostic player news (one row per source URL / post id + player),
+ * plus team- and league-scoped X rows (`scope` team|league, `player_id` null).
  * Cron + X ingest write here; a single X roundup may attach to several
  * players. Global feeds (ticker) dedupe by post; player pages filter by
- * player_id.
+ * player_id (and ignore non-player scopes).
  */
 export const sharedPlayerNews = pgTable(
   "shared_player_news",
   {
     id: text("id").primaryKey(),
-    playerId: text("player_id").notNull(),
+    /** Null for team/league-scoped X rows. */
+    playerId: text("player_id"),
     player: text("player").notNull(),
-    team: text("team").notNull(),
+    /** Null for league-scoped X rows. */
+    team: text("team"),
     change: text("change").notNull(),
     newsType: text("news_type", { enum: ["roster", "waiver", "headline"] })
       .notNull()
@@ -217,6 +220,8 @@ export const sharedPlayerNews = pgTable(
     score: integer("score"),
     /** e.g. `["dynasty"]` — redraft feeds hide dynasty-tagged rows. */
     tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    /** player (default) | team | league — team/league rows skip player attach. */
+    scope: text("scope", { enum: ["player", "team", "league"] }).notNull().default("player"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
@@ -226,8 +231,11 @@ export const sharedPlayerNews = pgTable(
       table.externalId,
       table.playerId,
     ),
+    // Partial unique indexes for team/league scopes are defined in
+    // drizzle-pg/0016_shared_player_news_scope.sql (hand-applied).
     index("shared_player_news_player_id_idx").on(table.playerId),
     index("shared_player_news_published_at_idx").on(table.publishedAt),
+    index("shared_player_news_scope_idx").on(table.scope),
   ],
 );
 

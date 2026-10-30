@@ -20,12 +20,31 @@ export const PLAYER_NEWS_NOTES_SNAPSHOT_KEY = "player-news-notes-snapshot-v1";
 
 export type PlayerNewsSource = "sleeper" | "x" | "nflverse";
 export type PlayerNewsKind = "roster" | "waiver" | "headline";
+export type PlayerNewsScope = "player" | "team" | "league";
+
+/** Canonical NFL team codes after {@link normalizeNewsTeam} (JAC→JAX, etc.). */
+export const NFL_NEWS_TEAM_CODES = [
+  "ARI", "ATL", "BAL", "BUF", "CAR", "CHI", "CIN", "CLE",
+  "DAL", "DEN", "DET", "GB", "HOU", "IND", "JAX", "KC",
+  "LAC", "LAR", "LV", "MIA", "MIN", "NE", "NO", "NYG",
+  "NYJ", "PHI", "PIT", "SEA", "SF", "TB", "TEN", "WAS",
+] as const;
+
+export type NflNewsTeamCode = (typeof NFL_NEWS_TEAM_CODES)[number];
+
+const NFL_NEWS_TEAM_CODE_SET: ReadonlySet<string> = new Set(NFL_NEWS_TEAM_CODES);
+
+export function isValidNflNewsTeam(team: string | null | undefined): team is NflNewsTeamCode {
+  return Boolean(team && NFL_NEWS_TEAM_CODE_SET.has(team));
+}
 
 export type SharedNewsDraft = {
   id: string;
-  playerId: string;
+  /** Null for team/league-scoped X rows. */
+  playerId: string | null;
   player: string;
-  team: string;
+  /** Null for league-scoped X rows. */
+  team: string | null;
   change: string;
   newsType: PlayerNewsKind;
   roleContext: string;
@@ -38,6 +57,7 @@ export type SharedNewsDraft = {
   signal: string | null;
   score: number | null;
   tags: string[];
+  scope: PlayerNewsScope;
 };
 
 /** Short lowercase tags (e.g. `dynasty`); max 5 per item. */
@@ -57,16 +77,27 @@ export type NotesSnapshot = Record<string, NotesSnapshotEntry>;
 const newsTypeSchema = z.enum(["roster", "waiver", "headline"]);
 const sourceSchema = z.enum(["sleeper", "x", "nflverse"]);
 
+const xNewsScopeSchema = z.enum(["player", "team", "league"]);
+
 /**
  * X ingest producer contract:
- * Prefer `player_id` (Sleeper id) whenever known. Name matching is a fallback
- * and will drop ambiguous last-name-only rows unless `team` is also sent.
+ * - scope "player" (default): Prefer `player_id` (Sleeper id) whenever known.
+ *   Name matching is a fallback and will drop ambiguous last-name-only rows
+ *   unless `team` is also sent.
+ * - scope "team": `team` required (valid NFL code; JAC/LA/WSH/… normalized).
+ *   No player resolve / attach — one row with player_id null.
+ * - scope "league": no player and no team — one row with player_id and team null.
  */
 export const xNewsItemSchema = z
   .object({
+    /** Defaults to "player" when omitted. */
+    scope: xNewsScopeSchema.optional(),
     player_id: z.string().min(1).max(80).optional(),
     player_name: z.string().min(1).max(160).optional(),
-    /** Optional NFL team code; required to resolve last-name-only `player_name`. */
+    /**
+     * NFL team code. Required for scope "team" (and for last-name-only player
+     * name resolve). Ignored / forbidden for scope "league".
+     */
     team: z.string().min(1).max(8).optional(),
     text: z.string().min(1).max(4000),
     author_handle: z.string().min(1).max(80),
@@ -81,8 +112,53 @@ export const xNewsItemSchema = z
     /** Optional tags such as `["dynasty"]` for dynasty-only posts. */
     tags: z.array(newsTagSchema).max(5).optional(),
   })
-  .refine((item) => Boolean(item.player_id || item.player_name), {
-    message: "Each item needs player_id or player_name (prefer player_id).",
+  .superRefine((item, ctx) => {
+    const scope = item.scope ?? "player";
+    switch (scope) {
+      case "player": {
+        if (!item.player_id && !item.player_name) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Each item needs player_id or player_name (prefer player_id).",
+            path: ["player_id"],
+          });
+        }
+        break;
+      }
+      case "team": {
+        const team = normalizeNewsTeam(item.team);
+        if (!isValidNflNewsTeam(team)) {
+          ctx.addIssue({
+            code: "custom",
+            message: "scope \"team\" requires a valid NFL team code.",
+            path: ["team"],
+          });
+        }
+        break;
+      }
+      case "league": {
+        if (item.player_id || item.player_name) {
+          ctx.addIssue({
+            code: "custom",
+            message: "scope \"league\" must not include player_id or player_name.",
+            path: ["player_id"],
+          });
+        }
+        if (item.team) {
+          ctx.addIssue({
+            code: "custom",
+            message: "scope \"league\" must not include team.",
+            path: ["team"],
+          });
+        }
+        break;
+      }
+      default: {
+        const _exhaustive: never = scope;
+        void _exhaustive;
+        break;
+      }
+    }
   });
 
 export const xNewsBatchSchema = z.object({
@@ -90,6 +166,10 @@ export const xNewsBatchSchema = z.object({
 });
 
 export type XNewsItem = z.infer<typeof xNewsItemSchema>;
+
+export function xNewsItemScope(item: Pick<XNewsItem, "scope">): PlayerNewsScope {
+  return item.scope ?? "player";
+}
 
 export function retentionCutoff(now = new Date()): Date {
   return new Date(now.getTime() - PLAYER_NEWS_RETENTION_DAYS * 24 * 60 * 60 * 1000);
@@ -115,18 +195,35 @@ export function normalizeNewsTags(tags: readonly string[] | null | undefined): s
 }
 
 /**
- * In-batch / write dedupe: one row per (post, player).
- * Prefer (source, externalId, playerId); fall back to (sourceUrl, playerId).
+ * In-batch / write dedupe.
+ * - player: one row per (post, player)
+ * - team: one row per (post, team)
+ * - league: one row per post
+ * Prefer externalId when present; fall back to sourceUrl.
  */
 export function dedupeKey(
   source: PlayerNewsSource,
   externalId: string | null,
   sourceUrl: string,
-  playerId: string,
+  playerId: string | null,
+  scope: PlayerNewsScope = "player",
+  team: string | null = null,
 ): string {
-  const player = playerId.trim();
-  if (externalId && externalId.trim()) return `${source}:${externalId.trim()}:${player}`;
-  return `url:${sourceUrl.trim()}:${player}`;
+  const base = externalId && externalId.trim()
+    ? `${source}:${externalId.trim()}`
+    : `url:${sourceUrl.trim()}`;
+  switch (scope) {
+    case "player":
+      return `${base}:${(playerId ?? "").trim()}`;
+    case "team":
+      return `${base}:team:${(team ?? "").trim()}`;
+    case "league":
+      return `${base}:league`;
+    default: {
+      const _exhaustive: never = scope;
+      return _exhaustive;
+    }
+  }
 }
 
 export function signalToNewsType(signal: string | null | undefined): PlayerNewsKind {
@@ -223,6 +320,7 @@ export function buildInjuryStatusDraft(input: {
     signal: "injury",
     score: null,
     tags: [],
+    scope: "player",
   };
 }
 
@@ -260,6 +358,7 @@ export function buildInjuryNotesDraft(input: {
     signal: "injury_notes",
     score: null,
     tags: [],
+    scope: "player",
   };
 }
 
@@ -514,21 +613,15 @@ export function resolveXNewsPlayer(
   return meta ? { playerId: byName, player: meta.player, team: meta.team } : null;
 }
 
-export function buildXNewsDraft(
-  item: XNewsItem,
-  resolved: { playerId: string; player: string; team: string },
-): SharedNewsDraft {
+function xNewsDraftBase(item: XNewsItem): Omit<
+  SharedNewsDraft,
+  "id" | "playerId" | "player" | "team" | "scope"
+> {
   const handle = item.author_handle.replace(/^@/, "");
-  const newsType = signalToNewsType(item.signal);
   const postId = item.post_id.trim();
   return {
-    // Include playerId so the same X post can produce distinct PKs per player.
-    id: stableNewsId(["x", postId, resolved.playerId]),
-    playerId: resolved.playerId,
-    player: resolved.player,
-    team: resolved.team,
     change: item.text.trim(),
-    newsType,
+    newsType: signalToNewsType(item.signal),
     roleContext: `Posted by @${handle} on X.`,
     source: "x",
     sourceLabel: `@${handle}`,
@@ -542,16 +635,123 @@ export function buildXNewsDraft(
   };
 }
 
+export function buildXNewsDraft(
+  item: XNewsItem,
+  resolved: { playerId: string; player: string; team: string },
+): SharedNewsDraft {
+  const postId = item.post_id.trim();
+  return {
+    ...xNewsDraftBase(item),
+    // Include playerId so the same X post can produce distinct PKs per player.
+    id: stableNewsId(["x", postId, resolved.playerId]),
+    playerId: resolved.playerId,
+    player: resolved.player,
+    team: resolved.team,
+    scope: "player",
+  };
+}
+
+/** One team-scoped row; no player resolve. `team` must already be canonical. */
+export function buildXNewsTeamDraft(item: XNewsItem, team: NflNewsTeamCode): SharedNewsDraft {
+  const postId = item.post_id.trim();
+  return {
+    ...xNewsDraftBase(item),
+    id: stableNewsId(["x", postId, "team", team]),
+    playerId: null,
+    player: team,
+    team,
+    scope: "team",
+  };
+}
+
+/** One league-scoped row; no player or team. */
+export function buildXNewsLeagueDraft(item: XNewsItem): SharedNewsDraft {
+  const postId = item.post_id.trim();
+  return {
+    ...xNewsDraftBase(item),
+    id: stableNewsId(["x", postId, "league"]),
+    playerId: null,
+    player: "NFL",
+    team: null,
+    scope: "league",
+  };
+}
+
 export function filterDuplicateDrafts(drafts: SharedNewsDraft[]): SharedNewsDraft[] {
   const seen = new Set<string>();
   const out: SharedNewsDraft[] = [];
   for (const draft of drafts) {
-    const key = dedupeKey(draft.source, draft.externalId, draft.sourceUrl, draft.playerId);
+    const key = dedupeKey(
+      draft.source,
+      draft.externalId,
+      draft.sourceUrl,
+      draft.playerId,
+      draft.scope,
+      draft.team,
+    );
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(draft);
   }
   return out;
+}
+
+/**
+ * Pure ingest branching: player scope fans out via `resolvePlayerIds`; team and
+ * league scopes write a single row each (no player attach).
+ */
+export function collectXNewsDrafts(
+  items: ReadonlyArray<XNewsItem>,
+  resolvePlayerIds: (item: XNewsItem) => string[],
+  playerMeta: (playerId: string) => { player: string; team: string } | null,
+): { drafts: SharedNewsDraft[]; unresolved: string[] } {
+  const drafts: SharedNewsDraft[] = [];
+  const unresolved: string[] = [];
+
+  for (const item of items) {
+    const scope = xNewsItemScope(item);
+    switch (scope) {
+      case "player": {
+        const playerIds = resolvePlayerIds(item);
+        if (playerIds.length === 0) {
+          unresolved.push(item.player_id ?? item.player_name ?? item.post_id);
+          break;
+        }
+        for (const playerId of playerIds) {
+          const meta = playerMeta(playerId);
+          if (!meta) continue;
+          drafts.push(
+            buildXNewsDraft(item, {
+              playerId,
+              player: meta.player,
+              team: meta.team,
+            }),
+          );
+        }
+        break;
+      }
+      case "team": {
+        const team = normalizeNewsTeam(item.team);
+        if (!isValidNflNewsTeam(team)) {
+          unresolved.push(item.team ?? item.post_id);
+          break;
+        }
+        drafts.push(buildXNewsTeamDraft(item, team));
+        break;
+      }
+      case "league": {
+        drafts.push(buildXNewsLeagueDraft(item));
+        break;
+      }
+      default: {
+        const _exhaustive: never = scope;
+        void _exhaustive;
+        break;
+      }
+    }
+  }
+
+  return { drafts, unresolved };
 }
 
 export function asPlayerNewsSource(value: string): PlayerNewsSource {

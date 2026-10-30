@@ -181,12 +181,28 @@ function tickerLabel(subject: string, detail: string): string {
 }
 
 function tickerNewsLabel(item: PlayerNewsItem): string {
-  const isLeagueHeadline = item.playerId === "league" || /^league headline$/i.test(item.player);
-  const subject = isLeagueHeadline ? (item.team && item.team !== "NFL" ? item.team : "NFL") : item.player;
-  const escapedNames = [item.player, item.player.split(/\s+/).at(-1), item.team]
-    .filter((value): value is string => Boolean(value) && !/^league headline$|^nfl$/i.test(value ?? ""))
+  const scope = item.scope ?? "player";
+  const isTeamScoped = scope === "team";
+  const isLeagueScoped = scope === "league"
+    || item.playerId === "league"
+    || /^league headline$/i.test(item.player);
+  const subject = isTeamScoped
+    ? (item.team && item.team !== "NFL" ? item.team : item.player)
+    : isLeagueScoped
+      ? (item.team && item.team !== "NFL" ? item.team : "NFL")
+      : item.player;
+  // Include `subject` so league "NFL: …" does not keep a leading "NFL" in the
+  // change text (player/team names still strip as before).
+  const escapedNames = [subject, item.player, item.player.split(/\s+/).at(-1), item.team]
+    .filter((value): value is string => {
+      if (!value) return false;
+      return !/^league headline$/i.test(value);
+    })
     .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const subjectPattern = escapedNames.length > 0 ? new RegExp(`^(?:${escapedNames.join("|")})\\s*(?::|[-–—])?\\s*`, "i") : null;
+  const uniqueEscaped = [...new Set(escapedNames)];
+  const subjectPattern = uniqueEscaped.length > 0
+    ? new RegExp(`^(?:${uniqueEscaped.join("|")})\\s*(?::|[-–—])?\\s*`, "i")
+    : null;
   const detail = subjectPattern ? item.change.replace(subjectPattern, "") : item.change;
   return tickerLabel(subject, detail.replace(/^(?:is|are|has|have)\s+/i, ""));
 }

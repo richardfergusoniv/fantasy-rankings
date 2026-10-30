@@ -22,15 +22,18 @@ import {
 } from "../_lib/ingest-helpers.js";
 import {
   buildPlayerNewsNameIndex,
-  buildXNewsDraft,
+  collectXNewsDrafts,
   filterDuplicateDrafts,
   resolveXNewsPlayer,
   retentionCutoff,
   xNewsBatchSchema,
+  xNewsItemScope,
+  type PlayerNewsNameIndex,
 } from "../_lib/player-news-shared.js";
 import {
   buildXNewsMentionNeedles,
   resolveXNewsPlayerIdsForItem,
+  type XNewsMentionNeedle,
 } from "../_lib/x-news-mentions.js";
 import { loadNflPlayersMap } from "../_lib/nfl-players-cache.js";
 import { type SleeperPlayer } from "../_lib/sleeper.js";
@@ -75,9 +78,11 @@ const MAX_INGEST_BODY_BYTES = 8 * 1024 * 1024;
  *                   `computedAt`, busts the dashboard cache on commit.
  * - pfn-tables:     writes `pfn:{tableKey}` rows to `source_cache` for the
  *                   4 PFN tables.
- * - player-news-x:  inserts shared player-news rows from X (dedupe by
- *                   post_id + player_id so one roundup can attach to several
- *                   players). Producers should send Sleeper `player_id` when
+ * - player-news-x:  inserts shared player-news rows from X. Player scope
+ *                   dedupes by post_id + player_id (roundups fan out).
+ *                   Team/league scopes store one row with player_id null
+ *                   (dedupe by post_id + scope, plus team for team scope).
+ *                   Producers should send Sleeper `player_id` when
  *                   known; `player_name` (+ optional `team`) is a fallback.
  *                   Last-name-only names require `team` or the item is dropped.
  * - prop-line-snapshots: inserts dated consensus prop-line rows into
@@ -347,44 +352,50 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     return badRequest("Invalid player-news-x payload.", parsed.error.issues);
   }
 
-  let loaded: Awaited<ReturnType<typeof loadPlayerNameIndex>>;
-  try {
-    loaded = await loadPlayerNameIndex();
-  } catch {
-    return json({ ok: false, error: "Sleeper player data is temporarily unavailable." }, 502);
+  // Team/league scopes do not resolve players — skip the Sleeper index so a
+  // cache miss cannot 502 a team/league-only batch.
+  const needsPlayerIndex = parsed.data.items.some((item) => xNewsItemScope(item) === "player");
+  let index: PlayerNewsNameIndex | null = null;
+  let mentionNeedles: XNewsMentionNeedle[] = [];
+  if (needsPlayerIndex) {
+    try {
+      const loaded = await loadPlayerNameIndex();
+      index = loaded.index;
+      mentionNeedles = loaded.mentionNeedles;
+    } catch {
+      return json({ ok: false, error: "Sleeper player data is temporarily unavailable." }, 502);
+    }
   }
-  const { index, mentionNeedles } = loaded;
 
-  const unresolved: string[] = [];
-  const drafts = [];
-  for (const item of parsed.data.items) {
-    // Producer may send one extract; expand text mentions to every resolvable
-    // Sleeper id so multi-player roundups attach Amon-Ra / Gibbs / … too.
-    const playerIds = resolveXNewsPlayerIdsForItem(
-      item,
-      index,
-      mentionNeedles,
-      resolveXNewsPlayer,
-    );
-    if (playerIds.length === 0) {
-      unresolved.push(item.player_id ?? item.player_name ?? item.post_id);
-      continue;
-    }
-    for (const playerId of playerIds) {
-      const meta = index.byId.get(playerId);
-      if (!meta) continue;
-      drafts.push(
-        buildXNewsDraft(item, {
-          playerId,
-          player: meta.player,
-          team: meta.team,
-        }),
+  // Player scope expands text mentions; team/league write one row each
+  // (player_id null) without attach/fan-out.
+  const playerIndex = index;
+  const playerNeedles = mentionNeedles;
+  const { drafts, unresolved } = collectXNewsDrafts(
+    parsed.data.items,
+    (item) => {
+      if (!playerIndex) return [];
+      return resolveXNewsPlayerIdsForItem(
+        item,
+        playerIndex,
+        playerNeedles,
+        resolveXNewsPlayer,
       );
-    }
-  }
+    },
+    (playerId) => playerIndex?.byId.get(playerId) ?? null,
+  );
 
   const unique = filterDuplicateDrafts(drafts);
+  const countByScope = (scope: "player" | "team" | "league") =>
+    unique.filter((draft) => draft.scope === scope).length;
+  const resolvedPlayer = countByScope("player");
+  const resolvedTeam = countByScope("team");
+  const resolvedLeague = countByScope("league");
+
   let inserted = 0;
+  let insertedPlayer = 0;
+  let insertedTeam = 0;
+  let insertedLeague = 0;
   for (let offset = 0; offset < unique.length; offset += 100) {
     const chunk = unique.slice(offset, offset + 100).map((draft) => ({
       id: draft.id,
@@ -403,17 +414,38 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
       signal: draft.signal,
       score: draft.score,
       tags: draft.tags,
+      scope: draft.scope,
       createdAt: new Date(),
     }));
     const result = await db
       .insert(schema.sharedPlayerNews)
       .values(chunk)
-      // Bare ON CONFLICT skips rows that hit either unique index
-      // ((source_url, player_id) or (source, external_id, player_id)), so a
-      // resent post with a rewritten URL still counts as a duplicate.
+      // Bare ON CONFLICT skips rows that hit a unique index (player, team, or
+      // league), so a resent post still counts as a duplicate.
       .onConflictDoNothing()
-      .returning({ id: schema.sharedPlayerNews.id });
+      .returning({
+        id: schema.sharedPlayerNews.id,
+        scope: schema.sharedPlayerNews.scope,
+      });
     inserted += result.length;
+    for (const row of result) {
+      switch (row.scope) {
+        case "player":
+          insertedPlayer += 1;
+          break;
+        case "team":
+          insertedTeam += 1;
+          break;
+        case "league":
+          insertedLeague += 1;
+          break;
+        default: {
+          const _exhaustive: never = row.scope;
+          void _exhaustive;
+          break;
+        }
+      }
+    }
   }
 
   const cutoff = retentionCutoff();
@@ -452,6 +484,12 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     unresolved: unresolved.length,
     unresolvedSamples,
     purged: purged.length,
+    resolvedPlayer,
+    resolvedTeam,
+    resolvedLeague,
+    insertedPlayer,
+    insertedTeam,
+    insertedLeague,
   });
 }
 

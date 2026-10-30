@@ -27,6 +27,27 @@ export function newsVisibleInContext(
   return !tags.includes(DYNASTY_NEWS_TAG);
 }
 
+/** Player-attached rows only (excludes team/league X ticker rows). */
+export function isPlayerScopedNews(item: {
+  scope?: string | null;
+  playerId?: string | null;
+}): boolean {
+  const scope = item.scope ?? "player";
+  if (scope === "team" || scope === "league") return false;
+  return Boolean(item.playerId);
+}
+
+/** Team- or league-scoped X rows for the global ticker. */
+export function isTeamOrLeagueNews(item: {
+  scope?: string | null;
+  playerId?: string | null;
+}): boolean {
+  const scope = item.scope ?? "player";
+  if (scope === "team" || scope === "league") return true;
+  // Legacy / defensive: null player_id without an explicit player scope.
+  return item.playerId == null && scope !== "player";
+}
+
 /**
  * Grouping key for global/league-wide feeds (ticker, multi-player chat).
  * One X roundup may have many rows (one per player); collapse by post id

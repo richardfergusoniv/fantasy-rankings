@@ -13,6 +13,9 @@ import {
   buildNewsUpdatedDraft,
   buildPlayerNewsNameIndex,
   buildXNewsDraft,
+  buildXNewsLeagueDraft,
+  buildXNewsTeamDraft,
+  collectXNewsDrafts,
   dedupeKey,
   filterDuplicateDrafts,
   isLastNameOnlyKey,
@@ -40,8 +43,23 @@ describe("xNewsItemSchema / xNewsBatchSchema", () => {
     score: 90,
   };
 
+  const baseFields = {
+    text: "Lions pace note.",
+    author_handle: "@reporter",
+    source_url: "https://x.com/reporter/status/456",
+    post_id: "456",
+    published_at: "2026-10-10T18:00:00.000Z",
+  };
+
   it("accepts a well-formed X item", () => {
     expect(xNewsItemSchema.safeParse(validItem).success).toBe(true);
+  });
+
+  it("defaults omitted scope to player behavior (requires player_id or player_name)", () => {
+    expect(xNewsItemSchema.safeParse(validItem).success).toBe(true);
+    expect(xNewsItemSchema.safeParse({ ...validItem, scope: "player" }).success).toBe(true);
+    const { player_id: _id, ...rest } = validItem;
+    expect(xNewsItemSchema.safeParse(rest).success).toBe(false);
   });
 
   it("accepts player_name instead of player_id", () => {
@@ -63,6 +81,40 @@ describe("xNewsItemSchema / xNewsBatchSchema", () => {
     expect(xNewsItemSchema.safeParse(rest).success).toBe(false);
   });
 
+  it("accepts scope team with a valid NFL team code and aliases", () => {
+    expect(xNewsItemSchema.safeParse({ ...baseFields, scope: "team", team: "DET" }).success).toBe(true);
+    expect(xNewsItemSchema.safeParse({ ...baseFields, scope: "team", team: "jac" }).success).toBe(true);
+    expect(xNewsItemSchema.safeParse({ ...baseFields, scope: "team", team: "LA" }).success).toBe(true);
+    expect(xNewsItemSchema.safeParse({ ...baseFields, scope: "team", team: "WSH" }).success).toBe(true);
+  });
+
+  it("rejects scope team without a valid team", () => {
+    expect(xNewsItemSchema.safeParse({ ...baseFields, scope: "team" }).success).toBe(false);
+    expect(xNewsItemSchema.safeParse({ ...baseFields, scope: "team", team: "XYZ" }).success).toBe(false);
+  });
+
+  it("accepts scope league without player or team", () => {
+    expect(xNewsItemSchema.safeParse({ ...baseFields, scope: "league" }).success).toBe(true);
+  });
+
+  it("rejects scope league when player or team fields are set", () => {
+    expect(xNewsItemSchema.safeParse({
+      ...baseFields,
+      scope: "league",
+      team: "DET",
+    }).success).toBe(false);
+    expect(xNewsItemSchema.safeParse({
+      ...baseFields,
+      scope: "league",
+      player_id: "4046",
+    }).success).toBe(false);
+    expect(xNewsItemSchema.safeParse({
+      ...baseFields,
+      scope: "league",
+      player_name: "Anyone",
+    }).success).toBe(false);
+  });
+
   it("rejects invalid batch payloads", () => {
     expect(xNewsBatchSchema.safeParse({ items: [] }).success).toBe(false);
     expect(xNewsBatchSchema.safeParse({ items: [{ ...validItem, post_id: "" }] }).success).toBe(false);
@@ -82,6 +134,100 @@ describe("xNewsItemSchema / xNewsBatchSchema", () => {
       ...validItem,
       tags: ["a", "b", "c", "d", "e", "f"],
     }).success).toBe(false);
+  });
+});
+
+describe("collectXNewsDrafts scope branching", () => {
+  const playerItem = {
+    scope: "player" as const,
+    player_id: "1",
+    text: "Jefferson limited.",
+    author_handle: "reporter",
+    source_url: "https://x.com/r/status/1",
+    post_id: "1",
+    published_at: "2026-10-10T18:00:00.000Z",
+  };
+  const teamItem = {
+    scope: "team" as const,
+    team: "JAC",
+    text: "Jaguars play at a top-5 pace.",
+    author_handle: "reporter",
+    source_url: "https://x.com/r/status/2",
+    post_id: "2",
+    published_at: "2026-10-10T18:00:00.000Z",
+  };
+  const leagueItem = {
+    scope: "league" as const,
+    text: "League-wide target share note.",
+    author_handle: "reporter",
+    source_url: "https://x.com/r/status/3",
+    post_id: "3",
+    published_at: "2026-10-10T18:00:00.000Z",
+  };
+
+  it("fans out player scope via resolvePlayerIds and skips team/league resolve", () => {
+    const resolveCalls: string[] = [];
+    const { drafts, unresolved } = collectXNewsDrafts(
+      [playerItem, teamItem, leagueItem],
+      (item) => {
+        resolveCalls.push(item.post_id);
+        return item.player_id ? [item.player_id] : [];
+      },
+      (playerId) => (playerId === "1" ? { player: "A", team: "MIN" } : null),
+    );
+    expect(resolveCalls).toEqual(["1"]);
+    expect(unresolved).toEqual([]);
+    expect(drafts.map((d) => d.scope)).toEqual(["player", "team", "league"]);
+    expect(drafts[0]).toMatchObject({ playerId: "1", team: "MIN", scope: "player" });
+    expect(drafts[1]).toMatchObject({ playerId: null, team: "JAX", player: "JAX", scope: "team" });
+    expect(drafts[2]).toMatchObject({ playerId: null, team: null, player: "NFL", scope: "league" });
+  });
+
+  it("treats omitted scope as player and builds a player draft", () => {
+    const { scope: _scope, ...omittedScope } = playerItem;
+    const { drafts, unresolved } = collectXNewsDrafts(
+      [omittedScope],
+      (item) => (item.player_id ? [item.player_id] : []),
+      (playerId) => (playerId === "1" ? { player: "A", team: "MIN" } : null),
+    );
+    expect(unresolved).toEqual([]);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({ playerId: "1", scope: "player" });
+  });
+
+  it("records unresolved player items and still builds team/league drafts", () => {
+    const { drafts, unresolved } = collectXNewsDrafts(
+      [playerItem, teamItem],
+      () => [],
+      () => null,
+    );
+    expect(unresolved).toEqual(["1"]);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]?.scope).toBe("team");
+  });
+
+  it("dedupes team by post+team and league by post", () => {
+    const teamDup = { ...teamItem, source_url: "https://x.com/r/status/2b", text: "dup" };
+    const leagueDup = { ...leagueItem, source_url: "https://x.com/r/status/3b", text: "dup" };
+    const { drafts } = collectXNewsDrafts(
+      [teamItem, teamDup, leagueItem, leagueDup],
+      () => [],
+      () => null,
+    );
+    const unique = filterDuplicateDrafts(drafts);
+    expect(unique).toHaveLength(2);
+    expect(unique.map((d) => d.scope).sort()).toEqual(["league", "team"]);
+  });
+
+  it("build helpers leave player_id null for team and league", () => {
+    const parsedTeam = xNewsItemSchema.parse(teamItem);
+    const parsedLeague = xNewsItemSchema.parse(leagueItem);
+    expect(buildXNewsTeamDraft(parsedTeam, "JAX").playerId).toBeNull();
+    expect(buildXNewsLeagueDraft(parsedLeague)).toMatchObject({
+      playerId: null,
+      team: null,
+      scope: "league",
+    });
   });
 });
 
@@ -132,6 +278,8 @@ describe("dedupe + filterDuplicateDrafts", () => {
     expect(dedupeKey("sleeper", null, "https://sleeper.app/a", "1")).toBe(
       "url:https://sleeper.app/a:1",
     );
+    expect(dedupeKey("x", "123", "https://x.com/a", null, "team", "DET")).toBe("x:123:team:DET");
+    expect(dedupeKey("x", "123", "https://x.com/a", null, "league")).toBe("x:123:league");
   });
 
   it("drops the same post+player twice in a batch", () => {
