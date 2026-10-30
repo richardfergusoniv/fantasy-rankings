@@ -269,9 +269,9 @@ function ServiceError({
   return (
     <div role="main" className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
       <div className="absolute right-2 top-[max(0.5rem,env(safe-area-inset-top))]"><ThemeToggle /></div>
-      <Card className="w-full max-w-sm py-6">
+      <Card className="w-full max-w-sm rounded-[var(--radius)] border-[var(--hairline)] py-6 shadow-none">
         <CardHeader>
-          <CardTitle className="text-2xl">
+          <CardTitle className="text-[length:var(--type-display)] font-semibold tracking-[-0.02em]">
             <h1>Something went wrong</h1>
           </CardTitle>
           <CardDescription>
@@ -337,9 +337,9 @@ function UpdatePassword({ onDone }: { onDone: () => void }) {
   return (
     <div role="main" className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
       <div className="absolute right-2 top-[max(0.5rem,env(safe-area-inset-top))]"><ThemeToggle /></div>
-      <Card className="w-full max-w-sm py-6">
+      <Card className="w-full max-w-sm rounded-[var(--radius)] border-[var(--hairline)] py-6 shadow-none">
         <CardHeader>
-          <CardTitle className="text-2xl">
+          <CardTitle className="text-[length:var(--type-display)] font-semibold tracking-[-0.02em]">
             <h1>Choose a new password</h1>
           </CardTitle>
         </CardHeader>
@@ -474,9 +474,9 @@ function AuthScreen({ initialNotice }: { initialNotice?: string | null }) {
     <div role="main" className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
       <div className="absolute right-2 top-[max(0.5rem,env(safe-area-inset-top))]"><ThemeToggle /></div>
       <SkipLink href="#auth-form">Skip to form</SkipLink>
-      <Card className="w-full max-w-sm py-6">
+      <Card className="w-full max-w-sm rounded-[var(--radius)] border-[var(--hairline)] py-6 shadow-none">
         <CardHeader>
-          <CardTitle className="text-2xl">
+          <CardTitle className="text-[length:var(--type-display)] font-semibold tracking-[-0.02em]">
             <h1 translate="no">Fantasy Rankings</h1>
           </CardTitle>
           <CardDescription>
@@ -616,9 +616,9 @@ function ConnectSleeper({
     <div role="main" className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-8 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
       <div className="absolute right-2 top-[max(0.5rem,env(safe-area-inset-top))]"><ThemeToggle /></div>
       <SkipLink href="#connect-form">Skip to form</SkipLink>
-      <Card className="w-full max-w-sm py-6">
+      <Card className="w-full max-w-sm rounded-[var(--radius)] border-[var(--hairline)] py-6 shadow-none">
         <CardHeader>
-          <CardTitle className="text-2xl">
+          <CardTitle className="text-[length:var(--type-display)] font-semibold tracking-[-0.02em]">
             <h1>Connect <span translate="no">Sleeper</span></h1>
           </CardTitle>
           <CardDescription>
