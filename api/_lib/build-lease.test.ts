@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("./db.js", () => ({ db: {}, schema: {} }));
 
 import {
+  leaseIsHeld,
   runWithBuildLease,
   type BuildLeaseRow,
   type BuildLeaseStore,
@@ -142,11 +143,19 @@ describe("runWithBuildLease deadline", () => {
 });
 
 describe("runWithBuildLease bookkeeping failures", () => {
-  it("builds without a lease when the claim itself fails", async () => {
+  it("fails closed (no unleased build) when the claim itself fails", async () => {
     const { store } = createFakeStore();
     store.claim = async () => { throw new Error("db down"); };
+    const build = vi.fn(async () => "ok");
     const finish = vi.spyOn(store, "finish");
-    expect(await runWithBuildLease(store, "r", "h", 90_000, async () => "ok")).toEqual({ status: "built", result: "ok" });
+    const outcome = await runWithBuildLease(store, "r", "h", 90_000, build);
+    expect(outcome.status).toBe("failed");
+    if (outcome.status === "failed") {
+      expect((outcome.error as Error).name).toBe("BuildLeaseUnavailableError");
+    }
+    // Never silently switches back to an unleased build on missing
+    // table/permission errors.
+    expect(build).not.toHaveBeenCalled();
     expect(finish).not.toHaveBeenCalled();
   });
 
@@ -154,5 +163,30 @@ describe("runWithBuildLease bookkeeping failures", () => {
     const { store } = createFakeStore();
     store.finish = async () => { throw new Error("db blip"); };
     expect(await runWithBuildLease(store, "r", "h", 90_000, async () => "ok")).toEqual({ status: "built", result: "ok" });
+  });
+});
+
+describe("leaseIsHeld (fenced publication guard)", () => {
+  const row = (over: Partial<BuildLeaseRow>): BuildLeaseRow => ({
+    resource: "r",
+    holder: "h1",
+    status: "running",
+    lastError: null,
+    acquiredAt: new Date(0),
+    expiresAt: new Date(10_000),
+    updatedAt: new Date(0),
+    ...over,
+  });
+
+  it("is held only for the matching running, unexpired owner", () => {
+    expect(leaseIsHeld(row({}), "h1", 5_000)).toBe(true);
+    // Another owner (lease taken over) cannot publish.
+    expect(leaseIsHeld(row({}), "h2", 5_000)).toBe(false);
+    // Finished/failed leases are not publishable.
+    expect(leaseIsHeld(row({ status: "done" }), "h1", 5_000)).toBe(false);
+    // Expired lease cannot publish.
+    expect(leaseIsHeld(row({}), "h1", 11_000)).toBe(false);
+    // Missing row cannot publish.
+    expect(leaseIsHeld(null, "h1", 5_000)).toBe(false);
   });
 });

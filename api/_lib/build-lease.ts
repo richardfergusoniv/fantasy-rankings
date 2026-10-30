@@ -110,6 +110,32 @@ export class BuildDeadlineError extends Error {
   }
 }
 
+/** The lease store is unreachable (missing table, permissions, DB down). */
+export class BuildLeaseUnavailableError extends Error {
+  constructor(resource: string) {
+    super(`build lease unavailable for ${resource}`);
+    this.name = "BuildLeaseUnavailableError";
+  }
+}
+
+/** The holder lost the lease before publishing (expiry or takeover). */
+export class BuildLeaseLostError extends Error {
+  constructor(resource: string, holder: string) {
+    super(`build lease lost for ${resource} by ${holder}`);
+    this.name = "BuildLeaseLostError";
+  }
+}
+
+/** True while `row` is a live lease still owned by `holder`. */
+export function leaseIsHeld(
+  row: BuildLeaseRow | null,
+  holder: string,
+  nowMs = Date.now(),
+): boolean {
+  if (!row || row.holder !== holder || row.status !== "running") return false;
+  return row.expiresAt.getTime() > nowMs;
+}
+
 async function finishQuietly(store: BuildLeaseStore, resource: string, holder: string, error: string | null) {
   try {
     await store.finish(resource, holder, error);
@@ -129,9 +155,12 @@ async function finishQuietly(store: BuildLeaseStore, resource: string, holder: s
  * frozen instance). Releasing at the deadline would let a second build start
  * next to the one still running.
  *
- * Lease bookkeeping is best-effort: if the store can't be reached to claim,
- * the build runs unleased (as before leases existed) rather than failing, and
- * a failed release never turns a finished build into a failure.
+ * Lease bookkeeping is fail-closed for claiming: if the store can't be
+ * reached (missing `build_leases`, lost permissions, DB down), the build does
+ * NOT run unleased — that would silently reintroduce duplicate cross-instance
+ * builds. The caller gets `{ status: "failed" }` (retryable; callers fall
+ * back to a fresh cached row). A failed release still never turns a finished
+ * build into a failure.
  */
 export async function runWithBuildLease<T>(
   store: BuildLeaseStore,
@@ -141,15 +170,15 @@ export async function runWithBuildLease<T>(
   build: () => Promise<T>,
   options?: { deadlineMs?: number },
 ): Promise<BuildLeaseOutcome<T>> {
-  let leased = true;
   try {
     if (!(await store.claim(resource, holder, ttlMs))) return { status: "joined" };
   } catch (claimError) {
     countCacheMetric("build_lease.claim_error");
-    console.error("[build-lease] claim failed; building without a lease", claimError);
-    leased = false;
+    console.error("[build-lease] claim failed; refusing unleased build", claimError);
+    const error = new BuildLeaseUnavailableError(resource);
+    return { status: "failed", error, released: Promise.resolve() };
   }
-  const release = (error: string | null) => (leased ? finishQuietly(store, resource, holder, error) : Promise.resolve());
+  const release = (error: string | null) => finishQuietly(store, resource, holder, error);
   const work = Promise.resolve().then(build);
   const settled = work.then(
     () => null,
