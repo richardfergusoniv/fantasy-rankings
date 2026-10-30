@@ -72,6 +72,12 @@
 .trending-add { color: var(--dim); }
 .trending-drop { color: var(--negative); }
 
+/* Raised summary at the top of My team: the draft grade on draft day and today. */
+.draft-grade { padding: 12px; }
+.draft-grade-eyebrow { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.draft-grade .card-hero { margin-top: 6px; border-block: 0; }
+.draft-grade .card-hero > div { padding-block: 4px 0; }
+
 @media (min-width: 760px) {
   .draft-center { max-width: var(--content-width); }
   .draft-controls { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr) auto; }

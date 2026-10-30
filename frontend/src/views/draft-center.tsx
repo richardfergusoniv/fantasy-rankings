@@ -21,6 +21,7 @@ import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-f
 import { formatWhole } from "../lib/format-number";
 import { Badge } from "@/components/ui/badge";
 import { CloseGlyph } from "../components/glyphs";
+import { DraftGradeCard } from "./draft-grade-card";
 import { LoadingBlock, ListPagination } from "../components/state-blocks";
 
 type DraftRow = DraftCenterData["adp"][number] & {
@@ -480,7 +481,12 @@ export function DraftCenter({
           {draftFilters}
           {draftBoard}
         </div>
-      ) : myTeamSection}
+      ) : (
+        <>
+          {completedDraft?.ownRosterId != null ? <DraftGradeCard leagueId={league.id} /> : null}
+          {myTeamSection}
+        </>
+      )}
     </section>
   );
 }

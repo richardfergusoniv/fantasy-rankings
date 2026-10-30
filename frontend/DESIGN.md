@@ -44,7 +44,7 @@ Three jobs, three looks (`theme/badges.css`). One meaning per color.
 
 ## Shared pieces
 
-- Page summaries: Matchup, Power and Projected open with one raised `Card` (hairline, `shadow-sm`). Other panels stay flat; only modals get real depth.
+- Page summaries: Matchup, Power, Projected and Draft's My team (the draft grade) open with one raised `Card` (hairline, `shadow-sm`). Other panels stay flat; only modals get real depth.
 - Icons are lucide line icons from `components/glyphs.tsx` (close, back, chevron, plus, sort). Movement is the drawn `MoveTriangle` (rank, value, depth chart, ticker); never a typed ▲ ▼ × ← ›.
 - States come from `components/state-blocks.tsx`: `LoadingBlock` (caption over shimmer rows), `EmptyState` (what is missing, then what to do) and `ListPagination` ("120 of 348 · Show 120 more").
 - Eyebrow labels and column heads are sentence case, 12px, weight 600. The font ships 400, 500, 600, 700 and 800; use 600 for labels and 700 for values.
