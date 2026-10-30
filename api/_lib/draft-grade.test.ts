@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  bestAvailable,
+  betterPicks,
   draftSurplusByTeam,
   expectedValue,
   GRADE_LETTERS,
@@ -16,7 +16,10 @@ import {
 } from "./draft-grade.js";
 
 const board = (entries: Array<[string, number]>): ValueBoard => new Map(entries);
-const pick = (pickNo: number, rosterId: number, playerId: string, position = "RB"): GradedPick => ({ pickNo, rosterId, playerId, position });
+const positionOf: Record<string, string> = { p1: "RB", p2: "WR", p3: "RB", p4: "WR", p5: "QB", p6: "TE", p7: "RB", p8: "WR" };
+const positions = new Map(Object.entries(positionOf));
+const slots = ["QB", "RB", "WR", "TE"];
+const pick = (pickNo: number, rosterId: number, playerId: string, position = positionOf[playerId] ?? "RB"): GradedPick => ({ pickNo, rosterId, playerId, position });
 
 // Four teams, two rounds, snake order. The market ranks p1..p8 in that order.
 const marketBoard = board([["p1", 1000], ["p2", 900], ["p3", 800], ["p4", 700], ["p5", 600], ["p6", 500], ["p7", 400], ["p8", 300]]);
@@ -129,36 +132,48 @@ describe("pickGrades", () => {
   });
 });
 
-describe("bestAvailable", () => {
-  it("is null at every pick that took the best player left", () => {
-    expect([...bestAvailable({ picks: fair, rosterId: 1, values: marketBoard }).values()]).toEqual([null, null]);
+describe("betterPicks", () => {
+  const args = { positions, starterSlots: slots };
+
+  it("is null at every pick of a draft that followed the market", () => {
+    for (const rosterId of [1, 2, 3, 4]) {
+      expect([...betterPicks({ ...args, picks: fair, rosterId, values: marketBoard }).values()]).toEqual([null, null]);
+    }
   });
 
-  it("names the best player still undrafted at the pick, never one taken earlier", () => {
-    // Team 1 takes p2 first, so p1 is there to have taken; at pick 2 team 2 takes p1 and has no better option.
+  it("names a player who would have added more to the lineup, never one already taken", () => {
+    // Team 1 takes the second-best player first, so the best was there to take.
     const swapped = [pick(1, 1, "p2"), pick(2, 2, "p1"), ...fair.slice(2)];
-    expect(bestAvailable({ picks: swapped, rosterId: 1, values: marketBoard }).get("p2")).toBe("p1");
-    expect(bestAvailable({ picks: swapped, rosterId: 2, values: marketBoard }).get("p1")).toBeNull();
-    // Team 3 took p3 at pick 3 with p1 and p2 gone: nobody better remains.
-    expect(bestAvailable({ picks: swapped, rosterId: 3, values: marketBoard }).get("p3")).toBeNull();
+    expect(betterPicks({ ...args, picks: swapped, rosterId: 1, values: marketBoard }).get("p2")).toBe("p1");
+    expect(betterPicks({ ...args, picks: swapped, rosterId: 2, values: marketBoard }).get("p1")).toBeNull();
   });
 
-  it("uses the values it is given, so hindsight can find a player who has since risen", () => {
-    const today = board([...marketBoard].map(([id, value]) => [id, id === "p8" ? 5000 : value] as [string, number]));
-    const better = bestAvailable({ picks: fair, rosterId: 4, values: today });
-    expect(better.get("p4")).toBe("p8");
-    // By pick 8 the risen player has been taken (by team 1, the drafter who took him).
-    expect(bestAvailable({ picks: fair, rosterId: 1, values: today }).get("p8")).toBeNull();
+  describe("given the picks before it", () => {
+    // a2 is the best player left at pick 3 by value, but team 1 already starts an RB (a1).
+    const values = board([["a1", 1000], ["a2", 950], ["a3", 800], ["a4", 700], ["a5", 600]]);
+    const labels = new Map([["a1", "RB"], ["a2", "RB"], ["a3", "WR"], ["a4", "QB"], ["a5", "TE"]]);
+    const picks = [pick(1, 1, "a1", "RB"), pick(2, 2, "a3", "WR"), pick(3, 1, "a5", "TE")];
+
+    it("skips a position the team has already filled, so the best player by value is not the answer", () => {
+      const result = betterPicks({ picks, rosterId: 1, values, positions: labels, starterSlots: slots });
+      expect(result.get("a1")).toBeNull();
+      expect(result.get("a5")).toBe("a4");
+    });
+
+    it("counts a flex slot, which an extra running back can fill", () => {
+      const result = betterPicks({ picks, rosterId: 1, values, positions: labels, starterSlots: [...slots, "FLEX"] });
+      expect(result.get("a5")).toBe("a2");
+    });
   });
 
   it("has nothing better for a kicker or defense pick", () => {
     const picks = [pick(1, 1, "k1", "K"), pick(2, 1, "p1")];
-    expect(bestAvailable({ picks, rosterId: 1, values: marketBoard }).get("k1")).toBeNull();
+    expect(betterPicks({ ...args, picks, rosterId: 1, values: marketBoard }).get("k1")).toBeNull();
   });
 });
 
 describe("gradeDraft", () => {
-  const options = { ownRosterId: 2, minBoardPlayers: 1 };
+  const options = { ownRosterId: 2, minBoardPlayers: 1, positions, starterSlots: slots };
 
   it("grades a steal first on draft day and last once the player has faded", () => {
     const steal = [pick(1, 1, "p2"), pick(2, 2, "p1"), ...fair.slice(2)];
@@ -204,7 +219,8 @@ describe("shiftDateKey", () => {
 });
 
 describe("loadDraftGrade", () => {
-  const league = { id: "lg", seasonLongFormat: { key: "redraft-1qb-10t-0.5ppr" } };
+  const league = { id: "lg", seasonLongFormat: { key: "redraft-1qb-10t-0.5ppr" }, starterSlots: slots };
+  const labelsFor = async (_format: string, ids: readonly string[]) => new Map(ids.map((id) => [id, { name: `Name ${id}`, position: positionOf[id] ?? "RB" }]));
   const sleeperPicks = fair.map((p) => ({ pick_no: p.pickNo, roster_id: p.rosterId, player_id: p.playerId, metadata: { position: p.position } }));
   const draft = (id: string, extra: Record<string, unknown> = {}) => ({ draft_id: id, status: "complete", type: "snake", start_time: Date.UTC(2026, 8, 3, 23, 41), ...extra });
   const fetcher = (drafts: unknown[], picksByDraft: Record<string, unknown[]>) => async <T>(url: string): Promise<T> => {
@@ -217,6 +233,7 @@ describe("loadDraftGrade", () => {
     const grade = await loadDraftGrade(league, 1, {
       fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }),
       loadBoard: async (formatKey, date, windowDays) => { calls.push([formatKey, date, windowDays]); return marketBoard; },
+      loadLabels: labelsFor,
       now: () => new Date("2026-10-30T20:00:00Z"),
       minBoardPlayers: 1,
     });
@@ -233,7 +250,7 @@ describe("loadDraftGrade", () => {
     const grade = await loadDraftGrade(league, 1, {
       fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }),
       loadBoard: async (_format, _date, windowDays) => (windowDays === 14 ? today : marketBoard),
-      loadLabels: async (_format, ids) => { labelCalls.push([...ids]); return new Map(ids.map((id) => [id, { name: `Name ${id}`, position: "WR" }])); },
+      loadLabels: async (format, ids) => { labelCalls.push([...ids]); return labelsFor(format, ids); },
       minBoardPlayers: 1,
     });
     // Team 1 took p1 (pick 1) and p8 (pick 8). Today p1 has fallen, so p2 was the better first pick.
@@ -241,19 +258,21 @@ describe("loadDraftGrade", () => {
       ["p1", 1, { draftDay: null, today: { playerId: "p2", name: "Name p2", position: "WR" } }],
       ["p8", 8, { draftDay: null, today: null }],
     ]);
-    expect(labelCalls).toEqual([["p2"]]);
+    // One lookup covers everyone on either board: positions decide who fits, names label the answers.
+    expect(labelCalls).toEqual([["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"]]);
   });
 
   it("returns null when no draft is complete, or the only one is an auction", async () => {
     const loadBoard = async () => marketBoard;
-    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1", { status: "drafting" })], {}), loadBoard })).toBeNull();
-    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1", { type: "auction" })], { d1: sleeperPicks }), loadBoard })).toBeNull();
+    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1", { status: "drafting" })], {}), loadBoard, loadLabels: labelsFor })).toBeNull();
+    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1", { type: "auction" })], { d1: sleeperPicks }), loadBoard, loadLabels: labelsFor })).toBeNull();
   });
 
   it("grades the draft with the most picks when a league has more than one", async () => {
     const grade = await loadDraftGrade(league, 1, {
       fetchJson: fetcher([draft("rookie"), draft("startup")], { rookie: sleeperPicks.slice(0, 2), startup: sleeperPicks }),
       loadBoard: async () => marketBoard,
+      loadLabels: labelsFor,
       minBoardPlayers: 1,
     });
     expect(grade?.draftId).toBe("startup");
@@ -261,7 +280,7 @@ describe("loadDraftGrade", () => {
 
   it("returns null without a start time or when the draft-day board is missing", async () => {
     const loadBoard = async () => board([]);
-    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1", { start_time: null })], { d1: sleeperPicks }), loadBoard: async () => marketBoard, minBoardPlayers: 1 })).toBeNull();
-    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }), loadBoard })).toBeNull();
+    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1", { start_time: null })], { d1: sleeperPicks }), loadBoard: async () => marketBoard, loadLabels: labelsFor, minBoardPlayers: 1 })).toBeNull();
+    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }), loadBoard, loadLabels: labelsFor })).toBeNull();
   });
 });
