@@ -11,8 +11,8 @@ import { useProfileTag } from "../lib/use-profile-tag";
 import { formatCompactCount } from "../lib/format-number";
 import { DepthChangeMark, depthChange, MatchupTag, ProfileChips, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 import { isHiddenHalfPointPropStat, propStatDef } from "../../../api/_lib/prop-line-reads";
-import { CloseGlyph } from "../components/glyphs";
 import { EmptyState } from "../components/state-blocks";
+import { CloseGlyph } from "../components/glyphs";
 import {
   analyticsMetricsForLeague,
   basePositionOrder,
