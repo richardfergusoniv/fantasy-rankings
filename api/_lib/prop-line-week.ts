@@ -20,6 +20,7 @@ import {
   sleeperPicksCacheKey,
   type SleeperPickLine,
 } from "./sleeper-picks.js";
+import { readSharedBoard } from "./shared-board-cache.js";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 import { readNflState } from "./user-leagues.js";
 
@@ -114,25 +115,30 @@ function serializeLines(
   });
 }
 
-/** The week's staged Sleeper Picks board, joined by player id + stat. */
+/** The week's staged Sleeper Picks board, joined by player id + stat.
+ * L1/Runtime Cache first (the ingest handler publishes after its durable
+ * write); an evicted or failed cache falls back to the `source_cache` row —
+ * one bounded lookup, the intended eviction path. */
 async function loadSleeperPickBoard(
   season: number,
   week: number,
 ): Promise<{ byKey: Map<string, SleeperPickLine>; pulledAt: string | null }> {
-  try {
+  const scope = `${season}:${week}`;
+  const { envelope } = await readSharedBoard("sleeper-picks", scope, async () => {
     const rows = await db
       .select({ payload: schema.sourceCache.payload })
       .from(schema.sourceCache)
       .where(eq(schema.sourceCache.cacheKey, sleeperPicksCacheKey(season, week)))
       .limit(1);
     const row = rows[0];
-    if (!row) return { byKey: new Map(), pulledAt: null };
+    if (!row) return null;
     const board = parseStoredSleeperPicks(decodeSourceCachePayload(row.payload));
-    if (!board) return { byKey: new Map(), pulledAt: null };
-    return { byKey: buildSleeperPickMap(board.lines), pulledAt: board.pulledAt };
-  } catch {
-    return { byKey: new Map(), pulledAt: null };
-  }
+    if (!board) return null;
+    return { payload: board, sourceAgeMs: new Date(board.pulledAt).getTime() };
+  });
+  const board = envelope ? parseStoredSleeperPicks(envelope.payload) : null;
+  if (!board) return { byKey: new Map(), pulledAt: null };
+  return { byKey: buildSleeperPickMap(board.lines), pulledAt: board.pulledAt };
 }
 
 /** One season/week query → latest line per player/stat (+ open/move). */
