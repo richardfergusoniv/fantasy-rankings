@@ -609,7 +609,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
           <div className="matchup-title-row" role="group" aria-label={`${matchup.team} versus ${matchup.opponent}`}>
             {[matchup.team, matchup.opponent].map((name, index) => (
               <Fragment key={name}>
-                {index === 1 ? <span className="matchup-title-at" aria-hidden="true">{matchup.isAway === false ? "vs" : "@"}</span> : null}
+                {index === 1 ? <span className="matchup-title-at" aria-hidden="true">{matchup.isAway ? "@" : "vs"}</span> : null}
                 {onOpenTeam ? (
                   <button type="button" className="matchup-team-title" aria-label={`View ${name} team data`} aria-haspopup="dialog" onClick={() => onOpenTeam(name)}>
                     {name}<i aria-hidden="true">›</i>
