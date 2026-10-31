@@ -39,8 +39,8 @@ const DEFAULT_SLOTS = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX"];
 
 const TIMING_ROUNDS = 4;
 
-/** Most search steps per pass and plan; past it the best combination found so far is used (about 0.4 s for a full draft). */
-const NODE_BUDGET = 3000;
+/** Most search steps per pass and plan; past it the best combination found so far is used (about 2 s for a full draft, usually much less). */
+const NODE_BUDGET = 20000;
 
 const roundOf = (pickNo: number, teams: number) => Math.floor((pickNo - 1) / Math.max(teams, 1)) + 1;
 
