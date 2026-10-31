@@ -40,13 +40,12 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
   const sameStrategy = strategies?.yours.name === strategies?.best.name && strategies?.yours.timing === strategies?.best.timing;
 
   const hindsight = query.data?.grade?.hindsight ?? null;
-  const yoursPlan = hindsight?.plans.find((plan) => plan.yours);
 
   return (
     <section className="draft-my-team">
       {hindsight && entries.length > 0 ? (
         <>
-          <HindsightCard hindsight={hindsight} yoursIsBest={sameStrategy} yoursTiming={yoursPlan?.timing ?? ""} onOpen={() => setSheetOpen(true)} />
+          <HindsightCard hindsight={hindsight} onOpen={() => setSheetOpen(true)} />
           <HindsightSheet
             open={sheetOpen}
             onOpenChange={setSheetOpen}
