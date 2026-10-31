@@ -28,7 +28,7 @@ export type RankingHorizon = (typeof RANKING_HORIZONS)[number];
 export const DRAFT_POSITIONS = ["ALL", "QB", "RB", "WR", "TE", "K", "DEF", "ROOKIES"] as const;
 export type DraftPosition = (typeof DRAFT_POSITIONS)[number];
 
-export const DRAFT_ROOMS = ["board", "myTeam", "alternatives"] as const;
+export const DRAFT_ROOMS = ["board", "myTeam", "alternativeDraft"] as const;
 export type DraftRoom = (typeof DRAFT_ROOMS)[number];
 
 export const CHART_DATASETS = ["advanced", "projections"] as const;
