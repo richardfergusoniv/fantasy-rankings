@@ -127,13 +127,22 @@ describe("xNewsItemSchema / xNewsBatchSchema", () => {
     expect(xNewsItemSchema.safeParse({ ...validItem, source_url: "file:///tmp/x" }).success).toBe(false);
   });
 
-  it("accepts optional tags and rejects invalid tag shapes", () => {
+  it("accepts allowlisted tags and drops unknown tags instead of rejecting", () => {
     expect(xNewsItemSchema.safeParse({ ...validItem, tags: ["dynasty"] }).success).toBe(true);
-    expect(xNewsItemSchema.safeParse({ ...validItem, tags: ["Dynasty"] }).success).toBe(false);
     expect(xNewsItemSchema.safeParse({
       ...validItem,
+      tags: ["insider", "beat", "analyst", "rumor", "team-account"],
+    }).success).toBe(true);
+    const mixed = xNewsItemSchema.parse({
+      ...validItem,
+      tags: ["Insider", "unknown-foo", "dynasty", "!!!", "player"],
+    });
+    expect(mixed.tags).toEqual(["insider", "dynasty", "player"]);
+    const onlyUnknown = xNewsItemSchema.parse({
+      ...validItem,
       tags: ["a", "b", "c", "d", "e", "f"],
-    }).success).toBe(false);
+    });
+    expect(onlyUnknown.tags).toEqual([]);
   });
 });
 
@@ -241,12 +250,12 @@ describe("normalizeNewsTags + dynasty visibility", () => {
         source_url: "https://x.com/d/status/9",
         post_id: "9",
         published_at: "2026-10-10T18:00:00.000Z",
-        tags: ["dynasty", "dynasty", "  "],
+        tags: ["dynasty", "dynasty", "  ", "insider", "nope"],
       },
       { playerId: "1", player: "A", team: "MIN" },
     );
-    expect(draft.tags).toEqual(["dynasty"]);
-    expect(normalizeNewsTags(["Dynasty", "FOO", "foo"])).toEqual(["dynasty", "foo"]);
+    expect(draft.tags).toEqual(["dynasty", "insider"]);
+    expect(normalizeNewsTags(["Dynasty", "FOO", "foo", "beat"])).toEqual(["dynasty", "beat"]);
     const untagged = buildXNewsDraft(
       {
         player_id: "1",

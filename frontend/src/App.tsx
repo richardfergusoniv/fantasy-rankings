@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "./api";
 import { playerWeeklyRank } from "./player-card-state";
 import { newsVisibleInContext } from "../../api/_lib/player-news-filters";
+import { selectNewsBadges } from "../../api/_lib/player-news-badges";
 import { isDynastyNewsContext } from "./player-news-context";
 import { newsForTicker, PROMINENT_OVERALL_RANK_LIMIT, tickerItemKind } from "./ticker-news";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
@@ -134,6 +135,8 @@ function primaryPageForTab(tab: Tab): PrimaryPage {
 type TickerItem = {
   key: string;
   source: string;
+  /** Rumor uses muted amber so unconfirmed items stay distinct from good/bad. */
+  sourceTone?: "neutral" | "rumor";
   label: string;
   quote: string | null;
   move: number | null;
@@ -231,13 +234,12 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
       { isDynastyContext },
     ).map((item) => {
       const isArticle = item.source === "article" && isHttpOrHttpsUrl(item.sourceUrl);
+      const badges = selectNewsBadges(item);
+      const sourceParts = [badges.primary.label, ...badges.secondary.map((badge) => badge.label)];
       return {
         key: `news:${item.id}`,
-        source: isArticle
-          ? item.sourceLabel
-          : item.newsType === "headline" && item.playerId === "league"
-            ? "BREAKING"
-            : "NEWS",
+        source: sourceParts.join(" · "),
+        sourceTone: badges.primary.tone,
         label: tickerNewsLabel(item),
         quote: null,
         move: null,
@@ -273,7 +275,7 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
 
   const content = (item: TickerItem) => (
     <>
-      <span className={`ticker-source ${item.source === "BREAKING" ? "breaking" : ""}`}>{item.source}</span>
+      <span className={`ticker-source${item.sourceTone === "rumor" ? " is-rumor" : ""}`}>{item.source}</span>
       <span className="ticker-label">{item.label}</span>
       {item.quote ? <strong>{item.quote}</strong> : null}
       {item.move !== null && Math.abs(item.move) >= 0.05 ? <span className={`ticker-move ${item.tone}`}><MoveTriangle direction={item.move > 0 ? "up" : "down"} />{formatDecimal(Math.abs(item.move), 2)}</span> : null}

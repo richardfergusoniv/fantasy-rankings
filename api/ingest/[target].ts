@@ -78,13 +78,17 @@ const MAX_INGEST_BODY_BYTES = 8 * 1024 * 1024;
  *                   `computedAt`, busts the dashboard cache on commit.
  * - pfn-tables:     writes `pfn:{tableKey}` rows to `source_cache` for the
  *                   4 PFN tables.
- * - player-news-x:  inserts shared player-news rows from X. Player scope
+ * - player-news-x:  upserts shared player-news rows from X. Player scope
  *                   dedupes by post_id + player_id (roundups fan out).
  *                   Team/league scopes store one row with player_id null
  *                   (dedupe by post_id + scope, plus team for team scope).
- *                   Producers should send Sleeper `player_id` when
- *                   known; `player_name` (+ optional `team`) is a fallback.
- *                   Last-name-only names require `team` or the item is dropped.
+ *                   Insert uses bare ON CONFLICT DO NOTHING (all unique
+ *                   indexes), then refreshes `tags` by id so dynasty /
+ *                   source-role tags from a resent item survive. Unknown tags
+ *                   are dropped at validation (item still accepted). Producers
+ *                   should send Sleeper `player_id` when known; `player_name`
+ *                   (+ optional `team`) is a fallback. Last-name-only names
+ *                   require `team` or the item is dropped.
  * - prop-line-snapshots: inserts dated consensus prop-line rows into
  *                   `prop_line_snapshots` (line-movement history).
  * - sleeper-picks:  stores the normalized Sleeper Picks NFL board as one
@@ -420,8 +424,9 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     const result = await db
       .insert(schema.sharedPlayerNews)
       .values(chunk)
-      // Bare ON CONFLICT skips rows that hit a unique index (player, team, or
-      // league), so a resent post still counts as a duplicate.
+      // Bare ON CONFLICT skips every unique index (PK, url+player, external+player,
+      // team/league). PK-only DO UPDATE would leave url/external collisions
+      // unhandled and abort the whole chunk.
       .onConflictDoNothing()
       .returning({
         id: schema.sharedPlayerNews.id,
@@ -446,6 +451,18 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
         }
       }
     }
+    // Refresh tags by deterministic id so resent X items (same id, skipped by
+    // ON CONFLICT) still pick up source-role / dynasty tags. One statement per
+    // chunk; no-ops when the id was never inserted (e.g. url-only collision
+    // with a different id).
+    const tagPayload = chunk.map((row) => ({ id: row.id, tags: row.tags }));
+    await db.execute(sql`
+      UPDATE shared_player_news AS spn
+      SET tags = v.tags
+      FROM jsonb_to_recordset(${JSON.stringify(tagPayload)}::jsonb)
+        AS v(id text, tags text[])
+      WHERE spn.id = v.id
+    `);
   }
 
   const cutoff = retentionCutoff();

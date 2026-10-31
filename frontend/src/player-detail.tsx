@@ -31,6 +31,7 @@ import {
 } from "./dashboard-shared";
 import { actualComponentsForGame } from "./actual-components";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
+import { NewsTypeBadges } from "./news-badges";
 import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { buildGameLogRows } from "./lib/game-log-rows";
 import { positionTierLabel } from "./lib/position-tier";
@@ -787,11 +788,7 @@ export function PlayerDetailSheet({
                 const timeLabel = newsItemTimeLabel(item, newsNowMs);
                 const header = (
                   <div>
-                    {!isArticle ? (
-                      <span className={`news-severity ${item.newsType}`}>
-                        {item.newsType === "headline" ? "League news" : item.newsType === "waiver" ? "Waiver signal" : "Roster update"}
-                      </span>
-                    ) : null}
+                    <NewsTypeBadges item={item} />
                     <time>{outletLabel} · {timeLabel}</time>
                   </div>
                 );

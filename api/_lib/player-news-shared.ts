@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { isHttpOrHttpsUrl } from "./http-url.js";
+import { isAllowedNewsTag } from "./player-news-badges.js";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 
 export {
@@ -9,6 +10,18 @@ export {
   newsVisibleInContext,
   SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT,
 } from "./player-news-filters.js";
+export {
+  ALLOWED_NEWS_TAGS,
+  X_SOURCE_ROLE_TAGS,
+  articleOutletBadgeLabel,
+  isAllowedNewsTag,
+  selectNewsBadges,
+  type AllowedNewsTag,
+  type NewsBadge,
+  type NewsBadges,
+  type NewsBadgeTone,
+  type XSourceRoleTag,
+} from "./player-news-badges.js";
 
 /**
  * Pure helpers for the shared player-news pipeline and X ingest.
@@ -60,12 +73,16 @@ export type SharedNewsDraft = {
   scope: PlayerNewsScope;
 };
 
-/** Short lowercase tags (e.g. `dynasty`); max 5 per item. */
-const newsTagSchema = z
-  .string()
-  .min(1)
-  .max(32)
-  .regex(/^[a-z][a-z0-9_-]*$/, "tags must be lowercase alphanumeric (with _ or -)");
+/**
+ * Tags on X ingest: unknown / malformed values are dropped (not rejected).
+ * Allowlist: dynasty + X source-role tags (insider, beat, analyst, rumor,
+ * team-account, player). Max 5 after filtering.
+ */
+const newsTagsFieldSchema = z.preprocess((value) => {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return value;
+  return normalizeNewsTags(value.filter((entry): entry is string => typeof entry === "string"));
+}, z.array(z.string().min(1).max(32)).max(5).optional());
 
 export type NotesSnapshotEntry = {
   injuryNotes: string | null;
@@ -109,8 +126,12 @@ export const xNewsItemSchema = z
     published_at: z.string().datetime(),
     signal: z.string().min(1).max(80).optional(),
     score: z.number().int().min(0).max(100).optional(),
-    /** Optional tags such as `["dynasty"]` for dynasty-only posts. */
-    tags: z.array(newsTagSchema).max(5).optional(),
+    /**
+     * Optional tags: dynasty and/or one X source-role tag
+     * (`insider` | `beat` | `analyst` | `rumor` | `team-account` | `player`).
+     * Unknown tags are dropped; they do not reject the item.
+     */
+    tags: newsTagsFieldSchema,
   })
   .superRefine((item, ctx) => {
     const scope = item.scope ?? "player";
@@ -179,14 +200,18 @@ export function stableNewsId(parts: string[]): string {
   return createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 32);
 }
 
-/** Normalize optional ingest tags: lowercase, trim, dedupe, cap at 5. */
+/**
+ * Normalize optional ingest tags: lowercase, trim, dedupe, keep allowlisted
+ * tags only, cap at 5. Unknown tags are dropped so producers can evolve
+ * without rejecting whole items.
+ */
 export function normalizeNewsTags(tags: readonly string[] | null | undefined): string[] {
   if (!tags || tags.length === 0) return [];
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of tags) {
     const tag = raw.trim().toLowerCase();
-    if (!tag || seen.has(tag)) continue;
+    if (!tag || !isAllowedNewsTag(tag) || seen.has(tag)) continue;
     seen.add(tag);
     out.push(tag);
     if (out.length >= 5) break;
