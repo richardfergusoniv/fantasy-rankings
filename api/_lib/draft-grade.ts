@@ -3,7 +3,8 @@
  *
  * The FantasyCalc value board stored for the draft's date stands in for ADP: it ranks every
  * player as the market saw them that day. For each pick, the expected value is the draft-day
- * value of the player the market ranked at that overall pick number. A pick's surplus is the
+ * value of the player the market ranked at that pick's place among the players this draft took
+ * (so a rookie draft is measured within its rookies, not against the whole dynasty market). A pick's surplus is the
  * player's value minus that expectation, so reaches cost points and steals add them.
  *
  *   Draft day = each player's value on draft day, minus the slot's expectation.
@@ -220,7 +221,10 @@ export function gradeDraft(args: {
   const min = args.minBoardPlayers ?? MIN_BOARD_PLAYERS;
   // Today is measured against draft-day slots, so without the draft-day board neither grade exists.
   if (args.draftDayBoard.size < min) return { draftDay: null, today: null, picks: [] };
-  const slotBoard = args.draftDayBoard;
+  // Slots are measured against the players this draft could have taken, which are the ones it did take.
+  const drafted = new Set(args.picks.map((pick) => pick.playerId));
+  const slotBoard: ValueBoard = new Map([...args.draftDayBoard].filter(([playerId]) => drafted.has(playerId)));
+  if (slotBoard.size === 0) return { draftDay: null, today: null, picks: [] };
   const hasToday = args.todayBoard.size >= min;
   const draftDay = resultFor(draftSurplusByTeam({ picks: args.picks, slotBoard, values: args.draftDayBoard }), args.ownRosterId);
   const today = hasToday

@@ -467,10 +467,10 @@ export function DraftCenter({
             </button>
             <span><span className="sr-only">Position </span>{row.position === "DEF" ? "DST" : row.position}</span>
             <span className={isSpecialist ? "ranking-proj" : undefined}><strong>{isSpecialist ? <><span className="sr-only">Weekly projection </span>{formatProjectionPoints(row.weeklyProjection, row.projectionSource)}</> : row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{formatWhole(row.marketValue)}</>}</strong>{isSpecialist ? <span aria-hidden="true">PROJ</span> : null}</span>
-            <span className="draft-row-actions">
+            {draftIsFinal ? null : <span className="draft-row-actions">
               <button type="button" className="draft-icon-button" disabled={!row.playerId} onClick={() => row.playerId && addToMyTeam(row.playerId)} aria-label={`Add ${row.name} to my team`} title="Add to my team"><Plus aria-hidden="true" /></button>
               {liveDraft ? null : <button type="button" className="draft-icon-button draft-taken-button" disabled={!row.playerId} onClick={() => row.playerId && markTaken(row.playerId)} aria-label={`Drafted by another team, ${row.name}`} title="Drafted by another team"><UserX aria-hidden="true" /></button>}
-            </span>
+            </span>}
           </div>
         );
       })}

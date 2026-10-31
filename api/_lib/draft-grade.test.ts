@@ -218,6 +218,23 @@ describe("gradeDraft", () => {
   });
 });
 
+describe("gradeDraft slot pool", () => {
+  it("measures slots against the players the draft took, so a rookie draft is graded within its rookies", () => {
+    // A veteran worth 9000 is on the board but could not be drafted in a rookie draft.
+    const rookies = board([["vet", 9000], ["r1", 1000], ["r2", 900], ["r3", 800], ["r4", 700]]);
+    const picks = [pick(1, 1, "r1", "RB"), pick(2, 2, "r2", "WR"), pick(3, 2, "r3", "WR"), pick(4, 1, "r4", "RB")];
+    const grades = gradeDraft({ picks, ownRosterId: 1, draftDayBoard: rookies, todayBoard: rookies, minBoardPlayers: 1 });
+    // Pick 1 took the best rookie where the pool's best rookie belonged: 100%, not 11% of the veteran.
+    expect(grades.picks[0]?.draftDay).toEqual({ letter: "A+", percent: 100 });
+    expect(grades.picks[1]?.draftDay).toEqual({ letter: "A+", percent: 100 });
+  });
+
+  it("has no grades when none of the draft's players are on the board", () => {
+    const grades = gradeDraft({ picks: [pick(1, 1, "unknown", "RB"), pick(2, 2, "other", "WR")], ownRosterId: 1, draftDayBoard: board([["x", 5]]), todayBoard: board([["x", 5]]), minBoardPlayers: 1 });
+    expect(grades).toEqual({ draftDay: null, today: null, picks: [] });
+  });
+});
+
 describe("gradeDraft round length", () => {
   it("uses the draft's team count for the window when given", () => {
     const values = board([["low", 100], ["a", 90], ["star", 5000]]);
