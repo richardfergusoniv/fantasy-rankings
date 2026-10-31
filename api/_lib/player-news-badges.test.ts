@@ -19,16 +19,26 @@ describe("selectNewsBadges", () => {
     });
   });
 
-  it("maps X source-role tags to primary labels", () => {
-    expect(selectNewsBadges({ source: "x", tags: ["insider"] }).primary).toEqual({
-      key: "insider",
-      label: "Insider",
-      tone: "neutral",
-    });
-    expect(selectNewsBadges({ source: "x", tags: ["beat"] }).primary.label).toBe("Beat writer");
-    expect(selectNewsBadges({ source: "x", tags: ["analyst"] }).primary.label).toBe("Analyst");
-    expect(selectNewsBadges({ source: "x", tags: ["team-account"] }).primary.label).toBe("Team account");
-    expect(selectNewsBadges({ source: "x", tags: ["player"] }).primary.label).toBe("Player");
+  it("maps X source-role tags the scanner sends to primary labels", () => {
+    // Live X producer currently emits insider | beat | analyst | rumor |
+    // team-account (+ optional dynasty). `player` is allowlisted for later.
+    const cases: Array<{ tag: string; label: string }> = [
+      { tag: "insider", label: "Insider" },
+      { tag: "beat", label: "Beat writer" },
+      { tag: "analyst", label: "Analyst" },
+      { tag: "team-account", label: "Team account" },
+      { tag: "player", label: "Player" },
+    ];
+    for (const { tag, label } of cases) {
+      expect(selectNewsBadges({ source: "x", tags: [tag] }).primary).toEqual({
+        key: tag,
+        label,
+        tone: "neutral",
+      });
+      expect(
+        selectNewsBadges({ source: "x", tags: [tag, "dynasty"] }).secondary.map((b) => b.label),
+      ).toEqual(["Dynasty"]);
+    }
   });
 
   it("falls back to X when source is x with no role tag", () => {
