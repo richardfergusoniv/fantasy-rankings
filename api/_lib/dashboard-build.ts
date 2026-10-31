@@ -125,7 +125,7 @@ import {
   runWithBuildLease,
 } from "./build-lease.js";
 import { createDashboardBuildTracker, type DashboardBuildState } from "./dashboard-build-status.js";
-import { assertDashboardBuildPublishable } from "./dashboard-build-guard.js";
+import { assertDashboardBuildPublishable, buildRetryBudgetMs } from "./dashboard-build-guard.js";
 import { captureServerError } from "./posthog.js";
 
 /**
@@ -2322,12 +2322,20 @@ export async function loadOrBuildUserDashboard(
   // A user-pressed refresh (force) gets one build retry before falling
   // back: Sleeper is effectively always reachable, so a resync should not
   // fail on a single bad build. Background loads keep one attempt — the
-  // next section poll kicks another build anyway.
+  // next section poll kicks another build anyway. Both attempts share
+  // ONE request deadline (the build budget inside the function's
+  // maxDuration): two stacked 55s windows could exceed the 60s platform
+  // cap and the client's deadline, and the request would die before
+  // reaching the fallback below. A retry with too little budget left
+  // does not start (see buildRetryBudgetMs).
   const maxBuildAttempts = force ? 2 : 1;
+  const requestDeadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
   let buildError: unknown;
   for (let attempt = 0; attempt < maxBuildAttempts; attempt += 1) {
+    const budgetMs = buildRetryBudgetMs({ requestDeadlineAtMs, nowMs: Date.now(), attempt });
+    if (budgetMs === null) break;
     try {
-      const built = await buildUserDashboardUnderLease(sleeperUserId, force, cached?.fetchedAtMs ?? 0);
+      const built = await buildUserDashboardUnderLease(sleeperUserId, force, cached?.fetchedAtMs ?? 0, budgetMs);
       return {
         dashboard: built.dashboard,
         // A fresh row found at lease recheck keeps its real fetchedAt: stamping
@@ -2684,6 +2692,10 @@ async function buildUserDashboardUnderLease(
   sleeperUserId: string,
   force: boolean,
   cachedFetchedAtMs: number,
+  // The caller's remaining request budget. A retrying caller passes what
+  // is left of the ONE shared deadline so two attempts can never stack
+  // into two full build windows (see buildRetryBudgetMs).
+  budgetMs: number = BUILD_DEADLINE_MS,
 ): Promise<{ dashboard: Dashboard; fetchedAtMs: number; recheck: boolean }> {
   const resource = dashboardBuildLeaseResource(sleeperUserId);
   const holder = crypto.randomUUID();
@@ -2705,7 +2717,7 @@ async function buildUserDashboardUnderLease(
         }
       }
       // Align soft actuals waits with this lease wait (same budget window).
-      const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
+      const deadlineAtMs = Date.now() + budgetMs;
       const dashboard = await buildUserDashboard(sleeperUserId, force, {
         deadlineAtMs,
         // A cached snapshot exists (the caller read one before leasing):
@@ -2718,7 +2730,7 @@ async function buildUserDashboardUnderLease(
     },
     // On timeout the build keeps the lease until it settles, so a retry
     // can't start a second build alongside it.
-    { deadlineMs: BUILD_DEADLINE_MS },
+    { deadlineMs: budgetMs },
   );
   if (outcome.status === "built") {
     countCacheMetric("dashboard.build.done");
@@ -2734,7 +2746,7 @@ async function buildUserDashboardUnderLease(
   const joined = await waitForFreshDashboardCache(
     sleeperUserId,
     cachedFetchedAtMs,
-    BUILD_DEADLINE_MS,
+    budgetMs,
     resource,
   );
   if (!joined) {
