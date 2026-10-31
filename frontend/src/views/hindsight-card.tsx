@@ -12,7 +12,7 @@ export const gapText = (gap: number) => `${gap > 0 ? "+" : ""}${gap.toFixed(1)}%
 export function HindsightCard({ hindsight, onOpen }: { hindsight: Hindsight; onOpen: () => void }) {
   const items = [
     { label: "Lineup gap", value: gapText(hindsight.gapToBest), valueTone: hindsight.gapToBest > 0 ? ("good" as const) : undefined },
-    { label: "Picks to change", value: `${hindsight.changes} of ${hindsight.of}` },
+    { label: "Swaps", value: `${hindsight.changes} of ${hindsight.of}` },
     { label: "Your strategy", value: gapText(hindsight.gapYours), valueTone: hindsight.gapYours > 0 ? ("good" as const) : undefined },
   ];
   return (
