@@ -36,6 +36,29 @@ describe("assertDashboardBuildPublishable", () => {
     expect(incomplete.rosterFetchFailedLeagueIds).toEqual(["league-1", "league-2"]);
     expect(incomplete.message).toContain("league-1");
   });
+
+  it("publishes when the only failed league is not in the cached snapshot", () => {
+    expect(() => assertDashboardBuildPublishable({
+      requireComplete: true,
+      rosterFetchFailedLeagueIds: ["league-new"],
+      protectedLeagueIds: ["league-1"],
+    })).not.toThrow();
+  });
+
+  it("blocks on snapshot leagues only, and reports just those", () => {
+    let thrown: unknown;
+    try {
+      assertDashboardBuildPublishable({
+        requireComplete: true,
+        rosterFetchFailedLeagueIds: ["league-1", "league-new"],
+        protectedLeagueIds: ["league-1"],
+      });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(IncompleteDashboardBuildError);
+    expect((thrown as InstanceType<typeof IncompleteDashboardBuildError>).rosterFetchFailedLeagueIds).toEqual(["league-1"]);
+  });
 });
 
 describe("buildRetryBudgetMs", () => {

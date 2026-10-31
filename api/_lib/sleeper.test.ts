@@ -93,4 +93,13 @@ describe("fetchJsonWithRetry", () => {
     })).resolves.toBe("on time");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it("rechecks the deadline after the backoff, before starting the next attempt", async () => {
+    const fetchMock = stubFetchSequence([{ status: 503 }, { status: 200, body: "late" }]);
+    await expect(fetchJsonWithRetry("https://example.test/x", {
+      sleepFn: () => new Promise<void>((resolve) => setTimeout(resolve, 120)),
+      deadlineAtMs: Date.now() + 30,
+    })).rejects.toThrow("Source returned 503");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

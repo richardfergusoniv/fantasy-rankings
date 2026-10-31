@@ -24,9 +24,23 @@ export class IncompleteDashboardBuildError extends Error {
 export function assertDashboardBuildPublishable(args: {
   requireComplete: boolean;
   rosterFetchFailedLeagueIds: readonly string[];
+  /**
+   * The leagues present in the cached snapshot this build would
+   * replace. Only their failures block publishing: a league joined
+   * after the snapshot was taken has nothing stored to protect, so its
+   * failure must not hold the other leagues' fresh data hostage to a
+   * stale snapshot. When omitted, every failure blocks (the behavior
+   * for callers that do not know the snapshot's leagues).
+   */
+  protectedLeagueIds?: readonly string[];
 }): void {
-  if (args.requireComplete && args.rosterFetchFailedLeagueIds.length > 0) {
-    throw new IncompleteDashboardBuildError(args.rosterFetchFailedLeagueIds);
+  if (!args.requireComplete) return;
+  const protectedSet = args.protectedLeagueIds ? new Set(args.protectedLeagueIds) : null;
+  const blocking = protectedSet
+    ? args.rosterFetchFailedLeagueIds.filter((leagueId) => protectedSet.has(leagueId))
+    : args.rosterFetchFailedLeagueIds;
+  if (blocking.length > 0) {
+    throw new IncompleteDashboardBuildError(blocking);
   }
 }
 

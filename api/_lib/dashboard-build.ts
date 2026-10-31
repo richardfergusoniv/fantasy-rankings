@@ -118,6 +118,7 @@ import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./playe
 import { buildStandings, waiverStatus } from "./league-standings.js";
 import { loadTeamGameLines, type TeamGameLine } from "./team-game-lines.js";
 import {
+  BuildDeadlineError,
   dashboardBuildLeaseResource,
   drizzleBuildLeaseStore,
   publishUnderBuildLease,
@@ -1464,7 +1465,7 @@ async function loadFreeAgentWeeklyStats(
 export async function buildUserDashboard(
   sleeperUserId: string,
   fresh = false,
-  options?: { deadlineAtMs?: number; requireComplete?: boolean },
+  options?: { deadlineAtMs?: number; requireComplete?: boolean; protectedLeagueIds?: readonly string[] },
 ): Promise<Dashboard> {
   const buildDeadlineAt = options?.deadlineAtMs ?? Date.now() + BUILD_DEADLINE_MS;
   const sourceErrors: string[] = [];
@@ -2273,6 +2274,7 @@ export async function buildUserDashboard(
   assertDashboardBuildPublishable({
     requireComplete: options?.requireComplete === true,
     rosterFetchFailedLeagueIds,
+    protectedLeagueIds: options?.protectedLeagueIds,
   });
   // Projection-accuracy telemetry is best-effort: a failed write must not
   // fail the user-facing build (the original action let it throw).
@@ -2347,6 +2349,10 @@ export async function loadOrBuildUserDashboard(
       };
     } catch (error) {
       buildError = error;
+      // A build that hit its deadline still holds the lease while it
+      // settles, so a retry could only join it and burn what is left of
+      // the request budget. Go straight to the fallback instead.
+      if (error instanceof BuildDeadlineError) break;
     }
   }
 
@@ -2718,11 +2724,15 @@ async function buildUserDashboardUnderLease(
       }
       // Align soft actuals waits with this lease wait (same budget window).
       const deadlineAtMs = Date.now() + budgetMs;
+      // The publish guard protects the leagues the existing snapshot
+      // actually holds; a league joined since is not in it.
+      const existing = cachedFetchedAtMs > 0 ? await readUserDashboardCache(sleeperUserId) : null;
       const dashboard = await buildUserDashboard(sleeperUserId, force, {
         deadlineAtMs,
         // A cached snapshot exists (the caller read one before leasing):
         // never let an incomplete build overwrite it.
         requireComplete: cachedFetchedAtMs > 0,
+        protectedLeagueIds: existing?.dashboard.leagues.map((league) => league.id),
       });
       // Ownership is locked and all section writes commit atomically.
       await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard, { resource, holder });
@@ -2834,11 +2844,13 @@ export function kickUserDashboardBuild(
             }
           }
           const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
+          const existing = freshness !== null ? await readUserDashboardCache(sleeperUserId) : null;
           const dashboard = await buildUserDashboard(sleeperUserId, false, {
             deadlineAtMs,
             // Any existing snapshot (fresh or stale) is worth protecting
             // from an incomplete build; a cold build publishes partial.
             requireComplete: freshness !== null,
+            protectedLeagueIds: existing?.dashboard.leagues.map((league) => league.id),
           });
           await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard, { resource, holder });
           return dashboard;

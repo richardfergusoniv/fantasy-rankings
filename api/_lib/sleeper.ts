@@ -266,6 +266,10 @@ export async function fetchJsonWithRetry<T>(
       if (attempt >= maxAttempts - 1 || !isRetryableSourceFetchError(err)) throw err;
       if (options.deadlineAtMs !== undefined && Date.now() >= options.deadlineAtMs) throw err;
       await sleepFn(backoffMs[Math.min(attempt, backoffMs.length - 1)] ?? 0);
+      // Recheck after the backoff: the sleep itself can cross the
+      // deadline, and starting another full attempt past it would hand
+      // the caller back its budget already spent.
+      if (options.deadlineAtMs !== undefined && Date.now() >= options.deadlineAtMs) throw err;
     }
   }
   throw lastError;
