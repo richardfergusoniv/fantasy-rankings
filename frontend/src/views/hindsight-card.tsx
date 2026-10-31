@@ -66,7 +66,14 @@ export function HindsightSheet({ open, onOpenChange, hindsight, entries, nameOf,
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="hindsight-sheet">
+      <DialogContent
+        className="hindsight-sheet"
+        onCloseAutoFocus={(event) => {
+          // The sheet opens from the summary card, so put focus back on it rather than on the page.
+          event.preventDefault();
+          document.querySelector<HTMLElement>(".hindsight-card")?.focus();
+        }}
+      >
         <div className="hindsight-sheet-head">
           <DialogTitle>All strategies</DialogTitle>
           <DialogDescription className="sr-only">Who each strategy would have taken at each of your picks, on today’s values.</DialogDescription>
