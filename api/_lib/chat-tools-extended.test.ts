@@ -664,6 +664,9 @@ describe("extended chat tools", () => {
     expect(result.depth?.rank).toBe(1);
   });
 
+  // This test does seconds of real async work (live-shaped projection
+  // loads) and sat ~1s under the 5s default timeout, so any added suite
+  // load flakes it. Give it explicit headroom.
   it("get_projections returns week and ROS for roster", async () => {
     selectResults.push([]); // projection accuracy
     const result = await toolGetProjections(ctxWithDashboard(), {
@@ -677,7 +680,7 @@ describe("extended chat tools", () => {
     expect(result.ok).toBe(true);
     expect(result.players.some((p) => p.playerId === "p1")).toBe(true);
     expect(result.propLines.length).toBeGreaterThan(0);
-  });
+  }, 15_000);
 
   it("get_projections defaults omitted leagueId to the viewing league", async () => {
     selectResults.push([]);

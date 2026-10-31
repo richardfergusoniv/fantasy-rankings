@@ -8,7 +8,7 @@ import {
   type LeagueRosters,
   type RosterSlot,
 } from "./league-relevance.js";
-import { SLEEPER_BASE, fetchJson, type SleeperLeague, type SleeperRoster } from "./sleeper.js";
+import { SLEEPER_BASE, fetchJsonWithRetry, type SleeperLeague, type SleeperRoster } from "./sleeper.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
 
 /**
@@ -116,7 +116,7 @@ export async function readNflState(
   const parsed = cached ? parseNflState(cached.value) : null;
   if (!fresh && parsed && cached?.fresh) return parsed;
   try {
-    const state = await fetchJson<{ season: string; week: number; season_type?: string }>(`${SLEEPER_BASE}/state/nfl`);
+    const state = await fetchJsonWithRetry<{ season: string; week: number; season_type?: string }>(`${SLEEPER_BASE}/state/nfl`);
     const next = parseNflState({
       season: Number(state.season),
       week: state.week,
@@ -147,7 +147,7 @@ export async function readUserLeagues(
   // should see it on the next request instead of waiting out the TTL.
   if (!fresh && parsed && cached?.fresh && parsed.length > 0) return { ...state, leagues: parsed };
   try {
-    const leagues = await fetchJson<unknown>(`${SLEEPER_BASE}/user/${sleeperUserId}/leagues/nfl/${state.season}`);
+    const leagues = await fetchJsonWithRetry<unknown>(`${SLEEPER_BASE}/user/${sleeperUserId}/leagues/nfl/${state.season}`);
     const next = parseLeagueList(leagues);
     if (!next) throw new Error("Sleeper leagues are unavailable");
     await writeCache(cacheKey, next);
@@ -181,7 +181,7 @@ export async function readLeagueRosters(leagues: SleeperLeague[], fresh = false)
       return { id: league.league_id, name: league.name, rosters: parsed };
     }
     try {
-      const raw = await fetchJson<SleeperRoster[]>(`${SLEEPER_BASE}/league/${league.league_id}/rosters`);
+      const raw = await fetchJsonWithRetry<SleeperRoster[]>(`${SLEEPER_BASE}/league/${league.league_id}/rosters`);
       const rosters = rosterSlots(raw);
       await writeCache(cacheKey, { rosters });
       return { id: league.league_id, name: league.name, rosters };

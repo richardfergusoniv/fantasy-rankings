@@ -61,6 +61,7 @@ import {
   SLEEPER_PROJECTIONS_BASE,
   canonicalTeam,
   fetchJson,
+  fetchJsonWithRetry,
   fetchText,
   isDynasticalPpfdLeague,
   isUnavailableForCurrentWeek,
@@ -124,6 +125,7 @@ import {
   runWithBuildLease,
 } from "./build-lease.js";
 import { createDashboardBuildTracker, type DashboardBuildState } from "./dashboard-build-status.js";
+import { assertDashboardBuildPublishable } from "./dashboard-build-guard.js";
 import { captureServerError } from "./posthog.js";
 
 /**
@@ -1462,10 +1464,11 @@ async function loadFreeAgentWeeklyStats(
 export async function buildUserDashboard(
   sleeperUserId: string,
   fresh = false,
-  options?: { deadlineAtMs?: number },
+  options?: { deadlineAtMs?: number; requireComplete?: boolean },
 ): Promise<Dashboard> {
   const buildDeadlineAt = options?.deadlineAtMs ?? Date.now() + BUILD_DEADLINE_MS;
   const sourceErrors: string[] = [];
+  const rosterFetchFailedLeagueIds: string[] = [];
   let season: number;
   let week: number;
   let seasonType = "";
@@ -1498,10 +1501,10 @@ export async function buildUserDashboard(
     // Compact daily cache (cron refresh-nfl-players) — not the full Sleeper dump in Supabase.
     loadNflPlayersMap(fresh),
     attachWeekContext
-      ? fetchJson<SleeperProjection[]>(`${SLEEPER_PROJECTIONS_BASE}/projections/nfl/${season}/${week}?season_type=regular&order_by=pts_ppr`)
+      ? fetchJsonWithRetry<SleeperProjection[]>(`${SLEEPER_PROJECTIONS_BASE}/projections/nfl/${season}/${week}?season_type=regular&order_by=pts_ppr`)
       : Promise.resolve([] as SleeperProjection[]),
     attachWeekContext
-      ? fetchJson<SleeperGame[]>(`${SLEEPER_BASE.replace("/v1", "")}/schedule/nfl/regular/${season}`)
+      ? fetchJsonWithRetry<SleeperGame[]>(`${SLEEPER_BASE.replace("/v1", "")}/schedule/nfl/regular/${season}`)
       : Promise.resolve([] as SleeperGame[]),
     fetchText(NFLVERSE_PLAYER_STATS_2026_URL),
     fetchText(NFLVERSE_PLAYER_STATS_2025_URL),
@@ -1744,15 +1747,16 @@ export async function buildUserDashboard(
   const leagues = await mapWithConcurrency(sleeperLeagues, 2, async (league) => {
     let rosters: SleeperRoster[];
     try {
-      rosters = await fetchJson<SleeperRoster[]>(`${SLEEPER_BASE}/league/${league.league_id}/rosters`);
+      rosters = await fetchJsonWithRetry<SleeperRoster[]>(`${SLEEPER_BASE}/league/${league.league_id}/rosters`);
     } catch {
       sourceErrors.push(`${league.name}: roster unavailable.`);
+      rosterFetchFailedLeagueIds.push(league.league_id);
       return null;
     }
     const [matchupsResult, usersResult, tradedPicksResult] = await Promise.allSettled([
-      fetchJson<SleeperMatchup[]>(`${SLEEPER_BASE}/league/${league.league_id}/matchups/${week}`),
-      fetchJson<SleeperUser[]>(`${SLEEPER_BASE}/league/${league.league_id}/users`),
-      fetchJson<SleeperTradedPick[]>(`${SLEEPER_BASE}/league/${league.league_id}/traded_picks`),
+      fetchJsonWithRetry<SleeperMatchup[]>(`${SLEEPER_BASE}/league/${league.league_id}/matchups/${week}`),
+      fetchJsonWithRetry<SleeperUser[]>(`${SLEEPER_BASE}/league/${league.league_id}/users`),
+      fetchJsonWithRetry<SleeperTradedPick[]>(`${SLEEPER_BASE}/league/${league.league_id}/traded_picks`),
     ]);
     const ownRoster = rosters.find((roster) => roster.owner_id === sleeperUserId);
     if (!ownRoster) {
@@ -2263,6 +2267,13 @@ export async function buildUserDashboard(
     gameLines,
     sourceErrors: [...new Set(sourceErrors)],
   });
+  // Publish guard: an incomplete build must not replace a complete cached
+  // snapshot (see assertDashboardBuildPublishable). Throws before any
+  // telemetry write or cache publish; callers fall back to the snapshot.
+  assertDashboardBuildPublishable({
+    requireComplete: options?.requireComplete === true,
+    rosterFetchFailedLeagueIds,
+  });
   // Projection-accuracy telemetry is best-effort: a failed write must not
   // fail the user-facing build (the original action let it throw).
   try {
@@ -2297,39 +2308,55 @@ export async function loadOrBuildUserDashboard(
   sleeperUserId: string,
   force = false,
   viewerUserId: string | null = null,
-): Promise<{ dashboard: Dashboard; fetchedAtMs: number }> {
+): Promise<{ dashboard: Dashboard; fetchedAtMs: number; fellBack: boolean }> {
   const cached = await readUserDashboardCache(sleeperUserId);
   const cachedDashboard = cached?.dashboard ?? null;
   if (!force && cachedDashboard && cached?.fresh) {
     return {
       dashboard: cachedDashboard,
       fetchedAtMs: responseCacheFetchedAtMs("fresh", Date.now(), cached.fetchedAtMs),
+      fellBack: false,
     };
   }
 
-  try {
-    const built = await buildUserDashboardUnderLease(sleeperUserId, force, cached?.fetchedAtMs ?? 0);
-    return {
-      dashboard: built.dashboard,
-      // A fresh row found at lease recheck keeps its real fetchedAt: stamping
-      // it "now" would restart the absolute freshness deadline.
-      fetchedAtMs: built.recheck
-        ? responseCacheFetchedAtMs("fresh", Date.now(), built.fetchedAtMs)
-        : responseCacheFetchedAtMs("built", Date.now()),
-    };
-  } catch (error) {
-    if (cachedDashboard) {
-      return { dashboard: cachedDashboard, fetchedAtMs: responseCacheFetchedAtMs("fallback", Date.now()) };
+  // A user-pressed refresh (force) gets one build retry before falling
+  // back: Sleeper is effectively always reachable, so a resync should not
+  // fail on a single bad build. Background loads keep one attempt — the
+  // next section poll kicks another build anyway.
+  const maxBuildAttempts = force ? 2 : 1;
+  let buildError: unknown;
+  for (let attempt = 0; attempt < maxBuildAttempts; attempt += 1) {
+    try {
+      const built = await buildUserDashboardUnderLease(sleeperUserId, force, cached?.fetchedAtMs ?? 0);
+      return {
+        dashboard: built.dashboard,
+        // A fresh row found at lease recheck keeps its real fetchedAt: stamping
+        // it "now" would restart the absolute freshness deadline.
+        fetchedAtMs: built.recheck
+          ? responseCacheFetchedAtMs("fresh", Date.now(), built.fetchedAtMs)
+          : responseCacheFetchedAtMs("built", Date.now()),
+        fellBack: false,
+      };
+    } catch (error) {
+      buildError = error;
     }
-    const ownerUserId = readOwnerUserId();
-    if (ownerUserId && viewerUserId === ownerUserId) {
-      const snapshot = await readGlobalDashboardSnapshot();
-      if (snapshot) {
-        return { dashboard: snapshot, fetchedAtMs: responseCacheFetchedAtMs("fallback", Date.now()) };
-      }
-    }
-    throw error;
   }
+
+  // The build failed (or the publish guard refused an incomplete build).
+  // Serve the fallback, but report it as one: the route surfaces
+  // `fellBack` so a forced refresh can tell the user the resync failed
+  // instead of silently presenting the stale snapshot as fresh.
+  if (cachedDashboard) {
+    return { dashboard: cachedDashboard, fetchedAtMs: responseCacheFetchedAtMs("fallback", Date.now()), fellBack: true };
+  }
+  const ownerUserId = readOwnerUserId();
+  if (ownerUserId && viewerUserId === ownerUserId) {
+    const snapshot = await readGlobalDashboardSnapshot();
+    if (snapshot) {
+      return { dashboard: snapshot, fetchedAtMs: responseCacheFetchedAtMs("fallback", Date.now()), fellBack: true };
+    }
+  }
+  throw buildError;
 }
 
 async function upsertSourceCacheRow(
@@ -2679,7 +2706,12 @@ async function buildUserDashboardUnderLease(
       }
       // Align soft actuals waits with this lease wait (same budget window).
       const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
-      const dashboard = await buildUserDashboard(sleeperUserId, force, { deadlineAtMs });
+      const dashboard = await buildUserDashboard(sleeperUserId, force, {
+        deadlineAtMs,
+        // A cached snapshot exists (the caller read one before leasing):
+        // never let an incomplete build overwrite it.
+        requireComplete: cachedFetchedAtMs > 0,
+      });
       // Ownership is locked and all section writes commit atomically.
       await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard, { resource, holder });
       return { dashboard, fetchedAtMs: Date.now(), recheck: false };
@@ -2782,14 +2814,20 @@ export function kickUserDashboardBuild(
         BUILD_LEASE_TTL_MS,
         async () => {
           // Recheck after winning the lease (see buildUserDashboardUnderLease).
-          if ((await readUserDashboardFreshness(sleeperUserId))?.fresh) {
+          const freshness = await readUserDashboardFreshness(sleeperUserId);
+          if (freshness?.fresh) {
             const recheck = await readUserDashboardCache(sleeperUserId);
             if (recheck?.fresh) {
               return recheck.dashboard;
             }
           }
           const deadlineAtMs = Date.now() + BUILD_DEADLINE_MS;
-          const dashboard = await buildUserDashboard(sleeperUserId, false, { deadlineAtMs });
+          const dashboard = await buildUserDashboard(sleeperUserId, false, {
+            deadlineAtMs,
+            // Any existing snapshot (fresh or stale) is worth protecting
+            // from an incomplete build; a cold build publishes partial.
+            requireComplete: freshness !== null,
+          });
           await writeUserDashboardCache(userDashboardCacheKey(sleeperUserId), dashboard, { resource, holder });
           return dashboard;
         },

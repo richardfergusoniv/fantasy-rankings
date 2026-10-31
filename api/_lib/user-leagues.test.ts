@@ -23,6 +23,7 @@ vi.mock("./db.js", () => ({
 vi.mock("./sleeper.js", () => ({
   SLEEPER_BASE: "https://api.sleeper.app/v1",
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
+  fetchJsonWithRetry: (...args: unknown[]) => fetchJsonMock(...args),
 }));
 
 import { encodeSourceCachePayload } from "./source-cache-payload.js";

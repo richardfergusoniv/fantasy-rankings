@@ -642,6 +642,7 @@ export function App() {
   }, [selectedMatchup, setSelectedMatchup]);
   const [rosterCardRosterId, setRosterCardRosterId] = useState<number | null>(null);
   const [commandBarOpen, setCommandBarOpen] = useState(false);
+  const [failedResyncAsOf, setFailedResyncAsOf] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
   const [browserViewerId, setBrowserViewerId] = useState<string | null | undefined>(undefined);
@@ -771,13 +772,17 @@ export function App() {
         const { data } = await supabase.auth.getSession();
         if (!data.session) throw new Error("Sign in required.");
       }
-      return withClientDeadline(api.getDashboard({ force: true }), DASHBOARD_DEADLINE_MS);
+      return withClientDeadline(api.refreshDashboard(), DASHBOARD_DEADLINE_MS);
     },
     onSuccess: async (data, _variables, owner) => {
       if (!owner || !(await owner.stillCurrent())) return;
       const { sessionUserId, identity } = owner.startedBy;
-      saveBrowserDashboard(sessionUserId, identity.accountId, data);
-      queryClient.setQueryData(personalQueryKey(identity, "fantasy-dashboard"), data);
+      // A fell-back resync still returns the previous dashboard; flag its
+      // asOf so the header can say the refresh failed. The note clears on
+      // its own once a dashboard with a newer asOf lands by any path.
+      setFailedResyncAsOf(data.resyncFailed ? data.dashboard.asOf : null);
+      saveBrowserDashboard(sessionUserId, identity.accountId, data.dashboard);
+      queryClient.setQueryData(personalQueryKey(identity, "fantasy-dashboard"), data.dashboard);
       queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "dashboard-section") });
       queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "projected-standings") });
     },
@@ -1379,6 +1384,11 @@ export function App() {
             </div>
           </div>
           <DashboardPartialNotes dashboard={dashboard} />
+          {failedResyncAsOf !== null && dashboard.asOf === failedResyncAsOf ? (
+            <p className="data-notes resync-note" role="status">
+              Couldn’t resync with Sleeper, so this is still the data from {new Date(dashboard.asOf).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. Use refresh to try again.
+            </p>
+          ) : null}
           <label className="league-picker">
             <span className="sr-only">Choose league</span>
             <select value={league.id} onChange={(event) => chooseLeague(event.target.value)}>
