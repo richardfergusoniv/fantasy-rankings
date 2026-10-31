@@ -17,11 +17,8 @@
  * the player was worth (value / expected value): 100% on draft day means he went exactly where
  * the market had him, so Draft day and Today read as report-card scores.
  *
- * For each of those picks it also names a better pick, using the league's own draft order for
- * realism: among the players other teams took in the next round of picks (so he was still available
- * and went soon after), the one worth the most, if more than the player taken. That is judged on
- * draft-day values and again on today's, so hindsight shows who to have taken. A player the league
- * let fall further than a round, or never drafted, is not suggested.
+ * The same picks are also replayed on today's values (see draft-strategy.ts): what the user's own
+ * strategy would have taken at each pick, and what the best of Zero RB, Hero RB and Robust RB would have.
  *
  * Kickers and defenses have no FantasyCalc value and are not scored, and they do not use up a
  * slot: a skill pick's slot is its place among the draft's QB/RB/WR/TE picks. A player with no
@@ -32,6 +29,7 @@ import { z } from "zod";
 import { badRequest, forbidden, internalError, json, unauthorized } from "./api-utils.js";
 import { resolveSleeperUserId } from "./auth.js";
 import { readUserDashboardCache } from "./dashboard-build.js";
+import { STRATEGY_LABELS, strategyView, timingLabel, type Plan } from "./draft-strategy.js";
 import { db, schema } from "./db.js";
 import { isRedraftFormatKey, pacificDateKey, resolveFantasyCalcSnapshotFormatKey } from "./player-value-history.js";
 import { isNflValueHistoryInSeason } from "./season-week.js";
@@ -64,8 +62,8 @@ export type PickGrade = { letter: string; percent: number };
 
 export type BetterPick = { playerId: string; name: string; position: string; team: string | null };
 
-/** A better player taken in the next round of the league's draft, on draft day and today; null when there was none. */
-export type BetterPicks = { draftDay: BetterPick | null; today: BetterPick | null };
+/** Who the user's strategy done best, and the best strategy, would have taken at a pick; null when it is the player taken. */
+export type BetterPicks = { yours: BetterPick | null; best: BetterPick | null };
 
 export type OwnPickGrade = {
   playerId: string;
@@ -75,6 +73,9 @@ export type OwnPickGrade = {
   better: BetterPicks;
 };
 
+/** A strategy as shown in a column header: "Zero RB" over "Late QB · Late TE". */
+export type StrategyLabel = { name: string; timing: string };
+
 export type DraftGrade = {
   draftId: string;
   /** Null when the value board for the draft's date is missing. */
@@ -83,6 +84,8 @@ export type DraftGrade = {
   today: DraftGradeResult | null;
   /** The user's own picks in draft order. */
   picks: OwnPickGrade[];
+  /** The user's strategy and the best one, as a name and its QB/TE timing; null without today's board. */
+  strategies: { yours: StrategyLabel; best: StrategyLabel } | null;
 };
 
 export function gradeLetter(rank: number, teams: number): string {
@@ -172,36 +175,7 @@ export function pickGrades(args: {
   return out;
 }
 
-/**
- * For each of one team's skill picks, a better pick: among the players other teams took in the next
- * `window` picks (a round of the league's own draft), the one worth the most on `values`, if he is
- * worth more than the player taken. Those players were still available and went soon after, so they
- * were realistic alternatives. The team's own later picks are skipped.
- */
-export function betterPicks(args: {
-  picks: readonly GradedPick[];
-  rosterId: number;
-  values: ValueBoard;
-  window: number;
-}): Map<string, GradedPick | null> {
-  const floor = floorValue(args.values);
-  const ordered = [...args.picks].sort((a, b) => a.pickNo - b.pickNo);
-  const out = new Map<string, GradedPick | null>();
-  for (const pick of ordered) {
-    if (pick.rosterId !== args.rosterId) continue;
-    if (!isSkill(pick.position)) { out.set(pick.playerId, null); continue; }
-    let best: GradedPick | null = null;
-    let bestValue = args.values.get(pick.playerId) ?? floor;
-    for (const later of ordered) {
-      if (later.pickNo <= pick.pickNo || later.pickNo > pick.pickNo + args.window) continue;
-      if (later.rosterId === args.rosterId || !isSkill(later.position) || !later.name) continue;
-      const value = args.values.get(later.playerId);
-      if (value !== undefined && value > bestValue) { best = later; bestValue = value; }
-    }
-    out.set(pick.playerId, best);
-  }
-  return out;
-}
+const strategyLabel = (plan: Plan): StrategyLabel => ({ name: STRATEGY_LABELS[plan.rb], timing: timingLabel(plan) });
 
 function resultFor(totals: ReadonlyMap<number, number>, ownRosterId: number): DraftGradeResult | null {
   const rank = placeOf(totals, ownRosterId);
@@ -216,16 +190,18 @@ export function gradeDraft(args: {
   todayBoard: ValueBoard;
   /** Teams in the draft, from its settings; a round is this many picks. */
   teams?: number | null;
+  /** The league's starting lineup slots, for weighing which strategy builds the best roster. */
+  slots?: readonly string[];
   minBoardPlayers?: number;
-}): { draftDay: DraftGradeResult | null; today: DraftGradeResult | null; picks: OwnPickGrade[] } {
+}): { draftDay: DraftGradeResult | null; today: DraftGradeResult | null; picks: OwnPickGrade[]; strategies: DraftGrade["strategies"] } {
   const min = args.minBoardPlayers ?? MIN_BOARD_PLAYERS;
   // Today is measured against draft-day slots, so without the draft-day board neither grade exists.
-  if (args.draftDayBoard.size < min) return { draftDay: null, today: null, picks: [] };
+  if (args.draftDayBoard.size < min) return { draftDay: null, today: null, picks: [], strategies: null };
   // Slots are measured against the players this draft could have taken, which are the ones it did take.
   // A drafted player with no stored row counts at the board's floor, the same value he is scored at.
   const skillPicks = args.picks.filter((pick) => isSkill(pick.position));
   // With none of them on the board there is nothing to measure slots against.
-  if (!skillPicks.some((pick) => args.draftDayBoard.has(pick.playerId))) return { draftDay: null, today: null, picks: [] };
+  if (!skillPicks.some((pick) => args.draftDayBoard.has(pick.playerId))) return { draftDay: null, today: null, picks: [], strategies: null };
   const floor = floorValue(args.draftDayBoard);
   const slotBoard: ValueBoard = new Map(skillPicks.map((pick) => [pick.playerId, args.draftDayBoard.get(pick.playerId) ?? floor] as [string, number]));
   const hasToday = args.todayBoard.size >= min;
@@ -237,10 +213,8 @@ export function gradeDraft(args: {
   const sinceThen = hasToday ? pickGrades({ picks: args.picks, rosterId: args.ownRosterId, slotBoard, values: args.todayBoard }) : null;
   const pickNoOf = new Map(args.picks.filter((pick) => pick.rosterId === args.ownRosterId).map((pick) => [pick.playerId, pick.pickNo]));
   // The window is one round: the draft's team count, which can exceed the teams still holding picks after trades.
-  const window = args.teams && args.teams > 0 ? args.teams : new Set(args.picks.map((pick) => pick.rosterId)).size;
-  const better = (values: ValueBoard) => betterPicks({ picks: args.picks, rosterId: args.ownRosterId, values, window });
-  const betterOnDraftDay = better(args.draftDayBoard);
-  const betterToday = hasToday ? better(args.todayBoard) : null;
+  const teams = args.teams && args.teams > 0 ? args.teams : new Set(args.picks.map((pick) => pick.rosterId)).size;
+  const view = hasToday ? strategyView({ picks: args.picks, rosterId: args.ownRosterId, values: args.todayBoard, teams, slots: args.slots }) : null;
   const named = (pick: GradedPick | null | undefined): BetterPick | null => (
     pick ? { playerId: pick.playerId, name: pick.name ?? "", position: pick.position, team: pick.team ?? null } : null
   );
@@ -249,9 +223,9 @@ export function gradeDraft(args: {
     pickNo: pickNoOf.get(playerId) ?? 0,
     draftDay: grade,
     today: sinceThen?.get(playerId) ?? null,
-    better: { draftDay: named(betterOnDraftDay.get(playerId)), today: named(betterToday?.get(playerId)) },
+    better: { yours: named(view?.yoursPicks.get(playerId)), best: named(view?.bestPicks.get(playerId)) },
   }));
-  return { draftDay, today, picks };
+  return { draftDay, today, picks, strategies: view ? { yours: strategyLabel(view.yours), best: strategyLabel(view.best) } : null };
 }
 
 /** `YYYY-MM-DD` moved by whole days (noon UTC keeps it clear of day boundaries). */
@@ -327,7 +301,8 @@ export async function loadDraftGrade(
     loadBoard(formatKey, pacificDateKey(new Date(startedAt)), DRAFT_DAY_WINDOW_DAYS),
     loadBoard(formatKey, pacificDateKey(deps.now?.() ?? new Date()), todayWindowDays),
   ]);
-  const grades = gradeDraft({ picks: best.picks, ownRosterId, draftDayBoard, todayBoard, teams: best.draft.settings?.teams, minBoardPlayers: deps.minBoardPlayers });
+  const slots = (await get<{ roster_positions?: string[] }>(`${SLEEPER_BASE}/league/${league.id}`).catch(() => null))?.roster_positions;
+  const grades = gradeDraft({ picks: best.picks, ownRosterId, draftDayBoard, todayBoard, teams: best.draft.settings?.teams, slots, minBoardPlayers: deps.minBoardPlayers });
   if (!grades.draftDay && !grades.today) return null;
   return { draftId: best.draft.draft_id ?? "", ...grades };
 }

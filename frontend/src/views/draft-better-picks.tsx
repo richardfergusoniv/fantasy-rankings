@@ -21,7 +21,7 @@ function BetterCell({ label, better, secondaryOf, onOpenPlayer }: {
   );
 }
 
-/** Once the draft is final: at each of the team's picks, the best player still available, by draft-day value and by today's. */
+/** Once the draft is final: at each of the team's picks, who the user's strategy and the best strategy would have taken, on today's values. */
 export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer }: {
   leagueId: string;
   players: readonly BetterPicksPlayer[];
@@ -30,17 +30,20 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
 }) {
   const query = useDraftGrade(leagueId);
   const byId = new Map(players.map((player) => [player.playerId, player]));
+  const strategies = query.data?.grade?.strategies ?? null;
   // Kickers and defenses have no value to compare, so they carry no grade and are left out.
-  const entries = (query.data?.grade?.picks ?? []).filter((entry) => byId.has(entry.playerId) && (entry.draftDay !== null || entry.today !== null));
+  const entries = strategies ? (query.data?.grade?.picks ?? []).filter((entry) => byId.has(entry.playerId) && (entry.draftDay !== null || entry.today !== null)) : [];
+  // When the user's strategy is already the best one, a single column says so.
+  const sameStrategy = strategies?.yours.name === strategies?.best.name && strategies?.yours.timing === strategies?.best.timing;
 
   return (
     <section className="draft-my-team">
       {entries.length > 0 ? (
-        <div className="draft-board data-table-frame" role="list" aria-label="Best available player at each pick">
+        <div className="draft-board data-table-frame" role="list" aria-label="Hindsight by strategy">
           <div className="draft-row draft-table-head draft-better-row" aria-hidden="true">
             <span>Your pick</span>
-            <span>Draft day</span>
-            <span>Today</span>
+            <span><b>{strategies?.yours.name}</b>{strategies?.yours.timing}</span>
+            {sameStrategy ? null : <span><b>{strategies?.best.name}</b>{strategies?.best.timing}</span>}
           </div>
           {entries.map((entry) => {
             const player = byId.get(entry.playerId);
@@ -52,8 +55,8 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
                     <small>{[`Pick ${entry.pickNo}`, player?.secondary].filter(Boolean).join(" · ")}</small>
                   </button>
                 </div>
-                <BetterCell label="Draft day" better={entry.better.draftDay} secondaryOf={secondaryOf} onOpenPlayer={onOpenPlayer} />
-                <BetterCell label="Today" better={entry.better.today} secondaryOf={secondaryOf} onOpenPlayer={onOpenPlayer} />
+                <BetterCell label={strategies?.yours.name ?? "Your strategy"} better={entry.better.yours} secondaryOf={secondaryOf} onOpenPlayer={onOpenPlayer} />
+                {sameStrategy ? null : <BetterCell label={strategies?.best.name ?? "Best strategy"} better={entry.better.best} secondaryOf={secondaryOf} onOpenPlayer={onOpenPlayer} />}
               </div>
             );
           })}
