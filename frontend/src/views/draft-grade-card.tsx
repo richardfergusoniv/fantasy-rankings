@@ -3,11 +3,14 @@ import { Card } from "@/components/ui/card";
 import { api } from "../api";
 import { CardHero } from "../components/card-hero";
 import { ordinal } from "../projected-standings-view";
+import { personalQueryKey, useViewerIdentity } from "../viewer-scope";
 
 /** The league's draft grade for the signed-in team; both the summary card and the recap table read it. */
 export function useDraftGrade(leagueId: string) {
+  // The grade depends on who is signed in, so it is keyed (and cleared on sign-out) like the other personal queries.
+  const viewer = useViewerIdentity();
   return useQuery({
-    queryKey: ["draft-grade", leagueId],
+    queryKey: personalQueryKey(viewer, "draft-grade", leagueId),
     queryFn: () => api.getDraftGrade({ leagueId }),
     staleTime: 30 * 60_000,
     refetchOnWindowFocus: false,

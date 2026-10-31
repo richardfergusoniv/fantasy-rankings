@@ -32,8 +32,10 @@ import { badRequest, forbidden, internalError, json, unauthorized } from "./api-
 import { resolveSleeperUserId } from "./auth.js";
 import { readUserDashboardCache } from "./dashboard-build.js";
 import { db, schema } from "./db.js";
-import { pacificDateKey, resolveFantasyCalcSnapshotFormatKey } from "./player-value-history.js";
+import { isRedraftFormatKey, pacificDateKey, resolveFantasyCalcSnapshotFormatKey } from "./player-value-history.js";
+import { isNflValueHistoryInSeason } from "./season-week.js";
 import { fetchJson, SLEEPER_BASE, type SleeperDraft, type SleeperDraftPick } from "./sleeper.js";
+import { readNflState } from "./user-leagues.js";
 import { viewerBelongsToLeague } from "./viewer-league-access.js";
 
 const SKILL_POSITIONS = ["QB", "RB", "WR", "TE"] as const;
@@ -46,6 +48,7 @@ export const MIN_BOARD_PLAYERS = 50;
 
 /** Redraft rows are skipped when unchanged in the offseason, so draft day looks back this far. */
 const DRAFT_DAY_WINDOW_DAYS = 120;
+/** In season rows are daily, so a player with no row in this long has left the stored board. */
 const TODAY_WINDOW_DAYS = 14;
 
 /** Player id → FantasyCalc value, for QB/RB/WR/TE. */
@@ -210,6 +213,8 @@ export function gradeDraft(args: {
   ownRosterId: number;
   draftDayBoard: ValueBoard;
   todayBoard: ValueBoard;
+  /** Teams in the draft, from its settings; a round is this many picks. */
+  teams?: number | null;
   minBoardPlayers?: number;
 }): { draftDay: DraftGradeResult | null; today: DraftGradeResult | null; picks: OwnPickGrade[] } {
   const min = args.minBoardPlayers ?? MIN_BOARD_PLAYERS;
@@ -224,8 +229,8 @@ export function gradeDraft(args: {
   const onDraftDay = pickGrades({ picks: args.picks, rosterId: args.ownRosterId, slotBoard, values: args.draftDayBoard });
   const sinceThen = hasToday ? pickGrades({ picks: args.picks, rosterId: args.ownRosterId, slotBoard, values: args.todayBoard }) : null;
   const pickNoOf = new Map(args.picks.filter((pick) => pick.rosterId === args.ownRosterId).map((pick) => [pick.playerId, pick.pickNo]));
-  // The window is one round: as many picks as there are teams in the draft.
-  const window = new Set(args.picks.map((pick) => pick.rosterId)).size;
+  // The window is one round: the draft's team count, which can exceed the teams still holding picks after trades.
+  const window = args.teams && args.teams > 0 ? args.teams : new Set(args.picks.map((pick) => pick.rosterId)).size;
   const better = (values: ValueBoard) => betterPicks({ picks: args.picks, rosterId: args.ownRosterId, values, window });
   const betterOnDraftDay = better(args.draftDayBoard);
   const betterToday = hasToday ? better(args.todayBoard) : null;
@@ -269,6 +274,8 @@ export type LoadDraftGradeDeps = {
   fetchJson?: <T>(url: string) => Promise<T>;
   loadBoard?: (formatKey: string, asOfDateKey: string, windowDays: number) => Promise<ValueBoard>;
   now?: () => Date;
+  /** The NFL season phase ("off", "pre", "regular", ...). */
+  seasonType?: () => Promise<string>;
   minBoardPlayers?: number;
 };
 
@@ -306,11 +313,14 @@ export async function loadDraftGrade(
   const startedAt = best.draft.start_time ?? best.draft.last_picked;
   if (typeof startedAt !== "number") return null;
   const formatKey = resolveFantasyCalcSnapshotFormatKey(league.seasonLongFormat.key);
+  // In the offseason redraft values that have not changed are not stored again, so today's board looks back as far as draft day's.
+  const seasonType = await (deps.seasonType ?? (async () => (await readNflState()).seasonType))();
+  const todayWindowDays = !isNflValueHistoryInSeason(seasonType) && isRedraftFormatKey(formatKey) ? DRAFT_DAY_WINDOW_DAYS : TODAY_WINDOW_DAYS;
   const [draftDayBoard, todayBoard] = await Promise.all([
     loadBoard(formatKey, pacificDateKey(new Date(startedAt)), DRAFT_DAY_WINDOW_DAYS),
-    loadBoard(formatKey, pacificDateKey(deps.now?.() ?? new Date()), TODAY_WINDOW_DAYS),
+    loadBoard(formatKey, pacificDateKey(deps.now?.() ?? new Date()), todayWindowDays),
   ]);
-  const grades = gradeDraft({ picks: best.picks, ownRosterId, draftDayBoard, todayBoard, minBoardPlayers: deps.minBoardPlayers });
+  const grades = gradeDraft({ picks: best.picks, ownRosterId, draftDayBoard, todayBoard, teams: best.draft.settings?.teams, minBoardPlayers: deps.minBoardPlayers });
   if (!grades.draftDay && !grades.today) return null;
   return { draftId: best.draft.draft_id ?? "", ...grades };
 }

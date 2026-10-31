@@ -24,7 +24,7 @@ import { CloseGlyph } from "../components/glyphs";
 import { DraftGradeCard } from "./draft-grade-card";
 import { DraftBetterPicks } from "./draft-better-picks";
 import { DraftRecap } from "./draft-recap";
-import { leagueDraftIsFinal } from "../draft-final";
+import { gradedDraftFor, leagueDraftIsFinal } from "../draft-final";
 import { LoadingBlock, ListPagination } from "../components/state-blocks";
 
 type DraftRow = DraftCenterData["adp"][number] & {
@@ -350,7 +350,10 @@ export function DraftCenter({
   });
   // Once the league's draft is complete the team is set: My team becomes a graded recap with nothing to remove.
   const draftIsFinal = leagueDraftIsFinal(data?.drafts, league.id);
-  const recapPicks = [...ownPicks]
+  // The recap lists the picks of the one draft being graded, so a league with a startup and a rookie draft never mixes the two.
+  const recapDraft = gradedDraftFor(data?.drafts, league.id);
+  const recapPicks = (recapDraft?.picks ?? [])
+    .filter((pick) => pick.rosterId === recapDraft?.ownRosterId && draftPositionIsEligible(pick.position))
     .sort((a, b) => a.pickNo - b.pickNo)
     .map((pick) => ({ playerId: pick.playerId, name: pick.playerName, secondary: draftSecondaryLine(pick.position, pick.team) }));
   const localMyTeamRows = rows.filter((row) => row.playerId && myTeamIdSet.has(row.playerId) && !sleeperDraftedIds.has(row.playerId));

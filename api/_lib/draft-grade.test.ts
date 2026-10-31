@@ -218,6 +218,16 @@ describe("gradeDraft", () => {
   });
 });
 
+describe("gradeDraft round length", () => {
+  it("uses the draft's team count for the window when given", () => {
+    const values = board([["low", 100], ["a", 90], ["star", 5000]]);
+    const picks = [pick(1, 1, "low", "RB"), pick(2, 2, "a", "WR"), pick(6, 2, "star", "WR")];
+    const run = (teams?: number) => gradeDraft({ picks, ownRosterId: 1, draftDayBoard: values, todayBoard: values, teams, minBoardPlayers: 1 }).picks[0]?.better.draftDay;
+    expect(run(8)?.playerId).toBe("star");
+    expect(run()).toBeNull(); // two rosters seen: a two-pick window misses pick 6
+  });
+});
+
 describe("shiftDateKey", () => {
   it("moves a date across month and year ends", () => {
     expect(shiftDateKey("2026-09-03", -120)).toBe("2026-05-06");
@@ -227,6 +237,7 @@ describe("shiftDateKey", () => {
 
 describe("loadDraftGrade", () => {
   const league = { id: "lg", seasonLongFormat: { key: "redraft-1qb-10t-0.5ppr" } };
+  const inSeason = async () => "regular";
   const sleeperPicks = fair.map((p) => ({ pick_no: p.pickNo, roster_id: p.rosterId, player_id: p.playerId, metadata: { position: p.position, first_name: "Name", last_name: p.playerId, team: "TM" } }));
   const draft = (id: string, extra: Record<string, unknown> = {}) => ({ draft_id: id, status: "complete", type: "snake", start_time: Date.UTC(2026, 8, 3, 23, 41), ...extra });
   const fetcher = (drafts: unknown[], picksByDraft: Record<string, unknown[]>) => async <T>(url: string): Promise<T> => {
@@ -237,6 +248,7 @@ describe("loadDraftGrade", () => {
   it("loads the draft-day board for the draft's Pacific date and today's board for today", async () => {
     const calls: Array<[string, string, number]> = [];
     const grade = await loadDraftGrade(league, 1, {
+      seasonType: inSeason,
       fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }),
       loadBoard: async (formatKey, date, windowDays) => { calls.push([formatKey, date, windowDays]); return marketBoard; },
       now: () => new Date("2026-10-30T20:00:00Z"),
@@ -252,6 +264,7 @@ describe("loadDraftGrade", () => {
   it("names the better players on draft day and today for the user's own picks", async () => {
     const today = board([...marketBoard].map(([id, value]) => [id, id === "p1" ? 100 : value] as [string, number]));
     const grade = await loadDraftGrade(league, 1, {
+      seasonType: inSeason,
       fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }),
       loadBoard: async (_format, _date, windowDays) => (windowDays === 14 ? today : marketBoard),
       minBoardPlayers: 1,
@@ -265,12 +278,13 @@ describe("loadDraftGrade", () => {
 
   it("returns null when no draft is complete, or the only one is an auction", async () => {
     const loadBoard = async () => marketBoard;
-    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1", { status: "drafting" })], {}), loadBoard })).toBeNull();
-    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1", { type: "auction" })], { d1: sleeperPicks }), loadBoard })).toBeNull();
+    expect(await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1", { status: "drafting" })], {}), loadBoard })).toBeNull();
+    expect(await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1", { type: "auction" })], { d1: sleeperPicks }), loadBoard })).toBeNull();
   });
 
   it("grades the draft with the most picks when a league has more than one", async () => {
     const grade = await loadDraftGrade(league, 1, {
+      seasonType: inSeason,
       fetchJson: fetcher([draft("rookie"), draft("startup")], { rookie: sleeperPicks.slice(0, 2), startup: sleeperPicks }),
       loadBoard: async () => marketBoard,
       minBoardPlayers: 1,
@@ -280,7 +294,45 @@ describe("loadDraftGrade", () => {
 
   it("returns null without a start time or when the draft-day board is missing", async () => {
     const loadBoard = async () => board([]);
-    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1", { start_time: null })], { d1: sleeperPicks }), loadBoard: async () => marketBoard, minBoardPlayers: 1 })).toBeNull();
-    expect(await loadDraftGrade(league, 1, { fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }), loadBoard })).toBeNull();
+    expect(await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1", { start_time: null })], { d1: sleeperPicks }), loadBoard: async () => marketBoard, minBoardPlayers: 1 })).toBeNull();
+    expect(await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }), loadBoard })).toBeNull();
   });
+  it("looks back as far as draft day for today's board in the offseason, when unchanged redraft values are not stored", async () => {
+    const windows = async (seasonType: string, formatKey: string) => {
+      const seen: number[] = [];
+      await loadDraftGrade({ id: "lg", seasonLongFormat: { key: formatKey } }, 1, {
+        seasonType: async () => seasonType,
+        fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }),
+        loadBoard: async (_format, _date, windowDays) => { seen.push(windowDays); return marketBoard; },
+        minBoardPlayers: 1,
+      });
+      return seen;
+    };
+    expect(await windows("off", "redraft-1qb-10t-0.5ppr")).toEqual([120, 120]);
+    expect(await windows("regular", "redraft-1qb-10t-0.5ppr")).toEqual([120, 14]);
+    // Dynasty rows are stored daily all year, so the short look-back is right there.
+    expect(await windows("off", "dynasty-1qb-10t-0.5ppr")).toEqual([120, 14]);
+  });
+
+  it("measures the window in the draft's configured team count, not the teams still holding picks", async () => {
+    // Four rosters made picks but the draft has 8 teams: a better player taken 5 picks later still counts.
+    const picks = [
+      { pick_no: 1, roster_id: 1, player_id: "low", metadata: { position: "RB", first_name: "Low", last_name: "Guy", team: "TM" } },
+      { pick_no: 2, roster_id: 2, player_id: "a", metadata: { position: "WR", first_name: "A", last_name: "Guy", team: "TM" } },
+      { pick_no: 3, roster_id: 3, player_id: "b", metadata: { position: "WR", first_name: "B", last_name: "Guy", team: "TM" } },
+      { pick_no: 4, roster_id: 4, player_id: "c", metadata: { position: "WR", first_name: "C", last_name: "Guy", team: "TM" } },
+      { pick_no: 6, roster_id: 2, player_id: "star", metadata: { position: "WR", first_name: "Star", last_name: "Guy", team: "TM" } },
+    ];
+    const values = board([["low", 100], ["a", 90], ["b", 80], ["c", 70], ["star", 5000]]);
+    const grade = (teams: number) => loadDraftGrade(league, 1, {
+      seasonType: inSeason,
+      fetchJson: fetcher([draft("d1", { settings: { teams, rounds: 2 } })], { d1: picks }),
+      loadBoard: async () => values,
+      minBoardPlayers: 1,
+    });
+    // Without the setting the round would be the 4 rosters seen, which stops at pick 5 and misses the star at 6.
+    expect((await grade(8))?.picks[0]?.better.draftDay?.playerId).toBe("star");
+    expect((await grade(4))?.picks[0]?.better.draftDay).toBeNull();
+  });
+
 });
