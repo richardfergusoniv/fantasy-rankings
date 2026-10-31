@@ -87,6 +87,8 @@ export function DraftCenter({
   onDraftFiltersChange: (filters: { draftPosition: DraftPosition | null; draftQuery: string | null; draftRoom: DraftRoom | null }) => void;
 } & PlayerLink) {
   const leagueDrafts = useMemo(() => data?.drafts.filter((draft) => draft.leagueId === league.id) ?? [], [data?.drafts, league.id]);
+  // Once the league's draft is complete the team is set: My team becomes a graded recap with nothing to remove.
+  const draftIsFinal = leagueDraftIsFinal(data?.drafts, league.id);
   const liveDraft = leagueDrafts.find((draft) => draft.status === "drafting") ?? null;
   const completedDraft = leagueDrafts.find((draft) => draft.status === "complete") ?? null;
   const syncedDraft = liveDraft ?? completedDraft;
@@ -334,13 +336,14 @@ export function DraftCenter({
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.toLowerCase();
     const available = rows
-      .filter((row) => !draftedIds.has(row.playerId ?? "") && !myTeamIdSet.has(row.playerId ?? ""))
+      // Once the draft is final My team is read-only, so selections saved while preparing no longer hide anyone: only Sleeper's picks leave the board.
+      .filter((row) => !(draftIsFinal ? sleeperDraftedIds : draftedIds).has(row.playerId ?? "") && (draftIsFinal || !myTeamIdSet.has(row.playerId ?? "")))
       .filter((row) => (effectiveDraftPosition === "ALL" || (effectiveDraftPosition === "ROOKIES" ? row.rookie : row.position === effectiveDraftPosition)) && row.name.toLowerCase().includes(normalizedQuery));
     // Once the league has drafted, ADP order is stale: list valued players by market value
     // (stable sort keeps K and DEF, which have no market value, after them in projection order).
     if (!completedDraft || liveDraft) return available;
     return available.sort((a, b) => (b.marketValue ?? -1) - (a.marketValue ?? -1));
-  }, [completedDraft, draftedIds, effectiveDraftPosition, liveDraft, myTeamIdSet, query, rows]);
+  }, [completedDraft, draftIsFinal, draftedIds, effectiveDraftPosition, liveDraft, myTeamIdSet, query, rows, sleeperDraftedIds]);
   const draftPositionIsEligible = (value: string) => value !== "K" && value !== "DEF" || league.rankingPositions.includes(value as "K" | "DEF");
   const seenOwnPickIds = new Set<string>();
   const ownPicks = syncedLeagueDrafts.flatMap((draft) => draft.ownRosterId === null ? [] : draft.picks.filter((pick) => pick.rosterId === draft.ownRosterId)).filter((pick) => {
@@ -348,8 +351,6 @@ export function DraftCenter({
     seenOwnPickIds.add(pick.playerId);
     return true;
   });
-  // Once the league's draft is complete the team is set: My team becomes a graded recap with nothing to remove.
-  const draftIsFinal = leagueDraftIsFinal(data?.drafts, league.id);
   // The recap lists the picks of the one draft being graded, so a league with a startup and a rookie draft never mixes the two.
   const recapDraft = gradedDraftFor(data?.drafts, league.id);
   const recapPicks = (recapDraft?.picks ?? [])
