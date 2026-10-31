@@ -6,10 +6,36 @@ import {
 } from "../../api/_lib/player-news-badges";
 
 function badgeClassName(badge: NewsBadge): string {
-  return badge.tone === "rumor" ? "news-type-badge is-rumor" : "news-type-badge";
+  switch (badge.tone) {
+    case "rumor":
+      return "news-type-badge is-rumor";
+    case "muted":
+      return "news-type-badge is-muted";
+    case "neutral":
+      return "news-type-badge";
+    default: {
+      const _exhaustive: never = badge.tone;
+      return _exhaustive;
+    }
+  }
 }
 
-/** Compact type badges for news cards (primary + Dynasty / Team / League). */
+function badgeVariant(badge: NewsBadge): "accent" | "outline" | "secondary" {
+  switch (badge.tone) {
+    case "rumor":
+      return "accent";
+    case "muted":
+      return "outline";
+    case "neutral":
+      return "secondary";
+    default: {
+      const _exhaustive: never = badge.tone;
+      return _exhaustive;
+    }
+  }
+}
+
+/** Compact type badges for news cards (primary + Cryptic / Dynasty / Team / League). */
 export function NewsTypeBadges({
   item,
   className,
@@ -21,7 +47,7 @@ export function NewsTypeBadges({
   return (
     <span className={className ? `news-type-badges ${className}` : "news-type-badges"}>
       <Badge
-        variant={primary.tone === "rumor" ? "accent" : "secondary"}
+        variant={badgeVariant(primary)}
         size="compact"
         className={badgeClassName(primary)}
       >
@@ -30,9 +56,9 @@ export function NewsTypeBadges({
       {secondary.map((badge) => (
         <Badge
           key={badge.key}
-          variant="secondary"
+          variant={badgeVariant(badge)}
           size="compact"
-          className="news-type-badge"
+          className={badgeClassName(badge)}
         >
           {badge.label}
         </Badge>

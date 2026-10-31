@@ -144,6 +144,19 @@ describe("xNewsItemSchema / xNewsBatchSchema", () => {
     });
     expect(onlyUnknown.tags).toEqual([]);
   });
+
+  it("keeps cryptic through ingest normalization with role + dynasty under the tag max", () => {
+    const parsed = xNewsItemSchema.parse({
+      ...validItem,
+      tags: ["Player", "CRYPTIC", "dynasty", "nope"],
+    });
+    expect(parsed.tags).toEqual(["player", "cryptic", "dynasty"]);
+    expect(normalizeNewsTags(["cryptic", "player", "dynasty", "extra"])).toEqual([
+      "cryptic",
+      "player",
+      "dynasty",
+    ]);
+  });
 });
 
 describe("collectXNewsDrafts scope branching", () => {

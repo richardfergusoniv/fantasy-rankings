@@ -240,7 +240,8 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
       return {
         key: `news:${item.id}`,
         source: sourceParts.join(" · "),
-        sourceTone: badges.primary.tone,
+        // Primary is never muted (cryptic is secondary-only); keep ticker amber for rumor.
+        sourceTone: badges.primary.tone === "rumor" ? "rumor" : "neutral",
         label: tickerNewsLabel(item),
         quote: null,
         move: null,

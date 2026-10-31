@@ -107,6 +107,26 @@ describe("selectNewsBadges", () => {
       }).secondary.map((badge) => badge.label),
     ).toEqual(["Dynasty", "League"]);
   });
+
+  it("keeps Player primary and leads secondaries with Cryptic for player+cryptic", () => {
+    expect(
+      selectNewsBadges({
+        source: "x",
+        tags: ["player", "cryptic"],
+        scope: "player",
+      }),
+    ).toEqual({
+      primary: { key: "player", label: "Player", tone: "neutral" },
+      secondary: [{ key: "cryptic", label: "Cryptic", tone: "muted" }],
+    });
+    expect(
+      selectNewsBadges({
+        source: "x",
+        tags: ["player", "dynasty", "cryptic"],
+        scope: "team",
+      }).secondary.map((badge) => badge.label),
+    ).toEqual(["Cryptic", "Dynasty", "Team"]);
+  });
 });
 
 describe("articleOutletBadgeLabel", () => {
