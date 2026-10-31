@@ -1,7 +1,9 @@
 import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { BetterPick, Hindsight } from "../../../api/_lib/draft-grade";
 import { CardHero } from "../components/card-hero";
+import { ChevronGlyph } from "../components/glyphs";
 
 /** `+5.8%`, `0.0%`: how far a lineup is above the drafted one. */
 export const gapText = (gap: number) => `${gap > 0 ? "+" : ""}${gap.toFixed(1)}%`;
@@ -27,7 +29,6 @@ export function HindsightCard({ hindsight, yoursIsBest, yoursTiming, onOpen }: {
       role="button"
       tabIndex={0}
       aria-haspopup="dialog"
-      aria-label="Hindsight summary. Open all strategies."
       onClick={onOpen}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(); } }}
     >
@@ -35,13 +36,13 @@ export function HindsightCard({ hindsight, yoursIsBest, yoursTiming, onOpen }: {
       <CardHero ariaLabel="Hindsight" items={items} />
       {hindsight.biggestSwap ? (
         <div className="hindsight-swap">
-          <span><b>Biggest swap</b> · {hindsight.biggestSwap.from} → {hindsight.biggestSwap.to.name}</span>
+          <span><b>Biggest swap</b> · {hindsight.biggestSwap.from} for {hindsight.biggestSwap.to.name}</span>
           <em>+{hindsight.biggestSwap.gain.toLocaleString()}</em>
         </div>
       ) : null}
       <div className="hindsight-open">
         <span>Compare all {planCount} strategies</span>
-        <span aria-hidden="true">›</span>
+        <ChevronGlyph />
       </div>
     </Card>
   );
@@ -81,7 +82,7 @@ export function HindsightSheet({ open, onOpenChange, hindsight, entries, nameOf,
                     <b>{plan.name}</b>
                     <span>{plan.timing}</span>
                     <em>{plan.gap === null ? "Not possible" : gapText(plan.gap)}</em>
-                    {plan.best || plan.yours ? <i>{[plan.best ? "Best" : null, plan.yours ? "Yours" : null].filter(Boolean).join(" · ")}</i> : null}
+                    {plan.best || plan.yours ? <Badge variant="secondary" size="compact" className="status-badge">{[plan.best ? "Best" : null, plan.yours ? "Yours" : null].filter(Boolean).join(" · ")}</Badge> : null}
                   </th>
                 ))}
               </tr>

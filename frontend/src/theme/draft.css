@@ -189,7 +189,7 @@ a.player-news-item { color: inherit; text-decoration: none; }
 .hindsight-swap { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: var(--type-control); }
 .hindsight-swap b { font-weight: 700; }
 .hindsight-swap em { flex: none; color: var(--link); font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; }
-.hindsight-open { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--link); font-size: var(--type-control); font-weight: 700; }
+.hindsight-open { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--link); font-size: var(--type-control); font-weight: 700; }
 [data-slot="dialog-content"].hindsight-sheet {
   top: auto;
   right: 0;
@@ -222,7 +222,7 @@ a.player-news-item { color: inherit; text-decoration: none; }
 .hindsight-table th b { display: block; }
 .hindsight-table th span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .hindsight-table th em { display: block; margin-top: 2px; color: var(--link); font-size: var(--type-caption); font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; }
-.hindsight-table th i { display: inline-block; margin-top: 3px; padding: 0 6px; border: 1px solid var(--link); border-radius: 999px; color: var(--link); font-size: 11px; font-style: normal; font-weight: 700; }
+.hindsight-table th .status-badge { margin-top: 3px; }
 .hindsight-table td strong, .hindsight-table th.is-pick strong { display: block; font-size: var(--type-control); font-weight: 700; }
 .hindsight-table td small, .hindsight-table th.is-pick small { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .hindsight-none, .hindsight-table .is-off, .hindsight-table th.is-off em { color: var(--dim); }
