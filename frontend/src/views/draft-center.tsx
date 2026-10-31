@@ -489,7 +489,7 @@ export function DraftCenter({
           {draftFilters}
           {draftBoard}
         </div>
-      ) : draftIsFinal && mode === "betterPicks" ? (
+      ) : draftIsFinal && mode === "alternatives" ? (
         <DraftBetterPicks
           leagueId={league.id}
           players={recapPicks}

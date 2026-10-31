@@ -34,9 +34,9 @@ describe("dashboard URL state", () => {
     expect(parseDashboardSearch(serializeDashboardSearch(original))).toEqual(original);
   });
 
-  it("round-trips the Better picks draft room", () => {
-    const original = state({ tab: "draft", draftRoom: "betterPicks" });
-    expect(serializeDashboardSearch(original)).toBe("?tab=draft&room=betterPicks");
+  it("round-trips the Alternatives draft room", () => {
+    const original = state({ tab: "draft", draftRoom: "alternatives" });
+    expect(serializeDashboardSearch(original)).toBe("?tab=draft&room=alternatives");
     expect(parseDashboardSearch(serializeDashboardSearch(original))).toEqual(original);
   });
 

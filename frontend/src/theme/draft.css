@@ -80,7 +80,7 @@
 .draft-grade .card-hero { margin-top: 6px; border-block: 0; }
 .draft-grade .card-hero > div { padding-block: 4px 0; }
 
-/* Better picks: your pick, then the best player still available at that slot on draft day and today. */
+/* Alternatives: your pick, then a better player taken in the next round, by draft-day and by today's value. */
 .draft-row.draft-better-row { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding-block: 8px; }
 .draft-better-row.draft-table-head { padding-block: 5px; }
 .draft-better-row.draft-table-head > span:nth-child(n+2) { justify-content: flex-start; text-align: left; }

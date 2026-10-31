@@ -35,7 +35,7 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
 
   return (
     <section className="draft-my-team">
-      <div className="section-heading"><h2>Better picks</h2></div>
+      <div className="section-heading"><h2>Alternatives</h2></div>
       {entries.length > 0 ? (
         <div className="draft-board data-table-frame" role="list" aria-label="Best available player at each pick">
           <div className="draft-row draft-table-head draft-better-row" aria-hidden="true">
@@ -59,7 +59,7 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
             );
           })}
         </div>
-      ) : <div className="empty-inline compact">{query.isPending ? "Loading…" : "Better picks aren’t available for this draft."}</div>}
+      ) : <div className="empty-inline compact">{query.isPending ? "Loading…" : "Alternatives aren’t available for this draft."}</div>}
     </section>
   );
 }
