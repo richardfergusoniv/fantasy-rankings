@@ -67,6 +67,20 @@ export const api = {
     return body.dashboard;
   },
 
+  /**
+   * The refresh button's load: a forced dashboard request that also reports
+   * whether the server-side resync fell back to the previous snapshot
+   * (`resync: "failed"` in the body), so the UI can say the refresh failed
+   * instead of silently showing stale data as if it were fresh.
+   */
+  refreshDashboard: async (): Promise<{ dashboard: Dashboard; resyncFailed: boolean }> => {
+    const body = await request<{ dashboard: Dashboard; resync?: string }>(
+      `/api/dashboard${buildQuery({ force: true })}`,
+      { cache: "no-store" },
+    );
+    return { dashboard: body.dashboard, resyncFailed: body.resync === "failed" };
+  },
+
   getDashboardSection: (args: {
     section: DashboardSection["section"];
     /** Restart a failed background build instead of reporting the failure again. */

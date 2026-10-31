@@ -206,6 +206,75 @@ export async function fetchJson<T>(url: string): Promise<T> {
   })(), SOURCE_TIMEOUT_MS, () => controller.abort());
 }
 
+/**
+ * Whether a failed source fetch is worth retrying: rate limits (429) and
+ * server errors (5xx) are transient, and anything that is not an HTTP status
+ * error at all (network failure, timeout abort) may clear on a second try.
+ * Other 4xx responses are deterministic, so retrying them only adds latency.
+ * Mirrors `isRetryableHistoryFetchError` in player-value-history.ts, plus 429.
+ */
+export function isRetryableSourceFetchError(err: unknown): boolean {
+  if (!(err instanceof Error)) return true;
+  const match = /^Source returned (\d+)$/.exec(err.message);
+  if (match) {
+    const status = Number(match[1]);
+    return status === 429 || (status >= 500 && status <= 599);
+  }
+  return true;
+}
+
+export const SOURCE_FETCH_RETRY_BACKOFF_MS = [400, 1_200] as const;
+
+async function defaultSleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * `fetchJson` with bounded retries for transient failures (see
+ * `isRetryableSourceFetchError`). Used on the dashboard build's Sleeper
+ * reads, where a single blip otherwise fails the whole resync and the
+ * caller silently serves the previous snapshot. Sleeper is effectively
+ * always reachable, so a resync should not fail on one bad attempt.
+ * Inject `sleepFn` in unit tests.
+ */
+export async function fetchJsonWithRetry<T>(
+  url: string,
+  options: {
+    maxAttempts?: number;
+    backoffMs?: readonly number[];
+    sleepFn?: (ms: number) => Promise<void>;
+    /**
+     * Absolute deadline for STARTING further attempts. Callers inside a
+     * bounded invocation (a dashboard build, a 60s function) pass theirs
+     * so a chain of slow retries can never outlive the caller's budget:
+     * once the deadline passes, the last error throws immediately and the
+     * caller's fallback runs instead. An attempt already in flight keeps
+     * its own per-attempt timeout.
+     */
+    deadlineAtMs?: number;
+  } = {},
+): Promise<T> {
+  const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
+  const backoffMs = options.backoffMs ?? SOURCE_FETCH_RETRY_BACKOFF_MS;
+  const sleepFn = options.sleepFn ?? defaultSleep;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await fetchJson<T>(url);
+    } catch (err) {
+      lastError = err;
+      if (attempt >= maxAttempts - 1 || !isRetryableSourceFetchError(err)) throw err;
+      if (options.deadlineAtMs !== undefined && Date.now() >= options.deadlineAtMs) throw err;
+      await sleepFn(backoffMs[Math.min(attempt, backoffMs.length - 1)] ?? 0);
+      // Recheck after the backoff: the sleep itself can cross the
+      // deadline, and starting another full attempt past it would hand
+      // the caller back its budget already spent.
+      if (options.deadlineAtMs !== undefined && Date.now() >= options.deadlineAtMs) throw err;
+    }
+  }
+  throw lastError;
+}
+
 export async function fetchText(url: string, timeoutMs = SOURCE_TIMEOUT_MS): Promise<string> {
   const controller = new AbortController();
   return await withDeadline((async () => {

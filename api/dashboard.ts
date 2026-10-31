@@ -103,6 +103,7 @@ async function handleDashboard(
             dashboard: cached.dashboard,
             live: cached.live,
             fetchedAtMs: cached.fetchedAtMs,
+            resyncFailed: false,
           };
         },
         loadOwnerSnapshot: async () => {
@@ -112,6 +113,7 @@ async function handleDashboard(
             dashboard: snapshot,
             live: dashboardSnapshotIsLive(snapshot),
             fetchedAtMs: 0,
+            resyncFailed: false,
           };
         },
         buildOwn: async (id) => {
@@ -121,6 +123,7 @@ async function handleDashboard(
             live: dashboardSnapshotIsLive(loaded.dashboard),
             // 0 when the build fell back to a stale row or the owner snapshot.
             fetchedAtMs: loaded.fetchedAtMs,
+            resyncFailed: loaded.fellBack,
           };
         },
       });
@@ -137,7 +140,11 @@ async function handleDashboard(
           });
       return {
         kind: "value",
-        body: { dashboard: payload.dashboard },
+        // A forced load whose build fell back says so in the body: the
+        // response is a 200 with the stale dashboard, and without this flag
+        // the client cannot tell a failed resync from a successful one.
+        // ttlSeconds is 0 for fallbacks, so this body is never view-cached.
+        body: { dashboard: payload.dashboard, ...(payload.resyncFailed ? { resync: "failed" } : {}) },
         version: payload.dashboard.asOf,
         live: payload.live,
         ttlSeconds,
