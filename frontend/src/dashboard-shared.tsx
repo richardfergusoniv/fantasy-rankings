@@ -30,6 +30,7 @@ import { EdgeStrip } from "./components/edge-strip";
 import { RefreshIcon, SectionError } from "./section-error";
 import { dashboardFreshness } from "./dashboard-freshness";
 import { newsAbsoluteTimeLabel, newsItemTimeLabel, newsRelativeTimeLabel } from "./news-time";
+import { NewsTypeBadges } from "./news-badges";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { gameLineSummary, type TeamGameLineLike } from "./game-line-summary";
@@ -756,9 +757,6 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
 export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose: () => void }) {
   const isArticle = item.source === "article";
   const nowMs = useMinuteNow(isArticle);
-  const severity = item.newsType === "headline"
-    ? item.playerId === "league" ? "Breaking" : "League news"
-    : item.newsType === "waiver" ? "Waiver signal" : "Roster update";
   const outletLabel = item.author && !isArticle
     ? `${item.sourceLabel} · ${item.author}`
     : item.sourceLabel;
@@ -772,11 +770,7 @@ export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose
         <DialogCloseButton label="Close news card" />
         <DialogHeader className="news-card-header pr-8">
           <div className="flex flex-wrap items-center gap-2">
-            {!isArticle ? (
-              <Badge variant={item.newsType === "headline" ? "negative" : "secondary"}>{severity}</Badge>
-            ) : (
-              <span className="text-xs font-semibold text-muted-foreground">{item.sourceLabel}</span>
-            )}
+            <NewsTypeBadges item={item} />
             <time className="text-xs text-muted-foreground">{newsItemTimeLabel(item, nowMs)}</time>
           </div>
         </DialogHeader>

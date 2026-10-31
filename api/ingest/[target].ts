@@ -78,13 +78,16 @@ const MAX_INGEST_BODY_BYTES = 8 * 1024 * 1024;
  *                   `computedAt`, busts the dashboard cache on commit.
  * - pfn-tables:     writes `pfn:{tableKey}` rows to `source_cache` for the
  *                   4 PFN tables.
- * - player-news-x:  inserts shared player-news rows from X. Player scope
+ * - player-news-x:  upserts shared player-news rows from X. Player scope
  *                   dedupes by post_id + player_id (roundups fan out).
  *                   Team/league scopes store one row with player_id null
  *                   (dedupe by post_id + scope, plus team for team scope).
- *                   Producers should send Sleeper `player_id` when
- *                   known; `player_name` (+ optional `team`) is a fallback.
- *                   Last-name-only names require `team` or the item is dropped.
+ *                   Conflict on id refreshes `tags` so dynasty / source-role
+ *                   tags from a resent item survive. Unknown tags are dropped
+ *                   at validation (item still accepted). Producers should send
+ *                   Sleeper `player_id` when known; `player_name` (+ optional
+ *                   `team`) is a fallback. Last-name-only names require `team`
+ *                   or the item is dropped.
  * - prop-line-snapshots: inserts dated consensus prop-line rows into
  *                   `prop_line_snapshots` (line-movement history).
  * - sleeper-picks:  stores the normalized Sleeper Picks NFL board as one
@@ -420,15 +423,23 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     const result = await db
       .insert(schema.sharedPlayerNews)
       .values(chunk)
-      // Bare ON CONFLICT skips rows that hit a unique index (player, team, or
-      // league), so a resent post still counts as a duplicate.
-      .onConflictDoNothing()
+      // Deterministic ids: conflict on PK refreshes tags so source-role /
+      // dynasty tags from a resent X item survive the upsert path.
+      .onConflictDoUpdate({
+        target: schema.sharedPlayerNews.id,
+        set: {
+          tags: sql`excluded.tags`,
+        },
+      })
       .returning({
         id: schema.sharedPlayerNews.id,
         scope: schema.sharedPlayerNews.scope,
+        // xmax = 0 ⇒ row inserted in this statement (not an update).
+        isInsert: sql<boolean>`(xmax = 0)`,
       });
-    inserted += result.length;
     for (const row of result) {
+      if (!row.isInsert) continue;
+      inserted += 1;
       switch (row.scope) {
         case "player":
           insertedPlayer += 1;

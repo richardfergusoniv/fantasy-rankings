@@ -64,7 +64,15 @@
 .player-news-section { margin-top: 16px; padding-top: 4px; border-top: 1px solid var(--hairline); }
 .player-news-item { display: grid; gap: 5px; padding: 11px 0; border-bottom: 1px solid var(--hairline); }
 a.player-news-item { color: inherit; text-decoration: none; }
-.player-news-item > div { display: flex; justify-content: space-between; color: var(--dim); font-size: var(--type-caption); }
+.player-news-item > div { display: flex; justify-content: space-between; gap: 8px; color: var(--dim); font-size: var(--type-caption); }
+.player-news-item > div .news-type-badges { min-width: 0; }
+.news-type-badges { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.news-type-badge { min-height: var(--badge-height); }
+/* Rumor stays muted amber/yellow so it reads as unconfirmed, not good/bad. */
+.news-type-badge.is-rumor {
+  background: var(--accent-soft);
+  color: var(--ui-accent-foreground);
+}
 .news-severity { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .player-news-item strong { font-size: var(--type-body); }
 .player-news-item p { margin: 0; color: var(--dim); font-size: var(--type-body); line-height: 1.45; }
