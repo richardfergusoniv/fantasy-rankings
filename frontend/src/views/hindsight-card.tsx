@@ -5,6 +5,9 @@ import type { BetterPick, Hindsight } from "../../../api/_lib/draft-grade";
 import { CardHero } from "../components/card-hero";
 import { ChevronGlyph } from "../components/glyphs";
 
+/** "Late QB · Early TE" that wraps after the dot, never before it. */
+export const timingText = (timing: string) => timing.replace(" · ", "\u00A0· ");
+
 /** `+5.8%`, `0.0%`: how far a lineup is above the drafted one. */
 export const gapText = (gap: number) => `${gap > 0 ? "+" : ""}${gap.toFixed(1)}%`;
 
@@ -78,7 +81,7 @@ export function HindsightSheet({ open, onOpenChange, hindsight, entries, nameOf,
                 {hindsight.plans.map((plan) => (
                   <th scope="col" key={`${plan.name}-${plan.timing}`} className={`${plan.best ? "is-best " : ""}${plan.yours ? "is-yours " : ""}${plan.gap === null ? "is-off" : ""}`}>
                     <b>{plan.name}</b>
-                    <span>{plan.timing}</span>
+                    <span>{timingText(plan.timing)}</span>
                     <em>{plan.gap === null ? "Not possible" : gapText(plan.gap)}</em>
                     {plan.best || plan.yours ? <Badge variant="secondary" size="compact" className="status-badge">{[plan.best ? "Best" : null, plan.yours ? "Yours" : null].filter(Boolean).join(" · ")}</Badge> : null}
                   </th>

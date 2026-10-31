@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { BetterPick } from "../../../api/_lib/draft-grade";
 import { useDraftGrade } from "./draft-grade-card";
-import { HindsightCard, HindsightSheet } from "./hindsight-card";
+import { HindsightCard, HindsightSheet, timingText } from "./hindsight-card";
 
 export type BetterPicksPlayer = { playerId: string; name: string; secondary: string | null };
 
@@ -60,8 +60,8 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
         <div className="draft-board data-table-frame" role="list" aria-label="Hindsight by strategy">
           <div className="draft-row draft-table-head draft-better-row" aria-hidden="true">
             <span>Your pick</span>
-            <span><b>{strategies?.yours.name}</b>{strategies?.yours.timing}</span>
-            {sameStrategy ? null : <span><b>{strategies?.best.name}</b>{strategies?.best.timing}</span>}
+            <span><b>{strategies?.yours.name}</b>{timingText(strategies?.yours.timing ?? "")}</span>
+            {sameStrategy ? null : <span><b>{strategies?.best.name}</b>{timingText(strategies?.best.timing ?? "")}</span>}
           </div>
           {entries.map((entry) => {
             const player = byId.get(entry.playerId);
