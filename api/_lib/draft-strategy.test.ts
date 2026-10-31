@@ -56,6 +56,22 @@ describe("simulateStrategy preference tolerance", () => {
   });
 });
 
+describe("simulateStrategy edge cases", () => {
+  it("counts every TE-eligible flex slot in the tight-end cap", () => {
+    const values = board([["te1", 100], ["te2", 90], ["wr", 1], ["teOpp", 80]]);
+    const picks = [pick(1, 1, "te1", "TE"), pick(2, 1, "te2", "TE"), pick(41, 1, "wr", "WR"), pick(42, 2, "teOpp", "TE")];
+    const sim = simulateStrategy({ plan: { rb: "balanced", qb: "late", te: "early" }, picks, rosterId: 1, values, teams: 10, slots: ["TE", "FLEX", "FLEX"] });
+    expect(sim?.[2]?.chosen.playerId).toBe("teOpp");
+  });
+
+  it("replaces a skill player who has fallen off today's board", () => {
+    const values = board([["wrOpp", 100], ["floor", 1]]);
+    const picks = [pick(41, 1, "gone", "WR"), pick(42, 2, "wrOpp", "WR")];
+    const sim = simulateStrategy({ plan: { rb: "balanced", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["WR"] });
+    expect(sim?.[0]?.chosen.playerId).toBe("wrOpp");
+  });
+});
+
 describe("detectPlan", () => {
   it("reads QB and TE as early when taken in the first four rounds, otherwise late", () => {
     const picks = [pick(5, 1, "q", "QB"), pick(55, 1, "t", "TE")];

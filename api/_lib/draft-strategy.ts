@@ -103,7 +103,7 @@ function positionCap(position: string, slots: readonly string[]): number {
   const count = (slot: string) => slots.filter((value) => value === slot).length;
   const flexUsers = (position: string) => slots.filter((slot) => FLEX_ELIGIBLE[slot]?.includes(position)).length;
   if (position === "QB") return Math.max(count("QB") + count("SUPER_FLEX"), 1);
-  if (position === "TE") return Math.max(count("TE"), 1) + Math.min(flexUsers("TE"), 1);
+  if (position === "TE") return Math.max(count("TE"), 1) + flexUsers("TE");
   return Number.POSITIVE_INFINITY;
 }
 
@@ -145,6 +145,7 @@ export function simulateStrategy(args: {
 }): SimulatedPick[] | null {
   const ordered = [...args.picks].sort((a, b) => a.pickNo - b.pickNo);
   const own = ordered.filter((pick) => pick.rosterId === args.rosterId);
+  const floor = args.values.size === 0 ? 0 : Math.min(...args.values.values());
   const used = new Set<string>();
   const chosen: GradedPick[] = [];
   const takenRounds: Record<string, number[]> = { QB: [], RB: [], WR: [], TE: [] };
@@ -152,8 +153,8 @@ export function simulateStrategy(args: {
   let feasible = true;
   const isSkill = (position: string) => ["QB", "RB", "WR", "TE"].includes(position);
   own.forEach((pick, index) => {
-    // Kickers, defenses and anything unpriced stay as drafted.
-    if (!isSkill(pick.position) || !args.values.has(pick.playerId)) {
+    // Kickers and defenses stay as drafted. A skill player off today's board is valued at its floor, as in the grades.
+    if (!isSkill(pick.position)) {
       out.push({ actual: pick, chosen: pick });
       used.add(pick.playerId);
       return;
@@ -173,11 +174,11 @@ export function simulateStrategy(args: {
       if (ruleOf(player) === "ban") return false;
       return heldAt(player.position) < positionCap(player.position, args.slots);
     });
-    const valueOf = (player: GradedPick) => args.values.get(player.playerId) ?? 0;
+    const valueOf = (player: GradedPick) => args.values.get(player.playerId) ?? floor;
     const asValue = (player: GradedPick) => ({ position: player.position, value: valueOf(player) });
     // A pick is worth what it adds to the starting lineup alongside the players already chosen and the later actual picks,
     // so a replacement is not taken at the cost of a starter the roster still needs.
-    const rest = later.filter((player) => isSkill(player.position) && args.values.has(player.playerId));
+    const rest = later.filter((player) => isSkill(player.position));
     const lineupWith = (player: GradedPick) => lineupValue([...chosen, player, ...rest].map(asValue), args.slots);
     const gain = new Map(usable.map((player) => [player, lineupWith(player)] as const));
     // The actual pick breaks a tie, so the view only differs where a real alternative is worth more.
