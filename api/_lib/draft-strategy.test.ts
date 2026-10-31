@@ -147,6 +147,26 @@ describe("simulateStrategy position caps", () => {
   });
 });
 
+describe("simulateStrategy search limits", () => {
+  it("still finds a legal replay when the best-looking branch can never be completed", () => {
+    // A late-drafted QB the user must keep, an early opposing QB that would leave two, and many pointless
+    // combinations of bench picks in between.
+    const values = new Map<string, number>([["w0", 100], ["q", 200], ["w1", 101], ["myQb", 1]]);
+    const picks: GradedPick[] = [pick(41, 1, "w0", "WR"), pick(42, 2, "q", "QB"), pick(43, 2, "w1", "WR")];
+    for (let i = 0; i < 5; i += 1) {
+      const own = 50 + i * 10;
+      picks.push(pick(own, 1, `mine${i}`, "WR"));
+      values.set(`mine${i}`, 5);
+      for (let k = 1; k <= 9; k += 1) { picks.push(pick(own + k, 2, `opp${i}-${k}`, "WR")); values.set(`opp${i}-${k}`, 5 + k); }
+    }
+    picks.push(pick(161, 1, "myQb", "QB"));
+    const sim = simulateStrategy({ plan: { rb: "balanced", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["QB", "WR"] });
+    expect(sim).not.toBeNull();
+    expect(sim?.[0]?.chosen.playerId).toBe("w1");
+    expect(sim?.[sim.length - 1]?.chosen.playerId).toBe("myQb");
+  });
+});
+
 describe("detectPlan", () => {
   it("reads QB and TE as early when taken in the first four rounds, otherwise late", () => {
     const picks = [pick(5, 1, "q", "QB"), pick(55, 1, "t", "TE")];

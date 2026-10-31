@@ -218,6 +218,14 @@ export function simulateStrategy(args: {
     });
     return byPosition.flatMap((list, at) => list.sort((a, b) => b.value - a.value).slice(0, slotsFor[at]));
   });
+  // Picks whose only choices are one position must take that position, which the roster cap can already rule out.
+  const forced = POSITIONS.map((position) => {
+    const counts = Array.from({ length: slotCount + 1 }, () => 0);
+    for (let at = slotCount - 1; at >= 0; at -= 1) {
+      counts[at] = counts[at + 1]! + (pools[at]!.every((player) => player.position === position) ? 1 : 0);
+    }
+    return counts;
+  });
   // For each requirement, how many of the decisions from each point on could still supply it.
   const supply = needs.map((need) => {
     const counts = Array.from({ length: slotCount + 1 }, () => 0);
@@ -287,6 +295,11 @@ export function simulateStrategy(args: {
           const have = (takenRounds[need.position] ?? []).filter((value) => value <= need.throughRound).length;
           return have + supply[n]![at + 1]! >= need.min;
         });
+        if (viable) {
+          viable = POSITIONS.every((position, p) => (
+            chosen.filter((player) => player.position === position).length + forced[p]![at + 1]! <= rosterCap(position)
+          ));
+        }
         if (viable && mode === "changes" && incumbent && changed >= incumbent.changes) viable = false;
         if (viable && (mode === "changes" || incumbent)) {
           const ceiling = lineupValue([...chosen.map(asValue), ...suffixTop[at + 1]!], args.slots);
@@ -303,7 +316,9 @@ export function simulateStrategy(args: {
     return incumbent;
   };
 
-  const mostValuable = explore("value", 0, null);
+  // A search that ran out of steps before finding any roster is not proof the plan cannot be followed:
+  // look again for any roster that follows it, keeping as many of the user's picks as it can.
+  const mostValuable = explore("value", 0, null) ?? explore("changes", 0, null);
   if (!mostValuable) return null;
   const result = explore("changes", mostValuable.value, mostValuable) ?? mostValuable;
   const byDecision = new Map(decisions.map((index, at) => [index, result.picks[at]!] as const));
