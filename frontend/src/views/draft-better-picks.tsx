@@ -34,7 +34,7 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
   // Kickers and defenses have no value to compare, so they carry no grade and are left out.
   const entries = strategies ? (query.data?.grade?.picks ?? []).filter((entry) => byId.has(entry.playerId) && (entry.draftDay !== null || entry.today !== null)) : [];
   // When the user's strategy is already the best one, a single column says so.
-  const sameStrategy = strategies?.yours === strategies?.best;
+  const sameStrategy = strategies?.yours.name === strategies?.best.name && strategies?.yours.timing === strategies?.best.timing;
 
   return (
     <section className="draft-my-team">
@@ -43,8 +43,8 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
         <div className="draft-board data-table-frame" role="list" aria-label="Alt picks by strategy">
           <div className="draft-row draft-table-head draft-better-row" aria-hidden="true">
             <span>Your pick</span>
-            <span>{strategies?.yours}</span>
-            {sameStrategy ? null : <span>{strategies?.best}</span>}
+            <span><b>{strategies?.yours.name}</b>{strategies?.yours.timing}</span>
+            {sameStrategy ? null : <span><b>{strategies?.best.name}</b>{strategies?.best.timing}</span>}
           </div>
           {entries.map((entry) => {
             const player = byId.get(entry.playerId);
@@ -56,8 +56,8 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
                     <small>{[`Pick ${entry.pickNo}`, player?.secondary].filter(Boolean).join(" · ")}</small>
                   </button>
                 </div>
-                <BetterCell label={strategies?.yours ?? "Your strategy"} better={entry.better.yours} secondaryOf={secondaryOf} onOpenPlayer={onOpenPlayer} />
-                {sameStrategy ? null : <BetterCell label={strategies?.best ?? "Best strategy"} better={entry.better.best} secondaryOf={secondaryOf} onOpenPlayer={onOpenPlayer} />}
+                <BetterCell label={strategies?.yours.name ?? "Your strategy"} better={entry.better.yours} secondaryOf={secondaryOf} onOpenPlayer={onOpenPlayer} />
+                {sameStrategy ? null : <BetterCell label={strategies?.best.name ?? "Best strategy"} better={entry.better.best} secondaryOf={secondaryOf} onOpenPlayer={onOpenPlayer} />}
               </div>
             );
           })}

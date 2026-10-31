@@ -1,13 +1,14 @@
 /**
  * Draft strategies, for the Alt picks hindsight view: how the user's draft would have gone had they
  * stuck to their own approach and taken the best realistic player each time, and how the best of the
- * common approaches (Zero RB, Hero RB, Robust RB) would have gone.
+ * common approaches (Zero RB, Hero RB, Robust RB, each with early or late QB and TE) would have gone.
  *
  * A strategy is a rule about when running backs are taken, from the usual definitions:
  *   Zero RB   - no running back in the first four rounds.
  *   Hero RB   - one running back in the first two rounds, none in rounds three and four.
  *   Robust RB - running backs early: two in the first three rounds.
  *   Balanced  - anything else; the fallback label for a draft that fits none of them.
+ * Quarterbacks and tight ends are early when one is taken in the first four rounds, otherwise late.
  *
  * Each pick is replayed on today's values using the league's own draft order for realism: the choices
  * at a pick are the player actually taken plus whoever other teams took in the next round of picks.
@@ -17,6 +18,11 @@
 import type { GradedPick, ValueBoard } from "./draft-grade.js";
 
 export type Strategy = "zero-rb" | "hero-rb" | "robust-rb" | "balanced";
+
+export type Timing = "early" | "late";
+
+/** A full approach: how running backs went, and when a quarterback and a tight end were taken. */
+export type Plan = { rb: Strategy; qb: Timing; te: Timing };
 
 export const STRATEGY_LABELS: Record<Strategy, string> = {
   "zero-rb": "Zero RB",
@@ -28,8 +34,10 @@ export const STRATEGY_LABELS: Record<Strategy, string> = {
 const ARCHETYPES: readonly Strategy[] = ["zero-rb", "hero-rb", "robust-rb"];
 const DEFAULT_SLOTS = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX"];
 
-/** A robust drafter takes the running back unless a player at another position is worth this much more. */
-const ROBUST_TOLERANCE = 0.85;
+/** A plan that favors a position takes him unless a player at another position is worth this much more. */
+const PREFER_TOLERANCE = 0.85;
+
+const TIMING_ROUNDS = 4;
 
 const roundOf = (pickNo: number, teams: number) => Math.floor((pickNo - 1) / Math.max(teams, 1)) + 1;
 
@@ -41,6 +49,21 @@ export function detectStrategy(picks: readonly GradedPick[], teams: number): Str
   if (through(3) >= 2) return "robust-rb";
   if (through(2) === 1 && through(4) === 1) return "hero-rb";
   return "balanced";
+}
+
+function detectTiming(picks: readonly GradedPick[], teams: number, position: string): Timing {
+  return picks.some((pick) => pick.position === position && roundOf(pick.pickNo, teams) <= TIMING_ROUNDS) ? "early" : "late";
+}
+
+/** The plan a team's picks followed. */
+export function detectPlan(picks: readonly GradedPick[], teams: number): Plan {
+  return { rb: detectStrategy(picks, teams), qb: detectTiming(picks, teams, "QB"), te: detectTiming(picks, teams, "TE") };
+}
+
+/** "Late QB · Late TE", for under the strategy name. */
+export function timingLabel(plan: Plan): string {
+  const word = (timing: Timing) => (timing === "early" ? "Early" : "Late");
+  return `${word(plan.qb)} QB · ${word(plan.te)} TE`;
 }
 
 const FLEX_ELIGIBLE: Record<string, readonly string[]> = {
@@ -78,10 +101,19 @@ function positionCap(position: string, slots: readonly string[]): number {
 
 export type SimulatedPick = { actual: GradedPick; chosen: GradedPick };
 
-/** Whether a strategy allows a running back at this pick, given the running backs it has already taken. */
-function rbRule(strategy: Strategy, round: number, rbs: readonly number[]): "ban" | "prefer" | "free" {
-  const through = (limit: number) => rbs.filter((value) => value <= limit).length;
-  switch (strategy) {
+type Rule = "ban" | "prefer" | "free";
+
+/** What a plan says about taking `position` in `round`, given the rounds it has already taken one. */
+function ruleFor(plan: Plan, position: string, round: number, taken: readonly number[]): Rule {
+  const through = (limit: number) => taken.filter((value) => value <= limit).length;
+  if (position === "QB" || position === "TE") {
+    const timing = position === "QB" ? plan.qb : plan.te;
+    if (round > TIMING_ROUNDS) return "free";
+    if (timing === "late") return "ban";
+    return taken.length === 0 ? "prefer" : "free";
+  }
+  if (position !== "RB") return "free";
+  switch (plan.rb) {
     case "zero-rb": return round <= 4 ? "ban" : "free";
     case "hero-rb":
       if (round <= 2) return through(2) >= 1 ? "ban" : "free";
@@ -93,7 +125,7 @@ function rbRule(strategy: Strategy, round: number, rbs: readonly number[]): "ban
 
 /** Replays the user's own picks under a strategy on `values`, using the league's draft order for the choices. */
 export function simulateStrategy(args: {
-  strategy: Strategy;
+  plan: Plan;
   picks: readonly GradedPick[];
   rosterId: number;
   values: ValueBoard;
@@ -104,7 +136,7 @@ export function simulateStrategy(args: {
   const own = ordered.filter((pick) => pick.rosterId === args.rosterId);
   const used = new Set<string>();
   const chosen: GradedPick[] = [];
-  const rbRounds: number[] = [];
+  const takenRounds: Record<string, number[]> = { QB: [], RB: [], WR: [], TE: [] };
   const out: SimulatedPick[] = [];
   const isSkill = (position: string) => ["QB", "RB", "WR", "TE"].includes(position);
   own.forEach((pick, index) => {
@@ -123,34 +155,32 @@ export function simulateStrategy(args: {
       other.pickNo > pick.pickNo && other.pickNo <= pick.pickNo + args.teams
       && other.rosterId !== args.rosterId && isSkill(other.position) && !!other.name && args.values.has(other.playerId)
     ))].filter((player) => !used.has(player.playerId));
+    const ruleOf = (player: GradedPick) => ruleFor(args.plan, player.position, round, takenRounds[player.position] ?? []);
     const usable = pool.filter((player) => {
       if (player === pick) return true;
-      if (player.position === "RB" && rbRule(args.strategy, round, rbRounds) === "ban") return false;
+      if (ruleOf(player) === "ban") return false;
       return heldAt(player.position) < positionCap(player.position, args.slots);
     });
     const valueOf = (player: GradedPick) => args.values.get(player.playerId) ?? 0;
     // The actual pick breaks a tie, so the view only differs where a real alternative is worth more.
-    let best = usable.sort((a, b) => valueOf(b) - valueOf(a) || (b === pick ? 1 : 0) - (a === pick ? 1 : 0))[0] ?? pick;
-    if (rbRule(args.strategy, round, rbRounds) === "prefer") {
-      const backs = usable.filter((player) => player.position === "RB").sort((a, b) => valueOf(b) - valueOf(a));
-      if (backs[0] && valueOf(backs[0]) >= valueOf(best) * ROBUST_TOLERANCE) best = backs[0];
-    }
-    // A strategy that bans running backs must not keep the actual back as its pick either.
-    if (best.position === "RB" && rbRule(args.strategy, round, rbRounds) === "ban") {
-      best = usable.find((player) => player.position !== "RB") ?? best;
-    }
+    const byValue = (a: GradedPick, b: GradedPick) => valueOf(b) - valueOf(a) || (b === pick ? 1 : 0) - (a === pick ? 1 : 0);
+    const allowed = usable.filter((player) => ruleOf(player) !== "ban").sort(byValue);
+    // A plan that bans a position must not keep the actual player there either.
+    let best = allowed[0] ?? pick;
+    const preferred = allowed.find((player) => ruleOf(player) === "prefer");
+    if (preferred && valueOf(preferred) >= valueOf(best) * PREFER_TOLERANCE) best = preferred;
     used.add(best.playerId);
     chosen.push(best);
-    if (best.position === "RB") rbRounds.push(round);
+    takenRounds[best.position]?.push(round);
     out.push({ actual: pick, chosen: best });
   });
   return out;
 }
 
 export type StrategyView = {
-  yours: Strategy;
-  best: Strategy;
-  /** Per own pick (by the actual player's id): the player the strategy would have taken; null when it is the same player. */
+  yours: Plan;
+  best: Plan;
+  /** Per own pick (by the actual player's id): the player the plan would have taken; null when it is the same player. */
   yoursPicks: Map<string, GradedPick | null>;
   bestPicks: Map<string, GradedPick | null>;
 };
@@ -160,7 +190,10 @@ function rosterValue(picks: readonly GradedPick[], values: ValueBoard, slots: re
   return lineupValue(picks.map((pick) => ({ position: pick.position, value: values.get(pick.playerId) ?? floor })), slots);
 }
 
-/** The user's strategy done best and the best of the common strategies, replayed on today's values. */
+const TIMINGS: readonly Timing[] = ["early", "late"];
+const ALL_PLANS: readonly Plan[] = ARCHETYPES.flatMap((rb) => TIMINGS.flatMap((qb) => TIMINGS.map((te) => ({ rb, qb, te }))));
+
+/** The user's plan done best and the best of the common plans, replayed on today's values. */
 export function strategyView(args: {
   picks: readonly GradedPick[];
   rosterId: number;
@@ -173,21 +206,20 @@ export function strategyView(args: {
   if (own.length === 0 || args.values.size === 0) return null;
   const floor = Math.min(...args.values.values());
   const actualValue = rosterValue(own, args.values, slots, floor);
-  const yours = detectStrategy(own, args.teams);
+  const yours = detectPlan(own, args.teams);
 
-  const run = (strategy: Strategy) => {
-    const simulated = simulateStrategy({ strategy, picks: args.picks, rosterId: args.rosterId, values: args.values, teams: args.teams, slots });
+  const run = (plan: Plan) => {
+    const simulated = simulateStrategy({ plan, picks: args.picks, rosterId: args.rosterId, values: args.values, teams: args.teams, slots });
     const value = rosterValue(simulated.map((item) => item.chosen), args.values, slots, floor);
-    // A strategy that would not have beaten the roster the user has leaves every pick alone.
+    // A plan that would not have beaten the roster the user has leaves every pick alone.
     const better = value > actualValue;
     const picks = new Map(simulated.map((item) => [item.actual.playerId, better && item.chosen.playerId !== item.actual.playerId ? item.chosen : null] as const));
-    return { strategy, value, picks };
+    return { plan, value, picks };
   };
 
   const mine = run(yours);
-  const candidates = ARCHETYPES.map(run).sort((a, b) => b.value - a.value);
-  const top = candidates[0]!;
+  const top = ALL_PLANS.map(run).sort((a, b) => b.value - a.value)[0]!;
   // The user's own approach wins ties, so a draft that was already the best way to go says so.
-  const best = ARCHETYPES.includes(yours) && mine.value >= top.value ? mine : top;
-  return { yours, best: best.strategy, yoursPicks: mine.picks, bestPicks: best.picks };
+  const best = ARCHETYPES.includes(yours.rb) && mine.value >= top.value ? mine : top;
+  return { yours, best: best.plan, yoursPicks: mine.picks, bestPicks: best.picks };
 }

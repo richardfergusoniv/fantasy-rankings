@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectStrategy, lineupValue, simulateStrategy, strategyView } from "./draft-strategy.js";
+import { detectPlan, detectStrategy, lineupValue, simulateStrategy, strategyView } from "./draft-strategy.js";
 import type { GradedPick, ValueBoard } from "./draft-grade.js";
 
 const pick = (pickNo: number, rosterId: number, playerId: string, position: string): GradedPick => ({ pickNo, rosterId, playerId, position, name: `Name ${playerId}`, team: "TM" });
@@ -21,6 +21,14 @@ describe("detectStrategy", () => {
   });
 });
 
+describe("detectPlan", () => {
+  it("reads QB and TE as early when taken in the first four rounds, otherwise late", () => {
+    const picks = [pick(5, 1, "q", "QB"), pick(55, 1, "t", "TE")];
+    expect(detectPlan(picks, 10)).toMatchObject({ qb: "early", te: "late" });
+    expect(detectPlan([], 10)).toMatchObject({ qb: "late", te: "late" });
+  });
+});
+
 describe("lineupValue", () => {
   it("fills dedicated slots, then flex slots with the best of what is left", () => {
     const players = [
@@ -39,16 +47,28 @@ describe("simulateStrategy", () => {
 
   it("never takes a running back in the first rounds under Zero RB", () => {
     const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "rb", "RB")];
-    const sim = simulateStrategy({ ...base, strategy: "zero-rb", picks });
+    const sim = simulateStrategy({ ...base, plan: { rb: "zero-rb", qb: "late", te: "late" }, picks });
     expect(sim[0]?.chosen.playerId).toBe("wr");
     const rbFirst = [pick(1, 1, "rb2", "RB"), pick(2, 2, "wr", "WR"), pick(3, 2, "rb", "RB")];
-    expect(simulateStrategy({ ...base, strategy: "zero-rb", picks: rbFirst })[0]?.chosen.playerId).toBe("wr");
+    expect(simulateStrategy({ ...base, plan: { rb: "zero-rb", qb: "late", te: "late" }, picks: rbFirst })[0]?.chosen.playerId).toBe("wr");
   });
 
   it("does not suggest another quarterback when the team got one later", () => {
     const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "qb", "QB"), pick(3, 1, "qbLater", "QB"), pick(4, 2, "rb2", "RB")];
-    const sim = simulateStrategy({ ...base, strategy: "balanced", picks });
+    const sim = simulateStrategy({ ...base, plan: { rb: "balanced", qb: "late", te: "late" }, picks });
     expect(sim[0]?.chosen.playerId).toBe("wr");
+  });
+});
+
+describe("simulateStrategy timing", () => {
+  const slots = ["QB", "RB", "WR", "TE", "FLEX"];
+  const values = board([["wr", 800], ["qb", 700], ["rb", 500]]);
+  const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "qb", "QB")];
+  const sim = (qb: "early" | "late") => simulateStrategy({ plan: { rb: "balanced", qb, te: "late" }, picks, rosterId: 1, values, teams: 2, slots })[0]?.chosen.playerId;
+
+  it("keeps a quarterback out of the early rounds when late, and favors one when early", () => {
+    expect(sim("late")).toBe("wr");
+    expect(sim("early")).toBe("qb");
   });
 });
 
@@ -67,7 +87,7 @@ describe("strategyView", () => {
     const values = board([["bust", 100], ["wr1", 900], ["rb2", 300], ["wr2", 600]]);
     const picks = [pick(1, 1, "bust", "RB"), pick(2, 2, "wr1", "WR"), pick(3, 1, "rb2", "RB"), pick(4, 2, "wr2", "WR")];
     const view = strategyView({ picks, rosterId: 1, values, teams: 2, slots });
-    expect(view?.yours).toBe("robust-rb");
+    expect(view?.yours.rb).toBe("robust-rb");
     expect(view?.bestPicks.get("bust")?.playerId).toBe("wr1");
   });
 

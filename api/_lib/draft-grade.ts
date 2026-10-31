@@ -29,7 +29,7 @@ import { z } from "zod";
 import { badRequest, forbidden, internalError, json, unauthorized } from "./api-utils.js";
 import { resolveSleeperUserId } from "./auth.js";
 import { readUserDashboardCache } from "./dashboard-build.js";
-import { STRATEGY_LABELS, strategyView } from "./draft-strategy.js";
+import { STRATEGY_LABELS, strategyView, timingLabel, type Plan } from "./draft-strategy.js";
 import { db, schema } from "./db.js";
 import { isRedraftFormatKey, pacificDateKey, resolveFantasyCalcSnapshotFormatKey } from "./player-value-history.js";
 import { isNflValueHistoryInSeason } from "./season-week.js";
@@ -73,6 +73,9 @@ export type OwnPickGrade = {
   better: BetterPicks;
 };
 
+/** A strategy as shown in a column header: "Zero RB" over "Late QB · Late TE". */
+export type StrategyLabel = { name: string; timing: string };
+
 export type DraftGrade = {
   draftId: string;
   /** Null when the value board for the draft's date is missing. */
@@ -81,8 +84,8 @@ export type DraftGrade = {
   today: DraftGradeResult | null;
   /** The user's own picks in draft order. */
   picks: OwnPickGrade[];
-  /** Labels of the user's strategy and the best one; null without today's board. */
-  strategies: { yours: string; best: string } | null;
+  /** The user's strategy and the best one, as a name and its QB/TE timing; null without today's board. */
+  strategies: { yours: StrategyLabel; best: StrategyLabel } | null;
 };
 
 export function gradeLetter(rank: number, teams: number): string {
@@ -172,6 +175,8 @@ export function pickGrades(args: {
   return out;
 }
 
+const strategyLabel = (plan: Plan): StrategyLabel => ({ name: STRATEGY_LABELS[plan.rb], timing: timingLabel(plan) });
+
 function resultFor(totals: ReadonlyMap<number, number>, ownRosterId: number): DraftGradeResult | null {
   const rank = placeOf(totals, ownRosterId);
   if (rank === null || totals.size < 2) return null;
@@ -220,7 +225,7 @@ export function gradeDraft(args: {
     today: sinceThen?.get(playerId) ?? null,
     better: { yours: named(view?.yoursPicks.get(playerId)), best: named(view?.bestPicks.get(playerId)) },
   }));
-  return { draftDay, today, picks, strategies: view ? { yours: STRATEGY_LABELS[view.yours], best: STRATEGY_LABELS[view.best] } : null };
+  return { draftDay, today, picks, strategies: view ? { yours: strategyLabel(view.yours), best: strategyLabel(view.best) } : null };
 }
 
 /** `YYYY-MM-DD` moved by whole days (noon UTC keeps it clear of day boundaries). */
