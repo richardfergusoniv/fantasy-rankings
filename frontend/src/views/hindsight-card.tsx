@@ -31,10 +31,7 @@ export function HindsightCard({ hindsight, yoursIsBest, yoursTiming, onOpen }: {
       onClick={onOpen}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(); } }}
     >
-      <div className="draft-grade-eyebrow hindsight-eyebrow">
-        <span>Hindsight</span>
-        <ChevronGlyph />
-      </div>
+      <span className="hindsight-chevron"><ChevronGlyph /></span>
       <CardHero ariaLabel="Hindsight" items={items} />
       {hindsight.biggestSwap ? (
         <div className="hindsight-swap">
