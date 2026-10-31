@@ -1,0 +1,145 @@
+{
+  "articles": [
+    {
+      "id": 50331710,
+      "nowId": "1-50331710",
+      "contentKey": "50331710-1-5-1",
+      "dataSourceIdentifier": "8bbedf80028be",
+      "type": "HeadlineNews",
+      "headline": "Sources: Commanders' Daron Payne likely IR-bound after practice injury",
+      "description": "Commanders DT Daron Payne suffered a significant foot injury in practice Friday that likely will land him on injured reserve, sources told NFL Network.",
+      "lastModified": "2026-10-30T23:45:24Z",
+      "published": "2026-10-30T23:45:24Z",
+      "links": {
+        "api": {
+          "self": {
+            "href": "https://content.core.api.espn.com/v1/sports/news/50331710"
+          }
+        },
+        "app": {
+          "sportscenter": {
+            "href": "sportscenter://x-callback-url/showStory?uid=50331710"
+          }
+        },
+        "mobile": {
+          "href": "http://m.espn.go.com/nfl/story?storyId=50331710"
+        },
+        "web": {
+          "href": "https://www.espn.com/nfl/story/_/id/50331710/sources-commanders-daron-payne-injures-foot-practice"
+        }
+      },
+      "premium": false
+    },
+    {
+      "id": 50289130,
+      "nowId": "1-50289130",
+      "contentKey": "50289130-1-6-1",
+      "dataSourceIdentifier": "04c76de8161a5",
+      "type": "Story",
+      "headline": "Fantasy football Week 8 inactives: Chase to play; Hall questionable; Egbuka out",
+      "description": "Updated inactives and analysis based on the latest reports and official announcements leading up to kickoff.",
+      "lastModified": "2026-10-30T23:25:07Z",
+      "published": "2026-10-30T23:25:07Z",
+      "links": {
+        "api": {
+          "self": {
+            "href": "https://content.core.api.espn.com/v1/sports/news/50289130"
+          }
+        },
+        "app": {
+          "sportscenter": {
+            "href": "sportscenter://x-callback-url/showStory?uid=50289130"
+          }
+        },
+        "mobile": {
+          "href": "http://m.espn.go.com/wireless/story?storyId=50289130"
+        },
+        "web": {
+          "href": "https://www.espn.com/fantasy/football/story/_/page/FFSundayInactives-50289130/fantasy-football-injuries-nfl-week-8-inactive-active"
+        }
+      },
+      "premium": false
+    },
+    {
+      "id": 50331045,
+      "nowId": "1-50331045",
+      "contentKey": "50331045-1-5-1",
+      "dataSourceIdentifier": "4e9fdd77c42bb",
+      "type": "HeadlineNews",
+      "headline": "Colts' Shane Steichen: WR Josh Downs 'ready to go' despite trade request",
+      "description": "Colts coach Shane Steichen says receiver Josh Downs practiced all week and is \"ready to go\" despite the trade request he made earlier this week.",
+      "lastModified": "2026-10-30T22:19:00Z",
+      "published": "2026-10-30T22:19:00Z",
+      "links": {
+        "api": {
+          "self": {
+            "href": "https://content.core.api.espn.com/v1/sports/news/50331045"
+          }
+        },
+        "app": {
+          "sportscenter": {
+            "href": "sportscenter://x-callback-url/showStory?uid=50331045"
+          }
+        },
+        "mobile": {
+          "href": "http://m.espn.go.com/nfl/story?storyId=50331045"
+        },
+        "web": {
+          "href": "https://www.espn.com/nfl/story/_/id/50331045/colts-steichen-wr-downs-ready-go-trade-demand"
+        }
+      },
+      "premium": false
+    },
+    {
+      "id": 50330916,
+      "nowId": "1-50330916",
+      "contentKey": "50330916-1-293-1",
+      "dataSourceIdentifier": "64dceb6195372",
+      "type": "Media",
+      "headline": "Budda Baker fields trade rumor questions in costume",
+      "description": "Budda Baker fields trade rumor questions in costume",
+      "lastModified": "2026-10-30T21:08:26Z",
+      "published": "2026-10-30T21:08:26Z",
+      "links": {
+        "api": {
+          "artwork": {
+            "href": "https://artwork.api.espn.com/artwork/collections/media/cdeec211-4a76-40ed-a3b8-27ae8d83579d"
+          },
+          "self": {
+            "href": "https://content.core.api.espn.com/v1/video/clips/50330916"
+          }
+        },
+        "sportscenter": {
+          "href": "sportscenter://x-callback-url/showVideo?videoID=50330916&videoDSI=64dceb6195372"
+        },
+        "web": {
+          "href": "https://www.espn.com/video/clip/_/id/50330916/budda-baker-fields-trade-rumor-questions-costume",
+          "self": {
+            "href": "https://www.espn.com/video/clip/_/id/50330916/budda-baker-fields-trade-rumor-questions-costume",
+            "dsi": {
+              "href": "https://www.espn.com/video/clip?id=64dceb6195372"
+            }
+          }
+        }
+      },
+      "premium": false
+    },
+    {
+      "id": 50331710,
+      "nowId": "1-50331710",
+      "contentKey": "50331710-1-5-1",
+      "dataSourceIdentifier": "8bbedf80028be",
+      "type": "HeadlineNews",
+      "headline": "ESPN+ exclusive grades",
+      "description": "Commanders DT Daron Payne suffered a significant foot injury in practice Friday that likely will land him on injured reserve, sources told NFL Network.",
+      "lastModified": "2026-10-30T23:45:24Z",
+      "published": "2026-10-30T23:45:24Z",
+      "links": {
+        "web": {
+          "href": "https://www.espn.com/nfl/story/_/id/1/espn-plus"
+        }
+      },
+      "premium": true
+    }
+  ]
+}

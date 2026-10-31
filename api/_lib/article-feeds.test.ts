@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   ARTICLE_FEED_SOURCES,
@@ -10,6 +13,7 @@ import {
   decodeXmlEntities,
   detectPffPremiumFromHtml,
   filterArticleHeadline,
+  isPublishedWithinWindow,
   matchArticlePlayers,
   normalizeHeadlineKey,
   parseFeedXml,
@@ -21,10 +25,30 @@ import {
   type ArticleFeedsCachePayload,
 } from "./article-feeds.js";
 import {
+  detectFantasyLifePremiumFromHtml,
+  extractArticlePublishedAtFromHtml,
+  footballguysTeamHintFromTitle,
+  parse247BrownsListingHtml,
+  parseEspnNflNewsJson,
+  parseFantasyLifeNewsSitemap,
+  parseFootballguysNewsHtml,
+  parseFootballguysEtTimestamp,
+  parseSiOnsiNewsSitemap,
+  parseWpRestDateGmt,
+  parseWpRestPostsJson,
+  SI_ONSI_TEAM_SLUG_TO_CODE,
+  siOnsiTeamFromUrl,
+} from "./article-feed-parsers.js";
+import {
   buildPlayerNewsNameIndex,
   type PlayerNewsNameIndexEntry,
 } from "./player-news-shared.js";
 import { buildXNewsMentionNeedles } from "./x-news-mentions.js";
+
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "article-feeds");
+function fixture(name: string): string {
+  return readFileSync(join(FIXTURES, name), "utf8");
+}
 
 const fantasyPros: ArticleFeedSource = ARTICLE_FEED_SOURCES.find((s) => s.name === "FantasyPros")!;
 const pff: ArticleFeedSource = ARTICLE_FEED_SOURCES.find((s) => s.name === "PFF")!;
@@ -517,14 +541,124 @@ describe("truncateSummary", () => {
 });
 
 describe("feed list decisions", () => {
-  it("includes PFT and excludes paywalled / Google-News-only sources", () => {
+  it("includes gap sources and keeps paywalled / Google News out", () => {
     const names = ARTICLE_FEED_SOURCES.map((s) => s.name);
     expect(names).toContain("ProFootballTalk");
     expect(names).toContain("PFF");
+    expect(names).toContain("Denver Post");
+    expect(names).toContain("Sun Sentinel");
+    expect(names).toContain("SI OnSI");
+    expect(names).toContain("ESPN");
+    expect(names).toContain("Fantasy Life");
+    expect(names).toContain("247Sports Browns");
+    expect(names).toContain("Footballguys");
     expect(names.some((n) => /athletic/i.test(n))).toBe(false);
     expect(names.some((n) => /fantasy points/i.test(n))).toBe(false);
-    expect(ARTICLE_FEED_SOURCES.some((s) => /news\.php/.test(s.feedUrl))).toBe(false);
+    expect(ARTICLE_FEED_SOURCES.some((s) => /rotowire\.com\/rss\/news\.php/.test(s.feedUrl))).toBe(false);
     expect(ARTICLE_FEED_SOURCES.some((s) => /news\.google\.com/.test(s.feedUrl))).toBe(false);
-    expect(names.some((n) => /cleveland|denver post|sun sentinel|cfr/i.test(n))).toBe(false);
+    expect(ARTICLE_FEED_SOURCES.some((s) => /footballguys\.com\/articles/.test(s.feedUrl))).toBe(false);
+    const usa = ARTICLE_FEED_SOURCES.find((s) => s.name === "USA Today team wires");
+    const pewter = ARTICLE_FEED_SOURCES.find((s) => s.name === "Pewter Report");
+    expect(usa?.disabled).toBe(true);
+    expect(pewter?.disabled).toBe(true);
+  });
+});
+
+describe("published_at window", () => {
+  const now = new Date("2026-10-30T20:00:00Z");
+
+  it("keeps items within ~48h and drops older / missing / far-future", () => {
+    expect(isPublishedWithinWindow(new Date("2026-10-30T12:00:00Z"), now)).toBe(true);
+    expect(isPublishedWithinWindow(new Date("2026-10-28T20:00:00Z"), now)).toBe(true);
+    expect(isPublishedWithinWindow(new Date("2026-10-28T19:59:59Z"), now)).toBe(false);
+    expect(isPublishedWithinWindow(null, now)).toBe(false);
+    expect(isPublishedWithinWindow(new Date("2026-10-30T22:00:00Z"), now)).toBe(false);
+  });
+
+  it("preserves bare numeric URL hashes for Footballguys anchors", () => {
+    expect(canonicalArticleUrl("https://www.footballguys.com/news#1378282")).toBe(
+      "https://www.footballguys.com/news#1378282",
+    );
+    expect(
+      canonicalArticleUrl("https://www.fantasypros.com/nfl/news/x#section"),
+    ).toBe("https://www.fantasypros.com/nfl/news/x");
+  });
+});
+
+describe("gap source parsers (fixtures)", () => {
+  it("parses Denver Post / Sun Sentinel WP REST JSON with naive date_gmt as UTC", () => {
+    const denver = parseWpRestPostsJson(fixture("denver-post-wp.json"));
+    expect(denver.length).toBeGreaterThan(0);
+    expect(denver[0]!.title.length).toBeGreaterThan(5);
+    expect(denver[0]!.url).toMatch(/^https:\/\/www\.denverpost\.com\//);
+    expect(denver[0]!.publishedAt).toBeInstanceOf(Date);
+    expect(parseWpRestDateGmt("2026-10-30T21:11:56")?.toISOString()).toBe("2026-10-30T21:11:56.000Z");
+
+    const sun = parseWpRestPostsJson(fixture("sun-sentinel-wp.json"));
+    expect(sun.length).toBeGreaterThan(0);
+    expect(sun[0]!.url).toMatch(/sun-sentinel\.com/);
+  });
+
+  it("parses SI OnSI news sitemap and maps team slugs", () => {
+    const items = parseSiOnsiNewsSitemap(fixture("si-news-sitemap.xml"));
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((i) => /\/nfl\/[^/]+\/onsi\//i.test(i.url))).toBe(true);
+    expect(items[0]!.title.length).toBeGreaterThan(5);
+    expect(siOnsiTeamFromUrl("https://www.si.com/nfl/titans/onsi/foo")).toBe("TEN");
+    expect(siOnsiTeamFromUrl("https://www.si.com/nfl/saints/onsi/foo")).toBe("NO");
+    expect(siOnsiTeamFromUrl("https://www.si.com/nfl/draft/onsi/foo")).toBeNull();
+    expect(Object.keys(SI_ONSI_TEAM_SLUG_TO_CODE)).toHaveLength(32);
+  });
+
+  it("parses ESPN JSON and drops Media + premium items", () => {
+    const items = parseEspnNflNewsJson(fixture("espn-nfl-news.json"));
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((i) => !/espn-plus/i.test(i.url))).toBe(true);
+    expect(items.every((i) => !/\/video\//i.test(i.url))).toBe(true);
+    expect(items.some((i) => /espn\.com/i.test(i.url))).toBe(true);
+  });
+
+  it("parses Fantasy Life news sitemap and detects FL+ pages", () => {
+    const items = parseFantasyLifeNewsSitemap(fixture("fantasylife-news-sitemap.xml"));
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((i) => i.url.includes("/articles/"))).toBe(true);
+    expect(detectFantasyLifePremiumFromHtml(fixture("fantasylife-free.html"))).toBe(false);
+    expect(detectFantasyLifePremiumFromHtml(fixture("fantasylife-premium.html"))).toBe(true);
+    expect(detectFantasyLifePremiumFromHtml(fixture("fantasylife-premium-escaped.html"))).toBe(true);
+  });
+
+  it("parses 247Sports Browns listing and article dates", () => {
+    const listing = parse247BrownsListingHtml(fixture("browns-247-listing.html"));
+    expect(listing.length).toBeGreaterThan(0);
+    expect(listing[0]!.id).toMatch(/^\d+$/);
+    expect(listing[0]!.url).toContain("/nfl/cleveland-browns/article/");
+    expect(listing[0]!.title.length).toBeGreaterThan(10);
+    const published = extractArticlePublishedAtFromHtml(fixture("browns-247-article.html"));
+    expect(published?.toISOString()).toBe("2026-10-30T18:00:00.000Z");
+  });
+
+  it("parses Footballguys /news HTML with ET year inference and anchor URLs", () => {
+    const now = new Date("2026-10-30T23:00:00Z");
+    const items = parseFootballguysNewsHtml(fixture("footballguys-news.html"), now);
+    expect(items.length).toBe(2);
+    expect(items[0]!.url).toMatch(/^https:\/\/www\.footballguys\.com\/news#\d+$/);
+    expect(items[0]!.guid).toMatch(/^footballguys:news:\d+$/);
+    expect(items[0]!.title).toMatch(/\|/);
+    expect(items[0]!.publishedAt).toBeInstanceOf(Date);
+    expect(items.some((i) => /Footballguys view:/i.test(i.summary))).toBe(true);
+    expect(footballguysTeamHintFromTitle("Seahawks | Zach Charbonnet limited")).toBe("SEA");
+
+    const et = parseFootballguysEtTimestamp("Fri Oct 30, 07:16 PM", now);
+    expect(et).toBeInstanceOf(Date);
+    // 7:16 PM EDT = 23:16 UTC
+    expect(et!.toISOString()).toBe("2026-10-30T23:16:00.000Z");
+
+    // Fall-back morning: 12:30 AM on the first Sunday in November is still EDT
+    // (transition is 02:00 EDT), so 12:30 AM → 04:30Z — not 05:30Z (EST).
+    const fallBack = parseFootballguysEtTimestamp(
+      "Sun Nov 1, 12:30 AM",
+      new Date("2026-11-01T04:35:00Z"),
+    );
+    expect(fallBack?.toISOString()).toBe("2026-11-01T04:30:00.000Z");
   });
 });
