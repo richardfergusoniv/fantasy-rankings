@@ -39,6 +39,9 @@ const PREFER_TOLERANCE = 0.85;
 
 const TIMING_ROUNDS = 4;
 
+/** Most choices the replay tries before it gives up on a plan as one the draft cannot follow. */
+const BACKTRACK_BUDGET = 1000;
+
 const roundOf = (pickNo: number, teams: number) => Math.floor((pickNo - 1) / Math.max(teams, 1)) + 1;
 
 /** The strategy a team's skill picks followed, by when its running backs were taken. */
@@ -146,19 +149,20 @@ export function simulateStrategy(args: {
   const ordered = [...args.picks].sort((a, b) => a.pickNo - b.pickNo);
   const own = ordered.filter((pick) => pick.rosterId === args.rosterId);
   const floor = args.values.size === 0 ? 0 : Math.min(...args.values.values());
-  const used = new Set<string>();
+  const isSkill = (position: string) => ["QB", "RB", "WR", "TE"].includes(position);
+  // Kickers and defenses stay as drafted. A skill player off today's board is valued at its floor, as in the grades.
+  const used = new Set<string>(own.filter((pick) => !isSkill(pick.position)).map((pick) => pick.playerId));
   const chosen: GradedPick[] = [];
   const takenRounds: Record<string, number[]> = { QB: [], RB: [], WR: [], TE: [] };
   const out: SimulatedPick[] = [];
-  let feasible = true;
-  const isSkill = (position: string) => ["QB", "RB", "WR", "TE"].includes(position);
-  own.forEach((pick, index) => {
-    // Kickers and defenses stay as drafted. A skill player off today's board is valued at its floor, as in the grades.
-    if (!isSkill(pick.position)) {
-      out.push({ actual: pick, chosen: pick });
-      used.add(pick.playerId);
-      return;
-    }
+  const valueOf = (player: GradedPick) => args.values.get(player.playerId) ?? floor;
+  const asValue = (player: GradedPick) => ({ position: player.position, value: valueOf(player) });
+  // Neighbouring picks share candidates, so an earlier choice can leave a later pick nobody it allows: back up and try the next choice.
+  let budget = BACKTRACK_BUDGET;
+
+  /** The player choices at an own skill pick, the plan's favorite first. */
+  const optionsAt = (index: number): GradedPick[] => {
+    const pick = own[index]!;
     const round = roundOf(pick.pickNo, args.teams);
     const later = own.slice(index + 1);
     const heldAt = (position: string) => (
@@ -176,31 +180,51 @@ export function simulateStrategy(args: {
       if (player.position === pick.position) return true;
       return heldAt(player.position) < positionCap(player.position, args.slots);
     });
-    const valueOf = (player: GradedPick) => args.values.get(player.playerId) ?? floor;
-    const asValue = (player: GradedPick) => ({ position: player.position, value: valueOf(player) });
     // A pick is worth what it adds to the starting lineup alongside the players already chosen and the later actual picks,
     // so a replacement is not taken at the cost of a starter the roster still needs.
     const rest = later.filter((player) => isSkill(player.position));
-    const lineupWith = (player: GradedPick) => lineupValue([...chosen, player, ...rest].map(asValue), args.slots);
-    const gain = new Map(usable.map((player) => [player, lineupWith(player)] as const));
+    const gain = new Map(usable.map((player) => [player, lineupValue([...chosen, player, ...rest].map(asValue), args.slots)] as const));
     // The actual pick breaks a tie, so the view only differs where a real alternative is worth more.
     const byGain = (a: GradedPick, b: GradedPick) => (
       gain.get(b)! - gain.get(a)! || valueOf(b) - valueOf(a) || (b === pick ? 1 : 0) - (a === pick ? 1 : 0)
     );
-    const allowed = usable.filter((player) => ruleOf(player) !== "ban").sort(byGain);
     // A plan that bans a position cannot keep the actual player there either.
-    if (allowed.length === 0) { feasible = false; out.push({ actual: pick, chosen: pick }); return; }
-    let best = allowed[0]!;
+    const allowed = usable.filter((player) => ruleOf(player) !== "ban").sort(byGain);
     const preferred = allowed.find((player) => ruleOf(player) === "prefer");
     // The tolerance applies to what each adds, so starters already on the roster do not swamp the comparison.
     const base = lineupValue([...chosen, ...rest].map(asValue), args.slots);
-    if (preferred && gain.get(preferred)! - base >= (gain.get(best)! - base) * PREFER_TOLERANCE) best = preferred;
-    used.add(best.playerId);
-    chosen.push(best);
-    takenRounds[best.position]?.push(round);
-    out.push({ actual: pick, chosen: best });
-  });
-  return feasible ? out : null;
+    if (preferred && allowed[0] && gain.get(preferred)! - base >= (gain.get(allowed[0])! - base) * PREFER_TOLERANCE) {
+      return [preferred, ...allowed.filter((player) => player !== preferred)];
+    }
+    return allowed;
+  };
+
+  const place = (index: number): boolean => {
+    if (index >= own.length) return true;
+    const pick = own[index]!;
+    if (!isSkill(pick.position)) {
+      out.push({ actual: pick, chosen: pick });
+      if (place(index + 1)) return true;
+      out.pop();
+      return false;
+    }
+    const round = roundOf(pick.pickNo, args.teams);
+    for (const option of optionsAt(index)) {
+      if (budget-- <= 0) return false;
+      used.add(option.playerId);
+      chosen.push(option);
+      takenRounds[option.position]?.push(round);
+      out.push({ actual: pick, chosen: option });
+      if (place(index + 1)) return true;
+      out.pop();
+      takenRounds[option.position]?.pop();
+      chosen.pop();
+      used.delete(option.playerId);
+    }
+    return false;
+  };
+
+  return place(0) ? out : null;
 }
 
 export type StrategyView = {

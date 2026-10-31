@@ -90,6 +90,15 @@ describe("simulateStrategy Hero RB", () => {
   });
 });
 
+describe("simulateStrategy backtracking", () => {
+  it("backs up an earlier choice when it would leave a later pick with nobody the plan allows", () => {
+    const values = board([["wr", 10], ["rb", 1], ["wrOpp", 20]]);
+    const picks = [pick(10, 1, "wr", "WR"), pick(11, 1, "rb", "RB"), pick(12, 2, "wrOpp", "WR")];
+    const sim = simulateStrategy({ plan: { rb: "zero-rb", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["RB", "WR", "FLEX"] });
+    expect(sim?.map((item) => item.chosen.playerId)).toEqual(["wr", "wrOpp"]);
+  });
+});
+
 describe("detectPlan", () => {
   it("reads QB and TE as early when taken in the first four rounds, otherwise late", () => {
     const picks = [pick(5, 1, "q", "QB"), pick(55, 1, "t", "TE")];
