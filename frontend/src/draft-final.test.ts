@@ -13,6 +13,9 @@ describe("leagueDraftIsFinal", () => {
     expect(leagueDraftIsFinal(undefined, "a")).toBe(false);
     expect(leagueDraftIsFinal([draft("a", "pre_draft")], "a")).toBe(false);
     expect(leagueDraftIsFinal([draft("a", "complete"), draft("a", "drafting")], "a")).toBe(false);
+    // A finished startup draft with a rookie draft still to come keeps the editable view for that draft.
+    expect(leagueDraftIsFinal([draft("a", "complete"), draft("a", "pre_draft")], "a")).toBe(false);
+    expect(leagueDraftIsFinal([draft("a", "complete"), draft("a", "paused")], "a")).toBe(false);
     expect(leagueDraftIsFinal([draft("a", "complete", null)], "a")).toBe(false);
   });
 

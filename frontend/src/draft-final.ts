@@ -1,9 +1,12 @@
 import type { DraftCenterData } from "./dashboard-types";
 
-/** A league's draft is final once one is complete, none is still live, and the signed-in team took part. */
+/** A draft that has not finished: still to start, live, or paused. */
+const UNFINISHED_STATUSES = ["pre_draft", "drafting", "paused"];
+
+/** A league's draft is final once one is complete, none is still to come or live, and the signed-in team took part. */
 export function leagueDraftIsFinal(drafts: DraftCenterData["drafts"] | undefined, leagueId: string | undefined): boolean {
   const forLeague = (drafts ?? []).filter((draft) => draft.leagueId === leagueId);
-  if (forLeague.some((draft) => draft.status === "drafting")) return false;
+  if (forLeague.some((draft) => UNFINISHED_STATUSES.includes(draft.status))) return false;
   return forLeague.some((draft) => draft.status === "complete" && draft.ownRosterId !== null);
 }
 

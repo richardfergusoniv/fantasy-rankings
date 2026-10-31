@@ -229,6 +229,15 @@ describe("gradeDraft slot pool", () => {
     expect(grades.picks[1]?.draftDay).toEqual({ letter: "A+", percent: 100 });
   });
 
+  it("counts a drafted player with no stored row at the board's floor in the slots, as he is scored", () => {
+    // z is on the board but undrafted and sets the floor; the last pick is a player with no row at all.
+    const values = board([["a", 100], ["b", 90], ["c", 80], ["z", 1]]);
+    const picks = [pick(1, 1, "a", "RB"), pick(2, 2, "b", "WR"), pick(3, 2, "c", "WR"), pick(4, 1, "missing", "RB")];
+    const grades = gradeDraft({ picks, ownRosterId: 1, draftDayBoard: values, todayBoard: values, minBoardPlayers: 1 });
+    expect(grades.picks.map((entry) => entry.draftDay)).toEqual([{ letter: "A+", percent: 100 }, { letter: "A+", percent: 100 }]);
+    expect(grades.draftDay).toEqual({ letter: "A+", rank: 1, of: 2 });
+  });
+
   it("has no grades when none of the draft's players are on the board", () => {
     const grades = gradeDraft({ picks: [pick(1, 1, "unknown", "RB"), pick(2, 2, "other", "WR")], ownRosterId: 1, draftDayBoard: board([["x", 5]]), todayBoard: board([["x", 5]]), minBoardPlayers: 1 });
     expect(grades).toEqual({ draftDay: null, today: null, picks: [] });

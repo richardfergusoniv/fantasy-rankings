@@ -222,9 +222,12 @@ export function gradeDraft(args: {
   // Today is measured against draft-day slots, so without the draft-day board neither grade exists.
   if (args.draftDayBoard.size < min) return { draftDay: null, today: null, picks: [] };
   // Slots are measured against the players this draft could have taken, which are the ones it did take.
-  const drafted = new Set(args.picks.map((pick) => pick.playerId));
-  const slotBoard: ValueBoard = new Map([...args.draftDayBoard].filter(([playerId]) => drafted.has(playerId)));
-  if (slotBoard.size === 0) return { draftDay: null, today: null, picks: [] };
+  // A drafted player with no stored row counts at the board's floor, the same value he is scored at.
+  const skillPicks = args.picks.filter((pick) => isSkill(pick.position));
+  // With none of them on the board there is nothing to measure slots against.
+  if (!skillPicks.some((pick) => args.draftDayBoard.has(pick.playerId))) return { draftDay: null, today: null, picks: [] };
+  const floor = floorValue(args.draftDayBoard);
+  const slotBoard: ValueBoard = new Map(skillPicks.map((pick) => [pick.playerId, args.draftDayBoard.get(pick.playerId) ?? floor] as [string, number]));
   const hasToday = args.todayBoard.size >= min;
   const draftDay = resultFor(draftSurplusByTeam({ picks: args.picks, slotBoard, values: args.draftDayBoard }), args.ownRosterId);
   const today = hasToday
