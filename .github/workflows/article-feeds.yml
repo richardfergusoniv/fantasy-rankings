@@ -1,12 +1,13 @@
 name: Article feeds
 
-# Timer for RSS/Atom article-feed ingest. The work lives in the app's
-# /api/cron/jobs?job=refresh-article-feeds endpoint; this workflow only
+# Timer for article-feed ingest (RSS/Atom + WP JSON / sitemaps / HTML). The
+# work lives in /api/cron/jobs?job=refresh-article-feeds; this workflow only
 # calls it on schedule with the CRON_SECRET bearer header. Writes filtered
 # articles into shared_player_news (source=article). API-side ETag + unique
 # indexes make repeated runs safe. Manual dispatches always run.
 #
-# Cadence (Pacific, covering PDT and PST via overlapping UTC windows):
+# Cadence ≤30m so short windows (Footballguys ~50 items, RotoWire/NBC) do not
+# miss items (Pacific, covering PDT and PST via overlapping UTC windows):
 # - Thu / Sun / Mon: every 15 minutes, roughly 6 AM–11 PM
 # - Tue / Wed / Fri / Sat: every 30 minutes, roughly 6 AM–11 PM
 

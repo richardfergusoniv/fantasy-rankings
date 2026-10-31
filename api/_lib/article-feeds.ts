@@ -1,7 +1,6 @@
 import { and, desc, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 import { db, schema } from "./db.js";
 import { encodeSourceCachePayload, decodeSourceCachePayload } from "./source-cache-payload.js";
-import { isHttpOrHttpsUrl } from "./http-url.js";
 import { loadNflPlayersMap } from "./nfl-players-cache.js";
 import {
   X_NEWS_ATTACH_PLAYER_CAP_PRACTICE_REPORT,
@@ -25,30 +24,62 @@ import {
   type SharedNewsDraft,
 } from "./player-news-shared.js";
 import { sportsTeamCodes } from "./team-situational.js";
+import {
+  ARTICLE_SUMMARY_MAX_CHARS,
+  canonicalArticleUrl,
+  decodeXmlEntities,
+  stripHtml,
+  truncateSummary,
+} from "./article-feed-text.js";
+import {
+  browns247ListingToFeedItems,
+  detectFantasyLifePremiumFromHtml,
+  extractArticlePublishedAtFromHtml,
+  footballguysTeamHintFromTitle,
+  parse247BrownsListingHtml,
+  parseEspnNflNewsJson,
+  parseFantasyLifeNewsSitemap,
+  parseFootballguysNewsHtml,
+  parseSiOnsiNewsSitemap,
+  parseWpRestPostsJson,
+  siOnsiTeamFromUrl,
+} from "./article-feed-parsers.js";
 
 /**
- * Poll RSS/Atom article feeds into shared_player_news (source='article').
- * Invoked as cron job `refresh-article-feeds` — no new Vercel function.
+ * Poll RSS/Atom (+ HTML/JSON/sitemap) article feeds into shared_player_news
+ * (source='article'). Invoked as cron job `refresh-article-feeds` — no new
+ * Vercel function.
  */
 
 export const ARTICLE_FEEDS_CACHE_KEY = "article-feeds-v1";
-export const ARTICLE_FEEDS_USER_AGENT = "fantasy-rankings-article-feeds/1.0 (+https://github.com/richardfergusoniv/fantasy-rankings)";
+/** Browser-like UA — several outlets (247Sports, WP REST) 406/403 bot UAs. */
+export const ARTICLE_FEEDS_USER_AGENT =
+  "Mozilla/5.0 (compatible; fantasy-rankings-article-feeds/1.1; +https://github.com/richardfergusoniv/fantasy-rankings) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 export const ARTICLE_FEED_TIMEOUT_MS = 8_000;
 export const ARTICLE_PAGE_TIMEOUT_MS = 5_000;
 export const ARTICLE_FEEDS_JOB_BUDGET_MS = 50_000;
-export const ARTICLE_SUMMARY_MAX_CHARS = 280;
+export { ARTICLE_SUMMARY_MAX_CHARS, canonicalArticleUrl, decodeXmlEntities, stripHtml, truncateSummary };
 
-/** Tracking / share params stripped for canonical URL dedupe. */
-const TRACKING_QUERY_PARAMS = new Set([
-  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id",
-  "fbclid", "gclid", "gbraid", "wbraid", "mc_cid", "mc_eid", "igshid", "si",
-  "ref", "ref_src", "s", "smid", "ncid",
-]);
+/** Drop items older than this (or missing published_at) so stale sitemap/API rows cannot leak in. */
+export const ARTICLE_PUBLISHED_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+/** Allow a small clock-skew window for "future" publisher timestamps. */
+export const ARTICLE_PUBLISHED_FUTURE_SKEW_MS = 5 * 60 * 1000;
+/** Max 247Sports article page fetches per job run (datePublished lookup). */
+export const ARTICLE_247_MAX_PAGE_FETCHES = 5;
 
 export type ArticleFeedAllowlist =
   | { kind: "category"; values: readonly string[] }
   | { kind: "path"; prefixes: readonly string[] }
   | { kind: "none" };
+
+export type ArticleFeedKind =
+  | "rss"
+  | "wp_json"
+  | "si_onsi_sitemap"
+  | "espn_json"
+  | "fantasylife_sitemap"
+  | "html_247_browns"
+  | "html_footballguys";
 
 export type ArticleFeedSource = {
   name: string;
@@ -63,12 +94,20 @@ export type ArticleFeedSource = {
   titlePrefixStrip?: string;
   /** When true, fetch each new article page to detect PFF premium paywall. */
   checkPffPremium?: boolean;
+  /** When true, fetch each new article page to detect Fantasy Life FL+ paywall. */
+  checkFantasyLifePremium?: boolean;
+  /** Fetch/parse strategy. Defaults to RSS/Atom XML. */
+  kind?: ArticleFeedKind;
+  /** Skip polling; still emitted in the job JSON status report. */
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
 /**
- * Working native feeds only. Skipped (Richard): paywalled Athletic / Fantasy Points,
- * RotoWire news blurbs, Google-News-only USA Today / SI / Pewter / CFR / Denver Post /
- * Sun Sentinel, and unusable ESPN / ETR / 4for4 / etc.
+ * Working native + direct HTML/JSON/sitemap sources. Skipped (Richard): paywalled
+ * Athletic / Fantasy Points / ETR / Footballguys /articles; RotoWire news blurbs;
+ * Google News; Underdog; 4for4. USA Today wires + Pewter Report stay listed as
+ * disabled after Vercel IPs returned 402/403.
  */
 export const ARTICLE_FEED_SOURCES: readonly ArticleFeedSource[] = [
   {
@@ -227,10 +266,91 @@ export const ARTICLE_FEED_SOURCES: readonly ArticleFeedSource[] = [
     downrank: false,
     teamHint: "LV",
   },
+  {
+    name: "Denver Post",
+    domain: "denverpost.com",
+    feedUrl:
+      "https://www.denverpost.com/wp-json/wp/v2/posts?categories=97&per_page=50&_fields=date_gmt,title,link,excerpt",
+    allowlist: { kind: "none" },
+    downrank: false,
+    teamHint: "DEN",
+    kind: "wp_json",
+  },
+  {
+    name: "Sun Sentinel",
+    domain: "sun-sentinel.com",
+    feedUrl:
+      "https://www.sun-sentinel.com/wp-json/wp/v2/posts?categories=118&per_page=50&_fields=date_gmt,title,link,excerpt",
+    allowlist: { kind: "none" },
+    downrank: false,
+    teamHint: "MIA",
+    kind: "wp_json",
+  },
+  {
+    name: "SI OnSI",
+    domain: "si.com",
+    feedUrl: "https://www.si.com/news-sitemap.xml",
+    allowlist: { kind: "none" },
+    downrank: false,
+    kind: "si_onsi_sitemap",
+  },
+  {
+    name: "ESPN",
+    domain: "espn.com",
+    feedUrl: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/news?limit=100",
+    allowlist: { kind: "none" },
+    downrank: false,
+    kind: "espn_json",
+  },
+  {
+    name: "Fantasy Life",
+    domain: "fantasylife.com",
+    feedUrl: "https://www.fantasylife.com/news-sitemap.xml",
+    allowlist: { kind: "path", prefixes: ["/articles/"] },
+    downrank: false,
+    kind: "fantasylife_sitemap",
+    checkFantasyLifePremium: true,
+  },
+  {
+    name: "247Sports Browns",
+    domain: "247sports.com",
+    feedUrl: "https://247sports.com/nfl/cleveland-browns/",
+    allowlist: { kind: "none" },
+    downrank: false,
+    teamHint: "CLE",
+    kind: "html_247_browns",
+  },
+  {
+    name: "Footballguys",
+    domain: "footballguys.com",
+    feedUrl: "https://www.footballguys.com/news",
+    allowlist: { kind: "none" },
+    downrank: false,
+    kind: "html_footballguys",
+  },
+  {
+    name: "USA Today team wires",
+    domain: "usatoday.com",
+    feedUrl: "https://packerswire.usatoday.com/feed/",
+    allowlist: { kind: "none" },
+    downrank: false,
+    disabled: true,
+    disabledReason: "HTTP 402 Access Restricted from Vercel (and GitHub-adjacent IPs)",
+  },
+  {
+    name: "Pewter Report",
+    domain: "pewterreport.com",
+    feedUrl: "https://www.pewterreport.com/feed/",
+    allowlist: { kind: "none" },
+    downrank: false,
+    teamHint: "TB",
+    disabled: true,
+    disabledReason: "HTTP 403 Cloudflare challenge from Vercel",
+  },
 ];
 
 // ---------------------------------------------------------------------------
-// Cache payload (ETag validators + PFF premium verdicts)
+// Cache payload (ETag validators + page premium verdicts + 247 seen ids)
 // ---------------------------------------------------------------------------
 
 export type FeedValidator = {
@@ -240,17 +360,24 @@ export type FeedValidator = {
 
 export type ArticleFeedsCachePayload = {
   feeds: Record<string, FeedValidator>;
-  /** guid or canonical URL → true when premium (skip), false when free. */
+  /**
+   * guid or canonical URL → true when premium (skip), false when free.
+   * Shared by PFF and Fantasy Life page checks. Legacy key `pffPremium` is
+   * still accepted when reading older cache rows.
+   */
   pffPremium: Record<string, boolean>;
+  /** 247Sports Browns article ids whose datePublished was resolved. */
+  browns247SeenIds?: Record<string, true>;
   /** Next feed index for rotating the poll start under the job budget. */
   nextFeedIndex?: number;
 };
 
-/** Cap stored PFF verdicts so the source-cache row cannot grow without bound. */
+/** Cap stored premium verdicts so the source-cache row cannot grow without bound. */
 export const MAX_PFF_PREMIUM_CACHE_ENTRIES = 2_000;
+export const MAX_BROWNS_247_SEEN_IDS = 500;
 
 export function emptyArticleFeedsCache(): ArticleFeedsCachePayload {
-  return { feeds: {}, pffPremium: {} };
+  return { feeds: {}, pffPremium: {}, browns247SeenIds: {} };
 }
 
 export function parseArticleFeedsCache(raw: string | null | undefined): ArticleFeedsCachePayload {
@@ -258,7 +385,12 @@ export function parseArticleFeedsCache(raw: string | null | undefined): ArticleF
   try {
     const value: unknown = decodeSourceCachePayload(raw);
     if (!value || typeof value !== "object" || Array.isArray(value)) return emptyArticleFeedsCache();
-    const record = value as { feeds?: unknown; pffPremium?: unknown; nextFeedIndex?: unknown };
+    const record = value as {
+      feeds?: unknown;
+      pffPremium?: unknown;
+      browns247SeenIds?: unknown;
+      nextFeedIndex?: unknown;
+    };
     const feeds: Record<string, FeedValidator> = {};
     if (record.feeds && typeof record.feeds === "object" && !Array.isArray(record.feeds)) {
       for (const [key, entry] of Object.entries(record.feeds as Record<string, unknown>)) {
@@ -276,17 +408,28 @@ export function parseArticleFeedsCache(raw: string | null | undefined): ArticleF
         if (typeof verdict === "boolean") pffPremium[key] = verdict;
       }
     }
+    const browns247SeenIds: Record<string, true> = {};
+    if (record.browns247SeenIds && typeof record.browns247SeenIds === "object" && !Array.isArray(record.browns247SeenIds)) {
+      for (const [key, flag] of Object.entries(record.browns247SeenIds as Record<string, unknown>)) {
+        if (flag === true) browns247SeenIds[key] = true;
+      }
+    }
     const nextFeedIndex =
       typeof record.nextFeedIndex === "number" && Number.isFinite(record.nextFeedIndex)
         ? Math.max(0, Math.floor(record.nextFeedIndex))
         : undefined;
-    return { feeds, pffPremium, ...(nextFeedIndex !== undefined ? { nextFeedIndex } : {}) };
+    return {
+      feeds,
+      pffPremium,
+      browns247SeenIds,
+      ...(nextFeedIndex !== undefined ? { nextFeedIndex } : {}),
+    };
   } catch {
     return emptyArticleFeedsCache();
   }
 }
 
-/** Drop oldest insertion-order keys when the PFF verdict map exceeds the cap. */
+/** Drop oldest insertion-order keys when the premium verdict map exceeds the cap. */
 export function prunePffPremiumCache(
   cache: ArticleFeedsCachePayload,
   maxEntries = MAX_PFF_PREMIUM_CACHE_ENTRIES,
@@ -299,91 +442,28 @@ export function prunePffPremiumCache(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Text helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Decode a single XML/HTML entity reference. One pass only — avoids the
- * CodeQL double-unescape pattern of replacing `&amp;` then numeric entities.
- */
-function decodeOneXmlEntity(entity: string): string {
-  const lower = entity.toLowerCase();
-  switch (lower) {
-    case "&nbsp;":
-      return " ";
-    case "&amp;":
-      return "&";
-    case "&lt;":
-      return "<";
-    case "&gt;":
-      return ">";
-    case "&quot;":
-      return "\"";
-    case "&apos;":
-      return "'";
-    default: {
-      if (/^&#x[0-9a-f]+;$/i.test(entity)) {
-        const code = Number.parseInt(entity.slice(3, -1), 16);
-        return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : "";
-      }
-      if (/^&#\d+;$/.test(entity)) {
-        const code = Number(entity.slice(2, -1));
-        return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : "";
-      }
-      return entity;
-    }
+export function pruneBrowns247SeenIds(
+  cache: ArticleFeedsCachePayload,
+  maxEntries = MAX_BROWNS_247_SEEN_IDS,
+): void {
+  if (!cache.browns247SeenIds) return;
+  const keys = Object.keys(cache.browns247SeenIds);
+  if (keys.length <= maxEntries) return;
+  const drop = keys.length - maxEntries;
+  for (let i = 0; i < drop; i += 1) {
+    delete cache.browns247SeenIds[keys[i]!];
   }
 }
 
-export function decodeXmlEntities(value: string): string {
-  return value
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1")
-    .replace(/&(#x[0-9a-f]+|#\d+|nbsp|amp|lt|gt|quot|apos);/gi, decodeOneXmlEntity);
-}
-
-export function stripHtml(value: string): string {
-  // Remove script/style before entity decoding so encoded tags stay inert.
-  // Closing tags use \b[^>]* so junk like `</script\t\n bar>` still matches (CodeQL).
-  return decodeXmlEntities(
-    value
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, " ")
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, " ")
-      .replace(/<[^>]+>/g, " "),
-  )
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-export function truncateSummary(value: string, max = ARTICLE_SUMMARY_MAX_CHARS): string {
-  const clean = value.replace(/\s+/g, " ").trim();
-  if (clean.length <= max) return clean;
-  const available = Math.max(1, max - 1);
-  const candidate = clean.slice(0, available);
-  const lastSpace = candidate.lastIndexOf(" ");
-  const clipped = lastSpace >= Math.floor(available * 0.62) ? candidate.slice(0, lastSpace) : candidate;
-  return `${clipped.trimEnd()}…`;
-}
-
-export function canonicalArticleUrl(rawUrl: string): string | null {
-  if (!rawUrl.trim() || !isHttpOrHttpsUrl(rawUrl.trim())) return null;
-  try {
-    const url = new URL(rawUrl.trim());
-    url.hash = "";
-    const kept = new URLSearchParams();
-    for (const [key, value] of url.searchParams.entries()) {
-      if (TRACKING_QUERY_PARAMS.has(key.toLowerCase())) continue;
-      kept.append(key, value);
-    }
-    url.search = kept.toString() ? `?${kept.toString()}` : "";
-    url.hostname = url.hostname.toLowerCase();
-    if (url.pathname.length > 1 && url.pathname.endsWith("/")) {
-      url.pathname = url.pathname.slice(0, -1);
-    }
-    return url.toString();
-  } catch {
-    return null;
-  }
+export function isPublishedWithinWindow(
+  publishedAt: Date | null | undefined,
+  now: Date,
+  maxAgeMs = ARTICLE_PUBLISHED_MAX_AGE_MS,
+): boolean {
+  if (!publishedAt || !Number.isFinite(publishedAt.getTime())) return false;
+  const delta = now.getTime() - publishedAt.getTime();
+  if (delta < -ARTICLE_PUBLISHED_FUTURE_SKEW_MS) return false;
+  return delta <= maxAgeMs;
 }
 
 /**
@@ -544,6 +624,32 @@ export type ParsedFeedItem = {
   summary: string;
   categories: string[];
 };
+
+export function parseSourceItems(source: ArticleFeedSource, body: string, now: Date): ParsedFeedItem[] {
+  const kind = source.kind ?? "rss";
+  switch (kind) {
+    case "rss":
+      return parseFeedXml(body);
+    case "wp_json":
+      return parseWpRestPostsJson(body);
+    case "si_onsi_sitemap":
+      return parseSiOnsiNewsSitemap(body);
+    case "espn_json":
+      return parseEspnNflNewsJson(body);
+    case "fantasylife_sitemap":
+      return parseFantasyLifeNewsSitemap(body);
+    case "html_footballguys":
+      return parseFootballguysNewsHtml(body, now);
+    case "html_247_browns":
+      // Dates require per-article page fetches — handled in refreshArticleFeeds.
+      return browns247ListingToFeedItems(parse247BrownsListingHtml(body), new Map());
+    default: {
+      const _exhaustive: never = kind;
+      void _exhaustive;
+      return [];
+    }
+  }
+}
 
 function tagText(block: string, tag: string): string {
   const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, "i");
@@ -966,7 +1072,14 @@ export function buildArticleNewsDrafts(input: {
 export type ArticleFeedRunStatus = {
   name: string;
   feedUrl: string;
-  status: "ok" | "not_modified" | "http_error" | "timeout" | "parse_error" | "skipped_budget";
+  status:
+    | "ok"
+    | "not_modified"
+    | "http_error"
+    | "timeout"
+    | "parse_error"
+    | "skipped_budget"
+    | "disabled";
   httpStatus: number;
   itemsSeen: number;
   itemsPassed: number;
@@ -1139,10 +1252,11 @@ async function purgeExpiredArticleNews(now = new Date()): Promise<number> {
   return deleted.length;
 }
 
-async function resolvePffPremium(input: {
+async function resolvePagePremium(input: {
   item: ParsedFeedItem;
   cache: ArticleFeedsCachePayload;
   remainingMs: number;
+  detect: (html: string) => boolean;
   signal?: AbortSignal;
 }): Promise<{ premium: boolean; fetched: boolean; failed: boolean }> {
   const cacheKey = input.item.guid || input.item.url;
@@ -1165,10 +1279,85 @@ async function resolvePffPremium(input: {
     // or a transient timeout permanently suppresses a free article.
     return { premium: true, fetched: true, failed: true };
   }
-  const premium = detectPffPremiumFromHtml(page.body);
+  const premium = input.detect(page.body);
   input.cache.pffPremium[cacheKey] = premium;
   if (urlKey !== cacheKey) input.cache.pffPremium[urlKey] = premium;
   return { premium, fetched: true, failed: false };
+}
+
+async function resolvePffPremium(input: {
+  item: ParsedFeedItem;
+  cache: ArticleFeedsCachePayload;
+  remainingMs: number;
+  signal?: AbortSignal;
+}): Promise<{ premium: boolean; fetched: boolean; failed: boolean }> {
+  return resolvePagePremium({ ...input, detect: detectPffPremiumFromHtml });
+}
+
+async function resolveFantasyLifePremium(input: {
+  item: ParsedFeedItem;
+  cache: ArticleFeedsCachePayload;
+  remainingMs: number;
+  signal?: AbortSignal;
+}): Promise<{ premium: boolean; fetched: boolean; failed: boolean }> {
+  return resolvePagePremium({ ...input, detect: detectFantasyLifePremiumFromHtml });
+}
+
+/**
+ * For 247 Browns listing rows, page-fetch unknown ids (bounded) to read
+ * datePublished. Marks resolved ids in cache; fetch failures skip for this run only.
+ */
+async function enrich247BrownsItems(input: {
+  listingHtml: string;
+  cache: ArticleFeedsCachePayload;
+  now: Date;
+  remainingMs: () => number;
+  signal?: AbortSignal;
+}): Promise<{ items: ParsedFeedItem[]; pageFetches: number; deferred: boolean }> {
+  const listing = parse247BrownsListingHtml(input.listingHtml);
+  const seen = input.cache.browns247SeenIds ?? (input.cache.browns247SeenIds = {});
+  const publishedById = new Map<string, Date | null>();
+  let pageFetches = 0;
+  let deferred = false;
+
+  for (const row of listing) {
+    if (Object.prototype.hasOwnProperty.call(seen, row.id)) {
+      // Already resolved previously — only re-emit if still inside the window
+      // would require caching dates; skip re-fetch and let absence mean "done".
+      continue;
+    }
+    if (pageFetches >= ARTICLE_247_MAX_PAGE_FETCHES) {
+      deferred = true;
+      break;
+    }
+    if (input.remainingMs() < ARTICLE_PAGE_TIMEOUT_MS + 500) {
+      deferred = true;
+      break;
+    }
+    const page = await fetchTextWithTimeout(row.url, {
+      timeoutMs: Math.min(ARTICLE_PAGE_TIMEOUT_MS, input.remainingMs()),
+      signal: input.signal,
+      headers: {
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        referer: "https://247sports.com/nfl/cleveland-browns/",
+      },
+    });
+    pageFetches += 1;
+    if (!page.ok || !page.body) {
+      deferred = true;
+      continue;
+    }
+    const publishedAt = extractArticlePublishedAtFromHtml(page.body);
+    seen[row.id] = true;
+    if (!isPublishedWithinWindow(publishedAt, input.now)) continue;
+    publishedById.set(row.id, publishedAt);
+  }
+
+  return {
+    items: browns247ListingToFeedItems(listing, publishedById),
+    pageFetches,
+    deferred,
+  };
 }
 
 /**
@@ -1205,6 +1394,21 @@ export async function refreshArticleFeeds(options?: {
   }
 
   for (const source of orderedSources) {
+    if (source.disabled) {
+      feedStatuses.push({
+        name: source.name,
+        feedUrl: source.feedUrl,
+        status: "disabled",
+        httpStatus: 0,
+        itemsSeen: 0,
+        itemsPassed: 0,
+        itemsInserted: 0,
+        premiumSkipped: 0,
+        error: source.disabledReason ?? "disabled",
+      });
+      continue;
+    }
+
     const remaining = deadline - Date.now();
     if (remaining < ARTICLE_FEED_TIMEOUT_MS + 1_000) {
       feedStatuses.push({
@@ -1225,6 +1429,14 @@ export async function refreshArticleFeeds(options?: {
     const conditionalHeaders: Record<string, string> = {};
     if (validator.etag) conditionalHeaders["if-none-match"] = validator.etag;
     if (validator.lastModified) conditionalHeaders["if-modified-since"] = validator.lastModified;
+    const kind = source.kind ?? "rss";
+    if (kind === "wp_json" || kind === "espn_json") {
+      conditionalHeaders.accept = "application/json, text/json, */*;q=0.8";
+    } else if (kind === "si_onsi_sitemap" || kind === "fantasylife_sitemap") {
+      conditionalHeaders.accept = "application/xml, text/xml, */*;q=0.8";
+    } else if (kind === "html_247_browns" || kind === "html_footballguys") {
+      conditionalHeaders.accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+    }
 
     const response = await fetchTextWithTimeout(source.feedUrl, {
       timeoutMs: Math.min(ARTICLE_FEED_TIMEOUT_MS, remaining),
@@ -1277,8 +1489,22 @@ export async function refreshArticleFeeds(options?: {
     }
 
     let items: ParsedFeedItem[];
+    /** True when page checks were deferred — do not advance ETag. */
+    let premiumDeferred = false;
     try {
-      items = parseFeedXml(response.body);
+      if (kind === "html_247_browns") {
+        const enriched = await enrich247BrownsItems({
+          listingHtml: response.body,
+          cache,
+          now,
+          remainingMs: () => deadline - Date.now(),
+          signal: options?.signal,
+        });
+        items = enriched.items;
+        if (enriched.deferred) premiumDeferred = true;
+      } else {
+        items = parseSourceItems(source, response.body, now);
+      }
     } catch (err) {
       feedStatuses.push({
         name: source.name,
@@ -1297,9 +1523,10 @@ export async function refreshArticleFeeds(options?: {
     let itemsPassed = 0;
     let itemsInserted = 0;
     let premiumSkipped = 0;
-    /** True when a PFF page check was skipped for budget — do not advance ETag. */
-    let premiumDeferred = false;
     const drafts: SharedNewsDraft[] = [];
+    const itemsSeen = kind === "html_247_browns"
+      ? parse247BrownsListingHtml(response.body).length
+      : items.length;
 
     for (const rawItem of items) {
       let title = rawItem.title;
@@ -1307,11 +1534,18 @@ export async function refreshArticleFeeds(options?: {
         title = title.slice(source.titlePrefixStrip.length).trim();
       }
       const item: ParsedFeedItem = { ...rawItem, title };
+      if (!isPublishedWithinWindow(item.publishedAt, now)) continue;
+
       const canonical = canonicalArticleUrl(item.url) ?? item.url;
       if (seenUrls.has(canonical)) continue;
 
       const textBlob = `${title} ${item.summary}`;
-      const team = detectArticleTeam(textBlob, { teamHint: source.teamHint, url: item.url });
+      const teamHint =
+        source.teamHint
+        ?? (kind === "si_onsi_sitemap" ? siOnsiTeamFromUrl(item.url) : null)
+        ?? (kind === "html_footballguys" ? footballguysTeamHintFromTitle(title) : null)
+        ?? null;
+      const team = detectArticleTeam(textBlob, { teamHint, url: item.url });
       const matched = matchArticlePlayers(textBlob, index, needles, team);
       const hasPlayer = matched.length > 0;
       const filter = filterArticleHeadline(
@@ -1337,6 +1571,24 @@ export async function refreshArticleFeeds(options?: {
           // Budget exhausted or page fetch failed — keep prior validators so
           // the next poll re-reads the feed and retries the item instead of
           // 304-skipping forever after a transient failure.
+          premiumDeferred = true;
+          premiumSkipped += 1;
+          continue;
+        }
+        if (premium.premium) {
+          premiumSkipped += 1;
+          continue;
+        }
+      }
+
+      if (source.checkFantasyLifePremium) {
+        const premium = await resolveFantasyLifePremium({
+          item,
+          cache,
+          remainingMs: deadline - Date.now(),
+          signal: options?.signal,
+        });
+        if (premium.failed) {
           premiumDeferred = true;
           premiumSkipped += 1;
           continue;
@@ -1417,15 +1669,16 @@ export async function refreshArticleFeeds(options?: {
       feedUrl: source.feedUrl,
       status: "ok",
       httpStatus: response.status,
-      itemsSeen: items.length,
+      itemsSeen,
       itemsPassed,
       itemsInserted,
       premiumSkipped,
-      ...(premiumDeferred ? { error: "premium checks deferred; validators not advanced" } : {}),
+      ...(premiumDeferred ? { error: "page checks deferred; validators not advanced" } : {}),
     });
   }
 
   prunePffPremiumCache(cache);
+  pruneBrowns247SeenIds(cache);
   await writeFeedsCache(cache);
   const purged = await purgeExpiredArticleNews(now);
 
