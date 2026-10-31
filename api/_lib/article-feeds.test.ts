@@ -36,6 +36,7 @@ import {
   parseSiOnsiNewsSitemap,
   parseWpRestDateGmt,
   parseWpRestPostsJson,
+  SI_ONSI_TEAM_SLUG_TO_CODE,
   siOnsiTeamFromUrl,
 } from "./article-feed-parsers.js";
 import {
@@ -604,7 +605,9 @@ describe("gap source parsers (fixtures)", () => {
     expect(items.every((i) => /\/nfl\/[^/]+\/onsi\//i.test(i.url))).toBe(true);
     expect(items[0]!.title.length).toBeGreaterThan(5);
     expect(siOnsiTeamFromUrl("https://www.si.com/nfl/titans/onsi/foo")).toBe("TEN");
+    expect(siOnsiTeamFromUrl("https://www.si.com/nfl/saints/onsi/foo")).toBe("NO");
     expect(siOnsiTeamFromUrl("https://www.si.com/nfl/draft/onsi/foo")).toBeNull();
+    expect(Object.keys(SI_ONSI_TEAM_SLUG_TO_CODE)).toHaveLength(32);
   });
 
   it("parses ESPN JSON and drops Media + premium items", () => {
@@ -649,5 +652,13 @@ describe("gap source parsers (fixtures)", () => {
     expect(et).toBeInstanceOf(Date);
     // 7:16 PM EDT = 23:16 UTC
     expect(et!.toISOString()).toBe("2026-10-30T23:16:00.000Z");
+
+    // Fall-back morning: 12:30 AM on the first Sunday in November is still EDT
+    // (transition is 02:00 EDT), so 12:30 AM → 04:30Z — not 05:30Z (EST).
+    const fallBack = parseFootballguysEtTimestamp(
+      "Sun Nov 1, 12:30 AM",
+      new Date("2026-11-01T04:35:00Z"),
+    );
+    expect(fallBack?.toISOString()).toBe("2026-11-01T04:30:00.000Z");
   });
 });

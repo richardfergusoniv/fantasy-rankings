@@ -110,6 +110,7 @@ export const SI_ONSI_TEAM_SLUG_TO_CODE: Readonly<Record<string, NflNewsTeamCode>
   raiders: "LV",
   rams: "LAR",
   ravens: "BAL",
+  saints: "NO",
   seahawks: "SEA",
   steelers: "PIT",
   texans: "HOU",
@@ -363,15 +364,30 @@ function monthNumber(token: string): number | null {
   return FBG_MONTHS[key] ?? null;
 }
 
-/** US Eastern offset hours for a Y-M-D civil date (EST=5, EDT=4). */
-export function usEasternOffsetHours(year: number, month: number, day: number): number {
-  // 2nd Sunday in March 02:00 → 1st Sunday in November 02:00
+/**
+ * US Eastern offset hours (EST=5, EDT=4) for a local civil wall time.
+ * Uses the article's hour/minute — not a noon stand-in — so fall-back mornings
+ * (e.g. Sun Nov 1, 12:30 AM) stay on EDT until 02:00 EDT.
+ */
+export function usEasternOffsetHours(
+  year: number,
+  month: number,
+  day: number,
+  hour = 12,
+  minute = 0,
+): number {
+  // Spring forward: 02:00 EST → 03:00 EDT on 2nd Sunday in March.
+  // Fall back: 02:00 EDT → 01:00 EST on 1st Sunday in November.
   const secondSundayMarch = nthWeekdayOfMonth(year, 3, 0, 2);
   const firstSundayNovember = nthWeekdayOfMonth(year, 11, 0, 1);
-  const utcApprox = Date.UTC(year, month - 1, day, 12, 0, 0);
-  const start = Date.UTC(year, 2, secondSundayMarch, 7, 0, 0); // 02:00 EST = 07:00 UTC
-  const end = Date.UTC(year, 10, firstSundayNovember, 6, 0, 0); // 02:00 EDT = 06:00 UTC
-  return utcApprox >= start && utcApprox < end ? 4 : 5;
+  const startUtc = Date.UTC(year, 2, secondSundayMarch, 7, 0, 0); // 02:00 EST = 07:00 UTC
+  const endUtc = Date.UTC(year, 10, firstSundayNovember, 6, 0, 0); // 02:00 EDT = 06:00 UTC
+  // Prefer the EDT reading when that instant still falls inside the DST window
+  // (covers pre-transition early mornings on fall-back day; ambiguous 1:xx AM
+  // prefers the earlier EDT occurrence, which matches FBG's usual cadence).
+  const asEdtUtc = Date.UTC(year, month - 1, day, hour + 4, minute, 0);
+  if (asEdtUtc >= startUtc && asEdtUtc < endUtc) return 4;
+  return 5;
 }
 
 function nthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): number {
@@ -413,7 +429,7 @@ export function parseFootballguysEtTimestamp(raw: string, now = new Date()): Dat
   let best: Date | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const year of years) {
-    const offset = usEasternOffsetHours(year, month, day);
+    const offset = usEasternOffsetHours(year, month, day, hour, minute);
     const utcMs = Date.UTC(year, month - 1, day, hour + offset, minute, 0);
     if (!Number.isFinite(utcMs)) continue;
     const candidate = new Date(utcMs);
