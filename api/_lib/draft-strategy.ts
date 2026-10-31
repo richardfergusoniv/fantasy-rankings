@@ -124,7 +124,7 @@ function ruleFor(plan: Plan, position: string, round: number, taken: readonly nu
   switch (plan.rb) {
     case "zero-rb": return round <= 4 ? "ban" : "free";
     case "hero-rb":
-      if (round <= 2) return through(2) >= 1 ? "ban" : "free";
+      if (round <= 2) return through(2) >= 1 ? "ban" : "prefer";
       return round <= 4 ? "ban" : "free";
     case "robust-rb": return round <= 3 && through(3) < 2 ? "prefer" : "free";
     default: return "free";

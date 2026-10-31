@@ -81,6 +81,15 @@ describe("simulateStrategy same-position upgrades", () => {
   });
 });
 
+describe("simulateStrategy Hero RB", () => {
+  it("favors its first early running back unless a player at another position is clearly better", () => {
+    const values = board([["rb", 99], ["wrOpp", 100], ["wr", 50]]);
+    const picks = [pick(1, 1, "rb", "RB"), pick(2, 2, "wrOpp", "WR"), pick(11, 1, "wr", "WR")];
+    const sim = simulateStrategy({ plan: { rb: "hero-rb", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["RB", "WR", "FLEX"] });
+    expect(sim?.[0]?.chosen.playerId).toBe("rb");
+  });
+});
+
 describe("detectPlan", () => {
   it("reads QB and TE as early when taken in the first four rounds, otherwise late", () => {
     const picks = [pick(5, 1, "q", "QB"), pick(55, 1, "t", "TE")];
