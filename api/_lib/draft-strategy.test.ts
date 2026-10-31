@@ -131,6 +131,22 @@ describe("simulateStrategy full search", () => {
   });
 });
 
+describe("simulateStrategy position caps", () => {
+  it("lets a plan replace a late quarterback with another position when it takes one early", () => {
+    const values = board([["wr", 100], ["qb", 1], ["qbOpp", 200], ["wrOpp", 100]]);
+    const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "qbOpp", "QB"), pick(51, 1, "qb", "QB"), pick(52, 2, "wrOpp", "WR")];
+    const sim = simulateStrategy({ plan: { rb: "balanced", qb: "early", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["QB", "WR"] });
+    expect(sim?.map((item) => item.chosen.playerId)).toEqual(["qbOpp", "wrOpp"]);
+  });
+
+  it("has no replay when the only way to take a quarterback early would leave two the lineup cannot use", () => {
+    const values = board([["wr", 100], ["qbOpp", 200], ["qb", 150]]);
+    const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "qbOpp", "QB"), pick(51, 1, "qb", "QB")];
+    const sim = simulateStrategy({ plan: { rb: "balanced", qb: "early", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["QB", "WR"] });
+    expect(sim).toBeNull();
+  });
+});
+
 describe("detectPlan", () => {
   it("reads QB and TE as early when taken in the first four rounds, otherwise late", () => {
     const picks = [pick(5, 1, "q", "QB"), pick(55, 1, "t", "TE")];

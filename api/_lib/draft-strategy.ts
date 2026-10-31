@@ -228,6 +228,8 @@ export function simulateStrategy(args: {
     return counts;
   });
 
+  // The most players of a position the final roster may hold: what the lineup can use, or what the user actually took if more.
+  const rosterCap = (position: string) => Math.max(positionCap(position, args.slots), own.filter((pick) => pick.position === position).length);
   type Found = { value: number; changes: number; picks: GradedPick[] };
   // The picks that keep each actual player first, for the second pass that minimizes changes.
   const keepFirst = pools.map((pool, at) => {
@@ -250,6 +252,7 @@ export function simulateStrategy(args: {
     const search = (at: number, changes: number): void => {
       if (budget <= 0) return;
       if (at >= slotCount) {
+        if (POSITIONS.some((position) => chosen.filter((player) => player.position === position).length > rosterCap(position))) return;
         const value = lineupValue(chosen.map(asValue), args.slots);
         if (mode === "value" ? !incumbent || value > incumbent.value : value >= target && (!incumbent || changes < incumbent.changes)) {
           incumbent = { value, changes, picks: [...chosen] };
@@ -260,9 +263,7 @@ export function simulateStrategy(args: {
       const pick = own[index]!;
       const round = rounds[index]!;
       const later = own.slice(index + 1);
-      const heldAt = (position: string) => (
-        chosen.filter((player) => player.position === position).length + later.filter((player) => player.position === position).length
-      );
+      const heldAt = (position: string) => chosen.filter((player) => player.position === position).length;
       let candidates = options[at]!;
       if (mode === "value") {
         // Most promising first, so a good combination is found early and cuts off the rest.
@@ -275,7 +276,7 @@ export function simulateStrategy(args: {
         if (used.has(option.playerId)) continue;
         if (banned(args.plan, option.position, round, takenRounds[option.position] ?? [])) continue;
         // Upgrading the player taken at the same position is never a duplicate, even with a backup drafted later.
-        if (option !== pick && option.position !== pick.position && heldAt(option.position) >= positionCap(option.position, args.slots)) continue;
+        if (option !== pick && option.position !== pick.position && heldAt(option.position) >= rosterCap(option.position)) continue;
         budget -= 1;
         used.add(option.playerId);
         chosen.push(option);
