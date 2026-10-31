@@ -12,6 +12,7 @@ export {
 } from "./player-news-filters.js";
 export {
   ALLOWED_NEWS_TAGS,
+  CRYPTIC_NEWS_TAG,
   X_SOURCE_ROLE_TAGS,
   articleOutletBadgeLabel,
   isAllowedNewsTag,
@@ -75,8 +76,9 @@ export type SharedNewsDraft = {
 
 /**
  * Tags on X ingest: unknown / malformed values are dropped (not rejected).
- * Allowlist: dynasty + X source-role tags (insider, beat, analyst, rumor,
- * team-account, player). Max 5 after filtering.
+ * Allowlist: dynasty, cryptic, + X source-role tags (insider, beat, analyst,
+ * rumor, team-account, player). Max 5 after filtering (fits role + dynasty +
+ * cryptic).
  */
 const newsTagsFieldSchema = z.preprocess((value) => {
   if (value === undefined) return undefined;
@@ -127,7 +129,7 @@ export const xNewsItemSchema = z
     signal: z.string().min(1).max(80).optional(),
     score: z.number().int().min(0).max(100).optional(),
     /**
-     * Optional tags: dynasty and/or one X source-role tag
+     * Optional tags: dynasty, cryptic, and/or one X source-role tag
      * (`insider` | `beat` | `analyst` | `rumor` | `team-account` | `player`).
      * Unknown tags are dropped; they do not reject the item.
      */

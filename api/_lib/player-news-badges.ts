@@ -17,9 +17,17 @@ export const X_SOURCE_ROLE_TAGS = [
 
 export type XSourceRoleTag = (typeof X_SOURCE_ROLE_TAGS)[number];
 
+/**
+ * Extra tag for cryptic player-account posts (emoji-only, faith, "business is
+ * business"). Not a source-role tag — primary stays Player / role; this is a
+ * secondary low-confidence marker.
+ */
+export const CRYPTIC_NEWS_TAG = "cryptic";
+
 /** Tags accepted on ingest; unknown values are dropped, not rejected. */
 export const ALLOWED_NEWS_TAGS = [
   DYNASTY_NEWS_TAG,
+  CRYPTIC_NEWS_TAG,
   ...X_SOURCE_ROLE_TAGS,
 ] as const;
 
@@ -36,7 +44,7 @@ export function isXSourceRoleTag(tag: string): tag is XSourceRoleTag {
   return X_SOURCE_ROLE_TAG_SET.has(tag);
 }
 
-export type NewsBadgeTone = "neutral" | "rumor";
+export type NewsBadgeTone = "neutral" | "rumor" | "muted";
 
 export type NewsBadge = {
   key: string;
@@ -196,13 +204,18 @@ function primaryBadgeForItem(item: NewsBadgeItem, tags: readonly string[]): News
 }
 
 /**
- * One primary type badge, plus Dynasty / Team / League secondaries when present.
+ * One primary type badge, plus Cryptic / Dynasty / Team / League secondaries.
  * Priority: rumor → X role → article outlet → sleeper → nflverse → bare X.
+ * Cryptic (when tagged) leads the secondary list as a muted low-confidence mark.
  */
 export function selectNewsBadges(item: NewsBadgeItem): NewsBadges {
   const tags = item.tags ?? [];
   const primary = primaryBadgeForItem(item, tags);
   const secondary: NewsBadge[] = [];
+
+  if (tags.includes(CRYPTIC_NEWS_TAG)) {
+    secondary.push({ key: "cryptic", label: "Cryptic", tone: "muted" });
+  }
 
   if (tags.includes(DYNASTY_NEWS_TAG)) {
     secondary.push({ key: "dynasty", label: "Dynasty", tone: "neutral" });
