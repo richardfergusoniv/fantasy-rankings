@@ -265,7 +265,8 @@ export function strategyView(args: {
     // A plan that would not have beaten the roster the user has leaves every pick alone.
     const better = value > actualValue;
     const picks = new Map(simulated.map((item) => [item.actual.playerId, better && item.chosen.playerId !== item.actual.playerId ? item.chosen : null] as const));
-    return { plan, value, picks };
+    // A replay that is worse than the roster the user has is scored as that roster, so it cannot make another plan look best.
+    return { plan, value: Math.max(value, actualValue), picks };
   };
 
   const none = new Map<string, GradedPick | null>(own.map((pick) => [pick.playerId, null]));

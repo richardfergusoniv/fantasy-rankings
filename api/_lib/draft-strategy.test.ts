@@ -169,6 +169,13 @@ describe("strategyView", () => {
     expect(view?.bestPicks.get("bust")?.playerId).toBe("wr1");
   });
 
+  it("scores a replay worse than the actual roster as the actual roster, so it cannot crown another plan", () => {
+    const values = board([["wr", 100], ["qbOpp", 90], ["qb", 99], ["wrOpp", 95]]);
+    const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "qbOpp", "QB"), pick(11, 1, "qb", "QB"), pick(12, 2, "wrOpp", "WR")];
+    const view = strategyView({ picks, rosterId: 1, values, teams: 10, slots: ["QB", "WR", "SUPER_FLEX"] });
+    expect(view?.best).toEqual(view?.yours);
+  });
+
   it("is null without picks or values", () => {
     expect(strategyView({ picks: [], rosterId: 1, values: board([["a", 1]]), teams: 2 })).toBeNull();
   });
