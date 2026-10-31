@@ -22,3 +22,17 @@ export function gradedDraftFor(drafts: DraftCenterData["drafts"] | undefined, le
   const pool = completed.some((draft) => draft.type !== "auction") ? completed.filter((draft) => draft.type !== "auction") : completed;
   return [...pool].sort((a, b) => b.picks.length - a.picks.length)[0] ?? null;
 }
+
+/**
+ * Players to leave off the Draft board. Sleeper's picks always leave it; selections the user saved
+ * while preparing (marked taken, added to my team) only do so until the draft is final, because once
+ * My team is read-only nothing could show or undo them.
+ */
+export function boardExcludedPlayerIds(args: {
+  draftIsFinal: boolean;
+  sleeperDraftedIds: ReadonlySet<string>;
+  manualDraftedIds: readonly string[];
+  myTeamIds: readonly string[];
+}): Set<string> {
+  return new Set(args.draftIsFinal ? args.sleeperDraftedIds : [...args.sleeperDraftedIds, ...args.manualDraftedIds, ...args.myTeamIds]);
+}

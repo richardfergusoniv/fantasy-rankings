@@ -24,7 +24,7 @@ import { CloseGlyph } from "../components/glyphs";
 import { DraftGradeCard } from "./draft-grade-card";
 import { DraftBetterPicks } from "./draft-better-picks";
 import { DraftRecap } from "./draft-recap";
-import { gradedDraftFor, leagueDraftIsFinal } from "../draft-final";
+import { boardExcludedPlayerIds, gradedDraftFor, leagueDraftIsFinal } from "../draft-final";
 import { LoadingBlock, ListPagination } from "../components/state-blocks";
 
 type DraftRow = DraftCenterData["adp"][number] & {
@@ -329,21 +329,23 @@ export function DraftCenter({
     () => new Set(syncedLeagueDrafts.flatMap((draft) => draft.picks.map((pick) => pick.playerId))),
     [syncedLeagueDrafts],
   );
-  // Manual board decisions remain additive to Sleeper's read-only draft history.
+  // Manual board decisions remain additive to Sleeper's read-only draft history (see boardExcludedPlayerIds).
   // A Restore only removes the manual mark; it can never restore a Sleeper pick.
-  const draftedIds = useMemo(() => new Set([...sleeperDraftedIds, ...manualDraftedIds]), [manualDraftedIds, sleeperDraftedIds]);
   const myTeamIdSet = useMemo(() => new Set(myTeamIds), [myTeamIds]);
+  const boardExcluded = useMemo(
+    () => boardExcludedPlayerIds({ draftIsFinal, sleeperDraftedIds, manualDraftedIds, myTeamIds }),
+    [draftIsFinal, manualDraftedIds, myTeamIds, sleeperDraftedIds],
+  );
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.toLowerCase();
     const available = rows
-      // Once the draft is final My team is read-only, so selections saved while preparing no longer hide anyone: only Sleeper's picks leave the board.
-      .filter((row) => !(draftIsFinal ? sleeperDraftedIds : draftedIds).has(row.playerId ?? "") && (draftIsFinal || !myTeamIdSet.has(row.playerId ?? "")))
+      .filter((row) => !boardExcluded.has(row.playerId ?? ""))
       .filter((row) => (effectiveDraftPosition === "ALL" || (effectiveDraftPosition === "ROOKIES" ? row.rookie : row.position === effectiveDraftPosition)) && row.name.toLowerCase().includes(normalizedQuery));
     // Once the league has drafted, ADP order is stale: list valued players by market value
     // (stable sort keeps K and DEF, which have no market value, after them in projection order).
     if (!completedDraft || liveDraft) return available;
     return available.sort((a, b) => (b.marketValue ?? -1) - (a.marketValue ?? -1));
-  }, [completedDraft, draftIsFinal, draftedIds, effectiveDraftPosition, liveDraft, myTeamIdSet, query, rows, sleeperDraftedIds]);
+  }, [boardExcluded, completedDraft, effectiveDraftPosition, liveDraft, query, rows]);
   const draftPositionIsEligible = (value: string) => value !== "K" && value !== "DEF" || league.rankingPositions.includes(value as "K" | "DEF");
   const seenOwnPickIds = new Set<string>();
   const ownPicks = syncedLeagueDrafts.flatMap((draft) => draft.ownRosterId === null ? [] : draft.picks.filter((pick) => pick.rosterId === draft.ownRosterId)).filter((pick) => {

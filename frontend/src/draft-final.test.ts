@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gradedDraftFor, leagueDraftIsFinal } from "./draft-final";
+import { boardExcludedPlayerIds, gradedDraftFor, leagueDraftIsFinal } from "./draft-final";
 
 type Drafts = NonNullable<Parameters<typeof leagueDraftIsFinal>[0]>;
 const draft = (leagueId: string | null, status: string, ownRosterId: number | null = 3) => ({ leagueId, status, ownRosterId }) as Drafts[number];
@@ -42,5 +42,17 @@ describe("gradedDraftFor", () => {
   it("ignores drafts that are not complete and returns null when there is none", () => {
     expect(gradedDraftFor([withPicks("a", "drafting", 50)], "a")).toBeNull();
     expect(gradedDraftFor(undefined, "a")).toBeNull();
+  });
+});
+
+describe("boardExcludedPlayerIds", () => {
+  const args = { sleeperDraftedIds: new Set(["drafted"]), manualDraftedIds: ["marked"], myTeamIds: ["added"] };
+
+  it("hides Sleeper's picks and the user's own selections while the draft is being prepared", () => {
+    expect([...boardExcludedPlayerIds({ ...args, draftIsFinal: false })].sort()).toEqual(["added", "drafted", "marked"]);
+  });
+
+  it("hides only Sleeper's picks once the draft is final, so a preparation-only mark hides nobody", () => {
+    expect([...boardExcludedPlayerIds({ ...args, draftIsFinal: true })]).toEqual(["drafted"]);
   });
 });
