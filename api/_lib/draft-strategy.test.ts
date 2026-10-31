@@ -93,9 +93,25 @@ describe("simulateStrategy Hero RB", () => {
 describe("simulateStrategy backtracking", () => {
   it("backs up an earlier choice when it would leave a later pick with nobody the plan allows", () => {
     const values = board([["wr", 10], ["rb", 1], ["wrOpp", 20]]);
-    const picks = [pick(10, 1, "wr", "WR"), pick(11, 1, "rb", "RB"), pick(12, 2, "wrOpp", "WR")];
+    const picks = [pick(10, 1, "wr", "WR"), pick(11, 2, "x", "WR"), pick(12, 1, "rb", "RB"), pick(13, 2, "wrOpp", "WR")];
     const sim = simulateStrategy({ plan: { rb: "zero-rb", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["RB", "WR", "FLEX"] });
     expect(sim?.map((item) => item.chosen.playerId)).toEqual(["wr", "wrOpp"]);
+  });
+});
+
+describe("simulateStrategy back-to-back picks", () => {
+  it("can take the better player first and the player drafted at the previous pick next", () => {
+    const values = board([["wr19", 19], ["wr1", 1], ["wrOpp", 20]]);
+    const picks = [pick(10, 1, "wr19", "WR"), pick(11, 1, "wr1", "WR"), pick(12, 2, "wrOpp", "WR")];
+    const sim = simulateStrategy({ plan: { rb: "balanced", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["WR", "WR"] });
+    expect(sim?.map((item) => item.chosen.playerId)).toEqual(["wrOpp", "wr19"]);
+  });
+
+  it("does not offer a player drafted earlier once another team has picked since", () => {
+    const values = board([["wr19", 19], ["wr1", 1]]);
+    const picks = [pick(1, 1, "wr19", "WR"), pick(2, 2, "other", "WR"), pick(3, 1, "wr1", "WR")];
+    const sim = simulateStrategy({ plan: { rb: "balanced", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["WR", "WR"] });
+    expect(sim?.[1]?.chosen.playerId).toBe("wr1");
   });
 });
 

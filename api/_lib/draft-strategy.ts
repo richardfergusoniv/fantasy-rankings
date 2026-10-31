@@ -11,7 +11,8 @@
  * Quarterbacks and tight ends are early when one is taken in the first four rounds, otherwise late.
  *
  * Each pick is replayed on today's values using the league's own draft order for realism: the choices
- * at a pick are the player actually taken plus whoever other teams took in the next round of picks.
+ * at a pick are the player actually taken, whoever other teams took in the next round of picks, and a player
+ * the user took at the pick just before when nobody else picked in between.
  * Positions the roster is already set at (counting the user's later actual picks) are not suggested
  * again, so a quarterback taken later rules out recommending another one.
  */
@@ -168,10 +169,15 @@ export function simulateStrategy(args: {
     const heldAt = (position: string) => (
       chosen.filter((player) => player.position === position).length + later.filter((player) => player.position === position).length
     );
+    const priced = (other: GradedPick) => isSkill(other.position) && !!other.name && args.values.has(other.playerId);
+    // A player taken earlier at the user's own pick is still there when nobody else picked in between (a snake turn).
+    const stillThere = (earlier: GradedPick) => ordered.every((other) => (
+      other.rosterId === args.rosterId || other.pickNo < earlier.pickNo || other.pickNo > pick.pickNo
+    ));
     const pool = [pick, ...ordered.filter((other) => (
-      other.pickNo > pick.pickNo && other.pickNo <= pick.pickNo + args.teams
-      && other.rosterId !== args.rosterId && isSkill(other.position) && !!other.name && args.values.has(other.playerId)
-    ))].filter((player) => !used.has(player.playerId));
+      other.pickNo > pick.pickNo && other.pickNo <= pick.pickNo + args.teams && other.rosterId !== args.rosterId && priced(other)
+    )), ...own.slice(0, index).filter((earlier) => priced(earlier) && stillThere(earlier))]
+      .filter((player) => !used.has(player.playerId));
     const ruleOf = (player: GradedPick) => ruleFor(args.plan, player.position, round, takenRounds[player.position] ?? []);
     const usable = pool.filter((player) => {
       if (player === pick) return true;
