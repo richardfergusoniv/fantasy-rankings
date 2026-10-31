@@ -1130,7 +1130,7 @@ export function App() {
   const tradeWaiverError = tradeWaiverActive && (tradeWaiverQuery.isError || sectionBuildFailed(tradeWaiverQuery.data));
   const tradeSectionError = !hasCompleteDashboard && (tradeQuery.isError || sectionBuildFailed(tradeQuery.data) || tradeWaiverError);
   const draftSectionError = draftQuery.isError && !draftQuery.data;
-  // Alt picks only exists once the league's draft is final; a link to it before then lands on My team.
+  // Hindsight only exists once the league's draft is final; a link to it before then lands on My team.
   const draftIsFinal = leagueDraftIsFinal(draftQuery.data?.drafts, league?.id);
   const draftRoomShown = dashboardUrl.state.draftRoom === "altPicks" && !draftIsFinal ? "myTeam" : dashboardUrl.state.draftRoom ?? "board";
   const newsLoading = newsQuery.isPending && !newsQuery.data;
@@ -1429,7 +1429,7 @@ export function App() {
             <TabsList aria-label="Draft views">
               <TabsTrigger value="board">Board</TabsTrigger>
               <TabsTrigger value="myTeam">My team</TabsTrigger>
-              {draftIsFinal ? <TabsTrigger value="altPicks">Alt picks</TabsTrigger> : null}
+              {draftIsFinal ? <TabsTrigger value="altPicks">Hindsight</TabsTrigger> : null}
             </TabsList>
           </Tabs>
         ) : null}
