@@ -22,7 +22,6 @@ export function HindsightCard({ hindsight, yoursIsBest, yoursTiming, onOpen }: {
       ? { label: "Your strategy", value: "Best", sub: yoursTiming }
       : { label: "Your strategy", value: gapText(hindsight.gapYours), sub: "done best", valueTone: hindsight.gapYours > 0 ? ("good" as const) : undefined },
   ];
-  const planCount = hindsight.plans.filter((plan) => plan.gap !== null).length;
   return (
     <Card
       className="draft-grade hindsight-card gap-0 py-0 shadow-sm"
@@ -32,7 +31,10 @@ export function HindsightCard({ hindsight, yoursIsBest, yoursTiming, onOpen }: {
       onClick={onOpen}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(); } }}
     >
-      <div className="draft-grade-eyebrow">Hindsight</div>
+      <div className="draft-grade-eyebrow hindsight-eyebrow">
+        <span>Hindsight</span>
+        <ChevronGlyph />
+      </div>
       <CardHero ariaLabel="Hindsight" items={items} />
       {hindsight.biggestSwap ? (
         <div className="hindsight-swap">
@@ -40,10 +42,6 @@ export function HindsightCard({ hindsight, yoursIsBest, yoursTiming, onOpen }: {
           <em>+{hindsight.biggestSwap.gain.toLocaleString()}</em>
         </div>
       ) : null}
-      <div className="hindsight-open">
-        <span>Compare all {planCount} strategies</span>
-        <ChevronGlyph />
-      </div>
     </Card>
   );
 }
