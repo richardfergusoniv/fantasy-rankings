@@ -75,4 +75,22 @@ describe("fetchJsonWithRetry", () => {
     await expect(fetchJsonWithRetry("https://example.test/x", { sleepFn: noSleep })).rejects.toThrow("Source returned 500");
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  it("does not start another attempt once the caller's deadline has passed", async () => {
+    const fetchMock = stubFetchSequence([{ status: 503 }, { status: 200, body: "late" }]);
+    await expect(fetchJsonWithRetry("https://example.test/x", {
+      sleepFn: noSleep,
+      deadlineAtMs: Date.now() - 1,
+    })).rejects.toThrow("Source returned 503");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries normally while the caller's deadline is still ahead", async () => {
+    const fetchMock = stubFetchSequence([{ status: 503 }, { status: 200, body: "on time" }]);
+    await expect(fetchJsonWithRetry("https://example.test/x", {
+      sleepFn: noSleep,
+      deadlineAtMs: Date.now() + 60_000,
+    })).resolves.toBe("on time");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

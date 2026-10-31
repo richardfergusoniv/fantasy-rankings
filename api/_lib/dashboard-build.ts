@@ -1473,7 +1473,7 @@ export async function buildUserDashboard(
   let week: number;
   let seasonType = "";
   try {
-    const state = await readNflState(fresh);
+    const state = await readNflState(fresh, { retryDeadlineAtMs: buildDeadlineAt });
     season = state.season;
     week = state.week;
     seasonType = state.seasonType;
@@ -1497,14 +1497,14 @@ export async function buildUserDashboard(
     })
     : Promise.resolve([]);
   const [leagueResult, playersResult, sleeperProjectionResult, scheduleResult, currentStatsResult, previousStatsResult, kickoffResult, trendingResult] = await Promise.allSettled([
-    readUserLeagues(sleeperUserId, fresh),
+    readUserLeagues(sleeperUserId, fresh, { retryDeadlineAtMs: buildDeadlineAt }),
     // Compact daily cache (cron refresh-nfl-players) — not the full Sleeper dump in Supabase.
     loadNflPlayersMap(fresh),
     attachWeekContext
-      ? fetchJsonWithRetry<SleeperProjection[]>(`${SLEEPER_PROJECTIONS_BASE}/projections/nfl/${season}/${week}?season_type=regular&order_by=pts_ppr`)
+      ? fetchJsonWithRetry<SleeperProjection[]>(`${SLEEPER_PROJECTIONS_BASE}/projections/nfl/${season}/${week}?season_type=regular&order_by=pts_ppr`, { deadlineAtMs: buildDeadlineAt })
       : Promise.resolve([] as SleeperProjection[]),
     attachWeekContext
-      ? fetchJsonWithRetry<SleeperGame[]>(`${SLEEPER_BASE.replace("/v1", "")}/schedule/nfl/regular/${season}`)
+      ? fetchJsonWithRetry<SleeperGame[]>(`${SLEEPER_BASE.replace("/v1", "")}/schedule/nfl/regular/${season}`, { deadlineAtMs: buildDeadlineAt })
       : Promise.resolve([] as SleeperGame[]),
     fetchText(NFLVERSE_PLAYER_STATS_2026_URL),
     fetchText(NFLVERSE_PLAYER_STATS_2025_URL),
@@ -1747,16 +1747,16 @@ export async function buildUserDashboard(
   const leagues = await mapWithConcurrency(sleeperLeagues, 2, async (league) => {
     let rosters: SleeperRoster[];
     try {
-      rosters = await fetchJsonWithRetry<SleeperRoster[]>(`${SLEEPER_BASE}/league/${league.league_id}/rosters`);
+      rosters = await fetchJsonWithRetry<SleeperRoster[]>(`${SLEEPER_BASE}/league/${league.league_id}/rosters`, { deadlineAtMs: buildDeadlineAt });
     } catch {
       sourceErrors.push(`${league.name}: roster unavailable.`);
       rosterFetchFailedLeagueIds.push(league.league_id);
       return null;
     }
     const [matchupsResult, usersResult, tradedPicksResult] = await Promise.allSettled([
-      fetchJsonWithRetry<SleeperMatchup[]>(`${SLEEPER_BASE}/league/${league.league_id}/matchups/${week}`),
-      fetchJsonWithRetry<SleeperUser[]>(`${SLEEPER_BASE}/league/${league.league_id}/users`),
-      fetchJsonWithRetry<SleeperTradedPick[]>(`${SLEEPER_BASE}/league/${league.league_id}/traded_picks`),
+      fetchJsonWithRetry<SleeperMatchup[]>(`${SLEEPER_BASE}/league/${league.league_id}/matchups/${week}`, { deadlineAtMs: buildDeadlineAt }),
+      fetchJsonWithRetry<SleeperUser[]>(`${SLEEPER_BASE}/league/${league.league_id}/users`, { deadlineAtMs: buildDeadlineAt }),
+      fetchJsonWithRetry<SleeperTradedPick[]>(`${SLEEPER_BASE}/league/${league.league_id}/traded_picks`, { deadlineAtMs: buildDeadlineAt }),
     ]);
     const ownRoster = rosters.find((roster) => roster.owner_id === sleeperUserId);
     if (!ownRoster) {

@@ -97,6 +97,20 @@ async function writeCache(cacheKey: string, payload: unknown): Promise<void> {
   }
 }
 
+/**
+ * Default total budget for the Sleeper retries in one user-leagues read.
+ * These helpers run inside other people's deadlines (draft-center's 60s
+ * function, the dashboard build), and their cached fallbacks are the
+ * point of the design: during a Sleeper outage the retries must give up
+ * in time for the fallback to answer. Fast failures (5xx, 429) return in
+ * milliseconds and still get every retry well inside this budget; only
+ * the hang-to-timeout case is cut, keeping the pair's worst case at the
+ * ~30s it was before retries existed (one attempt can still be in flight
+ * when the budget lapses). Callers with their own deadline pass it via
+ * `retryDeadlineAtMs` instead.
+ */
+export const USER_LEAGUES_RETRY_BUDGET_MS = 15_000;
+
 export type ReadUserLeaguesOptions = {
   /**
    * When false, a failed Sleeper refresh must not fall back to an expired
@@ -105,18 +119,27 @@ export type ReadUserLeaguesOptions = {
    * preserves dashboard/draft reads.
    */
   allowStaleOnError?: boolean;
+  /**
+   * Absolute deadline shared by this read's Sleeper retries, including
+   * the NFL state read a league read makes first. Defaults to now +
+   * USER_LEAGUES_RETRY_BUDGET_MS.
+   */
+  retryDeadlineAtMs?: number;
 };
 
 export async function readNflState(
   fresh = false,
-  options: Pick<ReadUserLeaguesOptions, "allowStaleOnError"> = {},
+  options: Pick<ReadUserLeaguesOptions, "allowStaleOnError" | "retryDeadlineAtMs"> = {},
 ): Promise<NflState> {
   const allowStaleOnError = options.allowStaleOnError !== false;
   const cached = await readCachedPayload(NFL_STATE_KEY);
   const parsed = cached ? parseNflState(cached.value) : null;
   if (!fresh && parsed && cached?.fresh) return parsed;
   try {
-    const state = await fetchJsonWithRetry<{ season: string; week: number; season_type?: string }>(`${SLEEPER_BASE}/state/nfl`);
+    const state = await fetchJsonWithRetry<{ season: string; week: number; season_type?: string }>(
+      `${SLEEPER_BASE}/state/nfl`,
+      { deadlineAtMs: options.retryDeadlineAtMs ?? Date.now() + USER_LEAGUES_RETRY_BUDGET_MS },
+    );
     const next = parseNflState({
       season: Number(state.season),
       week: state.week,
@@ -139,7 +162,10 @@ export async function readUserLeagues(
   options: ReadUserLeaguesOptions = {},
 ): Promise<UserLeagues> {
   const allowStaleOnError = options.allowStaleOnError !== false;
-  const state = await readNflState(fresh, { allowStaleOnError });
+  // One retry deadline across the state read and this league read, so
+  // the pair's retries stay inside a single budget (see the constant).
+  const retryDeadlineAtMs = options.retryDeadlineAtMs ?? Date.now() + USER_LEAGUES_RETRY_BUDGET_MS;
+  const state = await readNflState(fresh, { allowStaleOnError, retryDeadlineAtMs });
   const cacheKey = userLeaguesCacheKey(sleeperUserId, state.season);
   const cached = await readCachedPayload(cacheKey);
   const parsed = cached ? parseLeagueList(cached.value) : null;
@@ -147,7 +173,10 @@ export async function readUserLeagues(
   // should see it on the next request instead of waiting out the TTL.
   if (!fresh && parsed && cached?.fresh && parsed.length > 0) return { ...state, leagues: parsed };
   try {
-    const leagues = await fetchJsonWithRetry<unknown>(`${SLEEPER_BASE}/user/${sleeperUserId}/leagues/nfl/${state.season}`);
+    const leagues = await fetchJsonWithRetry<unknown>(
+      `${SLEEPER_BASE}/user/${sleeperUserId}/leagues/nfl/${state.season}`,
+      { deadlineAtMs: retryDeadlineAtMs },
+    );
     const next = parseLeagueList(leagues);
     if (!next) throw new Error("Sleeper leagues are unavailable");
     await writeCache(cacheKey, next);
@@ -173,6 +202,10 @@ function rosterSlots(rosters: SleeperRoster[]): RosterSlot[] {
  * league failing is an error.
  */
 export async function readLeagueRosters(leagues: SleeperLeague[], fresh = false): Promise<LeagueRosters[]> {
+  // One retry deadline for the whole batch: the fetches run in parallel,
+  // and a Sleeper outage should degrade to the cache fills below, not
+  // stack a full retry chain per league against the caller's deadline.
+  const retryDeadlineAtMs = Date.now() + USER_LEAGUES_RETRY_BUDGET_MS;
   return Promise.all(leagues.map(async (league) => {
     const cacheKey = leagueRostersCacheKey(league.league_id);
     const cached = await readCachedPayload(cacheKey);
@@ -181,7 +214,7 @@ export async function readLeagueRosters(leagues: SleeperLeague[], fresh = false)
       return { id: league.league_id, name: league.name, rosters: parsed };
     }
     try {
-      const raw = await fetchJsonWithRetry<SleeperRoster[]>(`${SLEEPER_BASE}/league/${league.league_id}/rosters`);
+      const raw = await fetchJsonWithRetry<SleeperRoster[]>(`${SLEEPER_BASE}/league/${league.league_id}/rosters`, { deadlineAtMs: retryDeadlineAtMs });
       const rosters = rosterSlots(raw);
       await writeCache(cacheKey, { rosters });
       return { id: league.league_id, name: league.name, rosters };

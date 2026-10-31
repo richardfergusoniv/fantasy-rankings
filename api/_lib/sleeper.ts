@@ -243,6 +243,15 @@ export async function fetchJsonWithRetry<T>(
     maxAttempts?: number;
     backoffMs?: readonly number[];
     sleepFn?: (ms: number) => Promise<void>;
+    /**
+     * Absolute deadline for STARTING further attempts. Callers inside a
+     * bounded invocation (a dashboard build, a 60s function) pass theirs
+     * so a chain of slow retries can never outlive the caller's budget:
+     * once the deadline passes, the last error throws immediately and the
+     * caller's fallback runs instead. An attempt already in flight keeps
+     * its own per-attempt timeout.
+     */
+    deadlineAtMs?: number;
   } = {},
 ): Promise<T> {
   const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
@@ -255,6 +264,7 @@ export async function fetchJsonWithRetry<T>(
     } catch (err) {
       lastError = err;
       if (attempt >= maxAttempts - 1 || !isRetryableSourceFetchError(err)) throw err;
+      if (options.deadlineAtMs !== undefined && Date.now() >= options.deadlineAtMs) throw err;
       await sleepFn(backoffMs[Math.min(attempt, backoffMs.length - 1)] ?? 0);
     }
   }
