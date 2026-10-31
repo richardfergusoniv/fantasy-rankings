@@ -1117,9 +1117,9 @@ export function App() {
   const tradeWaiverError = tradeWaiverActive && (tradeWaiverQuery.isError || sectionBuildFailed(tradeWaiverQuery.data));
   const tradeSectionError = !hasCompleteDashboard && (tradeQuery.isError || sectionBuildFailed(tradeQuery.data) || tradeWaiverError);
   const draftSectionError = draftQuery.isError && !draftQuery.data;
-  // Alternative draft only exists once the league's draft is final; a link to it before then lands on My team.
+  // Alt draft only exists once the league's draft is final; a link to it before then lands on My team.
   const draftIsFinal = leagueDraftIsFinal(draftQuery.data?.drafts, league?.id);
-  const draftRoomShown = dashboardUrl.state.draftRoom === "alternativeDraft" && !draftIsFinal ? "myTeam" : dashboardUrl.state.draftRoom ?? "board";
+  const draftRoomShown = dashboardUrl.state.draftRoom === "altDraft" && !draftIsFinal ? "myTeam" : dashboardUrl.state.draftRoom ?? "board";
   const newsLoading = newsQuery.isPending && !newsQuery.data;
   const newsError = newsQuery.isError && !newsQuery.data;
   const retryNews = () => { void newsQuery.refetch(); };
@@ -1416,7 +1416,7 @@ export function App() {
             <TabsList aria-label="Draft views">
               <TabsTrigger value="board">Board</TabsTrigger>
               <TabsTrigger value="myTeam">My team</TabsTrigger>
-              {draftIsFinal ? <TabsTrigger value="alternativeDraft">Alternative draft</TabsTrigger> : null}
+              {draftIsFinal ? <TabsTrigger value="altDraft">Alt draft</TabsTrigger> : null}
             </TabsList>
           </Tabs>
         ) : null}
