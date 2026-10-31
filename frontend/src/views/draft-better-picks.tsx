@@ -38,9 +38,8 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
 
   return (
     <section className="draft-my-team">
-      <div className="section-heading"><h2>Alt picks</h2></div>
       {entries.length > 0 ? (
-        <div className="draft-board data-table-frame" role="list" aria-label="Alt picks by strategy">
+        <div className="draft-board data-table-frame" role="list" aria-label="Hindsight by strategy">
           <div className="draft-row draft-table-head draft-better-row" aria-hidden="true">
             <span>Your pick</span>
             <span><b>{strategies?.yours.name}</b>{strategies?.yours.timing}</span>
@@ -62,7 +61,7 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
             );
           })}
         </div>
-      ) : <div className="empty-inline compact">{query.isPending ? "Loading…" : "Alt picks aren’t available for this draft."}</div>}
+      ) : <div className="empty-inline compact">{query.isPending ? "Loading…" : "Hindsight isn’t available for this draft."}</div>}
     </section>
   );
 }

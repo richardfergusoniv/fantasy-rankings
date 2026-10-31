@@ -1,5 +1,5 @@
 /**
- * Draft strategies, for the Alt picks hindsight view: how the user's draft would have gone had they
+ * Draft strategies, for the Hindsight tab: how the user's draft would have gone had they
  * stuck to their own approach and taken the best realistic player each time, and how the best of the
  * common approaches (Zero RB, Hero RB, Robust RB, each with early or late QB and TE) would have gone.
  *
