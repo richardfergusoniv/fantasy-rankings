@@ -44,11 +44,12 @@ Three jobs, three looks (`theme/badges.css`). One meaning per color.
 
 ## Shared pieces
 
-- Page summaries: Matchup, Power, Projected and Draft's My team (the draft grade) open with one raised `Card` (hairline, `shadow-sm`). Other panels stay flat; only modals get real depth.
+- Page summaries: Matchup, Power, Projected, Draft's My team (the draft grade) and Draft's Hindsight (lineup gains) open with one raised `Card` (hairline, `shadow-sm`). Other panels stay flat; only modals get real depth.
 - Icons are lucide line icons from `components/glyphs.tsx` (close, back, chevron, plus, sort). Movement is the drawn `MoveTriangle` (rank, value, depth chart, ticker); never a typed ▲ ▼ × ← ›.
 - States come from `components/state-blocks.tsx`: `LoadingBlock` (caption over shimmer rows), `EmptyState` (what is missing, then what to do) and `ListPagination` ("120 of 348 · Show 120 more").
 - Eyebrow labels and column heads are sentence case, 12px, weight 600. The font ships 400, 500, 600, 700 and 800; use 600 for labels and 700 for values.
 - Draft's My team has two forms. During a draft it is the editable list (Remove, Drafted elsewhere). Once the league's draft is complete the team is set: it becomes a read-only recap with the draft grade card above a Player / Draft day / Today table, graded on the school scale (A+ at 97%, A 93, A− 90, B+ 87 ... D 65, F below) from the percentage of its slot's value each player was worth. Kickers and defenses show —.
+- Draft's Hindsight opens with a raised card of lineup gains in percent (best strategy, picks to change, your strategy done best) and the biggest swap. The card is a button: it opens a sheet with every strategy side by side, a table that scrolls sideways with the Your pick column pinned. The table under the card keeps the two columns for your strategy and the best one.
 - A status badge (`.status-badge`) names a state such as a bye week, kickoff time or playoff status; injury and designation tags use the same class.
 
 ## Rules

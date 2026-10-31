@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { BetterPick } from "../../../api/_lib/draft-grade";
 import { useDraftGrade } from "./draft-grade-card";
+import { HindsightCard, HindsightSheet } from "./hindsight-card";
 
 export type BetterPicksPlayer = { playerId: string; name: string; secondary: string | null };
 
@@ -29,6 +31,7 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
   onOpenPlayer: (playerId: string) => void;
 }) {
   const query = useDraftGrade(leagueId);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const byId = new Map(players.map((player) => [player.playerId, player]));
   const strategies = query.data?.grade?.strategies ?? null;
   // Kickers and defenses have no value to compare, so they carry no grade and are left out.
@@ -36,8 +39,24 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
   // When the user's strategy is already the best one, a single column says so.
   const sameStrategy = strategies?.yours.name === strategies?.best.name && strategies?.yours.timing === strategies?.best.timing;
 
+  const hindsight = query.data?.grade?.hindsight ?? null;
+  const yoursPlan = hindsight?.plans.find((plan) => plan.yours);
+
   return (
     <section className="draft-my-team">
+      {hindsight && entries.length > 0 ? (
+        <>
+          <HindsightCard hindsight={hindsight} yoursIsBest={sameStrategy} yoursTiming={yoursPlan?.timing ?? ""} onOpen={() => setSheetOpen(true)} />
+          <HindsightSheet
+            open={sheetOpen}
+            onOpenChange={setSheetOpen}
+            hindsight={hindsight}
+            entries={entries}
+            nameOf={(playerId) => byId.get(playerId)}
+            secondaryOf={secondaryOf}
+          />
+        </>
+      ) : null}
       {entries.length > 0 ? (
         <div className="draft-board data-table-frame" role="list" aria-label="Hindsight by strategy">
           <div className="draft-row draft-table-head draft-better-row" aria-hidden="true">

@@ -143,7 +143,7 @@ describe("gradeDraft", () => {
 
   it("has no grades without a usable draft-day board, and no Today without today's board", () => {
     const empty = board([]);
-    expect(gradeDraft({ ...options, picks: fair, draftDayBoard: empty, todayBoard: marketBoard })).toEqual({ draftDay: null, today: null, picks: [], strategies: null });
+    expect(gradeDraft({ ...options, picks: fair, draftDayBoard: empty, todayBoard: marketBoard })).toEqual({ draftDay: null, today: null, picks: [], strategies: null, hindsight: null });
     const noToday = gradeDraft({ ...options, picks: fair, draftDayBoard: marketBoard, todayBoard: empty });
     expect(noToday.draftDay).not.toBeNull();
     expect(noToday.today).toBeNull();
@@ -165,6 +165,38 @@ describe("gradeDraft", () => {
 
   it("has no grade for a team that made no picks", () => {
     expect(gradeDraft({ ...options, ownRosterId: 9, picks: fair, draftDayBoard: marketBoard, todayBoard: marketBoard }).draftDay).toBeNull();
+  });
+});
+
+describe("gradeDraft hindsight", () => {
+  const options = { ownRosterId: 2, teams: 4, minBoardPlayers: 1 };
+
+  it("sums the replay up in lineup-value percentages, pick counts and the biggest swap", () => {
+    const today = board([...marketBoard].map(([id, value]) => [id, id === "p2" ? 450 : value] as [string, number]));
+    const hindsight = gradeDraft({ ...options, picks: fair, draftDayBoard: marketBoard, todayBoard: today }).hindsight;
+    expect(hindsight).not.toBeNull();
+    expect(hindsight!.gapToBest).toBeGreaterThan(0);
+    expect(hindsight!.gapYours).toBeLessThanOrEqual(hindsight!.gapToBest);
+    expect(hindsight!.of).toBe(2);
+    expect(hindsight!.changes).toBeGreaterThan(0);
+    expect(hindsight!.biggestSwap).toMatchObject({ from: "Name p2", to: { playerId: "p3" } });
+    expect(hindsight!.biggestSwap!.gain).toBeGreaterThan(0);
+  });
+
+  it("lists every strategy with the best first, marks the user's own, and names where each differs", () => {
+    const today = board([...marketBoard].map(([id, value]) => [id, id === "p2" ? 450 : value] as [string, number]));
+    const plans = gradeDraft({ ...options, picks: fair, draftDayBoard: marketBoard, todayBoard: today }).hindsight!.plans;
+    expect(plans.length).toBeGreaterThanOrEqual(12);
+    expect(plans[0]!.best).toBe(true);
+    expect(plans.filter((plan) => plan.yours)).toHaveLength(1);
+    const possible = plans.filter((plan) => plan.gap !== null);
+    expect(possible.every((plan) => typeof plan.gap === "number")).toBe(true);
+    expect(plans.filter((plan) => plan.gap === null).every((plan) => Object.keys(plan.swaps).length === 0)).toBe(true);
+    expect(plans[0]!.swaps["p2"]).toMatchObject({ playerId: "p3" });
+  });
+
+  it("has no hindsight without today's board", () => {
+    expect(gradeDraft({ ...options, picks: fair, draftDayBoard: marketBoard, todayBoard: board([]) }).hindsight).toBeNull();
   });
 });
 
@@ -190,7 +222,7 @@ describe("gradeDraft slot pool", () => {
 
   it("has no grades when none of the draft's players are on the board", () => {
     const grades = gradeDraft({ picks: [pick(1, 1, "unknown", "RB"), pick(2, 2, "other", "WR")], ownRosterId: 1, draftDayBoard: board([["x", 5]]), todayBoard: board([["x", 5]]), minBoardPlayers: 1 });
-    expect(grades).toEqual({ draftDay: null, today: null, picks: [], strategies: null });
+    expect(grades).toEqual({ draftDay: null, today: null, picks: [], strategies: null, hindsight: null });
   });
 });
 

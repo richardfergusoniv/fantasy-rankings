@@ -29,7 +29,7 @@ import { z } from "zod";
 import { badRequest, forbidden, internalError, json, unauthorized } from "./api-utils.js";
 import { resolveSleeperUserId } from "./auth.js";
 import { readUserDashboardCache } from "./dashboard-build.js";
-import { STRATEGY_LABELS, strategyView, timingLabel, type Plan } from "./draft-strategy.js";
+import { STRATEGY_LABELS, strategyView, timingLabel, type Plan, type StrategyView } from "./draft-strategy.js";
 import { db, schema } from "./db.js";
 import { isRedraftFormatKey, pacificDateKey, resolveFantasyCalcSnapshotFormatKey } from "./player-value-history.js";
 import { isNflValueHistoryInSeason } from "./season-week.js";
@@ -76,6 +76,31 @@ export type OwnPickGrade = {
 /** A strategy as shown in a column header: "Zero RB" over "Late QB · Late TE". */
 export type StrategyLabel = { name: string; timing: string };
 
+/** One strategy's column in the Hindsight comparison. */
+export type HindsightPlan = {
+  name: string;
+  timing: string;
+  /** The lineup value it adds over the roster the user drafted, in percent; null when the draft cannot follow it. */
+  gap: number | null;
+  yours: boolean;
+  best: boolean;
+  /** The player it would have taken at each of the user's picks (by the actual player's id), only where it differs. */
+  swaps: Record<string, BetterPick>;
+};
+
+/** The numbers behind the Hindsight tab. */
+export type Hindsight = {
+  /** Lineup value over the drafted roster, in percent: the best strategy, and the user's own strategy done best. */
+  gapToBest: number;
+  gapYours: number;
+  /** Picks the best strategy would change, out of the user's skill picks. */
+  changes: number;
+  of: number;
+  biggestSwap: { from: string; to: BetterPick; gain: number } | null;
+  /** Every strategy, the best first. */
+  plans: HindsightPlan[];
+};
+
 export type DraftGrade = {
   draftId: string;
   /** Null when the value board for the draft's date is missing. */
@@ -86,6 +111,7 @@ export type DraftGrade = {
   picks: OwnPickGrade[];
   /** The user's strategy and the best one, as a name and its QB/TE timing; null without today's board. */
   strategies: { yours: StrategyLabel; best: StrategyLabel } | null;
+  hindsight: Hindsight | null;
 };
 
 export function gradeLetter(rank: number, teams: number): string {
@@ -177,6 +203,36 @@ export function pickGrades(args: {
 
 const strategyLabel = (plan: Plan): StrategyLabel => ({ name: STRATEGY_LABELS[plan.rb], timing: timingLabel(plan) });
 
+const roundTo1 = (value: number) => Math.round(value * 10) / 10;
+
+/** The Hindsight comparison from a strategy replay; gaps are percentages of the drafted roster's lineup value. */
+function hindsightFrom(view: StrategyView, named: (pick: GradedPick | null | undefined) => BetterPick | null): Hindsight {
+  const gap = (value: number) => (view.actualValue > 0 ? roundTo1(((value - view.actualValue) / view.actualValue) * 100) : 0);
+  const swapsOf = (picks: ReadonlyMap<string, GradedPick | null>) => Object.fromEntries(
+    [...picks].flatMap(([playerId, pick]) => { const swap = named(pick); return swap ? [[playerId, swap] as const] : []; }),
+  );
+  return {
+    gapToBest: gap(view.bestValue),
+    gapYours: gap(view.yoursValue),
+    changes: [...view.bestPicks.values()].filter((pick) => pick !== null).length,
+    of: view.skillPicks,
+    biggestSwap: view.biggestSwap && named(view.biggestSwap.to)
+      ? { from: view.biggestSwap.from.name ?? "", to: named(view.biggestSwap.to)!, gain: Math.round(view.biggestSwap.gain) }
+      : null,
+    plans: view.plans.map((outcome) => {
+      const label = strategyLabel(outcome.plan);
+      return {
+        name: label.name,
+        timing: label.timing,
+        gap: outcome.possible ? gap(outcome.value) : null,
+        yours: outcome.plan.rb === view.yours.rb && outcome.plan.qb === view.yours.qb && outcome.plan.te === view.yours.te,
+        best: outcome.plan.rb === view.best.rb && outcome.plan.qb === view.best.qb && outcome.plan.te === view.best.te,
+        swaps: outcome.possible ? swapsOf(outcome.picks) : {},
+      };
+    }),
+  };
+}
+
 function resultFor(totals: ReadonlyMap<number, number>, ownRosterId: number): DraftGradeResult | null {
   const rank = placeOf(totals, ownRosterId);
   if (rank === null || totals.size < 2) return null;
@@ -193,15 +249,15 @@ export function gradeDraft(args: {
   /** The league's starting lineup slots, for weighing which strategy builds the best roster. */
   slots?: readonly string[];
   minBoardPlayers?: number;
-}): { draftDay: DraftGradeResult | null; today: DraftGradeResult | null; picks: OwnPickGrade[]; strategies: DraftGrade["strategies"] } {
+}): { draftDay: DraftGradeResult | null; today: DraftGradeResult | null; picks: OwnPickGrade[]; strategies: DraftGrade["strategies"]; hindsight: DraftGrade["hindsight"] } {
   const min = args.minBoardPlayers ?? MIN_BOARD_PLAYERS;
   // Today is measured against draft-day slots, so without the draft-day board neither grade exists.
-  if (args.draftDayBoard.size < min) return { draftDay: null, today: null, picks: [], strategies: null };
+  if (args.draftDayBoard.size < min) return { draftDay: null, today: null, picks: [], strategies: null, hindsight: null };
   // Slots are measured against the players this draft could have taken, which are the ones it did take.
   // A drafted player with no stored row counts at the board's floor, the same value he is scored at.
   const skillPicks = args.picks.filter((pick) => isSkill(pick.position));
   // With none of them on the board there is nothing to measure slots against.
-  if (!skillPicks.some((pick) => args.draftDayBoard.has(pick.playerId))) return { draftDay: null, today: null, picks: [], strategies: null };
+  if (!skillPicks.some((pick) => args.draftDayBoard.has(pick.playerId))) return { draftDay: null, today: null, picks: [], strategies: null, hindsight: null };
   const floor = floorValue(args.draftDayBoard);
   const slotBoard: ValueBoard = new Map(skillPicks.map((pick) => [pick.playerId, args.draftDayBoard.get(pick.playerId) ?? floor] as [string, number]));
   const hasToday = args.todayBoard.size >= min;
@@ -225,7 +281,7 @@ export function gradeDraft(args: {
     today: sinceThen?.get(playerId) ?? null,
     better: { yours: named(view?.yoursPicks.get(playerId)), best: named(view?.bestPicks.get(playerId)) },
   }));
-  return { draftDay, today, picks, strategies: view ? { yours: strategyLabel(view.yours), best: strategyLabel(view.best) } : null };
+  return { draftDay, today, picks, strategies: view ? { yours: strategyLabel(view.yours), best: strategyLabel(view.best) } : null, hindsight: view ? hindsightFrom(view, named) : null };
 }
 
 /** `YYYY-MM-DD` moved by whole days (noon UTC keeps it clear of day boundaries). */
