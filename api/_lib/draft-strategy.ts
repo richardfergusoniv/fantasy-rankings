@@ -325,12 +325,35 @@ export function simulateStrategy(args: {
   return own.map((pick, index) => ({ actual: pick, chosen: byDecision.get(index) ?? pick }));
 }
 
+/**
+ * One plan's replay: its lineup value on today's values and who it would have taken at each of the user's picks.
+ * In `plans` these are the replay as it is, even when it is worse than the drafted roster.
+ */
+export type PlanOutcome = {
+  plan: Plan;
+  /** False when no combination of realistic picks follows the plan. */
+  possible: boolean;
+  value: number;
+  /** Per own pick (by the actual player's id): the player the plan would have taken; null when it is the same player. */
+  picks: Map<string, GradedPick | null>;
+};
+
 export type StrategyView = {
   yours: Plan;
   best: Plan;
   /** Per own pick (by the actual player's id): the player the plan would have taken; null when it is the same player. */
   yoursPicks: Map<string, GradedPick | null>;
   bestPicks: Map<string, GradedPick | null>;
+  /** Lineup value of the roster the user drafted, of their plan done best, and of the best plan. */
+  actualValue: number;
+  yoursValue: number;
+  bestValue: number;
+  /** The user's skill picks, which the lineup values are built from. */
+  skillPicks: number;
+  /** The best plan's swap that adds the most lineup value; null when it changes nothing. */
+  biggestSwap: { from: GradedPick; to: GradedPick; gain: number } | null;
+  /** Every plan, the best first and the ones the draft cannot follow last. */
+  plans: PlanOutcome[];
 };
 
 /** Value of the lineup a set of picks builds on `values`. */
@@ -340,6 +363,7 @@ function rosterValue(picks: readonly GradedPick[], values: ValueBoard, slots: re
 
 const TIMINGS: readonly Timing[] = ["early", "late"];
 const ALL_PLANS: readonly Plan[] = ARCHETYPES.flatMap((rb) => TIMINGS.flatMap((qb) => TIMINGS.map((te) => ({ rb, qb, te }))));
+const samePlan = (a: Plan, b: Plan) => a.rb === b.rb && a.qb === b.qb && a.te === b.te;
 
 /** The user's plan done best and the best of the common plans, replayed on today's values. */
 export function strategyView(args: {
@@ -356,7 +380,8 @@ export function strategyView(args: {
   const actualValue = rosterValue(own, args.values, slots, floor);
   const yours = detectPlan(own, args.teams);
 
-  const run = (plan: Plan) => {
+  type Replay = PlanOutcome & { items: SimulatedPick[]; raw: { value: number; picks: Map<string, GradedPick | null> } };
+  const run = (plan: Plan): Replay | null => {
     const simulated = simulateStrategy({ plan, picks: args.picks, rosterId: args.rosterId, values: args.values, teams: args.teams, slots });
     if (!simulated) return null;
     const value = rosterValue(simulated.map((item) => item.chosen), args.values, slots, floor);
@@ -364,14 +389,52 @@ export function strategyView(args: {
     const better = value > actualValue;
     const picks = new Map(simulated.map((item) => [item.actual.playerId, better && item.chosen.playerId !== item.actual.playerId ? item.chosen : null] as const));
     // A replay that is worse than the roster the user has is scored as that roster, so it cannot make another plan look best.
-    return { plan, value: Math.max(value, actualValue), picks };
+    const raw = { value, picks: new Map(simulated.map((item) => [item.actual.playerId, item.chosen.playerId !== item.actual.playerId ? item.chosen : null] as const)) };
+    return { plan, possible: true, value: Math.max(value, actualValue), picks, items: better ? simulated : [], raw };
   };
 
   const none = new Map<string, GradedPick | null>(own.map((pick) => [pick.playerId, null]));
-  const mine = run(yours) ?? { plan: yours, value: actualValue, picks: none };
+  // The user's own plan is usually one of the twelve; a draft that fits none of them adds its own.
+  const planList = ALL_PLANS.some((plan) => samePlan(plan, yours)) ? ALL_PLANS : [...ALL_PLANS, yours];
+  const replays = planList.map((plan) => ({ plan, replay: run(plan) }));
+  const mine = replays.find((entry) => samePlan(entry.plan, yours))?.replay
+    ?? { plan: yours, possible: true, value: actualValue, picks: none, items: [], raw: { value: actualValue, picks: none } };
   // Plans the draft could not follow are left out of the ranking.
-  const top = ALL_PLANS.flatMap((plan) => run(plan) ?? []).sort((a, b) => b.value - a.value)[0];
+  const top = replays.flatMap((entry) => (entry.replay && ARCHETYPES.includes(entry.plan.rb) ? [entry.replay] : [])).sort((a, b) => b.value - a.value)[0];
   // The user's own approach wins ties, so a draft that was already the best way to go says so.
   const best = !top || (ARCHETYPES.includes(yours.rb) && mine.value >= top.value) ? mine : top;
-  return { yours, best: best.plan, yoursPicks: mine.picks, bestPicks: best.picks };
+
+  const rank = (plan: Plan) => (samePlan(plan, best.plan) ? 0 : samePlan(plan, yours) ? 1 : 2);
+  const plans: PlanOutcome[] = replays
+    .map(({ plan, replay }): PlanOutcome => (replay
+      ? { plan, possible: true, value: replay.raw.value, picks: replay.raw.picks }
+      : { plan, possible: false, value: 0, picks: none }))
+    .sort((a, b) => Number(b.possible) - Number(a.possible) || Number(samePlan(b.plan, best.plan)) - Number(samePlan(a.plan, best.plan)) || b.value - a.value || rank(a.plan) - rank(b.plan));
+
+  // What each swap adds to the best roster: its lineup value with and without putting the original pick back.
+  const bestItems = (best as Replay).items ?? [];
+  const bestRoster = bestItems.map((item) => item.chosen);
+  const bestLineup = rosterValue(bestRoster, args.values, slots, floor);
+  const swaps = bestItems.flatMap((item, at) => {
+    if (item.chosen.playerId === item.actual.playerId) return [];
+    // Putting the original back: if that player already sits elsewhere in the roster (moved to a later pick), this slot just goes.
+    const elsewhere = bestRoster.some((player, index) => index !== at && player.playerId === item.actual.playerId);
+    const reverted = elsewhere
+      ? bestRoster.filter((_, index) => index !== at)
+      : bestRoster.map((player, index) => (index === at ? item.actual : player));
+    return [{ from: item.actual, to: item.chosen, gain: bestLineup - rosterValue(reverted, args.values, slots, floor) }];
+  }).sort((a, b) => b.gain - a.gain);
+
+  return {
+    yours,
+    best: best.plan,
+    yoursPicks: mine.picks,
+    bestPicks: best.picks,
+    actualValue,
+    yoursValue: mine.value,
+    bestValue: best.value,
+    skillPicks: own.filter((pick) => positionIndex(pick.position) >= 0).length,
+    biggestSwap: swaps[0] && swaps[0].gain > 0 ? swaps[0] : null,
+    plans,
+  };
 }

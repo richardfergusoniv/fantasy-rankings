@@ -244,6 +244,24 @@ describe("strategyView", () => {
     expect(view?.best).toEqual(view?.yours);
   });
 
+  it("lists a plan that would have done worse than the drafted roster as it is, with its real value and swaps", () => {
+    const values = board([["wr", 100], ["qbOpp", 90], ["qb", 99], ["wrOpp", 95]]);
+    const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "qbOpp", "QB"), pick(11, 1, "qb", "QB"), pick(12, 2, "wrOpp", "WR")];
+    const view = strategyView({ picks, rosterId: 1, values, teams: 10, slots: ["QB", "WR", "SUPER_FLEX"] });
+    const lateQb = view?.plans.find((outcome) => outcome.plan.rb === "zero-rb" && outcome.plan.qb === "late" && outcome.plan.te === "late");
+    expect(lateQb?.possible).toBe(true);
+    expect(lateQb!.value).toBeLessThan(view!.actualValue);
+    expect(lateQb!.picks.get("qb")).not.toBeNull();
+  });
+
+  it("values the biggest swap without counting a player twice when he moved to a later pick", () => {
+    // The best replay moves the RB to pick 41 and takes the 200 WR at pick 40; the QB upgrade at 61 is worth less.
+    const values = board([["rb", 100], ["wr1", 1], ["wrOpp", 200], ["qb", 1], ["qbOpp", 151]]);
+    const picks = [pick(40, 1, "rb", "RB"), pick(41, 1, "wr1", "WR"), pick(42, 2, "wrOpp", "WR"), pick(61, 1, "qb", "QB"), pick(62, 2, "qbOpp", "QB")];
+    const view = strategyView({ picks, rosterId: 1, values, teams: 10, slots: ["RB", "WR", "FLEX", "QB"] });
+    expect(view?.biggestSwap?.to.playerId).toBe("wrOpp");
+  });
+
   it("is null without picks or values", () => {
     expect(strategyView({ picks: [], rosterId: 1, values: board([["a", 1]]), teams: 2 })).toBeNull();
   });
