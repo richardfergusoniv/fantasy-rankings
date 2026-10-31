@@ -21,6 +21,32 @@ describe("detectStrategy", () => {
   });
 });
 
+describe("lineupValue with overlapping flex slots", () => {
+  it("assigns players across REC_FLEX and WRRB_FLEX for the best total", () => {
+    const players = [{ position: "WR", value: 10 }, { position: "TE", value: 9 }, { position: "RB", value: 1 }];
+    expect(lineupValue(players, ["REC_FLEX", "WRRB_FLEX"])).toBe(19);
+  });
+});
+
+describe("simulateStrategy feasibility", () => {
+  it("has no replay for a plan that leaves a pick with only banned players", () => {
+    const values = board([["rb1", 900], ["rb2", 800]]);
+    const picks = [pick(1, 1, "rb1", "RB"), pick(2, 2, "rb2", "RB")];
+    const args = { picks, rosterId: 1, values, teams: 2, slots: ["RB"] };
+    expect(simulateStrategy({ ...args, plan: { rb: "zero-rb", qb: "late", te: "late" } })).toBeNull();
+    expect(simulateStrategy({ ...args, plan: { rb: "balanced", qb: "late", te: "late" } })).not.toBeNull();
+  });
+});
+
+describe("simulateStrategy lineup contribution", () => {
+  it("does not trade away a needed starter for a marginally better bench player", () => {
+    const values = board([["qb", 100], ["wrOpp", 110], ["wrMine", 200], ["wrOpp2", 201]]);
+    const picks = [pick(41, 1, "qb", "QB"), pick(42, 2, "wrOpp", "WR"), pick(51, 1, "wrMine", "WR"), pick(52, 2, "wrOpp2", "WR")];
+    const sim = simulateStrategy({ plan: { rb: "balanced", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["QB", "WR"] });
+    expect(sim?.map((item) => item.chosen.playerId)).toEqual(["qb", "wrOpp2"]);
+  });
+});
+
 describe("detectPlan", () => {
   it("reads QB and TE as early when taken in the first four rounds, otherwise late", () => {
     const picks = [pick(5, 1, "q", "QB"), pick(55, 1, "t", "TE")];
@@ -48,15 +74,15 @@ describe("simulateStrategy", () => {
   it("never takes a running back in the first rounds under Zero RB", () => {
     const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "rb", "RB")];
     const sim = simulateStrategy({ ...base, plan: { rb: "zero-rb", qb: "late", te: "late" }, picks });
-    expect(sim[0]?.chosen.playerId).toBe("wr");
+    expect(sim?.[0]?.chosen.playerId).toBe("wr");
     const rbFirst = [pick(1, 1, "rb2", "RB"), pick(2, 2, "wr", "WR"), pick(3, 2, "rb", "RB")];
-    expect(simulateStrategy({ ...base, plan: { rb: "zero-rb", qb: "late", te: "late" }, picks: rbFirst })[0]?.chosen.playerId).toBe("wr");
+    expect(simulateStrategy({ ...base, plan: { rb: "zero-rb", qb: "late", te: "late" }, picks: rbFirst })?.[0]?.chosen.playerId).toBe("wr");
   });
 
   it("does not suggest another quarterback when the team got one later", () => {
     const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "qb", "QB"), pick(3, 1, "qbLater", "QB"), pick(4, 2, "rb2", "RB")];
     const sim = simulateStrategy({ ...base, plan: { rb: "balanced", qb: "late", te: "late" }, picks });
-    expect(sim[0]?.chosen.playerId).toBe("wr");
+    expect(sim?.[0]?.chosen.playerId).toBe("wr");
   });
 });
 
@@ -64,7 +90,7 @@ describe("simulateStrategy timing", () => {
   const slots = ["QB", "RB", "WR", "TE", "FLEX"];
   const values = board([["wr", 800], ["qb", 700], ["rb", 500]]);
   const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "qb", "QB")];
-  const sim = (qb: "early" | "late") => simulateStrategy({ plan: { rb: "balanced", qb, te: "late" }, picks, rosterId: 1, values, teams: 2, slots })[0]?.chosen.playerId;
+  const sim = (qb: "early" | "late") => simulateStrategy({ plan: { rb: "balanced", qb, te: "late" }, picks, rosterId: 1, values, teams: 2, slots })?.[0]?.chosen.playerId;
 
   it("keeps a quarterback out of the early rounds when late, and favors one when early", () => {
     expect(sim("late")).toBe("wr");
