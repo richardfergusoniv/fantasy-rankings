@@ -72,6 +72,15 @@ describe("simulateStrategy edge cases", () => {
   });
 });
 
+describe("simulateStrategy same-position upgrades", () => {
+  it("lets a starting QB be upgraded even when a backup was drafted later", () => {
+    const values = board([["qb1", 100], ["qbOpp", 200], ["qb2", 1]]);
+    const picks = [pick(41, 1, "qb1", "QB"), pick(42, 2, "qbOpp", "QB"), pick(61, 1, "qb2", "QB")];
+    const sim = simulateStrategy({ plan: { rb: "balanced", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["QB"] });
+    expect(sim?.[0]?.chosen.playerId).toBe("qbOpp");
+  });
+});
+
 describe("detectPlan", () => {
   it("reads QB and TE as early when taken in the first four rounds, otherwise late", () => {
     const picks = [pick(5, 1, "q", "QB"), pick(55, 1, "t", "TE")];

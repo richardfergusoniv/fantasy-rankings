@@ -172,6 +172,8 @@ export function simulateStrategy(args: {
     const usable = pool.filter((player) => {
       if (player === pick) return true;
       if (ruleOf(player) === "ban") return false;
+      // Upgrading the player taken at the same position is never a duplicate, even with a backup drafted later.
+      if (player.position === pick.position) return true;
       return heldAt(player.position) < positionCap(player.position, args.slots);
     });
     const valueOf = (player: GradedPick) => args.values.get(player.playerId) ?? floor;
