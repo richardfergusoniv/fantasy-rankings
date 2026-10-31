@@ -28,7 +28,10 @@ export function HindsightCard({ hindsight, onOpen }: { hindsight: Hindsight; onO
       <CardHero ariaLabel="Hindsight" items={items} />
       {hindsight.biggestSwap ? (
         <div className="hindsight-swap">
-          <span><b>Biggest swap</b> · {hindsight.biggestSwap.from} for {hindsight.biggestSwap.to.name}</span>
+          <div>
+            <b>Biggest swap</b>
+            <span>{hindsight.biggestSwap.from} for {hindsight.biggestSwap.to.name}</span>
+          </div>
           <em>+{hindsight.biggestSwap.gain.toLocaleString()}</em>
         </div>
       ) : null}
