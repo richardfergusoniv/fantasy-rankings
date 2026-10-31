@@ -13,6 +13,7 @@ import type { MatchupBoxScore } from "../../api/_lib/box-score";
 import type { SavedChartView, SavedChartViewInput } from "../../api/chart-views";
 import type { Dashboard, DashboardSection } from "../../api/_lib/dashboard-schemas";
 import type { DraftCenter } from "../../api/draft-center";
+import type { DraftGradeResponse } from "../../api/_lib/draft-grade";
 import type { PfnTables, TeamWeekStats } from "../../api/_lib/pfn-tables";
 import type { PlayerNews } from "../../api/player-news";
 import type { ProjectedStandings } from "../../api/_lib/projected-standings";
@@ -128,6 +129,9 @@ export const api = {
 
   getProjectedStandings: (args: { leagueId: string }): Promise<ProjectedStandings> =>
     request(`/api/data/projected-standings${buildQuery(args)}`),
+
+  getDraftGrade: (args: { leagueId: string }): Promise<DraftGradeResponse> =>
+    request(`/api/data/draft-grade${buildQuery(args)}`),
 
   listSavedChartViews: (_args?: EmptyArgs): Promise<{ views: SavedChartView[] }> => request("/api/chart-views"),
 

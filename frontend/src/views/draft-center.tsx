@@ -21,6 +21,10 @@ import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-f
 import { formatWhole } from "../lib/format-number";
 import { Badge } from "@/components/ui/badge";
 import { CloseGlyph } from "../components/glyphs";
+import { DraftGradeCard } from "./draft-grade-card";
+import { DraftBetterPicks } from "./draft-better-picks";
+import { DraftRecap } from "./draft-recap";
+import { boardExcludedPlayerIds, gradedDraftFor, leagueDraftIsFinal } from "../draft-final";
 import { LoadingBlock, ListPagination } from "../components/state-blocks";
 
 type DraftRow = DraftCenterData["adp"][number] & {
@@ -83,6 +87,8 @@ export function DraftCenter({
   onDraftFiltersChange: (filters: { draftPosition: DraftPosition | null; draftQuery: string | null; draftRoom: DraftRoom | null }) => void;
 } & PlayerLink) {
   const leagueDrafts = useMemo(() => data?.drafts.filter((draft) => draft.leagueId === league.id) ?? [], [data?.drafts, league.id]);
+  // Once the league's draft is complete the team is set: My team becomes a graded recap with nothing to remove.
+  const draftIsFinal = leagueDraftIsFinal(data?.drafts, league.id);
   const liveDraft = leagueDrafts.find((draft) => draft.status === "drafting") ?? null;
   const completedDraft = leagueDrafts.find((draft) => draft.status === "complete") ?? null;
   const syncedDraft = liveDraft ?? completedDraft;
@@ -92,7 +98,7 @@ export function DraftCenter({
   // presenting veterans as eligible in an established league.
   const draftBoardMode = league.seasonLongFormat.isDynasty ? (syncedBoardMode === "startup" ? "startup" : "rookie") : "redraft";
   const isRookieBoard = draftBoardMode === "rookie";
-  const [mode, setMode] = useState<"board" | "myTeam">(draftRoom ?? "board");
+  const [mode, setMode] = useState<DraftRoom>(draftRoom ?? "board");
   const [position, setPosition] = useState<"ALL" | "QB" | "RB" | "WR" | "TE" | "K" | "DEF" | "ROOKIES">(draftPosition ?? "ALL");
   const [query, setQuery] = useState(draftQuery ?? "");
   const [visibleDraftCount, setVisibleDraftCount] = useState(160);
@@ -116,7 +122,7 @@ export function DraftCenter({
   useEffect(() => { setPosition(draftPosition ?? "ALL"); }, [draftPosition]);
   useEffect(() => { setQuery(draftQuery ?? ""); }, [draftQuery]);
 
-  function publishDraftFilters(next: { position?: typeof position; query?: string; room?: "board" | "myTeam" }) {
+  function publishDraftFilters(next: { position?: typeof position; query?: string; room?: DraftRoom }) {
     const nextPosition = next.position ?? effectiveDraftPosition;
     const nextQuery = next.query ?? query;
     const nextRoom = next.room ?? mode;
@@ -323,20 +329,23 @@ export function DraftCenter({
     () => new Set(syncedLeagueDrafts.flatMap((draft) => draft.picks.map((pick) => pick.playerId))),
     [syncedLeagueDrafts],
   );
-  // Manual board decisions remain additive to Sleeper's read-only draft history.
+  // Manual board decisions remain additive to Sleeper's read-only draft history (see boardExcludedPlayerIds).
   // A Restore only removes the manual mark; it can never restore a Sleeper pick.
-  const draftedIds = useMemo(() => new Set([...sleeperDraftedIds, ...manualDraftedIds]), [manualDraftedIds, sleeperDraftedIds]);
   const myTeamIdSet = useMemo(() => new Set(myTeamIds), [myTeamIds]);
+  const boardExcluded = useMemo(
+    () => boardExcludedPlayerIds({ draftIsFinal, sleeperDraftedIds, manualDraftedIds, myTeamIds }),
+    [draftIsFinal, manualDraftedIds, myTeamIds, sleeperDraftedIds],
+  );
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.toLowerCase();
     const available = rows
-      .filter((row) => !draftedIds.has(row.playerId ?? "") && !myTeamIdSet.has(row.playerId ?? ""))
+      .filter((row) => !boardExcluded.has(row.playerId ?? ""))
       .filter((row) => (effectiveDraftPosition === "ALL" || (effectiveDraftPosition === "ROOKIES" ? row.rookie : row.position === effectiveDraftPosition)) && row.name.toLowerCase().includes(normalizedQuery));
     // Once the league has drafted, ADP order is stale: list valued players by market value
     // (stable sort keeps K and DEF, which have no market value, after them in projection order).
     if (!completedDraft || liveDraft) return available;
     return available.sort((a, b) => (b.marketValue ?? -1) - (a.marketValue ?? -1));
-  }, [completedDraft, draftedIds, effectiveDraftPosition, liveDraft, myTeamIdSet, query, rows]);
+  }, [boardExcluded, completedDraft, effectiveDraftPosition, liveDraft, query, rows]);
   const draftPositionIsEligible = (value: string) => value !== "K" && value !== "DEF" || league.rankingPositions.includes(value as "K" | "DEF");
   const seenOwnPickIds = new Set<string>();
   const ownPicks = syncedLeagueDrafts.flatMap((draft) => draft.ownRosterId === null ? [] : draft.picks.filter((pick) => pick.rosterId === draft.ownRosterId)).filter((pick) => {
@@ -344,6 +353,12 @@ export function DraftCenter({
     seenOwnPickIds.add(pick.playerId);
     return true;
   });
+  // The recap lists the picks of the one draft being graded, so a league with a startup and a rookie draft never mixes the two.
+  const recapDraft = gradedDraftFor(data?.drafts, league.id);
+  const recapPicks = (recapDraft?.picks ?? [])
+    .filter((pick) => pick.rosterId === recapDraft?.ownRosterId && draftPositionIsEligible(pick.position))
+    .sort((a, b) => a.pickNo - b.pickNo)
+    .map((pick) => ({ playerId: pick.playerId, name: pick.playerName, secondary: draftSecondaryLine(pick.position, pick.team) }));
   const localMyTeamRows = rows.filter((row) => row.playerId && myTeamIdSet.has(row.playerId) && !sleeperDraftedIds.has(row.playerId));
   const myTeamPlayers = [
     ...ownPicks.filter((pick) => !hiddenLiveTeamIds.includes(pick.playerId)).map((pick) => ({ playerId: pick.playerId, name: pick.playerName, position: pick.position, team: pick.team, livePick: true })),
@@ -455,10 +470,10 @@ export function DraftCenter({
             </button>
             <span><span className="sr-only">Position </span>{row.position === "DEF" ? "DST" : row.position}</span>
             <span className={isSpecialist ? "ranking-proj" : undefined}><strong>{isSpecialist ? <><span className="sr-only">Weekly projection </span>{formatProjectionPoints(row.weeklyProjection, row.projectionSource)}</> : row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{formatWhole(row.marketValue)}</>}</strong>{isSpecialist ? <span aria-hidden="true">PROJ</span> : null}</span>
-            <span className="draft-row-actions">
+            {draftIsFinal ? null : <span className="draft-row-actions">
               <button type="button" className="draft-icon-button" disabled={!row.playerId} onClick={() => row.playerId && addToMyTeam(row.playerId)} aria-label={`Add ${row.name} to my team`} title="Add to my team"><Plus aria-hidden="true" /></button>
               {liveDraft ? null : <button type="button" className="draft-icon-button draft-taken-button" disabled={!row.playerId} onClick={() => row.playerId && markTaken(row.playerId)} aria-label={`Drafted by another team, ${row.name}`} title="Drafted by another team"><UserX aria-hidden="true" /></button>}
-            </span>
+            </span>}
           </div>
         );
       })}
@@ -480,6 +495,18 @@ export function DraftCenter({
           {draftFilters}
           {draftBoard}
         </div>
+      ) : draftIsFinal && mode === "altPicks" ? (
+        <DraftBetterPicks
+          leagueId={league.id}
+          players={recapPicks}
+          secondaryOf={draftSecondaryLine}
+          onOpenPlayer={onOpenLinkedPlayer}
+        />
+      ) : draftIsFinal ? (
+        <>
+          <DraftGradeCard leagueId={league.id} />
+          <DraftRecap leagueId={league.id} picks={recapPicks} selectedPlayerId={linkedPlayerId ?? null} onOpenPlayer={onOpenLinkedPlayer} />
+        </>
       ) : myTeamSection}
     </section>
   );

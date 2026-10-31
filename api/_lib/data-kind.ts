@@ -6,7 +6,7 @@
  * Direct `/api/data/:kind` paths use the final segment.
  */
 
-export const DATA_KINDS = ["box-score", "pfn-tables", "value-history", "trades-history", "projected-standings"] as const;
+export const DATA_KINDS = ["box-score", "pfn-tables", "value-history", "trades-history", "projected-standings", "draft-grade"] as const;
 export type DataKind = (typeof DATA_KINDS)[number];
 
 export function kindFromPath(pathname: string): DataKind | null {
@@ -14,6 +14,7 @@ export function kindFromPath(pathname: string): DataKind | null {
     return "trades-history";
   }
   if (pathname.endsWith("/projected-standings")) return "projected-standings";
+  if (pathname.endsWith("/draft-grade")) return "draft-grade";
   if (pathname.endsWith("/box-score")) return "box-score";
   if (pathname.endsWith("/pfn-tables")) return "pfn-tables";
   if (pathname.endsWith("/value-history")) return "value-history";

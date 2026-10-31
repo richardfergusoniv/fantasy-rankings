@@ -34,6 +34,12 @@ describe("dashboard URL state", () => {
     expect(parseDashboardSearch(serializeDashboardSearch(original))).toEqual(original);
   });
 
+  it("round-trips the Alt picks room", () => {
+    const original = state({ tab: "draft", draftRoom: "altPicks" });
+    expect(serializeDashboardSearch(original)).toBe("?tab=draft&room=altPicks");
+    expect(parseDashboardSearch(serializeDashboardSearch(original))).toEqual(original);
+  });
+
   it("omits defaults so the matchup view stays a clean URL", () => {
     expect(serializeDashboardSearch(emptyDashboardUrlState())).toBe("");
     expect(parseDashboardSearch("")).toEqual(emptyDashboardUrlState());
