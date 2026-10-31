@@ -47,6 +47,15 @@ describe("simulateStrategy lineup contribution", () => {
   });
 });
 
+describe("simulateStrategy preference tolerance", () => {
+  it("compares what a player adds to the lineup, not the whole roster total", () => {
+    const values = board([["wr", 100], ["qbOpp", 1], ["rb", 1000]]);
+    const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "qbOpp", "QB"), pick(51, 1, "rb", "RB")];
+    const sim = simulateStrategy({ plan: { rb: "balanced", qb: "early", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["QB", "WR", "RB"] });
+    expect(sim?.[0]?.chosen.playerId).toBe("wr");
+  });
+});
+
 describe("detectPlan", () => {
   it("reads QB and TE as early when taken in the first four rounds, otherwise late", () => {
     const picks = [pick(5, 1, "q", "QB"), pick(55, 1, "t", "TE")];

@@ -189,7 +189,9 @@ export function simulateStrategy(args: {
     if (allowed.length === 0) { feasible = false; out.push({ actual: pick, chosen: pick }); return; }
     let best = allowed[0]!;
     const preferred = allowed.find((player) => ruleOf(player) === "prefer");
-    if (preferred && gain.get(preferred)! >= gain.get(best)! * PREFER_TOLERANCE) best = preferred;
+    // The tolerance applies to what each adds, so starters already on the roster do not swamp the comparison.
+    const base = lineupValue([...chosen, ...rest].map(asValue), args.slots);
+    if (preferred && gain.get(preferred)! - base >= (gain.get(best)! - base) * PREFER_TOLERANCE) best = preferred;
     used.add(best.playerId);
     chosen.push(best);
     takenRounds[best.position]?.push(round);
