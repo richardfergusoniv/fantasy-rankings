@@ -47,12 +47,18 @@ describe("simulateStrategy lineup contribution", () => {
   });
 });
 
-describe("simulateStrategy preference tolerance", () => {
-  it("compares what a player adds to the lineup, not the whole roster total", () => {
+describe("simulateStrategy plan requirements", () => {
+  it("takes a quarterback in the early rounds when the plan requires one, even if another player is worth more", () => {
     const values = board([["wr", 100], ["qbOpp", 1], ["rb", 1000]]);
     const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "qbOpp", "QB"), pick(51, 1, "rb", "RB")];
     const sim = simulateStrategy({ plan: { rb: "balanced", qb: "early", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["QB", "WR", "RB"] });
-    expect(sim?.[0]?.chosen.playerId).toBe("wr");
+    expect(sim?.[0]?.chosen.playerId).toBe("qbOpp");
+  });
+
+  it("has no replay when no quarterback could be taken early", () => {
+    const values = board([["wr", 100], ["wrOpp", 90]]);
+    const picks = [pick(1, 1, "wr", "WR"), pick(2, 2, "wrOpp", "WR")];
+    expect(simulateStrategy({ plan: { rb: "balanced", qb: "early", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["QB", "WR"] })).toBeNull();
   });
 });
 
@@ -100,11 +106,12 @@ describe("simulateStrategy backtracking", () => {
 });
 
 describe("simulateStrategy back-to-back picks", () => {
-  it("can take the better player first and the player drafted at the previous pick next", () => {
+  it("reaches the best total with the fewest changed picks when picks share a candidate", () => {
     const values = board([["wr19", 19], ["wr1", 1], ["wrOpp", 20]]);
     const picks = [pick(10, 1, "wr19", "WR"), pick(11, 1, "wr1", "WR"), pick(12, 2, "wrOpp", "WR")];
     const sim = simulateStrategy({ plan: { rb: "balanced", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["WR", "WR"] });
-    expect(sim?.map((item) => item.chosen.playerId)).toEqual(["wrOpp", "wr19"]);
+    // Either order totals 39; keeping the pick-10 player and changing only pick 11 is one change, not two.
+    expect(sim?.map((item) => item.chosen.playerId)).toEqual(["wr19", "wrOpp"]);
   });
 
   it("does not offer a player drafted earlier once another team has picked since", () => {
@@ -112,6 +119,15 @@ describe("simulateStrategy back-to-back picks", () => {
     const picks = [pick(1, 1, "wr19", "WR"), pick(2, 2, "other", "WR"), pick(3, 1, "wr1", "WR")];
     const sim = simulateStrategy({ plan: { rb: "balanced", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["WR", "WR"] });
     expect(sim?.[1]?.chosen.playerId).toBe("wr1");
+  });
+});
+
+describe("simulateStrategy full search", () => {
+  it("finds the best total when two picks compete for a player and nobody can be shuffled back", () => {
+    const values = board([["wrA", 19], ["wrB", 1], ["wrC", 20]]);
+    const picks = [pick(10, 1, "wrA", "WR"), pick(11, 2, "x", "WR"), pick(12, 1, "wrB", "WR"), pick(13, 2, "wrC", "WR")];
+    const sim = simulateStrategy({ plan: { rb: "balanced", qb: "late", te: "late" }, picks, rosterId: 1, values, teams: 10, slots: ["WR", "WR"] });
+    expect(sim?.map((item) => item.chosen.playerId)).toEqual(["wrA", "wrC"]);
   });
 });
 

@@ -153,8 +153,8 @@ describe("gradeDraft", () => {
     const today = board([...marketBoard].map(([id, value]) => [id, id === "p2" ? 450 : value] as [string, number]));
     const grades = gradeDraft({ ...options, picks: [...fair].reverse(), draftDayBoard: marketBoard, todayBoard: today });
     expect(grades.picks).toEqual([
-      { playerId: "p2", pickNo: 2, draftDay: { letter: "A+", percent: 100 }, today: { letter: "F", percent: 50 }, better: { yours: { playerId: "p3", name: "Name p3", position: "RB", team: "TM" }, best: { playerId: "p3", name: "Name p3", position: "RB", team: "TM" } } },
-      { playerId: "p7", pickNo: 7, draftDay: { letter: "A+", percent: 100 }, today: { letter: "A+", percent: 100 }, better: { yours: { playerId: "p8", name: "Name p8", position: "WR", team: "TM" }, best: null } },
+      { playerId: "p2", pickNo: 2, draftDay: { letter: "A+", percent: 100 }, today: { letter: "F", percent: 50 }, better: { yours: { playerId: "p4", name: "Name p4", position: "WR", team: "TM" }, best: { playerId: "p3", name: "Name p3", position: "RB", team: "TM" } } },
+      { playerId: "p7", pickNo: 7, draftDay: { letter: "A+", percent: 100 }, today: { letter: "A+", percent: 100 }, better: { yours: null, best: null } },
     ]);
   });
 

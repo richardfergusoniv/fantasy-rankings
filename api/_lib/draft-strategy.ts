@@ -1,6 +1,6 @@
 /**
  * Draft strategies, for the Hindsight tab: how the user's draft would have gone had they
- * stuck to their own approach and taken the best realistic player each time, and how the best of the
+ * stuck to their own approach and made the best realistic picks, and how the best of the
  * common approaches (Zero RB, Hero RB, Robust RB, each with early or late QB and TE) would have gone.
  *
  * A strategy is a rule about when running backs are taken, from the usual definitions:
@@ -10,11 +10,13 @@
  *   Balanced  - anything else; the fallback label for a draft that fits none of them.
  * Quarterbacks and tight ends are early when one is taken in the first four rounds, otherwise late.
  *
- * Each pick is replayed on today's values using the league's own draft order for realism: the choices
- * at a pick are the player actually taken, whoever other teams took in the next round of picks, and a player
- * the user took at the pick just before when nobody else picked in between.
- * Positions the roster is already set at (counting the user's later actual picks) are not suggested
- * again, so a quarterback taken later rules out recommending another one.
+ * A plan's rules are hard. The replay finds the set of picks that follows them and builds the most
+ * valuable starting lineup on today's values, trying every realistic combination (with branch and
+ * bound), not choosing pick by pick. The choices at a pick are the player actually taken, whoever other
+ * teams took in the next round of picks, and a player the user took at the pick just before when nobody
+ * else picked in between. Positions the roster is already set at (counting the user's later actual picks)
+ * are not suggested again, so a quarterback taken later rules out recommending another one. Among
+ * combinations worth the same, the one that changes the fewest of the user's picks wins.
  */
 import type { GradedPick, ValueBoard } from "./draft-grade.js";
 
@@ -35,13 +37,10 @@ export const STRATEGY_LABELS: Record<Strategy, string> = {
 const ARCHETYPES: readonly Strategy[] = ["zero-rb", "hero-rb", "robust-rb"];
 const DEFAULT_SLOTS = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX"];
 
-/** A plan that favors a position takes him unless a player at another position is worth this much more. */
-const PREFER_TOLERANCE = 0.85;
-
 const TIMING_ROUNDS = 4;
 
-/** Most choices the replay tries before it gives up on a plan as one the draft cannot follow. */
-const BACKTRACK_BUDGET = 1000;
+/** Most search steps per pass and plan; past it the best combination found so far is used (about 0.4 s for a full draft). */
+const NODE_BUDGET = 3000;
 
 const roundOf = (pickNo: number, teams: number) => Math.floor((pickNo - 1) / Math.max(teams, 1)) + 1;
 
@@ -70,36 +69,61 @@ export function timingLabel(plan: Plan): string {
   return `${word(plan.qb)} QB · ${word(plan.te)} TE`;
 }
 
+const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
+const positionIndex = (position: string) => (POSITIONS as readonly string[]).indexOf(position);
+
 const FLEX_ELIGIBLE: Record<string, readonly string[]> = {
   REC_FLEX: ["WR", "TE"],
   WRRB_FLEX: ["WR", "RB"],
   FLEX: ["RB", "WR", "TE"],
   SUPER_FLEX: ["QB", "RB", "WR", "TE"],
 };
-const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
 
-/** Total value of the best starting lineup the players can fill, trying every way to assign them to slots. */
+/**
+ * For each set of positions (as a bit mask), how many lineup slots accept one of them. A group of players
+ * fits the lineup exactly when no set of positions has more players than slots that accept them.
+ */
+function slotCapacities(slots: readonly string[]): number[] {
+  const accepts = slots.flatMap((slot) => {
+    const eligible = FLEX_ELIGIBLE[slot] ?? ((POSITIONS as readonly string[]).includes(slot) ? [slot] : []);
+    return eligible.length === 0 ? [] : [eligible.reduce((mask, position) => mask | (1 << positionIndex(position)), 0)];
+  });
+  return Array.from({ length: 16 }, (_, mask) => accepts.filter((accepted) => (accepted & mask) !== 0).length);
+}
+
+const capacityCache = new Map<string, number[]>();
+function capacitiesFor(slots: readonly string[]): number[] {
+  const key = slots.join(",");
+  let capacities = capacityCache.get(key);
+  if (!capacities) { capacities = slotCapacities(slots); capacityCache.set(key, capacities); }
+  return capacities;
+}
+
+function fitsLineup(counts: readonly number[], capacities: readonly number[]): boolean {
+  for (let mask = 1; mask < 16; mask += 1) {
+    let used = 0;
+    for (let at = 0; at < 4; at += 1) if (mask & (1 << at)) used += counts[at]!;
+    if (used > capacities[mask]!) return false;
+  }
+  return true;
+}
+
+/**
+ * Total value of the best starting lineup the players can fill. Lineups form a matroid, so taking the
+ * most valuable players first and keeping each one that still fits gives the best total.
+ */
 export function lineupValue(players: ReadonlyArray<{ position: string; value: number }>, slots: readonly string[]): number {
-  const lineupSlots = slots.filter((slot) => slot in FLEX_ELIGIBLE || (POSITIONS as readonly string[]).includes(slot));
-  const byPosition = POSITIONS.map((position) => players.filter((player) => player.position === position).map((player) => player.value).sort((a, b) => b - a));
-  const memo = new Map<string, number>();
-  // Within a position the best players fill slots first, so a slot only chooses which position to take next.
-  const best = (index: number, used: readonly number[]): number => {
-    if (index >= lineupSlots.length) return 0;
-    const key = `${index}:${used.join(",")}`;
-    const cached = memo.get(key);
-    if (cached !== undefined) return cached;
-    let top = best(index + 1, used);
-    for (const position of FLEX_ELIGIBLE[lineupSlots[index]!] ?? [lineupSlots[index]!]) {
-      const at = POSITIONS.indexOf(position as (typeof POSITIONS)[number]);
-      const value = byPosition[at]?.[used[at] ?? 0];
-      if (value === undefined) continue;
-      top = Math.max(top, value + best(index + 1, used.map((count, i) => (i === at ? count + 1 : count))));
-    }
-    memo.set(key, top);
-    return top;
-  };
-  return best(0, [0, 0, 0, 0]);
+  const capacities = capacitiesFor(slots);
+  const counts = [0, 0, 0, 0];
+  let total = 0;
+  for (const player of [...players].sort((a, b) => b.value - a.value)) {
+    const at = positionIndex(player.position);
+    if (at < 0) continue;
+    counts[at]! += 1;
+    if (fitsLineup(counts, capacities)) total += player.value;
+    else counts[at]! -= 1;
+  }
+  return total;
 }
 
 /** How many players of a position the lineup can use before more would only sit on the bench. */
@@ -113,31 +137,32 @@ function positionCap(position: string, slots: readonly string[]): number {
 
 export type SimulatedPick = { actual: GradedPick; chosen: GradedPick };
 
-type Rule = "ban" | "prefer" | "free";
+/** A plan needs at least `min` players at `position` taken in rounds up to `throughRound`. */
+type Requirement = { position: string; throughRound: number; min: number };
 
-/** What a plan says about taking `position` in `round`, given the rounds it has already taken one. */
-function ruleFor(plan: Plan, position: string, round: number, taken: readonly number[]): Rule {
-  const through = (limit: number) => taken.filter((value) => value <= limit).length;
-  if (position === "QB" || position === "TE") {
-    const timing = position === "QB" ? plan.qb : plan.te;
-    if (round > TIMING_ROUNDS) return "free";
-    if (timing === "late") return "ban";
-    return taken.length === 0 ? "prefer" : "free";
-  }
-  if (position !== "RB") return "free";
-  switch (plan.rb) {
-    case "zero-rb": return round <= 4 ? "ban" : "free";
-    case "hero-rb":
-      if (round <= 2) return through(2) >= 1 ? "ban" : "prefer";
-      return round <= 4 ? "ban" : "free";
-    case "robust-rb": return round <= 3 && through(3) < 2 ? "prefer" : "free";
-    default: return "free";
-  }
+function requirementsFor(plan: Plan): Requirement[] {
+  const needs: Requirement[] = [];
+  if (plan.rb === "hero-rb") needs.push({ position: "RB", throughRound: 2, min: 1 });
+  if (plan.rb === "robust-rb") needs.push({ position: "RB", throughRound: 3, min: 2 });
+  if (plan.qb === "early") needs.push({ position: "QB", throughRound: TIMING_ROUNDS, min: 1 });
+  if (plan.te === "early") needs.push({ position: "TE", throughRound: TIMING_ROUNDS, min: 1 });
+  return needs;
+}
+
+/** Whether a plan rules out `position` at a pick in `round`, given the rounds it already took one. */
+function banned(plan: Plan, position: string, round: number, taken: readonly number[]): boolean {
+  if (position === "QB") return plan.qb === "late" && round <= TIMING_ROUNDS;
+  if (position === "TE") return plan.te === "late" && round <= TIMING_ROUNDS;
+  if (position !== "RB") return false;
+  if (plan.rb === "zero-rb") return round <= 4;
+  if (plan.rb === "hero-rb") return round <= 2 ? taken.filter((value) => value <= 2).length >= 1 : round <= 4;
+  return false;
 }
 
 /**
- * Replays the user's own picks under a strategy on `values`, using the league's draft order for the choices.
- * Null when the plan leaves a pick with nobody it allows, so the replay cannot follow it.
+ * Replays the user's own picks under a plan on `values`: the combination of picks that follows the plan and
+ * builds the most valuable lineup, using the league's draft order for the choices. Null when no combination
+ * follows the plan.
  */
 export function simulateStrategy(args: {
   plan: Plan;
@@ -150,87 +175,138 @@ export function simulateStrategy(args: {
   const ordered = [...args.picks].sort((a, b) => a.pickNo - b.pickNo);
   const own = ordered.filter((pick) => pick.rosterId === args.rosterId);
   const floor = args.values.size === 0 ? 0 : Math.min(...args.values.values());
-  const isSkill = (position: string) => ["QB", "RB", "WR", "TE"].includes(position);
-  // Kickers and defenses stay as drafted. A skill player off today's board is valued at its floor, as in the grades.
-  const used = new Set<string>(own.filter((pick) => !isSkill(pick.position)).map((pick) => pick.playerId));
-  const chosen: GradedPick[] = [];
-  const takenRounds: Record<string, number[]> = { QB: [], RB: [], WR: [], TE: [] };
-  const out: SimulatedPick[] = [];
+  const isSkill = (position: string) => positionIndex(position) >= 0;
   const valueOf = (player: GradedPick) => args.values.get(player.playerId) ?? floor;
   const asValue = (player: GradedPick) => ({ position: player.position, value: valueOf(player) });
-  // Neighbouring picks share candidates, so an earlier choice can leave a later pick nobody it allows: back up and try the next choice.
-  let budget = BACKTRACK_BUDGET;
+  const priced = (other: GradedPick) => isSkill(other.position) && !!other.name && args.values.has(other.playerId);
 
-  /** The player choices at an own skill pick, the plan's favorite first. */
-  const optionsAt = (index: number): GradedPick[] => {
+  // Kickers and defenses stay as drafted. A skill player off today's board is valued at its floor, as in the grades.
+  const decisions = own.flatMap((pick, index) => (isSkill(pick.position) ? [index] : []));
+  const rounds = own.map((pick) => roundOf(pick.pickNo, args.teams));
+  const stillThere = (earlier: GradedPick, pick: GradedPick) => ordered.every((other) => (
+    other.rosterId === args.rosterId || other.pickNo < earlier.pickNo || other.pickNo > pick.pickNo
+  ));
+  // The players that could realistically be taken at each of the user's skill picks.
+  const pools = decisions.map((index) => {
     const pick = own[index]!;
-    const round = roundOf(pick.pickNo, args.teams);
-    const later = own.slice(index + 1);
-    const heldAt = (position: string) => (
-      chosen.filter((player) => player.position === position).length + later.filter((player) => player.position === position).length
-    );
-    const priced = (other: GradedPick) => isSkill(other.position) && !!other.name && args.values.has(other.playerId);
-    // A player taken earlier at the user's own pick is still there when nobody else picked in between (a snake turn).
-    const stillThere = (earlier: GradedPick) => ordered.every((other) => (
-      other.rosterId === args.rosterId || other.pickNo < earlier.pickNo || other.pickNo > pick.pickNo
-    ));
-    const pool = [pick, ...ordered.filter((other) => (
+    const nearby = ordered.filter((other) => (
       other.pickNo > pick.pickNo && other.pickNo <= pick.pickNo + args.teams && other.rosterId !== args.rosterId && priced(other)
-    )), ...own.slice(0, index).filter((earlier) => priced(earlier) && stillThere(earlier))]
-      .filter((player) => !used.has(player.playerId));
-    const ruleOf = (player: GradedPick) => ruleFor(args.plan, player.position, round, takenRounds[player.position] ?? []);
-    const usable = pool.filter((player) => {
-      if (player === pick) return true;
-      if (ruleOf(player) === "ban") return false;
-      // Upgrading the player taken at the same position is never a duplicate, even with a backup drafted later.
-      if (player.position === pick.position) return true;
-      return heldAt(player.position) < positionCap(player.position, args.slots);
+    ));
+    const earlierOwn = own.slice(0, index).filter((earlier) => priced(earlier) && stillThere(earlier, pick));
+    return [pick, ...nearby, ...earlierOwn].sort((a, b) => valueOf(b) - valueOf(a) || (b === pick ? 1 : 0) - (a === pick ? 1 : 0));
+  });
+
+  const needs = requirementsFor(args.plan);
+  // Best case for the slots after each decision, to cut off combinations that cannot beat the best found.
+  const slotCount = decisions.length;
+  const suffixTop = Array.from({ length: slotCount + 1 }, (_, from) => {
+    const remaining = slotCount - from;
+    const seen = new Set<string>();
+    const byPosition: Array<Array<{ position: string; value: number }>> = POSITIONS.map(() => []);
+    for (let at = from; at < slotCount; at += 1) {
+      for (const player of pools[at]!) {
+        if (seen.has(player.playerId)) continue;
+        seen.add(player.playerId);
+        byPosition[positionIndex(player.position)]!.push(asValue(player));
+      }
+    }
+    // At most one player per remaining pick, and no more of a position than picks that could take one.
+    const slotsFor = POSITIONS.map((position) => {
+      let count = 0;
+      for (let at = from; at < slotCount; at += 1) if (pools[at]!.some((player) => player.position === position)) count += 1;
+      return Math.min(count, remaining);
     });
-    // A pick is worth what it adds to the starting lineup alongside the players already chosen and the later actual picks,
-    // so a replacement is not taken at the cost of a starter the roster still needs.
-    const rest = later.filter((player) => isSkill(player.position));
-    const gain = new Map(usable.map((player) => [player, lineupValue([...chosen, player, ...rest].map(asValue), args.slots)] as const));
-    // The actual pick breaks a tie, so the view only differs where a real alternative is worth more.
-    const byGain = (a: GradedPick, b: GradedPick) => (
-      gain.get(b)! - gain.get(a)! || valueOf(b) - valueOf(a) || (b === pick ? 1 : 0) - (a === pick ? 1 : 0)
-    );
-    // A plan that bans a position cannot keep the actual player there either.
-    const allowed = usable.filter((player) => ruleOf(player) !== "ban").sort(byGain);
-    const preferred = allowed.find((player) => ruleOf(player) === "prefer");
-    // The tolerance applies to what each adds, so starters already on the roster do not swamp the comparison.
-    const base = lineupValue([...chosen, ...rest].map(asValue), args.slots);
-    if (preferred && allowed[0] && gain.get(preferred)! - base >= (gain.get(allowed[0])! - base) * PREFER_TOLERANCE) {
-      return [preferred, ...allowed.filter((player) => player !== preferred)];
+    return byPosition.flatMap((list, at) => list.sort((a, b) => b.value - a.value).slice(0, slotsFor[at]));
+  });
+  // For each requirement, how many of the decisions from each point on could still supply it.
+  const supply = needs.map((need) => {
+    const counts = Array.from({ length: slotCount + 1 }, () => 0);
+    for (let at = slotCount - 1; at >= 0; at -= 1) {
+      const can = rounds[decisions[at]!]! <= need.throughRound && pools[at]!.some((player) => player.position === need.position);
+      counts[at] = counts[at + 1]! + (can ? 1 : 0);
     }
-    return allowed;
+    return counts;
+  });
+
+  type Found = { value: number; changes: number; picks: GradedPick[] };
+  // The picks that keep each actual player first, for the second pass that minimizes changes.
+  const keepFirst = pools.map((pool, at) => {
+    const pick = own[decisions[at]!]!;
+    return [pick, ...pool.filter((player) => player !== pick)];
+  });
+
+  /**
+   * One pass of the search. `value` mode finds the most valuable lineup the plan allows. `changes` mode, given that
+   * value as `target`, finds the combination reaching it that changes the fewest of the user's picks.
+   */
+  const explore = (mode: "value" | "changes", target: number, start: Found | null): Found | null => {
+    let incumbent = start;
+    let budget = NODE_BUDGET;
+    const used = new Set<string>(own.filter((pick) => !isSkill(pick.position)).map((pick) => pick.playerId));
+    const chosen: GradedPick[] = [];
+    const takenRounds: Record<string, number[]> = { QB: [], RB: [], WR: [], TE: [] };
+    const options = mode === "value" ? pools : keepFirst;
+
+    const search = (at: number, changes: number): void => {
+      if (budget <= 0) return;
+      if (at >= slotCount) {
+        const value = lineupValue(chosen.map(asValue), args.slots);
+        if (mode === "value" ? !incumbent || value > incumbent.value : value >= target && (!incumbent || changes < incumbent.changes)) {
+          incumbent = { value, changes, picks: [...chosen] };
+        }
+        return;
+      }
+      const index = decisions[at]!;
+      const pick = own[index]!;
+      const round = rounds[index]!;
+      const later = own.slice(index + 1);
+      const heldAt = (position: string) => (
+        chosen.filter((player) => player.position === position).length + later.filter((player) => player.position === position).length
+      );
+      let candidates = options[at]!;
+      if (mode === "value") {
+        // Most promising first, so a good combination is found early and cuts off the rest.
+        const rest = later.filter((player) => isSkill(player.position));
+        const gain = new Map(candidates.map((option) => [option, lineupValue([...chosen, option, ...rest].map(asValue), args.slots)] as const));
+        candidates = [...candidates].sort((a, b) => gain.get(b)! - gain.get(a)! || (b === pick ? 1 : 0) - (a === pick ? 1 : 0));
+      }
+      for (const option of candidates) {
+        if (budget <= 0) return;
+        if (used.has(option.playerId)) continue;
+        if (banned(args.plan, option.position, round, takenRounds[option.position] ?? [])) continue;
+        // Upgrading the player taken at the same position is never a duplicate, even with a backup drafted later.
+        if (option !== pick && option.position !== pick.position && heldAt(option.position) >= positionCap(option.position, args.slots)) continue;
+        budget -= 1;
+        used.add(option.playerId);
+        chosen.push(option);
+        takenRounds[option.position]?.push(round);
+        const changed = changes + (option === pick ? 0 : 1);
+        // The plan's needs must still be reachable, and the best case from here must be able to beat the best found.
+        let viable = needs.every((need, n) => {
+          const have = (takenRounds[need.position] ?? []).filter((value) => value <= need.throughRound).length;
+          return have + supply[n]![at + 1]! >= need.min;
+        });
+        if (viable && mode === "changes" && incumbent && changed >= incumbent.changes) viable = false;
+        if (viable && (mode === "changes" || incumbent)) {
+          const ceiling = lineupValue([...chosen.map(asValue), ...suffixTop[at + 1]!], args.slots);
+          viable = mode === "changes" ? ceiling >= target : ceiling > incumbent!.value;
+        }
+        if (viable) search(at + 1, changed);
+        takenRounds[option.position]?.pop();
+        chosen.pop();
+        used.delete(option.playerId);
+      }
+    };
+
+    search(0, 0);
+    return incumbent;
   };
 
-  const place = (index: number): boolean => {
-    if (index >= own.length) return true;
-    const pick = own[index]!;
-    if (!isSkill(pick.position)) {
-      out.push({ actual: pick, chosen: pick });
-      if (place(index + 1)) return true;
-      out.pop();
-      return false;
-    }
-    const round = roundOf(pick.pickNo, args.teams);
-    for (const option of optionsAt(index)) {
-      if (budget-- <= 0) return false;
-      used.add(option.playerId);
-      chosen.push(option);
-      takenRounds[option.position]?.push(round);
-      out.push({ actual: pick, chosen: option });
-      if (place(index + 1)) return true;
-      out.pop();
-      takenRounds[option.position]?.pop();
-      chosen.pop();
-      used.delete(option.playerId);
-    }
-    return false;
-  };
-
-  return place(0) ? out : null;
+  const mostValuable = explore("value", 0, null);
+  if (!mostValuable) return null;
+  const result = explore("changes", mostValuable.value, mostValuable) ?? mostValuable;
+  const byDecision = new Map(decisions.map((index, at) => [index, result.picks[at]!] as const));
+  return own.map((pick, index) => ({ actual: pick, chosen: byDecision.get(index) ?? pick }));
 }
 
 export type StrategyView = {
