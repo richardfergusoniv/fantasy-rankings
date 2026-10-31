@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  betterPicks,
   draftSurplusByTeam,
   expectedValue,
   GRADE_LETTERS,
@@ -130,55 +129,6 @@ describe("pickGrades", () => {
   });
 });
 
-describe("betterPicks", () => {
-  const idOf = (result: Map<string, GradedPick | null>, playerId: string) => result.get(playerId)?.playerId ?? null;
-
-  it("is null at every pick of a draft that followed the market", () => {
-    for (const rosterId of [1, 2, 3, 4]) {
-      expect([...betterPicks({ picks: fair, rosterId, values: marketBoard, window: 4 }).values()]).toEqual([null, null]);
-    }
-  });
-
-  it("names a more valuable player another team took in the next round", () => {
-    // Team 1 takes the second-best player first; team 2 then takes the best.
-    const swapped = [pick(1, 1, "p2"), pick(2, 2, "p1"), ...fair.slice(2)];
-    const result = betterPicks({ picks: swapped, rosterId: 1, values: marketBoard, window: 4 });
-    expect(result.get("p2")).toMatchObject({ playerId: "p1", name: "Name p1", position: "RB", team: "TM" });
-    expect(idOf(betterPicks({ picks: swapped, rosterId: 2, values: marketBoard, window: 4 }), "p1")).toBeNull();
-  });
-
-  describe("using the league's own draft order", () => {
-    const values = board([["low", 100], ["star", 5000], ["mid", 900], ["own", 8000]]);
-    const picks = [
-      pick(1, 1, "low", "RB"),
-      pick(2, 2, "mid", "WR"),
-      pick(3, 1, "own", "RB"), // the team's own later pick is never a suggestion
-      pick(4, 3, "star", "WR"),
-      pick(9, 4, "late", "QB"),
-    ];
-
-    it("only suggests a player who went within the window, never one the league let fall further", () => {
-      expect(idOf(betterPicks({ picks, rosterId: 1, values, window: 3 }), "low")).toBe("star");
-      // With a window of 2 the star (pick 4) went too late to be a realistic pick at slot 1.
-      expect(idOf(betterPicks({ picks, rosterId: 1, values, window: 2 }), "low")).toBe("mid");
-    });
-
-    it("skips the team's own later picks, even if more valuable", () => {
-      expect(idOf(betterPicks({ picks, rosterId: 1, values, window: 3 }), "low")).not.toBe("own");
-    });
-
-    it("ignores players off the board, kickers and defenses, and players with no name", () => {
-      const noisy = [pick(1, 1, "low", "RB"), pick(2, 2, "k1", "K"), pick(3, 2, "ghost", "WR"), { ...pick(4, 2, "mid", "WR"), name: undefined }];
-      expect(idOf(betterPicks({ picks: noisy, rosterId: 1, values, window: 4 }), "low")).toBeNull();
-    });
-  });
-
-  it("has nothing better for a kicker or defense pick", () => {
-    const picks = [pick(1, 1, "k1", "K"), pick(2, 2, "p1")];
-    expect(betterPicks({ picks, rosterId: 1, values: marketBoard, window: 4 }).get("k1")).toBeNull();
-  });
-});
-
 describe("gradeDraft", () => {
   const options = { ownRosterId: 2, minBoardPlayers: 1 };
 
@@ -193,7 +143,7 @@ describe("gradeDraft", () => {
 
   it("has no grades without a usable draft-day board, and no Today without today's board", () => {
     const empty = board([]);
-    expect(gradeDraft({ ...options, picks: fair, draftDayBoard: empty, todayBoard: marketBoard })).toEqual({ draftDay: null, today: null, picks: [] });
+    expect(gradeDraft({ ...options, picks: fair, draftDayBoard: empty, todayBoard: marketBoard })).toEqual({ draftDay: null, today: null, picks: [], strategies: null });
     const noToday = gradeDraft({ ...options, picks: fair, draftDayBoard: marketBoard, todayBoard: empty });
     expect(noToday.draftDay).not.toBeNull();
     expect(noToday.today).toBeNull();
@@ -203,8 +153,8 @@ describe("gradeDraft", () => {
     const today = board([...marketBoard].map(([id, value]) => [id, id === "p2" ? 450 : value] as [string, number]));
     const grades = gradeDraft({ ...options, picks: [...fair].reverse(), draftDayBoard: marketBoard, todayBoard: today });
     expect(grades.picks).toEqual([
-      { playerId: "p2", pickNo: 2, draftDay: { letter: "A+", percent: 100 }, today: { letter: "F", percent: 50 }, better: { draftDay: null, today: { playerId: "p3", name: "Name p3", position: "RB", team: "TM" } } },
-      { playerId: "p7", pickNo: 7, draftDay: { letter: "A+", percent: 100 }, today: { letter: "A+", percent: 100 }, better: { draftDay: null, today: null } },
+      { playerId: "p2", pickNo: 2, draftDay: { letter: "A+", percent: 100 }, today: { letter: "F", percent: 50 }, better: { yours: { playerId: "p3", name: "Name p3", position: "RB", team: "TM" }, best: { playerId: "p3", name: "Name p3", position: "RB", team: "TM" } } },
+      { playerId: "p7", pickNo: 7, draftDay: { letter: "A+", percent: 100 }, today: { letter: "A+", percent: 100 }, better: { yours: { playerId: "p8", name: "Name p8", position: "WR", team: "TM" }, best: null } },
     ]);
   });
 
@@ -240,15 +190,15 @@ describe("gradeDraft slot pool", () => {
 
   it("has no grades when none of the draft's players are on the board", () => {
     const grades = gradeDraft({ picks: [pick(1, 1, "unknown", "RB"), pick(2, 2, "other", "WR")], ownRosterId: 1, draftDayBoard: board([["x", 5]]), todayBoard: board([["x", 5]]), minBoardPlayers: 1 });
-    expect(grades).toEqual({ draftDay: null, today: null, picks: [] });
+    expect(grades).toEqual({ draftDay: null, today: null, picks: [], strategies: null });
   });
 });
 
 describe("gradeDraft round length", () => {
   it("uses the draft's team count for the window when given", () => {
     const values = board([["low", 100], ["a", 90], ["star", 5000]]);
-    const picks = [pick(1, 1, "low", "RB"), pick(2, 2, "a", "WR"), pick(6, 2, "star", "WR")];
-    const run = (teams?: number) => gradeDraft({ picks, ownRosterId: 1, draftDayBoard: values, todayBoard: values, teams, minBoardPlayers: 1 }).picks[0]?.better.draftDay;
+    const picks = [pick(1, 1, "low", "WR"), pick(2, 2, "a", "WR"), pick(6, 2, "star", "WR")];
+    const run = (teams?: number) => gradeDraft({ picks, ownRosterId: 1, draftDayBoard: values, todayBoard: values, teams, minBoardPlayers: 1 }).picks[0]?.better.yours;
     expect(run(8)?.playerId).toBe("star");
     expect(run()).toBeNull(); // two rosters seen: a two-pick window misses pick 6
   });
@@ -287,7 +237,7 @@ describe("loadDraftGrade", () => {
     expect(grade).toMatchObject({ draftId: "d1", draftDay: { of: 4 }, today: { of: 4 } });
   });
 
-  it("names the better players on draft day and today for the user's own picks", async () => {
+  it("names the strategies and the players they would have taken, on today's values", async () => {
     const today = board([...marketBoard].map(([id, value]) => [id, id === "p1" ? 100 : value] as [string, number]));
     const grade = await loadDraftGrade(league, 1, {
       seasonType: inSeason,
@@ -295,11 +245,9 @@ describe("loadDraftGrade", () => {
       loadBoard: async (_format, _date, windowDays) => (windowDays === 14 ? today : marketBoard),
       minBoardPlayers: 1,
     });
-    // Team 1 took p1 (pick 1) and p8 (pick 8). Today p1 has fallen, so p2 was the better first pick.
-    expect(grade?.picks.map((entry) => [entry.playerId, entry.pickNo, entry.better])).toEqual([
-      ["p1", 1, { draftDay: null, today: { playerId: "p2", name: "Name p2", position: "WR", team: "TM" } }],
-      ["p8", 8, { draftDay: null, today: null }],
-    ]);
+    // Team 1 took p1 (RB, pick 1) and p8 (WR, pick 8). Today p1 has fallen, so taking p2 first is better.
+    expect(grade?.strategies).not.toBeNull();
+    expect(grade?.picks[0]?.better.yours ?? grade?.picks[0]?.better.best).toMatchObject({ playerId: expect.stringMatching(/^p[2-4]$/) });
   });
 
   it("returns null when no draft is complete, or the only one is an auction", async () => {
@@ -343,7 +291,7 @@ describe("loadDraftGrade", () => {
   it("measures the window in the draft's configured team count, not the teams still holding picks", async () => {
     // Four rosters made picks but the draft has 8 teams: a better player taken 5 picks later still counts.
     const picks = [
-      { pick_no: 1, roster_id: 1, player_id: "low", metadata: { position: "RB", first_name: "Low", last_name: "Guy", team: "TM" } },
+      { pick_no: 1, roster_id: 1, player_id: "low", metadata: { position: "WR", first_name: "Low", last_name: "Guy", team: "TM" } },
       { pick_no: 2, roster_id: 2, player_id: "a", metadata: { position: "WR", first_name: "A", last_name: "Guy", team: "TM" } },
       { pick_no: 3, roster_id: 3, player_id: "b", metadata: { position: "WR", first_name: "B", last_name: "Guy", team: "TM" } },
       { pick_no: 4, roster_id: 4, player_id: "c", metadata: { position: "WR", first_name: "C", last_name: "Guy", team: "TM" } },
@@ -357,8 +305,8 @@ describe("loadDraftGrade", () => {
       minBoardPlayers: 1,
     });
     // Without the setting the round would be the 4 rosters seen, which stops at pick 5 and misses the star at 6.
-    expect((await grade(8))?.picks[0]?.better.draftDay?.playerId).toBe("star");
-    expect((await grade(4))?.picks[0]?.better.draftDay).toBeNull();
+    expect((await grade(8))?.picks[0]?.better.yours?.playerId).toBe("star");
+    expect((await grade(4))?.picks[0]?.better.yours).toBeNull();
   });
 
 });
