@@ -360,6 +360,11 @@ p { text-wrap: pretty; }
 @media (pointer: fine) {
   html { overscroll-behavior: none; }
 }
+/* Touch: while the app's pull-to-refresh is live (use-pull-to-refresh sets the class), it replaces the
+   browser's pull-to-reload, which would only reload saved data. Sign-in screens keep the native reload. */
+@media (pointer: coarse) {
+  html.has-pull-refresh { overscroll-behavior-y: none; }
+}
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
 [data-slot="dialog-overlay"] {

@@ -55,6 +55,7 @@ import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
 import { personalQueryKey, snapshotViewer, useViewerIdentity } from "./viewer-scope";
 import { useDashboardUrl } from "./use-dashboard-url";
+import { PULL_THRESHOLD, usePullToRefresh } from "./lib/use-pull-to-refresh";
 import { CommandBar } from "./shell/command-bar";
 import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "./shell/command-palette";
 import { InspectorFrame, useInspectorDockViewport } from "./shell/inspector-frame";
@@ -1241,7 +1242,7 @@ export function App() {
     else playerHistory.open(player);
   }, [dashboard, dashboardUrl.state.playerId, league, leagueDashboard, tab]);
 
-  if (shouldShowProgressiveShell({
+  const showLoadingShell = shouldShowProgressiveShell({
     hasDashboard: Boolean(dashboard),
     metaPending: metaQuery.isPending,
     teamPending: teamQuery.isPending,
@@ -1249,7 +1250,16 @@ export function App() {
     firstBuildTimedOut,
     tradeSectionWaiting,
     tradeWaiverWaiting,
-  })) {
+  });
+  // Phones: pull down from the top of the page to run the same refresh as the header button.
+  // Off while the loading shell shows (its refresh button is disabled too). A refresh on either
+  // tab counts as running, so switching tabs mid-refresh can't start a second one.
+  const pull = usePullToRefresh({
+    onRefresh: refreshCurrentView,
+    refreshing: refresh.isPending || draftRefresh.isPending,
+    disabled: askOpen || showLoadingShell,
+  });
+  if (showLoadingShell) {
     return <ProgressiveShell tab={tab} onTab={setTab} />;
   }
 
@@ -1376,6 +1386,11 @@ export function App() {
     <div className={`app-shell${primaryPage === "team" ? " matchup-page" : ""}${inspectorDocked ? " is-inspector-docked" : ""}`}>
       <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
+      {pull.phase !== "idle" ? (
+        <div className={`pull-refresh${pull.ready ? " is-ready" : ""}`} style={{ transform: `translate(-50%, ${pull.distance}px)`, opacity: Math.min(1, pull.distance / PULL_THRESHOLD) }} aria-hidden="true">
+          <span style={{ transform: pull.phase === "refreshing" ? undefined : `rotate(${pull.distance * 3}deg)` }}><RefreshIcon spinning={pull.phase === "refreshing"} /></span>
+        </div>
+      ) : null}
       {askOpen ? (
         <Suspense fallback={null}>
           <LazyAskSheet open={askOpen} onOpenChange={changeAskOpen} context={askContextForTab(tab)} horizon={dashboardUrl.state.horizon} leagueId={league?.id ?? null} />
