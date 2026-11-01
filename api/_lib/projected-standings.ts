@@ -156,6 +156,11 @@ export function currentWeekLineupTotal(players: readonly RosterPlayer[], slots: 
  * Bye and unavailable players count as zero until their game locks.
  */
 function bestCurrentWeekLineupTotal(players: readonly RosterPlayer[], slots: readonly string[]): number {
+  return bestCurrentWeekLineupResult(players, slots).score;
+}
+
+/** The optimizer result behind bestCurrentWeekLineupTotal, so a preview can show the lineup it scored. */
+function bestCurrentWeekLineupResult(players: readonly RosterPlayer[], slots: readonly string[]) {
   const optimizable: OptimizablePlayer[] = players
     .filter((player) => player.playerId !== "0")
     .map((player) => ({
@@ -172,7 +177,7 @@ function bestCurrentWeekLineupTotal(players: readonly RosterPlayer[], slots: rea
       injuryStatus: player.injuryStatus,
       isBye: player.isBye,
     }));
-  return optimizeTradeRoster(optimizable, [...slots]).score;
+  return optimizeTradeRoster(optimizable, [...slots]);
 }
 
 export type PointsOf = (player: RosterPlayer) => number;
@@ -246,7 +251,18 @@ export function bestLineup(players: readonly RosterPlayer[], slots: readonly str
 function currentWeekLineup(players: readonly RosterPlayer[], slots: readonly string[], now = Date.now()): WeekLineup {
   const set = players.filter((player) => player.isStarter);
   const total = currentWeekLineupTotal(players, slots, now);
-  if (set.length === 0) return { total, outlook: null, starters: [] };
+  if (set.length === 0) {
+    // No lineup set: the total comes from the best lineup, so the preview shows that same lineup.
+    const best = bestCurrentWeekLineupResult(players, slots);
+    const byId = new Map(players.map((player) => [player.playerId, player]));
+    const starters = best.starters.map((player) => ({
+      slot: player.lineupSlot ?? player.position,
+      playerId: player.playerId,
+      name: byId.get(player.playerId)?.name ?? player.playerId,
+      points: round2(liveForecastPoints(player, now) ?? 0),
+    }));
+    return { total, outlook: best.starters.length > 0 ? teamOutlook(best.starters, now) : null, starters: alignToSlots(slots, starters) };
+  }
   const order = (slot: string | null) => {
     const index = slot ? slots.indexOf(slot) : -1;
     return index < 0 ? slots.length : index;

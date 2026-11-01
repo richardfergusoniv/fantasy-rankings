@@ -194,6 +194,26 @@ describe("buildProjectedStandings", () => {
     expect(game.winProbability).toBeLessThan(0.5);
   });
 
+  it("shows the best lineup in a current-week preview when a team has none set", () => {
+    // Nobody has set starters (isStarter false), so the current week falls back to each team's best lineup.
+    const currentWeek = {
+      ...league,
+      tradeTeams: [
+        { rosterId: 1, players: [player("a_wr", "WR", null, 14), player("a_te", "TE", null, 9), player("a_wr2", "WR", null, 4)] },
+        { rosterId: 2, players: [player("b_wr", "WR", null, 18), player("b_te", "TE", null, 8)] },
+        { rosterId: 3, players: [player("c_wr", "WR", null, 12), player("c_te", "TE", null, 6)] },
+      ],
+    } as unknown as League;
+    const result = buildProjectedStandings({
+      league: currentWeek, weeks: new Map(), appWeek: 5, games: [{ week: 5, a: 1, b: 2 }], throughWeek: 4, regularSeasonEndsWeek: 5, missingWeeks: [],
+    });
+    const game = result.userGames[0]!;
+    expect(game.mine.map((slot) => slot.playerId)).toEqual(["a_wr", "a_te"]);
+    expect(game.theirs.map((slot) => slot.playerId)).toEqual(["b_wr", "b_te"]);
+    expect(game.mine.reduce((sum, slot) => sum + slot.points, 0)).toBeCloseTo(game.myTotal, 1);
+    expect(game.winProbability).not.toBeNull();
+  });
+
   it("adds playoff odds that sum to the number of playoff spots", () => {
     const result = buildProjectedStandings({
       league,
