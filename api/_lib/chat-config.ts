@@ -40,6 +40,7 @@ export const CHAT_SYSTEM_PROMPT = [
   "Chain tools when a question needs it: check get_league_teams for trade partners whose needs fit the user's surplus; check suggest_lineup after a waiver add to see whether it changes a starter; compare drop candidates by value and role, not just projection; use get_player_news before recommending an injured or changing-role player.",
   "FORECASTS: whenever you give one, say which kind it is. One-week: the app's projection or the matchup win chance for this week. Multi-week: Sleeper's per-week projections (from get_projections or get_projected_standings), which already reflect byes and injury timelines. Trade value: FantasyCalc value is a price, not projected points, so never present it as a forecast of points. Your own estimate: anything you reason out beyond the tools. Say what the forecast assumes (current rosters and lineups, no future moves) and that it is an estimate.",
   "Use get_projected_standings for where teams are likely to finish and get_playoff_odds for chances; both are built on the same projections, so they agree. Use get_week_matchup for this week's win chance.",
+  "PROPS: use get_prop_board for prop questions across the whole board, or the prop lines inside get_projections for specific players. A line's hit record grades this season's played weeks against this week's line (over side); cite the record as evidence, never as a guarantee.",
   "For FAAB, give the suggested range and say how it compares with the remaining budget; in priority leagues explain the cost of using priority.",
   "Prefer the signed-in user's leagues and rosters when the question says 'my' or 'our'.",
 ].join(" ");
@@ -70,6 +71,41 @@ export function resolveOpenRouterFallbackModel(): string {
   const primary = resolveOpenRouterModel();
   if (primary === FALLBACK_OPENROUTER_MODEL) return DEFAULT_OPENROUTER_MODEL;
   return FALLBACK_OPENROUTER_MODEL;
+}
+
+/**
+ * Every other tool-capable `:free` model on OpenRouter, in the order the
+ * chat should fall through to them when the models ahead are blocked, busy,
+ * or down (checked against the live catalog 2026-11-01: 13 free models
+ * support tools; the only other free model is a content-safety classifier).
+ * Ordered by expected agent quality: the proven 550B first, then the
+ * largest-context general models, with the small and specialty models as
+ * last resorts. Free models that cannot call tools are useless to the
+ * agent and are never listed.
+ */
+export const FREE_FALLBACK_MODEL_CHAIN: readonly string[] = [
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "thinkingmachines/inkling-small:free",
+  "nvidia/nemotron-3.5-lightning:free",
+  "google/gemma-4-31b-it:free",
+  "google/gemma-4-26b-a4b-it:free",
+  "nvidia/nemotron-3.5-super-vl:free",
+  "cohere/north-mini-code:free",
+  "recursive/flint-v1.0:free",
+  "xingchen-agi/xing4.0-29b-a4b:free",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+  "dots-studio/dots-3-note-preview:free",
+  "liquid/lfm-2.5-2.6b:free",
+];
+
+/**
+ * The full attempt order for one chat call: the resolved primary, then the
+ * default (so a custom primary still gets the usual models behind it),
+ * then every fallback in FREE_FALLBACK_MODEL_CHAIN. Deduped, free-only.
+ */
+export function resolveOpenRouterModelChain(primary = resolveOpenRouterModel()): string[] {
+  const chain = [primary, DEFAULT_OPENROUTER_MODEL, ...FREE_FALLBACK_MODEL_CHAIN];
+  return [...new Set(chain)].filter(isFreeOpenRouterModel);
 }
 
 export function readOpenRouterApiKey(env = process.env): string | null {
