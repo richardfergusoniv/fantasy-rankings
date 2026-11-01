@@ -56,8 +56,17 @@ export function usePullToRefresh({ onRefresh, refreshing, disabled = false }: {
     setPhase("idle");
   }, []);
 
+  // Turning off mid-pull drops the gesture, so neither the disc nor a stale distance outlives it.
+  useEffect(() => {
+    if (disabled && phase === "pulling") reset();
+  }, [disabled, phase, reset]);
+
   useEffect(() => {
     if (disabled || typeof window === "undefined" || !window.matchMedia?.("(pointer: coarse)").matches) return undefined;
+    // The browser's own pull-to-reload is off only while this gesture is live (see base.css),
+    // so screens without it (sign-in) keep the native reload.
+    const root = document.documentElement;
+    root.classList.add("has-pull-refresh");
     const onStart = (event: TouchEvent) => {
       // No second refresh while one runs (from a pull or the header button).
       if (phase === "refreshing" || refreshingRef.current || event.touches.length !== 1) return;
@@ -85,7 +94,8 @@ export function usePullToRefresh({ onRefresh, refreshing, disabled = false }: {
       if (!start.current) return;
       const pulled = distanceRef.current;
       start.current = null;
-      if (decided.current && pulled >= PULL_THRESHOLD) {
+      // A refresh that started mid-pull (the header button) is not doubled on release.
+      if (decided.current && pulled >= PULL_THRESHOLD && !refreshingRef.current) {
         sawRefreshing.current = false;
         setPhase("refreshing");
         setDistance(PULL_THRESHOLD);
@@ -99,6 +109,7 @@ export function usePullToRefresh({ onRefresh, refreshing, disabled = false }: {
     window.addEventListener("touchend", onEnd, { passive: true });
     window.addEventListener("touchcancel", reset, { passive: true });
     return () => {
+      root.classList.remove("has-pull-refresh");
       window.removeEventListener("touchstart", onStart);
       window.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend", onEnd);

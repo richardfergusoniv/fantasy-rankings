@@ -1139,8 +1139,6 @@ export function App() {
       queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "player-news") });
     }
   };
-  // Phones: pull down from the top of the page to run the same refresh as the header button.
-  const pull = usePullToRefresh({ onRefresh: refreshCurrentView, refreshing: isRefreshing, disabled: askOpen });
 
   const hasCompleteDashboard = Boolean(dashboardQuery.data || browserDashboard);
   const hasPlayerSectionData = hasCompleteDashboard
@@ -1244,7 +1242,7 @@ export function App() {
     else playerHistory.open(player);
   }, [dashboard, dashboardUrl.state.playerId, league, leagueDashboard, tab]);
 
-  if (shouldShowProgressiveShell({
+  const showLoadingShell = shouldShowProgressiveShell({
     hasDashboard: Boolean(dashboard),
     metaPending: metaQuery.isPending,
     teamPending: teamQuery.isPending,
@@ -1252,7 +1250,16 @@ export function App() {
     firstBuildTimedOut,
     tradeSectionWaiting,
     tradeWaiverWaiting,
-  })) {
+  });
+  // Phones: pull down from the top of the page to run the same refresh as the header button.
+  // Off while the loading shell shows (its refresh button is disabled too). A refresh on either
+  // tab counts as running, so switching tabs mid-refresh can't start a second one.
+  const pull = usePullToRefresh({
+    onRefresh: refreshCurrentView,
+    refreshing: refresh.isPending || draftRefresh.isPending,
+    disabled: askOpen || showLoadingShell,
+  });
+  if (showLoadingShell) {
     return <ProgressiveShell tab={tab} onTab={setTab} />;
   }
 
