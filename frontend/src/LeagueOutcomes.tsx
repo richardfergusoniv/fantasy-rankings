@@ -84,7 +84,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
 
       <section className="power-table-section" aria-labelledby="proj-standings-heading">
         <div className="section-heading power-section-heading">
-          <h2 id="proj-standings-heading">Projected standings</h2>
+          <h2 id="proj-standings-heading">Projected record, playoff chances, and points scored</h2>
         </div>
         {groups.map((group, groupIndex) => (
           <Fragment key={group[0]?.rosterId ?? groupIndex}>
@@ -96,12 +96,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
                     <strong className="power-rank" role="cell">{team.rank}</strong>
                     <div className="power-team proj-team" role="cell">
                       <strong>{team.teamName}</strong>
-                      {team.isUser ? <span className="roster-owner-tag is-user">You</span> : null}
                       <MoveMark moved={placesMoved(team.currentRank, team.rank)} />
-                    </div>
-                    <div className="power-total proj-pf" role="cell">
-                      <strong>{formatDecimal(team.projectedPointsFor, 0)}</strong>
-                      <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round(barWidth(team.projectedPointsFor))}%` }} /></div>
                     </div>
                     <div className="power-total" role="cell"><strong>{recordLabel(team.projectedRecord)}</strong></div>
                     {team.playoffOdds != null ? (
@@ -110,6 +105,10 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
                         <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round(team.playoffOdds * 100)}%` }} /></div>
                       </div>
                     ) : null}
+                    <div className="power-total proj-pf" role="cell">
+                      <strong>{formatDecimal(team.projectedPointsFor, 0)}</strong>
+                      <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round(barWidth(team.projectedPointsFor))}%` }} /></div>
+                    </div>
                   </div>
                 </div>
               ))}

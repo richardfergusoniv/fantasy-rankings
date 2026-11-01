@@ -172,7 +172,7 @@
 .proj-finish { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; }
 .proj-hero .card-hero { margin-top: 10px; border-bottom: 0; }
 .proj-finish h2 { margin: 0; font-size: var(--type-display); font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
-.proj-row { grid-template-columns: 26px minmax(0, 1fr) 76px 52px; }
+.proj-row { grid-template-columns: 26px minmax(0, 1fr) 52px 76px; }
 .proj-team { display: flex; align-items: center; gap: 6px; }
 .proj-team > strong { display: block; min-width: 0; }
 /* `.power-team > span` would otherwise block-clip the move mark and the Yours pill. */
@@ -209,8 +209,8 @@
 .card-hero-v .proj-move.is-up i { border-bottom-width: 9px; }
 .card-hero-v .proj-move.is-down i { border-top-width: 9px; }
 
-/* Playoff odds: a fifth column on Projected rows, same small bar as projected points. */
-.proj-row.has-odds { grid-template-columns: 26px minmax(0, 1fr) 64px 44px 44px; gap: 6px; }
+/* Playoff odds: an extra column on Projected rows, same small bar as projected points. */
+.proj-row.has-odds { grid-template-columns: 26px minmax(0, 1fr) 44px 44px 64px; gap: 6px; }
 .proj-odds strong { font-size: var(--type-body); }
 .proj-odds .proj-bar i { inset: 0 auto 0 0; }
 .is-user .proj-odds strong { color: var(--roster-highlight); }
