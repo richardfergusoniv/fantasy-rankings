@@ -408,7 +408,7 @@ export function DraftCenter({
           </div>
         );
       })}
-      <div role="listitem"><ListPagination className="draft-list-pagination" shown={visibleDraftCount} total={filteredRows.length} step={160} onMore={() => setVisibleDraftCount((count) => count + 160)} /></div>
+      <div role="listitem"><ListPagination className="draft-list-pagination" hideCount shown={visibleDraftCount} total={filteredRows.length} step={160} onMore={() => setVisibleDraftCount((count) => count + 160)} /></div>
     </div>
   ) : <div className="empty-inline">No available players match these filters.</div>;
 
