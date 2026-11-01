@@ -106,7 +106,7 @@ export function MatchupPlayer({
       </div>
       <button type="button" className={matchupProjectionClassName({ scoreLabel: score.label })} onClick={openPlayer} tabIndex={-1} aria-hidden="true">
         <b>{formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)}</b>
-        {range ? <RangeBar range={range} value={score.value} domain={rangeMax} /> : null}
+        {range ? <RangeBar className={side === "theirs" ? "is-start" : undefined} range={range} value={score.value} domain={rangeMax} /> : null}
       </button>
     </div>
   );

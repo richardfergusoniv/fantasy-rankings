@@ -1089,7 +1089,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                       ) : null}
                     </span>
                   </span>
-                  <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : row.projectionRange ? <RangeBar range={row.projectionRange} value={row.projection} domain={rangeMax} /> : <span>{row.projectionLabel}</span>}</span>
+                  <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : row.projectionRange ? <RangeBar className="is-end" range={row.projectionRange} value={row.projection} domain={rangeMax} /> : <span>{row.projectionLabel}</span>}</span>
                 </>
               );
               const openPlayer = () => {

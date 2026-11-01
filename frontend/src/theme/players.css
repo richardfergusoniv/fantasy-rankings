@@ -374,8 +374,8 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
    a neutral band from the lowest to the highest book, and a tick at the projection. */
 .range-bar { position: relative; display: block; flex: none; width: 64px; height: 8px; margin-top: 4px; }
 .range-bar::before { content: ""; position: absolute; inset: 3px 0 auto; height: 2px; border-radius: 1px; background: var(--hairline); }
-.range-bar b { position: absolute; top: 1px; height: 6px; min-width: 2px; border-radius: 3px; background: color-mix(in srgb, var(--dim) 55%, transparent); }
+.range-bar b { position: absolute; top: 1px; height: 6px; min-width: 2px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--dim) 55%, transparent); }
 .range-bar u { position: absolute; top: 0; width: 2px; height: 8px; margin-left: -1px; border-radius: 1px; background: var(--text); text-decoration: none; }
-.ranking-proj .range-bar { margin-left: auto; }
-.matchup-player.theirs .matchup-player-score .range-bar { justify-self: start; }
+.range-bar.is-end { margin-left: auto; }
+.range-bar.is-start { justify-self: start; }
 .player-detail-range { width: min(100%, 160px); margin-top: 8px; }
