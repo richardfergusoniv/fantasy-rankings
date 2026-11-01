@@ -13,10 +13,12 @@ import {
   eligibleForSlot,
 } from "./lineup-optimizer.js";
 import {
+  moveVerdict,
   positionalNeed,
   scoreStartSit,
   scoreTrade,
   scoreWaiver,
+  type MoveVerdict,
 } from "./move-scoring.js";
 import { readChartExtrasSnapshot } from "./nflverse-chart-extras.js";
 import {
@@ -50,6 +52,7 @@ import { PLAYER_NEWS_SNAPSHOT_KEY } from "./sleeper.js";
 import {
   defaultToolLeague,
   findLeague,
+  gameLineForTeam,
   leagueAssets,
   leagueSeasonLongAssets,
   loadBoomBustSummary,
@@ -163,7 +166,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "suggest_lineup",
       description:
-        "Optimal start/sit for my team this week. Returns deterministic move-scoring labels and win-the-slot chances — explain them, never change them.",
+        "Optimal start/sit for my team this week. Returns deterministic move-scoring labels and win-the-slot chances — explain them, never change them. The result carries raw per-player evidence (usage trend, game line, prop lines) and no written reasons; compose the explanation yourself from the evidence.",
       parameters: {
         type: "object",
         properties: {
@@ -179,7 +182,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "suggest_waivers",
       description:
-        "Best available free agents in my league, plus the user's waiver status (FAAB budget remaining, waiver position). Returns deterministic move-scoring labels (Must add / Add / Watch / Pass) per window — explain them, never change them — plus a suggested FAAB bid range (or priority note) per player: a heuristic, say so. Pass is hidden from lists unless asked.",
+        "Best available free agents in my league, plus the user's waiver status (FAAB budget remaining, waiver position). Returns deterministic move-scoring labels (Must add / Add / Watch / Pass) per window — explain them, never change them — plus a suggested FAAB bid range (or priority note) per player: a heuristic, say so. Pass is hidden from lists unless asked. The result carries raw per-player evidence (usage trend, game line, prop lines) and no written reasons; compose the explanation yourself from the evidence.",
       parameters: {
         type: "object",
         properties: {
@@ -197,7 +200,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "suggest_trades",
       description:
-        "Trade ideas with deterministic move-scoring labels (Accept / Lean accept / Decline) and fair-trade z bands — explain them, never change them.",
+        "Trade ideas with deterministic move-scoring labels (Accept / Lean accept / Decline) and fair-trade z bands — explain them, never change them. The result carries the values behind each idea and no written reasons; compose the explanation yourself from the values and margins.",
       parameters: {
         type: "object",
         properties: {
@@ -593,6 +596,128 @@ export type PropLineHitRecord = {
 
 type PropLine = PropLineWeekPayload["lines"][number];
 
+const round1dp = (value: number) => Math.round(value * 10) / 10;
+
+/**
+ * Raw per-player evidence for the move tools (suggest_lineup, suggest_waivers):
+ * last-3-games usage from the nflverse week stats and snaps, this week's NFL
+ * game line, and the player's stored prop lines. Numbers only, no prose and
+ * no scoring internals, so the model composes its own reasoning from it.
+ * Every source is cached and independently optional; a failed load degrades
+ * that block to null instead of failing the tool.
+ */
+export type MovePlayerEvidence = {
+  usage: {
+    games: number;
+    snapSharePct: number | null;
+    targetSharePct: number | null;
+    targetsPerGame: number;
+    carriesPerGame: number;
+    pprPointsPerGame: number;
+  } | null;
+  game: ReturnType<typeof gameLineForTeam>;
+  propLines: Array<{
+    stat: string;
+    line: number;
+    overOdds: number | null;
+    underOdds: number | null;
+    bookCount: number;
+  }>;
+};
+
+type MoveEvidenceIndex = {
+  forPlayer: (player: {
+    playerId: string;
+    name: string;
+    team: string | null;
+    position: string;
+  }) => MovePlayerEvidence;
+};
+
+async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveEvidenceIndex> {
+  const { season, week } = dashboard;
+  let usageFor: ((player: { playerId: string; name: string; team: string | null; position: string }) => MovePlayerEvidence["usage"]) | null = null;
+  if (week > 1) {
+    try {
+      const { stats, snaps } = await loadTeamWeekStats(season);
+      const prior = stats.filter((row) => row.week >= 1 && row.week <= week - 1);
+      const statsById = new Map<string, typeof prior>();
+      for (const row of prior) {
+        const rows = statsById.get(row.playerId) ?? [];
+        rows.push(row);
+        statsById.set(row.playerId, rows);
+      }
+      const snapKey = (name: string, team: string, position: string) =>
+        `${name.toLowerCase().replace(/[^a-z ]/g, "").trim()}|${team}|${position}`;
+      const snapsByKey = new Map<string, typeof snaps>();
+      for (const row of snaps) {
+        if (row.week > week - 1) continue;
+        const key = snapKey(row.name, row.team, row.position);
+        const rows = snapsByKey.get(key) ?? [];
+        rows.push(row);
+        snapsByKey.set(key, rows);
+      }
+      usageFor = (player) => {
+        const rows = (statsById.get(player.playerId) ?? [])
+          .slice()
+          .sort((a, b) => b.week - a.week)
+          .slice(0, 3);
+        if (rows.length === 0) return null;
+        const snapRows = (snapsByKey.get(snapKey(player.name, player.team ?? "", player.position)) ?? [])
+          .slice()
+          .sort((a, b) => b.week - a.week)
+          .slice(0, 3);
+        const avg = (values: number[]) => round1dp(values.reduce((sum, v) => sum + v, 0) / values.length);
+        const shares = rows.map((row) => row.targetShare).filter((v): v is number => v !== null);
+        return {
+          games: rows.length,
+          snapSharePct: snapRows.length ? avg(snapRows.map((row) => row.offensePct)) : null,
+          targetSharePct: shares.length ? avg(shares) : null,
+          targetsPerGame: avg(rows.map((row) => row.targets)),
+          carriesPerGame: avg(rows.map((row) => row.carries)),
+          pprPointsPerGame: avg(rows.map((row) => row.fantasyPpr)),
+        };
+      };
+    } catch (err) {
+      console.error(
+        "[chat] move evidence usage load failed",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+
+  const propLinesByPlayer = new Map<string, MovePlayerEvidence["propLines"]>();
+  try {
+    const propWeek = await loadPropLineWeek({ season, week });
+    for (const line of propWeek?.lines ?? []) {
+      const rows = propLinesByPlayer.get(line.playerId) ?? [];
+      if (rows.length < 3) {
+        rows.push({
+          stat: line.stat,
+          line: line.line,
+          overOdds: line.overOdds,
+          underOdds: line.underOdds,
+          bookCount: line.bookCount,
+        });
+      }
+      propLinesByPlayer.set(line.playerId, rows);
+    }
+  } catch (err) {
+    console.error(
+      "[chat] move evidence prop lines load failed",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
+  return {
+    forPlayer: (player) => ({
+      usage: usageFor ? usageFor(player) : null,
+      game: gameLineForTeam(dashboard, player.team),
+      propLines: propLinesByPlayer.get(player.playerId) ?? [],
+    }),
+  };
+}
+
 type PropHitIndex = {
   historyFor: (line: PropLine) => PropLineHitRecord | null;
   /** Last week the stats payload actually covers; can trail the slate week. */
@@ -963,6 +1088,7 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
     };
   };
 
+  const evidence = await loadMoveEvidenceIndex(dashboard);
   const swaps = start.map((incoming, index) => {
     const outgoing = sit[index] ?? null;
     const slot = incoming.lineupSlot ?? incoming.position;
@@ -975,25 +1101,29 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
       alternative: alternative ? toScored(alternative) : null,
       weights,
     });
+    const startStub = {
+      playerId: incoming.playerId,
+      name: incoming.name,
+      position: incoming.position,
+      team: incoming.team,
+      slot: incoming.lineupSlot,
+      projection: incoming.projection,
+    };
+    const sitStub = outgoing
+      ? {
+        playerId: outgoing.playerId,
+        name: outgoing.name,
+        position: outgoing.position,
+        team: outgoing.team,
+        slot: outgoing.lineupSlot,
+        projection: outgoing.projection,
+      }
+      : null;
     return {
-      start: {
-        playerId: incoming.playerId,
-        name: incoming.name,
-        position: incoming.position,
-        slot: incoming.lineupSlot,
-        projection: incoming.projection,
-      },
-      sit: outgoing
-        ? {
-          playerId: outgoing.playerId,
-          name: outgoing.name,
-          position: outgoing.position,
-          slot: outgoing.lineupSlot,
-          projection: outgoing.projection,
-        }
-        : null,
-      scoring: scored.week,
-      reason: `${scored.week.label} (${scored.week.score}): ${scored.week.reasons[0]?.effect ?? incoming.name}`,
+      slot,
+      verdict: moveVerdict(scored.week),
+      start: { ...startStub, evidence: evidence.forPlayer(startStub) },
+      sit: sitStub ? { ...sitStub, evidence: evidence.forPlayer(sitStub) } : null,
     };
   });
 
@@ -1002,7 +1132,7 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
     leagueId: league.id,
     week: dashboard.week,
     scoringWindow: "week" as const,
-    note: "Labels and scores are from move-scoring. Explain them; do not re-rank.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries raw evidence only and no written reasons: compose the explanation from the evidence and name the deciding factor.",
     currentStarterProjection: Number(beforeProj.toFixed(2)),
     optimizedStarterProjection: Number(afterProj.toFixed(2)),
     projectionDelta: Number((afterProj - beforeProj).toFixed(2)),
@@ -1180,13 +1310,16 @@ export async function toolSuggestWaivers(
           value: valueById.get(dropCandidate.player.playerId) ?? 0,
         }
         : null,
-      scoring: move,
+      verdicts: {
+        week: moveVerdict(move.week),
+        seasonLong: moveVerdict(move.seasonLong),
+        ...(move.dynasty ? { dynasty: moveVerdict(move.dynasty) } : {}),
+      },
       primaryWindow: waiverWindowKey,
       primaryLabel: primary.label,
       primaryScore: primary.score,
       // Hide Pass from default lists (spec); still returned when explicitly asked later.
       hidden: primary.label === "Pass",
-      reason: `${primary.label} (${primary.score}): ${primary.reasons[0]?.effect ?? ""}`,
     };
   });
 
@@ -1197,6 +1330,7 @@ export async function toolSuggestWaivers(
   const nonPass = ranked.filter((row) => !row.hidden);
   const visible = (nonPass.length > 0 ? nonPass : ranked).slice(0, limit);
 
+  const evidence = await loadMoveEvidenceIndex(dashboard);
   return {
     ok: true as const,
     leagueId: league.id,
@@ -1204,10 +1338,21 @@ export async function toolSuggestWaivers(
     scoringWindow: waiverWindowKey,
     // FAAB budget / waiver priority, so bids and timing can be advised.
     waivers: league.waivers ?? null,
-    note: "Labels and scores are from move-scoring. Explain them; do not re-rank. Pass adds are omitted from lists unless nothing stronger is available or the user asks.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries raw evidence only and no written reasons: compose the explanation from the evidence and name the deciding factor. Pass adds are omitted from lists unless nothing stronger is available or the user asks.",
     weakPositions,
     suggestions: visible.map((row) => ({
-      ...row,
+      playerId: row.playerId,
+      name: row.name,
+      position: row.position,
+      team: row.team,
+      projection: row.projection,
+      value: row.value,
+      dropCandidate: row.dropCandidate,
+      primaryWindow: row.primaryWindow,
+      primaryLabel: row.primaryLabel,
+      primaryScore: row.primaryScore,
+      verdicts: row.verdicts,
+      evidence: evidence.forPlayer({ ...row, team: row.team ?? null }),
       bid: suggestFaabBid({
         label: row.primaryLabel as WaiverLabel,
         waivers: league.waivers ?? null,
@@ -1284,10 +1429,15 @@ export async function toolSuggestTrades(
     adjustedGive: number;
     adjustedGet: number;
     margin: number;
-    scoring: ReturnType<typeof scoreTrade>;
+    verdicts: {
+      week: MoveVerdict;
+      seasonLong: MoveVerdict;
+      dynasty?: MoveVerdict;
+    };
+    fairness: ReturnType<typeof scoreTrade>["fairness"] | null;
+    primaryWindow: "week" | "season_long" | "dynasty";
     primaryLabel: string;
     primaryScore: number;
-    reason: string;
   }> = [];
 
   for (const partner of league.tradeTeams.filter((team) => !team.isUser)) {
@@ -1469,10 +1619,15 @@ export async function toolSuggestTrades(
       adjustedGive,
       adjustedGet,
       margin,
-      scoring: move,
+      verdicts: {
+        week: moveVerdict(move.week),
+        seasonLong: moveVerdict(move.seasonLong),
+        ...(move.dynasty ? { dynasty: moveVerdict(move.dynasty) } : {}),
+      },
+      fairness: move.fairness ?? null,
+      primaryWindow: tradeWindowKey,
       primaryLabel: primary.label,
       primaryScore: primary.score,
-      reason: `${primary.label} (${primary.score}): ${primary.reasons[0]?.effect ?? ""}`,
     });
   }
 
@@ -1483,7 +1638,7 @@ export async function toolSuggestTrades(
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
     scoringWindow: tradeWindowKey,
-    note: "Labels and scores are from move-scoring. Explain them; do not re-rank.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind each idea and no written reasons: compose the explanation yourself and name the deciding factor.",
     myNeeds,
     mySurplus,
     suggestions: ideas.slice(0, limit),

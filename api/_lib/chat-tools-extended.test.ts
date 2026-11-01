@@ -779,32 +779,70 @@ describe("extended chat tools", () => {
   it("suggest_lineup proposes start/sit using optimizer", async () => {
     const result = await toolSuggestLineup(ctxWithDashboard(), { leagueId: "lg1" }) as {
       ok: boolean;
-      swaps: Array<{ start: { playerId: string }; sit: { playerId: string } | null }>;
+      swaps: Array<{
+        verdict: { label: string; score: number };
+        start: { playerId: string; evidence: { usage: unknown; game: unknown; propLines: unknown[] } };
+        sit: { playerId: string } | null;
+      }>;
       projectionDelta: number;
     };
     expect(result.ok).toBe(true);
     expect(result.swaps.some((swap) => swap.start.playerId === "p-bench")).toBe(true);
     expect(result.projectionDelta).toBeGreaterThan(0);
+    const swap = result.swaps[0]!;
+    expect(swap.verdict.label.length).toBeGreaterThan(0);
+    expect(swap.start.evidence).toBeDefined();
+    expect(Array.isArray(swap.start.evidence.propLines)).toBe(true);
+    // No engine prose or scoring internals reach the model.
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("\"reasons\"");
+    expect(serialized).not.toContain("\"reason\"");
+    expect(serialized).not.toContain("\"scoring\"");
+    expect(serialized).not.toContain("no_usage_history");
+    expect(serialized).not.toContain("projection_edge");
   });
 
-  it("suggest_waivers ranks free agents with reasons", async () => {
+  it("suggest_waivers ranks free agents with verdicts and evidence, no reasons", async () => {
     const result = await toolSuggestWaivers(ctxWithDashboard(), { leagueId: "lg1", limit: 5 }) as {
       ok: boolean;
-      suggestions: Array<{ playerId: string; reason: string }>;
+      suggestions: Array<{
+        playerId: string;
+        primaryLabel: string;
+        verdicts: { week: { label: string; score: number }; seasonLong: { label: string } };
+        evidence: { propLines: unknown[] };
+      }>;
     };
     expect(result.ok).toBe(true);
     expect(result.suggestions[0]?.playerId).toBe("fa1");
-    expect(result.suggestions[0]?.reason.length).toBeGreaterThan(0);
+    expect(result.suggestions[0]?.verdicts.week.label).toBe(result.suggestions[0]?.primaryLabel);
+    expect(Array.isArray(result.suggestions[0]?.evidence.propLines)).toBe(true);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("\"reasons\"");
+    expect(serialized).not.toContain("\"reason\"");
+    expect(serialized).not.toContain("\"scoring\"");
+    expect(serialized).not.toContain("no_usage_history");
   });
 
   it("suggest_trades returns roughly fair complementary ideas", async () => {
     const result = await toolSuggestTrades(ctxWithDashboard(), { leagueId: "lg1", limit: 5 }) as {
       ok: boolean;
-      suggestions: Array<{ partner: string; giveTotal: number; getTotal: number }>;
+      suggestions: Array<{
+        partner: string;
+        giveTotal: number;
+        getTotal: number;
+        primaryLabel: string;
+        verdicts: { seasonLong: { label: string } };
+        fairness: { band: string } | null;
+      }>;
     };
     expect(result.ok).toBe(true);
     expect(result.suggestions.length).toBeGreaterThan(0);
     expect(result.suggestions[0]?.partner).toBe("Rival");
+    expect(result.suggestions[0]?.verdicts.seasonLong.label).toBe(result.suggestions[0]?.primaryLabel);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("\"reasons\"");
+    expect(serialized).not.toContain("\"reason\"");
+    expect(serialized).not.toContain("\"scoring\"");
   });
 
   it("get_draft_info returns owned picks", async () => {
