@@ -5,7 +5,7 @@ import type { ProjectedStandings } from "./projected-standings.js";
 const team = (rosterId: number, teamName: string, wins: number, losses: number, isUser = false) => ({
   rosterId, teamName, isUser, rank: rosterId, currentRank: rosterId,
   record: { wins, losses, ties: 0 }, projectedRecord: { wins, losses, ties: 0 },
-  pointsFor: 400, projectedPointsFor: 400, inPlayoffs: false,
+  pointsFor: 400, projectedPointsFor: 400, inPlayoffs: false, playoffOdds: null,
 });
 
 const projected = (games: ProjectedStandings["games"]): ProjectedStandings => ({
@@ -13,6 +13,7 @@ const projected = (games: ProjectedStandings["games"]): ProjectedStandings => ({
   missingWeeks: [], projectionsAsOf: null,
   teams: [team(1, "A", 3, 1, true), team(2, "B", 2, 2), team(3, "C", 2, 2), team(4, "D", 0, 4)],
   games,
+  userGames: [],
 });
 
 describe("playoffOddsFromProjections", () => {

@@ -195,3 +195,26 @@
 .card-hero-v .proj-move i { border-right-width: 6px; border-left-width: 6px; }
 .card-hero-v .proj-move.is-up i { border-bottom-width: 9px; }
 .card-hero-v .proj-move.is-down i { border-top-width: 9px; }
+
+/* Playoff odds: a fifth column on Projected rows, same small bar as projected points. */
+.proj-row.has-odds { grid-template-columns: 26px minmax(0, 1fr) 64px 44px 44px; gap: 6px; }
+.proj-odds strong { font-size: var(--type-body); }
+.proj-odds .proj-bar i { inset: 0 auto 0 0; }
+.is-user .proj-odds strong { color: var(--roster-highlight); }
+
+/* Your next games: one line per week; the opponent opens the preview card. */
+.power-team .proj-game-open { display: block; max-width: 100%; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--link); font: inherit; font-size: var(--type-body); font-weight: 600; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.power-team .proj-game-open:hover { text-decoration: underline; }
+.power-team .proj-game-open:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.proj-game { grid-template-columns: 44px minmax(0, 1fr) 64px; }
+.proj-game .proj-win strong { white-space: nowrap; }
+
+/* Next-game preview card. */
+.next-game-card { display: grid; gap: 12px; }
+.next-game-score { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.next-game-score > div { display: grid; min-width: 0; gap: 2px; }
+.next-game-score > div.is-theirs { text-align: right; }
+.next-game-score span { overflow: hidden; color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.next-game-score strong { font-size: var(--type-display); line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
+.next-game-score .is-mine span { color: var(--roster-highlight); }
+.next-game-win { padding: 0; }

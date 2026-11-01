@@ -168,6 +168,46 @@ describe("buildProjectedStandings", () => {
     expect(byName.B!.projectedPointsFor).toBeGreaterThan(byName.B!.pointsFor);
   });
 
+  it("returns the viewer's games with both lineups slot by slot and a win chance", () => {
+    const result = buildProjectedStandings({
+      league,
+      weeks,
+      games: [{ week: 5, a: 1, b: 2 }, { week: 6, a: 2, b: 3 }],
+      throughWeek: 4,
+      regularSeasonEndsWeek: 6,
+      missingWeeks: [],
+    });
+    // Only team A's game (week 5 vs B) belongs to the viewer.
+    expect(result.userGames).toHaveLength(1);
+    const game = result.userGames[0]!;
+    expect(game.week).toBe(5);
+    expect(game.opponentRosterId).toBe(2);
+    expect(game.mine.map((slot) => slot.slot)).toEqual(["WR", "TE"]);
+    expect(game.mine.map((slot) => slot.playerId)).toEqual(["a_wr", "a_te"]);
+    expect(game.theirs.map((slot) => slot.playerId)).toEqual(["b_wr", "b_te"]);
+    // Lineup slots add up to the game's projected totals.
+    expect(game.mine.reduce((sum, slot) => sum + slot.points, 0)).toBeCloseTo(game.myTotal, 1);
+    expect(game.theirs.reduce((sum, slot) => sum + slot.points, 0)).toBeCloseTo(game.theirTotal, 1);
+    // A projects lower than B, so the win chance is under a coin flip but not zero.
+    expect(game.winProbability).toBeGreaterThan(0);
+    expect(game.winProbability).toBeLessThan(0.5);
+  });
+
+  it("adds playoff odds that sum to the number of playoff spots", () => {
+    const result = buildProjectedStandings({
+      league,
+      weeks,
+      games: [{ week: 5, a: 1, b: 2 }, { week: 6, a: 2, b: 3 }],
+      throughWeek: 4,
+      regularSeasonEndsWeek: 6,
+      missingWeeks: [],
+    });
+    const odds = result.teams.map((team) => team.playoffOdds ?? 0);
+    expect(odds.reduce((sum, value) => sum + value, 0)).toBeCloseTo(1, 2);
+    const byName = Object.fromEntries(result.teams.map((t) => [t.teamName, t.playoffOdds ?? 0]));
+    expect(byName.C).toBeLessThan(byName.B!);
+  });
+
   it("scores the current week from the app's projections and later weeks from Sleeper", () => {
     const appLeague = {
       ...league,
@@ -201,6 +241,7 @@ describe("buildProjectedStandings", () => {
     });
     expect(result.divisionsIgnored).toBe(true);
     expect(result.teams.some((t) => t.inPlayoffs)).toBe(false);
+    expect(result.teams.every((t) => t.playoffOdds === null)).toBe(true);
   });
 
   it("leaves current standings untouched when nothing remains", () => {
