@@ -55,7 +55,7 @@ import { WindowVirtualList } from "../virtual-list";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
 import { ListPagination } from "../components/state-blocks";
-import { CloseGlyph } from "../components/glyphs";
+import { CloseGlyph, MoveTriangle } from "../components/glyphs";
 import { ModalCard } from "../components/modal-card";
 
 /** Compact rankings/waivers row height (matches former density=compact). */
@@ -799,6 +799,10 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   );
   const rows = useMemo(() => {
     const rostered = new Set(league.rosteredPlayerIds);
+    // Desktop table: a weekly row also shows the player's 30-day season-value move.
+    const seasonMoveById = new Map(dashboard.seasonLongRankings
+      .filter((row) => row.formatKey === league.seasonLongFormat.key)
+      .map((row) => [row.playerId, movementPercent(row.value, row.trend30Day)]));
     if (isSeasonLong) {
       return dashboard.seasonLongRankings
         .filter((row) => row.formatKey === seasonFormatKey && row.position !== "PICK" && includedPositions.includes(row.position))
@@ -893,13 +897,13 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
           position: row.position,
           isRookie: rookiePlayerIds.has(row.playerId),
           injuryStatus: row.injuryStatus,
-          movement30Day: null,
+          movement30Day: seasonMoveById.get(row.playerId) ?? null,
         };
       })
       .sort((a, b) => effectivePosition === "FLEX" || effectivePosition === "SUPER"
         ? (b.sortProjection ?? Number.NEGATIVE_INFINITY) - (a.sortProjection ?? Number.NEGATIVE_INFINITY) || a.rank - b.rank
         : a.rank - b.rank);
-  }, [availableOnly, dashboard.seasonLongRankings, effectiveHorizon, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, leagueDefenses, leagueRankings, powerTeamByPlayerId, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
+  }, [availableOnly, dashboard.seasonLongRankings, effectiveHorizon, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, league.seasonLongFormat.key, leagueDefenses, leagueRankings, powerTeamByPlayerId, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
   const visibleRows = rows.slice(0, visibleRowCount);
   // One scale for every range bar in the list, so bars compare across rows.
   const rangeMax = useMemo(() => rangeDomain(rows.map((row) => row.projectionRange)), [rows]);
@@ -1089,7 +1093,21 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                       ) : null}
                     </span>
                   </span>
-                  <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : row.projectionRange ? <RangeBar className="is-end" range={row.projectionRange} value={row.projection} domain={rangeMax} /> : <span>{row.projectionLabel}</span>}</span>
+                  {/* Desktop table only (hidden on phones): the book range with its numbers, and the 30-day value move. */}
+                  <span className="ranking-wide-cell ranking-range-cell" aria-hidden="true">
+                    {row.projectionRange ? (
+                      <>
+                        <RangeBar className="is-wide" range={row.projectionRange} value={row.projection} domain={rangeMax} />
+                        <small>{formatDecimal(row.projectionRange.low, 1)}–{formatDecimal(row.projectionRange.high, 1)}</small>
+                      </>
+                    ) : null}
+                  </span>
+                  <span className="ranking-wide-cell ranking-move-cell" aria-hidden="true">
+                    {row.movement30Day !== null && Number.isFinite(row.movement30Day) && row.movement30Day !== 0 ? (
+                      <span className={row.movement30Day > 0 ? "is-up" : "is-down"}><MoveTriangle direction={row.movement30Day > 0 ? "up" : "down"} />{formatPercent(Math.abs(row.movement30Day))}</span>
+                    ) : null}
+                  </span>
+                  <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : row.projectionRange ? <><RangeBar className="is-end is-phone-only" range={row.projectionRange} value={row.projection} domain={rangeMax} /><span className="is-desktop-only">{row.projectionLabel}</span></> : <span>{row.projectionLabel}</span>}</span>
                 </>
               );
               const openPlayer = () => {

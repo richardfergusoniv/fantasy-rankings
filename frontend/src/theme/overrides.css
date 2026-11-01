@@ -411,3 +411,7 @@ a:active { color: var(--link-active); }
    heading keeps it everywhere else (above charts, controls, cards). */
 .section-heading:has(+ .data-table-frame),
 .section-heading:has(+ .power-table) { border-bottom: 0; }
+@media (min-width: 760px) {
+  /* Desktop rankings table: player | book range | 30-day move | projection. */
+  .rankings-view .ranking-row { grid-template-columns: minmax(0, 1fr) 200px 72px 62px; }
+}

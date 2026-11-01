@@ -394,3 +394,23 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .weekly-points-axis span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .weekly-points-axis b { display: block; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
 .weekly-points-axis small { display: block; font-size: var(--type-caption); }
+
+/* Desktop rankings table: the book range (bar plus low–high numbers) and the 30-day value move
+   get their own columns at 760px and up; phones keep the two-line row. */
+.ranking-wide-cell { display: none; }
+.ranking-range-cell { align-items: center; gap: 8px; }
+.ranking-range-cell small { color: var(--dim); font-size: var(--type-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.range-bar.is-wide { width: 100px; margin-top: 0; }
+.ranking-move-cell { justify-content: flex-end; font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ranking-move-cell > span { display: inline-flex; align-items: center; gap: 3px; }
+.ranking-move-cell .is-up { color: var(--positive); }
+.ranking-move-cell .is-down { color: var(--negative); }
+@media (min-width: 760px) {
+  .ranking-wide-cell { position: relative; z-index: 1; display: flex; min-width: 0; pointer-events: none; }
+}
+/* Phones show the range under the projection; desktop moves it to its own column and keeps the caption. */
+.is-desktop-only.is-desktop-only { display: none; }
+@media (min-width: 760px) {
+  .is-desktop-only.is-desktop-only { display: block; }
+  .range-bar.is-phone-only { display: none; }
+}
