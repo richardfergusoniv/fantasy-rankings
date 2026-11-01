@@ -160,6 +160,13 @@ describe("dashboard URL state", () => {
     expect(serializeDashboardSearch(state({ tab: "waivers", comparePlayerId: "4046" }))).toBe("?tab=waivers");
   });
 
+  it("carries both comparison players from a Matchup Advantage row", () => {
+    const comparison = state({ tab: "comparison", comparePlayerId: "6786", compareSecondPlayerId: "13227" });
+    expect(serializeDashboardSearch(comparison)).toBe("?tab=comparison&c1=6786&c2=13227");
+    expect(parseDashboardSearch("?tab=comparison&c1=6786&c2=13227")).toEqual(comparison);
+    expect(serializeDashboardSearch(state({ tab: "team", compareSecondPlayerId: "13227" }))).toBe("");
+  });
+
   it("carries the analytics player only on the analytics tab", () => {
     const analytics = state({ tab: "analytics", chartDataset: "advanced", analyticsPlayerId: "4046" });
     expect(serializeDashboardSearch(analytics)).toBe("?tab=analytics&chart=advanced&ap=4046");

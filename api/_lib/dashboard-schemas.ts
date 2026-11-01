@@ -316,6 +316,13 @@ export const strengthOfScheduleEntrySchema = z.object({
   table: z.record(z.string(), z.record(z.enum(["QB", "RB", "WR", "TE"]), strengthOfScheduleCellSchema)),
 });
 
+/** One team's game in a coming week; a bye has no opponent. */
+export const upcomingGameSchema = z.object({
+  week: z.number().int(),
+  opponent: z.string().nullable(),
+  isAway: z.boolean(),
+});
+
 export const playerTrendingEntrySchema = z.object({
   adds: z.number().int().nullable(),
   drops: z.number().int().nullable(),
@@ -351,6 +358,8 @@ export const dashboardResponse = z.object({
   defenses: z.array(defenseSchema),
   analytics: analyticsSchema,
   strengthOfSchedule: z.array(strengthOfScheduleEntrySchema),
+  /** Each NFL team's next four games (this week first), for the player card's schedule strip. */
+  upcomingGames: z.record(z.string(), z.array(upcomingGameSchema)).optional(),
   gameLines: z.array(teamGameLineSchema).default([]),
   sourceErrors: z.array(z.string()),
 });
@@ -413,6 +422,7 @@ export const dashboardPlayersSchema = dashboardResponse.pick({
   seasonLongRankings: true,
   defenses: true,
   strengthOfSchedule: true,
+  upcomingGames: true,
   playerTrending: true,
   playerInsights: true,
   gameLines: true,

@@ -213,6 +213,15 @@
 .advantage-list { display: grid; }
 .advantage-row { display: grid; grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr); gap: 4px 6px; align-items: center; padding: 8px var(--player-box-inline); border-bottom: 1px solid var(--row-divider); background: var(--surface); }
 .advantage-row:last-child { border-bottom: 0; }
+/* The whole row compares the two players; the names stay their own buttons above it. */
+.advantage-row.is-comparable { position: relative; }
+.advantage-row-open { position: absolute; inset: 0; z-index: 0; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.advantage-row-open:active { background: var(--surface-2); }
+.advantage-row-open:focus-visible { outline: 2px solid var(--action); outline-offset: -2px; }
+.advantage-row.is-comparable > :not(.advantage-row-open) { position: relative; z-index: 1; pointer-events: none; }
+.advantage-row.is-comparable > button.advantage-name { pointer-events: auto; }
+.advantage-row.is-comparable > .advantage-name { max-width: 100%; justify-self: start; }
+.advantage-row.is-comparable > .advantage-name.is-theirs { justify-self: end; }
 .advantage-name { min-width: 0; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--player-name-size); font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 button.advantage-name { cursor: pointer; }
 button.advantage-name:hover { color: var(--link); }

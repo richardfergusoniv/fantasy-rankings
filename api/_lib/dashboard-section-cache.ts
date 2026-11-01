@@ -164,6 +164,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
       seasonLongRankings: dashboard.seasonLongRankings,
       defenses: dashboard.defenses,
       strengthOfSchedule: dashboard.strengthOfSchedule ?? [],
+      upcomingGames: dashboard.upcomingGames ?? {},
       playerTrending: dashboard.playerTrending ?? {},
       playerInsights: dashboard.playerInsights ?? emptyPlayerInsights,
       gameLines: dashboard.gameLines ?? [],
@@ -417,6 +418,7 @@ export function assembleDashboardFromSections(
     seasonLongRankings: players.data.seasonLongRankings,
     defenses: players.data.defenses,
     playerTrending: players.data.playerTrending ?? {},
+    upcomingGames: players.data.upcomingGames ?? {},
     playerInsights: players.data.playerInsights ?? emptyPlayerInsights,
     analytics: analytics.data.analytics,
     strengthOfSchedule: players.data.strengthOfSchedule ?? [],
@@ -462,6 +464,10 @@ export function buildDashboardCacheWrites(args: {
         defenses: sections.players.defenses,
         strengthOfSchedule: sections.players.strengthOfSchedule,
         playerInsights: sections.players.playerInsights,
+        // Small (about 200 trending players and 32 teams x 4 games); Waivers adds and
+        // the player card's adds/drops and schedule strip read them from this row.
+        playerTrending: sections.players.playerTrending,
+        upcomingGames: sections.players.upcomingGames,
       };
       const sectionPayloads: Array<{ section: DashboardCacheSection; data: unknown }> = [
         { section: "meta", data: sections.meta },

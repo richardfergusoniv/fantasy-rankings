@@ -121,6 +121,7 @@ export function Lineup({
   dashboard,
   onOpenMatchup,
   onOpenLeagueTeam,
+  onComparePlayers,
   linkedPlayerId,
   onOpenLinkedPlayer,
 }: {
@@ -128,6 +129,8 @@ export function Lineup({
   dashboard: Dashboard;
   onOpenMatchup: (matchup: MatchupSelection) => void;
   onOpenLeagueTeam?: (rosterId: number) => void;
+  /** Advantage row: open Comparison with your starter and theirs. */
+  onComparePlayers?: (mine: string, theirs: string) => void;
 } & PlayerLink) {
   const [mode, setMode] = useState<"current" | "optimized" | "advantage">("current");
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -281,7 +284,7 @@ export function Lineup({
         <section className="lineup-section matchup-section advantage-section" aria-label="Advantage by lineup slot">
           {theirs ? (
             <div className="data-table-frame">
-              <AdvantageList rows={advantage} onOpenPlayer={onOpenLinkedPlayer} ariaLabel={`${userTeamName} versus ${opponentTeamName}, gap by lineup slot`} />
+              <AdvantageList rows={advantage} onOpenPlayer={onOpenLinkedPlayer} onCompare={onComparePlayers} ariaLabel={`${userTeamName} versus ${opponentTeamName}, gap by lineup slot`} />
             </div>
           ) : <div className="empty-inline compact">Sleeper hasn’t posted an opponent for this week.</div>}
         </section>

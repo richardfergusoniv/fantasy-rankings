@@ -36,7 +36,7 @@ import {
   sleeperInjuryTag,
 } from "../dashboard-shared";
 import type { RankingHorizon, RankingPosition } from "../dashboard-url";
-import { formatDecimal, formatPercent, formatPoints, formatWhole } from "../lib/format-number";
+import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "../lib/format-number";
 import { abbreviatedName, buildTeamDepthChart, depthChartPlayers, type DepthChartRow } from "../lib/team-depth-chart";
 import {
   DepthChangeMark,
@@ -907,6 +907,10 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   const visibleRows = rows.slice(0, visibleRowCount);
   // One scale for every range bar in the list, so bars compare across rows.
   const rangeMax = useMemo(() => rangeDomain(rows.map((row) => row.projectionRange)), [rows]);
+  // Waivers: Sleeper adds in the last 24 hours, each bar scaled to the most-added player in the list.
+  const addsById = dashboard.playerTrending ?? {};
+  const addsFor = (row: (typeof rows)[number]) => addsById[row.key]?.adds ?? 0;
+  const maxAdds = availableOnly ? Math.max(0, ...rows.map(addsFor)) : 0;
   const hasSearch = query.trim().length > 0;
   const rankingHorizonOptions: Array<SegmentOption<RankingHorizon>> = availableOnly
     ? league.seasonLongFormat.isDynasty
@@ -1044,6 +1048,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                   ? `${formatProjectionPoints(row.projection, row.projectionSource)} points scored`
                   : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points${row.projectionRange ? `, books ${formatDecimal(row.projectionRange.low, 1)} to ${formatDecimal(row.projectionRange.high, 1)}` : ""}`;
               const rosteredBy = row.rosterTeamName && row.rosterId === null ? `, rostered by ${row.rosterTeamName}` : "";
+              const rowAdds = maxAdds > 0 ? addsFor(row) : 0;
               const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${rosteredBy}${isSelected ? ", selected" : ""}`;
               const rosterId = row.rosterId;
               const content = (
@@ -1090,6 +1095,12 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                             {row.rosterTeamName}
                           </span>
                         )
+                      ) : null}
+                      {rowAdds > 0 ? (
+                        <span className="ranking-adds" title="Sleeper adds, last 24 hours">
+                          <span className="ranking-adds-track"><i style={{ width: `${Math.max(8, (rowAdds / maxAdds) * 100)}%` }} /></span>
+                          +{formatCompactCount(rowAdds)} adds
+                        </span>
                       ) : null}
                     </span>
                   </span>

@@ -1,4 +1,5 @@
 import { waitUntil } from "@vercel/functions";
+import { upcomingSchedule } from "./upcoming-schedule.js";
 import { and, desc, eq, inArray, like } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "./db.js";
@@ -2275,6 +2276,7 @@ export async function buildUserDashboard(
     defenses,
     analytics,
     strengthOfSchedule,
+    upcomingGames: upcomingSchedule(schedule, week, 4, canonicalTeam),
     gameLines,
     sourceErrors: [...new Set(sourceErrors)],
   });

@@ -152,6 +152,21 @@ describe("writeUserDashboardCache payload set (buildDashboardCacheWrites)", () =
     expect(writes).toHaveLength(DASHBOARD_CACHE_SECTIONS.length);
   });
 
+  it("keeps trending adds and the upcoming schedule in the players row", () => {
+    const writes = buildDashboardCacheWrites({
+      cacheKey: "dashboard:user:user-1",
+      dashboard: { ...sampleDashboard, playerTrending: { "player-1": { adds: 1200, drops: null } }, upcomingGames: { DAL: [{ week: 8, opponent: "ARI", isAway: false }] } },
+      fetchedAt: new Date("2026-10-12T03:00:00.000Z"),
+      live: false,
+      encode: encodeSourceCachePayload,
+      serializeFull: serializeDashboardForCache,
+    });
+    const players = writes.find((row) => row.cacheKey === userDashboardSectionCacheKey("user-1", "players"));
+    const envelope = decodeSourceCachePayload(players!.payload) as { data: { playerTrending?: unknown; upcomingGames?: unknown } };
+    expect(envelope.data.playerTrending).toEqual({ "player-1": { adds: 1200, drops: null } });
+    expect(envelope.data.upcomingGames).toEqual({ DAL: [{ week: 8, opponent: "ARI", isAway: false }] });
+  });
+
   it("only writes the full key for the global snapshot", () => {
     const writes = buildDashboardCacheWrites({
       cacheKey: "dashboard-live-projections-v25",

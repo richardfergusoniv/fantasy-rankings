@@ -61,6 +61,8 @@ export type DashboardUrlState = {
   tradePartner: string | null;
   /** Comparison's first player (dashboard player id). */
   comparePlayerId: string | null;
+  /** Comparison's second player, e.g. the opponent's starter from a Matchup Advantage row. */
+  compareSecondPlayerId: string | null;
   /** Player to focus in the Analytics scatter (dashboard player id). */
   analyticsPlayerId: string | null;
 };
@@ -74,6 +76,7 @@ export const CLEARED_TOOL_SELECTIONS = {
   gameLinesTeam: null,
   tradePartner: null,
   comparePlayerId: null,
+  compareSecondPlayerId: null,
   analyticsPlayerId: null,
 } as const satisfies Partial<DashboardUrlState>;
 
@@ -209,6 +212,7 @@ export function parseDashboardSearch(search: string): DashboardUrlState {
     gameLinesTeam: textParam(params.get("gt")),
     tradePartner: textParam(params.get("tp")),
     comparePlayerId: textParam(params.get("c1")),
+    compareSecondPlayerId: textParam(params.get("c2")),
     analyticsPlayerId: textParam(params.get("ap")),
   };
 }
@@ -237,6 +241,7 @@ export function serializeDashboardSearch(state: DashboardUrlState): string {
   if (state.tab === "monitor" && state.gameLinesTeam) params.set("gt", state.gameLinesTeam);
   if (state.tab === "trade" && state.tradePartner) params.set("tp", state.tradePartner);
   if (state.tab === "comparison" && state.comparePlayerId) params.set("c1", state.comparePlayerId);
+  if (state.tab === "comparison" && state.compareSecondPlayerId) params.set("c2", state.compareSecondPlayerId);
   if (state.tab === "analytics" && state.analyticsPlayerId) params.set("ap", state.analyticsPlayerId);
   const value = params.toString();
   return value ? `?${value}` : "";

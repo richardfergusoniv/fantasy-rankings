@@ -9,7 +9,9 @@ import { RankStrip } from "../components/rank-strip";
 import { handcuffStarter } from "../lib/handcuff";
 import { positionTierLabel } from "../lib/position-tier";
 import { useProfileTag } from "../lib/use-profile-tag";
-import { formatCompactCount } from "../lib/format-number";
+import { formatCompactCount, formatDecimal } from "../lib/format-number";
+import { comparisonShortName } from "../lib/short-name";
+import { OutcomeBox, outcomeDomain, type OutcomeSummary } from "../components/outcome-box";
 import { DepthChangeMark, depthChange, MatchupTag, ProfileChips, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 import { isHiddenHalfPointPropStat, propStatDef } from "../../../api/_lib/prop-line-reads";
 import { EmptyState } from "../components/state-blocks";
@@ -189,11 +191,25 @@ const comparisonGroupOrder: Record<ToolDataset, ComparisonGroup[]> = {
   advanced: ["Production", "Expected points", "Usage", "Efficiency", "Next Gen"],
 };
 
-/** "Hale" for "Marcus Hale", unless both players share a surname. */
-function comparisonShortName(name: string, other: string): string {
-  const last = name.trim().split(/\s+/).at(-1) ?? name;
-  const otherLast = other.trim().split(/\s+/).at(-1) ?? other;
-  return last.toLowerCase() === otherLast.toLowerCase() ? name : last;
+/**
+ * Start/sit: one box per player for this season's weekly scores (floor to ceiling,
+ * the middle half of his weeks boxed, median ticked), both on one scale. The
+ * higher median takes the winner gold, like the leading side of a bar.
+ */
+function ComparisonOutcomes({ outcomes, names }: { outcomes: readonly [OutcomeSummary, OutcomeSummary]; names: readonly [string, string] }) {
+  const domain = outcomeDomain(outcomes);
+  const leader = outcomes[0].median === outcomes[1].median ? null : outcomes[0].median > outcomes[1].median ? 0 : 1;
+  return (
+    <div className="comparison-outcomes" role="list" aria-label="Weekly points this season, floor to ceiling">
+      {outcomes.map((summary, index) => (
+        <div className="comparison-outcome" role="listitem" key={names[index]} aria-label={`${names[index]}: floor ${formatDecimal(summary.floor, 1)}, median ${formatDecimal(summary.median, 1)}, ceiling ${formatDecimal(summary.ceiling, 1)}`}>
+          <span className="comparison-outcome-name" aria-hidden="true">{names[index]}</span>
+          <OutcomeBox summary={summary} domain={domain} leads={leader === index} />
+          <span className={`comparison-outcome-median${leader === index ? " is-winner" : ""}`} aria-hidden="true">{formatDecimal(summary.median, 1)}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function ComparisonMetricRow({ row, leftName, rightName, headline = false, ranges }: { row: ComparisonRow; leftName: string; rightName: string; headline?: boolean; ranges?: readonly [ProjectionRange | null, ProjectionRange | null] }) {
@@ -465,13 +481,14 @@ function comparisonSection(dataset: ToolDataset, position: BasePosition, league:
   return { dataset, headline, groups };
 }
 
-function ComparisonView({ dashboard, league, window, onWindowChange, validPositions, initialPlayer, initialKey, onOpenPlayer, onOpenMatchup }: {
+function ComparisonView({ dashboard, league, window, onWindowChange, validPositions, initialPlayer, initialSecondPlayer, initialKey, onOpenPlayer, onOpenMatchup }: {
   dashboard: Dashboard;
   league: League;
   window: AnalyticsWindow;
   onWindowChange: (window: AnalyticsWindow) => void;
   validPositions: BasePosition[];
   initialPlayer: PlayerSelection | null;
+  initialSecondPlayer: PlayerSelection | null;
   initialKey: number;
   onOpenPlayer?: (playerId: string) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
@@ -528,9 +545,13 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     if (initialSeedKey.current === initialKey) return;
     const requested = candidates.find((entity) => isSamePlayer(entity, initialPlayer));
     if (!requested) return;
-    setSelectedPlayers([requested, null]);
+    // A second seed (a Matchup Advantage row) fills the other slot with the opponent's starter.
+    const second = initialSecondPlayer && validPositions.includes(initialSecondPlayer.position)
+      ? candidates.find((entity) => isSamePlayer(entity, initialSecondPlayer) && !isSamePlayer(entity, requested)) ?? null
+      : null;
+    setSelectedPlayers([requested, second]);
     initialSeedKey.current = initialKey;
-  }, [candidates, initialKey, initialPlayer, validPositions]);
+  }, [candidates, initialKey, initialPlayer, initialSecondPlayer, validPositions]);
 
   // Drop picks whose position the league no longer ranks.
   useEffect(() => {
@@ -623,6 +644,18 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     ];
     return rangeRows.filter((row) => row.leftValue || row.rightValue);
   })();
+  // Start/sit boxes: each player's weekly scores this season, floor to ceiling, on one scale.
+  const outcomes = (() => {
+    if (!leftPlayerId || !rightPlayerId) return null;
+    const ranges = new Map((boomBustQuery.data?.rows ?? []).map((range) => [range.playerId, range]));
+    const pick = (id: string): OutcomeSummary | null => {
+      const range = ranges.get(id);
+      return range ? { floor: range.floor, p25: range.p25, median: range.median, p75: range.p75, ceiling: range.ceiling } : null;
+    };
+    const first = pick(leftPlayerId);
+    const second = pick(rightPlayerId);
+    return first && second ? [first, second] as const : null;
+  })();
   const sections = left && right && position ? [
     comparisonSection("projections", position, league, resolved[0]?.projection, resolved[1]?.projection, [...boomBustRows, ...propRows]),
     comparisonSection("advanced", position, league, resolved[0]?.advanced, resolved[1]?.advanced),
@@ -658,6 +691,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
                 </header>
               ) : null}
               {section.headline ? <ComparisonMetricRow row={section.headline} leftName={left.name} rightName={right.name} headline ranges={section.dataset === "projections" ? projectionRanges : undefined} /> : null}
+              {section.dataset === "projections" && outcomes ? <ComparisonOutcomes outcomes={outcomes} names={[comparisonShortName(left.name, right.name), comparisonShortName(right.name, left.name)]} /> : null}
               {section.groups.map(({ group, rows: groupRows }) => (
                 <section className="comparison-group" key={group} aria-label={group}>
                   <div className="section-heading"><h3>{group}</h3></div>
@@ -675,7 +709,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
   );
 }
 
-export function ComparisonTool({ dashboard, league, initialPlayer = null, initialKey = 0, onOpenPlayer, onOpenMatchup }: { dashboard: Dashboard; league: League; initialPlayer?: PlayerSelection | null; initialKey?: number; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
+export function ComparisonTool({ dashboard, league, initialPlayer = null, initialSecondPlayer = null, initialKey = 0, onOpenPlayer, onOpenMatchup }: { dashboard: Dashboard; league: League; initialPlayer?: PlayerSelection | null; initialSecondPlayer?: PlayerSelection | null; initialKey?: number; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
   const [window, setWindow] = useState<AnalyticsWindow>("season");
 
@@ -688,6 +722,7 @@ export function ComparisonTool({ dashboard, league, initialPlayer = null, initia
         onWindowChange={setWindow}
         validPositions={validPositions}
         initialPlayer={initialPlayer}
+        initialSecondPlayer={initialSecondPlayer}
         initialKey={initialKey}
         onOpenPlayer={onOpenPlayer}
         onOpenMatchup={onOpenMatchup}
