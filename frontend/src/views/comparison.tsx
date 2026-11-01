@@ -546,7 +546,9 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     const requested = candidates.find((entity) => isSamePlayer(entity, initialPlayer));
     if (!requested) return;
     // A second seed (a Matchup Advantage row) fills the other slot with the opponent's starter.
-    const second = initialSecondPlayer && validPositions.includes(initialSecondPlayer.position)
+    // Both slots stay one position, as the pickers require: a FLEX row pairing an RB with a WR
+    // seeds only your player, since ranges and stat rows are scored for one position.
+    const second = initialSecondPlayer && initialSecondPlayer.position === requested.position
       ? candidates.find((entity) => isSamePlayer(entity, initialSecondPlayer) && !isSamePlayer(entity, requested)) ?? null
       : null;
     setSelectedPlayers([requested, second]);

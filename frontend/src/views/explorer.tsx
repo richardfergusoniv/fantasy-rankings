@@ -5,6 +5,7 @@ import type {
   MatchupSelection,
   PlayerLink,
 } from "../dashboard-types";
+import { comparisonSeed } from "../lib/comparison-seed";
 import type { RankingHorizon, RankingPosition } from "../dashboard-url";
 
 /** Modes that share the Players primary page (excludes draft — that is ?tab=draft). */
@@ -104,8 +105,6 @@ export function Explorer({
   }
 }
 
-const COMPARISON_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DEF"] as const;
-
 /**
  * Comparison seeded from the URL. The tool applies a seed once per key, so the key
  * advances each time the requested player changes and a repeated link re-seeds.
@@ -121,14 +120,10 @@ function SeededComparison({ dashboard, league, comparePlayerId, compareSecondPla
   const seedId = `${comparePlayerId ?? ""}|${compareSecondPlayerId ?? ""}`;
   const seed = useRef<{ id: string | null; key: number }>({ id: null, key: 0 });
   if (seed.current.id !== seedId) seed.current = { id: seedId, key: seed.current.key + 1 };
-  const selection = useCallback((playerId: string | null) => {
-    if (!playerId) return null;
-    const row = dashboard.rankings.find((item) => item.playerId === playerId)
-      ?? dashboard.seasonLongRankings.find((item) => item.playerId === playerId && item.formatKey === league.seasonLongFormat.key);
-    const position = COMPARISON_POSITIONS.find((item) => item === row?.position);
-    if (!row || !position) return null;
-    return { playerId: row.playerId, name: row.name, team: row.team ?? "", position };
-  }, [dashboard.rankings, dashboard.seasonLongRankings, league.seasonLongFormat.key]);
+  const selection = useCallback(
+    (playerId: string | null) => comparisonSeed(dashboard, league.seasonLongFormat.key, playerId),
+    [dashboard, league.seasonLongFormat.key],
+  );
   const initialPlayer = useMemo(() => selection(comparePlayerId), [comparePlayerId, selection]);
   const initialSecondPlayer = useMemo(() => selection(compareSecondPlayerId), [compareSecondPlayerId, selection]);
   return (
