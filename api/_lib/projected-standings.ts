@@ -50,7 +50,8 @@ export type ProjectedStandingsTeam = {
   playoffOdds: number | null;
 };
 
-export type ProjectedLineupSlot = { slot: string; playerId: string; name: string; points: number };
+/** One lineup slot; an unfilled slot keeps its place with a null player and 0 points. */
+export type ProjectedLineupSlot = { slot: string; playerId: string | null; name: string | null; points: number };
 
 /** One of the viewer's remaining games with both projected lineups, for the preview card. */
 export type ProjectedGamePreview = {
@@ -91,6 +92,22 @@ export type ProjectedStandings = {
 };
 
 type WeekLineup = { total: number; outlook: TeamOutlook | null; starters: ProjectedLineupSlot[] };
+
+/**
+ * Lay starters out in the league's slot order, one entry per slot, so two
+ * lineups compare slot for slot. A slot nobody fills stays as an empty entry
+ * instead of shifting every later slot; a starter whose slot isn't in the list
+ * (shouldn't happen) is kept at the end rather than dropped.
+ */
+export function alignToSlots(slots: readonly string[], starters: readonly ProjectedLineupSlot[]): ProjectedLineupSlot[] {
+  const remaining = [...starters];
+  const aligned = slots.map((slot) => {
+    const index = remaining.findIndex((starter) => starter.slot === slot);
+    if (index < 0) return { slot, playerId: null, name: null, points: 0 };
+    return remaining.splice(index, 1)[0]!;
+  });
+  return [...aligned, ...remaining];
+}
 
 /** A future-week starter as a pregame forecast player, so the matchup spread model applies. */
 function pregamePlayer(playerId: string, position: string, points: number): LiveForecastPlayer {
@@ -222,7 +239,7 @@ export function bestLineup(players: readonly RosterPlayer[], slots: readonly str
     points: round2(player.projection ?? 0),
   }));
   const outlook = teamOutlook(result.starters.map((player) => pregamePlayer(player.playerId, player.position, player.projection ?? 0)));
-  return { total: result.score, outlook, starters };
+  return { total: result.score, outlook, starters: alignToSlots(slots, starters) };
 }
 
 /** The lineup a team has set this week, forecast like the Matchup view, in slot order. */
@@ -234,14 +251,14 @@ function currentWeekLineup(players: readonly RosterPlayer[], slots: readonly str
     const index = slot ? slots.indexOf(slot) : -1;
     return index < 0 ? slots.length : index;
   };
-  const starters = [...set]
+  const starters = alignToSlots(slots, [...set]
     .sort((a, b) => order(a.lineupSlot) - order(b.lineupSlot))
     .map((player) => ({
       slot: player.lineupSlot ?? player.position,
       playerId: player.playerId,
       name: player.name,
       points: round2(liveForecastPoints(player, now) ?? 0),
-    }));
+    })));
   return { total, outlook: teamOutlook(set, now), starters };
 }
 

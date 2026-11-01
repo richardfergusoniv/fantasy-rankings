@@ -910,12 +910,16 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
       const chunkSize = 24;
       const responses = await Promise.all(Array.from({ length: Math.ceil(sparkHistoryIds.length / chunkSize) }, (_, index) =>
         api.getValueHistory({ formatKey: league.seasonLongFormat.key, playerIds: sparkHistoryIds.slice(index * chunkSize, (index + 1) * chunkSize) })));
-      return responses.flatMap((response) => response.series);
+      // Same shape as the trade dialog's query: both can share this cache key (e.g. one trade in the season).
+      return {
+        formatKey: responses[0]?.formatKey ?? league.seasonLongFormat.key,
+        series: responses.flatMap((response) => response.series),
+      };
     },
     enabled: sparkHistoryIds.length > 0,
     staleTime: 30 * 60 * 1000,
   });
-  const sparkPointsById = useMemo(() => new Map((sparkHistoryQuery.data ?? []).map((series) => [series.playerId, series.points])), [sparkHistoryQuery.data]);
+  const sparkPointsById = useMemo(() => new Map((sparkHistoryQuery.data?.series ?? []).map((series) => [series.playerId, series.points])), [sparkHistoryQuery.data]);
   const renderTradeRows = (trades: HistoricalTrade[]) => trades.map((trade) => {
     const teamValues = trade.teams.map((team) => ({ team, value: tradeTotal(historicalReceivedAssets(team, formatAssets, trade.id, dashboard.season, ownedPicks).valued) }));
     const rankedTeams = [...teamValues].sort((a, b) => b.value - a.value);

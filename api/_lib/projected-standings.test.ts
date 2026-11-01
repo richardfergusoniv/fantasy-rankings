@@ -7,6 +7,7 @@ vi.mock("./auth.js", () => ({ resolveSleeperUserId: vi.fn() }));
 vi.mock("./viewer-league-access.js", () => ({ viewerBelongsToLeague: vi.fn() }));
 
 import {
+  alignToSlots,
   currentWeekLineupTotal,
   bestLineupTotal,
   buildProjectedStandings,
@@ -368,5 +369,22 @@ describe("loadProjectedStandings", () => {
     expect(down).toEqual({ error: "Sleeper projections could not be fully loaded." });
     const none = await loadProjectedStandings(league, 2026, 5, { fetchLeague, fetchWeek, loadProjections: async () => { throw new Error("down"); } });
     expect(none).toEqual({ error: "Sleeper projections could not be fully loaded." });
+  });
+});
+
+
+describe("alignToSlots", () => {
+  const slot = (slotName: string, playerId: string) => ({ slot: slotName, playerId, name: playerId, points: 10 });
+
+  it("keeps an unfilled slot in place so later slots still line up", () => {
+    // A team with no QB: its RB must not land in the QB slot.
+    const aligned = alignToSlots(["QB", "RB", "WR", "FLEX"], [slot("RB", "rb1"), slot("WR", "wr1"), slot("FLEX", "wr2")]);
+    expect(aligned.map((entry) => [entry.slot, entry.playerId])).toEqual([["QB", null], ["RB", "rb1"], ["WR", "wr1"], ["FLEX", "wr2"]]);
+    expect(aligned[0]!.points).toBe(0);
+  });
+
+  it("fills repeated slots in order and keeps a starter whose slot isn't listed", () => {
+    const aligned = alignToSlots(["WR", "WR"], [slot("WR", "a"), slot("WR", "b"), slot("SUPER_FLEX", "c")]);
+    expect(aligned.map((entry) => entry.playerId)).toEqual(["a", "b", "c"]);
   });
 });

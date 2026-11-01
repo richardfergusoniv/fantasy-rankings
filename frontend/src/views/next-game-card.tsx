@@ -31,11 +31,11 @@ export function NextGameCard({
     const theirs = game.theirs[index];
     return {
       slot: mine?.slot ?? theirs?.slot ?? "—",
-      mine: mine ? { name: mine.name, points: mine.points } : null,
-      theirs: theirs ? { name: theirs.name, points: theirs.points } : null,
+      // Lineups arrive aligned to the league's slots; an unfilled slot has no player and shows as "—".
+      mine: mine?.name ? { name: mine.name, points: mine.points } : null,
+      theirs: theirs?.name ? { name: theirs.name, points: theirs.points } : null,
     };
   }));
-  // Future-week lineups are each team's best lineup, so slots line up by position, not by player.
   const top = biggestGaps(rows, PREVIEW_SLOTS);
   const myWin = game.winProbability === null ? null : winPercent(game.winProbability);
   return (
