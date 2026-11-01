@@ -494,6 +494,7 @@ function assembleStreamedDashboard(
       standings: powerData?.standings ?? [],
       playoffs: powerData?.playoffs ?? { teams: null, weekStart: null },
       waivers: identity.waivers ?? null,
+      waiverBids: identity.waiverBids,
     };
   });
   return {
@@ -506,6 +507,7 @@ function assembleStreamedDashboard(
     playerTrending: players?.playerTrending ?? {},
     playerInsights: players?.playerInsights ?? { depth: {}, depthAsOf: null, depthPrevious: {} },
     strengthOfSchedule: players?.strengthOfSchedule ?? [],
+    upcomingGames: players?.upcomingGames ?? {},
     gameLines: players?.gameLines ?? [],
     analytics: analytics?.analytics ?? { asOf: null, throughWeek: null, sourceUrl: "", entities: [], teamUsage: [], teamRecords: [] },
   };
@@ -595,6 +597,10 @@ export function App() {
   const tab = dashboardUrl.state.tab;
   const setTab = useCallback((next: Tab) => {
     dashboardUrl.commit({ tab: next, playerId: null, ...CLEARED_TOOL_SELECTIONS });
+  }, [dashboardUrl.commit]);
+  // Matchup Advantage row: open Comparison with your starter and theirs in the two slots.
+  const openComparison = useCallback((first: string, second: string) => {
+    dashboardUrl.commit({ tab: "comparison", playerId: null, ...CLEARED_TOOL_SELECTIONS, comparePlayerId: first, compareSecondPlayerId: second });
   }, [dashboardUrl.commit]);
   const openCommandPage = useCallback((next: Tab, options?: { tradeMode?: TradeMode }) => {
     if (next === "trade") {
@@ -1344,6 +1350,8 @@ export function App() {
       analytics={dashboard.analytics}
       analyticsLoading={analyticsLoading}
       sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)}
+      faabBid={league.waiverBids?.find((bid) => bid.playerId === playerHistory.current?.playerId) ?? null}
+      upcomingGames={playerHistory.current.team ? dashboard.upcomingGames?.[canonicalNflTeam(playerHistory.current.team) ?? playerHistory.current.team] : undefined}
       newsItems={tickerPlayerNews}
       newsLoading={newsLoading}
       newsError={newsError}
@@ -1526,7 +1534,7 @@ export function App() {
                 />
               </Suspense>
             )
-            : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={(rosterId) => setRosterCardRosterId(rosterId)} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
+            : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onComparePlayers={openComparison} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={(rosterId) => setRosterCardRosterId(rosterId)} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
             : tab === "outcomes" ? <Suspense fallback={<SectionLoading label="Loading playoff picture…" />}><LazyLeagueOutcomes leagueId={league.id} queryKey={personalQueryKey(viewer, "projected-standings", league.id)} /></Suspense>
             : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} dashboard={activeDashboard} onPlayerIntent={prefetchDashboardPlayer} onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }} onOpenMatchup={setSelectedMatchup} playerCardOpen={playerHistory.isOpen} selectedPlayerId={selectedPlayerId} /></Suspense>
             : tab === "draft" ? <Suspense fallback={<SectionLoading label="Loading draft…" />}><LazyDraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} loading={draftQuery.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} /></Suspense>
@@ -1558,6 +1566,7 @@ export function App() {
                 linkedPlayerId={selectedPlayerId}
                 onOpenLinkedPlayer={openLinkedPlayer}
                 comparePlayerId={tab === "comparison" ? dashboardUrl.state.comparePlayerId : null}
+                compareSecondPlayerId={tab === "comparison" ? dashboardUrl.state.compareSecondPlayerId : null}
               />
             ) : null}
           </FeatureErrorBoundary>

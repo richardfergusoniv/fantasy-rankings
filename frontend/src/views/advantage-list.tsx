@@ -8,10 +8,13 @@ import { advantageScale, formatGap, type AdvantageRow } from "./matchup-advantag
 export function AdvantageList({
   rows,
   onOpenPlayer,
+  onCompare,
   ariaLabel,
 }: {
   rows: readonly AdvantageRow[];
   onOpenPlayer?: (playerId: string) => void;
+  /** Tapping the row (anywhere but a name) compares the two players. */
+  onCompare?: (mine: string, theirs: string) => void;
   ariaLabel: string;
 }) {
   const scale = advantageScale(rows);
@@ -27,12 +30,16 @@ export function AdvantageList({
     <div className="advantage-list" role="list" aria-label={ariaLabel}>
       {rows.map((row, index) => {
         const gap = row.gap;
+        const mineId = row.mine?.playerId;
+        const theirsId = row.theirs?.playerId;
+        const compare = onCompare && mineId && theirsId ? () => onCompare(mineId, theirsId) : null;
         const width = gap === null ? 0 : (Math.abs(gap) / scale) * 100;
         const label = gap === null
           ? `${row.slot}: no projection`
           : gap === 0 ? `${row.slot}: even` : `${row.slot}: ${gap > 0 ? "you lead" : "they lead"} by ${Math.abs(gap).toFixed(1)}`;
         return (
-          <div className="advantage-row" role="listitem" aria-label={label} key={`${row.slot}-${index}`}>
+          <div className={`advantage-row${compare ? " is-comparable" : ""}`} role="listitem" aria-label={label} key={`${row.slot}-${index}`}>
+            {compare ? <button type="button" className="advantage-row-open" aria-label={`Compare ${row.mine!.name} and ${row.theirs!.name}`} onClick={compare} /> : null}
             {name(row.mine, "mine")}
             <span className="advantage-slot" aria-hidden="true">{row.slot.replace("_", " ")}</span>
             {name(row.theirs, "theirs")}

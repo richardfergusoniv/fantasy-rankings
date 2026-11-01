@@ -97,3 +97,8 @@ export function formatCompactCount(value: number): string {
 export function formatWholePercent(value: number, options?: FormatDecimalOptions): string {
   return `${formatDecimal(value, 0, options)}%`;
 }
+
+/** A suggested FAAB bid: "$14" when the range is one amount, else "$10–18". */
+export function faabBidLabel(bid: { low: number; high: number }): string {
+  return bid.low === bid.high ? `$${bid.low}` : `$${bid.low}–${bid.high}`;
+}

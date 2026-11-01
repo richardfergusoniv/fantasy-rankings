@@ -39,6 +39,8 @@ a[href].matchup-reference-button.matchup-reference-tag { text-decoration: none; 
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+/* The pill carries the ring; without this the global button ring also outlines the 44px tap area as a tall oval. */
+.matchup-reference-button.matchup-reference-tag:focus-visible { outline: none; }
 
 /* Matchup ease stays a link: green for easy, red for tough. The colors carry the meaning, so there are no arrows. */
 .matchup-reference-button.sos-soft .matchup-reference-button-label {

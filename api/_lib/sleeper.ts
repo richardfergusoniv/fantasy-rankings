@@ -519,7 +519,7 @@ function mean(values: number[]): number | null {
   return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2));
 }
 
-function percentile(values: number[], quantile: number): number | null {
+export function percentile(values: number[], quantile: number): number | null {
   if (values.length === 0) return null;
   const ordered = values.slice().sort((a, b) => a - b);
   const rank = (ordered.length - 1) * quantile;

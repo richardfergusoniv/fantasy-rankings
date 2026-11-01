@@ -1,6 +1,9 @@
 import { refreshPlayerCard, playerPointsLabel } from "./player-card-state";
 import { WeeklyPointsChart } from "./views/weekly-points-chart";
 import { RangeBar, rangeDomain } from "./components/range-bar";
+import { OutcomeBox, outcomeSummary } from "./components/outcome-box";
+import { ScheduleStrip } from "./views/schedule-strip";
+import type { UpcomingGame } from "../../api/_lib/upcoming-schedule";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
@@ -34,7 +37,7 @@ import {
 import { actualComponentsForGame } from "./actual-components";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { NewsTypeBadges } from "./news-badges";
-import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
+import { faabBidLabel, formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { buildGameLogRows } from "./lib/game-log-rows";
 import { positionTierLabel } from "./lib/position-tier";
 import { useProfileTag } from "./lib/use-profile-tag";
@@ -443,6 +446,8 @@ export function PlayerDetailSheet({
   analyticsLoading = false,
   newsItems,
   sosEntry,
+  upcomingGames,
+  faabBid,
   newsLoading = false,
   newsError = false,
   onRetryNews,
@@ -474,6 +479,10 @@ export function PlayerDetailSheet({
   analyticsLoading?: boolean;
   newsItems: PlayerNewsItem[];
   sosEntry?: StrengthOfScheduleEntryLike;
+  /** His team's next four games, for the schedule strip. */
+  upcomingGames?: readonly UpcomingGame[];
+  /** Suggested FAAB bid when he's a top graded waiver add. */
+  faabBid?: { low: number; high: number } | null;
   newsLoading?: boolean;
   newsError?: boolean;
   onRetryNews?: () => void;
@@ -770,10 +779,16 @@ export function PlayerDetailSheet({
             </div>
           </div>
         </div>
-        {trending && (trending.adds !== null || trending.drops !== null) ? (
+        {upcomingGames?.length ? <ScheduleStrip games={upcomingGames} position={player.position} sosEntry={sosEntry} /> : null}
+        {(trending && (trending.adds !== null || trending.drops !== null)) || faabBid ? (
           <div className="player-trending" aria-label="Sleeper adds and drops">
-            <div><span>Adds</span><strong className="is-up">{trending.adds === null ? "—" : `+${formatCompactCount(trending.adds)}`}</strong></div>
-            <div><span>Drops</span><strong className="is-down">{trending.drops === null ? "—" : `−${formatCompactCount(trending.drops)}`}</strong></div>
+            {trending && (trending.adds !== null || trending.drops !== null) ? (
+              <>
+                <div><span>Adds</span><strong className="is-up">{trending.adds === null ? "—" : `+${formatCompactCount(trending.adds)}`}</strong></div>
+                <div><span>Drops</span><strong className="is-down">{trending.drops === null ? "—" : `−${formatCompactCount(trending.drops)}`}</strong></div>
+              </>
+            ) : null}
+            {faabBid ? <div><span>Bid</span><strong>{faabBidLabel(faabBid)}</strong></div> : null}
           </div>
         ) : null}
         {toolLinks ? <ToolLinks ariaLabel={`Open ${player.name} in a tool`} links={toolLinks} /> : null}
@@ -873,6 +888,7 @@ export function PlayerDetailSheet({
                 nextOpponent={player.opponent}
               />
             ) : null}
+            {boomBustQuery.data?.gameLog?.length ? <SeasonOutcome points={boomBustQuery.data.gameLog.map((game) => game.points)} /> : null}
             {player.position !== "PICK" && player.seasonValue !== null ? (
               <Suspense fallback={<div className="loading-shimmer player-value-trend-loading" aria-hidden="true" />}>
                 <LazyPlayerValueTrend name={player.name} history={valueHistory} isLoading={historyQuery.isPending} />
@@ -1001,3 +1017,15 @@ export function BoomBustPanel({
   );
 }
 
+/** Start/sit box under the weekly chart: floor and ceiling at the ends, median ticked. */
+function SeasonOutcome({ points }: { points: readonly number[] }) {
+  const summary = outcomeSummary(points);
+  if (!summary) return null;
+  return (
+    <div className="season-outcome" role="img" aria-label={`Weekly points this season: floor ${formatDecimal(summary.floor, 1)}, median ${formatDecimal(summary.median, 1)}, ceiling ${formatDecimal(summary.ceiling, 1)}`}>
+      <span aria-hidden="true">{formatDecimal(summary.floor, 1)}</span>
+      <OutcomeBox summary={summary} domain={{ min: summary.floor, max: Math.max(summary.ceiling, summary.floor + 1) }} />
+      <span aria-hidden="true">{formatDecimal(summary.ceiling, 1)}</span>
+    </div>
+  );
+}

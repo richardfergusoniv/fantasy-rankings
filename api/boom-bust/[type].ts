@@ -19,6 +19,7 @@ import {
   hasSleeperGameParticipation,
   loadSleeperPlayerWeeklyProjections,
   loadSleeperPlayerWeeklySeason,
+  percentile,
   scoreProjectedPlayerStats,
   sleeperActualStats,
   sleeperGameLogStats,
@@ -250,6 +251,10 @@ const boomBustRangesResponse = z.object({
     floor: z.number(),
     ceiling: z.number(),
     range: z.number(),
+    /** Quartiles of the same weekly scores, for the start/sit box. */
+    p25: z.number(),
+    median: z.number(),
+    p75: z.number(),
     games: z.number().int(),
   })),
   unavailablePlayerIds: z.array(z.string()),
@@ -309,7 +314,16 @@ async function handleRanges(req: Request): Promise<Response> {
       if (points.length < 2) return null;
       const floor = Math.min(...points);
       const ceiling = Math.max(...points);
-      return { playerId, floor, ceiling, range: Number((ceiling - floor).toFixed(2)), games: points.length };
+      return {
+        playerId,
+        floor,
+        ceiling,
+        range: Number((ceiling - floor).toFixed(2)),
+        p25: percentile(points, 0.25) ?? floor,
+        median: percentile(points, 0.5) ?? floor,
+        p75: percentile(points, 0.75) ?? ceiling,
+        games: points.length,
+      };
     }));
     const rows = results.flatMap((result) => result.status === "fulfilled" && result.value ? [result.value] : []);
     const returned = new Set(rows.map((row) => row.playerId));

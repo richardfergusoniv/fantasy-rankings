@@ -1,10 +1,11 @@
-import { lazy, Suspense, useMemo, useRef, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, type ReactNode } from "react";
 import type {
   Dashboard,
   League,
   MatchupSelection,
   PlayerLink,
 } from "../dashboard-types";
+import { comparisonSeed } from "../lib/comparison-seed";
 import type { RankingHorizon, RankingPosition } from "../dashboard-url";
 
 /** Modes that share the Players primary page (excludes draft — that is ?tab=draft). */
@@ -43,6 +44,7 @@ export function Explorer({
   linkedPlayerId,
   onOpenLinkedPlayer,
   comparePlayerId,
+  compareSecondPlayerId,
 }: {
   mode: ExplorerMode;
   dashboard: Dashboard;
@@ -60,6 +62,8 @@ export function Explorer({
   onOpenPlayer: (playerId: string) => void;
   /** Dashboard player to seed the first Comparison slot with (the `c1` URL parameter). */
   comparePlayerId?: string | null;
+  /** Second Comparison slot (the `c2` URL parameter). */
+  compareSecondPlayerId?: string | null;
 } & PlayerLink): ReactNode {
   switch (mode) {
     case "rankings":
@@ -88,6 +92,7 @@ export function Explorer({
             dashboard={dashboard}
             league={league}
             comparePlayerId={comparePlayerId ?? null}
+            compareSecondPlayerId={compareSecondPlayerId ?? null}
             onOpenPlayer={onOpenPlayer}
             onOpenMatchup={onOpenMatchup}
           />
@@ -100,34 +105,33 @@ export function Explorer({
   }
 }
 
-const COMPARISON_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DEF"] as const;
-
 /**
  * Comparison seeded from the URL. The tool applies a seed once per key, so the key
  * advances each time the requested player changes and a repeated link re-seeds.
  */
-function SeededComparison({ dashboard, league, comparePlayerId, onOpenPlayer, onOpenMatchup }: {
+function SeededComparison({ dashboard, league, comparePlayerId, compareSecondPlayerId, onOpenPlayer, onOpenMatchup }: {
   dashboard: Dashboard;
   league: League;
   comparePlayerId: string | null;
+  compareSecondPlayerId: string | null;
   onOpenPlayer: (playerId: string) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
 }) {
+  const seedId = `${comparePlayerId ?? ""}|${compareSecondPlayerId ?? ""}`;
   const seed = useRef<{ id: string | null; key: number }>({ id: null, key: 0 });
-  if (seed.current.id !== comparePlayerId) seed.current = { id: comparePlayerId, key: seed.current.key + 1 };
-  const initialPlayer = useMemo(() => {
-    if (!comparePlayerId) return null;
-    const row = dashboard.rankings.find((item) => item.playerId === comparePlayerId)
-      ?? dashboard.seasonLongRankings.find((item) => item.playerId === comparePlayerId && item.formatKey === league.seasonLongFormat.key);
-    const position = COMPARISON_POSITIONS.find((item) => item === row?.position);
-    if (!row || !position) return null;
-    return { playerId: row.playerId, name: row.name, team: row.team ?? "", position };
-  }, [comparePlayerId, dashboard.rankings, dashboard.seasonLongRankings, league.seasonLongFormat.key]);
+  if (seed.current.id !== seedId) seed.current = { id: seedId, key: seed.current.key + 1 };
+  const selection = useCallback(
+    (playerId: string | null) => comparisonSeed(dashboard, league.seasonLongFormat.key, playerId),
+    [dashboard, league.seasonLongFormat.key],
+  );
+  const initialPlayer = useMemo(() => selection(comparePlayerId), [comparePlayerId, selection]);
+  const initialSecondPlayer = useMemo(() => selection(compareSecondPlayerId), [compareSecondPlayerId, selection]);
   return (
     <LazyComparisonTool
       dashboard={dashboard}
       league={league}
       initialPlayer={initialPlayer}
+      initialSecondPlayer={initialSecondPlayer}
       initialKey={seed.current.key}
       onOpenPlayer={onOpenPlayer}
       onOpenMatchup={onOpenMatchup}

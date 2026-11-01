@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { scoreWaiverSuggestions, waiverBidsFor } from "./waiver-suggestions.js";
+import { BUILTIN_SCORING_WEIGHTS } from "./scoring/weights.js";
 import type { Dashboard } from "./dashboard-schemas.js";
 import type { ChatToolContext } from "./chat-tools.js";
 
@@ -969,6 +971,26 @@ describe("extended chat tools", () => {
     expect(serialized).not.toContain("\"reason\"");
     expect(serialized).not.toContain("\"scoring\"");
     expect(serialized).not.toContain("no_usage_history");
+  });
+
+  it("saves FAAB bids for the top graded adds, the same grading as suggest_waivers", () => {
+    const dashboard = baseDashboard();
+    // A free agent who would start and outscore the lineup, so he grades above Pass.
+    for (const row of dashboard.rankings) if (row.playerId === "fa1") row.leagueProjection = 40;
+    const league = dashboard.leagues.find((row) => row.id === "lg1")!;
+    for (const row of league.tradeWaiverPool) if (row.playerId === "fa1") row.projection = 40;
+    expect(waiverBidsFor(dashboard, league, BUILTIN_SCORING_WEIGHTS)).toEqual([]);
+    const faab = { ...league, waivers: { type: "faab" as const, budget: 100, remaining: 90, position: null, teams: 12 } };
+    const bids = waiverBidsFor(dashboard, faab, BUILTIN_SCORING_WEIGHTS);
+    const graded = scoreWaiverSuggestions(dashboard, faab, BUILTIN_SCORING_WEIGHTS, { limit: 15, scoringWindow: "week", poolSize: 15 });
+    const expected = graded.suggestions.filter((row) => row.bid?.kind === "faab");
+    expect(bids.length).toBeGreaterThan(0);
+    expect(bids.map((bid) => bid.playerId)).toEqual(expected.map((row) => row.playerId));
+    for (const bid of bids) {
+      expect(bid.low).toBeGreaterThanOrEqual(1);
+      expect(bid.high).toBeLessThanOrEqual(90);
+      expect(bid.low).toBeLessThanOrEqual(bid.high);
+    }
   });
 
   it("suggest_trades returns roughly fair complementary ideas", async () => {

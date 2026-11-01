@@ -189,6 +189,14 @@ export const leaguePlayoffsSchema = z.object({
   weekStart: z.number().int().nullable(),
 });
 
+/** A suggested FAAB bid for one available player. */
+export const waiverBidSchema = z.object({
+  playerId: z.string(),
+  label: z.enum(["Must add", "Add", "Watch"]),
+  low: z.number().int(),
+  high: z.number().int(),
+});
+
 /** The user's waiver standing: FAAB budget (FAAB leagues) and priority. */
 export const waiverStatusSchema = z.object({
   type: z.enum(["faab", "rolling", "reverse_standings"]).nullable(),
@@ -238,6 +246,8 @@ export const leagueSchema = z.object({
   standings: z.array(standingsRowSchema).default([]),
   playoffs: leaguePlayoffsSchema.default({ teams: null, weekStart: null }),
   waivers: waiverStatusSchema.nullable().default(null),
+  /** FAAB bids for the top graded waiver adds (same grading as the chat assistant); FAAB leagues only. */
+  waiverBids: z.array(waiverBidSchema).optional(),
 });
 
 export const weeklySnapPointSchema = z.object({
@@ -316,6 +326,13 @@ export const strengthOfScheduleEntrySchema = z.object({
   table: z.record(z.string(), z.record(z.enum(["QB", "RB", "WR", "TE"]), strengthOfScheduleCellSchema)),
 });
 
+/** One team's game in a coming week; a bye has no opponent. */
+export const upcomingGameSchema = z.object({
+  week: z.number().int(),
+  opponent: z.string().nullable(),
+  isAway: z.boolean(),
+});
+
 export const playerTrendingEntrySchema = z.object({
   adds: z.number().int().nullable(),
   drops: z.number().int().nullable(),
@@ -351,6 +368,8 @@ export const dashboardResponse = z.object({
   defenses: z.array(defenseSchema),
   analytics: analyticsSchema,
   strengthOfSchedule: z.array(strengthOfScheduleEntrySchema),
+  /** Each NFL team's next four games (this week first), for the player card's schedule strip. */
+  upcomingGames: z.record(z.string(), z.array(upcomingGameSchema)).optional(),
   gameLines: z.array(teamGameLineSchema).default([]),
   sourceErrors: z.array(z.string()),
 });
@@ -372,6 +391,7 @@ export const leagueIdentitySchema = leagueSchema.pick({
   seasonLongFormat: true,
   tradeValuation: true,
   waivers: true,
+  waiverBids: true,
 });
 
 export const leagueTeamSchema = leagueSchema.pick({
@@ -413,6 +433,7 @@ export const dashboardPlayersSchema = dashboardResponse.pick({
   seasonLongRankings: true,
   defenses: true,
   strengthOfSchedule: true,
+  upcomingGames: true,
   playerTrending: true,
   playerInsights: true,
   gameLines: true,
