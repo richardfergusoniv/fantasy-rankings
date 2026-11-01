@@ -647,6 +647,7 @@ export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveE
       // ids, so resolve through the prop-line-reads identity index (id, then
       // unambiguous name+position, then name+team+position), never by raw id.
       const statsIndex = indexWeekStatsByPlayer(prior);
+      const statWeeks = new Set(prior.map((row) => row.week));
       const playedIndex = indexPlayedWeeks(snaps.filter((snap) => snap.week <= week - 1));
       type SnapRow = (typeof snaps)[number];
       const snapsByTeamKey = new Map<string, Map<number, SnapRow>>();
@@ -686,16 +687,20 @@ export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveE
         // The window is the player's last three PLAYED weeks (from snaps), so
         // a played week with no stat row counts as a zero week rather than
         // being skipped for an older productive game; the snap and stat
-        // averages describe the same weeks. Without snap data, fall back to
-        // the last three stat weeks.
-        const weeks = (played.size > 0 ? [...played] : statRows.map((row) => row.week))
+        // averages describe the same weeks. Played weeks are first filtered
+        // to the stats dataset's covered weeks (the buildPropHistory rule):
+        // snaps can publish ahead of stats, and a stats load that came back
+        // empty must read as unavailable evidence, not zero production.
+        // Without snap data at all, fall back to the last three stat weeks.
+        const coveredPlayed = new Set([...played].filter((w) => statWeeks.has(w)));
+        const weeks = (played.size > 0 ? [...coveredPlayed] : statRows.map((row) => row.week))
           .sort((a, b) => b - a)
           .slice(0, 3);
         if (weeks.length === 0) return null;
         const snapByWeek = snapMapFor(player);
         const avg = (values: number[]) => round1dp(values.reduce((sum, v) => sum + v, 0) / values.length);
         const shares = weeks
-          .map((w) => statByWeek.get(w)?.targetShare ?? (played.size > 0 ? 0 : null))
+          .map((w) => statByWeek.get(w)?.targetShare ?? (coveredPlayed.has(w) ? 0 : null))
           .filter((v): v is number => v !== null);
         return {
           games: weeks.length,

@@ -861,8 +861,14 @@ describe("extended chat tools", () => {
     });
     vi.mocked(loadTeamWeekStats).mockResolvedValueOnce({
       season: 2026,
-      // Played weeks 4, 5, 6 on snaps, but no stat row for week 5.
-      stats: [statRow(4, 8), statRow(6, 4)],
+      // Played weeks 4, 5, 6 on snaps, but no stat row for week 5. Another
+      // player's week-5 row keeps week 5 inside the dataset's coverage, so
+      // the missing row is a played zero week, not an uncovered week.
+      stats: [
+        statRow(4, 8),
+        statRow(6, 4),
+        { ...statRow(5, 3), playerId: "gsis-other", name: "Other Guy" },
+      ],
       snaps: [snapRow(4), snapRow(5), snapRow(6)],
     });
     selectResults.push([]); // prop-line cache miss inside the evidence index
@@ -877,6 +883,71 @@ describe("extended chat tools", () => {
     // (4 + 0 + 8) / 3: the zero week counts, it is not skipped.
     expect(evidence.usage?.targetsPerGame).toBe(4);
     expect(evidence.usage?.snapSharePct).toBe(50);
+  });
+
+  it("move evidence excludes played weeks outside stats coverage and reports no coverage as unavailable", async () => {
+    const statRow = (week: number, targets: number) => ({
+      playerId: "gsis-zero",
+      name: "Zero Week",
+      team: "BUF",
+      opponent: "NYJ",
+      position: "WR" as const,
+      week,
+      targets,
+      receptions: 0,
+      receivingYards: 0,
+      carries: 0,
+      rushingYards: 0,
+      receivingTds: 0,
+      rushingTds: 0,
+      passingTds: 0,
+      fantasyPpr: targets,
+      targetShare: 20,
+      completions: 0,
+      passAttempts: 0,
+      passingYards: 0,
+      interceptions: 0,
+      passingFirstDowns: 0,
+      rushingFirstDowns: 0,
+      receivingFirstDowns: 0,
+      sacksTaken: 0,
+      fumblesLost: 0,
+      passing2pt: 0,
+      rushing2pt: 0,
+      receiving2pt: 0,
+    });
+    const snapRow = (week: number) => ({
+      name: "Zero Week",
+      team: "BUF",
+      position: "WR" as const,
+      week,
+      offenseSnaps: 40,
+      offensePct: 50,
+    });
+    const ref = { playerId: "sleeper-zero", name: "Zero Week", team: "BUF", position: "WR" };
+
+    // Snaps run one week ahead of stats: week 6 is excluded from the
+    // window entirely, not zero-filled.
+    vi.mocked(loadTeamWeekStats).mockResolvedValueOnce({
+      season: 2026,
+      stats: [statRow(4, 8), statRow(5, 6)],
+      snaps: [snapRow(4), snapRow(5), snapRow(6)],
+    });
+    selectResults.push([]);
+    const ahead = await loadMoveEvidenceIndex(baseDashboard());
+    const aheadEvidence = ahead.forPlayer(ref);
+    expect(aheadEvidence.usage?.games).toBe(2);
+    expect(aheadEvidence.usage?.targetsPerGame).toBe(7);
+
+    // Stats came back empty while snaps are populated: unavailable, not zero.
+    vi.mocked(loadTeamWeekStats).mockResolvedValueOnce({
+      season: 2026,
+      stats: [],
+      snaps: [snapRow(4), snapRow(5), snapRow(6)],
+    });
+    selectResults.push([]);
+    const empty = await loadMoveEvidenceIndex(baseDashboard());
+    expect(empty.forPlayer(ref).usage).toBeNull();
   });
 
   it("suggest_waivers ranks free agents with verdicts and evidence, no reasons", async () => {
