@@ -43,7 +43,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
     );
   }
   if (query.isError || !query.data) {
-    return <SectionError title="Projected standings didn’t load." onRetry={() => { void query.refetch(); }} retrying={query.isFetching} />;
+    return <SectionError title="Playoff picture didn’t load." onRetry={() => { void query.refetch(); }} retrying={query.isFetching} />;
   }
 
   const { teams, games, userGames = [] } = query.data;
@@ -63,7 +63,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
   const groups = cutAfter >= 0 ? [teams.slice(0, cutAfter + 1), teams.slice(cutAfter + 1)] : [teams];
 
   return (
-    <section className="power-view proj-view" aria-label="Projected standings">
+    <section className="power-view proj-view" aria-label="Playoff picture">
       {me ? (
         <Card className="proj-hero gap-0 py-0 shadow-sm">
           <div className="proj-finish">
@@ -84,12 +84,12 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
 
       <section className="power-table-section" aria-labelledby="proj-standings-heading">
         <div className="section-heading power-section-heading">
-          <h2 id="proj-standings-heading">Projected record, playoff chances, and points scored</h2>
+          <h2 id="proj-standings-heading">Playoff picture</h2>
         </div>
         {groups.map((group, groupIndex) => (
           <Fragment key={group[0]?.rosterId ?? groupIndex}>
             {groupIndex > 0 ? <div className="proj-cut" role="separator" aria-label="Playoff cut">Playoff cut</div> : null}
-            <div className="power-table" role="table" aria-label={groups.length > 1 ? (groupIndex === 0 ? "Projected playoff teams" : "Projected teams outside the cut") : "Projected standings"}>
+            <div className="power-table" role="table" aria-label={groups.length > 1 ? (groupIndex === 0 ? "Projected playoff teams" : "Projected teams outside the cut") : "Playoff picture"}>
               {group.map((team) => (
                 <div className="power-list-item" key={team.rosterId}>
                   <div className={`power-row proj-row${team.isUser ? " is-user" : ""}${team.playoffOdds != null ? " has-odds" : ""}`} role="row">
