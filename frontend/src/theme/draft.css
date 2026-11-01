@@ -226,9 +226,10 @@ a.player-news-item { color: inherit; text-decoration: none; }
 .hindsight-table thead th.is-pick { z-index: 4; color: var(--dim); font-size: var(--type-caption); }
 .hindsight-table thead th.is-best, .hindsight-table thead th.is-yours { background: var(--surface-2); }
 .hindsight-table th b { display: block; }
-.hindsight-table th span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.hindsight-table th .hindsight-timing { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .hindsight-table th em { display: block; margin-top: 2px; color: var(--link); font-size: var(--type-caption); font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; }
-.hindsight-table th .status-badge { margin-top: 3px; }
+.hindsight-table th .status-badge { margin-top: 4px; background: var(--card); }
+.hindsight-table th:not(.is-pick), .hindsight-table td { border-left: 1px solid var(--hairline); }
 .hindsight-table td strong, .hindsight-table th.is-pick strong { display: block; font-size: var(--type-control); font-weight: 700; }
 .hindsight-table td small, .hindsight-table th.is-pick small { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .hindsight-none, .hindsight-table .is-off, .hindsight-table th.is-off em { color: var(--dim); }

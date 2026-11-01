@@ -81,7 +81,7 @@ export function HindsightSheet({ open, onOpenChange, hindsight, entries, nameOf,
                 {hindsight.plans.map((plan) => (
                   <th scope="col" key={`${plan.name}-${plan.timing}`} className={`${plan.best ? "is-best " : ""}${plan.yours ? "is-yours " : ""}${plan.gap === null ? "is-off" : ""}`}>
                     <b>{plan.name}</b>
-                    <span>{timingText(plan.timing)}</span>
+                    <span className="hindsight-timing">{timingText(plan.timing)}</span>
                     <em>{plan.gap === null ? "Not possible" : gapText(plan.gap)}</em>
                     {plan.best || plan.yours ? <Badge variant="secondary" size="compact" className="status-badge">{[plan.best ? "Best" : null, plan.yours ? "Yours" : null].filter(Boolean).join(" · ")}</Badge> : null}
                   </th>
