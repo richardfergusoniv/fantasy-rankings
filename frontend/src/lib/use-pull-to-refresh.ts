@@ -68,6 +68,11 @@ export function usePullToRefresh({ onRefresh, refreshing, disabled = false }: {
     const root = document.documentElement;
     root.classList.add("has-pull-refresh");
     const onStart = (event: TouchEvent) => {
+      // A second finger cancels the pull, so lifting either finger can't release it.
+      if (event.touches.length > 1) {
+        if (start.current) reset();
+        return;
+      }
       // No second refresh while one runs (from a pull or the header button).
       if (phase === "refreshing" || refreshingRef.current || event.touches.length !== 1) return;
       const touch = event.touches[0]!;
@@ -90,8 +95,9 @@ export function usePullToRefresh({ onRefresh, refreshing, disabled = false }: {
       distanceRef.current = pullDistance(dy);
       setDistance(distanceRef.current);
     };
-    const onEnd = () => {
-      if (!start.current) return;
+    const onEnd = (event: TouchEvent) => {
+      // Release only when the last finger lifts.
+      if (!start.current || event.touches.length > 0) return;
       const pulled = distanceRef.current;
       start.current = null;
       // A refresh that started mid-pull (the header button) is not doubled on release.
