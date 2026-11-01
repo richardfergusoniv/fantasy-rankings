@@ -55,6 +55,7 @@ import { SkipLink } from "./shared";
 import { supabase } from "./supabase";
 import { personalQueryKey, snapshotViewer, useViewerIdentity } from "./viewer-scope";
 import { useDashboardUrl } from "./use-dashboard-url";
+import { PULL_THRESHOLD, usePullToRefresh } from "./lib/use-pull-to-refresh";
 import { CommandBar } from "./shell/command-bar";
 import { isTypingTarget, type CommandLeagueItem, type CommandPlayerItem } from "./shell/command-palette";
 import { InspectorFrame, useInspectorDockViewport } from "./shell/inspector-frame";
@@ -1138,6 +1139,8 @@ export function App() {
       queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "player-news") });
     }
   };
+  // Phones: pull down from the top of the page to run the same refresh as the header button.
+  const pull = usePullToRefresh({ onRefresh: refreshCurrentView, refreshing: isRefreshing, disabled: askOpen });
 
   const hasCompleteDashboard = Boolean(dashboardQuery.data || browserDashboard);
   const hasPlayerSectionData = hasCompleteDashboard
@@ -1376,6 +1379,11 @@ export function App() {
     <div className={`app-shell${primaryPage === "team" ? " matchup-page" : ""}${inspectorDocked ? " is-inspector-docked" : ""}`}>
       <SkipLink />
       <SafeAreaTopScrim backgroundColor="var(--bg)" />
+      {pull.phase !== "idle" ? (
+        <div className={`pull-refresh${pull.ready ? " is-ready" : ""}`} style={{ transform: `translate(-50%, ${pull.distance}px)`, opacity: Math.min(1, pull.distance / PULL_THRESHOLD) }} aria-hidden="true">
+          <span style={{ transform: pull.phase === "refreshing" ? undefined : `rotate(${pull.distance * 3}deg)` }}><RefreshIcon spinning={pull.phase === "refreshing"} /></span>
+        </div>
+      ) : null}
       {askOpen ? (
         <Suspense fallback={null}>
           <LazyAskSheet open={askOpen} onOpenChange={changeAskOpen} context={askContextForTab(tab)} horizon={dashboardUrl.state.horizon} leagueId={league?.id ?? null} />

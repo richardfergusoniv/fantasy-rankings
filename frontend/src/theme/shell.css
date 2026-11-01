@@ -52,6 +52,11 @@ span.ticker-item:active { background: transparent; }
 .account-button:active { background: var(--accent-soft); }
 .account-button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 .spin { animation: refreshPulse 1s ease-in-out infinite; }
+/* Pull-to-refresh (touch): a disc that follows the pull down from under the status bar.
+   Amber when letting go will refresh, like the header refresh button's color. */
+.pull-refresh { position: fixed; z-index: 60; top: calc(env(safe-area-inset-top) - 36px); left: 50%; display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid var(--hairline); border-radius: var(--radius-pill); background: var(--surface); box-shadow: var(--shadow-popover); color: var(--dim); pointer-events: none; }
+.pull-refresh.is-ready { color: var(--link); }
+.pull-refresh > span { display: grid; place-items: center; }
 @keyframes refreshPulse { 50% { opacity: .25; } }
 
 .league-picker { position: relative; display: flex; align-items: center; min-height: 44px; }
