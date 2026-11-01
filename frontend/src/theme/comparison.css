@@ -48,7 +48,7 @@
 /* Comparison: two pickers side by side, then the card inline. */
 .comparison-pickers { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; max-width: 720px; }
 .comparison-pick { --comparison-space: 4px; min-width: 0; }
-.comparison-pick-search { min-height: 52px; height: 52px; }
+.comparison-pick-search { min-height: var(--text-input-height); height: var(--text-input-height); }
 .comparison-pick-search > svg { flex: none; }
 .comparison-pick-chosen { display: flex; min-height: 52px; align-items: stretch; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
 .comparison-pick-swap { display: grid; flex: 1; min-width: 0; align-content: center; gap: 2px; padding: 6px 2px 6px 10px; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }

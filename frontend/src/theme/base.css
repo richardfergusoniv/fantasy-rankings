@@ -265,8 +265,9 @@
   --sub-tab-button-height: 36px;
   --sub-tab-font-size: var(--type-tab);
   --sub-tab-font-weight: 600;
-  /* Search inputs sit alongside the 48px tab tracks. */
-  --search-input-height: 40px;
+  /* Every text box in the app shares this height. */
+  --text-input-height: 44px;
+  --search-input-height: var(--text-input-height);
   --table-scroll-max-height: 70vh;
   --league-roster-row-height: 56px;
 }
