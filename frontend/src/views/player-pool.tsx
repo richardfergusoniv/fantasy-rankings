@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { RangeBar, rangeDomain, type ProjectionRange } from "../components/range-bar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -822,6 +823,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             projection: row.value,
             projectionLabel: "VALUE",
             projectionSource: null,
+            projectionRange: null as ProjectionRange | null,
             position: row.position,
             isRookie: row.isRookie,
             injuryStatus: weeklyContext?.injuryStatus ?? null,
@@ -851,6 +853,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             projection: row.displayProjection,
             projectionLabel: showActual ? "PTS" : "PROJ",
             projectionSource: row.projectionSource,
+            projectionRange: null as ProjectionRange | null,
             position: "DEF",
             isRookie: false,
             injuryStatus: null,
@@ -885,6 +888,8 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
           projectionLabel: showActual ? "PTS" : "PROJ",
           sortProjection: sortValue,
           projectionSource: row.projectionSource,
+          // The book range describes the pregame projection only.
+          projectionRange: showActual ? null : (row.projectionRange ?? null),
           position: row.position,
           isRookie: rookiePlayerIds.has(row.playerId),
           injuryStatus: row.injuryStatus,
@@ -896,6 +901,8 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
         : a.rank - b.rank);
   }, [availableOnly, dashboard.seasonLongRankings, effectiveHorizon, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, leagueDefenses, leagueRankings, powerTeamByPlayerId, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
   const visibleRows = rows.slice(0, visibleRowCount);
+  // One scale for every range bar in the list, so bars compare across rows.
+  const rangeMax = useMemo(() => rangeDomain(rows.map((row) => row.projectionRange)), [rows]);
   const hasSearch = query.trim().length > 0;
   const rankingHorizonOptions: Array<SegmentOption<RankingHorizon>> = availableOnly
     ? league.seasonLongFormat.isDynasty
@@ -1082,7 +1089,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                       ) : null}
                     </span>
                   </span>
-                  <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : <span>{row.projectionLabel}</span>}</span>
+                  <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : row.projectionRange ? <RangeBar range={row.projectionRange} value={row.projection} domain={rangeMax} /> : <span>{row.projectionLabel}</span>}</span>
                 </>
               );
               const openPlayer = () => {

@@ -1052,6 +1052,7 @@ export function App() {
       actual: weekly?.actual ?? defense?.actualScore ?? rosterPlayer?.actual ?? null,
       defenseComponents: defense?.components ?? rosterPlayer?.defenseComponents,
       projectionComponents: weekly?.projectionComponents ?? rosterPlayer?.projectionComponents ?? null,
+      projectionRange: weekly && (weekly.gamePhase === "pregame" || weekly.gamePhase === null) ? weekly.projectionRange ?? null : null,
     };
   }
 

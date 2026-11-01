@@ -1,4 +1,5 @@
 import { refreshPlayerCard, playerPointsLabel } from "./player-card-state";
+import { RangeBar, rangeDomain } from "./components/range-bar";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
@@ -755,6 +756,9 @@ export function PlayerDetailSheet({
               <strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong>
               <small>{player.weeklyProjection === null ? "No weekly projection" : player.weeklyRank === null ? "No weekly rank" : <>{positionLabel} <span className={rankToneClassName(player.weeklyRank)}>#{player.weeklyRank}</span></>}</small>
             </div>
+            {player.projectionRange ? (
+              <RangeBar className="player-detail-range" range={player.projectionRange} value={player.weeklyProjection} domain={rangeDomain([player.projectionRange])} />
+            ) : null}
           </div>
           <div>
             <span>Season-long value</span>
