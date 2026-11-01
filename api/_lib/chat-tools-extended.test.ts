@@ -131,6 +131,7 @@ vi.mock("./sleeper.js", async (importOriginal) => {
 });
 
 import { dispatchChatTool } from "./chat-tools.js";
+import { loadTeamWeekStats } from "./pfn-tables.js";
 import {
   toolGetDraftInfo,
   toolGetPlayerAdvanced,
@@ -854,6 +855,28 @@ describe("extended chat tools", () => {
     expect(result.board[0]?.stat).toBe("rec_yards");
     expect(result.board[0]?.history?.overs).toBe(3);
     expect(result.board[0]?.history?.hitRate).toBe(0.5);
+  });
+
+  it("get_prop_board reports stats coverage and flags a failed stats load", async () => {
+    const covered = await toolGetPropBoard(ctxWithDashboard(), { leagueId: "lg1" }) as {
+      ok: boolean;
+      historyThroughWeek: number | null;
+      historyDegraded?: boolean;
+    };
+    expect(covered.historyThroughWeek).toBe(6);
+    expect(covered.historyDegraded).toBeUndefined();
+
+    vi.mocked(loadTeamWeekStats).mockRejectedValueOnce(new Error("nflverse unavailable"));
+    const degraded = await toolGetPropBoard(ctxWithDashboard(), { leagueId: "lg1" }) as {
+      ok: boolean;
+      historyThroughWeek: number | null;
+      historyDegraded?: boolean;
+      board: Array<{ history: unknown }>;
+    };
+    expect(degraded.ok).toBe(true);
+    expect(degraded.historyDegraded).toBe(true);
+    expect(degraded.historyThroughWeek).toBeNull();
+    expect(degraded.board[0]?.history).toBeNull();
   });
 
   it("get_prop_board filters by position", async () => {

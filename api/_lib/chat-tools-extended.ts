@@ -593,48 +593,64 @@ export type PropLineHitRecord = {
 
 type PropLine = PropLineWeekPayload["lines"][number];
 
+type PropHitIndex = {
+  historyFor: (line: PropLine) => PropLineHitRecord | null;
+  /** Last week the stats payload actually covers; can trail the slate week. */
+  throughWeek: number;
+};
+
 /**
  * Index of season hit records for prop lines, built exactly like the Game
  * Lines board: nflverse week stats and snap counts through the week before
  * the slate week, graded by buildPropHistory against this week's line.
- * Returns null when history cannot be built (week 1, no stats, load
- * failure); callers then report history as null rather than guessing.
+ * index is null when history cannot be built (week 1 or no stats yet);
+ * degraded marks a failed load, which callers surface instead of letting
+ * every line silently show no history.
  */
 async function loadPropHitIndex(
   season: number,
   week: number,
-): Promise<{ historyFor: (line: PropLine) => PropLineHitRecord | null } | null> {
-  if (week <= 1) return null;
+): Promise<{ index: PropHitIndex | null; degraded: boolean }> {
+  if (week <= 1) return { index: null, degraded: false };
   try {
     const { stats, snaps } = await loadTeamWeekStats(season);
     const priorStats = stats.filter((row) => row.week >= 1 && row.week <= week - 1);
-    if (priorStats.length === 0) return null;
+    if (priorStats.length === 0) return { index: null, degraded: false };
     const statsByPlayer = indexWeekStatsByPlayer(priorStats);
     const playedByPlayer = indexPlayedWeeks(snaps.filter((snap) => snap.week <= week - 1));
     const statWeeks = new Set(priorStats.map((row) => row.week));
+    const throughWeek = Math.max(...statWeeks);
     return {
-      historyFor: (line) => {
-        if (!line.position) return null;
-        const ref = { playerId: line.playerId, name: line.name, team: line.team, position: line.position };
-        const history = buildPropHistory(
-          line.stat,
-          line.line,
-          weekStatsForPlayer(statsByPlayer, ref),
-          playedWeeksForPlayer(playedByPlayer, ref),
-          statWeeks,
-        );
-        if (history.games === 0) return null;
-        return {
-          games: history.games,
-          overs: history.overs,
-          unders: history.unders,
-          pushes: history.pushes,
-          hitRate: history.hitRate,
-        };
+      degraded: false,
+      index: {
+        throughWeek,
+        historyFor: (line) => {
+          if (!line.position) return null;
+          const ref = { playerId: line.playerId, name: line.name, team: line.team, position: line.position };
+          const history = buildPropHistory(
+            line.stat,
+            line.line,
+            weekStatsForPlayer(statsByPlayer, ref),
+            playedWeeksForPlayer(playedByPlayer, ref),
+            statWeeks,
+          );
+          if (history.games === 0) return null;
+          return {
+            games: history.games,
+            overs: history.overs,
+            unders: history.unders,
+            pushes: history.pushes,
+            hitRate: history.hitRate,
+          };
+        },
       },
     };
-  } catch {
-    return null;
+  } catch (err) {
+    console.error(
+      "[chat] prop hit index load failed",
+      err instanceof Error ? err.message : String(err),
+    );
+    return { index: null, degraded: true };
   }
 }
 
@@ -722,8 +738,8 @@ export async function toolGetProjections(
     const weekProps = await loadPropLineWeek({ season: dashboard.season, week: dashboard.week });
     const idSet = new Set(ids);
     const lines = weekProps.lines.filter((line) => idSet.has(line.playerId)).slice(0, 40);
-    const hitIndex = lines.length > 0 ? await loadPropHitIndex(dashboard.season, dashboard.week) : null;
-    propLines = lines.map((line) => ({ ...line, history: hitIndex ? hitIndex.historyFor(line) : null }));
+    const hit = lines.length > 0 ? await loadPropHitIndex(dashboard.season, dashboard.week) : null;
+    propLines = lines.map((line) => ({ ...line, history: hit?.index ? hit.index.historyFor(line) : null }));
   } catch {
     propLines = [];
   }
@@ -797,8 +813,8 @@ export async function toolGetPropBoard(
       (!stat || line.stat.toLowerCase() === stat),
   );
 
-  const hitIndex = await loadPropHitIndex(dashboard.season, dashboard.week);
-  const entries = filtered.map((line) => ({ ...line, history: hitIndex ? hitIndex.historyFor(line) : null }));
+  const hit = await loadPropHitIndex(dashboard.season, dashboard.week);
+  const entries = filtered.map((line) => ({ ...line, history: hit.index ? hit.index.historyFor(line) : null }));
   entries.sort((left, right) =>
     compareHitsDesc(
       { hitRate: left.history?.hitRate ?? null, hits: left.history?.overs, name: left.name, stat: left.stat },
@@ -815,8 +831,10 @@ export async function toolGetPropBoard(
     pulledAt: weekProps.pulledAt,
     ...(weekProps.degraded ? { degraded: true as const } : {}),
     totalLines: filtered.length,
+    historyThroughWeek: hit.index?.throughWeek ?? null,
+    ...(hit.degraded ? { historyDegraded: true as const } : {}),
     note:
-      "history grades this season's prior played weeks against THIS week's line, over side; pushes are excluded from hitRate and a null history means no graded weeks (unsupported market, no stats coverage, or the player has not played). Lines are the stored consensus snapshot (line, odds, bookCount, move since open), not live odds. A hit record is evidence, not a guarantee.",
+      "history grades this season's prior played weeks against THIS week's line, over side; pushes are excluded from hitRate and a null history means no graded weeks (unsupported market, no stats coverage, or the player has not played). historyThroughWeek is the last week the stats actually cover and can trail the slate week; historyDegraded means the stats load failed, so no records could be built. Lines are the stored consensus snapshot (line, odds, bookCount, move since open), not live odds. A hit record is evidence, not a guarantee.",
     board: entries.slice(0, limit),
   };
 }
