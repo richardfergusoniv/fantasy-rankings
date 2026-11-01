@@ -369,6 +369,34 @@ export async function loadSleeperPlayerWeeklySeason(
   }
 }
 
+/**
+ * Sleeper's projection for each week of a player's season, same row shape and
+ * caching as loadSleeperPlayerWeeklySeason. Past weeks' projections don't change;
+ * the current week's refreshes on the same 30-minute window.
+ */
+export async function loadSleeperPlayerWeeklyProjections(playerId: string, season: number): Promise<SleeperWeeklyStatRow[]> {
+  const cacheKey = `sleeper-player-weekly-projections-v1:${playerId}:${season}`;
+  const cachedRows = await db.select().from(schema.sourceCache)
+    .where(eq(schema.sourceCache.cacheKey, cacheKey))
+    .limit(1);
+  const cached = cachedRows[0];
+  if (cached && Date.now() - cached.fetchedAt.getTime() < SLEEPER_WEEKLY_STATS_CURRENT_CACHE_MS) {
+    return normalizeSleeperWeeklyRows(decodeSourceCachePayload(cached.payload));
+  }
+  try {
+    const payload = await fetchJson<unknown>(
+      `${SLEEPER_PROJECTIONS_BASE}/projections/nfl/player/${encodeURIComponent(playerId)}?season_type=regular&season=${season}&grouping=week`,
+    );
+    const encoded = encodeSourceCachePayload(payload);
+    await db.insert(schema.sourceCache).values({ cacheKey, payload: encoded, fetchedAt: new Date() })
+      .onConflictDoUpdate({ target: schema.sourceCache.cacheKey, set: { payload: encoded, fetchedAt: new Date() } });
+    return normalizeSleeperWeeklyRows(payload);
+  } catch (error) {
+    if (cached) return normalizeSleeperWeeklyRows(decodeSourceCachePayload(cached.payload));
+    throw error;
+  }
+}
+
 function flattenSleeperWeeklyRow(row: SleeperWeeklyStatRow, week?: number): SleeperWeeklyStatRow {
   const nestedStats = typeof row.stats === "object" && row.stats !== null && !Array.isArray(row.stats)
     ? (row.stats as SleeperWeeklyStatRow)
