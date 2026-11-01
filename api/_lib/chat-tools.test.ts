@@ -343,7 +343,9 @@ describe("dispatchChatTool", () => {
       giveTotal: number;
       getTotal: number;
       waiverAdjustment: { give: number; get: number };
-      verdict: string;
+      verdicts: { seasonLong: { label: string; score: number } };
+      fairness: { band: string } | null;
+      rosterImpact: { seasonLong: { starterValueBefore: number; starterValueAfter: number; fillsHole: boolean } };
       primaryLabel: string;
       scoringWindow: string;
     };
@@ -355,7 +357,13 @@ describe("dispatchChatTool", () => {
     expect(result.waiverAdjustment).toEqual({ give: 0, get: 0 });
     expect(result.scoringWindow).toBe("season_long");
     expect(result.primaryLabel).toMatch(/Accept|Lean accept|Decline/);
-    expect(result.verdict.length).toBeGreaterThan(0);
+    expect(result.verdicts.seasonLong.label).toBe(result.primaryLabel);
+    expect(typeof result.rosterImpact.seasonLong.starterValueAfter).toBe("number");
+    // No engine prose or scoring internals reach the model.
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("\"reasons\"");
+    expect(serialized).not.toContain("\"verdict\":\"");
+    expect(serialized).not.toContain("\"scoring\"");
   });
 
   it("returns this week's matchup projections", async () => {

@@ -5,6 +5,7 @@
  *
  * Spec: docs/scoring/SCORING_SPEC.md (constants: api/_lib/scoring/constants.json).
  */
+import type { WindowScore } from "./scoring/types.js";
 
 export { SCORING_WEIGHTS, BUILTIN_SCORING_WEIGHTS, SCORING_CONSTANTS } from "./scoring/weights.js";
 export type { ScoringWeightsParams, SkillPosition } from "./scoring/weights.js";
@@ -64,6 +65,43 @@ export {
   fairnessBand,
 } from "./scoring/labels.js";
 
+/**
+ * The only part of a WindowScore the chat model sees: the deterministic
+ * verdict as data. The score's reasons are deliberately NOT part of this
+ * shape. They are written in engine voice (factor / source / effect), and
+ * when they reached the model it transcribed them instead of analyzing;
+ * the tools now send raw evidence alongside the verdict and the model
+ * composes its own reasoning from that.
+ */
+export type MoveVerdict = {
+  label: string;
+  score: number;
+  /** What the score number means, in plain words (the raw metric token stays server-side). */
+  unit: string;
+  closeCall?: boolean;
+  tiebreak?: { rule: string; pick: string };
+};
+
+const MOVE_SCORE_UNITS: Record<string, string> = {
+  win_the_slot_chance: "win chance, percent",
+  lineup_points_delta: "lineup points",
+  lineup_points_gained: "lineup points",
+  gain_pct_of_starters: "percent of starter value gained",
+  value_gap_pct: "value gap, percent",
+};
+
+export function moveVerdict(score: WindowScore): MoveVerdict {
+  return {
+    label: score.label,
+    score: score.score,
+    unit: MOVE_SCORE_UNITS[score.metric] ?? score.metric,
+    ...(score.closeCall ? { closeCall: true as const } : {}),
+    ...(score.tiebreak
+      ? { tiebreak: { rule: score.tiebreak.rule, pick: score.tiebreak.pickAfter } }
+      : {}),
+  };
+}
+
 /** Compact per-window system instructions (Model rules). Kept short for free OpenRouter models. */
 export const MOVE_SCORING_WINDOW_PROMPTS = {
   week: [
@@ -79,7 +117,7 @@ export const MOVE_SCORING_WINDOW_PROMPTS = {
     "T3 Questionable starter in a late game: keep a backup who plays later.",
     "Explain with: Talent beats matchup; the score already includes Vegas lines. After one bad game, check snaps and targets. A teammate out means more work for the others. Wind 20+ mph lowers passing; mention only if the tool lists it.",
     "Never cite: a matchup or defense rank alone, hot streaks, revenge games, home/away, Thursday games, teammates \"cannibalizing\", \"boom-bust\" labels, TD streaks.",
-    "Format: label and its number first (win chance, points gained or value gap), then 2-3 reasons from the tool. Say \"close call\" when it is one. Plain words, under 100 words unless asked.",
+    "Format: label and its number first (win chance, points gained or value gap), then 2-3 reasons you draw from the evidence in the result (projections, usage trend, game line, prop line). Name the deciding factor. Say \"close call\" when it is one. Plain words, under 100 words unless asked.",
   ].join("\n"),
 
   season_long: [
@@ -97,7 +135,7 @@ export const MOVE_SCORING_WINDOW_PROMPTS = {
     "S5 Rolling waivers: don't spend a top-3 priority on a Watch add. FAAB: no bid amounts.",
     "Explain with: Season average beats the last 3 weeks; a hot streak matters only if the role changed. For waiver adds, snaps and target share matter more than one big game. No schedule-strength bonus.",
     "Never cite: hot or cold streaks alone, TD streaks, a fixed \"fair trade\" %, schedule rankings, \"boom-bust\" labels.",
-    "Format: label and its number first (win chance, points gained or value gap), then 2-3 reasons from the tool. Say \"close call\" when it is one. Plain words, under 100 words unless asked.",
+    "Format: label and its number first (win chance, points gained or value gap), then 2-3 reasons you draw from the evidence in the result (value gap, usage trend, positional need, FAAB context). Name the deciding factor. Say \"close call\" when it is one. Plain words, under 100 words unless asked.",
   ].join("\n"),
 
   dynasty: [
@@ -113,7 +151,7 @@ export const MOVE_SCORING_WINDOW_PROMPTS = {
     "S4 2-for-1: prefer the best player if you can fill the open slot; a star carries more injury risk.",
     "Explain with: Age lowers value gradually, fastest for RBs 28+; there is no fixed sell age. Youth and draft capital help forecasts for young players. Picks use market value as is. In TE premium leagues, say TE values don't include the premium.",
     "Never cite: a fixed age cliff, a fixed \"fair trade\" %, a yearly pick discount, TD streaks.",
-    "Format: label and its number first (win chance, points gained or value gap), then 2-3 reasons from the tool. Say \"close call\" when it is one. Plain words, under 100 words unless asked.",
+    "Format: label and its number first (win chance, points gained or value gap), then 2-3 reasons you draw from the evidence in the result (value gap, age and role trajectory, contender or rebuilder fit). Name the deciding factor. Say \"close call\" when it is one. Plain words, under 100 words unless asked.",
   ].join("\n"),
 } as const;
 
