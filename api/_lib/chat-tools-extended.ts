@@ -41,6 +41,8 @@ import {
   indexPlayedWeeks,
   indexWeekStatsByPlayer,
   playedWeeksForPlayer,
+  propPlayerMatchKey,
+  propPlayerNamePositionKey,
   weekStatsForPlayer,
 } from "./prop-line-reads.js";
 import { loadTeamWeekStats } from "./pfn-tables.js";
@@ -634,36 +636,40 @@ type MoveEvidenceIndex = {
   }) => MovePlayerEvidence;
 };
 
-async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveEvidenceIndex> {
+export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveEvidenceIndex> {
   const { season, week } = dashboard;
   let usageFor: ((player: { playerId: string; name: string; team: string | null; position: string }) => MovePlayerEvidence["usage"]) | null = null;
   if (week > 1) {
     try {
       const { stats, snaps } = await loadTeamWeekStats(season);
       const prior = stats.filter((row) => row.week >= 1 && row.week <= week - 1);
-      const statsById = new Map<string, typeof prior>();
-      for (const row of prior) {
-        const rows = statsById.get(row.playerId) ?? [];
-        rows.push(row);
-        statsById.set(row.playerId, rows);
-      }
-      const snapKey = (name: string, team: string, position: string) =>
-        `${name.toLowerCase().replace(/[^a-z ]/g, "").trim()}|${team}|${position}`;
-      const snapsByKey = new Map<string, typeof snaps>();
+      // Stat rows carry nflverse (GSIS) ids while tool players carry Sleeper
+      // ids, so resolve through the prop-line-reads identity index (id, then
+      // unambiguous name+position, then name+team+position), never by raw id.
+      const statsIndex = indexWeekStatsByPlayer(prior);
+      const snapsByTeamKey = new Map<string, typeof snaps>();
+      const snapsByCrossKey = new Map<string, typeof snaps>();
       for (const row of snaps) {
-        if (row.week > week - 1) continue;
-        const key = snapKey(row.name, row.team, row.position);
-        const rows = snapsByKey.get(key) ?? [];
-        rows.push(row);
-        snapsByKey.set(key, rows);
+        if (row.week > week - 1 || row.offenseSnaps <= 0) continue;
+        const teamKey = propPlayerMatchKey(row.name, row.team, row.position);
+        const teamRows = snapsByTeamKey.get(teamKey) ?? [];
+        teamRows.push(row);
+        snapsByTeamKey.set(teamKey, teamRows);
+        const crossKey = propPlayerNamePositionKey(row.name, row.position);
+        const crossRows = snapsByCrossKey.get(crossKey) ?? [];
+        crossRows.push(row);
+        snapsByCrossKey.set(crossKey, crossRows);
       }
       usageFor = (player) => {
-        const rows = (statsById.get(player.playerId) ?? [])
-          .slice()
-          .sort((a, b) => b.week - a.week)
-          .slice(0, 3);
+        const rows = weekStatsForPlayer(statsIndex, player).slice(-3);
         if (rows.length === 0) return null;
-        const snapRows = (snapsByKey.get(snapKey(player.name, player.team ?? "", player.position)) ?? [])
+        let snapRows = snapsByTeamKey.get(propPlayerMatchKey(player.name, player.team, player.position)) ?? [];
+        if (snapRows.length === 0) {
+          const cross = snapsByCrossKey.get(propPlayerNamePositionKey(player.name, player.position)) ?? [];
+          // Cross-team fallback only when the name+position maps to one team.
+          if (new Set(cross.map((row) => row.team)).size <= 1) snapRows = cross;
+        }
+        snapRows = snapRows
           .slice()
           .sort((a, b) => b.week - a.week)
           .slice(0, 3);

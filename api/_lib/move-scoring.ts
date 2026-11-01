@@ -76,14 +76,25 @@ export {
 export type MoveVerdict = {
   label: string;
   score: number;
+  /** What the score number means, in plain words (the raw metric token stays server-side). */
+  unit: string;
   closeCall?: boolean;
   tiebreak?: { rule: string; pick: string };
+};
+
+const MOVE_SCORE_UNITS: Record<string, string> = {
+  win_the_slot_chance: "win chance, percent",
+  lineup_points_delta: "lineup points",
+  lineup_points_gained: "lineup points",
+  gain_pct_of_starters: "percent of starter value gained",
+  value_gap_pct: "value gap, percent",
 };
 
 export function moveVerdict(score: WindowScore): MoveVerdict {
   return {
     label: score.label,
     score: score.score,
+    unit: MOVE_SCORE_UNITS[score.metric] ?? score.metric,
     ...(score.closeCall ? { closeCall: true as const } : {}),
     ...(score.tiebreak
       ? { tiebreak: { rule: score.tiebreak.rule, pick: score.tiebreak.pickAfter } }

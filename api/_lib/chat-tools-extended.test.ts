@@ -133,6 +133,7 @@ vi.mock("./sleeper.js", async (importOriginal) => {
 import { dispatchChatTool } from "./chat-tools.js";
 import { loadTeamWeekStats } from "./pfn-tables.js";
 import {
+  loadMoveEvidenceIndex,
   toolGetDraftInfo,
   toolGetPlayerAdvanced,
   toolGetPlayerNews,
@@ -780,7 +781,7 @@ describe("extended chat tools", () => {
     const result = await toolSuggestLineup(ctxWithDashboard(), { leagueId: "lg1" }) as {
       ok: boolean;
       swaps: Array<{
-        verdict: { label: string; score: number };
+        verdict: { label: string; score: number; unit: string };
         start: { playerId: string; evidence: { usage: unknown; game: unknown; propLines: unknown[] } };
         sit: { playerId: string } | null;
       }>;
@@ -791,6 +792,7 @@ describe("extended chat tools", () => {
     expect(result.projectionDelta).toBeGreaterThan(0);
     const swap = result.swaps[0]!;
     expect(swap.verdict.label.length).toBeGreaterThan(0);
+    expect(swap.verdict.unit.length).toBeGreaterThan(0);
     expect(swap.start.evidence).toBeDefined();
     expect(Array.isArray(swap.start.evidence.propLines)).toBe(true);
     // No engine prose or scoring internals reach the model.
@@ -800,6 +802,22 @@ describe("extended chat tools", () => {
     expect(serialized).not.toContain("\"scoring\"");
     expect(serialized).not.toContain("no_usage_history");
     expect(serialized).not.toContain("projection_edge");
+  });
+
+  it("move evidence resolves nflverse usage across the Sleeper/GSIS id mismatch", async () => {
+    selectResults.push([]); // prop-line cache miss inside the evidence index
+    const index = await loadMoveEvidenceIndex(baseDashboard());
+    // The stats fixture is keyed by the nflverse id "alpha"; the tool-side
+    // ref carries a Sleeper-style id, so only the name identity can join.
+    const evidence = index.forPlayer({
+      playerId: "sleeper-9999",
+      name: "Alpha Receiver",
+      team: "BUF",
+      position: "WR",
+    });
+    expect(evidence.usage?.games).toBe(3);
+    expect(evidence.usage?.snapSharePct).toBe(80);
+    expect(evidence.usage?.pprPointsPerGame).toBeGreaterThan(0);
   });
 
   it("suggest_waivers ranks free agents with verdicts and evidence, no reasons", async () => {
