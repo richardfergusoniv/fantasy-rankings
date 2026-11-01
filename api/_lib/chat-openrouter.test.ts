@@ -115,6 +115,26 @@ describe("callOpenRouterWithFallback chain", () => {
     expect(secondResult.model).toBe(FALLBACK_OPENROUTER_MODEL);
   });
 
+  it("reports a chain that ends on a timeout as a 504 upstream error", async () => {
+    const { fetchImpl } = routedFetch({
+      "*": (init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("The operation was aborted", "AbortError")),
+          );
+        }),
+    });
+    await expect(
+      callOpenRouterWithFallback({
+        apiKey: "sk-or-test",
+        messages: [{ role: "user", content: "Hi" }],
+        tools: [],
+        fetchImpl,
+        attemptTimeoutMs: 5,
+      }),
+    ).rejects.toMatchObject({ name: "OpenRouterError", status: 504 });
+  });
+
   it("advances past a model whose attempt times out", async () => {
     const { attempts, fetchImpl } = routedFetch({
       [DEFAULT_OPENROUTER_MODEL]: (init) =>

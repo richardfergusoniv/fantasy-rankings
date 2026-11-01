@@ -332,6 +332,16 @@ export async function callOpenRouterWithFallback(args: {
       }
     }
   }
+  // A chain that ends on an attempt timeout must still surface as an
+  // upstream failure the route recognizes (busy 503), not a private error
+  // it would report as an internal failure.
+  if (lastError instanceof ModelAttemptTimeoutError) {
+    throw new OpenRouterError(
+      504,
+      `Model attempt timed out after ${attemptTimeoutMs}ms: ${lastError.model}`,
+      lastError.model,
+    );
+  }
   throw lastError;
 }
 
