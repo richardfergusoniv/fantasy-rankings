@@ -62,6 +62,56 @@ vi.mock("./prop-line-week.js", () => ({
   })),
 }));
 
+vi.mock("./pfn-tables.js", () => {
+  const receivingYardsByWeek: Record<number, number> = { 1: 70, 2: 40, 3: 80, 4: 62, 5: 90, 6: 30 };
+  const statRow = (week: number) => ({
+    playerId: "00-0001",
+    name: "Alpha Receiver",
+    team: "KC",
+    opponent: "BUF",
+    position: "WR",
+    week,
+    targets: 8,
+    receptions: 5,
+    receivingYards: receivingYardsByWeek[week] ?? 0,
+    carries: 0,
+    rushingYards: 0,
+    receivingTds: 0,
+    rushingTds: 0,
+    passingTds: 0,
+    fantasyPpr: 12,
+    targetShare: 22,
+    completions: 0,
+    passAttempts: 0,
+    passingYards: 0,
+    interceptions: 0,
+    passingFirstDowns: 0,
+    rushingFirstDowns: 0,
+    receivingFirstDowns: 0,
+    sacksTaken: 0,
+    fumblesLost: 0,
+    passing2pt: 0,
+    rushing2pt: 0,
+    receiving2pt: 0,
+  });
+  return {
+    loadTeamWeekStats: vi.fn(async () => ({
+      season: 2026,
+      stats: [1, 2, 3, 4, 5, 6].map(statRow),
+      snaps: [1, 2, 3, 4, 5, 6].map((week) => ({
+        name: "Alpha Receiver",
+        team: "KC",
+        position: "WR",
+        week,
+        offenseSnaps: 40,
+        offensePct: 80,
+      })),
+    })),
+    handlePfnTables: vi.fn(),
+    resetTeamWeekStatsCaches: vi.fn(),
+  };
+});
+
 vi.mock("./nflverse-chart-extras.js", () => ({
   readChartExtrasSnapshot: vi.fn(async () => ({
     fetchedAt: new Date().toISOString(),
@@ -81,11 +131,13 @@ vi.mock("./sleeper.js", async (importOriginal) => {
 });
 
 import { dispatchChatTool } from "./chat-tools.js";
+import { loadTeamWeekStats } from "./pfn-tables.js";
 import {
   toolGetDraftInfo,
   toolGetPlayerAdvanced,
   toolGetPlayerNews,
   toolGetProjections,
+  toolGetPropBoard,
   toolGetValueHistory,
   toolSuggestLineup,
   toolSuggestTrades,
@@ -703,7 +755,10 @@ describe("extended chat tools", () => {
     ) as { ok: boolean; leagueId: string };
     expect(result.ok).toBe(true);
     expect(result.leagueId).toBe("lg2");
-  });
+    // Same live-shaped async work as the roster test above (which carries
+    // 15s for it); the prop hit-index load added a step to this path and
+    // the 5s default timed out in CI.
+  }, 15_000);
 
   it("get_value_history downsamples stored snapshots", async () => {
     selectResults.push([
@@ -768,6 +823,79 @@ describe("extended chat tools", () => {
     selectResults.push([]);
     const result = await dispatchChatTool(
       "suggest_lineup",
+      { leagueId: "lg1" },
+      ctxWithDashboard(),
+    ) as { ok: boolean };
+    expect(result.ok).toBe(true);
+  });
+
+  it("get_projections attaches season hit records to prop lines", async () => {
+    selectResults.push([]); // projection accuracy
+    const result = await toolGetProjections(ctxWithDashboard(), {
+      leagueId: "lg1",
+      scope: "roster",
+    }) as {
+      ok: boolean;
+      propLines: Array<{
+        name: string;
+        history: { games: number; overs: number; unders: number; pushes: number; hitRate: number | null } | null;
+      }>;
+    };
+    expect(result.ok).toBe(true);
+    const line = result.propLines.find((row) => row.name === "Alpha Receiver");
+    expect(line?.history).toEqual({ games: 6, overs: 3, unders: 3, pushes: 0, hitRate: 0.5 });
+  }, 15_000);
+
+  it("get_prop_board returns the board with hit records", async () => {
+    const result = await toolGetPropBoard(ctxWithDashboard(), { leagueId: "lg1" }) as {
+      ok: boolean;
+      totalLines: number;
+      board: Array<{ name: string; stat: string; history: { overs: number; hitRate: number | null } | null }>;
+    };
+    expect(result.ok).toBe(true);
+    expect(result.totalLines).toBe(1);
+    expect(result.board[0]?.name).toBe("Alpha Receiver");
+    expect(result.board[0]?.stat).toBe("rec_yards");
+    expect(result.board[0]?.history?.overs).toBe(3);
+    expect(result.board[0]?.history?.hitRate).toBe(0.5);
+  });
+
+  it("get_prop_board reports stats coverage and flags a failed stats load", async () => {
+    const covered = await toolGetPropBoard(ctxWithDashboard(), { leagueId: "lg1" }) as {
+      ok: boolean;
+      historyThroughWeek: number | null;
+      historyDegraded?: boolean;
+    };
+    expect(covered.historyThroughWeek).toBe(6);
+    expect(covered.historyDegraded).toBeUndefined();
+
+    vi.mocked(loadTeamWeekStats).mockRejectedValueOnce(new Error("nflverse unavailable"));
+    const degraded = await toolGetPropBoard(ctxWithDashboard(), { leagueId: "lg1" }) as {
+      ok: boolean;
+      historyThroughWeek: number | null;
+      historyDegraded?: boolean;
+      board: Array<{ history: unknown }>;
+    };
+    expect(degraded.ok).toBe(true);
+    expect(degraded.historyDegraded).toBe(true);
+    expect(degraded.historyThroughWeek).toBeNull();
+    expect(degraded.board[0]?.history).toBeNull();
+  });
+
+  it("get_prop_board filters by position", async () => {
+    const result = await toolGetPropBoard(ctxWithDashboard(), { leagueId: "lg1", position: "RB" }) as {
+      ok: boolean;
+      totalLines: number;
+      board: unknown[];
+    };
+    expect(result.ok).toBe(true);
+    expect(result.totalLines).toBe(0);
+    expect(result.board).toEqual([]);
+  });
+
+  it("dispatchChatTool routes get_prop_board", async () => {
+    const result = await dispatchChatTool(
+      "get_prop_board",
       { leagueId: "lg1" },
       ctxWithDashboard(),
     ) as { ok: boolean };

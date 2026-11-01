@@ -32,7 +32,16 @@ import {
 import { VALUE_HISTORY_CHART_MIN_DATE } from "./player-value-history.js";
 import { suggestFaabBid } from "./faab-bid.js";
 import type { WaiverLabel } from "./scoring/labels.js";
-import { loadPropLineWeek } from "./prop-line-week.js";
+import { loadPropLineWeek, type PropLineWeekPayload } from "./prop-line-week.js";
+import {
+  buildPropHistory,
+  compareHitsDesc,
+  indexPlayedWeeks,
+  indexWeekStatsByPlayer,
+  playedWeeksForPlayer,
+  weekStatsForPlayer,
+} from "./prop-line-reads.js";
+import { loadTeamWeekStats } from "./pfn-tables.js";
 import { projectedPlayerPoints } from "./projected-standings.js";
 import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projections.js";
 import { DEFAULT_LAST_REGULAR_WEEK } from "./league-schedule.js";
@@ -99,7 +108,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "get_projections",
       description:
-        "This week's projection plus projected points for each remaining regular-season week and their total (Sleeper's per-week projections in this league's scoring, with byes and injury timelines), for a player or my roster, plus trade value, prop lines and recent projection accuracy when available.",
+        "This week's projection plus projected points for each remaining regular-season week and their total (Sleeper's per-week projections in this league's scoring, with byes and injury timelines), for a player or my roster, plus trade value, prop lines (each with the player's season hit record against that line, when graded) and recent projection accuracy when available.",
       parameters: {
         type: "object",
         properties: {
@@ -107,6 +116,24 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
           scope: { type: "string", enum: ["player", "roster"] },
           playerId: { type: "string" },
           playerName: { type: "string" },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_prop_board",
+      description:
+        "This week's player prop lines across the whole board (not just my roster), ranked hit-first. Each line carries odds, book count, movement since open, and the player's season hit record against this week's line (prior played weeks graded against this line, over side). Use for board-wide prop questions like best overs this week or who keeps clearing their rushing line. Hit records are evidence from stored lines and stats, not a guarantee.",
+      parameters: {
+        type: "object",
+        properties: {
+          leagueId: { type: "string" },
+          position: { type: "string", description: "Optional position filter e.g. WR" },
+          stat: { type: "string", description: "Optional prop market e.g. rec_yards, rush_yards, pass_tds" },
+          limit: { type: "number", description: "Default 15, max 30" },
         },
         additionalProperties: false,
       },
@@ -554,6 +581,79 @@ export async function loadUpcomingOutlook(
   };
 }
 
+/** Season hit record for one prop line: prior played weeks graded against it. */
+export type PropLineHitRecord = {
+  games: number;
+  overs: number;
+  unders: number;
+  pushes: number;
+  /** overs / (overs + unders); null when no decided games. */
+  hitRate: number | null;
+};
+
+type PropLine = PropLineWeekPayload["lines"][number];
+
+type PropHitIndex = {
+  historyFor: (line: PropLine) => PropLineHitRecord | null;
+  /** Last week the stats payload actually covers; can trail the slate week. */
+  throughWeek: number;
+};
+
+/**
+ * Index of season hit records for prop lines, built exactly like the Game
+ * Lines board: nflverse week stats and snap counts through the week before
+ * the slate week, graded by buildPropHistory against this week's line.
+ * index is null when history cannot be built (week 1 or no stats yet);
+ * degraded marks a failed load, which callers surface instead of letting
+ * every line silently show no history.
+ */
+async function loadPropHitIndex(
+  season: number,
+  week: number,
+): Promise<{ index: PropHitIndex | null; degraded: boolean }> {
+  if (week <= 1) return { index: null, degraded: false };
+  try {
+    const { stats, snaps } = await loadTeamWeekStats(season);
+    const priorStats = stats.filter((row) => row.week >= 1 && row.week <= week - 1);
+    if (priorStats.length === 0) return { index: null, degraded: false };
+    const statsByPlayer = indexWeekStatsByPlayer(priorStats);
+    const playedByPlayer = indexPlayedWeeks(snaps.filter((snap) => snap.week <= week - 1));
+    const statWeeks = new Set(priorStats.map((row) => row.week));
+    const throughWeek = Math.max(...statWeeks);
+    return {
+      degraded: false,
+      index: {
+        throughWeek,
+        historyFor: (line) => {
+          if (!line.position) return null;
+          const ref = { playerId: line.playerId, name: line.name, team: line.team, position: line.position };
+          const history = buildPropHistory(
+            line.stat,
+            line.line,
+            weekStatsForPlayer(statsByPlayer, ref),
+            playedWeeksForPlayer(playedByPlayer, ref),
+            statWeeks,
+          );
+          if (history.games === 0) return null;
+          return {
+            games: history.games,
+            overs: history.overs,
+            unders: history.unders,
+            pushes: history.pushes,
+            hitRate: history.hitRate,
+          };
+        },
+      },
+    };
+  } catch (err) {
+    console.error(
+      "[chat] prop hit index load failed",
+      err instanceof Error ? err.message : String(err),
+    );
+    return { index: null, degraded: true };
+  }
+}
+
 export async function toolGetProjections(
   ctx: ChatToolContext,
   args: {
@@ -637,7 +737,9 @@ export async function toolGetProjections(
   try {
     const weekProps = await loadPropLineWeek({ season: dashboard.season, week: dashboard.week });
     const idSet = new Set(ids);
-    propLines = weekProps.lines.filter((line) => idSet.has(line.playerId)).slice(0, 40);
+    const lines = weekProps.lines.filter((line) => idSet.has(line.playerId)).slice(0, 40);
+    const hit = lines.length > 0 ? await loadPropHitIndex(dashboard.season, dashboard.week) : null;
+    propLines = lines.map((line) => ({ ...line, history: hit?.index ? hit.index.historyFor(line) : null }));
   } catch {
     propLines = [];
   }
@@ -677,6 +779,63 @@ export async function toolGetProjections(
     upcomingNote: `upcoming: projected points per remaining regular-season week (through week ${outlook.lastWeek}) and their total. This week is the app's projection; later weeks are Sleeper's per-week projections in this league's scoring, which already reflect byes and injury timelines (0 or a missing week means bye or out). Third-party projections, not a guarantee.${outlook.missingWeeks.length ? ` Week(s) ${outlook.missingWeeks.join(", ")} could not be loaded.` : ""} restOfSeason is trade value, not points.`,
     propLines,
     projectionAccuracy: accuracy,
+  };
+}
+
+/**
+ * Board-wide prop scan: every stored line for the slate week (not just the
+ * user's roster), each with its season hit record against this week's line,
+ * ranked hit-first with the Game Lines board's own ordering (most clears,
+ * then best hit rate; no graded history sorts last).
+ */
+export async function toolGetPropBoard(
+  ctx: ChatToolContext,
+  args: { leagueId?: string; position?: string; stat?: string; limit?: number },
+) {
+  const dashboard = await loadDashboard(ctx);
+  const league = args.leagueId
+    ? requireLeague(dashboard, args.leagueId)
+    : defaultToolLeague(dashboard, ctx);
+  if (!league) return { ok: false as const, error: "League not found for this user." };
+
+  let weekProps: PropLineWeekPayload;
+  try {
+    weekProps = await loadPropLineWeek({ season: dashboard.season, week: dashboard.week });
+  } catch {
+    return { ok: false as const, error: "Prop lines could not be loaded." };
+  }
+
+  const position = args.position?.trim().toUpperCase() || null;
+  const stat = args.stat?.trim().toLowerCase() || null;
+  const filtered = weekProps.lines.filter(
+    (line) =>
+      (!position || line.position?.toUpperCase() === position) &&
+      (!stat || line.stat.toLowerCase() === stat),
+  );
+
+  const hit = await loadPropHitIndex(dashboard.season, dashboard.week);
+  const entries = filtered.map((line) => ({ ...line, history: hit.index ? hit.index.historyFor(line) : null }));
+  entries.sort((left, right) =>
+    compareHitsDesc(
+      { hitRate: left.history?.hitRate ?? null, hits: left.history?.overs, name: left.name, stat: left.stat },
+      { hitRate: right.history?.hitRate ?? null, hits: right.history?.overs, name: right.name, stat: right.stat },
+    ),
+  );
+  const limit = Math.min(Math.max(args.limit ?? 15, 1), 30);
+
+  return {
+    ok: true as const,
+    season: dashboard.season,
+    week: dashboard.week,
+    leagueId: league.id,
+    pulledAt: weekProps.pulledAt,
+    ...(weekProps.degraded ? { degraded: true as const } : {}),
+    totalLines: filtered.length,
+    historyThroughWeek: hit.index?.throughWeek ?? null,
+    ...(hit.degraded ? { historyDegraded: true as const } : {}),
+    note:
+      "history grades this season's prior played weeks against THIS week's line, over side; pushes are excluded from hitRate and a null history means no graded weeks (unsupported market, no stats coverage, or the player has not played). historyThroughWeek is the last week the stats actually cover and can trail the slate week; historyDegraded means the stats load failed, so no records could be built. Lines are the stored consensus snapshot (line, odds, bookCount, move since open), not live odds. A hit record is evidence, not a guarantee.",
+    board: entries.slice(0, limit),
   };
 }
 
@@ -1423,6 +1582,14 @@ const valueHistorySchema = z
     maxPoints: z.number().int().positive().max(40).optional(),
   })
   .strict();
+const propBoardSchema = z
+  .object({
+    leagueId: z.string().min(1).max(80).optional(),
+    position: z.string().min(1).max(8).optional(),
+    stat: z.string().min(1).max(40).optional(),
+    limit: z.number().int().positive().max(30).optional(),
+  })
+  .strict();
 const leagueOnlySchema = z.object({ leagueId: z.string().min(1).max(80) }).strict();
 const waiversSchema = z
   .object({
@@ -1459,6 +1626,11 @@ export async function dispatchExtendedChatTool(
       const parsed = projectionsSchema.safeParse(args);
       if (!parsed.success) return { ok: false, error: "Invalid arguments.", issues: parsed.error.issues };
       return toolGetProjections(ctx, parsed.data);
+    }
+    case "get_prop_board": {
+      const parsed = propBoardSchema.safeParse(args);
+      if (!parsed.success) return { ok: false, error: "Invalid arguments.", issues: parsed.error.issues };
+      return toolGetPropBoard(ctx, parsed.data);
     }
     case "get_value_history": {
       const parsed = valueHistorySchema.safeParse(args);
