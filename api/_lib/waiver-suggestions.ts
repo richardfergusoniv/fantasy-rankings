@@ -5,7 +5,7 @@
  */
 import type { Dashboard } from "./dashboard-schemas.js";
 import { optimizeTradeRoster, optimizeValueTradeRoster } from "./lineup-optimizer.js";
-import { positionalNeed, scoreWaiver } from "./move-scoring.js";
+import { moveVerdict, positionalNeed, scoreWaiver } from "./move-scoring.js";
 import { suggestFaabBid } from "./faab-bid.js";
 import type { WaiverLabel } from "./scoring/labels.js";
 import type { ScoringWeightsParams } from "./scoring/weights.js";
@@ -194,13 +194,16 @@ export function scoreWaiverSuggestions(
           value: valueById.get(dropCandidate.player.playerId) ?? 0,
         }
         : null,
-      scoring: move,
+      verdicts: {
+        week: moveVerdict(move.week),
+        seasonLong: moveVerdict(move.seasonLong),
+        ...(move.dynasty ? { dynasty: moveVerdict(move.dynasty) } : {}),
+      },
       primaryWindow: waiverWindowKey,
       primaryLabel: primary.label,
       primaryScore: primary.score,
       // Hide Pass from default lists (spec); still returned when explicitly asked later.
       hidden: primary.label === "Pass",
-      reason: `${primary.label} (${primary.score}): ${primary.reasons[0]?.effect ?? ""}`,
     };
   });
 
@@ -218,7 +221,7 @@ export function scoreWaiverSuggestions(
     scoringWindow: waiverWindowKey,
     // FAAB budget / waiver priority, so bids and timing can be advised.
     waivers: league.waivers ?? null,
-    note: "Labels and scores are from move-scoring. Explain them; do not re-rank. Pass adds are omitted from lists unless nothing stronger is available or the user asks.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries raw evidence only and no written reasons: compose the explanation from the evidence and name the deciding factor. Pass adds are omitted from lists unless nothing stronger is available or the user asks.",
     weakPositions,
     suggestions: visible.map((row) => ({
       ...row,

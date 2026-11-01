@@ -24,11 +24,15 @@ export function EmptyState({ title, detail, action }: { title: string; detail?: 
 }
 
 /** The end of a long list: how much is showing, and a button for more. */
-export function ListPagination({ shown, total, step, onMore, className = "" }: { shown: number; total: number; step: number; onMore: () => void; className?: string }) {
+export function ListPagination({ shown, total, step, onMore, className = "", hideCount = false }: { shown: number; total: number; step: number; onMore: () => void; className?: string; hideCount?: boolean }) {
+  const hasMore = shown < total;
+  // With the count hidden and nothing more to load there is no row at all.
+  if (hideCount && !hasMore) return null;
   return (
     <div className={`list-pagination-row${className ? ` ${className}` : ""}`}>
-      <span aria-live="polite">{Math.min(shown, total)} of {total}</span>
-      {shown < total ? <button type="button" onClick={onMore}>Show {Math.min(step, total - shown)} more</button> : null}
+      {/* The empty span keeps the button at the row's right edge. */}
+      {hideCount ? <span aria-hidden="true" /> : <span aria-live="polite">{Math.min(shown, total)} of {total}</span>}
+      {hasMore ? <button type="button" onClick={onMore}>Show {Math.min(step, total - shown)} more</button> : null}
     </div>
   );
 }

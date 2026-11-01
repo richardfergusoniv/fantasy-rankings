@@ -135,6 +135,7 @@ vi.mock("./sleeper.js", async (importOriginal) => {
 import { dispatchChatTool } from "./chat-tools.js";
 import { loadTeamWeekStats } from "./pfn-tables.js";
 import {
+  loadMoveEvidenceIndex,
   toolGetDraftInfo,
   toolGetPlayerAdvanced,
   toolGetPlayerNews,
@@ -781,22 +782,195 @@ describe("extended chat tools", () => {
   it("suggest_lineup proposes start/sit using optimizer", async () => {
     const result = await toolSuggestLineup(ctxWithDashboard(), { leagueId: "lg1" }) as {
       ok: boolean;
-      swaps: Array<{ start: { playerId: string }; sit: { playerId: string } | null }>;
+      swaps: Array<{
+        verdict: { label: string; score: number; unit: string };
+        start: { playerId: string; evidence: { usage: unknown; game: unknown; propLines: unknown[] } };
+        sit: { playerId: string } | null;
+      }>;
       projectionDelta: number;
     };
     expect(result.ok).toBe(true);
     expect(result.swaps.some((swap) => swap.start.playerId === "p-bench")).toBe(true);
     expect(result.projectionDelta).toBeGreaterThan(0);
+    const swap = result.swaps[0]!;
+    expect(swap.verdict.label.length).toBeGreaterThan(0);
+    expect(swap.verdict.unit.length).toBeGreaterThan(0);
+    expect(swap.start.evidence).toBeDefined();
+    expect(Array.isArray(swap.start.evidence.propLines)).toBe(true);
+    // No engine prose or scoring internals reach the model.
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("\"reasons\"");
+    expect(serialized).not.toContain("\"reason\"");
+    expect(serialized).not.toContain("\"scoring\"");
+    expect(serialized).not.toContain("no_usage_history");
+    expect(serialized).not.toContain("projection_edge");
   });
 
-  it("suggest_waivers ranks free agents with reasons", async () => {
+  it("move evidence resolves nflverse usage across the Sleeper/GSIS id mismatch", async () => {
+    selectResults.push([]); // prop-line cache miss inside the evidence index
+    const index = await loadMoveEvidenceIndex(baseDashboard());
+    // The stats fixture is keyed by the nflverse id "alpha"; the tool-side
+    // ref carries a Sleeper-style id, so only the name identity can join.
+    const evidence = index.forPlayer({
+      playerId: "sleeper-9999",
+      name: "Alpha Receiver",
+      team: "BUF",
+      position: "WR",
+    });
+    expect(evidence.usage?.games).toBe(3);
+    expect(evidence.usage?.snapSharePct).toBe(80);
+    expect(evidence.usage?.pprPointsPerGame).toBeGreaterThan(0);
+  });
+
+  it("move evidence counts played zero-stat weeks inside the usage window", async () => {
+    const statRow = (week: number, targets: number) => ({
+      playerId: "gsis-zero",
+      name: "Zero Week",
+      team: "BUF",
+      opponent: "NYJ",
+      position: "WR" as const,
+      week,
+      targets,
+      receptions: 0,
+      receivingYards: 0,
+      carries: 0,
+      rushingYards: 0,
+      receivingTds: 0,
+      rushingTds: 0,
+      passingTds: 0,
+      fantasyPpr: targets,
+      targetShare: 20,
+      completions: 0,
+      passAttempts: 0,
+      passingYards: 0,
+      interceptions: 0,
+      passingFirstDowns: 0,
+      rushingFirstDowns: 0,
+      receivingFirstDowns: 0,
+      sacksTaken: 0,
+      fumblesLost: 0,
+      passing2pt: 0,
+      rushing2pt: 0,
+      receiving2pt: 0,
+    });
+    const snapRow = (week: number) => ({
+      name: "Zero Week",
+      team: "BUF",
+      position: "WR" as const,
+      week,
+      offenseSnaps: 40,
+      offensePct: 50,
+    });
+    vi.mocked(loadTeamWeekStats).mockResolvedValueOnce({
+      season: 2026,
+      // Played weeks 4, 5, 6 on snaps, but no stat row for week 5. Another
+      // player's week-5 row keeps week 5 inside the dataset's coverage, so
+      // the missing row is a played zero week, not an uncovered week.
+      stats: [
+        statRow(4, 8),
+        statRow(6, 4),
+        { ...statRow(5, 3), playerId: "gsis-other", name: "Other Guy" },
+      ],
+      snaps: [snapRow(4), snapRow(5), snapRow(6)],
+    });
+    selectResults.push([]); // prop-line cache miss inside the evidence index
+    const index = await loadMoveEvidenceIndex(baseDashboard());
+    const evidence = index.forPlayer({
+      playerId: "sleeper-zero",
+      name: "Zero Week",
+      team: "BUF",
+      position: "WR",
+    });
+    expect(evidence.usage?.games).toBe(3);
+    // (4 + 0 + 8) / 3: the zero week counts, it is not skipped.
+    expect(evidence.usage?.targetsPerGame).toBe(4);
+    expect(evidence.usage?.snapSharePct).toBe(50);
+  });
+
+  it("move evidence excludes played weeks outside stats coverage and reports no coverage as unavailable", async () => {
+    const statRow = (week: number, targets: number) => ({
+      playerId: "gsis-zero",
+      name: "Zero Week",
+      team: "BUF",
+      opponent: "NYJ",
+      position: "WR" as const,
+      week,
+      targets,
+      receptions: 0,
+      receivingYards: 0,
+      carries: 0,
+      rushingYards: 0,
+      receivingTds: 0,
+      rushingTds: 0,
+      passingTds: 0,
+      fantasyPpr: targets,
+      targetShare: 20,
+      completions: 0,
+      passAttempts: 0,
+      passingYards: 0,
+      interceptions: 0,
+      passingFirstDowns: 0,
+      rushingFirstDowns: 0,
+      receivingFirstDowns: 0,
+      sacksTaken: 0,
+      fumblesLost: 0,
+      passing2pt: 0,
+      rushing2pt: 0,
+      receiving2pt: 0,
+    });
+    const snapRow = (week: number) => ({
+      name: "Zero Week",
+      team: "BUF",
+      position: "WR" as const,
+      week,
+      offenseSnaps: 40,
+      offensePct: 50,
+    });
+    const ref = { playerId: "sleeper-zero", name: "Zero Week", team: "BUF", position: "WR" };
+
+    // Snaps run one week ahead of stats: week 6 is excluded from the
+    // window entirely, not zero-filled.
+    vi.mocked(loadTeamWeekStats).mockResolvedValueOnce({
+      season: 2026,
+      stats: [statRow(4, 8), statRow(5, 6)],
+      snaps: [snapRow(4), snapRow(5), snapRow(6)],
+    });
+    selectResults.push([]);
+    const ahead = await loadMoveEvidenceIndex(baseDashboard());
+    const aheadEvidence = ahead.forPlayer(ref);
+    expect(aheadEvidence.usage?.games).toBe(2);
+    expect(aheadEvidence.usage?.targetsPerGame).toBe(7);
+
+    // Stats came back empty while snaps are populated: unavailable, not zero.
+    vi.mocked(loadTeamWeekStats).mockResolvedValueOnce({
+      season: 2026,
+      stats: [],
+      snaps: [snapRow(4), snapRow(5), snapRow(6)],
+    });
+    selectResults.push([]);
+    const empty = await loadMoveEvidenceIndex(baseDashboard());
+    expect(empty.forPlayer(ref).usage).toBeNull();
+  });
+
+  it("suggest_waivers ranks free agents with verdicts and evidence, no reasons", async () => {
     const result = await toolSuggestWaivers(ctxWithDashboard(), { leagueId: "lg1", limit: 5 }) as {
       ok: boolean;
-      suggestions: Array<{ playerId: string; reason: string }>;
+      suggestions: Array<{
+        playerId: string;
+        primaryLabel: string;
+        verdicts: { week: { label: string; score: number }; seasonLong: { label: string } };
+        evidence: { propLines: unknown[] };
+      }>;
     };
     expect(result.ok).toBe(true);
     expect(result.suggestions[0]?.playerId).toBe("fa1");
-    expect(result.suggestions[0]?.reason.length).toBeGreaterThan(0);
+    expect(result.suggestions[0]?.verdicts.week.label).toBe(result.suggestions[0]?.primaryLabel);
+    expect(Array.isArray(result.suggestions[0]?.evidence.propLines)).toBe(true);
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("\"reasons\"");
+    expect(serialized).not.toContain("\"reason\"");
+    expect(serialized).not.toContain("\"scoring\"");
+    expect(serialized).not.toContain("no_usage_history");
   });
 
   it("saves FAAB bids for the top graded adds, the same grading as suggest_waivers", () => {
@@ -822,11 +996,25 @@ describe("extended chat tools", () => {
   it("suggest_trades returns roughly fair complementary ideas", async () => {
     const result = await toolSuggestTrades(ctxWithDashboard(), { leagueId: "lg1", limit: 5 }) as {
       ok: boolean;
-      suggestions: Array<{ partner: string; giveTotal: number; getTotal: number }>;
+      suggestions: Array<{
+        partner: string;
+        giveTotal: number;
+        getTotal: number;
+        primaryLabel: string;
+        verdicts: { seasonLong: { label: string } };
+        fairness: { band: string } | null;
+        rosterImpact: { seasonLong: { starterValueBefore: number; starterValueAfter: number } };
+      }>;
     };
     expect(result.ok).toBe(true);
     expect(result.suggestions.length).toBeGreaterThan(0);
     expect(result.suggestions[0]?.partner).toBe("Rival");
+    expect(result.suggestions[0]?.verdicts.seasonLong.label).toBe(result.suggestions[0]?.primaryLabel);
+    expect(typeof result.suggestions[0]?.rosterImpact.seasonLong.starterValueAfter).toBe("number");
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("\"reasons\"");
+    expect(serialized).not.toContain("\"reason\"");
+    expect(serialized).not.toContain("\"scoring\"");
   });
 
   it("get_draft_info returns owned picks", async () => {

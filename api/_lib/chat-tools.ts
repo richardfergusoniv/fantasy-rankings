@@ -25,7 +25,7 @@ import {
   optimizeValueTradeRoster,
   type OptimizablePlayer,
 } from "./lineup-optimizer.js";
-import { scoreTrade } from "./move-scoring.js";
+import { moveVerdict, scoreTrade } from "./move-scoring.js";
 import { teamOutlook, winPercent, winProbability } from "./win-probability.js";
 import { redraftTwinFormat } from "./season-long-format.js";
 import { loadActiveScoringWeights } from "./scoring-jobs.js";
@@ -164,7 +164,7 @@ export const CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "evaluate_trade",
       description:
-        "Evaluate a two-sided trade with deterministic move-scoring labels and fair-trade z bands. Explain the scores; never change them.",
+        "Evaluate a two-sided trade with deterministic move-scoring labels and fair-trade z bands. Explain the scores; never change them. The result carries the values behind the verdict and no written reasons; compose the explanation yourself from the values and margins.",
       parameters: {
         type: "object",
         properties: {
@@ -956,7 +956,7 @@ async function toolEvaluateTrade(
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
     scoringWindow: windowKey,
-    note: "Labels and scores are from move-scoring. Explain them; do not re-rank.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind the verdict and no written reasons: compose the explanation yourself and name the deciding factor.",
     give: give.resolved,
     get: get.resolved,
     giveTotal,
@@ -965,10 +965,40 @@ async function toolEvaluateTrade(
     giveAdjustedTotal: giveAdjusted,
     getAdjustedTotal: getAdjusted,
     margin,
-    scoring: move,
+    verdicts: {
+      week: moveVerdict(move.week),
+      seasonLong: moveVerdict(move.seasonLong),
+      ...(move.dynasty ? { dynasty: moveVerdict(move.dynasty) } : {}),
+    },
+    fairness: move.fairness ?? null,
+    // The raw roster effects the labels are computed from: a value gap
+    // alone does not explain a trade verdict when starter value or power
+    // rank moves the other way.
+    rosterImpact: {
+      week: { lineupPointsBefore: lineup.before, lineupPointsAfter: lineup.after },
+      seasonLong: {
+        starterValueBefore: seasonLongSide.starterBefore,
+        starterValueAfter: seasonLongSide.starterAfter,
+        powerRankBefore: myRankBefore,
+        powerRankAfter: myRankAfter,
+        fillsHole,
+      },
+      ...(dynastySide
+        ? {
+          dynasty: {
+            starterValueBefore: dynastySide.starterBefore,
+            starterValueAfter: dynastySide.starterAfter,
+            powerRankBefore: myRankBefore,
+            powerRankAfter: (dynastySide.getAdjusted - dynastySide.giveAdjusted) >= 0
+              ? Math.max(1, myRankBefore - 1)
+              : myRankBefore + 1,
+            fillsHole,
+          },
+        }
+        : {}),
+    },
     primaryLabel: primary.label,
     primaryScore: primary.score,
-    verdict: `${primary.label} (${primary.score}): ${primary.reasons[0]?.effect ?? ""}`,
     unsupportedSettings: league.tradeValuation.unsupportedSettings,
   };
 }
