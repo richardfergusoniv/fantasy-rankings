@@ -34,8 +34,8 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
 
   if (query.isPending) {
     return (
-      <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading projected standings…">
-        <span>Loading projected standings…</span>
+      <section className="section-loading" role="status" aria-live="polite" aria-busy="true" aria-label="Loading playoff picture…">
+        <span>Loading playoff picture…</span>
         <div className="loading-shimmer loading-line wide" aria-hidden="true" />
         <div className="loading-shimmer loading-line" aria-hidden="true" />
         <div className="loading-shimmer loading-line" aria-hidden="true" />
