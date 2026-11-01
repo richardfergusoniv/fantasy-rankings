@@ -422,8 +422,10 @@ export function buildProjectedStandings(args: {
     userGames,
   };
   // Playoff odds reuse the chat assistant's simulator so both show the same numbers.
-  // No odds when no single cut can be drawn (divisions) or the league has no playoff spots.
-  if (playoffTeams > 0 && !result.divisionsIgnored) {
+  // No odds when no single cut can be drawn (divisions), the league has no playoff spots, or
+  // the league also plays the weekly median: the simulator decides head-to-head games only,
+  // so it could call a team eliminated that can still get in on median wins (same guard as the chat tool).
+  if (playoffTeams > 0 && !result.divisionsIgnored && !result.medianMatchup) {
     const odds = new Map(playoffOddsFromProjections(result).teams.map((team) => [team.rosterId, team.playoffPct / 100]));
     result.teams = result.teams.map((team) => ({ ...team, playoffOdds: odds.get(team.rosterId) ?? 0 }));
   }

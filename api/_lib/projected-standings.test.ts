@@ -214,6 +214,14 @@ describe("buildProjectedStandings", () => {
     expect(game.winProbability).not.toBeNull();
   });
 
+  it("withholds playoff odds in a league that also plays the weekly median", () => {
+    const result = buildProjectedStandings({
+      league, medianMatchup: true, weeks, games: [{ week: 5, a: 1, b: 2 }, { week: 6, a: 2, b: 3 }], throughWeek: 4, regularSeasonEndsWeek: 6, missingWeeks: [],
+    });
+    expect(result.medianMatchup).toBe(true);
+    expect(result.teams.every((t) => t.playoffOdds === null)).toBe(true);
+  });
+
   it("adds playoff odds that sum to the number of playoff spots", () => {
     const result = buildProjectedStandings({
       league,
