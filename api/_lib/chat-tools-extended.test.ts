@@ -755,7 +755,10 @@ describe("extended chat tools", () => {
     ) as { ok: boolean; leagueId: string };
     expect(result.ok).toBe(true);
     expect(result.leagueId).toBe("lg2");
-  });
+    // Same live-shaped async work as the roster test above (which carries
+    // 15s for it); the prop hit-index load added a step to this path and
+    // the 5s default timed out in CI.
+  }, 15_000);
 
   it("get_value_history downsamples stored snapshots", async () => {
     selectResults.push([
