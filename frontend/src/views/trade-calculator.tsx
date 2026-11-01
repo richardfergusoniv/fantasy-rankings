@@ -41,7 +41,7 @@ import { redraftTwinFormat } from "../../../api/_lib/season-long-format";
 import { clearTradeSide, removeTradePlayer, restoreTradePlayer } from "../undo";
 import { useUnsavedLeaveWarning } from "../unsaved-input";
 import { formatWhole } from "../lib/format-number";
-import { ChevronGlyph, CloseGlyph, MoveTriangle } from "../components/glyphs";
+import { CloseGlyph, MoveTriangle } from "../components/glyphs";
 import { EmptyState } from "../components/state-blocks";
 
 export function TradeAssetRow({ asset, onRemove, onOpenPlayer }: { asset: TradeAsset; onRemove: () => void; onOpenPlayer: (playerId: string) => void }) {
@@ -602,19 +602,18 @@ export function LeagueAdjustedTrade({
                   const recordLabel = record ? formatTeamRecord(record) : "—";
                   return (
                     <li key={team.rosterId}>
-                      {/* Picking a team opens its roster, so the row is a button with a chevron, not a checkbox that never checks. */}
-                      <button
-                        type="button"
-                        className="league-roster-row league-team-row"
-                        onClick={() => onPartnerChange(team.rosterId)}
-                        aria-label={record ? `Trade with ${team.teamName}, ${recordLabel}` : `Trade with ${team.teamName}`}
-                      >
+                      <label className="league-roster-row league-team-row">
+                        <input
+                          type="checkbox"
+                          checked={false}
+                          onChange={() => onPartnerChange(team.rosterId)}
+                          aria-label={record ? `Trade with ${team.teamName}, ${recordLabel}` : `Trade with ${team.teamName}`}
+                        />
                         <span className="league-roster-main">
                           <span className="league-roster-name"><strong>{team.teamName}</strong></span>
                         </span>
                         <span className="league-roster-meta"><span>{recordLabel}</span></span>
-                        <span className="league-team-row-chevron"><ChevronGlyph /></span>
-                      </button>
+                      </label>
                     </li>
                   );
                 })}
@@ -910,7 +909,8 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
         onClick={() => setSelectedTradeId(trade.id)}
       >
         <span className="trade-history-row-heading"><span>Week {trade.week} · {trade.season}</span><strong><HistoricalTeamMatchup trade={trade} league={league} /></strong></span>
-        <span className="trade-history-assets">{trade.teams.map((team) => <span key={team.rosterId}><b><HistoricalTeamName team={team} league={league} /></b>{compactHistoricalAssets(team)}</span>)}</span>
+        {/* Two-team trades: the header already names both teams in this order, so lines show only the assets (names stay for screen readers). */}
+        <span className="trade-history-assets">{trade.teams.map((team) => <span key={team.rosterId}><b className={trade.teams.length === 2 ? "sr-only" : undefined}><HistoricalTeamName team={team} league={league} /></b>{compactHistoricalAssets(team)}</span>)}</span>
         <span className="trade-history-winner">{winners.length !== 1 || !leadingTeam ? "Even" : <><HistoricalTeamName team={leadingTeam.team} league={league} /> won · +{formatWhole(Math.max(0, maxValue - runnerUp))}</>}</span>
       </button>
     );

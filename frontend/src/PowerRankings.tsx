@@ -153,11 +153,6 @@ export function PowerRankings({
               return <text key={position} x={xText} y={Number(yText) + 4} textAnchor={x > 165 ? "start" : x < 135 ? "end" : "middle"}>{positionLabel(position)}</text>;
             })}
           </svg>
-          {/* Key for the two shapes: teal is this roster, grey outline is the league average. */}
-          <div className="chart-key power-radar-key" aria-hidden="true">
-            <span><i className="selected-team-dot" /> {mine.teamName}</span>
-            <span><i className="radar-average-dot" /> League average</span>
-          </div>
         </div>
         <p className="power-position-table-label">League average</p>
         <div className="power-position-values" role="list" aria-label="League average value by position">

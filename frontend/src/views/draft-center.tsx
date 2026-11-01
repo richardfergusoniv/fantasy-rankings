@@ -341,10 +341,12 @@ export function DraftCenter({
     const available = rows
       .filter((row) => !boardExcluded.has(row.playerId ?? ""))
       .filter((row) => (effectiveDraftPosition === "ALL" || (effectiveDraftPosition === "ROOKIES" ? row.rookie : row.position === effectiveDraftPosition)) && row.name.toLowerCase().includes(normalizedQuery));
-    // Once the league has drafted, ADP order is stale: list valued players by market value
-    // (stable sort keeps K and DEF, which have no market value, after them in projection order).
+    // Once the league has drafted, ADP order is stale: list valued players by market value,
+    // then skill players with no value, then K and DEF (no market value; stable sort keeps
+    // them in projection order). A weekly projection is not comparable with a market value.
     if (!completedDraft || liveDraft) return available;
-    return available.sort((a, b) => (b.marketValue ?? -1) - (a.marketValue ?? -1));
+    const sortValue = (row: DraftRow) => (row.position === "K" || row.position === "DEF" ? -2 : row.marketValue ?? -1);
+    return available.sort((a, b) => sortValue(b) - sortValue(a));
   }, [boardExcluded, completedDraft, effectiveDraftPosition, liveDraft, query, rows]);
   const draftPositionIsEligible = (value: string) => value !== "K" && value !== "DEF" || league.rankingPositions.includes(value as "K" | "DEF");
   const seenOwnPickIds = new Set<string>();
@@ -455,7 +457,8 @@ export function DraftCenter({
         <span className="sr-only">Actions</span>
       </div>
       {filteredRows.slice(0, visibleDraftCount).map((row) => {
-        const isSpecialist = row.position === "K" || row.position === "DEF";
+        // After the draft the Val column is market value only; K/DST have none, so they show a dash.
+        const isSpecialist = (row.position === "K" || row.position === "DEF") && !(completedDraft && !liveDraft);
         const secondary = row.team?.trim() || null;
         const isSelected = Boolean(linkedPlayerId && row.playerId === linkedPlayerId);
         return (
