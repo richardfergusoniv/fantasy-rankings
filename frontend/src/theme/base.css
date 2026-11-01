@@ -186,6 +186,14 @@
   --roster-highlight-soft: light-dark(#b5e8e1, #1a4540);
   --on-roster-highlight: light-dark(#ffffff, #04201d);
   --chart-team: var(--roster-highlight);
+  /* Power stacked bars: one blue shade per position, darkest first (lightest first in dark mode). */
+  --position-shade-qb: light-dark(#1e3a5f, #dbe6f3);
+  --position-shade-rb: light-dark(#2f5582, #b4c9e2);
+  --position-shade-wr: light-dark(#4471a3, #8daacf);
+  --position-shade-te: light-dark(#6a90bd, #6a8cbc);
+  --position-shade-flex: light-dark(#93b0d3, #4f71a0);
+  --position-shade-k: light-dark(#bccfe6, #3a5680);
+  --position-shade-def: light-dark(#dde7f3, #2b3f5e);
   --ink: var(--foreground);
   --segment-track: light-dark(#e1e5ec, #242a33);
   --opponent-row: light-dark(#dde3ec, #323a46);

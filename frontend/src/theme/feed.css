@@ -153,5 +153,5 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .trade-grade-grid > div:last-child { border-right: 0; }
   /* Flex rather than auto-fit grid so a short last row stretches instead of leaving an empty hairline-colored cell. */
   .power-position-values { display: flex; flex-wrap: wrap; }
-  .power-position-values > div { flex: 1 1 120px; }
+  .power-position-values > span:not(.sr-only) { flex: 1 1 120px; }
 }
