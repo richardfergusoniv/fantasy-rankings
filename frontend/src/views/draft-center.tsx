@@ -449,7 +449,7 @@ export function DraftCenter({
   );
 
   const draftBoard = loading ? <LoadingBlock label="Loading draft values…" /> : filteredRows.length > 0 ? (
-    <div className="draft-board data-table-frame" role="list" aria-label="Draft player board">
+    <div className={`draft-board data-table-frame${draftIsFinal ? " is-final" : ""}`} role="list" aria-label="Draft player board">
       <div className="draft-row draft-table-head" aria-hidden="true">
         <span aria-hidden="true">Player</span>
         <span aria-hidden="true">Pos</span>

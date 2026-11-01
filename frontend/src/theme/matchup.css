@@ -62,11 +62,11 @@
 /* The frame owns the radius. Clip the list to that curve so the first row
    stays rounded after the column-key header is gone, without a second border. */
 .matchup-section .data-table-frame > .matchup-list { overflow: clip; border: 0; border-radius: inherit; background: transparent; }
-.matchup-row { display: grid; grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); gap: 0; min-height: 80px; align-items: stretch; border-bottom: 1px solid var(--row-divider); transition: background-color .18s ease; }
+.matchup-row { display: grid; grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); gap: 0; min-height: var(--player-box-height); align-items: stretch; border-bottom: 1px solid var(--row-divider); transition: background-color .18s ease; }
 .matchup-row:hover { background: color-mix(in srgb, var(--accent-soft) 54%, var(--surface)); }
 .matchup-row:last-child, .ranking-row:last-child, .trade-result-row:last-child, .quadrant-list > div:last-child, .player-row:last-child, .trade-asset-row:last-child, .power-table > .power-list-item:last-child .power-row, .power-team-card-roster .power-row:last-child { border-bottom: 0; }
 .matchup-slot { display: grid; place-items: center; border-inline: 1px solid var(--hairline); color: var(--link); font-size: var(--type-caption); line-height: 1; font-weight: 600; text-align: center; }
-.matchup-player { display: grid; min-width: 0; width: 100%; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 40px 40px; align-content: center; column-gap: 5px; padding: 0 6px; border: 0; background: transparent; color: inherit; font: inherit; }
+.matchup-player { display: grid; min-width: 0; width: 100%; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: var(--player-box-half) var(--player-box-half); align-content: center; column-gap: 5px; padding: 0 6px; border: 0; background: transparent; color: inherit; font: inherit; }
 .matchup-player.swapped-in { margin: 3px 0; padding: 4px 7px; background: var(--roster-highlight-bg); box-shadow: inset 3px 0 0 var(--roster-highlight); }
 .matchup-player.demoted { background: color-mix(in srgb, var(--dim) 9%, var(--surface)); box-shadow: inset 3px 0 0 var(--dim); }
 .matchup-player.theirs.swapped-in { background: var(--roster-highlight-bg); box-shadow: inset -3px 0 0 var(--roster-highlight); }
@@ -80,7 +80,7 @@
 .matchup-player.theirs .matchup-player-open { grid-column: 2; justify-content: flex-end; }
 .matchup-name-line { display: flex; min-width: 0; align-items: center; gap: 4px; }
 .matchup-player.theirs .matchup-name-line { justify-content: flex-end; }
-/* Two lines at most: the name row is 40px, so a third line ran into the matchup badge below it. */
+/* Two lines at most: the name row is half the row height, so a third line ran into the matchup badge below it. */
 .matchup-name-line strong { display: -webkit-box; min-width: 0; overflow: hidden; font-size: var(--type-body); line-height: 1.08; overflow-wrap: break-word; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .matchup-meta { display: flex; min-width: 0; min-height: 44px; align-items: flex-start; flex-wrap: wrap; gap: 4px; grid-column: 1; grid-row: 2; padding-top: 1px; overflow: visible; color: var(--dim); font-size: var(--type-caption); text-overflow: ellipsis; white-space: nowrap; }
 .matchup-player.theirs .matchup-meta { grid-column: 2; justify-content: flex-end; }
@@ -96,7 +96,7 @@
 .matchup-eyebrow { margin: 14px 0 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .matchup-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .matchup-team-title { display: inline-flex; min-height: 44px; align-items: center; gap: 4px; margin: 0; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-display); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; cursor: pointer; }
-.matchup-team-title i { color: var(--link); font-size: 22px; font-style: normal; font-weight: 500; }
+.matchup-team-title i { color: var(--link); font-size: var(--type-display); font-style: normal; font-weight: 500; }
 .matchup-team-title:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--radius-sm); }
 .matchup-title-at { color: var(--dim); font-size: var(--type-body); font-weight: 500; }
 .matchup-chip-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 2px; }
@@ -205,4 +205,4 @@
 .edge-strip-label { position: absolute; color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
 .edge-strip-label.is-first { top: 0; color: var(--link); }
 .edge-strip-label.is-second { top: 31px; }
-.matchup-edge-scale { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hairline); color: var(--dim); font-size: 11px; font-weight: 600; font-variant-numeric: lining-nums tabular-nums; }
+.matchup-edge-scale { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: lining-nums tabular-nums; }

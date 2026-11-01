@@ -21,7 +21,7 @@
 .power-position-values span { align-self: center; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .power-position-values strong { text-align: right; font-size: var(--type-body); font-weight: 700; }
 .power-list-item { display: block; }
-.power-row { display: grid; width: 100%; grid-template-columns: 26px minmax(0, 1fr) 82px; gap: 8px; min-height: 58px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); text-align: left; }
+.power-row { display: grid; width: 100%; grid-template-columns: 26px minmax(0, 1fr) 82px; gap: 8px; min-height: 50px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); text-align: left; }
 .power-row.is-user { background: var(--roster-highlight-bg); }
 .power-row.is-opponent { background: var(--opponent-row); }
 .power-row.is-average { background: var(--surface-2); }

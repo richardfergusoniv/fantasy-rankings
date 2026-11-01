@@ -225,18 +225,18 @@
   --font-display: var(--font-sans);
   --type-caption: 12px;
   --type-eyebrow: 12px;
-  --type-body: 15px;
-  --type-section: 18px;
-  --type-display: 24px;
+  --type-body: 14px;
+  --type-section: 17px;
+  --type-display: 22px;
   --type-tab: 14px;
   --type-control: var(--type-tab);
   --sticky-offset: 150px;
-  --player-box-height: 80px;
-  --player-box-half: 40px;
+  --player-box-height: 72px;
+  --player-box-half: 36px;
   --player-box-inline: 10px;
   --player-name-leading: 1.08;
   --player-row-height: 72px;
-  --player-name-size: 14px;
+  --player-name-size: 13px;
   --compact-control-height: 32px;
   --player-stack-nudge: 1px;
   --designation-height: 18px;
@@ -248,13 +248,13 @@
   --tab-button-padding-inline: 7px;
   --tab-gap: 0;
   /* In-page page tabs: Matchup Current/Optimized, Players/Tools subviews, League scope, Draft Board/My Team. */
-  --page-tab-height: 48px;
-  --page-tab-button-height: 44px;
+  --page-tab-height: 40px;
+  --page-tab-button-height: 36px;
   --page-tab-font-size: var(--type-tab);
   --page-tab-font-weight: 600;
-  /* Sub-tabs: 44px buttons (the touch target) in a 48px track, same as page tabs. */
-  --sub-tab-height: 48px;
-  --sub-tab-button-height: 44px;
+  /* Sub-tabs: 36px buttons in a 40px track, same as page tabs (trimmed from 44/48 at the owner's request). */
+  --sub-tab-height: 40px;
+  --sub-tab-button-height: 36px;
   --sub-tab-font-size: var(--type-tab);
   --sub-tab-font-weight: 600;
   /* Search inputs sit alongside the 48px tab tracks. */
