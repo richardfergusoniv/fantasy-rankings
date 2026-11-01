@@ -206,3 +206,26 @@
 .edge-strip-label.is-first { top: 0; color: var(--link); }
 .edge-strip-label.is-second { top: 31px; }
 .matchup-edge-scale { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--hairline); color: var(--dim); font-size: var(--type-caption); font-weight: 600; font-variant-numeric: lining-nums tabular-nums; }
+
+/* Advantage tab (and the next-games preview card): one row per lineup slot, names on both
+   sides like the Matchup rows, a bar growing from the center toward whoever leads.
+   Same colors as the win-probability bar: your side teal, theirs the track gray. */
+.advantage-list { display: grid; }
+.advantage-row { display: grid; grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr); gap: 4px 6px; align-items: center; padding: 8px var(--player-box-inline); border-bottom: 1px solid var(--row-divider); background: var(--surface); }
+.advantage-row:last-child { border-bottom: 0; }
+.advantage-name { min-width: 0; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--player-name-size); font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+button.advantage-name { cursor: pointer; }
+button.advantage-name:hover { color: var(--link); }
+.advantage-name.is-theirs { text-align: right; }
+.advantage-name.is-empty { color: var(--dim); font-weight: 600; }
+.advantage-slot { color: var(--dim); font-size: var(--type-caption); font-weight: 700; text-align: center; }
+.advantage-bars { display: grid; grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr); gap: 6px; align-items: center; min-height: 16px; }
+.advantage-half { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.advantage-half.is-mine { justify-content: flex-end; }
+.advantage-half i { display: block; height: 8px; border-radius: var(--radius-xs); }
+.advantage-half.is-mine i { background: var(--roster-highlight); }
+.advantage-half.is-theirs i { background: var(--border); }
+.advantage-half b { flex: none; font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums; }
+.advantage-half.is-mine b { color: var(--roster-highlight); }
+.advantage-half.is-theirs b { color: var(--text); }
+.advantage-half b.is-even { color: var(--dim); }
