@@ -31,6 +31,7 @@ h3 { font-size: var(--type-section); font-weight: 600; }
   text-transform: none;
 }
 .power-position-table-label {
+  margin: 14px 0 0;
   color: var(--text);
   font-size: var(--type-eyebrow);
   font-weight: 700;

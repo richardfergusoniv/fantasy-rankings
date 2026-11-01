@@ -38,7 +38,12 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
 
   const { teams, games } = query.data;
   const me = teams.find((team) => team.isUser) ?? null;
-  const topPoints = Math.max(...teams.map((team) => team.projectedPointsFor), 1);
+  // Bars span the league's range (lowest to highest), not 0 to max: 1,400 vs 1,700
+  // drawn from zero look identical. The lowest team keeps a short stub.
+  const pointsFor = teams.map((team) => team.projectedPointsFor);
+  const lowPoints = Math.min(...pointsFor);
+  const pointsRange = Math.max(...pointsFor) - lowPoints;
+  const barWidth = (points: number) => (pointsRange > 0 ? 12 + 88 * ((points - lowPoints) / pointsRange) : 100);
   const teamName = (rosterId: number) => teams.find((team) => team.rosterId === rosterId)?.teamName ?? "Opponent";
   const nextGames = me ? nextGamesForTeam(games, me.rosterId) : [];
   const moved = me ? placesMoved(me.currentRank, me.rank) : 0;
@@ -85,7 +90,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
                     </div>
                     <div className="power-total proj-pf" role="cell">
                       <strong>{formatDecimal(team.projectedPointsFor, 0)}</strong>
-                      <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round((team.projectedPointsFor / topPoints) * 100)}%` }} /></div>
+                      <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round(barWidth(team.projectedPointsFor))}%` }} /></div>
                     </div>
                     <div className="power-total" role="cell"><strong>{recordLabel(team.projectedRecord)}</strong></div>
                   </div>

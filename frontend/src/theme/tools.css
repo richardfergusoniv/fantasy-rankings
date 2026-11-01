@@ -1059,10 +1059,10 @@
 .game-board-split i {
   height: 4px;
   border-radius: 2px;
-  background: var(--action);
-}
-.game-board-split i + i {
   background: var(--dim);
+}
+.game-board-split i.is-leading {
+  background: var(--action);
 }
 .game-board-compares {
   border-bottom: 1px solid var(--hairline);

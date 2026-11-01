@@ -183,7 +183,8 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-content.history-back { animation: playerHistoryBackIn .18s cubic-bezier(.22,.75,.28,1) both; }
 @keyframes playerHistoryBackIn { from { transform: translate3d(-34px, 0, 0); opacity: .72; } }
 .player-sheet-grabber { width: 38px; height: 4px; margin: -8px auto 12px; border-radius: 999px; background: var(--border); }
-.player-detail-sheet .section-heading { position: static; }
+/* Not sticky in the sheet, so it needs no page-colored backing; the band read as a dark stripe on the card. */
+.player-detail-sheet .section-heading { position: static; background: transparent; }
 .player-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .player-detail-title-line { display: flex; min-width: 0; align-items: center; gap: 7px; }
 .player-detail-title-line h2 { margin: 0; font-size: var(--type-display); line-height: 1.1; letter-spacing: -.02em; }

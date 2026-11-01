@@ -119,6 +119,8 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .league-sticky { display: grid; grid-template-columns: max-content minmax(0, 680px); column-gap: 24px; align-items: center; padding: 10px 32px 8px; }
   /* Contain the inline size so the scrolling track doesn't stretch the max-content first column (and the page) to its full length. */
   .ticker-strip { grid-column: 1 / -1; margin: -10px -32px 4px; contain: inline-size; }
+  /* The strip stops at the shell edge, not the window edge; fade the ends so items don't look cut off mid-word. */
+  .ticker-viewport { mask-image: linear-gradient(to right, transparent, black 32px, black calc(100% - 32px), transparent); }
   .week-line { min-height: 44px; padding-right: 18px; }
   .data-notes { grid-column: 1 / -1; }
   .league-picker { max-width: 680px; }

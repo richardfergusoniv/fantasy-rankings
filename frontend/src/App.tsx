@@ -41,7 +41,7 @@ import {
   shortLeagueName,
   signOutForPersonalData,
 } from "./dashboard-shared";
-import { formatDecimal, formatPoints } from "./lib/format-number";
+import { formatDecimal } from "./lib/format-number";
 import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPosition, TradeMode } from "./dashboard-url";
 import { withStreamedAnalytics } from "./dashboard-analytics";
 import { isSectionWaiting, sectionBuildFailed, shouldShowProgressiveShell } from "./dashboard-loading";
@@ -255,15 +255,24 @@ function TickerStrip({ data, news, rosterPlayerIds, opponentPlayerIds, prominent
     if (headlineItems.length > 0) return headlineItems;
 
     // No player news: keep the existing ADP edge fallback (never Sleeper adds/drops).
+    // ADP rows repeat per league format, so each player appears once (largest edge wins).
+    const seenAdpPlayers = new Set<string>();
     return (data?.adp ?? [])
       .filter((row) => row.pool === "all" && row.mflAdp !== null)
       .map((row) => ({ row, edge: (row.mflAdp ?? row.adp) - row.adp }))
       .sort((a, b) => Math.abs(b.edge) - Math.abs(a.edge))
+      .filter(({ row }) => {
+        const playerKey = row.playerId ?? row.name;
+        if (seenAdpPlayers.has(playerKey)) return false;
+        seenAdpPlayers.add(playerKey);
+        return true;
+      })
       .slice(0, 7)
       .map(({ row, edge }) => ({
         key: `adp:${row.format}:${row.playerId ?? row.name}`,
         source: "ADP",
-        label: tickerLabel(row.name, `ADP ${formatDecimal(row.adp, 2)} · ${formatPoints(edge, { sign: "always" })} vs MFL`),
+        // The edge is drawn once, by the move arrow; the label names both ADPs.
+        label: tickerLabel(row.name, `ADP ${formatDecimal(row.adp, 1)} · MFL ${formatDecimal(row.mflAdp ?? row.adp, 1)}`),
         quote: null,
         move: edge,
         tone: Math.abs(edge) < 0.05 ? "neutral" : edge > 0 ? "up" : "down",

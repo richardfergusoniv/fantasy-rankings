@@ -1128,7 +1128,8 @@ function ScatterPlot({
           <Scatter name={fieldSeriesName} data={rosteredPlayers} fill="var(--chart-2)" fillOpacity={0.7} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
           {/* Waivers use amber so available K/DST stand apart from grey rostered points on mobile. */}
           <Scatter name="Waivers" data={availablePlayers} fill="var(--chart-1)" fillOpacity={0.85} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
-          <Scatter name="Ownership unavailable" data={unknownPlayers} fill="var(--dim)" fillOpacity={0.45} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
+          {/* Hollow rings so unknown ownership never reads as a grey rostered dot. */}
+          <Scatter name="Ownership unavailable" data={unknownPlayers} fill="none" stroke="var(--dim)" strokeWidth={1.5} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
           {/* My team is a diamond as well as teal, so it reads without colour. */}
           <Scatter name="My team" data={selectedTeamPlayers} shape="diamond" fill="var(--chart-team)" stroke="var(--chart-team)" strokeWidth={1} onClick={compact ? undefined : (point: ChartDatum) => toggleFocus(point.id)} />
           {!compact && focused ? (
@@ -1163,7 +1164,12 @@ function ScatterPlot({
       </div>
       <p className="sr-only">{ariaLabel}. {plottedData.map((point) => `${point.name}, ${point.team}: ${xAxis.short} ${point.x}, ${yAxis.short} ${point.y}`).join("; ")}{zoomed ? " Chart is zoomed into the central region of plotted points." : ""}</p>
       {compact ? (
-        <div className="scatter-frame is-compact">{plot}</div>
+        // The preview keeps its axis titles so the dots can be read without opening the chart.
+        <div className="scatter-axis-rail is-compact">
+          <span className="scatter-axis-y" aria-hidden="true">{yAxisTitle}</span>
+          <div className="scatter-frame is-compact">{plot}</div>
+          <span className="scatter-axis-x" aria-hidden="true">{axisTitle}</span>
+        </div>
       ) : (
         <>
           <div className="scatter-axis-rail">
@@ -1356,7 +1362,7 @@ function ChartKey({ teamName, hasUnknown = false }: { teamName: string; hasUnkno
       <span><i className="selected-team-dot" /> {teamName}</span>
       <span><i className="rostered-dot" /> Rostered</span>
       <span><i className="waiver-dot" /> Waivers</span>
-      {hasUnknown ? <span><i /> Ownership unavailable</span> : null}
+      {hasUnknown ? <span><i className="unknown-dot" /> Ownership unavailable</span> : null}
     </div>
   );
 }

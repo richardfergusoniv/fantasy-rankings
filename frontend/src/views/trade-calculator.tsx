@@ -41,7 +41,7 @@ import { redraftTwinFormat } from "../../../api/_lib/season-long-format";
 import { clearTradeSide, removeTradePlayer, restoreTradePlayer } from "../undo";
 import { useUnsavedLeaveWarning } from "../unsaved-input";
 import { formatWhole } from "../lib/format-number";
-import { CloseGlyph, MoveTriangle } from "../components/glyphs";
+import { ChevronGlyph, CloseGlyph, MoveTriangle } from "../components/glyphs";
 import { EmptyState } from "../components/state-blocks";
 
 export function TradeAssetRow({ asset, onRemove, onOpenPlayer }: { asset: TradeAsset; onRemove: () => void; onOpenPlayer: (playerId: string) => void }) {
@@ -107,7 +107,7 @@ export function TradeSide({ title, assets, availableAssets, onAdd, onRemove, onC
                 }
               }}
               name="trade-asset-search"
-              placeholder={`Add to ${title.toLowerCase()}…`}
+              placeholder="Search players or picks…"
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="none"
@@ -602,18 +602,19 @@ export function LeagueAdjustedTrade({
                   const recordLabel = record ? formatTeamRecord(record) : "—";
                   return (
                     <li key={team.rosterId}>
-                      <label className="league-roster-row league-team-row">
-                        <input
-                          type="checkbox"
-                          checked={false}
-                          onChange={() => onPartnerChange(team.rosterId)}
-                          aria-label={record ? `Trade with ${team.teamName}, ${recordLabel}` : `Trade with ${team.teamName}`}
-                        />
+                      {/* Picking a team opens its roster, so the row is a button with a chevron, not a checkbox that never checks. */}
+                      <button
+                        type="button"
+                        className="league-roster-row league-team-row"
+                        onClick={() => onPartnerChange(team.rosterId)}
+                        aria-label={record ? `Trade with ${team.teamName}, ${recordLabel}` : `Trade with ${team.teamName}`}
+                      >
                         <span className="league-roster-main">
                           <span className="league-roster-name"><strong>{team.teamName}</strong></span>
                         </span>
                         <span className="league-roster-meta"><span>{recordLabel}</span></span>
-                      </label>
+                        <span className="league-team-row-chevron"><ChevronGlyph /></span>
+                      </button>
                     </li>
                   );
                 })}

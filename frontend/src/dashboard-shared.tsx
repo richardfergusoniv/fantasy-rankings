@@ -700,6 +700,8 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
             <SectionError title="PFN matchup data didn’t load." onRetry={() => { void tablesQuery.refetch(); }} retrying={tablesQuery.isFetching} compact />
           ) : (
             <>
+              {/* With neither table there is nothing to rank; show only the notice below, not six rows of dashes. */}
+              {offense || defense ? (
               <section className="matchup-grade-section" aria-label="Matchups">
                 <div className="matchup-stat-groups" aria-label={`${matchup.team} and ${matchup.opponent} PFN offense versus defense matchups`}>
                   <Tabs value={pairingTab} onValueChange={(value) => setPairingTab(value as "team-offense" | "team-defense")} className="matchup-pairing-tabs">
@@ -747,6 +749,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
                   })}
                 </div>
               </section>
+              ) : null}
               {!offense || !defense ? <SectionError title="PFN matchup data is incomplete." onRetry={() => { void tablesQuery.refetch(); }} retrying={tablesQuery.isFetching} compact /> : null}
             </>
           )}
