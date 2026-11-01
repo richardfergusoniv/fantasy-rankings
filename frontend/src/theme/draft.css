@@ -204,7 +204,7 @@ a.player-news-item { color: inherit; text-decoration: none; }
   display: flex;
   width: 100%;
   max-width: none;
-  max-height: min(88dvh, 640px);
+  max-height: calc(100dvh - 40px - env(safe-area-inset-top, 0px));
   flex-direction: column;
   gap: 0;
   padding: 0 0 env(safe-area-inset-bottom, 0px);
@@ -240,6 +240,7 @@ a.player-news-item { color: inherit; text-decoration: none; }
     bottom: auto;
     left: 50%;
     width: min(calc(100% - 2rem), 960px);
+    max-height: min(88dvh, 860px);
     --tw-translate-x: -50%;
     --tw-translate-y: -50%;
     border-width: 1px;
