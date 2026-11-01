@@ -494,6 +494,7 @@ function assembleStreamedDashboard(
       standings: powerData?.standings ?? [],
       playoffs: powerData?.playoffs ?? { teams: null, weekStart: null },
       waivers: identity.waivers ?? null,
+      waiverBids: identity.waiverBids,
     };
   });
   return {
@@ -1349,6 +1350,7 @@ export function App() {
       analytics={dashboard.analytics}
       analyticsLoading={analyticsLoading}
       sosEntry={dashboard.strengthOfSchedule.find((entry) => entry.leagueId === league.id)}
+      faabBid={league.waiverBids?.find((bid) => bid.playerId === playerHistory.current?.playerId) ?? null}
       upcomingGames={playerHistory.current.team ? dashboard.upcomingGames?.[canonicalNflTeam(playerHistory.current.team) ?? playerHistory.current.team] : undefined}
       newsItems={tickerPlayerNews}
       newsLoading={newsLoading}

@@ -36,7 +36,7 @@ import {
   sleeperInjuryTag,
 } from "../dashboard-shared";
 import type { RankingHorizon, RankingPosition } from "../dashboard-url";
-import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "../lib/format-number";
+import { faabBidLabel, formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "../lib/format-number";
 import { abbreviatedName, buildTeamDepthChart, depthChartPlayers, type DepthChartRow } from "../lib/team-depth-chart";
 import {
   DepthChangeMark,
@@ -910,6 +910,8 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   // Waivers: Sleeper adds in the last 24 hours, each bar scaled to the most-added player in the list.
   const addsById = dashboard.playerTrending ?? {};
   const addsFor = (row: (typeof rows)[number]) => addsById[row.key]?.adds ?? 0;
+  // Suggested FAAB bids for the top graded adds (the chat assistant's grading, saved by the refresh).
+  const bidById = useMemo(() => new Map((availableOnly ? league.waiverBids ?? [] : []).map((bid) => [bid.playerId, bid])), [availableOnly, league.waiverBids]);
   const maxAdds = availableOnly ? Math.max(0, ...rows.map(addsFor)) : 0;
   const hasSearch = query.trim().length > 0;
   const rankingHorizonOptions: Array<SegmentOption<RankingHorizon>> = availableOnly
@@ -1096,6 +1098,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                           </span>
                         )
                       ) : null}
+                      {bidById.has(row.key) ? <span className="ranking-bid" title={`Suggested FAAB bid · ${bidById.get(row.key)!.label}`}>{faabBidLabel(bidById.get(row.key)!)}</span> : null}
                       {rowAdds > 0 ? (
                         <span className="ranking-adds" title="Sleeper adds, last 24 hours">
                           <span className="ranking-adds-track"><i style={{ width: `${Math.max(8, (rowAdds / maxAdds) * 100)}%` }} /></span>

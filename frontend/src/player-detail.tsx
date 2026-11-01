@@ -37,7 +37,7 @@ import {
 import { actualComponentsForGame } from "./actual-components";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { NewsTypeBadges } from "./news-badges";
-import { formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
+import { faabBidLabel, formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { buildGameLogRows } from "./lib/game-log-rows";
 import { positionTierLabel } from "./lib/position-tier";
 import { useProfileTag } from "./lib/use-profile-tag";
@@ -447,6 +447,7 @@ export function PlayerDetailSheet({
   newsItems,
   sosEntry,
   upcomingGames,
+  faabBid,
   newsLoading = false,
   newsError = false,
   onRetryNews,
@@ -480,6 +481,8 @@ export function PlayerDetailSheet({
   sosEntry?: StrengthOfScheduleEntryLike;
   /** His team's next four games, for the schedule strip. */
   upcomingGames?: readonly UpcomingGame[];
+  /** Suggested FAAB bid when he's a top graded waiver add. */
+  faabBid?: { low: number; high: number } | null;
   newsLoading?: boolean;
   newsError?: boolean;
   onRetryNews?: () => void;
@@ -777,10 +780,15 @@ export function PlayerDetailSheet({
           </div>
         </div>
         {upcomingGames?.length ? <ScheduleStrip games={upcomingGames} position={player.position} sosEntry={sosEntry} /> : null}
-        {trending && (trending.adds !== null || trending.drops !== null) ? (
+        {(trending && (trending.adds !== null || trending.drops !== null)) || faabBid ? (
           <div className="player-trending" aria-label="Sleeper adds and drops">
-            <div><span>Adds</span><strong className="is-up">{trending.adds === null ? "—" : `+${formatCompactCount(trending.adds)}`}</strong></div>
-            <div><span>Drops</span><strong className="is-down">{trending.drops === null ? "—" : `−${formatCompactCount(trending.drops)}`}</strong></div>
+            {trending && (trending.adds !== null || trending.drops !== null) ? (
+              <>
+                <div><span>Adds</span><strong className="is-up">{trending.adds === null ? "—" : `+${formatCompactCount(trending.adds)}`}</strong></div>
+                <div><span>Drops</span><strong className="is-down">{trending.drops === null ? "—" : `−${formatCompactCount(trending.drops)}`}</strong></div>
+              </>
+            ) : null}
+            {faabBid ? <div><span>Bid</span><strong>{faabBidLabel(faabBid)}</strong></div> : null}
           </div>
         ) : null}
         {toolLinks ? <ToolLinks ariaLabel={`Open ${player.name} in a tool`} links={toolLinks} /> : null}

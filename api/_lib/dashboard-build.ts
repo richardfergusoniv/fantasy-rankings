@@ -1,5 +1,6 @@
 import { waitUntil } from "@vercel/functions";
 import { upcomingSchedule } from "./upcoming-schedule.js";
+import { waiverBidsFor } from "./waiver-suggestions.js";
 import { and, desc, eq, inArray, like } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "./db.js";
@@ -2280,6 +2281,16 @@ export async function buildUserDashboard(
     gameLines,
     sourceErrors: [...new Set(sourceErrors)],
   });
+  // FAAB bids for the top graded waiver adds, graded exactly as the chat assistant
+  // grades them. Best-effort: a failure leaves the leagues without bids.
+  try {
+    // Dynamic import: scoring-jobs imports this module, so a static import would be circular.
+    const { loadActiveScoringWeights } = await import("./scoring-jobs.js");
+    const weights = await loadActiveScoringWeights();
+    for (const league of dashboard.leagues) league.waiverBids = waiverBidsFor(dashboard, league, weights);
+  } catch (error) {
+    console.error("[dashboard-build] waiver bids failed", error);
+  }
   // Publish guard: an incomplete build must not replace a complete cached
   // snapshot (see assertDashboardBuildPublishable). Throws before any
   // telemetry write or cache publish; callers fall back to the snapshot.

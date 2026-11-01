@@ -189,6 +189,14 @@ export const leaguePlayoffsSchema = z.object({
   weekStart: z.number().int().nullable(),
 });
 
+/** A suggested FAAB bid for one available player. */
+export const waiverBidSchema = z.object({
+  playerId: z.string(),
+  label: z.enum(["Must add", "Add", "Watch"]),
+  low: z.number().int(),
+  high: z.number().int(),
+});
+
 /** The user's waiver standing: FAAB budget (FAAB leagues) and priority. */
 export const waiverStatusSchema = z.object({
   type: z.enum(["faab", "rolling", "reverse_standings"]).nullable(),
@@ -238,6 +246,8 @@ export const leagueSchema = z.object({
   standings: z.array(standingsRowSchema).default([]),
   playoffs: leaguePlayoffsSchema.default({ teams: null, weekStart: null }),
   waivers: waiverStatusSchema.nullable().default(null),
+  /** FAAB bids for the top graded waiver adds (same grading as the chat assistant); FAAB leagues only. */
+  waiverBids: z.array(waiverBidSchema).optional(),
 });
 
 export const weeklySnapPointSchema = z.object({
@@ -381,6 +391,7 @@ export const leagueIdentitySchema = leagueSchema.pick({
   seasonLongFormat: true,
   tradeValuation: true,
   waivers: true,
+  waiverBids: true,
 });
 
 export const leagueTeamSchema = leagueSchema.pick({
