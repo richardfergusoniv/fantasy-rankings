@@ -1,6 +1,7 @@
 /**
  * OpenRouter OpenAI-compatible chat completions client.
- * Paid models are refused; on 403/404/429/5xx the free fallback model is tried once.
+ * Paid models are refused; on 403/404/429/5xx (or a per-attempt timeout) the
+ * call falls through the chain of free tool-capable models until one answers.
  * Client-side aborts / deadlines are not retried as upstream failures.
  */
 import {
@@ -9,6 +10,7 @@ import {
   OPENROUTER_BASE_URL,
   resolveOpenRouterFallbackModel,
   resolveOpenRouterModel,
+  resolveOpenRouterModelChain,
 } from "./chat-config.js";
 import type { OpenAiToolDefinition } from "./chat-tools.js";
 
@@ -202,22 +204,38 @@ export function shouldFallback(status: number): boolean {
 }
 
 /**
- * Call OpenRouter with the configured free primary model; on 403/404/429/5xx retry
- * once with the free fallback model. Aborts / deadlines are not retried.
- */
-/**
- * After the primary fails with a fallback-eligible status, go straight to the
- * fallback for this long (per instance), instead of paying a failed primary
- * round-trip on every call while it is down.
+ * After a model fails with a fallback-eligible status, deprioritize it for
+ * this long (per instance), instead of paying a failed round-trip to it on
+ * every call while it is down.
  */
 export const PRIMARY_COOLDOWN_MS = 5 * 60_000;
 const primaryCooldownUntil = new Map<string, number>();
 
-/** Test helper: forget primary-model cooldowns. */
+/** Test helper: forget model cooldowns. */
 export function resetPrimaryCooldowns(): void {
   primaryCooldownUntil.clear();
 }
 
+/** Per-attempt cap so one slow model cannot starve the rest of the chain. */
+export const MODEL_ATTEMPT_TIMEOUT_MS = 20_000;
+
+/** Internal marker: an attempt hit the per-attempt cap (not the caller's deadline). */
+class ModelAttemptTimeoutError extends Error {
+  readonly model: string;
+  constructor(model: string) {
+    super(`Model attempt timed out: ${model}`);
+    this.name = "ModelAttemptTimeoutError";
+    this.model = model;
+  }
+}
+
+/**
+ * Call OpenRouter with the configured free primary model; on 403/404/429/5xx
+ * or a per-attempt timeout, fall through the chain of free tool-capable
+ * models (the named fallback first, then every other one) until a model
+ * answers or the chain runs out. The caller's abort signal outranks the
+ * chain: a deadline stops everything and is never retried.
+ */
 export async function callOpenRouterWithFallback(args: {
   apiKey: string;
   messages: ChatCompletionMessage[];
@@ -226,11 +244,21 @@ export async function callOpenRouterWithFallback(args: {
   primaryModel?: string;
   fallbackModel?: string;
   signal?: AbortSignal;
+  attemptTimeoutMs?: number;
 }): Promise<{ response: ChatCompletionResponse; model: string }> {
   const primary = args.primaryModel ?? resolveOpenRouterModel();
   const fallback = args.fallbackModel ?? resolveOpenRouterFallbackModel();
   assertFreeModel(primary);
   assertFreeModel(fallback);
+
+  // Models still cooling down after a recent failure go last instead of
+  // being skipped outright, so a bad run never leaves nothing to try.
+  const chain = [...new Set([primary, fallback, ...resolveOpenRouterModelChain(primary)])];
+  const now = Date.now();
+  const ordered = [
+    ...chain.filter((model) => (primaryCooldownUntil.get(model) ?? 0) <= now),
+    ...chain.filter((model) => (primaryCooldownUntil.get(model) ?? 0) > now),
+  ];
 
   // Do not send tool_choice: "auto" is the default when tools are present, and
   // some free endpoints (e.g. inkling) reject the explicit tool_choice param.
@@ -239,40 +267,82 @@ export async function callOpenRouterWithFallback(args: {
     tools: args.tools,
     temperature: 0.2,
   };
+  const attemptTimeoutMs = args.attemptTimeoutMs ?? MODEL_ATTEMPT_TIMEOUT_MS;
 
-  const callModel = async (model: string) => ({
-    response: await callOpenRouterChat({
-      apiKey: args.apiKey,
-      body: { ...bodyBase, model },
-      fetchImpl: args.fetchImpl,
-      signal: args.signal,
-    }),
-    model,
-  });
+  const callModel = async (model: string) => {
+    const attempt = new AbortController();
+    const onParentAbort = () => attempt.abort();
+    if (args.signal) {
+      if (args.signal.aborted) throw new ChatAgentTimeoutError();
+      args.signal.addEventListener("abort", onParentAbort, { once: true });
+    }
+    const timer = setTimeout(() => attempt.abort(), attemptTimeoutMs);
+    try {
+      const response = await callOpenRouterChat({
+        apiKey: args.apiKey,
+        body: { ...bodyBase, model },
+        fetchImpl: args.fetchImpl,
+        signal: attempt.signal,
+      });
+      return { response, model };
+    } catch (err) {
+      if (args.signal?.aborted) throw new ChatAgentTimeoutError();
+      // callOpenRouterChat reports any abort as ChatAgentTimeoutError; with
+      // the caller's signal still live, the abort was this attempt's timer.
+      if (err instanceof ChatAgentTimeoutError) throw new ModelAttemptTimeoutError(model);
+      throw err;
+    } finally {
+      clearTimeout(timer);
+      args.signal?.removeEventListener("abort", onParentAbort);
+    }
+  };
 
-  if (fallback !== primary && (primaryCooldownUntil.get(primary) ?? 0) > Date.now()) {
-    return callModel(fallback);
+  let lastError: unknown;
+  for (let index = 0; index < ordered.length; index += 1) {
+    const model = ordered[index]!;
+    try {
+      const result = await callModel(model);
+      primaryCooldownUntil.delete(model);
+      return result;
+    } catch (err) {
+      if (err instanceof ChatAgentTimeoutError) throw err;
+      const timedOut = err instanceof ModelAttemptTimeoutError;
+      if (!timedOut && (!(err instanceof OpenRouterError) || !shouldFallback(err.status))) throw err;
+      lastError = err;
+      primaryCooldownUntil.set(model, Date.now() + PRIMARY_COOLDOWN_MS);
+      if (index + 1 >= ordered.length) break;
+      // Log every hop: if the whole chain fails, only the last error reaches
+      // the route, and a persistently broken model would stay invisible.
+      if (timedOut) {
+        console.error("[chat] model attempt timed out; trying next", attemptTimeoutMs, model);
+      } else if (index === 0) {
+        console.error(
+          "[chat] primary model failed; trying fallback",
+          (err as OpenRouterError).status,
+          model,
+          summarizeOpenRouterErrorBody((err as OpenRouterError).body),
+        );
+      } else {
+        console.error(
+          "[chat] fallback model failed; trying next",
+          (err as OpenRouterError).status,
+          model,
+          summarizeOpenRouterErrorBody((err as OpenRouterError).body),
+        );
+      }
+    }
   }
-
-  try {
-    const result = await callModel(primary);
-    primaryCooldownUntil.delete(primary);
-    return result;
-  } catch (err) {
-    if (err instanceof ChatAgentTimeoutError) throw err;
-    if (!(err instanceof OpenRouterError) || !shouldFallback(err.status)) throw err;
-    if (fallback === primary) throw err;
-    primaryCooldownUntil.set(primary, Date.now() + PRIMARY_COOLDOWN_MS);
-    // Log the primary's failure: if the fallback fails too, only its error
-    // reaches the route, and a persistent primary problem would stay invisible.
-    console.error(
-      "[chat] primary model failed; trying fallback",
-      err.status,
-      primary,
-      summarizeOpenRouterErrorBody(err.body),
+  // A chain that ends on an attempt timeout must still surface as an
+  // upstream failure the route recognizes (busy 503), not a private error
+  // it would report as an internal failure.
+  if (lastError instanceof ModelAttemptTimeoutError) {
+    throw new OpenRouterError(
+      504,
+      `Model attempt timed out after ${attemptTimeoutMs}ms: ${lastError.model}`,
+      lastError.model,
     );
-    return callModel(fallback);
   }
+  throw lastError;
 }
 
 export function buildInitialMessages(

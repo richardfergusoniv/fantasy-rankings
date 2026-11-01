@@ -72,6 +72,41 @@ export function resolveOpenRouterFallbackModel(): string {
   return FALLBACK_OPENROUTER_MODEL;
 }
 
+/**
+ * Every other tool-capable `:free` model on OpenRouter, in the order the
+ * chat should fall through to them when the models ahead are blocked, busy,
+ * or down (checked against the live catalog 2026-11-01: 13 free models
+ * support tools; the only other free model is a content-safety classifier).
+ * Ordered by expected agent quality: the proven 550B first, then the
+ * largest-context general models, with the small and specialty models as
+ * last resorts. Free models that cannot call tools are useless to the
+ * agent and are never listed.
+ */
+export const FREE_FALLBACK_MODEL_CHAIN: readonly string[] = [
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "thinkingmachines/inkling-small:free",
+  "nvidia/nemotron-3.5-lightning:free",
+  "google/gemma-4-31b-it:free",
+  "google/gemma-4-26b-a4b-it:free",
+  "nvidia/nemotron-3.5-super-vl:free",
+  "cohere/north-mini-code:free",
+  "recursive/flint-v1.0:free",
+  "xingchen-agi/xing4.0-29b-a4b:free",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+  "dots-studio/dots-3-note-preview:free",
+  "liquid/lfm-2.5-2.6b:free",
+];
+
+/**
+ * The full attempt order for one chat call: the resolved primary, then the
+ * default (so a custom primary still gets the usual models behind it),
+ * then every fallback in FREE_FALLBACK_MODEL_CHAIN. Deduped, free-only.
+ */
+export function resolveOpenRouterModelChain(primary = resolveOpenRouterModel()): string[] {
+  const chain = [primary, DEFAULT_OPENROUTER_MODEL, ...FREE_FALLBACK_MODEL_CHAIN];
+  return [...new Set(chain)].filter(isFreeOpenRouterModel);
+}
+
 export function readOpenRouterApiKey(env = process.env): string | null {
   const key = env.OPENROUTER_API_KEY?.trim();
   return key ? key : null;
