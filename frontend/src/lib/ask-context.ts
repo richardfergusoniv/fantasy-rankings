@@ -50,7 +50,7 @@ const BY_TAB: Record<Tab, AskContext> = {
   comparison: PLAYERS,
   trade: TRADE,
   power: { label: "League", suggestions: ["Who is the best team in my league?", "Which teams could I trade with?", "How does my team stack up?"] },
-  outcomes: { label: "Projected standings", suggestions: ["What do I need to make the playoffs?", "Who is most likely to finish last?", "How do my remaining games look?"] },
+  outcomes: { label: "Playoff picture", suggestions: ["What do I need to make the playoffs?", "Who is most likely to finish last?", "How do my remaining games look?"] },
   draft: { label: "Draft", suggestions: ["Who should I take next?", "Which positions are running out?", "Who is the best value left?"] },
   monitor: GENERAL,
   "team-stats": GENERAL,
