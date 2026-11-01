@@ -30,10 +30,11 @@
   align-items: center;
   min-width: 0;
   max-width: 100%;
-  min-height: 44px;
-  padding: 0 0 0 12px;
+  /* Compact filter height, like This week / Season long: these pills filter a view, they aren't primary actions. */
+  min-height: var(--compact-control-height);
+  padding: 0 0 0 10px;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background-color: var(--surface);
   box-shadow: var(--shadow-control);
 }
@@ -147,10 +148,10 @@
   width: auto;
   min-width: 0;
   max-width: 100%;
-  min-height: 42px;
+  min-height: calc(var(--compact-control-height) - 2px);
   padding: 0 30px 0 6px;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background-color: transparent;
   background-image: var(--select-arrow);
   background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%;
