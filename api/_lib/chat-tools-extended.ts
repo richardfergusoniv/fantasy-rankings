@@ -647,41 +647,63 @@ export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveE
       // ids, so resolve through the prop-line-reads identity index (id, then
       // unambiguous name+position, then name+team+position), never by raw id.
       const statsIndex = indexWeekStatsByPlayer(prior);
-      const snapsByTeamKey = new Map<string, typeof snaps>();
-      const snapsByCrossKey = new Map<string, typeof snaps>();
+      const playedIndex = indexPlayedWeeks(snaps.filter((snap) => snap.week <= week - 1));
+      type SnapRow = (typeof snaps)[number];
+      const snapsByTeamKey = new Map<string, Map<number, SnapRow>>();
+      const snapsByCrossKey = new Map<string, Map<number, SnapRow>>();
+      const crossTeamsByWeek = new Map<string, Map<number, Set<string>>>();
       for (const row of snaps) {
         if (row.week > week - 1 || row.offenseSnaps <= 0) continue;
         const teamKey = propPlayerMatchKey(row.name, row.team, row.position);
-        const teamRows = snapsByTeamKey.get(teamKey) ?? [];
-        teamRows.push(row);
-        snapsByTeamKey.set(teamKey, teamRows);
+        const teamMap = snapsByTeamKey.get(teamKey) ?? new Map<number, SnapRow>();
+        teamMap.set(row.week, row);
+        snapsByTeamKey.set(teamKey, teamMap);
         const crossKey = propPlayerNamePositionKey(row.name, row.position);
-        const crossRows = snapsByCrossKey.get(crossKey) ?? [];
-        crossRows.push(row);
-        snapsByCrossKey.set(crossKey, crossRows);
+        const crossMap = snapsByCrossKey.get(crossKey) ?? new Map<number, SnapRow>();
+        crossMap.set(row.week, row);
+        snapsByCrossKey.set(crossKey, crossMap);
+        const weeks = crossTeamsByWeek.get(crossKey) ?? new Map<number, Set<string>>();
+        const teams = weeks.get(row.week) ?? new Set<string>();
+        teams.add(row.team);
+        weeks.set(row.week, teams);
+        crossTeamsByWeek.set(crossKey, weeks);
       }
-      usageFor = (player) => {
-        const rows = weekStatsForPlayer(statsIndex, player).slice(-3);
-        if (rows.length === 0) return null;
-        let snapRows = snapsByTeamKey.get(propPlayerMatchKey(player.name, player.team, player.position)) ?? [];
-        if (snapRows.length === 0) {
-          const cross = snapsByCrossKey.get(propPlayerNamePositionKey(player.name, player.position)) ?? [];
-          // Cross-team fallback only when the name+position maps to one team.
-          if (new Set(cross.map((row) => row.team)).size <= 1) snapRows = cross;
+      // Same resolution order as playedWeeksForPlayer: name+position first
+      // (skipped when that identity is ambiguous), then name+team+position.
+      const snapMapFor = (player: { name: string; team: string | null; position: string }) => {
+        const crossKey = propPlayerNamePositionKey(player.name, player.position);
+        const ambiguous = [...(crossTeamsByWeek.get(crossKey)?.values() ?? [])].some((teams) => teams.size > 1);
+        if (!ambiguous) {
+          const cross = snapsByCrossKey.get(crossKey);
+          if (cross?.size) return cross;
         }
-        snapRows = snapRows
-          .slice()
-          .sort((a, b) => b.week - a.week)
+        return snapsByTeamKey.get(propPlayerMatchKey(player.name, player.team, player.position)) ?? null;
+      };
+      usageFor = (player) => {
+        const statRows = weekStatsForPlayer(statsIndex, player);
+        const statByWeek = new Map(statRows.map((row) => [row.week, row]));
+        const played = playedWeeksForPlayer(playedIndex, player);
+        // The window is the player's last three PLAYED weeks (from snaps), so
+        // a played week with no stat row counts as a zero week rather than
+        // being skipped for an older productive game; the snap and stat
+        // averages describe the same weeks. Without snap data, fall back to
+        // the last three stat weeks.
+        const weeks = (played.size > 0 ? [...played] : statRows.map((row) => row.week))
+          .sort((a, b) => b - a)
           .slice(0, 3);
+        if (weeks.length === 0) return null;
+        const snapByWeek = snapMapFor(player);
         const avg = (values: number[]) => round1dp(values.reduce((sum, v) => sum + v, 0) / values.length);
-        const shares = rows.map((row) => row.targetShare).filter((v): v is number => v !== null);
+        const shares = weeks
+          .map((w) => statByWeek.get(w)?.targetShare ?? (played.size > 0 ? 0 : null))
+          .filter((v): v is number => v !== null);
         return {
-          games: rows.length,
-          snapSharePct: snapRows.length ? avg(snapRows.map((row) => row.offensePct)) : null,
+          games: weeks.length,
+          snapSharePct: snapByWeek ? avg(weeks.map((w) => snapByWeek.get(w)?.offensePct ?? 0)) : null,
           targetSharePct: shares.length ? avg(shares) : null,
-          targetsPerGame: avg(rows.map((row) => row.targets)),
-          carriesPerGame: avg(rows.map((row) => row.carries)),
-          pprPointsPerGame: avg(rows.map((row) => row.fantasyPpr)),
+          targetsPerGame: avg(weeks.map((w) => statByWeek.get(w)?.targets ?? 0)),
+          carriesPerGame: avg(weeks.map((w) => statByWeek.get(w)?.carries ?? 0)),
+          pprPointsPerGame: avg(weeks.map((w) => statByWeek.get(w)?.fantasyPpr ?? 0)),
         };
       };
     } catch (err) {
@@ -1441,6 +1463,23 @@ export async function toolSuggestTrades(
       dynasty?: MoveVerdict;
     };
     fairness: ReturnType<typeof scoreTrade>["fairness"] | null;
+    rosterImpact: {
+      week: { lineupPointsBefore: number; lineupPointsAfter: number };
+      seasonLong: {
+        starterValueBefore: number;
+        starterValueAfter: number;
+        powerRankBefore: number;
+        powerRankAfter: number;
+        fillsHole: boolean;
+      };
+      dynasty?: {
+        starterValueBefore: number;
+        starterValueAfter: number;
+        powerRankBefore: number;
+        powerRankAfter: number;
+        fillsHole: boolean;
+      };
+    };
     primaryWindow: "week" | "season_long" | "dynasty";
     primaryLabel: string;
     primaryScore: number;
@@ -1631,6 +1670,32 @@ export async function toolSuggestTrades(
         ...(move.dynasty ? { dynasty: moveVerdict(move.dynasty) } : {}),
       },
       fairness: move.fairness ?? null,
+      // The raw roster effects the labels are computed from: a value gap
+      // alone does not explain a trade verdict when starter value or power
+      // rank moves the other way.
+      rosterImpact: {
+        week: { lineupPointsBefore: lineup.before, lineupPointsAfter: lineup.after },
+        seasonLong: {
+          starterValueBefore: Math.max(1, slBefore.score),
+          starterValueAfter: slAfter.score,
+          powerRankBefore: myRank,
+          powerRankAfter: margin >= 0 ? Math.max(1, myRank - 1) : myRank + 1,
+          fillsHole,
+        },
+        ...(dynastyTotals && dyBefore && dyAfter
+          ? {
+            dynasty: {
+              starterValueBefore: Math.max(1, dyBefore.score),
+              starterValueAfter: dyAfter.score,
+              powerRankBefore: myRank,
+              powerRankAfter: (dynastyTotals.adjustedGet - dynastyTotals.adjustedGive) >= 0
+                ? Math.max(1, myRank - 1)
+                : myRank + 1,
+              fillsHole,
+            },
+          }
+          : {}),
+      },
       primaryWindow: tradeWindowKey,
       primaryLabel: primary.label,
       primaryScore: primary.score,

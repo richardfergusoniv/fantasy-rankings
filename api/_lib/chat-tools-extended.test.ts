@@ -820,6 +820,65 @@ describe("extended chat tools", () => {
     expect(evidence.usage?.pprPointsPerGame).toBeGreaterThan(0);
   });
 
+  it("move evidence counts played zero-stat weeks inside the usage window", async () => {
+    const statRow = (week: number, targets: number) => ({
+      playerId: "gsis-zero",
+      name: "Zero Week",
+      team: "BUF",
+      opponent: "NYJ",
+      position: "WR" as const,
+      week,
+      targets,
+      receptions: 0,
+      receivingYards: 0,
+      carries: 0,
+      rushingYards: 0,
+      receivingTds: 0,
+      rushingTds: 0,
+      passingTds: 0,
+      fantasyPpr: targets,
+      targetShare: 20,
+      completions: 0,
+      passAttempts: 0,
+      passingYards: 0,
+      interceptions: 0,
+      passingFirstDowns: 0,
+      rushingFirstDowns: 0,
+      receivingFirstDowns: 0,
+      sacksTaken: 0,
+      fumblesLost: 0,
+      passing2pt: 0,
+      rushing2pt: 0,
+      receiving2pt: 0,
+    });
+    const snapRow = (week: number) => ({
+      name: "Zero Week",
+      team: "BUF",
+      position: "WR" as const,
+      week,
+      offenseSnaps: 40,
+      offensePct: 50,
+    });
+    vi.mocked(loadTeamWeekStats).mockResolvedValueOnce({
+      season: 2026,
+      // Played weeks 4, 5, 6 on snaps, but no stat row for week 5.
+      stats: [statRow(4, 8), statRow(6, 4)],
+      snaps: [snapRow(4), snapRow(5), snapRow(6)],
+    });
+    selectResults.push([]); // prop-line cache miss inside the evidence index
+    const index = await loadMoveEvidenceIndex(baseDashboard());
+    const evidence = index.forPlayer({
+      playerId: "sleeper-zero",
+      name: "Zero Week",
+      team: "BUF",
+      position: "WR",
+    });
+    expect(evidence.usage?.games).toBe(3);
+    // (4 + 0 + 8) / 3: the zero week counts, it is not skipped.
+    expect(evidence.usage?.targetsPerGame).toBe(4);
+    expect(evidence.usage?.snapSharePct).toBe(50);
+  });
+
   it("suggest_waivers ranks free agents with verdicts and evidence, no reasons", async () => {
     const result = await toolSuggestWaivers(ctxWithDashboard(), { leagueId: "lg1", limit: 5 }) as {
       ok: boolean;
@@ -851,12 +910,14 @@ describe("extended chat tools", () => {
         primaryLabel: string;
         verdicts: { seasonLong: { label: string } };
         fairness: { band: string } | null;
+        rosterImpact: { seasonLong: { starterValueBefore: number; starterValueAfter: number } };
       }>;
     };
     expect(result.ok).toBe(true);
     expect(result.suggestions.length).toBeGreaterThan(0);
     expect(result.suggestions[0]?.partner).toBe("Rival");
     expect(result.suggestions[0]?.verdicts.seasonLong.label).toBe(result.suggestions[0]?.primaryLabel);
+    expect(typeof result.suggestions[0]?.rosterImpact.seasonLong.starterValueAfter).toBe("number");
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("\"reasons\"");
     expect(serialized).not.toContain("\"reason\"");

@@ -971,6 +971,32 @@ async function toolEvaluateTrade(
       ...(move.dynasty ? { dynasty: moveVerdict(move.dynasty) } : {}),
     },
     fairness: move.fairness ?? null,
+    // The raw roster effects the labels are computed from: a value gap
+    // alone does not explain a trade verdict when starter value or power
+    // rank moves the other way.
+    rosterImpact: {
+      week: { lineupPointsBefore: lineup.before, lineupPointsAfter: lineup.after },
+      seasonLong: {
+        starterValueBefore: seasonLongSide.starterBefore,
+        starterValueAfter: seasonLongSide.starterAfter,
+        powerRankBefore: myRankBefore,
+        powerRankAfter: myRankAfter,
+        fillsHole,
+      },
+      ...(dynastySide
+        ? {
+          dynasty: {
+            starterValueBefore: dynastySide.starterBefore,
+            starterValueAfter: dynastySide.starterAfter,
+            powerRankBefore: myRankBefore,
+            powerRankAfter: (dynastySide.getAdjusted - dynastySide.giveAdjusted) >= 0
+              ? Math.max(1, myRankBefore - 1)
+              : myRankBefore + 1,
+            fillsHole,
+          },
+        }
+        : {}),
+    },
     primaryLabel: primary.label,
     primaryScore: primary.score,
     unsupportedSettings: league.tradeValuation.unsupportedSettings,
