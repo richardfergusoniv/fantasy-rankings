@@ -62,6 +62,10 @@ describe("resolveValueHistoryPlayerId", () => {
     { playerId: "9221", position: "RB", value: 11000, overallRank: 1 },
   ];
 
+  it("maps a player drafted with a traded pick back to his player id", () => {
+    expect(resolveValueHistoryPlayerId({ playerId: "historical:t1:4:9221", position: "RB", value: 11000, overallRank: 1 }, market)).toBe("9221");
+  });
+
   it("passes players and FantasyCalc pick ids through", () => {
     expect(isFantasyCalcPickId("FP_2027_mid_0")).toBe(true);
     expect(isFantasyCalcPickId("pick:lg:2027:1:3")).toBe(false);

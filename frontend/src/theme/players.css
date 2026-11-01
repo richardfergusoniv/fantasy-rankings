@@ -383,9 +383,11 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 /* Weekly points against projection (Season tab): bar = points scored, tick = that week's
    projection; green beat it, red missed it. The coming week is an outline at the card's projection. */
 .weekly-points { display: grid; gap: 4px; margin: 4px 0 14px; }
-.weekly-points-plot { display: grid; grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); gap: 6px; align-items: end; height: 132px; padding-top: 6px; border-bottom: 1px solid var(--hairline); }
-.weekly-points-col { position: relative; display: grid; align-items: end; height: 100%; }
-.weekly-points-bar { display: block; border-radius: var(--radius-xs) var(--radius-xs) 0 0; background: var(--dim); }
+.weekly-points-plot { position: relative; display: grid; grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); gap: 6px; align-items: end; height: 132px; margin-top: 6px; border-bottom: 1px solid var(--hairline); }
+.weekly-points-col { position: relative; height: 100%; }
+.weekly-points-bar { position: absolute; right: 0; left: 0; display: block; border-radius: var(--radius-xs) var(--radius-xs) 0 0; background: var(--dim); }
+.weekly-points-bar.is-negative { border-radius: 0 0 var(--radius-xs) var(--radius-xs); }
+.weekly-points-zero { position: absolute; right: 0; left: 0; margin: 0; border: 0; border-top: 1px solid var(--hairline); }
 .weekly-points-bar.is-over { background: var(--positive); }
 .weekly-points-bar.is-under { background: var(--negative); }
 .weekly-points-bar.is-next { border: 1.5px dashed var(--dim); border-bottom: 0; background: transparent; }

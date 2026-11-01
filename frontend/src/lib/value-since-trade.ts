@@ -5,7 +5,8 @@ export type ValueSinceTradeRow = { date: string; a: number; b: number };
 /**
  * Each side's FantasyCalc value, summed day by day from the trade date to the
  * latest stored day: the actual daily values, not rescaled to today. A player
- * with no stored history is left out of both the line and its total; one whose
+ * with no stored history is left out of both the line and its total (and if a
+ * whole side has none, there is no chart); one whose
  * history starts later carries his first stored value back to the trade date.
  */
 export function valueSinceTrade(
@@ -19,7 +20,8 @@ export function valueSinceTrade(
     const points = historyByPlayerId.get(id);
     if (points?.length) ascending.set(id, [...points].sort((x, y) => x.date.localeCompare(y.date)));
   }
-  if (ascending.size === 0) return [];
+  // A side with no stored history would draw as a flat zero line, so show nothing instead.
+  if (!sideA.some((id) => ascending.has(id)) || !sideB.some((id) => ascending.has(id))) return [];
   const dates = new Set<string>([tradeDate]);
   for (const points of ascending.values()) {
     for (const point of points) if (point.date >= tradeDate) dates.add(point.date);

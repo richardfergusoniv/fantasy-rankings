@@ -122,6 +122,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .ticker-strip { grid-column: 1 / -1; margin: -10px 0 4px; contain: inline-size; }
   /* The strip stops at the shell edge, not the window edge; fade the ends so items don't look cut off mid-word. */
   .ticker-viewport { mask-image: linear-gradient(to right, transparent, black 32px, black calc(100% - 32px), transparent); }
+  .ticker-viewport:focus-within { mask-image: none; }
   .week-line { min-height: 44px; padding-right: 18px; }
   .data-notes { grid-column: 1 / -1; }
   .league-picker { max-width: 680px; }

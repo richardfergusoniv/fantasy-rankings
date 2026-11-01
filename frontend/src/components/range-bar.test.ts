@@ -16,4 +16,8 @@ describe("rangeDomain", () => {
   it("never goes below zero", () => {
     expect(rangeDomain([{ low: 0.2, high: 1 }]).min).toBe(0);
   });
+
+  it("reaches below zero when a book's low is negative", () => {
+    expect(rangeDomain([{ low: -1.5, high: 6 }]).min).toBeLessThan(-1.5);
+  });
 });

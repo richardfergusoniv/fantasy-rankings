@@ -19,7 +19,11 @@ export function TradeValueSpark({ rows, names, leader }: {
   const span = Math.max(high - low, 1);
   const width = 300;
   const height = 48;
-  const x = (index: number) => (index / (rows.length - 1)) * width;
+  // Space points by date, so a long gap between stored days reads as a long stretch.
+  const day = (date: string) => Date.parse(`${date}T00:00:00Z`);
+  const start = day(rows[0]!.date);
+  const days = Math.max(day(rows[rows.length - 1]!.date) - start, 1);
+  const x = (index: number) => ((day(rows[index]!.date) - start) / days) * width;
   const y = (value: number) => 4 + (1 - (value - low) / span) * (height - 8);
   const path = (key: "a" | "b") => rows.map((row, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)} ${y(row[key]).toFixed(1)}`).join(" ");
   const first = rows[0]!;

@@ -214,6 +214,23 @@ describe("buildProjectedStandings", () => {
     expect(game.winProbability).not.toBeNull();
   });
 
+  it("shows the set starters in a current-week preview, not the best lineup", () => {
+    // The viewer starts a_wr and a_te and benches a_wr2, who projects higher than a_te would allow the optimizer to pass up.
+    const starter = (id: string, position: string, slot: string, projection: number) => ({ ...player(id, position, null, projection), isStarter: true, lineupSlot: slot });
+    const currentWeek = {
+      ...league,
+      tradeTeams: [
+        { rosterId: 1, players: [starter("a_wr", "WR", "WR", 4), starter("a_te", "TE", "TE", 9), player("a_wr2", "WR", null, 14)] },
+        { rosterId: 2, players: [player("b_wr", "WR", null, 18), player("b_te", "TE", null, 8)] },
+        { rosterId: 3, players: [player("c_wr", "WR", null, 12), player("c_te", "TE", null, 6)] },
+      ],
+    } as unknown as League;
+    const result = buildProjectedStandings({
+      league: currentWeek, weeks: new Map(), appWeek: 5, games: [{ week: 5, a: 1, b: 2 }], throughWeek: 4, regularSeasonEndsWeek: 5, missingWeeks: [],
+    });
+    expect(result.userGames[0]!.mine.map((slot) => slot.playerId)).toEqual(["a_wr", "a_te"]);
+  });
+
   it("withholds playoff odds in a league that also plays the weekly median", () => {
     const result = buildProjectedStandings({
       league, medianMatchup: true, weeks, games: [{ week: 5, a: 1, b: 2 }, { week: 6, a: 2, b: 3 }], throughWeek: 4, regularSeasonEndsWeek: 6, missingWeeks: [],

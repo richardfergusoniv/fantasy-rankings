@@ -152,9 +152,11 @@ export function bookRangePoints(
   }
   const low = score(lowLine);
   const high = score(highLine);
-  if (!Number.isFinite(low) || !Number.isFinite(high)) return null;
+  // Threshold bonuses can make the mixed ends score past the consensus line; keep the projection inside the range.
+  const middle = score(consensusStats);
+  if (!Number.isFinite(low) || !Number.isFinite(high) || !Number.isFinite(middle)) return null;
   const round2 = (value: number) => Math.round(value * 100) / 100;
-  return { low: round2(Math.min(low, high)), high: round2(Math.max(low, high)) };
+  return { low: round2(Math.min(low, high, middle)), high: round2(Math.max(low, high, middle)) };
 }
 
 export function scoreSleeperPlayerProjection(

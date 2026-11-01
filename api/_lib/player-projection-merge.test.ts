@@ -387,6 +387,20 @@ describe("bookRangePoints", () => {
     expect(range!.high).toBeGreaterThan(score(consensus));
   });
 
+  it("keeps the consensus projection inside the range under a negative threshold bonus", () => {
+    // A league that takes 3 points off at 300 passing yards: the 310-yard line scores below 290, so it becomes the
+    // low end, yet it still scores above the 300-yard consensus. The range must still contain the consensus score.
+    const bonus = (stats: Record<string, number>) => scoreProjectedPlayerStats("QB", stats, { ...PPR, bonus_pass_yd_300: -3 }, { recFdProxy: true });
+    const line = { pass_yd: 300, pass_td: 2, pass_int: 0.6, rush_yd: 20 };
+    const range = bookRangePoints("QB", {
+      expected_stats_low: { pass_yards: 290, pass_tds: 2, pass_interceptions: 0.6, rush_yards: 20 },
+      expected_stats_high: { pass_yards: 310, pass_tds: 2, pass_interceptions: 0.6, rush_yards: 20 },
+      td_probability: null,
+    }, line, bonus);
+    expect(range!.low).toBeLessThanOrEqual(bonus(line));
+    expect(range!.high).toBeGreaterThanOrEqual(bonus(line));
+  });
+
   it("is null for snapshots that predate the range fields", () => {
     expect(bookRangePoints("QB", { td_probability: null }, consensus, score)).toBeNull();
   });

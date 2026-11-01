@@ -1042,7 +1042,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                 ? `${formatWhole(row.projection ?? 0)} ${row.projectionLabel}`
                 : row.projectionLabel === "PTS"
                   ? `${formatProjectionPoints(row.projection, row.projectionSource)} points scored`
-                  : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points`;
+                  : `${formatProjectionPoints(row.projection, row.projectionSource)} projected points${row.projectionRange ? `, books ${formatDecimal(row.projectionRange.low, 1)} to ${formatDecimal(row.projectionRange.high, 1)}` : ""}`;
               const rosteredBy = row.rosterTeamName && row.rosterId === null ? `, rostered by ${row.rosterTeamName}` : "";
               const rowAccessibleLabel = `View ${row.name}, ${accessibleMatchup}, ${accessibleValue}${row.isRookie && !accessibleMatchup.includes("Rookie") ? ", Rookie" : ""}${row.injuryStatus ? `, injury status ${row.injuryStatus}` : ""}${rosteredBy}${isSelected ? ", selected" : ""}`;
               const rosterId = row.rosterId;
@@ -1103,8 +1103,8 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                     ) : null}
                   </span>
                   <span className="ranking-wide-cell ranking-move-cell" aria-hidden="true">
-                    {row.movement30Day !== null && Number.isFinite(row.movement30Day) && row.movement30Day !== 0 ? (
-                      <span className={row.movement30Day > 0 ? "is-up" : "is-down"}><MoveTriangle direction={row.movement30Day > 0 ? "up" : "down"} />{formatPercent(Math.abs(row.movement30Day))}</span>
+                    {row.movement30Day !== null && !Number.isNaN(row.movement30Day) && row.movement30Day !== 0 ? (
+                      <span className={row.movement30Day > 0 ? "is-up" : "is-down"}><MoveTriangle direction={row.movement30Day > 0 ? "up" : "down"} />{Number.isFinite(row.movement30Day) ? formatPercent(Math.abs(row.movement30Day)) : "from 0"}</span>
                     ) : null}
                   </span>
                   <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : row.projectionRange ? <><RangeBar className="is-end is-phone-only" range={row.projectionRange} value={row.projection} domain={rangeMax} /><span className="is-desktop-only">{row.projectionLabel}</span></> : <span>{row.projectionLabel}</span>}</span>

@@ -23,4 +23,8 @@ describe("valueSinceTrade", () => {
   it("is empty when nobody in the trade has stored history", () => {
     expect(valueSinceTrade(["x"], ["y"], history, "2026-10-01")).toEqual([]);
   });
+
+  it("is empty when one whole side has no stored history", () => {
+    expect(valueSinceTrade(["hampton"], ["y"], history, "2026-10-01")).toEqual([]);
+  });
 });

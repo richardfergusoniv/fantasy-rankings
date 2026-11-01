@@ -37,5 +37,6 @@ export function rangeDomain(ranges: ReadonlyArray<ProjectionRange | null | undef
   const low = Math.min(...present.map((range) => range.low));
   const high = Math.max(...present.map((range) => range.high));
   const pad = Math.max((high - low) * 0.05, 0.5);
-  return { min: Math.max(0, low - pad), max: high + pad };
+  // Floor at zero unless a book line projects below it, then pad under that low too.
+  return { min: low < 0 ? low - pad : Math.max(0, low - pad), max: high + pad };
 }
