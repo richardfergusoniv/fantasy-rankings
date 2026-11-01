@@ -140,6 +140,8 @@ def build_consensus(records: list[PropRecord]) -> list[dict]:
         spread = (max(lines) - min(lines)) if len(lines) > 1 else 0.0
 
         td_probability = None
+        td_probability_min = None
+        td_probability_max = None
         if stat == "anytime_td":
             # Median of per-book implied probabilities. Converting the
             # median odds instead corrupts markets whose books straddle
@@ -150,6 +152,8 @@ def build_consensus(records: list[PropRecord]) -> list[dict]:
                      if p is not None]
             if probs:
                 td_probability = float(median(probs))
+                td_probability_min = float(min(probs))
+                td_probability_max = float(max(probs))
             contested = (max(probs) - min(probs) > DRASTIC_TD_PROB_SPREAD) \
                 if len(probs) > 1 else False
         else:
@@ -166,6 +170,10 @@ def build_consensus(records: list[PropRecord]) -> list[dict]:
             "consensus_line": consensus_line,
             "anchor_line": anchor,
             "line_spread": spread,
+            # The lowest and highest book votes: the app draws these as each
+            # player's book range. Equal to the consensus with one book.
+            "min_line": float(min(lines)),
+            "max_line": float(max(lines)),
             "book_count": len(votes),
             "books": _display_book_names(vote_recs),
             "provider_count": len(providers),
@@ -174,6 +182,8 @@ def build_consensus(records: list[PropRecord]) -> list[dict]:
             "alt_lines_filtered": len(recs) - len(votes),
             "contested": contested,
             "td_probability": td_probability,
+            "td_probability_min": td_probability_min,
+            "td_probability_max": td_probability_max,
             "median_over_odds": _med([r.over_odds for r in vote_recs]),
             "median_under_odds": _med([r.under_odds for r in vote_recs]),
             "week": recs[0].week,

@@ -264,6 +264,11 @@ const vegasPlayerProjectionSchema = z.object({
   opponent: z.string().max(12).nullable(),
   expected_stats: z.record(z.string(), z.number()),
   td_probability: z.union([z.number(), z.record(z.string(), z.number())]).nullable(),
+  // Each stat's lowest and highest book line (pipeline 2026-11). Optional so older snapshots still parse.
+  expected_stats_low: z.record(z.string(), z.number()).optional(),
+  expected_stats_high: z.record(z.string(), z.number()).optional(),
+  td_probability_low: z.union([z.number(), z.record(z.string(), z.number())]).nullable().optional(),
+  td_probability_high: z.union([z.number(), z.record(z.string(), z.number())]).nullable().optional(),
   coverage: z.object({
     stats: z.union([z.number(), z.array(z.string()), z.record(z.string(), z.number())]),
     provider_count: z.number().int().nonnegative(),
@@ -1911,6 +1916,10 @@ export async function buildUserDashboard(
       const projectionComponents = gamePhase === "final" || position === "DEF" || projection === null || isUnavailable
         ? null
         : (rankRow?.projectionComponents ?? null);
+      // The book range only describes the pregame projection, so it goes once the game starts.
+      const projectionRange = gamePhase === "pregame" || gamePhase === null
+        ? (projection !== null && projection === pregameProjection && !isUnavailable ? (rankRow?.projectionRange ?? null) : null)
+        : null;
       // Prefer matchup points; when the feed is missing/empty, reuse the
       // weekly-stat actual already stamped on the ranking or defense row so
       // lineup totals and power rankings stay consistent with the board.
@@ -1941,6 +1950,7 @@ export async function buildUserDashboard(
         injuryStatus,
         defenseComponents: defense?.components ?? null,
         projectionComponents,
+        projectionRange,
       };
     };
 

@@ -4,6 +4,7 @@ import { rankingSchema } from "./dashboard-schemas.js";
 import {
   applyActualRanks,
   applyDefenseActualRanks,
+  bookRangePoints,
   finalizeDefenseActualDisplay,
   mergePlayerProjections,
   nonKickerProjectionCount,
@@ -12,6 +13,7 @@ import {
   type ProjectionSnapshot,
   type SleeperProjection,
 } from "./player-projection-merge.js";
+import { scoreProjectedPlayerStats } from "./sleeper.js";
 
 type Ranking = z.infer<typeof rankingSchema>;
 
@@ -361,5 +363,38 @@ describe("finalizeDefenseActualDisplay", () => {
       ["MIA", 9],
       ["NYJ", 8],
     ]);
+  });
+});
+
+
+describe("bookRangePoints", () => {
+  const score = (stats: Record<string, number>) => scoreProjectedPlayerStats("QB", stats, PPR, { recFdProxy: true });
+  const consensus = { pass_yd: 250, pass_td: 1.5, pass_int: 0.6, rush_yd: 20 };
+
+  it("scores each end in the league's rules, with interceptions counted the right way", () => {
+    const range = bookRangePoints("QB", {
+      expected_stats_low: { pass_yards: 230, pass_tds: 1.5, pass_interceptions: 0.5, rush_yards: 15 },
+      expected_stats_high: { pass_yards: 270, pass_tds: 1.5, pass_interceptions: 0.8, rush_yards: 25 },
+      td_probability: null,
+    }, consensus, score);
+    // Low: 230 yds, 1.5 TD, the HIGH interception line (0.8), 15 rush yds.
+    // High: 270 yds, 1.5 TD, the LOW interception line (0.5), 25 rush yds.
+    expect(range).toEqual({
+      low: Math.round((230 * 0.04 + 1.5 * 4 - 0.8 * 2 + 15 * 0.1) * 100) / 100,
+      high: Math.round((270 * 0.04 + 1.5 * 4 - 0.5 * 2 + 25 * 0.1) * 100) / 100,
+    });
+    expect(range!.low).toBeLessThan(score(consensus));
+    expect(range!.high).toBeGreaterThan(score(consensus));
+  });
+
+  it("is null for snapshots that predate the range fields", () => {
+    expect(bookRangePoints("QB", { td_probability: null }, consensus, score)).toBeNull();
+  });
+
+  it("collapses to the projection when every book agrees", () => {
+    const same = { pass_yards: 250, pass_tds: 1.5, pass_interceptions: 0.6, rush_yards: 20 };
+    const range = bookRangePoints("QB", { expected_stats_low: same, expected_stats_high: same, td_probability: null }, consensus, score);
+    expect(range!.low).toBe(range!.high);
+    expect(range!.low).toBeCloseTo(score(consensus), 2);
   });
 });

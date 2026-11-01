@@ -48,6 +48,11 @@ export const vegasProjectionPayloadSchema = z.object({
         opponent: z.string().max(12).nullable(),
         expected_stats: z.record(z.string(), z.number()),
         td_probability: z.union([z.number(), z.record(z.string(), z.number())]).nullable(),
+        // Each stat's lowest and highest book line (pipeline 2026-11). Optional so older snapshots still parse.
+        expected_stats_low: z.record(z.string(), z.number()).optional(),
+        expected_stats_high: z.record(z.string(), z.number()).optional(),
+        td_probability_low: z.union([z.number(), z.record(z.string(), z.number())]).nullable().optional(),
+        td_probability_high: z.union([z.number(), z.record(z.string(), z.number())]).nullable().optional(),
         coverage: z.object({
           stats: z.union([z.number(), z.array(z.string()), z.record(z.string(), z.number())]),
           provider_count: z.number().int().nonnegative(),

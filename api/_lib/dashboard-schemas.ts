@@ -28,6 +28,8 @@ export const rankingSchema = z.object({
   sleeperProjection: z.number().nullable(),
   projectionSource: z.enum(["vegas", "first_down", "fallback", "sleeper"]),
   projectionComponents: z.record(z.string(), z.number()).nullable(),
+  /** Lowest and highest book line for this week, scored in the league's rules. Vegas rows only. */
+  projectionRange: z.object({ low: z.number(), high: z.number() }).nullable().optional(),
   injuryStatus: z.string().nullable(),
   gameTime: z.string().nullable(),
   // Points the player has actually scored this week and their game's
@@ -120,6 +122,8 @@ export const rosterPlayerSchema = z.object({
   injuryStatus: z.string().nullable(),
   defenseComponents: defenseProjectionComponentsSchema.nullable(),
   projectionComponents: z.record(z.string(), z.number()).nullable(),
+  /** Lowest and highest book line, scored in the league's rules; only while the pregame projection stands. */
+  projectionRange: z.object({ low: z.number(), high: z.number() }).nullable().optional(),
 });
 
 export const suggestionSchema = z.object({

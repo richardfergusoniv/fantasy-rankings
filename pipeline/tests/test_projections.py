@@ -101,3 +101,27 @@ def test_display_name_falls_back_to_raw_when_unknown():
                                       "sleeper_id": None}}
     p = _proj(rows, positions)
     assert p["player"] == "Some Obscure Guy"
+
+
+def test_book_range_lines_ride_along_without_changing_the_projection():
+    rows = [
+        {**_row("Josh Palmer", "rec_yards", line=41.5), "min_line": 36.5, "max_line": 48.5},
+        {**_row("Josh Palmer", "receptions", line=3.5), "min_line": 2.5, "max_line": 4.5},
+        {**_row("Josh Palmer", "anytime_td", td_prob=0.3433),
+         "td_probability_min": 0.28, "td_probability_max": 0.41},
+    ]
+    p = _proj(rows, POSITIONS)
+    assert p["expected_stats"] == {"rec_yards": 41.5, "receptions": 3.5}
+    assert p["expected_stats_low"] == {"rec_yards": 36.5, "receptions": 2.5}
+    assert p["expected_stats_high"] == {"rec_yards": 48.5, "receptions": 4.5}
+    assert p["td_probability_low"] == 0.28
+    assert p["td_probability_high"] == 0.41
+    # The projection itself still comes from the consensus lines only.
+    assert p["leagues"][HALF_PPR] == build_projections(_wr_rows(), LEAGUES, POSITIONS)[0]["leagues"][HALF_PPR]
+
+
+def test_book_range_falls_back_to_the_consensus_when_older_rows_lack_it():
+    p = _proj(_wr_rows(), POSITIONS)
+    assert p["expected_stats_low"] == p["expected_stats"]
+    assert p["expected_stats_high"] == p["expected_stats"]
+    assert p["td_probability_low"] == p["td_probability"] == p["td_probability_high"]
