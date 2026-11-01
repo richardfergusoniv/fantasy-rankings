@@ -6,6 +6,7 @@ import {
   isFreeOpenRouterModel,
   resolveOpenRouterFallbackModel,
   resolveOpenRouterModel,
+  resolveOpenRouterModelChain,
 } from "./chat-config.js";
 import {
   callOpenRouterChat,
@@ -39,6 +40,19 @@ describe("chat-config free models", () => {
       "nvidia/nemotron-3-ultra-550b-a55b:free",
     );
     expect(resolveOpenRouterFallbackModel()).toBe(FALLBACK_OPENROUTER_MODEL);
+  });
+
+  it("builds the full free fallback chain, primary first, deduped, free only", () => {
+    const chain = resolveOpenRouterModelChain();
+    expect(chain[0]).toBe(DEFAULT_OPENROUTER_MODEL);
+    expect(chain[1]).toBe(FALLBACK_OPENROUTER_MODEL);
+    expect(chain).toHaveLength(13);
+    expect(new Set(chain).size).toBe(chain.length);
+    expect(chain.every(isFreeOpenRouterModel)).toBe(true);
+    // The one free model without tool support never enters the chain.
+    expect(chain).not.toContain("nvidia/nemotron-3.5-content-safety:free");
+    expect(resolveOpenRouterModelChain(FALLBACK_OPENROUTER_MODEL)[0]).toBe(FALLBACK_OPENROUTER_MODEL);
+    expect(resolveOpenRouterModelChain(FALLBACK_OPENROUTER_MODEL)).toHaveLength(13);
   });
 
   it("falls back on 403/404 as well as 429/5xx", () => {
