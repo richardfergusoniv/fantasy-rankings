@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { RangeBar, rangeDomain, type ProjectionRange } from "../components/range-bar";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { MatchupSelection } from "../dashboard-types";
@@ -195,7 +196,7 @@ function comparisonShortName(name: string, other: string): string {
   return last.toLowerCase() === otherLast.toLowerCase() ? name : last;
 }
 
-function ComparisonMetricRow({ row, leftName, rightName, headline = false }: { row: ComparisonRow; leftName: string; rightName: string; headline?: boolean }) {
+function ComparisonMetricRow({ row, leftName, rightName, headline = false, ranges }: { row: ComparisonRow; leftName: string; rightName: string; headline?: boolean; ranges?: readonly [ProjectionRange | null, ProjectionRange | null] }) {
   const { metric, leftValue, rightValue } = row;
   const leftWins = Boolean(!metric.neutral && leftValue && rightValue && (metric.lowerIsBetter ? leftValue.value < rightValue.value : leftValue.value > rightValue.value));
   const rightWins = Boolean(!metric.neutral && leftValue && rightValue && (metric.lowerIsBetter ? rightValue.value < leftValue.value : rightValue.value > leftValue.value));
@@ -231,6 +232,13 @@ function ComparisonMetricRow({ row, leftName, rightName, headline = false }: { r
           <strong className={valueClass(leftValue, leftWins, rightWins)} aria-hidden="true">{leftDisplay}</strong>
           <GapBar left={leftValue?.value} right={rightValue?.value} lowerIsBetter={metric.lowerIsBetter} neutral={metric.neutral} />
           <strong className={valueClass(rightValue, rightWins, leftWins)} aria-hidden="true">{rightDisplay}</strong>
+          {ranges && (ranges[0] || ranges[1]) ? (
+            <>
+              {/* Each player's book range under his projection, both on one scale. */}
+              <span className="comparison-range is-left">{ranges[0] ? <RangeBar range={ranges[0]} value={leftValue?.value ?? null} domain={rangeDomain(ranges)} /> : null}</span>
+              <span className="comparison-range is-right">{ranges[1] ? <RangeBar range={ranges[1]} value={rightValue?.value ?? null} domain={rangeDomain(ranges)} /> : null}</span>
+            </>
+          ) : null}
         </>
       )}
     </div>
@@ -560,6 +568,13 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     : undefined;
   const leftPlayerId = playerDetailId(left);
   const rightPlayerId = playerDetailId(right);
+  // Book ranges for the Week headline, only while each player's pregame projection stands.
+  const rangeFor = (playerId: string | undefined | null): ProjectionRange | null => {
+    if (!playerId) return null;
+    const row = dashboard.rankings.find((item) => item.leagueId === league.id && item.playerId === playerId);
+    return row && (row.gamePhase === "pregame" || row.gamePhase === null) ? row.projectionRange ?? null : null;
+  };
+  const projectionRanges = [rangeFor(leftPlayerId), rangeFor(rightPlayerId)] as const;
   const boomBustPlayerIds = [leftPlayerId, rightPlayerId].filter((playerId): playerId is string => Boolean(playerId));
   const supportsBoomBust = position === "QB" || position === "RB" || position === "WR" || position === "TE";
   const boomBustQuery = useQuery({
@@ -642,7 +657,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
                   <SegmentedControl className="compact-control" value={window} onChange={onWindowChange} label="Season stat window" options={[{ value: "season", label: "This season" }, { value: "rolling17", label: "Rolling 17 games" }]} />
                 </header>
               ) : null}
-              {section.headline ? <ComparisonMetricRow row={section.headline} leftName={left.name} rightName={right.name} headline /> : null}
+              {section.headline ? <ComparisonMetricRow row={section.headline} leftName={left.name} rightName={right.name} headline ranges={section.dataset === "projections" ? projectionRanges : undefined} /> : null}
               {section.groups.map(({ group, rows: groupRows }) => (
                 <section className="comparison-group" key={group} aria-label={group}>
                   <div className="section-heading"><h3>{group}</h3></div>

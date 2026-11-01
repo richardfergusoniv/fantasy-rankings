@@ -126,7 +126,8 @@ export function resolveValueHistoryPlayerId(
   asset: ValueHistoryAssetRef,
   marketAssets: ReadonlyArray<ValueHistoryAssetRef> = [],
 ): string {
-  if (asset.position !== "PICK") return asset.playerId;
+  // Players drafted with a traded pick are rewritten as `historical:<trade>:<roster>:<playerId>`.
+  if (asset.position !== "PICK") return asset.playerId.startsWith("historical:") ? asset.playerId.split(":").pop() ?? asset.playerId : asset.playerId;
   if (isFantasyCalcPickId(asset.playerId)) return asset.playerId;
   const embedded = asset.playerId.match(FANTASY_CALC_PICK_ID)?.[0];
   if (embedded) return embedded;

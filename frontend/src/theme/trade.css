@@ -6,8 +6,9 @@
 .section-error.compact { min-height: 96px; padding: 16px 8px; }
 
 .trade-history-view { min-width: 0; }
-.trade-history-filter { display: grid; width: min(100%, 180px); gap: 5px; margin: 0 0 14px auto; }
-.trade-history-filter > span:first-child { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.trade-history-filter { margin: 0 0 14px; }
+/* Alone in a block (no toolbar row), the select collapsed to its padding; min-width fits "All seasons". */
+.trade-history-filter select { flex: none; min-width: 8em; }
 .trade-history-source-note { margin: 0 2px 12px; color: var(--dim); font-size: var(--type-caption); line-height: 1.4; }
 .trade-history-loading { display: grid; gap: 8px; padding-top: 4px; }
 .trade-history-loading .loading-shimmer { display: block; height: 96px; border-radius: var(--radius); background: var(--surface-2); }
@@ -366,3 +367,8 @@ button.league-partner-change:active { color: var(--link-active); }
 .league-trade-verdict.is-good { color: var(--link); }
 .league-trade-verdict.is-bad { color: var(--warning); }
 .league-trade-dialog .card-hero { margin-top: 0; }
+/* Value since the trade on a history card: the side ahead now in the trade-winner amber, the other gray. */
+.trade-value-spark { display: block; width: 100%; height: 48px; overflow: visible; }
+.trade-value-spark path { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.trade-value-spark .is-leader { stroke: var(--winner); stroke-width: 2.5; }
+.trade-value-spark .is-other { stroke: var(--dim); }

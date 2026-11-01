@@ -1,4 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { TradeValueSpark } from "./trade-value-spark";
+import { valueSinceTrade } from "../lib/value-since-trade";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogCloseButton, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CardHero } from "../components/card-hero";
@@ -107,7 +109,7 @@ export function TradeSide({ title, assets, availableAssets, onAdd, onRemove, onC
                 }
               }}
               name="trade-asset-search"
-              placeholder={`Add to ${title.toLowerCase()}…`}
+              placeholder="Search players or picks…"
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="none"
@@ -894,6 +896,30 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
     for (const trade of tradesQuery.data?.trades ?? []) groups.set(trade.season, [...(groups.get(trade.season) ?? []), trade]);
     return [...groups.entries()].sort(([a], [b]) => b - a);
   }, [tradesQuery.data?.trades]);
+  // Value since the trade, for each two-team card: every player's FantasyCalc history in one batched query.
+  const sparkSideIds = useMemo(() => new Map((tradesQuery.data?.trades ?? [])
+    .filter((trade) => trade.teams.length === 2)
+    .slice(0, 40)
+    .map((trade) => [trade.id, trade.teams.map((team) => historicalReceivedAssets(team, formatAssets, trade.id, dashboard.season, ownedPicks).valued
+      .map((asset) => resolveValueHistoryPlayerId(asset, formatAssets)))])), [dashboard.season, formatAssets, ownedPicks, tradesQuery.data?.trades]);
+  const sparkHistoryIds = useMemo(() => [...new Set([...sparkSideIds.values()].flat(2))].sort(), [sparkSideIds]);
+  const sparkHistoryQuery = useQuery({
+    queryKey: ["fantasycalc-value-history", league.seasonLongFormat.key, sparkHistoryIds],
+    queryFn: async () => {
+      // /api/value-history allows at most 24 playerIds per request.
+      const chunkSize = 24;
+      const responses = await Promise.all(Array.from({ length: Math.ceil(sparkHistoryIds.length / chunkSize) }, (_, index) =>
+        api.getValueHistory({ formatKey: league.seasonLongFormat.key, playerIds: sparkHistoryIds.slice(index * chunkSize, (index + 1) * chunkSize) })));
+      // Same shape as the trade dialog's query: both can share this cache key (e.g. one trade in the season).
+      return {
+        formatKey: responses[0]?.formatKey ?? league.seasonLongFormat.key,
+        series: responses.flatMap((response) => response.series),
+      };
+    },
+    enabled: sparkHistoryIds.length > 0,
+    staleTime: 30 * 60 * 1000,
+  });
+  const sparkPointsById = useMemo(() => new Map((sparkHistoryQuery.data?.series ?? []).map((series) => [series.playerId, series.points])), [sparkHistoryQuery.data]);
   const renderTradeRows = (trades: HistoricalTrade[]) => trades.map((trade) => {
     const teamValues = trade.teams.map((team) => ({ team, value: tradeTotal(historicalReceivedAssets(team, formatAssets, trade.id, dashboard.season, ownedPicks).valued) }));
     const rankedTeams = [...teamValues].sort((a, b) => b.value - a.value);
@@ -909,7 +935,21 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
         onClick={() => setSelectedTradeId(trade.id)}
       >
         <span className="trade-history-row-heading"><span>Week {trade.week} · {trade.season}</span><strong><HistoricalTeamMatchup trade={trade} league={league} /></strong></span>
-        <span className="trade-history-assets">{trade.teams.map((team) => <span key={team.rosterId}><b><HistoricalTeamName team={team} league={league} /></b>{compactHistoricalAssets(team)}</span>)}</span>
+        {/* Two-team trades: the header already names both teams in this order, so lines show only the assets (names stay for screen readers). */}
+        <span className="trade-history-assets">{trade.teams.map((team) => <span key={team.rosterId}><b className={trade.teams.length === 2 ? "sr-only" : undefined}><HistoricalTeamName team={team} league={league} /></b>{compactHistoricalAssets(team)}</span>)}</span>
+        {(() => {
+          const sides = sparkSideIds.get(trade.id);
+          if (!sides || sides.length !== 2 || sparkPointsById.size === 0) return null;
+          const [first, second] = trade.teams;
+          const leaderIndex = winners.length !== 1 || !leadingTeam ? null : leadingTeam.team.rosterId === first?.rosterId ? 0 : 1;
+          return (
+            <TradeValueSpark
+              rows={valueSinceTrade(sides[0] ?? [], sides[1] ?? [], sparkPointsById, trade.createdAt.slice(0, 10))}
+              names={[first?.teamName ?? "", second?.teamName ?? ""] as const}
+              leader={leaderIndex}
+            />
+          );
+        })()}
         <span className="trade-history-winner">{winners.length !== 1 || !leadingTeam ? "Even" : <><HistoricalTeamName team={leadingTeam.team} league={league} /> won · +{formatWhole(Math.max(0, maxValue - runnerUp))}</>}</span>
       </button>
     );
@@ -919,23 +959,22 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
   if (tradesQuery.isError) return <div className="section-error compact"><strong>Trade history is unavailable.</strong><button type="button" onClick={() => void tradesQuery.refetch()}>Try again</button></div>;
   return (
     <div className="trade-history-view">
-      <label className="trade-history-filter">
+      {/* Same pill as the Team stats toolbar: caption inside the control, left-aligned. */}
+      <label className="monitor-value-chart-field trade-history-filter">
         <span>Season</span>
-        <span className="select-control-field">
-          <select
-            aria-label="Trade history season"
-            value={selectedSeason}
-            onChange={(event) => {
-              const nextSeason = event.target.value === "all" ? "all" : Number(event.target.value);
-              setSelectedSeason(nextSeason);
-              setSelectedTradeId(null);
-              refreshRequested.current = null;
-            }}
-          >
-            {tradesQuery.data.seasons.map((season) => <option key={season} value={season}>{season}</option>)}
-            <option value="all">All seasons</option>
-          </select>
-        </span>
+        <select
+          aria-label="Trade history season"
+          value={selectedSeason}
+          onChange={(event) => {
+            const nextSeason = event.target.value === "all" ? "all" : Number(event.target.value);
+            setSelectedSeason(nextSeason);
+            setSelectedTradeId(null);
+            refreshRequested.current = null;
+          }}
+        >
+          {tradesQuery.data.seasons.map((season) => <option key={season} value={season}>{season}</option>)}
+          <option value="all">All seasons</option>
+        </select>
       </label>
       {tradesQuery.data.sourceErrors.length ? <p className="trade-history-source-note">{tradesQuery.data.sourceErrors.join(" ")}</p> : null}
       {!tradesQuery.data.trades.length ? (

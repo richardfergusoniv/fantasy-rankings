@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { api } from "./api";
@@ -7,6 +7,15 @@ import { CardHero } from "./components/card-hero";
 import { SectionError } from "./section-error";
 import { formatDecimal, formatWhole } from "./lib/format-number";
 import { nextGamesForTeam, ordinal, placesMoved, recordLabel } from "./projected-standings-view";
+import { NextGameCard } from "./views/next-game-card";
+
+/** "34%"; the ends read "<1%" and ">99%" so a long shot never shows as impossible. */
+function oddsLabel(odds: number): string {
+  const pct = odds * 100;
+  if (pct > 0 && pct < 1) return "<1%";
+  if (pct < 100 && pct > 99) return ">99%";
+  return `${Math.round(pct)}%`;
+}
 
 function MoveMark({ moved }: { moved: number }) {
   if (moved === 0) return null;
@@ -14,6 +23,7 @@ function MoveMark({ moved }: { moved: number }) {
 }
 
 export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; queryKey: readonly unknown[] }) {
+  const [previewWeek, setPreviewWeek] = useState<number | null>(null);
   const query = useQuery({
     queryKey,
     queryFn: () => api.getProjectedStandings({ leagueId }),
@@ -36,9 +46,14 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
     return <SectionError title="Projected standings didn’t load." onRetry={() => { void query.refetch(); }} retrying={query.isFetching} />;
   }
 
-  const { teams, games } = query.data;
+  const { teams, games, userGames = [] } = query.data;
   const me = teams.find((team) => team.isUser) ?? null;
-  const topPoints = Math.max(...teams.map((team) => team.projectedPointsFor), 1);
+  // Bars span the league's range (lowest to highest), not 0 to max: 1,400 vs 1,700
+  // drawn from zero look identical. The lowest team keeps a short stub.
+  const pointsFor = teams.map((team) => team.projectedPointsFor);
+  const lowPoints = Math.min(...pointsFor);
+  const pointsRange = Math.max(...pointsFor) - lowPoints;
+  const barWidth = (points: number) => (pointsRange > 0 ? 12 + 88 * ((points - lowPoints) / pointsRange) : 100);
   const teamName = (rosterId: number) => teams.find((team) => team.rosterId === rosterId)?.teamName ?? "Opponent";
   const nextGames = me ? nextGamesForTeam(games, me.rosterId) : [];
   const moved = me ? placesMoved(me.currentRank, me.rank) : 0;
@@ -61,6 +76,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
               { label: "Proj. record", value: recordLabel(me.projectedRecord) },
               { label: "Moves", value: moved === 0 ? "—" : <MoveMark moved={moved} /> },
               { label: "Proj. points", value: formatWhole(me.projectedPointsFor) },
+              ...(me.playoffOdds != null ? [{ label: "Playoff odds", value: oddsLabel(me.playoffOdds) }] : []),
             ]}
           />
         </Card>
@@ -76,7 +92,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
             <div className="power-table" role="table" aria-label={groups.length > 1 ? (groupIndex === 0 ? "Projected playoff teams" : "Projected teams outside the cut") : "Projected standings"}>
               {group.map((team) => (
                 <div className="power-list-item" key={team.rosterId}>
-                  <div className={`power-row proj-row${team.isUser ? " is-user" : ""}`} role="row">
+                  <div className={`power-row proj-row${team.isUser ? " is-user" : ""}${team.playoffOdds != null ? " has-odds" : ""}`} role="row">
                     <strong className="power-rank" role="cell">{team.rank}</strong>
                     <div className="power-team proj-team" role="cell">
                       <strong>{team.teamName}</strong>
@@ -85,9 +101,15 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
                     </div>
                     <div className="power-total proj-pf" role="cell">
                       <strong>{formatDecimal(team.projectedPointsFor, 0)}</strong>
-                      <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round((team.projectedPointsFor / topPoints) * 100)}%` }} /></div>
+                      <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round(barWidth(team.projectedPointsFor))}%` }} /></div>
                     </div>
                     <div className="power-total" role="cell"><strong>{recordLabel(team.projectedRecord)}</strong></div>
+                    {team.playoffOdds != null ? (
+                      <div className="power-total proj-odds" role="cell" aria-label={`Playoff odds ${oddsLabel(team.playoffOdds)}`}>
+                        <strong>{oddsLabel(team.playoffOdds)}</strong>
+                        <div className="proj-bar" aria-hidden="true"><i style={{ width: `${Math.round(team.playoffOdds * 100)}%` }} /></div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -102,18 +124,29 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
             <h2 id="proj-games-heading">Your next games</h2>
             <span>Proj. result</span>
           </div>
-          {nextGames.map((game) => (
-            <div className="power-row proj-game" key={game.week}>
-              <strong className="power-rank">Wk {game.week}</strong>
-              <div className="power-team">
-                <strong>vs {teamName(game.opponentRosterId)}</strong>
-                <span>{formatDecimal(game.mine, 1)} – {formatDecimal(game.theirs, 1)}</span>
+          {nextGames.map((game) => {
+            const preview = userGames.find((item) => item.week === game.week) ?? null;
+            const name = teamName(game.opponentRosterId);
+            return (
+              <div className="power-row proj-game" key={game.week}>
+                <strong className="power-rank">Wk {game.week}</strong>
+                <div className="power-team">
+                  {preview ? (
+                    <button type="button" className="proj-game-open" aria-haspopup="dialog" onClick={() => setPreviewWeek(game.week)}>{name}</button>
+                  ) : <strong>{name}</strong>}
+                </div>
+                <div className={`power-total proj-win ${game.result === "W" ? "is-up" : game.result === "L" ? "is-down" : ""}`}><strong>{game.result} {formatDecimal(game.margin, 1, { sign: "always" })}</strong></div>
               </div>
-              <div className={`power-total proj-win ${game.result === "W" ? "is-up" : game.result === "L" ? "is-down" : ""}`}><strong>{game.result}</strong><span>{formatDecimal(game.margin, 2, { sign: "always" })} pts</span></div>
-            </div>
-          ))}
+            );
+          })}
         </section>
       ) : null}
+      {(() => {
+        const preview = previewWeek === null ? null : userGames.find((item) => item.week === previewWeek) ?? null;
+        return preview && me ? (
+          <NextGameCard game={preview} myName={me.teamName} opponentName={teamName(preview.opponentRosterId)} onClose={() => setPreviewWeek(null)} />
+        ) : null;
+      })()}
     </section>
   );
 }

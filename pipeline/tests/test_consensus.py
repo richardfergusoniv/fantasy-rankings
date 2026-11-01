@@ -163,3 +163,30 @@ def test_td_probability_is_median_of_per_book_probs():
     # probs: 52.4%, 51.2%, 48.8%, 47.6% -> median 50.0%
     assert abs(row["td_probability"] - 0.5) < 0.02
     assert row["td_probability"] > 0.4  # not the ~0% the old path produced
+
+
+def test_min_and_max_lines_are_the_extreme_book_votes():
+    recs = [
+        _rec("a", "dk", "Patrick Mahomes", "pass_yards", 285.5),
+        _rec("b", "fd", "Patrick Mahomes", "pass_yards", 280.5),
+        _rec("c", "mgm", "Patrick Mahomes", "pass_yards", 290.5),
+    ]
+    row = build_consensus(recs)[0]
+    assert row["min_line"] == 280.5
+    assert row["max_line"] == 290.5
+    assert row["max_line"] - row["min_line"] == row["line_spread"]
+
+
+def test_single_book_range_collapses_to_its_line():
+    row = build_consensus([_rec("a", "dk", "Patrick Mahomes", "pass_yards", 285.5)])[0]
+    assert row["min_line"] == row["max_line"] == 285.5
+
+
+def test_anytime_td_range_uses_the_per_book_probabilities():
+    recs = [
+        _rec("a", "dk", "Josh Allen", "anytime_td", 0.5, over=150),
+        _rec("b", "fd", "Josh Allen", "anytime_td", 0.5, over=120),
+        _rec("c", "mgm", "Josh Allen", "anytime_td", 0.5, over=100),
+    ]
+    row = build_consensus(recs)[0]
+    assert row["td_probability_min"] < row["td_probability"] < row["td_probability_max"]

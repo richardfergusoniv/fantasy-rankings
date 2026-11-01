@@ -82,6 +82,7 @@ function TeamStatsLineChart({
   statLabel,
   isSnaps,
   ariaLabel,
+  spotlightId,
 }: {
   series: readonly TeamStatsChartSeries[];
   weeks: readonly number[];
@@ -89,7 +90,14 @@ function TeamStatsLineChart({
   statLabel: string;
   isSnaps: boolean;
   ariaLabel: string;
+  /** The one player drawn in color; everyone else is a thin gray line for context. */
+  spotlightId: string | null;
 }) {
+  // Spotlight draws last so it sits on top of the gray lines.
+  const ordered = useMemo(
+    () => [...series].sort((a, b) => Number(a.id === spotlightId) - Number(b.id === spotlightId)),
+    [series, spotlightId],
+  );
   const data = useMemo(() => weeks.map((week) => {
     const row: Record<string, number | string | null> = { week };
     for (const item of series) {
@@ -139,36 +147,28 @@ function TeamStatsLineChart({
             labelFormatter={(label) => `Week ${label}`}
             contentStyle={chartTooltipStyle}
           />
-          {series.map((item) => (
-            <Line
-              key={item.id}
-              type="monotone"
-              dataKey={item.id}
-              name={item.label}
-              stroke={item.color}
-              strokeWidth={item.rostered ? 2.5 : 1.5}
-              strokeOpacity={item.rostered ? 1 : 0.45}
-              dot={{ r: item.rostered ? 3 : 2 }}
-              connectNulls={false}
-            />
-          ))}
+          {ordered.map((item) => {
+            const isSpotlight = item.id === spotlightId;
+            // Your own player keeps your teal; any other spotlit player uses the text color. No extra hues.
+            const stroke = isSpotlight ? (item.rostered ? "var(--chart-team)" : "var(--text)") : "var(--dim)";
+            return (
+              <Line
+                key={item.id}
+                type="monotone"
+                dataKey={item.id}
+                name={item.label}
+                stroke={stroke}
+                strokeWidth={isSpotlight ? 2.5 : 1.25}
+                strokeOpacity={isSpotlight ? 1 : 0.4}
+                dot={isSpotlight ? { r: 3, fill: stroke, stroke } : false}
+                activeDot={isSpotlight ? { r: 4 } : false}
+                connectNulls={false}
+              />
+            );
+          })}
         </LineChart>
       </ChartContainer>
     </div>
-  );
-}
-
-/** Outside the chart's button wrapper so assistive tech can read the player names. */
-function TeamStatsLegend({ series }: { series: readonly TeamStatsChartSeries[] }) {
-  return (
-    <ul className="team-stats-legend" aria-label="Chart legend">
-      {series.map((item) => (
-        <li key={item.id} className={item.rostered ? "is-rostered" : undefined}>
-          <i style={{ background: item.color, opacity: item.rostered ? 1 : 0.6 }} aria-hidden="true" />
-          {item.label}
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -446,6 +446,13 @@ export function TeamStatsPanel({
     () => buildTeamStatsChartSeries(rows, gridWeeks.map((stack) => stack.week), isSnaps, league),
     [gridWeeks, isSnaps, league, rows],
   );
+  // Player pill: same order as the table (highest average first). Defaults to your own
+  // player on this team, else the leader; a pick that leaves the list falls back the same way.
+  const spotlightOptions = useMemo(() => gridRows.map(({ row, rostered }) => ({ id: row.key, name: row.name, rostered })), [gridRows]);
+  const [pickedSpotlight, setPickedSpotlight] = useState<string | null>(null);
+  const spotlightId = spotlightOptions.some((option) => option.id === pickedSpotlight)
+    ? pickedSpotlight
+    : (spotlightOptions.find((option) => option.rostered) ?? spotlightOptions[0])?.id ?? null;
 
   const unavailable = dataQuery.isError;
   const loading = dataQuery.isPending;
@@ -531,6 +538,20 @@ export function TeamStatsPanel({
             ))}
           </select>
         </label>
+        {spotlightOptions.length > 0 ? (
+          <label className="monitor-value-chart-field">
+            <span>Player</span>
+            <select
+              aria-label="Player highlighted on the chart"
+              value={spotlightId ?? ""}
+              onChange={(event) => setPickedSpotlight(event.target.value)}
+            >
+              {spotlightOptions.map((option) => (
+                <option key={option.id} value={option.id}>{option.name}</option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
 
       {unavailable ? (
@@ -568,9 +589,9 @@ export function TeamStatsPanel({
                 statLabel={statLabel}
                 isSnaps={isSnaps}
                 ariaLabel={`${selectedTeam} ${statLabel} by week`}
+                spotlightId={spotlightId}
               />
             </div>
-            <TeamStatsLegend series={chartSeries} />
           </div>
           <ChartDialog
             isOpen={tableOpen}

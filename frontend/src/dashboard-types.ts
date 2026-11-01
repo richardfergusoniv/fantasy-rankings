@@ -68,6 +68,8 @@ export type PlayerSearchResult = {
   actual?: number | null;
   defenseComponents?: Dashboard["defenses"][number]["components"];
   projectionComponents?: Dashboard["rankings"][number]["projectionComponents"];
+  /** Lowest and highest book line for this week; only while the pregame projection stands. */
+  projectionRange?: { low: number; high: number } | null;
 };
 export type PlayerDetailTab = "overview" | "season" | "advanced" | "props";
 export type AnalyticsEntity = Dashboard["analytics"]["entities"][number];

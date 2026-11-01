@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { optimizeLineup, sumLiveForecast } from "../../../api/_lib/lineup-optimizer";
+import { liveForecastPoints, optimizeLineup, sumLiveForecast } from "../../../api/_lib/lineup-optimizer";
 import type {
   Dashboard,
   League,
@@ -26,6 +26,9 @@ import {
 } from "./lineup-projection";
 import { formatPercent } from "../lib/format-number";
 import { teamOutlook, winPercent, winProbability } from "./win-probability";
+import { AdvantageList } from "./advantage-list";
+import { RangeBar, rangeDomain, type RangeDomain } from "../components/range-bar";
+import { advantageRows } from "./matchup-advantage";
 
 export {
   isOptimizedLineupChanged,
@@ -44,6 +47,7 @@ export function MatchupPlayer({
   selected = false,
   onOpen,
   onOpenMatchup,
+  rangeMax = { min: 0, max: 1 },
 }: {
   player: RosterPlayer | undefined;
   side: "mine" | "theirs";
@@ -53,6 +57,8 @@ export function MatchupPlayer({
   selected?: boolean;
   onOpen?: (player: RosterPlayer) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
+  /** Shared right edge for book-range bars across both lineups. */
+  rangeMax?: RangeDomain;
 }) {
   if (!player) {
     return (
@@ -67,7 +73,8 @@ export function MatchupPlayer({
   const openPlayer = () => onOpen?.(player);
   const position = player.position === "DEF" ? "DST" : player.position;
   const matchup = accessibleMatchupLabel(player.team, player.opponent, player.isAway, player.isBye);
-  const scoreDescription = `${formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)} ${score.label === "PROJ" ? "projected points" : "points"}`;
+  const range = score.label === "PROJ" ? player.projectionRange ?? null : null;
+  const scoreDescription = `${formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)} ${score.label === "PROJ" ? "projected points" : "points"}${range ? `, books range ${formatProjectionPoints(range.low)} to ${formatProjectionPoints(range.high)}` : ""}`;
   const injuryDescription = player.injuryStatus ? `, injury status ${player.injuryStatus}` : "";
   const substitutionDescription = isSwappedIn
     ? ", swapped into this lineup"
@@ -99,6 +106,7 @@ export function MatchupPlayer({
       </div>
       <button type="button" className={matchupProjectionClassName({ scoreLabel: score.label })} onClick={openPlayer} tabIndex={-1} aria-hidden="true">
         <b>{formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)}</b>
+        {range ? <RangeBar className={side === "theirs" ? "is-start" : undefined} range={range} value={score.value} domain={rangeMax} /> : null}
       </button>
     </div>
   );
@@ -121,7 +129,7 @@ export function Lineup({
   onOpenMatchup: (matchup: MatchupSelection) => void;
   onOpenLeagueTeam?: (rosterId: number) => void;
 } & PlayerLink) {
-  const [mode, setMode] = useState<"current" | "optimized">("current");
+  const [mode, setMode] = useState<"current" | "optimized" | "advantage">("current");
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), LOCK_TICK_MS);
@@ -141,7 +149,7 @@ export function Lineup({
   const myBench = sortPlayersByFantasyPosition(activeMode === "optimized" ? optimized.bench : league.bench);
   const theirs = opponent?.starters;
   const theirBench = opponent?.bench ? sortPlayersByFantasyPosition(opponent.bench) : undefined;
-  const isReordered = activeMode !== "current";
+  const isReordered = activeMode === "optimized";
   const currentForecast = useMemo(() => forecastTotal(league.starters, nowMs), [league.starters, nowMs]);
   const optimizedForecast = useMemo(() => forecastTotal(optimized.starters, nowMs), [optimized.starters, nowMs]);
   const opponentForecast = useMemo(
@@ -170,6 +178,21 @@ export function Lineup({
     return fromPower.length === 1 ? fromPower[0]?.rosterId ?? null : null;
   })();
   const opponentTeamName = opponent?.name ?? "OPPONENT";
+  const rangeMax = rangeDomain([...mine, ...myBench, ...(theirs ?? []), ...(theirBench ?? [])].map((player) => player?.projectionRange));
+  // Advantage compares your current lineup with theirs, slot by slot, on the same
+  // live-aware projection the score card totals.
+  const advantage = useMemo(() => {
+    if (activeMode !== "advantage" || !theirs) return [];
+    const count = Math.max(mine.length, theirs.length);
+    const sideOf = (player: RosterPlayer | undefined) => (player && player.playerId !== "0"
+      ? { playerId: player.playerId, name: player.name, points: liveForecastPoints(player, nowMs) }
+      : null);
+    return advantageRows(Array.from({ length: count }, (_, index) => ({
+      slot: mine[index]?.lineupSlot ?? theirs[index]?.lineupSlot ?? "—",
+      mine: sideOf(mine[index]),
+      theirs: sideOf(theirs[index]),
+    })));
+  }, [activeMode, mine, theirs, nowMs]);
   const starterCount = Math.max(mine.length, theirs?.length ?? 0);
   const rows = Array.from({ length: starterCount }, (_, index) => ({
     mine: mine[index],
@@ -197,7 +220,7 @@ export function Lineup({
         value={activeMode}
         onChange={setMode}
         label="Your lineup version"
-        options={[{ value: "current", label: "Current lineup" }, { value: "optimized", label: "Optimized lineup" }]}
+        options={[{ value: "current", label: "Current" }, { value: "optimized", label: "Optimized" }, { value: "advantage", label: "Advantage" }]}
       />
 
       <Card className="matchup-score gap-0 py-0 shadow-sm" aria-label="Head-to-head score">
@@ -254,6 +277,16 @@ export function Lineup({
         ) : null}
       </Card>
 
+      {activeMode === "advantage" ? (
+        <section className="lineup-section matchup-section advantage-section" aria-label="Advantage by lineup slot">
+          {theirs ? (
+            <div className="data-table-frame">
+              <AdvantageList rows={advantage} onOpenPlayer={onOpenLinkedPlayer} ariaLabel={`${userTeamName} versus ${opponentTeamName}, gap by lineup slot`} />
+            </div>
+          ) : <div className="empty-inline compact">Sleeper hasn’t posted an opponent for this week.</div>}
+        </section>
+      ) : (
+      <>
       <section className="lineup-section matchup-section">
         <div className="section-heading"><h2>Starters</h2></div>
         <div className="data-table-frame">
@@ -266,6 +299,7 @@ export function Lineup({
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
+                rangeMax={rangeMax}
                 selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
                 isSwappedIn={isReordered && Boolean(matchupCell(myPlayer)) && !league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
               />
@@ -276,6 +310,7 @@ export function Lineup({
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
+                rangeMax={rangeMax}
                 selected={Boolean(linkedPlayerId && theirs?.playerId === linkedPlayerId)}
               />
             </div>
@@ -297,6 +332,7 @@ export function Lineup({
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
+                rangeMax={rangeMax}
                 selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
                 isDemoted={isReordered && Boolean(myPlayer) && league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
               />
@@ -307,6 +343,7 @@ export function Lineup({
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
+                rangeMax={rangeMax}
                 selected={Boolean(linkedPlayerId && theirs?.playerId === linkedPlayerId)}
               />
             </div>
@@ -315,6 +352,8 @@ export function Lineup({
         </div>
         {benchRows.length === 0 ? <div className="empty-inline compact">No bench players are listed.</div> : null}
       </section>
+      </>
+      )}
     </>
   );
 }

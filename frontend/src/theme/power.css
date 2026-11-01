@@ -13,15 +13,28 @@
 .radar-average { fill: var(--dim); fill-opacity: .06; stroke: var(--dim); stroke-width: 1.5; }
 .radar-team { fill: var(--chart-team); fill-opacity: .16; stroke: var(--chart-team); stroke-width: 2.2; }
 .radar-dot { fill: var(--chart-team); stroke: var(--surface); stroke-width: 1.5; }
-.power-position-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 8px; overflow: clip; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--hairline); }
-.power-position-values > div { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 7px; min-width: 0; padding: 8px 9px; background: var(--surface); }
+.power-position-values { display: grid; width: 100%; padding: 0; cursor: pointer; text-align: left; font: inherit; color: var(--text); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 8px; overflow: clip; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--hairline); }
+.power-position-values > span:not(.sr-only) { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 7px; min-width: 0; padding: 8px 9px; background: var(--surface); }
 .power-position-values > .power-position-total { grid-column: 1 / -1; }
 .power-position-values > .power-position-total-highlight { background: var(--roster-highlight-bg); }
 .power-position-values > .power-position-total-highlight span, .power-position-values > .power-position-total-highlight strong { color: var(--roster-highlight); }
-.power-position-values span { align-self: center; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
-.power-position-values strong { text-align: right; font-size: var(--type-body); font-weight: 700; }
+.power-position-values > span > span { align-self: center; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.power-position-values > span > strong { text-align: right; font-size: var(--type-body); font-weight: 700; }
+.power-position-values:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.power-stack-list { display: grid; gap: 2px; margin-top: 10px; }
+.power-stack-row { display: grid; width: 100%; grid-template-columns: 20px minmax(0, 118px) minmax(0, 1fr) 48px; gap: 8px; align-items: center; min-height: 32px; padding: 4px 6px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.power-stack-row:active { background: var(--surface-2); }
+.power-stack-rank { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
+.power-stack-name { overflow: hidden; font-size: var(--type-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.power-stack-total { text-align: right; font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums; }
+.power-stack-row.is-user .power-stack-rank, .power-stack-row.is-user .power-stack-name, .power-stack-row.is-user .power-stack-total { color: var(--roster-highlight); }
+.power-stack-bar { display: flex; gap: 1px; height: 14px; min-width: 0; }
+.power-stack-bar i { display: block; height: 100%; }
+.power-stack-row.is-user .power-stack-bar { outline: 2px solid var(--roster-highlight); outline-offset: 1px; border-radius: 2px; }
+.power-stack-detail { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 2px 10px; color: var(--dim); font-size: var(--type-caption); font-variant-numeric: tabular-nums; }
+.power-stack-detail b { color: var(--text); font-weight: 600; }
 .power-list-item { display: block; }
-.power-row { display: grid; width: 100%; grid-template-columns: 26px minmax(0, 1fr) 82px; gap: 8px; min-height: 58px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); text-align: left; }
+.power-row { display: grid; width: 100%; grid-template-columns: 26px minmax(0, 1fr) 82px; gap: 8px; min-height: 50px; align-items: center; padding: 0 10px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); text-align: left; }
 .power-row.is-user { background: var(--roster-highlight-bg); }
 .power-row.is-opponent { background: var(--opponent-row); }
 .power-row.is-average { background: var(--surface-2); }
@@ -195,3 +208,26 @@
 .card-hero-v .proj-move i { border-right-width: 6px; border-left-width: 6px; }
 .card-hero-v .proj-move.is-up i { border-bottom-width: 9px; }
 .card-hero-v .proj-move.is-down i { border-top-width: 9px; }
+
+/* Playoff odds: a fifth column on Projected rows, same small bar as projected points. */
+.proj-row.has-odds { grid-template-columns: 26px minmax(0, 1fr) 64px 44px 44px; gap: 6px; }
+.proj-odds strong { font-size: var(--type-body); }
+.proj-odds .proj-bar i { inset: 0 auto 0 0; }
+.is-user .proj-odds strong { color: var(--roster-highlight); }
+
+/* Your next games: one line per week; the opponent opens the preview card. */
+.power-team .proj-game-open { display: block; max-width: 100%; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--link); font: inherit; font-size: var(--type-body); font-weight: 600; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.power-team .proj-game-open:hover { text-decoration: underline; }
+.power-team .proj-game-open:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.proj-game { grid-template-columns: 44px minmax(0, 1fr) 64px; }
+.proj-game .proj-win strong { white-space: nowrap; }
+
+/* Next-game preview card. */
+.next-game-card { display: grid; gap: 12px; }
+.next-game-score { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.next-game-score > div { display: grid; min-width: 0; gap: 2px; }
+.next-game-score > div.is-theirs { text-align: right; }
+.next-game-score span { overflow: hidden; color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.next-game-score strong { font-size: var(--type-display); line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
+.next-game-score .is-mine span { color: var(--roster-highlight); }
+.next-game-win { padding: 0; }

@@ -13,7 +13,7 @@
 
 ## Type
 
-Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-body` 15px, `--type-section` 18px, `--type-display` 24px (30px at min-width: 760px). Numerals are tabular everywhere.
+Fira Sans for UI, Fira Code for data. Tokens: `--type-caption` 12px, `--type-body` 14px, `--type-section` 17px, `--type-display` 22px (28px at min-width: 760px); player names `--player-name-size` 13px. Text boxes stay 16px so iOS doesn't zoom on focus. Numerals are tabular everywhere.
 
 ## Badges
 
@@ -32,7 +32,9 @@ Three jobs, three looks (`theme/badges.css`). One meaning per color.
 - Compact filters (`SegmentedControl` with `compact-control`: 32px, content width, centered, `--radius-sm`) sit under the tabs for two-option choices such as Rankings horizon, Trade basis and Comparison window. Four or more options use a pill select.
 - Text on tappable controls (buttons, selects, links, chip lists) uses `--type-control` (14px, same as tabs). The 12px `--type-caption` is for metadata, column heads and field labels, not for something you tap. The exception is link badges, which stay 12px so a long label such as "Game lines · Sun, Oct 26, 1:00 PM PT" fits on a phone.
 - `--radius` is 12px; `sm`/`md`/`xl` derive from it. Small tags, chips and skeleton lines use `--radius-xs` (4px, derived from `--radius`); never write a bare `4px` radius. Flat list rows, dividers and full-bleed frames use `0` on purpose.
-- 4px spacing steps. Touch targets default to 44px.
+- 4px spacing steps. Touch targets default to 44px; tab tracks are 40px with 36px buttons, and toolbar pills and compact filters are 32px.
+- Row heights: Matchup rows 72px (`--player-box-height`), Power rows 50px, Rankings / Waivers / Draft board rows 56px.
+- On desktop the shell is the content width plus 32px gutters, so the ticker, header, tabs and views share one left and right edge.
 - One primary layout breakpoint at 760px, with additional responsive rules at max-width 420px and max-width 759px.
 - On desktop, the page tabs, sub-tabs and every view share one content width (`--content-width`), so they end at the same right edge.
 

@@ -17,6 +17,7 @@ import {
   canonicalTeam,
   fetchJson,
   hasSleeperGameParticipation,
+  loadSleeperPlayerWeeklyProjections,
   loadSleeperPlayerWeeklySeason,
   scoreProjectedPlayerStats,
   sleeperActualStats,
@@ -24,6 +25,16 @@ import {
   type SleeperLeague,
 } from "../_lib/sleeper.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "../_lib/source-cache-payload.js";
+
+/** How long the game log waits for the optional weekly projections. */
+const PROJECTION_WAIT_MS = 3_000;
+
+/** The promise's value, or null if it hasn't settled within `ms`. */
+function withinWait<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 /**
  * GET /api/boom-bust/history?leagueId=&playerId=&position=&view=
@@ -60,6 +71,8 @@ const boomBustHistoryResponse = boomBustSeriesSchema.extend({
     opponent: z.string().nullable(),
     team: z.string().nullable(),
     points: z.number(),
+    /** Sleeper's projection for that week in this league's scoring; null when Sleeper had none. */
+    projected: z.number().nullable().optional(),
     stats: z.record(z.string(), z.number()),
   })),
   seasonTotals: z.record(z.string(), z.number()),
@@ -128,10 +141,24 @@ async function handleHistory(req: Request): Promise<Response> {
       if (!scoringSettings) return json(unavailable());
 
       const seasons: readonly number[] = args.view === "season" ? [2026] : BOOM_BUST_SEASONS;
-      const results = await Promise.allSettled(seasons.map(async (season) => ({
-        season,
-        rows: await loadSleeperPlayerWeeklySeason(args.playerId, season),
-      })));
+      const [results, projectionResult] = await Promise.all([
+        Promise.allSettled(seasons.map(async (season) => ({
+          season,
+          rows: await loadSleeperPlayerWeeklySeason(args.playerId, season),
+        }))),
+        // This season's weekly projections, for the actual-vs-projection chart. Optional: a failure or a slow
+        // response leaves them null so they never hold up the game log.
+        withinWait(loadSleeperPlayerWeeklyProjections(args.playerId, 2026).catch(() => null), PROJECTION_WAIT_MS),
+      ]);
+      const projectedByWeek = new Map<number, number>();
+      for (const row of projectionResult ?? []) {
+        const week = Number(row.week);
+        if (!Number.isInteger(week)) continue;
+        const stats = sleeperActualStats(row);
+        // Rows keep their week (and sometimes season) as numbers; a row with nothing else has no projection.
+        if (!Object.keys(stats).some((key) => key !== "week" && key !== "season")) continue;
+        projectedByWeek.set(week, Number(scoreProjectedPlayerStats(args.position, stats, scoringSettings).toFixed(2)));
+      }
       const unavailableSeasons: number[] = [];
       const games: Array<{
         season: number;
@@ -170,7 +197,9 @@ async function handleHistory(req: Request): Promise<Response> {
       if (args.view === "last3" && unavailableSeasons.length > 0) {
         coverageNote = "Some Sleeper seasons could not be loaded, so the last 3 years may be incomplete.";
       }
-      const gameLog = dedupedGames.filter((game) => game.season === 2026);
+      const gameLog = dedupedGames
+        .filter((game) => game.season === 2026)
+        .map((game) => ({ ...game, projected: projectedByWeek.get(game.week) ?? null }));
       const seasonTotals = gameLog.reduce<Record<string, number>>((totals, game) => {
         totals.fantasyPoints = Number(((totals.fantasyPoints ?? 0) + game.points).toFixed(2));
         for (const [key, value] of Object.entries(game.stats)) {

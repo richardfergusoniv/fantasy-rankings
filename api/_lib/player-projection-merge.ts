@@ -33,6 +33,11 @@ const vegasPlayerProjectionSchema = z.object({
   opponent: z.string().nullable(),
   expected_stats: z.record(z.string(), z.number()),
   td_probability: z.union([z.number(), z.record(z.string(), z.number())]).nullable(),
+  // Each stat's lowest and highest book line (pipeline 2026-11). Optional so older snapshots still parse.
+  expected_stats_low: z.record(z.string(), z.number()).optional(),
+  expected_stats_high: z.record(z.string(), z.number()).optional(),
+  td_probability_low: z.union([z.number(), z.record(z.string(), z.number())]).nullable().optional(),
+  td_probability_high: z.union([z.number(), z.record(z.string(), z.number())]).nullable().optional(),
   coverage: z.object({
     stats: z.union([z.number(), z.array(z.string()), z.record(z.string(), z.number())]),
     provider_count: z.number(),
@@ -118,6 +123,40 @@ function adaptVegasStatsForScorer(
     }
   }
   return normalized;
+}
+
+/**
+ * The player's book range in one league: his lowest and highest books' lines
+ * scored in that league's rules. Each stat takes whichever end scores fewer
+ * (low) or more (high) points with the rest of the line held at consensus, so a
+ * stat that costs points, like interceptions, counts toward the right end.
+ * Null when the snapshot predates the range fields.
+ */
+export function bookRangePoints(
+  position: Ranking["position"],
+  feed: Pick<FeedRow, "expected_stats_low" | "expected_stats_high" | "td_probability" | "td_probability_low" | "td_probability_high">,
+  consensusStats: Record<string, number>,
+  score: (stats: Record<string, number>) => number,
+): { low: number; high: number } | null {
+  if (!feed.expected_stats_low || !feed.expected_stats_high) return null;
+  const lowRaw = adaptVegasStatsForScorer(position, feed.expected_stats_low, feed.td_probability_low ?? feed.td_probability);
+  const highRaw = adaptVegasStatsForScorer(position, feed.expected_stats_high, feed.td_probability_high ?? feed.td_probability);
+  const lowLine: Record<string, number> = { ...consensusStats };
+  const highLine: Record<string, number> = { ...consensusStats };
+  for (const key of Object.keys(consensusStats)) {
+    const a = lowRaw[key] ?? consensusStats[key]!;
+    const b = highRaw[key] ?? consensusStats[key]!;
+    const aFirst = score({ ...consensusStats, [key]: a }) <= score({ ...consensusStats, [key]: b });
+    lowLine[key] = aFirst ? a : b;
+    highLine[key] = aFirst ? b : a;
+  }
+  const low = score(lowLine);
+  const high = score(highLine);
+  // Threshold bonuses can make the mixed ends score past the consensus line; keep the projection inside the range.
+  const middle = score(consensusStats);
+  if (!Number.isFinite(low) || !Number.isFinite(high) || !Number.isFinite(middle)) return null;
+  const round2 = (value: number) => Math.round(value * 100) / 100;
+  return { low: round2(Math.min(low, high, middle)), high: round2(Math.max(low, high, middle)) };
 }
 
 export function scoreSleeperPlayerProjection(
@@ -278,6 +317,7 @@ export function mergePlayerProjections(
     let leaguePoints: number | null = null;
     let vegasPoints: number | null = null;
     let projectionComponents: Record<string, number> | null = null;
+    let projectionRange: { low: number; high: number } | null = null;
     if (usePrimaryBoard && feed && isFirstDownSnapshot) {
       const stagedPoints = feed.leagues[leagueId] ?? feed.expected_stats.projected_points;
       leaguePoints = typeof stagedPoints === "number" && Number.isFinite(stagedPoints) ? stagedPoints : null;
@@ -288,6 +328,12 @@ export function mergePlayerProjections(
       // unset so the fallback can run.
       if (Object.keys(scorerStats).length > 0) {
         leaguePoints = scoreProjectedPlayerStats(base.position, scorerStats, scoringSettings, { recFdProxy: true });
+        projectionRange = bookRangePoints(
+          base.position,
+          feed,
+          scorerStats,
+          (stats) => scoreProjectedPlayerStats(base.position, stats, scoringSettings, { recFdProxy: true }),
+        );
       }
       // League-independent Vegas baseline: same stats through canonical PPR so
       // the comparison tool's "Vegas projection" never duplicates the
@@ -309,6 +355,7 @@ export function mergePlayerProjections(
         sleeperProjection: validSleeperPoints,
         projectionSource: isFirstDownSnapshot ? "first_down" : "vegas",
         projectionComponents,
+        projectionRange,
       }];
     }
 

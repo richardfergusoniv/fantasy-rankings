@@ -293,8 +293,9 @@ function GameLineCardBlock({
           role="img"
           aria-label={`${card.isFinal ? "Final" : "Implied"} points split, ${awayShare} percent ${card.awayTeam}`}
         >
-          <i style={{ flex: awayShare }} />
-          <i style={{ flex: 100 - awayShare }} />
+          {/* Amber follows the leading side, matching the amber implied number above it. */}
+          <i style={{ flex: awayShare }} className={hasPoints && awayPoints > homePoints ? "is-leading" : undefined} />
+          <i style={{ flex: 100 - awayShare }} className={hasPoints && homePoints > awayPoints ? "is-leading" : undefined} />
         </div>
       )}
       <div className="game-board-compares">

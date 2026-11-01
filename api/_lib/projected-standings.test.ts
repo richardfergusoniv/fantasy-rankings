@@ -7,6 +7,7 @@ vi.mock("./auth.js", () => ({ resolveSleeperUserId: vi.fn() }));
 vi.mock("./viewer-league-access.js", () => ({ viewerBelongsToLeague: vi.fn() }));
 
 import {
+  alignToSlots,
   currentWeekLineupTotal,
   bestLineupTotal,
   buildProjectedStandings,
@@ -168,6 +169,91 @@ describe("buildProjectedStandings", () => {
     expect(byName.B!.projectedPointsFor).toBeGreaterThan(byName.B!.pointsFor);
   });
 
+  it("returns the viewer's games with both lineups slot by slot and a win chance", () => {
+    const result = buildProjectedStandings({
+      league,
+      weeks,
+      games: [{ week: 5, a: 1, b: 2 }, { week: 6, a: 2, b: 3 }],
+      throughWeek: 4,
+      regularSeasonEndsWeek: 6,
+      missingWeeks: [],
+    });
+    // Only team A's game (week 5 vs B) belongs to the viewer.
+    expect(result.userGames).toHaveLength(1);
+    const game = result.userGames[0]!;
+    expect(game.week).toBe(5);
+    expect(game.opponentRosterId).toBe(2);
+    expect(game.mine.map((slot) => slot.slot)).toEqual(["WR", "TE"]);
+    expect(game.mine.map((slot) => slot.playerId)).toEqual(["a_wr", "a_te"]);
+    expect(game.theirs.map((slot) => slot.playerId)).toEqual(["b_wr", "b_te"]);
+    // Lineup slots add up to the game's projected totals.
+    expect(game.mine.reduce((sum, slot) => sum + slot.points, 0)).toBeCloseTo(game.myTotal, 1);
+    expect(game.theirs.reduce((sum, slot) => sum + slot.points, 0)).toBeCloseTo(game.theirTotal, 1);
+    // A projects lower than B, so the win chance is under a coin flip but not zero.
+    expect(game.winProbability).toBeGreaterThan(0);
+    expect(game.winProbability).toBeLessThan(0.5);
+  });
+
+  it("shows the best lineup in a current-week preview when a team has none set", () => {
+    // Nobody has set starters (isStarter false), so the current week falls back to each team's best lineup.
+    const currentWeek = {
+      ...league,
+      tradeTeams: [
+        { rosterId: 1, players: [player("a_wr", "WR", null, 14), player("a_te", "TE", null, 9), player("a_wr2", "WR", null, 4)] },
+        { rosterId: 2, players: [player("b_wr", "WR", null, 18), player("b_te", "TE", null, 8)] },
+        { rosterId: 3, players: [player("c_wr", "WR", null, 12), player("c_te", "TE", null, 6)] },
+      ],
+    } as unknown as League;
+    const result = buildProjectedStandings({
+      league: currentWeek, weeks: new Map(), appWeek: 5, games: [{ week: 5, a: 1, b: 2 }], throughWeek: 4, regularSeasonEndsWeek: 5, missingWeeks: [],
+    });
+    const game = result.userGames[0]!;
+    expect(game.mine.map((slot) => slot.playerId)).toEqual(["a_wr", "a_te"]);
+    expect(game.theirs.map((slot) => slot.playerId)).toEqual(["b_wr", "b_te"]);
+    expect(game.mine.reduce((sum, slot) => sum + slot.points, 0)).toBeCloseTo(game.myTotal, 1);
+    expect(game.winProbability).not.toBeNull();
+  });
+
+  it("shows the set starters in a current-week preview, not the best lineup", () => {
+    // The viewer starts a_wr and a_te and benches a_wr2, who projects higher than a_te would allow the optimizer to pass up.
+    const starter = (id: string, position: string, slot: string, projection: number) => ({ ...player(id, position, null, projection), isStarter: true, lineupSlot: slot });
+    const currentWeek = {
+      ...league,
+      tradeTeams: [
+        { rosterId: 1, players: [starter("a_wr", "WR", "WR", 4), starter("a_te", "TE", "TE", 9), player("a_wr2", "WR", null, 14)] },
+        { rosterId: 2, players: [player("b_wr", "WR", null, 18), player("b_te", "TE", null, 8)] },
+        { rosterId: 3, players: [player("c_wr", "WR", null, 12), player("c_te", "TE", null, 6)] },
+      ],
+    } as unknown as League;
+    const result = buildProjectedStandings({
+      league: currentWeek, weeks: new Map(), appWeek: 5, games: [{ week: 5, a: 1, b: 2 }], throughWeek: 4, regularSeasonEndsWeek: 5, missingWeeks: [],
+    });
+    expect(result.userGames[0]!.mine.map((slot) => slot.playerId)).toEqual(["a_wr", "a_te"]);
+  });
+
+  it("withholds playoff odds in a league that also plays the weekly median", () => {
+    const result = buildProjectedStandings({
+      league, medianMatchup: true, weeks, games: [{ week: 5, a: 1, b: 2 }, { week: 6, a: 2, b: 3 }], throughWeek: 4, regularSeasonEndsWeek: 6, missingWeeks: [],
+    });
+    expect(result.medianMatchup).toBe(true);
+    expect(result.teams.every((t) => t.playoffOdds === null)).toBe(true);
+  });
+
+  it("adds playoff odds that sum to the number of playoff spots", () => {
+    const result = buildProjectedStandings({
+      league,
+      weeks,
+      games: [{ week: 5, a: 1, b: 2 }, { week: 6, a: 2, b: 3 }],
+      throughWeek: 4,
+      regularSeasonEndsWeek: 6,
+      missingWeeks: [],
+    });
+    const odds = result.teams.map((team) => team.playoffOdds ?? 0);
+    expect(odds.reduce((sum, value) => sum + value, 0)).toBeCloseTo(1, 2);
+    const byName = Object.fromEntries(result.teams.map((t) => [t.teamName, t.playoffOdds ?? 0]));
+    expect(byName.C).toBeLessThan(byName.B!);
+  });
+
   it("scores the current week from the app's projections and later weeks from Sleeper", () => {
     const appLeague = {
       ...league,
@@ -201,6 +287,7 @@ describe("buildProjectedStandings", () => {
     });
     expect(result.divisionsIgnored).toBe(true);
     expect(result.teams.some((t) => t.inPlayoffs)).toBe(false);
+    expect(result.teams.every((t) => t.playoffOdds === null)).toBe(true);
   });
 
   it("leaves current standings untouched when nothing remains", () => {
@@ -327,5 +414,22 @@ describe("loadProjectedStandings", () => {
     expect(down).toEqual({ error: "Sleeper projections could not be fully loaded." });
     const none = await loadProjectedStandings(league, 2026, 5, { fetchLeague, fetchWeek, loadProjections: async () => { throw new Error("down"); } });
     expect(none).toEqual({ error: "Sleeper projections could not be fully loaded." });
+  });
+});
+
+
+describe("alignToSlots", () => {
+  const slot = (slotName: string, playerId: string) => ({ slot: slotName, playerId, name: playerId, points: 10 });
+
+  it("keeps an unfilled slot in place so later slots still line up", () => {
+    // A team with no QB: its RB must not land in the QB slot.
+    const aligned = alignToSlots(["QB", "RB", "WR", "FLEX"], [slot("RB", "rb1"), slot("WR", "wr1"), slot("FLEX", "wr2")]);
+    expect(aligned.map((entry) => [entry.slot, entry.playerId])).toEqual([["QB", null], ["RB", "rb1"], ["WR", "wr1"], ["FLEX", "wr2"]]);
+    expect(aligned[0]!.points).toBe(0);
+  });
+
+  it("fills repeated slots in order and keeps a starter whose slot isn't listed", () => {
+    const aligned = alignToSlots(["WR", "WR"], [slot("WR", "a"), slot("WR", "b"), slot("SUPER_FLEX", "c")]);
+    expect(aligned.map((entry) => entry.playerId)).toEqual(["a", "b", "c"]);
   });
 });

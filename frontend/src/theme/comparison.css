@@ -155,3 +155,10 @@ button.comparison-board-name:hover { color: var(--link); }
 .comparison-section > .empty-inline { margin: 4px 0 10px; }
 .comparison-group { border-top: 1px solid var(--border); }
 .comparison-group > .section-heading { margin-top: 14px; }
+/* Book range under each player's Week projection (headline row only). */
+.comparison-row:has(.comparison-range) { grid-template-areas: "label label label" "left bar right" "lrange . rrange"; }
+.comparison-range { display: flex; min-width: 0; }
+.comparison-range.is-left { grid-area: lrange; justify-content: flex-start; }
+.comparison-range.is-right { grid-area: rrange; justify-content: flex-end; }
+/* Group headings sit on the comparison card: use its surface, not the page color, so no dark band shows. */
+.comparison-board .section-heading { background: var(--surface); }

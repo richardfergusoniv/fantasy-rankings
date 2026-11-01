@@ -183,7 +183,8 @@ html.is-sheet-dragging { user-select: none; -webkit-user-select: none; }
 .player-detail-content.history-back { animation: playerHistoryBackIn .18s cubic-bezier(.22,.75,.28,1) both; }
 @keyframes playerHistoryBackIn { from { transform: translate3d(-34px, 0, 0); opacity: .72; } }
 .player-sheet-grabber { width: 38px; height: 4px; margin: -8px auto 12px; border-radius: 999px; background: var(--border); }
-.player-detail-sheet .section-heading { position: static; }
+/* Not sticky in the sheet, so it needs no page-colored backing; the band read as a dark stripe on the card. */
+.player-detail-sheet .section-heading { position: static; background: transparent; }
 .player-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .player-detail-title-line { display: flex; min-width: 0; align-items: center; gap: 7px; }
 .player-detail-title-line h2 { margin: 0; font-size: var(--type-display); line-height: 1.1; letter-spacing: -.02em; }
@@ -368,3 +369,50 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .team-card-metrics > div:nth-child(even) { padding-right: 0; padding-left: 12px; border-left: 1px solid var(--hairline); }
 .team-card-metrics span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .team-card-metrics strong { color: var(--text); font-size: var(--type-section); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Book range under a weekly projection (components/range-bar.tsx): a hairline track,
+   a neutral band from the lowest to the highest book, and a tick at the projection. */
+.range-bar { position: relative; display: block; flex: none; width: 64px; height: 8px; margin-top: 4px; }
+.range-bar::before { content: ""; position: absolute; inset: 3px 0 auto; height: 2px; border-radius: 1px; background: var(--hairline); }
+.range-bar b { position: absolute; top: 1px; height: 6px; min-width: 2px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--dim) 55%, transparent); }
+.range-bar u { position: absolute; top: 0; width: 2px; height: 8px; margin-left: -1px; border-radius: 1px; background: var(--text); text-decoration: none; }
+.range-bar.is-end { margin-left: auto; }
+.range-bar.is-start { justify-self: start; }
+.player-detail-range { width: min(100%, 160px); margin-top: 8px; }
+
+/* Weekly points against projection (Season tab): bar = points scored, tick = that week's
+   projection; green beat it, red missed it. The coming week is an outline at the card's projection. */
+.weekly-points { display: grid; gap: 4px; margin: 4px 0 14px; }
+.weekly-points-plot { position: relative; display: grid; grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); gap: 6px; align-items: end; height: 132px; margin-top: 6px; border-bottom: 1px solid var(--hairline); }
+.weekly-points-col { position: relative; height: 100%; }
+.weekly-points-bar { position: absolute; right: 0; left: 0; display: block; border-radius: var(--radius-xs) var(--radius-xs) 0 0; background: var(--dim); }
+.weekly-points-bar.is-negative { border-radius: 0 0 var(--radius-xs) var(--radius-xs); }
+.weekly-points-zero { position: absolute; right: 0; left: 0; margin: 0; border: 0; border-top: 1px solid var(--hairline); }
+.weekly-points-bar.is-over { background: var(--positive); }
+.weekly-points-bar.is-under { background: var(--negative); }
+.weekly-points-bar.is-next { border: 1.5px dashed var(--dim); border-bottom: 0; background: transparent; }
+.weekly-points-tick { position: absolute; right: -2px; left: -2px; height: 2px; border-radius: 1px; background: var(--text); text-decoration: none; }
+.weekly-points-axis { display: grid; grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); gap: 6px; color: var(--dim); font-size: var(--type-caption); line-height: 1.2; text-align: center; }
+.weekly-points-axis span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weekly-points-axis b { display: block; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.weekly-points-axis small { display: block; font-size: var(--type-caption); }
+
+/* Desktop rankings table: the book range (bar plus low–high numbers) and the 30-day value move
+   get their own columns at 760px and up; phones keep the two-line row. */
+.ranking-wide-cell { display: none; }
+.ranking-range-cell { align-items: center; gap: 8px; }
+.ranking-range-cell small { color: var(--dim); font-size: var(--type-caption); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.range-bar.is-wide { width: 100px; margin-top: 0; }
+.ranking-move-cell { justify-content: flex-end; font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ranking-move-cell > span { display: inline-flex; align-items: center; gap: 3px; }
+.ranking-move-cell .is-up { color: var(--positive); }
+.ranking-move-cell .is-down { color: var(--negative); }
+@media (min-width: 760px) {
+  .ranking-wide-cell { position: relative; z-index: 1; display: flex; min-width: 0; pointer-events: none; }
+}
+/* Phones show the range under the projection; desktop moves it to its own column and keeps the caption. */
+.is-desktop-only.is-desktop-only { display: none; }
+@media (min-width: 760px) {
+  .is-desktop-only.is-desktop-only { display: block; }
+  .range-bar.is-phone-only { display: none; }
+}

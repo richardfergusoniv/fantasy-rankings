@@ -82,6 +82,15 @@
   gap: 4px 6px;
   min-height: 0;
 }
+.scatter-axis-rail.is-compact {
+  height: 100%;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 2px 4px;
+}
+.scatter-axis-rail.is-compact .scatter-axis-y,
+.scatter-axis-rail.is-compact .scatter-axis-x {
+  font-weight: 600;
+}
 .scatter-axis-y {
   grid-row: 1;
   grid-column: 1;
@@ -221,6 +230,7 @@
 .chart-key i.selected-team-dot { width: 8px; height: 8px; border-radius: 1px; background: var(--roster-highlight); transform: rotate(45deg); }
 .chart-key i.rostered-dot { background: var(--chart-2); }
 .chart-key i.waiver-dot { background: var(--chart-1); }
+.chart-key i.unknown-dot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--dim); }
 .quadrant-summary { margin-top: 18px; }
 .quadrant-list > div { display: grid; grid-template-columns: minmax(0, 1fr) 66px 66px; gap: 7px; min-height: 50px; align-items: center; padding: 0 10px; border-bottom: 1px solid var(--hairline); }
 .quadrant-list > div > span:first-child { min-width: 0; }

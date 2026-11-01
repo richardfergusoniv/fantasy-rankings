@@ -11,7 +11,6 @@ import type {
 import {
   DesignationBadge,
   comparablePlayerName,
-  formatProjectionPoints,
   showUndoToast,
 } from "../dashboard-shared";
 import type { DraftPosition, DraftRoom } from "../dashboard-url";
@@ -100,6 +99,8 @@ export function DraftCenter({
   const isRookieBoard = draftBoardMode === "rookie";
   const [mode, setMode] = useState<DraftRoom>(draftRoom ?? "board");
   const [position, setPosition] = useState<"ALL" | "QB" | "RB" | "WR" | "TE" | "K" | "DEF" | "ROOKIES">(draftPosition ?? "ALL");
+  // K and DST are not on the board at all (owner, 2026-11-01): no market value, and a weekly
+  // projection isn't comparable with one. Old links with ?dpos=K or DEF fall back to ALL.
   const [query, setQuery] = useState(draftQuery ?? "");
   const [visibleDraftCount, setVisibleDraftCount] = useState(160);
   const [myTeamIds, setMyTeamIds] = useState<string[]>(() => readDraftPlayerIds(`fantasy-draft-my-team:${league.id}`));
@@ -112,8 +113,6 @@ export function DraftCenter({
     "RB",
     "WR",
     "TE",
-    ...(league.rankingPositions.includes("K") ? ["K" as const] : []),
-    ...(league.rankingPositions.includes("DEF") ? ["DEF" as const] : []),
     ...(league.seasonLongFormat.isDynasty ? ["ROOKIES" as const] : []),
   ];
   const effectiveDraftPosition = draftPositionOptions.includes(position) ? position : "ALL";
@@ -253,74 +252,8 @@ export function DraftCenter({
       };
     })
     : [];
-  const kickerRows: DraftRow[] = !isRookieBoard && league.rankingPositions.includes("K")
-    ? dashboard.rankings
-      .filter((row) => row.leagueId === league.id && row.position === "K")
-      .sort((a, b) => (b.leagueProjection ?? -Infinity) - (a.leagueProjection ?? -Infinity) || a.leagueRank - b.leagueRank)
-      .map((row) => ({
-        format: league.seasonLongFormat.key,
-        pool: "all" as const,
-        playerId: row.playerId,
-        name: row.name,
-        team: row.team || null,
-        position: "K",
-        adp: Number.MAX_SAFE_INTEGER,
-        high: null,
-        low: null,
-        timesDrafted: null,
-        mflAdp: null,
-        adpSource: "projection" as const,
-        marketValue: null,
-        marketRank: null,
-        rookie: false,
-        tier: Math.ceil(row.leagueRank / 10),
-        gap: null,
-        injuryStatus: row.injuryStatus,
-        weeklyRank: row.leagueRank,
-        weeklyProjection: row.leagueProjection,
-        opponent: row.opponent,
-        isAway: row.isAway,
-        isBye: row.isBye,
-        projectionSource: row.projectionSource,
-        projectionComponents: row.projectionComponents,
-      }))
-    : [];
-  const defenseRows: DraftRow[] = !isRookieBoard && league.rankingPositions.includes("DEF")
-    ? dashboard.defenses
-      .filter((row) => row.leagueId === league.id)
-      .sort((a, b) => (b.displayProjection ?? -Infinity) - (a.displayProjection ?? -Infinity) || a.team.localeCompare(b.team))
-      .map((row) => ({
-        format: league.seasonLongFormat.key,
-        pool: "all" as const,
-        playerId: row.team,
-        name: `${row.team} Defense`,
-        team: row.team,
-        position: "DEF",
-        adp: Number.MAX_SAFE_INTEGER,
-        high: null,
-        low: null,
-        timesDrafted: null,
-        mflAdp: null,
-        adpSource: "projection" as const,
-        marketValue: null,
-        marketRank: null,
-        rookie: false,
-        tier: Math.ceil((row.rank ?? 1) / 10),
-        gap: null,
-        injuryStatus: null,
-        weeklyRank: row.rank,
-        weeklyProjection: row.displayProjection,
-        opponent: row.opponent,
-        isAway: row.isAway,
-        isBye: false,
-        projectionSource: row.projectionSource,
-        gamePhase: row.gamePhase,
-        defenseComponents: row.components ?? undefined,
-        projectionComponents: null,
-      }))
-    : [];
-    return [...adpRows, ...fantasyCalcFallbackRows, ...kickerRows, ...defenseRows];
-  }, [boardSeasonRows, dashboard.defenses, dashboard.rankings, data?.adp, injuryByName, injuryByPlayer, isRookieBoard, league.id, league.rankingPositions, league.seasonLongFormat.key, sortedByValue, valueRank]);
+    return [...adpRows, ...fantasyCalcFallbackRows].filter((row) => row.position !== "K" && row.position !== "DEF" && row.position !== "DST");
+  }, [boardSeasonRows, data?.adp, injuryByName, injuryByPlayer, isRookieBoard, league.id, league.seasonLongFormat.key, sortedByValue, valueRank]);
   const syncedLeagueDrafts = useMemo(
     () => leagueDrafts.filter((draft) => draft.status === "drafting" || draft.status === "complete"),
     [leagueDrafts],
@@ -341,8 +274,7 @@ export function DraftCenter({
     const available = rows
       .filter((row) => !boardExcluded.has(row.playerId ?? ""))
       .filter((row) => (effectiveDraftPosition === "ALL" || (effectiveDraftPosition === "ROOKIES" ? row.rookie : row.position === effectiveDraftPosition)) && row.name.toLowerCase().includes(normalizedQuery));
-    // Once the league has drafted, ADP order is stale: list valued players by market value
-    // (stable sort keeps K and DEF, which have no market value, after them in projection order).
+    // Once the league has drafted, ADP order is stale: list valued players by market value.
     if (!completedDraft || liveDraft) return available;
     return available.sort((a, b) => (b.marketValue ?? -1) - (a.marketValue ?? -1));
   }, [boardExcluded, completedDraft, effectiveDraftPosition, liveDraft, query, rows]);
@@ -447,7 +379,7 @@ export function DraftCenter({
   );
 
   const draftBoard = loading ? <LoadingBlock label="Loading draft values…" /> : filteredRows.length > 0 ? (
-    <div className="draft-board data-table-frame" role="list" aria-label="Draft player board">
+    <div className={`draft-board data-table-frame${draftIsFinal ? " is-final" : ""}`} role="list" aria-label="Draft player board">
       <div className="draft-row draft-table-head" aria-hidden="true">
         <span aria-hidden="true">Player</span>
         <span aria-hidden="true">Pos</span>
@@ -455,7 +387,6 @@ export function DraftCenter({
         <span className="sr-only">Actions</span>
       </div>
       {filteredRows.slice(0, visibleDraftCount).map((row) => {
-        const isSpecialist = row.position === "K" || row.position === "DEF";
         const secondary = row.team?.trim() || null;
         const isSelected = Boolean(linkedPlayerId && row.playerId === linkedPlayerId);
         return (
@@ -469,7 +400,7 @@ export function DraftCenter({
               {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
             </button>
             <span><span className="sr-only">Position </span>{row.position === "DEF" ? "DST" : row.position}</span>
-            <span className={isSpecialist ? "ranking-proj" : undefined}><strong>{isSpecialist ? <><span className="sr-only">Weekly projection </span>{formatProjectionPoints(row.weeklyProjection, row.projectionSource)}</> : row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{formatWhole(row.marketValue)}</>}</strong>{isSpecialist ? <span aria-hidden="true">PROJ</span> : null}</span>
+            <span><strong>{row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{formatWhole(row.marketValue)}</>}</strong></span>
             {draftIsFinal ? null : <span className="draft-row-actions">
               <button type="button" className="draft-icon-button" disabled={!row.playerId} onClick={() => row.playerId && addToMyTeam(row.playerId)} aria-label={`Add ${row.name} to my team`} title="Add to my team"><Plus aria-hidden="true" /></button>
               {liveDraft ? null : <button type="button" className="draft-icon-button draft-taken-button" disabled={!row.playerId} onClick={() => row.playerId && markTaken(row.playerId)} aria-label={`Drafted by another team, ${row.name}`} title="Drafted by another team"><UserX aria-hidden="true" /></button>}

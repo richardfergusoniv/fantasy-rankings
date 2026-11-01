@@ -230,7 +230,7 @@
   background: transparent;
   color: var(--text);
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--player-name-size);
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
@@ -238,7 +238,7 @@
 .matchup-team-open .matchup-reference-button-label {
   min-height: 21px;
   padding: 2px 6px 0;
-  font-size: 13px;
+  font-size: var(--player-name-size);
 }
 /* Each pairing is a heading over stat rows; a row is the name, the gap in ranks, and one strip. */
 .matchup-pairing { padding: 10px 0 4px; border-bottom: 1px solid var(--hairline); }

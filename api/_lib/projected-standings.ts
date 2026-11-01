@@ -3,7 +3,10 @@
  * lineup each team has set, the same total the Matchup view shows; later weeks
  * use each team's best lineup from its current roster with Sleeper's per-week
  * projections rescored in the league's rules. The higher projected score wins
- * the matchup. No simulation and no probabilities: projections added up.
+ * the matchup in the projected table. Playoff odds come from the chat
+ * assistant's seeded simulation around these same projections, and the
+ * viewer's games carry both lineups slot by slot with a win chance from the
+ * Matchup card's spread model.
  *
  * Sleeper's future-week projections already carry injury timelines and byes:
  * a player who is out or on bye in a week has no projection row for it, and
@@ -16,7 +19,9 @@ import { readUserDashboardCache } from "./dashboard-build.js";
 import type { Dashboard } from "./dashboard-schemas.js";
 import { scoreProjectedDefenseStats } from "./defense-scoring.js";
 import { scoreSleeperPlayerProjection } from "./player-projection-merge.js";
-import { isUnavailableStatus, optimizeTradeRoster, sumLiveForecast, type OptimizablePlayer } from "./lineup-optimizer.js";
+import { isUnavailableStatus, liveForecastPoints, optimizeTradeRoster, sumLiveForecast, type LiveForecastPlayer, type OptimizablePlayer } from "./lineup-optimizer.js";
+import { teamOutlook, winProbability, type TeamOutlook } from "./win-probability.js";
+import { playoffOddsFromProjections } from "./projected-playoff-odds.js";
 import { DEFAULT_LAST_REGULAR_WEEK, loadScheduleGames, type FetchWeek } from "./league-schedule.js";
 import { fetchJson, SLEEPER_BASE } from "./sleeper.js";
 import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projections.js";
@@ -41,6 +46,23 @@ export type ProjectedStandingsTeam = {
   projectedPointsFor: number;
   /** True when the team lands inside the playoff cut. */
   inPlayoffs: boolean;
+  /** Share of simulated seasons (0–1) that end inside the playoff cut; null when no cut can be drawn. */
+  playoffOdds: number | null;
+};
+
+/** One lineup slot; an unfilled slot keeps its place with a null player and 0 points. */
+export type ProjectedLineupSlot = { slot: string; playerId: string | null; name: string | null; points: number };
+
+/** One of the viewer's remaining games with both projected lineups, for the preview card. */
+export type ProjectedGamePreview = {
+  week: number;
+  opponentRosterId: number;
+  mine: ProjectedLineupSlot[];
+  theirs: ProjectedLineupSlot[];
+  myTotal: number;
+  theirTotal: number;
+  /** Chance (0–1) the viewer outscores the opponent, from the same spread model as the Matchup card. */
+  winProbability: number | null;
 };
 
 export type ProjectedGame = {
@@ -65,7 +87,32 @@ export type ProjectedStandings = {
   projectionsAsOf: string | null;
   teams: ProjectedStandingsTeam[];
   games: ProjectedGame[];
+  /** The viewer's remaining games, lineup by lineup. Empty when the viewer's roster isn't in the league. */
+  userGames: ProjectedGamePreview[];
 };
+
+type WeekLineup = { total: number; outlook: TeamOutlook | null; starters: ProjectedLineupSlot[] };
+
+/**
+ * Lay starters out in the league's slot order, one entry per slot, so two
+ * lineups compare slot for slot. A slot nobody fills stays as an empty entry
+ * instead of shifting every later slot; a starter whose slot isn't in the list
+ * (shouldn't happen) is kept at the end rather than dropped.
+ */
+export function alignToSlots(slots: readonly string[], starters: readonly ProjectedLineupSlot[]): ProjectedLineupSlot[] {
+  const remaining = [...starters];
+  const aligned = slots.map((slot) => {
+    const index = remaining.findIndex((starter) => starter.slot === slot);
+    if (index < 0) return { slot, playerId: null, name: null, points: 0 };
+    return remaining.splice(index, 1)[0]!;
+  });
+  return [...aligned, ...remaining];
+}
+
+/** A future-week starter as a pregame forecast player, so the matchup spread model applies. */
+function pregamePlayer(playerId: string, position: string, points: number): LiveForecastPlayer {
+  return { playerId, position, projection: points, actual: null, gamePhase: "pregame", gameTime: null, gamePeriod: null, gameClockSeconds: null, injuryStatus: null, isBye: false } as LiveForecastPlayer;
+}
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
@@ -109,6 +156,11 @@ export function currentWeekLineupTotal(players: readonly RosterPlayer[], slots: 
  * Bye and unavailable players count as zero until their game locks.
  */
 function bestCurrentWeekLineupTotal(players: readonly RosterPlayer[], slots: readonly string[]): number {
+  return bestCurrentWeekLineupResult(players, slots).score;
+}
+
+/** The optimizer result behind bestCurrentWeekLineupTotal, so a preview can show the lineup it scored. */
+function bestCurrentWeekLineupResult(players: readonly RosterPlayer[], slots: readonly string[]) {
   const optimizable: OptimizablePlayer[] = players
     .filter((player) => player.playerId !== "0")
     .map((player) => ({
@@ -125,7 +177,7 @@ function bestCurrentWeekLineupTotal(players: readonly RosterPlayer[], slots: rea
       injuryStatus: player.injuryStatus,
       isBye: player.isBye,
     }));
-  return optimizeTradeRoster(optimizable, [...slots]).score;
+  return optimizeTradeRoster(optimizable, [...slots]);
 }
 
 export type PointsOf = (player: RosterPlayer) => number;
@@ -171,6 +223,61 @@ export async function loadLeagueAverageMatch(
   return response?.settings?.league_average_match === 1;
 }
 
+/** Best lineup for one roster in one future week, with each starter and the team's spread. */
+export function bestLineup(players: readonly RosterPlayer[], slots: readonly string[], pointsOf: PointsOf): WeekLineup {
+  const byId = new Map(players.map((player) => [player.playerId, player]));
+  const optimizable: OptimizablePlayer[] = players
+    .filter((player) => player.playerId !== "0")
+    .map((player) => ({
+      playerId: player.playerId,
+      position: player.position,
+      lineupSlot: null,
+      isStarter: false,
+      projection: pointsOf(player),
+      actual: null,
+    }));
+  const result = optimizeTradeRoster(optimizable, [...slots]);
+  const starters = result.starters.map((player) => ({
+    slot: player.lineupSlot ?? player.position,
+    playerId: player.playerId,
+    name: byId.get(player.playerId)?.name ?? player.playerId,
+    points: round2(player.projection ?? 0),
+  }));
+  const outlook = teamOutlook(result.starters.map((player) => pregamePlayer(player.playerId, player.position, player.projection ?? 0)));
+  return { total: result.score, outlook, starters: alignToSlots(slots, starters) };
+}
+
+/** The lineup a team has set this week, forecast like the Matchup view, in slot order. */
+function currentWeekLineup(players: readonly RosterPlayer[], slots: readonly string[], now = Date.now()): WeekLineup {
+  const set = players.filter((player) => player.isStarter);
+  const total = currentWeekLineupTotal(players, slots, now);
+  if (set.length === 0) {
+    // No lineup set: the total comes from the best lineup, so the preview shows that same lineup.
+    const best = bestCurrentWeekLineupResult(players, slots);
+    const byId = new Map(players.map((player) => [player.playerId, player]));
+    const starters = best.starters.map((player) => ({
+      slot: player.lineupSlot ?? player.position,
+      playerId: player.playerId,
+      name: byId.get(player.playerId)?.name ?? player.playerId,
+      points: round2(liveForecastPoints(player, now) ?? 0),
+    }));
+    return { total, outlook: best.starters.length > 0 ? teamOutlook(best.starters, now) : null, starters: alignToSlots(slots, starters) };
+  }
+  const order = (slot: string | null) => {
+    const index = slot ? slots.indexOf(slot) : -1;
+    return index < 0 ? slots.length : index;
+  };
+  const starters = alignToSlots(slots, [...set]
+    .sort((a, b) => order(a.lineupSlot) - order(b.lineupSlot))
+    .map((player) => ({
+      slot: player.lineupSlot ?? player.position,
+      playerId: player.playerId,
+      name: player.name,
+      points: round2(liveForecastPoints(player, now) ?? 0),
+    })));
+  return { total, outlook: teamOutlook(set, now), starters };
+}
+
 /** Median of the teams' totals; with an even count, the mean of the middle two. */
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
@@ -198,15 +305,19 @@ export function buildProjectedStandings(args: {
   const rosters = new Map(league.tradeTeams.map((team) => [team.rosterId, team.players]));
 
   const weekTotals = new Map<string, number>();
+  const weekLineups = new Map<string, WeekLineup>();
   const scoredWeeks = new Set<number>(weeks.keys());
   if (args.appWeek != null) scoredWeeks.add(args.appWeek);
   for (const week of scoredWeeks) {
     const projections = weeks.get(week);
     for (const [rosterId, players] of rosters) {
-      const total = week === args.appWeek
-        ? currentWeekLineupTotal(players, slots)
-        : projections ? bestLineupTotal(players, slots, sleeperWeekPoints(projections, league)) : null;
-      if (total != null) weekTotals.set(`${week}:${rosterId}`, total);
+      const lineup = week === args.appWeek
+        ? currentWeekLineup(players, slots)
+        : projections ? bestLineup(players, slots, sleeperWeekPoints(projections, league)) : null;
+      if (lineup) {
+        weekTotals.set(`${week}:${rosterId}`, lineup.total);
+        weekLineups.set(`${week}:${rosterId}`, lineup);
+      }
     }
   }
   const teamAverage = (rosterId: number) => {
@@ -263,10 +374,28 @@ export function buildProjectedStandings(args: {
     return played === 0 ? 0 : (t.wins + t.ties / 2) / played;
   };
   const playoffTeams = league.playoffs?.teams ?? 0;
+  const userRosterId = league.standings.find((row) => row.isUser)?.rosterId ?? null;
+  const userGames: ProjectedGamePreview[] = userRosterId === null ? [] : projectedGames
+    .filter((game) => game.rosterIdA === userRosterId || game.rosterIdB === userRosterId)
+    .map((game) => {
+      const opponentRosterId = game.rosterIdA === userRosterId ? game.rosterIdB : game.rosterIdA;
+      const mine = weekLineups.get(`${game.week}:${userRosterId}`);
+      const theirs = weekLineups.get(`${game.week}:${opponentRosterId}`);
+      return {
+        week: game.week,
+        opponentRosterId,
+        mine: mine?.starters ?? [],
+        theirs: theirs?.starters ?? [],
+        myTotal: round2(game.rosterIdA === userRosterId ? game.projectedA : game.projectedB),
+        theirTotal: round2(game.rosterIdA === userRosterId ? game.projectedB : game.projectedA),
+        winProbability: mine?.outlook && theirs?.outlook ? winProbability(mine.outlook, theirs.outlook) : null,
+      };
+    });
+
   const ordered = [...table.values()].sort((x, y) => winPct(y) - winPct(x) || y.pf - x.pf || x.row.teamName.localeCompare(y.row.teamName));
   const asOfs = [...weeks.values()].map((week) => week.asOf).sort();
 
-  return {
+  const result: ProjectedStandings = {
     leagueId: league.id,
     throughWeek: args.throughWeek,
     regularSeasonEndsWeek: args.regularSeasonEndsWeek,
@@ -287,9 +416,20 @@ export function buildProjectedStandings(args: {
       projectedPointsFor: round2(t.pf),
       // With divisions a division winner can qualify below the overall cut, so draw no cut at all.
       inPlayoffs: playoffTeams > 0 && league.playoffs?.positionKnown !== false && index < playoffTeams,
+      playoffOdds: null,
     })),
     games: projectedGames,
+    userGames,
   };
+  // Playoff odds reuse the chat assistant's simulator so both show the same numbers.
+  // No odds when no single cut can be drawn (divisions), the league has no playoff spots, or
+  // the league also plays the weekly median: the simulator decides head-to-head games only,
+  // so it could call a team eliminated that can still get in on median wins (same guard as the chat tool).
+  if (playoffTeams > 0 && !result.divisionsIgnored && !result.medianMatchup) {
+    const odds = new Map(playoffOddsFromProjections(result).teams.map((team) => [team.rosterId, team.playoffPct / 100]));
+    result.teams = result.teams.map((team) => ({ ...team, playoffOdds: odds.get(team.rosterId) ?? 0 }));
+  }
+  return result;
 }
 
 export type LoadProjectedStandingsOptions = {

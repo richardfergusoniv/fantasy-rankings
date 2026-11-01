@@ -6,6 +6,7 @@ import { formatRecord, LeagueTeamCard, positionLabel } from "./league-team-card"
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { SegmentedControl, points, shortLeagueName } from "./shared";
 import { formatPercent, formatWhole } from "./lib/format-number";
+import { PowerStackList, type PowerStackTeam } from "./views/power-stack-list";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
 type League = Dashboard["leagues"][number];
@@ -31,6 +32,7 @@ export function PowerRankings({
   const [scope, setScope] = useState<"week" | "restOfSeason">("week");
   const [mode, setMode] = useState<"seasonLong" | "dynasty">("seasonLong");
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+  const [stacksOpen, setStacksOpen] = useState(false);
   const isDynastyLeague = league.seasonLongFormat.isDynasty;
   const activeMode = isDynastyLeague ? mode : "seasonLong";
   const isWeekly = scope !== "restOfSeason";
@@ -48,6 +50,7 @@ export function PowerRankings({
 
   useEffect(() => {
     setSelectedTeamId(null);
+    setStacksOpen(false);
   }, [league.id]);
 
   const displayedTeams = useMemo(
@@ -76,6 +79,17 @@ export function PowerRankings({
       averageStrength: Math.round((average / leader) * 100),
     };
   });
+
+  const stackTeams: PowerStackTeam[] = displayedTeams.map((team) => ({
+    rosterId: team.rosterId,
+    rank: team.rank,
+    teamName: team.teamName,
+    isUser: team.isUser,
+    segments: [
+      ...positions.map((position) => ({ key: position, label: positionLabel(position), value: team.positionValues[position] })),
+      ...(isDynastyView ? [{ key: "PICKS", label: "PICKS", value: team.futurePickValue }] : []),
+    ],
+  }));
 
   const radarPoint = (index: number, percent: number, radius = 90): string => {
     const angle = (-90 + index * (360 / positions.length)) * Math.PI / 180;
@@ -130,7 +144,6 @@ export function PowerRankings({
           <span>Your power rank</span>
           <strong>#{mine.rank}</strong>
         </div>
-        <p>of {powerRankings.length} teams</p>
       </Card>
 
       <section className="power-chart-section" aria-labelledby="position-strength-heading">
@@ -155,15 +168,23 @@ export function PowerRankings({
           </svg>
         </div>
         <p className="power-position-table-label">League average</p>
-        <div className="power-position-values" role="list" aria-label="League average value by position">
+        <button
+          type="button"
+          className="power-position-values"
+          aria-expanded={stacksOpen}
+          aria-controls="power-stack-list"
+          onClick={() => setStacksOpen((open) => !open)}
+        >
           {radarData.map((row) => (
-            <div key={row.position} role="listitem"><span>{positionLabel(row.position)}</span><strong>{isWeekly ? points(row.average) : formatWhole(row.average)}</strong></div>
+            <span key={row.position}><span>{positionLabel(row.position)}</span><strong>{isWeekly ? points(row.average) : formatWhole(row.average)}</strong></span>
           ))}
           {leagueAveragePicks !== null ? (
-            <div role="listitem"><span>PICKS</span><strong>{formatWhole(leagueAveragePicks)}</strong></div>
+            <span><span>PICKS</span><strong>{formatWhole(leagueAveragePicks)}</strong></span>
           ) : null}
-          {isWeekly ? <div className="power-position-total-highlight" role="listitem"><span>Total</span><strong>{points(totalAverage)}</strong></div> : <div className={leagueAveragePicks !== null ? "power-position-total-highlight" : "power-position-total power-position-total-highlight"} role="listitem"><span>Total</span><strong>{formatWhole(leagueAverageDisplayTotal)}</strong></div>}
-        </div>
+          <span className="sr-only">Every team by position</span>
+          {isWeekly ? <span className="power-position-total-highlight"><span>Total</span><strong>{points(totalAverage)}</strong></span> : <span className={leagueAveragePicks !== null ? "power-position-total-highlight" : "power-position-total power-position-total-highlight"}><span>Total</span><strong>{formatWhole(leagueAverageDisplayTotal)}</strong></span>}
+        </button>
+        {stacksOpen ? <PowerStackList id="power-stack-list" teams={stackTeams} weekly={isWeekly} /> : null}
       </section>
 
       <section className="power-table-section" aria-labelledby="league-power-heading">

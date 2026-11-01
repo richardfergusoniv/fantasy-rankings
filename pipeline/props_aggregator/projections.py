@@ -269,9 +269,20 @@ def build_projections(consensus_rows: list[dict], leagues: list[dict],
         team = merged_meta[key]["team"] or pos_info.get("team") or ""
 
         expected: dict[str, float] = {}
+        # Each stat's lowest and highest book line. The app rescores these in
+        # each league's rules to draw the player's book range; they are never
+        # used for the projection itself.
+        expected_low: dict[str, float] = {}
+        expected_high: dict[str, float] = {}
         td_prob: float | None = None
+        td_prob_low: float | None = None
+        td_prob_high: float | None = None
         for stat, row in stats.items():
             _, kind = STAT_MAP[stat]
+            if kind in ("line", "direct"):
+                consensus = float(row["consensus_line"])
+                expected_low[stat] = float(row.get("min_line", consensus))
+                expected_high[stat] = float(row.get("max_line", consensus))
             if kind == "line":
                 expected[stat] = float(row["consensus_line"])
             elif kind == "prob":
@@ -281,6 +292,8 @@ def build_projections(consensus_rows: list[dict], leagues: list[dict],
                 td_prob = row.get("td_probability")
                 if td_prob is None:
                     td_prob = american_to_prob(row.get("median_over_odds"))
+                td_prob_low = row.get("td_probability_min", td_prob)
+                td_prob_high = row.get("td_probability_max", td_prob)
             elif kind == "direct":
                 expected[stat] = float(row["consensus_line"])
 
@@ -332,7 +345,11 @@ def build_projections(consensus_rows: list[dict], leagues: list[dict],
             "position": position or "UNK",
             "opponent": abbr_team(merged_meta[key]["opponent"]),
             "expected_stats": {k: round(v, 2) for k, v in expected.items()},
+            "expected_stats_low": {k: round(v, 2) for k, v in expected_low.items()},
+            "expected_stats_high": {k: round(v, 2) for k, v in expected_high.items()},
             "td_probability": round(td_prob, 4) if td_prob is not None else None,
+            "td_probability_low": round(td_prob_low, 4) if td_prob_low is not None else None,
+            "td_probability_high": round(td_prob_high, 4) if td_prob_high is not None else None,
             "coverage": {
                 "stats": sorted(merged_meta[key]["stats"]),
                 "provider_count": merged_meta[key]["provider_count"],

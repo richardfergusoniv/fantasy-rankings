@@ -30,10 +30,11 @@
   align-items: center;
   min-width: 0;
   max-width: 100%;
-  min-height: 44px;
-  padding: 0 0 0 12px;
+  /* Compact filter height, like This week / Season long: these pills filter a view, they aren't primary actions. */
+  min-height: var(--compact-control-height);
+  padding: 0 0 0 10px;
   border: 1px solid var(--hairline);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background-color: var(--surface);
   box-shadow: var(--shadow-control);
 }
@@ -147,10 +148,10 @@
   width: auto;
   min-width: 0;
   max-width: 100%;
-  min-height: 42px;
+  min-height: calc(var(--compact-control-height) - 2px);
   padding: 0 30px 0 6px;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   background-color: transparent;
   background-image: var(--select-arrow);
   background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%;
@@ -251,35 +252,6 @@
   border: 0;
   border-radius: 0;
   height: min(52dvh, 420px);
-}
-.team-stats-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin: 0;
-  padding: 8px 12px 10px;
-  list-style: none;
-  color: var(--dim);
-  font-size: var(--type-caption);
-}
-.team-stats-legend li {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-}
-.team-stats-legend li.is-rostered {
-  color: var(--text);
-  font-weight: 700;
-}
-.team-stats-legend i {
-  flex: none;
-  width: 12px;
-  height: 3px;
-  border-radius: 2px;
-}
-.team-stats-legend .is-rostered i {
-  height: 4px;
 }
 .team-stats-table-dialog .chart-result-body {
   overflow: auto;
@@ -1059,10 +1031,10 @@
 .game-board-split i {
   height: 4px;
   border-radius: 2px;
-  background: var(--action);
-}
-.game-board-split i + i {
   background: var(--dim);
+}
+.game-board-split i.is-leading {
+  background: var(--action);
 }
 .game-board-compares {
   border-bottom: 1px solid var(--hairline);

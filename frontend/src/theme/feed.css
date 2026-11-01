@@ -78,8 +78,9 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 
 @media (min-width: 760px) {
   /* One desktop content width: tabs, sub-tabs and every view share the same right edge. */
-  :root { --type-display: 30px; --sticky-offset: 104px; --content-width: 920px; }
-  .app-shell { max-width: 1080px; margin: 0 auto; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+  :root { --type-display: 28px; --sticky-offset: 104px; --content-width: 920px; }
+  /* Shell = content width plus its 32px gutters, so the header, ticker, tabs and views share one left and right edge. */
+  .app-shell { max-width: calc(var(--content-width) + 64px); margin: 0 auto; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
   .app-shell.is-inspector-docked { max-width: min(1440px, 100%); }
   .app-workspace.is-inspector-docked {
     display: flex;
@@ -116,9 +117,12 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   }
   /* First column sizes to the week text plus the Ask/theme/refresh controls so
      the league picker can never overlap them at any width or zoom level. */
-  .league-sticky { display: grid; grid-template-columns: max-content minmax(0, 680px); column-gap: 24px; align-items: center; padding: 10px 32px 8px; }
+  .league-sticky { display: grid; grid-template-columns: max-content minmax(0, 680px); column-gap: 24px; align-items: center; margin-inline: 32px; padding: 10px 0 8px; }
   /* Contain the inline size so the scrolling track doesn't stretch the max-content first column (and the page) to its full length. */
-  .ticker-strip { grid-column: 1 / -1; margin: -10px -32px 4px; contain: inline-size; }
+  .ticker-strip { grid-column: 1 / -1; margin: -10px 0 4px; contain: inline-size; }
+  /* The strip stops at the shell edge, not the window edge; fade the ends so items don't look cut off mid-word. */
+  .ticker-viewport { mask-image: linear-gradient(to right, transparent, black 32px, black calc(100% - 32px), transparent); }
+  .ticker-viewport:focus-within { mask-image: none; }
   .week-line { min-height: 44px; padding-right: 18px; }
   .data-notes { grid-column: 1 / -1; }
   .league-picker { max-width: 680px; }
@@ -150,5 +154,5 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
   .trade-grade-grid > div:last-child { border-right: 0; }
   /* Flex rather than auto-fit grid so a short last row stretches instead of leaving an empty hairline-colored cell. */
   .power-position-values { display: flex; flex-wrap: wrap; }
-  .power-position-values > div { flex: 1 1 120px; }
+  .power-position-values > span:not(.sr-only) { flex: 1 1 120px; }
 }

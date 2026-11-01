@@ -1,4 +1,6 @@
 import { refreshPlayerCard, playerPointsLabel } from "./player-card-state";
+import { WeeklyPointsChart } from "./views/weekly-points-chart";
+import { RangeBar, rangeDomain } from "./components/range-bar";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent as ReactTouchEvent } from "react";
 import { ToolLinks, type ToolLinkItem } from "./tool-links";
 import { useQuery } from "@tanstack/react-query";
@@ -755,6 +757,9 @@ export function PlayerDetailSheet({
               <strong>{formatProjectionPoints(player.weeklyProjection, player.projectionSource)}</strong>
               <small>{player.weeklyProjection === null ? "No weekly projection" : player.weeklyRank === null ? "No weekly rank" : <>{positionLabel} <span className={rankToneClassName(player.weeklyRank)}>#{player.weeklyRank}</span></>}</small>
             </div>
+            {player.projectionRange ? (
+              <RangeBar className="player-detail-range" range={player.projectionRange} value={player.weeklyProjection} domain={rangeDomain([player.projectionRange])} />
+            ) : null}
           </div>
           <div>
             <span>Season-long value</span>
@@ -860,6 +865,14 @@ export function PlayerDetailSheet({
         </div> : null}
         {activeTab === "season" ? (
           <div id="player-detail-season-panel" role="tabpanel" aria-labelledby="player-detail-season-tab">
+            {boomBustQuery.data?.gameLog?.length ? (
+              <WeeklyPointsChart
+                games={boomBustQuery.data.gameLog}
+                nextWeek={week}
+                nextProjection={player.gamePhase === "pregame" || player.gamePhase == null ? player.weeklyProjection : null}
+                nextOpponent={player.opponent}
+              />
+            ) : null}
             {player.position !== "PICK" && player.seasonValue !== null ? (
               <Suspense fallback={<div className="loading-shimmer player-value-trend-loading" aria-hidden="true" />}>
                 <LazyPlayerValueTrend name={player.name} history={valueHistory} isLoading={historyQuery.isPending} />
