@@ -130,7 +130,6 @@ export function PowerRankings({
           <span>Your power rank</span>
           <strong>#{mine.rank}</strong>
         </div>
-        <p>of {powerRankings.length} teams</p>
       </Card>
 
       <section className="power-chart-section" aria-labelledby="position-strength-heading">

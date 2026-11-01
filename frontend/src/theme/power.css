@@ -1,6 +1,5 @@
 /* Power rankings and team cards. */
-/* "of 12 teams" reads with the rank, not across the card from it. */
-.power-hero { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 12px; }
+.power-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 2px 12px; padding: 12px; }
 .power-hero > div { display: flex; align-items: baseline; gap: 8px; }
 .power-hero > div > span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .power-hero > div > strong { color: var(--text); font-size: var(--type-display); line-height: 1; font-weight: 700; }

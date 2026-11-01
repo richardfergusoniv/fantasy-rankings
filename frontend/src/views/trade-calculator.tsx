@@ -920,23 +920,22 @@ export function TradeHistoryView({ dashboard, league }: { dashboard: Dashboard; 
   if (tradesQuery.isError) return <div className="section-error compact"><strong>Trade history is unavailable.</strong><button type="button" onClick={() => void tradesQuery.refetch()}>Try again</button></div>;
   return (
     <div className="trade-history-view">
-      <label className="trade-history-filter">
+      {/* Same pill as the Team stats toolbar: caption inside the control, left-aligned. */}
+      <label className="monitor-value-chart-field trade-history-filter">
         <span>Season</span>
-        <span className="select-control-field">
-          <select
-            aria-label="Trade history season"
-            value={selectedSeason}
-            onChange={(event) => {
-              const nextSeason = event.target.value === "all" ? "all" : Number(event.target.value);
-              setSelectedSeason(nextSeason);
-              setSelectedTradeId(null);
-              refreshRequested.current = null;
-            }}
-          >
-            {tradesQuery.data.seasons.map((season) => <option key={season} value={season}>{season}</option>)}
-            <option value="all">All seasons</option>
-          </select>
-        </span>
+        <select
+          aria-label="Trade history season"
+          value={selectedSeason}
+          onChange={(event) => {
+            const nextSeason = event.target.value === "all" ? "all" : Number(event.target.value);
+            setSelectedSeason(nextSeason);
+            setSelectedTradeId(null);
+            refreshRequested.current = null;
+          }}
+        >
+          {tradesQuery.data.seasons.map((season) => <option key={season} value={season}>{season}</option>)}
+          <option value="all">All seasons</option>
+        </select>
       </label>
       {tradesQuery.data.sourceErrors.length ? <p className="trade-history-source-note">{tradesQuery.data.sourceErrors.join(" ")}</p> : null}
       {!tradesQuery.data.trades.length ? (
