@@ -8,7 +8,9 @@ const {
   previousDepthFromRows,
   mergeNgsSources,
   parseNgs,
+  epComponentStats,
   parseOpportunity,
+  playerInsightsNeedsComponentsMigration,
   parsePlayerIds,
   playerInsightsNeedsSleeperIdMigration,
   playerInsightsSnapshotSchema,
@@ -36,8 +38,53 @@ describe("parseOpportunity", () => {
 
   it("sums one season's regular-season games per player, weeks in order", () => {
     expect(parseOpportunity(csv)).toEqual({
-      "00-1": { games: 2, expected: 47.3, actual: 47.7, weeks: [[1, 26.3, 29.1], [2, 21, 18.6]] },
+      "00-1": { games: 2, expected: 47.3, actual: 47.7, weeks: [[1, 26.3, 29.1], [2, 21, 18.6]], componentWeeks: [] },
     });
+  });
+});
+
+describe("ep components", () => {
+  const csv = [
+    "season,week,player_id,total_fantasy_points,total_fantasy_points_exp,receptions_exp,rec_yards_gained_exp,rec_touchdown_exp,rush_yards_gained_exp,pass_yards_gained_exp,pass_touchdown_exp,pass_interception_exp,rec_first_down_exp,pass_two_point_conv_exp,rec_two_point_conv_exp",
+    "2026,1,00-9,20,22,6,80,0.4,10,0,0,0,3,0,1",
+    "2026,2,00-9,10,12,4,50,0.1,30,0,0,0,2,0,0",
+  ].join("\n");
+
+  it("maps ep_weekly component columns onto Sleeper scoring keys", () => {
+    expect(epComponentStats({
+      receptions_exp: "6", rec_yards_gained_exp: "80", rec_touchdown_exp: "0.4",
+      rush_yards_gained_exp: "10", pass_interception_exp: "0.2",
+      pass_two_point_conv_exp: "0.1", rec_two_point_conv_exp: "0.2", rush_two_point_conv_exp: "0",
+    })).toEqual({ rec: 6, rec_yd: 80, rec_td: 0.4, rush_yd: 10, pass_int: 0.2, pass_2pt: 0.1, rec_2pt: 0.2 });
+  });
+
+  it("keeps per-week components alongside the totals, in week order", () => {
+    const parsed = parseOpportunity(csv);
+    expect(parsed["00-9"]?.componentWeeks).toEqual([
+      { week: 1, stats: { rec: 6, rec_yd: 80, rec_td: 0.4, rush_yd: 10, rec_fd: 3, rec_2pt: 1 } },
+      { week: 2, stats: { rec: 4, rec_yd: 50, rec_td: 0.1, rush_yd: 30, rec_fd: 2 } },
+    ]);
+  });
+
+  it("flags snapshots whose opportunity rows carry no components as stale", () => {
+    const base = {
+      fetchedAt: new Date().toISOString(),
+      season: 2026 as const,
+      ngs: {},
+      depth: {},
+      depthAsOf: null,
+      depthPrevious: {},
+      sleeperByGsis: { "00-9": "123" },
+    };
+    expect(playerInsightsNeedsComponentsMigration({
+      ...base,
+      opportunity: { "00-9": { games: 1, expected: 10, actual: 9, weeks: [[1, 10, 9]], componentWeeks: [] } },
+    })).toBe(true);
+    expect(playerInsightsNeedsComponentsMigration({
+      ...base,
+      opportunity: { "00-9": { games: 1, expected: 10, actual: 9, weeks: [[1, 10, 9]], componentWeeks: [{ week: 1, stats: { rec: 5 } }] } },
+    })).toBe(false);
+    expect(playerInsightsNeedsComponentsMigration({ ...base, opportunity: {} })).toBe(false);
   });
 });
 
