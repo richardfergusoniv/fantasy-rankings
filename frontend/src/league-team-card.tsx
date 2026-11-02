@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Badge } from "@/components/ui/badge";
 import { CardHero } from "./components/card-hero";
 import type { Dashboard, League, MatchupSelection } from "./dashboard-types";
@@ -9,6 +9,8 @@ import { formatWhole } from "./lib/format-number";
 import { displayedMatchupPoints } from "../../api/_lib/lineup-optimizer";
 import { teamOutlook, winPercent, winProbability } from "./views/win-probability";
 import { CloseGlyph } from "./components/glyphs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LeagueWeeklyPerformance } from "./league-weekly-performance";
 import { EmptyState } from "./components/state-blocks";
 
 type RosterPlayer = League["tradeTeams"][number]["players"][number];
@@ -68,6 +70,7 @@ export function LeagueTeamCard({
   onOpenMatchup?: (matchup: MatchupSelection) => void;
   onClose: () => void;
 }) {
+  const tabsId = useId();
   const dialogRef = useRef<HTMLElement | null>(null);
   const returnPlayerRowRef = useRef<HTMLElement | null>(null);
   const wasPlayerCardOpenRef = useRef(false);
@@ -240,25 +243,36 @@ export function LeagueTeamCard({
               </div>
             )}
           </div>
-          <div className="power-team-card-positions" role="list" aria-label={`${team.teamName} position values`}>
-            {positions.map((position) => {
-              const values = powerRankings.map((candidate) => candidate.positionValues[position]);
-              // A position nobody has any value at has no meaningful rank.
-              const rank = values.some((value) => value !== 0) ? leagueRank(values, team.positionValues[position]) : null;
-              return (
-                <div key={position} role="listitem">
-                  <span>{positionLabel(position)}</span>
-                  <strong>{scope === "week" ? points(team.positionValues[position]) : formatWhole(team.positionValues[position])}</strong>
-                  {rank === null ? null : <small className="power-position-rank" aria-label={`Ranked ${rank} in the league`}>#{rank}</small>}
-                </div>
-              );
-            })}
-          </div>
-          <div className="power-team-card-roster" role="region" aria-label={`${team.teamName} roster`}>
-            {rows.length > 0 ? (
-              <>{rows.map((row) => renderPlayer(row))}</>
-            ) : <EmptyState title="No roster values for this format" />}
-          </div>
+          <Tabs key={`${league.id}:${team.rosterId}`} defaultValue="players" className="power-team-card-tabs">
+            <TabsList aria-label={`${team.teamName} team details`}>
+              <TabsTrigger value="players" id={`${tabsId}-players-tab`} aria-controls={`${tabsId}-players-panel`}>Players</TabsTrigger>
+              <TabsTrigger value="weekly" id={`${tabsId}-weekly-tab`} aria-controls={`${tabsId}-weekly-panel`}>Weekly</TabsTrigger>
+            </TabsList>
+            <TabsContent value="players" id={`${tabsId}-players-panel`} aria-labelledby={`${tabsId}-players-tab`}>
+              <div className="power-team-card-positions" role="list" aria-label={`${team.teamName} position values`}>
+                {positions.map((position) => {
+                  const values = powerRankings.map((candidate) => candidate.positionValues[position]);
+                  // A position nobody has any value at has no meaningful rank.
+                  const rank = values.some((value) => value !== 0) ? leagueRank(values, team.positionValues[position]) : null;
+                  return (
+                    <div key={position} role="listitem">
+                      <span>{positionLabel(position)}</span>
+                      <strong>{scope === "week" ? points(team.positionValues[position]) : formatWhole(team.positionValues[position])}</strong>
+                      {rank === null ? null : <small className="power-position-rank" aria-label={`Ranked ${rank} in the league`}>#{rank}</small>}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="power-team-card-roster" role="region" aria-label={`${team.teamName} roster`}>
+                {rows.length > 0 ? (
+                  <>{rows.map((row) => renderPlayer(row))}</>
+                ) : <EmptyState title="No roster values for this format" />}
+              </div>
+            </TabsContent>
+            <TabsContent value="weekly" id={`${tabsId}-weekly-panel`} aria-labelledby={`${tabsId}-weekly-tab`}>
+              <LeagueWeeklyPerformance leagueId={league.id} rosterId={team.rosterId} season={dashboard.season} snapshotAsOf={dashboard.asOf} />
+            </TabsContent>
+          </Tabs>
         </section>
       </div>
     </ModalPortal>

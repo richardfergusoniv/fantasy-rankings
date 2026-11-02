@@ -8,6 +8,7 @@ describe("api/data kindFromPath", () => {
     expect(kindFromPath("/api/data/value-history")).toBe("value-history");
     expect(kindFromPath("/api/data/trades-history")).toBe("trades-history");
     expect(kindFromPath("/api/data/projected-standings")).toBe("projected-standings");
+    expect(kindFromPath("/api/data/league-weekly-performance")).toBe("league-weekly-performance");
     expect(kindFromPath("/api/data/draft-grade")).toBe("draft-grade");
   });
 

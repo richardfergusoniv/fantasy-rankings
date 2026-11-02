@@ -61,6 +61,8 @@ Three jobs, three looks (`theme/badges.css`). One meaning per color.
 - Power's stacked bars use one blue per position (`--position-shade-qb` darkest through `--position-shade-def`, reversed in dark mode) with no color key: tapping a team shows its numbers.
 - Waivers rows show Sleeper's 24-hour adds as a 40px bar scaled to the most-added player in the list (`--positive`), and a suggested FAAB bid ("$5–13") for the top graded adds. The bid comes from the chat assistant's waiver grading (`api/_lib/waiver-suggestions.ts`), saved by each refresh for the 15 highest-projected free agents per FAAB league.
 
+- League team cards keep their summary above Players / Weekly tabs. Players contains position totals and the roster; Weekly performance shows regular-season points, all-play wins–losses–ties and competition rank against every other team. Actual and Projected rows are explicitly labeled. Missing source data stays unavailable rather than becoming a zero score.
+
 ## Rules
 
 - No raw hex colors in `theme/*.css` outside `:root` (enforced by the token-hygiene test).

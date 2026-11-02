@@ -4,7 +4,7 @@
 import type { OddsGame } from "./playoff-odds.js";
 import { fetchJson, SLEEPER_BASE } from "./sleeper.js";
 
-export type SleeperMatchupRow = { roster_id: number; matchup_id?: number | null; points?: number };
+export type SleeperMatchupRow = { roster_id: number; matchup_id?: number | null; points?: number; custom_points?: number | null };
 export type FetchWeek = (leagueId: string, week: number) => Promise<SleeperMatchupRow[]>;
 
 export const DEFAULT_LAST_REGULAR_WEEK = 14;

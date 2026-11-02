@@ -801,6 +801,7 @@ export function App() {
       queryClient.setQueryData(personalQueryKey(identity, "fantasy-dashboard"), data.dashboard);
       queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "dashboard-section") });
       queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "projected-standings") });
+      queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "league-weekly-performance") });
     },
     onError: async (error: unknown, _variables, owner) => {
       // A stale 401 from the previous viewer's token must not sign out the new one.
