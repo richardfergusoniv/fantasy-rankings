@@ -21,7 +21,7 @@
 .news-item-topline span { flex: none; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .news-item-topline .waiver-news-badge { padding: 2px 5px; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--link); }
 .waiver-news-item .news-item-topline > div { flex-wrap: wrap; }
-.news-item-topline a { flex: none; color: var(--link); font-size: var(--type-control); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.news-item-topline a { flex: none; color: var(--link); font-size: var(--type-control); font-weight: 700; text-decoration: none; }
 .news-item > p { margin: 7px 0 0; font-size: var(--type-body); line-height: 1.4; }
 .news-context { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--hairline); }
 .news-context > span { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
