@@ -11,17 +11,19 @@ export type RangeDomain = { min: number; max: number };
  * the projection. A short band means the books agree. No words: the numbers are
  * in the accessible name and the hover title.
  */
-export function RangeBar({ range, value, domain, className }: {
+export function RangeBar({ range, value, domain, className, valueNote }: {
   range: ProjectionRange;
   value: number | null;
   /** Shared scale so every bar in a list compares directly. */
   domain: RangeDomain;
   className?: string;
+  /** Appended to the accessible name, e.g. where an actual finish landed. */
+  valueNote?: string;
 }) {
   const min = Math.min(domain.min, range.low);
   const span = Math.max(Math.max(domain.max, range.high) - min, 0.01);
   const pct = (n: number) => `${Math.max(0, Math.min(100, ((n - min) / span) * 100))}%`;
-  const label = `Books range ${formatDecimal(range.low, 1)} to ${formatDecimal(range.high, 1)}`;
+  const label = `Books range ${formatDecimal(range.low, 1)} to ${formatDecimal(range.high, 1)}${valueNote ? `, ${valueNote}` : ""}`;
   return (
     <span className={["range-bar", className].filter(Boolean).join(" ")} role="img" aria-label={label} title={label}>
       <b style={{ left: pct(range.low), width: `calc(${pct(range.high)} - ${pct(range.low)})` }} />

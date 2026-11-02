@@ -27,7 +27,6 @@ import {
 import { formatPercent } from "../lib/format-number";
 import { teamOutlook, winPercent, winProbability } from "./win-probability";
 import { AdvantageList } from "./advantage-list";
-import { RangeBar, rangeDomain, type RangeDomain } from "../components/range-bar";
 import { advantageRows } from "./matchup-advantage";
 
 export {
@@ -47,7 +46,6 @@ export function MatchupPlayer({
   selected = false,
   onOpen,
   onOpenMatchup,
-  rangeMax = { min: 0, max: 1 },
 }: {
   player: RosterPlayer | undefined;
   side: "mine" | "theirs";
@@ -57,8 +55,6 @@ export function MatchupPlayer({
   selected?: boolean;
   onOpen?: (player: RosterPlayer) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
-  /** Shared right edge for book-range bars across both lineups. */
-  rangeMax?: RangeDomain;
 }) {
   if (!player) {
     return (
@@ -73,8 +69,7 @@ export function MatchupPlayer({
   const openPlayer = () => onOpen?.(player);
   const position = player.position === "DEF" ? "DST" : player.position;
   const matchup = accessibleMatchupLabel(player.team, player.opponent, player.isAway, player.isBye);
-  const range = score.label === "PROJ" ? player.projectionRange ?? null : null;
-  const scoreDescription = `${formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)} ${score.label === "PROJ" ? "projected points" : "points"}${range ? `, books range ${formatProjectionPoints(range.low)} to ${formatProjectionPoints(range.high)}` : ""}`;
+  const scoreDescription = `${formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)} ${score.label === "PROJ" ? "projected points" : "points"}`;
   const injuryDescription = player.injuryStatus ? `, injury status ${player.injuryStatus}` : "";
   const substitutionDescription = isSwappedIn
     ? ", swapped into this lineup"
@@ -106,7 +101,6 @@ export function MatchupPlayer({
       </div>
       <button type="button" className={matchupProjectionClassName({ scoreLabel: score.label })} onClick={openPlayer} tabIndex={-1} aria-hidden="true">
         <b>{formatProjectionPoints(score.value, score.label === "PROJ" ? player.projectionSource : null)}</b>
-        {range ? <RangeBar className={side === "theirs" ? "is-start" : undefined} range={range} value={score.value} domain={rangeMax} /> : null}
       </button>
     </div>
   );
@@ -181,7 +175,6 @@ export function Lineup({
     return fromPower.length === 1 ? fromPower[0]?.rosterId ?? null : null;
   })();
   const opponentTeamName = opponent?.name ?? "OPPONENT";
-  const rangeMax = rangeDomain([...mine, ...myBench, ...(theirs ?? []), ...(theirBench ?? [])].map((player) => player?.projectionRange));
   // Advantage compares your current lineup with theirs, slot by slot, on the same
   // live-aware projection the score card totals.
   const advantage = useMemo(() => {
@@ -302,7 +295,6 @@ export function Lineup({
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
-                rangeMax={rangeMax}
                 selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
                 isSwappedIn={isReordered && Boolean(matchupCell(myPlayer)) && !league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
               />
@@ -313,7 +305,6 @@ export function Lineup({
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
-                rangeMax={rangeMax}
                 selected={Boolean(linkedPlayerId && theirs?.playerId === linkedPlayerId)}
               />
             </div>
@@ -335,7 +326,6 @@ export function Lineup({
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
-                rangeMax={rangeMax}
                 selected={Boolean(linkedPlayerId && myPlayer?.playerId === linkedPlayerId)}
                 isDemoted={isReordered && Boolean(myPlayer) && league.starters.some((starter) => starter.playerId === myPlayer?.playerId)}
               />
@@ -346,7 +336,6 @@ export function Lineup({
                 sosEntry={sosEntry}
                 onOpen={openPlayer}
                 onOpenMatchup={onOpenMatchup}
-                rangeMax={rangeMax}
                 selected={Boolean(linkedPlayerId && theirs?.playerId === linkedPlayerId)}
               />
             </div>
