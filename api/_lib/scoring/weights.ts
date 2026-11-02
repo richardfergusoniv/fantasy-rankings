@@ -7,11 +7,14 @@ import constants from "./constants.json" with { type: "json" };
 
 export type SkillPosition = "QB" | "RB" | "WR" | "TE";
 
+/** Positions with their own spread (sigma) constants: the skill positions plus K and DEF, whose weekly volatility is nothing like a receiver's. */
+export type SpreadPosition = SkillPosition | "K" | "DEF";
+
 export type ScoringWeightsParams = {
   version: string;
   vegasWeightWv: Record<SkillPosition, number>;
-  spreadA: Record<SkillPosition, number>;
-  spreadB: Record<SkillPosition, number>;
+  spreadA: Record<SpreadPosition, number>;
+  spreadB: Record<SpreadPosition, number>;
   questionablePPlay: Record<SkillPosition | "ALL", number>;
   questionableM: Record<SkillPosition | "ALL", number>;
   vacatedTargetSharePer10: Record<SkillPosition, number>;
@@ -44,12 +47,16 @@ export const BUILTIN_SCORING_WEIGHTS: ScoringWeightsParams = {
     RB: c.start_sit.spread_sd.a.RB,
     WR: c.start_sit.spread_sd.a.WR,
     TE: c.start_sit.spread_sd.a.TE,
+    K: c.start_sit.spread_sd.a.K,
+    DEF: c.start_sit.spread_sd.a.DEF,
   },
   spreadB: {
     QB: c.start_sit.spread_sd.b.QB,
     RB: c.start_sit.spread_sd.b.RB,
     WR: c.start_sit.spread_sd.b.WR,
     TE: c.start_sit.spread_sd.b.TE,
+    K: c.start_sit.spread_sd.b.K,
+    DEF: c.start_sit.spread_sd.b.DEF,
   },
   questionablePPlay: {
     QB: c.injury.questionable.p_play.QB,
