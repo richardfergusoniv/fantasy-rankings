@@ -45,6 +45,17 @@ const opportunitySchema = z.object({
   actual: z.number(),
   /** [week, expected, actual], one per game. */
   weeks: z.array(z.tuple([z.number().int(), z.number(), z.number()])),
+  /**
+   * Per-week expected stat components under Sleeper scoring keys (rec,
+   * rec_yd, pass_td, ...), parsed from the same ep_weekly rows. The usage
+   * projection scores these under each league's settings. Default keeps
+   * snapshots cached before this field existed valid; the loader treats
+   * their absence as stale (see playerInsightsNeedsComponentsMigration).
+   */
+  componentWeeks: z.array(z.object({
+    week: z.number().int(),
+    stats: z.record(z.string(), z.number()),
+  })).default([]),
 });
 
 const depthSchema = z.object({
@@ -103,6 +114,40 @@ function num(value: string | undefined): number | null {
 const round1 = (value: number) => Math.round(value * 10) / 10;
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
+/** ep_weekly expected-component column -> Sleeper scoring key. Sleeper
+ * scores two-point conversions per play type (pass_2pt, rec_2pt, rush_2pt),
+ * so those columns stay separate keys. */
+const EP_COMPONENT_COLUMNS: Array<[string, string]> = [
+  ["pass_completions_exp", "pass_cmp"],
+  ["receptions_exp", "rec"],
+  ["pass_yards_gained_exp", "pass_yd"],
+  ["rec_yards_gained_exp", "rec_yd"],
+  ["rush_yards_gained_exp", "rush_yd"],
+  ["pass_touchdown_exp", "pass_td"],
+  ["rec_touchdown_exp", "rec_td"],
+  ["rush_touchdown_exp", "rush_td"],
+  ["pass_two_point_conv_exp", "pass_2pt"],
+  ["rec_two_point_conv_exp", "rec_2pt"],
+  ["rush_two_point_conv_exp", "rush_2pt"],
+  ["pass_first_down_exp", "pass_fd"],
+  ["rec_first_down_exp", "rec_fd"],
+  ["rush_first_down_exp", "rush_fd"],
+  ["pass_interception_exp", "pass_int"],
+];
+
+const round3 = (value: number) => Math.round(value * 1000) / 1000;
+
+/** One week's expected stat components, zero and absent values dropped. */
+export function epComponentStats(row: Record<string, string>): Record<string, number> {
+  const stats: Record<string, number> = {};
+  for (const [column, key] of EP_COMPONENT_COLUMNS) {
+    const value = num(row[column]);
+    if (value === null || value === 0) continue;
+    stats[key] = round3((stats[key] ?? 0) + value);
+  }
+  return stats;
+}
+
 /** Season totals and per-week values from ffopportunity `ep_weekly_<season>.csv`. */
 export function parseOpportunity(csv: string, season = SEASON): Record<string, PlayerOpportunity> {
   const output: Record<string, PlayerOpportunity> = {};
@@ -113,17 +158,20 @@ export function parseOpportunity(csv: string, season = SEASON): Record<string, P
     const expected = num(row.total_fantasy_points_exp);
     const actual = num(row.total_fantasy_points);
     if (!id || id === "NA" || week === null || week > 18 || expected === null || actual === null) continue;
-    const entry = output[id] ?? { games: 0, expected: 0, actual: 0, weeks: [] };
+    const entry = output[id] ?? { games: 0, expected: 0, actual: 0, weeks: [], componentWeeks: [] };
     entry.games += 1;
     entry.expected += expected;
     entry.actual += actual;
     entry.weeks.push([week, round1(expected), round1(actual)]);
+    const stats = epComponentStats(row);
+    if (Object.keys(stats).length > 0) entry.componentWeeks.push({ week, stats });
     output[id] = entry;
   }
   for (const entry of Object.values(output)) {
     entry.expected = round1(entry.expected);
     entry.actual = round1(entry.actual);
     entry.weeks.sort((a, b) => a[0] - b[0]);
+    entry.componentWeeks.sort((a, b) => a.week - b.week);
   }
   return output;
 }
@@ -342,6 +390,14 @@ function looksComplete(snapshot: PlayerInsightsSnapshot): boolean {
   return Object.keys(snapshot.opportunity).length >= 100;
 }
 
+/** Snapshots cached before component parsing have opportunity rows but no
+ * componentWeeks anywhere; treat them as stale so the refresh picks the
+ * components up instead of waiting out the cache window. */
+export function playerInsightsNeedsComponentsMigration(snapshot: PlayerInsightsSnapshot): boolean {
+  const entries = Object.values(snapshot.opportunity);
+  return entries.length > 0 && entries.every((entry) => entry.componentWeeks.length === 0);
+}
+
 /** Pre-map caches lack sleeperByGsis (or parsed empty); force refresh rather than stamp null playerIds. */
 export function playerInsightsNeedsSleeperIdMigration(snapshot: PlayerInsightsSnapshot): boolean {
   const map = snapshot.sleeperByGsis;
@@ -360,7 +416,8 @@ export function retainSleeperByGsisFromPrevious(
 
 function snapshotIsFresh(snapshot: PlayerInsightsSnapshot): boolean {
   return Date.now() - Date.parse(snapshot.fetchedAt) < PLAYER_INSIGHTS_CACHE_MS
-    && !playerInsightsNeedsSleeperIdMigration(snapshot);
+    && !playerInsightsNeedsSleeperIdMigration(snapshot)
+    && !playerInsightsNeedsComponentsMigration(snapshot);
 }
 
 // ---------------------------------------------------------------------------
