@@ -120,6 +120,7 @@ const sampleDashboard: Dashboard = {
       standings: [],
       playoffs: { teams: null, weekStart: null },
       waivers: null,
+      rosterLimits: null,
       powerRankingsDynasty: [],
     },
   ],

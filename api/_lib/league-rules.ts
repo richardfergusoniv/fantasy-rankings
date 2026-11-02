@@ -24,6 +24,8 @@ export type LeagueRulesSummary = {
   positionsRanked: string[];
   playoffs: { teams: number | null; weekStart: number | null; regularSeasonEndsWeek: number | null };
   waivers: League["waivers"];
+  /** Roster size, bench/IR/taxi slots and the trade deadline week; null when the dashboard predates the field. */
+  rosterLimits: League["rosterLimits"];
   unsupportedSettings: string[];
 };
 
@@ -86,6 +88,7 @@ export function summarizeLeagueRules(league: League): LeagueRulesSummary {
       regularSeasonEndsWeek: weekStart ? weekStart - 1 : null,
     },
     waivers: league.waivers ?? null,
+    rosterLimits: league.rosterLimits ?? null,
     unsupportedSettings: league.tradeValuation.unsupportedSettings,
   };
 }
@@ -96,9 +99,20 @@ function slotText(slots: Record<string, number>): string {
 
 /** One bounded line for the system prompt. */
 export function leagueRulesPromptLine(rules: LeagueRulesSummary): string {
+  const limits = rules.rosterLimits;
+  const rosterExtras = limits
+    ? [
+      limits.benchSlots > 0 ? `${limits.benchSlots} bench` : "",
+      limits.irSlots > 0 ? `${limits.irSlots} IR` : "",
+      limits.taxiSlots > 0 ? `${limits.taxiSlots} taxi` : "",
+    ].filter(Boolean)
+    : [];
   const parts = [
     `Rules: ${rules.numTeams} teams`,
     `starters ${slotText(rules.starterSlots) || "unknown"}`,
+    limits
+      ? `roster ${limits.rosterSize}${rosterExtras.length > 0 ? ` (${rosterExtras.join(", ")})` : ""}${limits.tradeDeadlineWeek ? `, trade deadline week ${limits.tradeDeadlineWeek}` : ""}`
+      : "",
     rules.scoringHighlights.slice(0, 4).join("; "),
     rules.playoffs.teams
       ? `${rules.playoffs.teams} playoff teams${rules.playoffs.weekStart ? ` starting week ${rules.playoffs.weekStart}` : ""}`

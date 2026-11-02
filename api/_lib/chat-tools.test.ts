@@ -153,6 +153,7 @@ function baseDashboard(overrides: Partial<Dashboard> = {}): Dashboard {
         standings: [],
         playoffs: { teams: null, weekStart: null },
         waivers: null,
+        rosterLimits: null,
         powerRankingsDynasty: [
           {
             rosterId: 1,

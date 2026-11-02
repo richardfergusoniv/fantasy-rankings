@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildStandings, waiverStatus, type SleeperStandingsRoster } from "./league-standings.js";
+import { buildStandings, rosterLimits, waiverStatus, type SleeperStandingsRoster } from "./league-standings.js";
 
 const roster = (id: number, wins: number, losses: number, fpts: number, extra: Partial<NonNullable<SleeperStandingsRoster["settings"]>> = {}): SleeperStandingsRoster => ({
   roster_id: id,
@@ -46,6 +46,30 @@ describe("buildStandings", () => {
     const { standings, playoffs } = buildStandings([roster(1, 1, 0, 100), roster(2, 0, 1, 90)], 1, name, undefined);
     expect(standings.every((row) => row.playoffSeed === null && row.gamesOutOfPlayoffs === null)).toBe(true);
     expect(playoffs).toEqual({ teams: null, weekStart: null, positionKnown: true });
+  });
+});
+
+describe("rosterLimits", () => {
+  const positions = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF", "BN", "BN", "BN", "IR", "TAXI", "TAXI"];
+
+  it("counts size, bench, IR and taxi from roster positions, settings first", () => {
+    expect(rosterLimits(positions, { trade_deadline: 11 })).toEqual({
+      rosterSize: 15, benchSlots: 3, irSlots: 1, taxiSlots: 2, tradeDeadlineWeek: 11,
+    });
+    // Settings counts win over the roster-position entries when both exist.
+    expect(rosterLimits(positions, { reserve_slots: 3, taxi_slots: 4 })?.irSlots).toBe(3);
+    expect(rosterLimits(positions, { reserve_slots: 3, taxi_slots: 4 })?.taxiSlots).toBe(4);
+  });
+
+  it("normalizes a missing or non-positive trade deadline to null", () => {
+    expect(rosterLimits(positions, {})?.tradeDeadlineWeek).toBeNull();
+    expect(rosterLimits(positions, { trade_deadline: 0 })?.tradeDeadlineWeek).toBeNull();
+    expect(rosterLimits(positions, { trade_deadline: -1 })?.tradeDeadlineWeek).toBeNull();
+  });
+
+  it("is null without roster positions", () => {
+    expect(rosterLimits(undefined, { trade_deadline: 11 })).toBeNull();
+    expect(rosterLimits([], {})).toBeNull();
   });
 });
 
