@@ -20,6 +20,11 @@
  * The same picks are also replayed on today's values (see draft-strategy.ts): what the user's own
  * strategy would have taken at each pick, and what the best of Zero RB, Hero RB and Robust RB would have.
  *
+ * A rookie draft gets no strategy replay: those archetypes describe a startup draft, and a
+ * three-to-five-round rookie draft makes nearly every drafter a Zero RB team by construction.
+ * Its hindsight is a value replay instead (rookieValueReplay below): at each of the user's picks,
+ * the best dynasty value this draft took later, so it was still on the board.
+ *
  * Kickers and defenses have no FantasyCalc value and are not scored, and they do not use up a
  * slot: a skill pick's slot is its place among the draft's QB/RB/WR/TE picks. A player with no
  * stored row (outside the stored board) is valued at the board's floor.
@@ -101,6 +106,31 @@ export type Hindsight = {
   plans: HindsightPlan[];
 };
 
+/** One of the user's rookie picks against the best dynasty value still on the board when it was made. */
+export type RookiePickReplay = {
+  pickNo: number;
+  playerId: string;
+  name: string;
+  position: string;
+  team: string | null;
+  /** Today's value of the player taken; the board's floor when he has no stored row. */
+  value: number;
+  /** The best value still available at that pick, present only when it beats the player taken. */
+  best: (BetterPick & { value: number }) | null;
+};
+
+/** Hindsight for a rookie draft: best dynasty value against each pick, no strategy archetypes. */
+export type RookieHindsight = {
+  /** Percent of the taken picks' total value the best-available redo adds. */
+  valueGainPct: number;
+  /** Picks where a better value was still on the board. */
+  changes: number;
+  /** The user's skill picks in the draft. */
+  of: number;
+  biggestMiss: { from: string; to: BetterPick; gain: number } | null;
+  picks: RookiePickReplay[];
+};
+
 export type DraftGrade = {
   draftId: string;
   /** Null when the value board for the draft's date is missing. */
@@ -112,6 +142,8 @@ export type DraftGrade = {
   /** The user's strategy and the best one, as a name and its QB/TE timing; null without today's board. */
   strategies: { yours: StrategyLabel; best: StrategyLabel } | null;
   hindsight: Hindsight | null;
+  /** Set instead of strategies and hindsight when the graded draft is a rookie draft. */
+  rookieHindsight: RookieHindsight | null;
 };
 
 export function gradeLetter(rank: number, teams: number): string {
@@ -233,6 +265,69 @@ function hindsightFrom(view: StrategyView, named: (pick: GradedPick | null | und
   };
 }
 
+/**
+ * The rookie-draft redo: walk the user's skill picks in order and, at each one, name the most
+ * valuable player this draft took later (so he was still on the board), skipping anyone already
+ * named for an earlier pick so the redo never spends the same player twice. No lineup is built
+ * and no strategy is followed: the pick is judged on dynasty value alone.
+ */
+export function rookieValueReplay(args: {
+  picks: readonly GradedPick[];
+  rosterId: number;
+  values: ValueBoard;
+}): { hindsight: RookieHindsight; bestByPlayerId: Map<string, GradedPick | null> } {
+  const floor = floorValue(args.values);
+  const valueOf = (pick: GradedPick) => args.values.get(pick.playerId) ?? floor;
+  const drafted = args.picks.filter((pick) => isSkill(pick.position)).sort((a, b) => a.pickNo - b.pickNo);
+  const own = drafted.filter((pick) => pick.rosterId === args.rosterId);
+  const spent = new Set<string>();
+  const bestByPlayerId = new Map<string, GradedPick | null>();
+  let takenTotal = 0;
+  let redoTotal = 0;
+  const rows: RookiePickReplay[] = own.map((pick) => {
+    const taken = valueOf(pick);
+    takenTotal += taken;
+    let best: GradedPick | null = null;
+    for (const candidate of drafted) {
+      if (candidate.pickNo <= pick.pickNo || spent.has(candidate.playerId)) continue;
+      if (best === null || valueOf(candidate) > valueOf(best)) best = candidate;
+    }
+    const alternative = best !== null && valueOf(best) > taken ? best : null;
+    if (alternative) spent.add(alternative.playerId);
+    redoTotal += alternative ? valueOf(alternative) : taken;
+    bestByPlayerId.set(pick.playerId, alternative);
+    return {
+      pickNo: pick.pickNo,
+      playerId: pick.playerId,
+      name: pick.name ?? "",
+      position: pick.position,
+      team: pick.team ?? null,
+      value: taken,
+      best: alternative
+        ? { playerId: alternative.playerId, name: alternative.name ?? "", position: alternative.position, team: alternative.team ?? null, value: valueOf(alternative) }
+        : null,
+    };
+  });
+  let biggestMiss: RookieHindsight["biggestMiss"] = null;
+  for (const row of rows) {
+    if (!row.best) continue;
+    const gain = row.best.value - row.value;
+    if (!biggestMiss || gain > biggestMiss.gain) {
+      biggestMiss = { from: row.name, to: { playerId: row.best.playerId, name: row.best.name, position: row.best.position, team: row.best.team }, gain: Math.round(gain) };
+    }
+  }
+  return {
+    bestByPlayerId,
+    hindsight: {
+      valueGainPct: takenTotal > 0 ? roundTo1(((redoTotal - takenTotal) / takenTotal) * 100) : 0,
+      changes: rows.filter((row) => row.best !== null).length,
+      of: rows.length,
+      biggestMiss,
+      picks: rows,
+    },
+  };
+}
+
 function resultFor(totals: ReadonlyMap<number, number>, ownRosterId: number): DraftGradeResult | null {
   const rank = placeOf(totals, ownRosterId);
   if (rank === null || totals.size < 2) return null;
@@ -249,15 +344,17 @@ export function gradeDraft(args: {
   /** The league's starting lineup slots, for weighing which strategy builds the best roster. */
   slots?: readonly string[];
   minBoardPlayers?: number;
-}): { draftDay: DraftGradeResult | null; today: DraftGradeResult | null; picks: OwnPickGrade[]; strategies: DraftGrade["strategies"]; hindsight: DraftGrade["hindsight"] } {
+  /** A rookie draft: hindsight is the value replay, never the strategy replay. */
+  rookieDraft?: boolean;
+}): { draftDay: DraftGradeResult | null; today: DraftGradeResult | null; picks: OwnPickGrade[]; strategies: DraftGrade["strategies"]; hindsight: DraftGrade["hindsight"]; rookieHindsight: DraftGrade["rookieHindsight"] } {
   const min = args.minBoardPlayers ?? MIN_BOARD_PLAYERS;
   // Today is measured against draft-day slots, so without the draft-day board neither grade exists.
-  if (args.draftDayBoard.size < min) return { draftDay: null, today: null, picks: [], strategies: null, hindsight: null };
+  if (args.draftDayBoard.size < min) return { draftDay: null, today: null, picks: [], strategies: null, hindsight: null, rookieHindsight: null };
   // Slots are measured against the players this draft could have taken, which are the ones it did take.
   // A drafted player with no stored row counts at the board's floor, the same value he is scored at.
   const skillPicks = args.picks.filter((pick) => isSkill(pick.position));
   // With none of them on the board there is nothing to measure slots against.
-  if (!skillPicks.some((pick) => args.draftDayBoard.has(pick.playerId))) return { draftDay: null, today: null, picks: [], strategies: null, hindsight: null };
+  if (!skillPicks.some((pick) => args.draftDayBoard.has(pick.playerId))) return { draftDay: null, today: null, picks: [], strategies: null, hindsight: null, rookieHindsight: null };
   const floor = floorValue(args.draftDayBoard);
   const slotBoard: ValueBoard = new Map(skillPicks.map((pick) => [pick.playerId, args.draftDayBoard.get(pick.playerId) ?? floor] as [string, number]));
   const hasToday = args.todayBoard.size >= min;
@@ -270,7 +367,8 @@ export function gradeDraft(args: {
   const pickNoOf = new Map(args.picks.filter((pick) => pick.rosterId === args.ownRosterId).map((pick) => [pick.playerId, pick.pickNo]));
   // The window is one round: the draft's team count, which can exceed the teams still holding picks after trades.
   const teams = args.teams && args.teams > 0 ? args.teams : new Set(args.picks.map((pick) => pick.rosterId)).size;
-  const view = hasToday ? strategyView({ picks: args.picks, rosterId: args.ownRosterId, values: args.todayBoard, teams, slots: args.slots }) : null;
+  const view = hasToday && !args.rookieDraft ? strategyView({ picks: args.picks, rosterId: args.ownRosterId, values: args.todayBoard, teams, slots: args.slots }) : null;
+  const rookie = hasToday && args.rookieDraft ? rookieValueReplay({ picks: args.picks, rosterId: args.ownRosterId, values: args.todayBoard }) : null;
   const named = (pick: GradedPick | null | undefined): BetterPick | null => (
     pick ? { playerId: pick.playerId, name: pick.name ?? "", position: pick.position, team: pick.team ?? null } : null
   );
@@ -279,9 +377,9 @@ export function gradeDraft(args: {
     pickNo: pickNoOf.get(playerId) ?? 0,
     draftDay: grade,
     today: sinceThen?.get(playerId) ?? null,
-    better: { yours: named(view?.yoursPicks.get(playerId)), best: named(view?.bestPicks.get(playerId)) },
+    better: { yours: named(view?.yoursPicks.get(playerId)), best: named(view?.bestPicks.get(playerId)) ?? named(rookie?.bestByPlayerId.get(playerId)) },
   }));
-  return { draftDay, today, picks, strategies: view ? { yours: strategyLabel(view.yours), best: strategyLabel(view.best) } : null, hindsight: view ? hindsightFrom(view, named) : null };
+  return { draftDay, today, picks, strategies: view ? { yours: strategyLabel(view.yours), best: strategyLabel(view.best) } : null, hindsight: view ? hindsightFrom(view, named) : null, rookieHindsight: rookie?.hindsight ?? null };
 }
 
 /** `YYYY-MM-DD` moved by whole days (noon UTC keeps it clear of day boundaries). */
@@ -328,7 +426,7 @@ function gradedPicks(picks: readonly SleeperDraftPick[]): GradedPick[] {
 
 /** Grades the league's completed draft for one team; null when there is nothing to grade. */
 export async function loadDraftGrade(
-  league: { id: string; seasonLongFormat: { key: string } },
+  league: { id: string; seasonLongFormat: { key: string; isDynasty?: boolean } },
   ownRosterId: number,
   deps: LoadDraftGradeDeps = {},
 ): Promise<DraftGrade | null> {
@@ -357,8 +455,15 @@ export async function loadDraftGrade(
     loadBoard(formatKey, pacificDateKey(new Date(startedAt)), DRAFT_DAY_WINDOW_DAYS),
     loadBoard(formatKey, pacificDateKey(deps.now?.() ?? new Date()), todayWindowDays),
   ]);
-  const slots = (await get<{ roster_positions?: string[] }>(`${SLEEPER_BASE}/league/${league.id}`).catch(() => null))?.roster_positions;
-  const grades = gradeDraft({ picks: best.picks, ownRosterId, draftDayBoard, todayBoard, teams: best.draft.settings?.teams, slots, minBoardPlayers: deps.minBoardPlayers });
+  const sleeperLeague = await get<{ roster_positions?: string[]; previous_league_id?: string | null }>(`${SLEEPER_BASE}/league/${league.id}`).catch(() => null);
+  const slots = sleeperLeague?.roster_positions;
+  // The Draft Center's test for what kind of draft a dynasty league held: an established
+  // dynasty (a previous league exists) drafts rookies; a first-year dynasty drafts a startup.
+  const rookieDraft = league.seasonLongFormat.isDynasty === true
+    && typeof sleeperLeague?.previous_league_id === "string"
+    && sleeperLeague.previous_league_id.length > 0
+    && sleeperLeague.previous_league_id !== "0";
+  const grades = gradeDraft({ picks: best.picks, ownRosterId, draftDayBoard, todayBoard, teams: best.draft.settings?.teams, slots, minBoardPlayers: deps.minBoardPlayers, rookieDraft });
   if (!grades.draftDay && !grades.today) return null;
   return { draftId: best.draft.draft_id ?? "", ...grades };
 }

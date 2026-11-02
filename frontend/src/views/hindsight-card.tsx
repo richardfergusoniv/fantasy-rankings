@@ -1,7 +1,7 @@
 import { Dialog, DialogCloseButton, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import type { BetterPick, Hindsight } from "../../../api/_lib/draft-grade";
+import type { BetterPick, Hindsight, RookieHindsight } from "../../../api/_lib/draft-grade";
 import { CardHero } from "../components/card-hero";
 import { ChevronGlyph } from "../components/glyphs";
 
@@ -36,6 +36,28 @@ export function HindsightCard({ hindsight, onOpen }: { hindsight: Hindsight; onO
             <span>{hindsight.biggestSwap.from} for {hindsight.biggestSwap.to.name}</span>
           </div>
           <em>+{hindsight.biggestSwap.gain.toLocaleString()}</em>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+/** Raised summary at the top of Hindsight for a rookie draft: dynasty value left against each pick. No sheet: the per-pick table below the card carries the whole replay. */
+export function RookieHindsightCard({ rookie }: { rookie: RookieHindsight }) {
+  const items = [
+    { label: "Value left", value: gapText(rookie.valueGainPct) },
+    { label: "Better picks", value: `${rookie.changes} of ${rookie.of}` },
+  ];
+  return (
+    <Card className="draft-grade hindsight-card gap-0 py-0 shadow-sm">
+      <CardHero ariaLabel="Hindsight" items={items} />
+      {rookie.biggestMiss ? (
+        <div className="hindsight-swap">
+          <div>
+            <b>Biggest miss</b>
+            <span>{rookie.biggestMiss.from} for {rookie.biggestMiss.to.name}</span>
+          </div>
+          <em>+{rookie.biggestMiss.gain.toLocaleString()}</em>
         </div>
       ) : null}
     </Card>

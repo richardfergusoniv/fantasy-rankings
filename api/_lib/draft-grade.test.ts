@@ -143,7 +143,7 @@ describe("gradeDraft", () => {
 
   it("has no grades without a usable draft-day board, and no Today without today's board", () => {
     const empty = board([]);
-    expect(gradeDraft({ ...options, picks: fair, draftDayBoard: empty, todayBoard: marketBoard })).toEqual({ draftDay: null, today: null, picks: [], strategies: null, hindsight: null });
+    expect(gradeDraft({ ...options, picks: fair, draftDayBoard: empty, todayBoard: marketBoard })).toEqual({ draftDay: null, today: null, picks: [], strategies: null, hindsight: null, rookieHindsight: null });
     const noToday = gradeDraft({ ...options, picks: fair, draftDayBoard: marketBoard, todayBoard: empty });
     expect(noToday.draftDay).not.toBeNull();
     expect(noToday.today).toBeNull();
@@ -222,7 +222,7 @@ describe("gradeDraft slot pool", () => {
 
   it("has no grades when none of the draft's players are on the board", () => {
     const grades = gradeDraft({ picks: [pick(1, 1, "unknown", "RB"), pick(2, 2, "other", "WR")], ownRosterId: 1, draftDayBoard: board([["x", 5]]), todayBoard: board([["x", 5]]), minBoardPlayers: 1 });
-    expect(grades).toEqual({ draftDay: null, today: null, picks: [], strategies: null, hindsight: null });
+    expect(grades).toEqual({ draftDay: null, today: null, picks: [], strategies: null, hindsight: null, rookieHindsight: null });
   });
 });
 
@@ -233,6 +233,50 @@ describe("gradeDraft round length", () => {
     const run = (teams?: number) => gradeDraft({ picks, ownRosterId: 1, draftDayBoard: values, todayBoard: values, teams, minBoardPlayers: 1 }).picks[0]?.better.yours;
     expect(run(8)?.playerId).toBe("star");
     expect(run()).toBeNull(); // two rosters seen: a two-pick window misses pick 6
+  });
+});
+
+describe("gradeDraft rookie hindsight", () => {
+  const options = { ownRosterId: 2, teams: 4, minBoardPlayers: 1 };
+
+  it("replaces the strategy replay with the best dynasty value still on the board at each pick", () => {
+    // Roster 2 took p2 (pick 2) and p7 (pick 7). Today p2 has faded to 450; the best value
+    // taken after pick 2 is p3 at 800, and nothing taken after pick 7 beats p7's 400.
+    const today = board([...marketBoard].map(([id, value]) => [id, id === "p2" ? 450 : value] as [string, number]));
+    const grades = gradeDraft({ ...options, picks: fair, draftDayBoard: marketBoard, todayBoard: today, rookieDraft: true });
+    expect(grades.strategies).toBeNull();
+    expect(grades.hindsight).toBeNull();
+    const rookie = grades.rookieHindsight;
+    expect(rookie).not.toBeNull();
+    expect(rookie!.of).toBe(2);
+    expect(rookie!.changes).toBe(1);
+    // Taken 450 + 400 = 850; the redo takes 800 + 400 = 1200, a 41.2% gain.
+    expect(rookie!.valueGainPct).toBe(41.2);
+    expect(rookie!.biggestMiss).toMatchObject({ from: "Name p2", to: { playerId: "p3" }, gain: 350 });
+    expect(rookie!.picks[0]).toMatchObject({ playerId: "p2", value: 450, best: { playerId: "p3", value: 800 } });
+    expect(rookie!.picks[1]).toMatchObject({ playerId: "p7", value: 400, best: null });
+    // The per-pick better names the same alternative the replay found.
+    expect(grades.picks[0]?.better).toEqual({ yours: null, best: { playerId: "p3", name: "Name p3", position: "RB", team: "TM" } });
+    expect(grades.picks[1]?.better).toEqual({ yours: null, best: null });
+    // The grades themselves are unchanged by the mode.
+    expect(grades.draftDay).not.toBeNull();
+    expect(grades.today).not.toBeNull();
+  });
+
+  it("never spends the same player twice and never names a player taken earlier", () => {
+    const values = board([["a", 100], ["b", 200], ["star", 5000], ["c", 300]]);
+    const picks = [pick(1, 1, "a", "WR"), pick(2, 1, "b", "WR"), pick(3, 2, "star", "WR"), pick(4, 2, "c", "WR")];
+    const rookie = gradeDraft({ picks, ownRosterId: 1, draftDayBoard: values, todayBoard: values, minBoardPlayers: 1, rookieDraft: true }).rookieHindsight;
+    // Pick 1's redo is the star; at pick 2 the star is spent, so the redo is c (300 over b's 200).
+    expect(rookie!.picks.map((row) => row.best?.playerId ?? null)).toEqual(["star", "c"]);
+    expect(rookie!.changes).toBe(2);
+  });
+
+  it("leaves kickers and defenses out, and has no replay without today's board", () => {
+    const picks = [pick(1, 1, "p1"), pick(2, 1, "k1", "K"), pick(3, 2, "p2")];
+    const rookie = gradeDraft({ picks, ownRosterId: 1, draftDayBoard: marketBoard, todayBoard: marketBoard, minBoardPlayers: 1, rookieDraft: true }).rookieHindsight;
+    expect(rookie!.of).toBe(1);
+    expect(gradeDraft({ ...options, picks: fair, draftDayBoard: marketBoard, todayBoard: board([]), rookieDraft: true }).rookieHindsight).toBeNull();
   });
 });
 
@@ -296,6 +340,27 @@ describe("loadDraftGrade", () => {
       minBoardPlayers: 1,
     });
     expect(grade?.draftId).toBe("startup");
+  });
+
+  it("gives an established dynasty league the rookie value replay, and a first-year dynasty the strategies", async () => {
+    const routing = (previousLeagueId: string | null) => async <T>(url: string): Promise<T> => {
+      if (url.endsWith("/league/lg/drafts")) return [draft("d1")] as T;
+      if (/\/draft\/[^/]+\/picks$/.test(url)) return sleeperPicks as T;
+      if (url.endsWith("/league/lg")) return { roster_positions: ["QB", "RB", "WR", "TE"], previous_league_id: previousLeagueId } as T;
+      throw new Error(`unexpected url ${url}`);
+    };
+    const dynasty = { id: "lg", seasonLongFormat: { key: "dynasty-1qb-12t-1ppr", isDynasty: true } };
+    const deps = { seasonType: inSeason, loadBoard: async () => marketBoard, minBoardPlayers: 1 };
+    const established = await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: routing("prev-league") });
+    expect(established?.rookieHindsight).not.toBeNull();
+    expect(established?.strategies).toBeNull();
+    const firstYear = await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: routing("0") });
+    expect(firstYear?.rookieHindsight).toBeNull();
+    expect(firstYear?.strategies).not.toBeNull();
+    // A redraft league keeps the strategies even though its Sleeper league has a previous one.
+    const redraft = await loadDraftGrade(league, 1, { ...deps, fetchJson: routing("prev-league") });
+    expect(redraft?.rookieHindsight).toBeNull();
+    expect(redraft?.strategies).not.toBeNull();
   });
 
   it("returns null without a start time or when the draft-day board is missing", async () => {

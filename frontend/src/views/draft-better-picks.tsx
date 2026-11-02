@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { BetterPick } from "../../../api/_lib/draft-grade";
+import type { BetterPick, RookiePickReplay } from "../../../api/_lib/draft-grade";
 import { useDraftGrade } from "./draft-grade-card";
-import { HindsightCard, HindsightSheet, timingText } from "./hindsight-card";
+import { HindsightCard, HindsightSheet, RookieHindsightCard, timingText } from "./hindsight-card";
 
 export type BetterPicksPlayer = { playerId: string; name: string; secondary: string | null };
 
@@ -18,6 +18,24 @@ function BetterCell({ label, better, secondaryOf, onOpenPlayer }: {
       <button type="button" className="draft-better-open" onClick={() => onOpenPlayer(better.playerId)} aria-label={`${label}: view ${better.name} details and news`}>
         <strong>{better.name}</strong>
         {secondary ? <small>{secondary}</small> : null}
+      </button>
+    </div>
+  );
+}
+
+function RookieBestCell({ row, secondaryOf, onOpenPlayer }: {
+  row: RookiePickReplay;
+  secondaryOf: (position: string, team: string | null) => string | null;
+  onOpenPlayer: (playerId: string) => void;
+}) {
+  const best = row.best;
+  if (!best) return <div className="draft-better-cell"><span className="sr-only">Best available: no better value was still on the board</span><span aria-hidden="true">—</span></div>;
+  const secondary = secondaryOf(best.position, best.team);
+  return (
+    <div className="draft-better-cell">
+      <button type="button" className="draft-better-open" onClick={() => onOpenPlayer(best.playerId)} aria-label={`Best available: view ${best.name} details and news`}>
+        <strong>{best.name}</strong>
+        <small>{[secondary, `+${(best.value - row.value).toLocaleString()}`].filter(Boolean).join(" · ")}</small>
       </button>
     </div>
   );
@@ -40,10 +58,13 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
   const sameStrategy = strategies?.yours.name === strategies?.best.name && strategies?.yours.timing === strategies?.best.timing;
 
   const hindsight = query.data?.grade?.hindsight ?? null;
+  const rookie = query.data?.grade?.rookieHindsight ?? null;
 
   return (
     <section className="draft-my-team">
-      {hindsight && entries.length > 0 ? (
+      {rookie ? (
+        <RookieHindsightCard rookie={rookie} />
+      ) : hindsight && entries.length > 0 ? (
         <>
           <HindsightCard hindsight={hindsight} onOpen={() => setSheetOpen(true)} />
           <HindsightSheet
@@ -56,7 +77,25 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
           />
         </>
       ) : null}
-      {entries.length > 0 ? (
+      {rookie ? (
+        <div className="draft-board data-table-frame" role="list" aria-label="Hindsight by best available value">
+          <div className="draft-row draft-table-head draft-better-row is-two-col" aria-hidden="true">
+            <span>Your pick</span>
+            <span><b>Best available</b></span>
+          </div>
+          {rookie.picks.map((row) => (
+            <div className="draft-row draft-better-row is-two-col" role="listitem" key={row.playerId}>
+              <div className="draft-better-cell">
+                <button type="button" className="draft-better-open" onClick={() => onOpenPlayer(row.playerId)} aria-label={`Pick ${row.pickNo}: view ${row.name} details and news`}>
+                  <strong>{row.name}</strong>
+                  <small>{[`Pick ${row.pickNo}`, secondaryOf(row.position, row.team)].filter(Boolean).join(" · ")}</small>
+                </button>
+              </div>
+              <RookieBestCell row={row} secondaryOf={secondaryOf} onOpenPlayer={onOpenPlayer} />
+            </div>
+          ))}
+        </div>
+      ) : entries.length > 0 ? (
         <div className="draft-board data-table-frame" role="list" aria-label="Hindsight by strategy">
           <div className="draft-row draft-table-head draft-better-row" aria-hidden="true">
             <span>Your pick</span>
