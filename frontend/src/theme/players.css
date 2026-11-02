@@ -118,7 +118,7 @@
 .news-card-modal .news-type-badges { align-items: center; }
 .news-card-headline { display: block; margin-top: 15px; font-size: var(--type-display); line-height: 1.2; letter-spacing: -.02em; }
 .news-card-modal > p { margin: 10px 0 0; color: var(--dim); font-size: var(--type-body); line-height: 1.5; }
-.news-card-modal > a { display: inline-flex; min-height: 44px; align-items: center; margin-top: 15px; color: var(--link); font-size: var(--type-control); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.news-card-modal > a { display: inline-flex; min-height: 44px; align-items: center; margin-top: 15px; color: var(--link); font-size: var(--type-control); font-weight: 700; text-decoration: none; }
 @keyframes newsCardIn { from { transform: translateY(6px); opacity: .88; } }
 
 .matchup-data-card { position: relative; width: min(100%, 520px); max-height: min(88dvh, 720px); padding: 16px; }
