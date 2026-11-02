@@ -115,7 +115,7 @@ export const MOVE_SCORING_WINDOW_PROMPTS = {
     "T1 Underdog this week: prefer the player on your QB's team. Favorite: prefer the one who isn't.",
     "T2 Don't start your defense against your own QB, RB or WR.",
     "T3 Questionable starter in a late game: keep a backup who plays later.",
-    "Explain with: Talent beats matchup; the score already includes Vegas lines. After one bad game, check snaps and targets. A teammate out means more work for the others. Wind 20+ mph lowers passing; mention only if the tool lists it.",
+    "Explain with: Talent beats matchup; the score already includes Vegas lines. After one bad game, check snaps and targets. A teammate out means more work for the others.",
     "Never cite: a matchup or defense rank alone, hot streaks, revenge games, home/away, Thursday games, teammates \"cannibalizing\", \"boom-bust\" labels, TD streaks.",
     "Format: label and its number first (win chance, points gained or value gap), then 2-3 reasons you draw from the evidence in the result (projections, usage trend, game line, prop line). Name the deciding factor. Say \"close call\" when it is one. Plain words, under 100 words unless asked.",
   ].join("\n"),

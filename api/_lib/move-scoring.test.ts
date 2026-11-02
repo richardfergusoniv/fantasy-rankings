@@ -15,6 +15,7 @@ import {
   shrinkAndCap,
   sigma30ForValue,
   startSitLabel,
+  MOVE_SCORING_WINDOW_PROMPTS,
   tradeFairnessZ,
   SCORING_WEIGHTS,
 } from "./move-scoring.js";
@@ -318,6 +319,37 @@ describe("calibration guardrails", () => {
       tiebreakCases: 0,
     });
     expect(flags.some((f) => f.measure === "strong_start" && f.flagged)).toBe(true);
+  });
+});
+
+describe("K and DEF spread constants", () => {
+  it("gives a kicker his own sigma instead of a receiver's", () => {
+    const blend = blendProjection({ playerId: "k1", name: "Kicker", position: "K", vegasProjection: 9 });
+    expect(blend.pStar).toBeCloseTo(9, 5);
+    // K constants: 3.6 + 0.16 * 9 = 5.04. WR's would give 6.51.
+    expect(blend.moments.sigma).toBeCloseTo(5.04, 2);
+  });
+
+  it("gives a defense its own sigma instead of a receiver's", () => {
+    const blend = blendProjection({ playerId: "d1", name: "Defense", position: "DEF", vegasProjection: 8 });
+    // DEF constants: 4.4 + 0.26 * 8 = 6.48. WR's would give 6.12.
+    expect(blend.moments.sigma).toBeCloseTo(6.48, 2);
+  });
+
+  it("falls back to WR constants when a stored weights row predates the K/DEF entries", () => {
+    const stale = JSON.parse(JSON.stringify(SCORING_WEIGHTS)) as typeof SCORING_WEIGHTS;
+    delete (stale.spreadA as Record<string, number>).K;
+    delete (stale.spreadB as Record<string, number>).K;
+    const blend = blendProjection({ playerId: "k1", name: "Kicker", position: "K", vegasProjection: 9 }, { weights: stale });
+    expect(blend.moments.sigma).toBeCloseTo(6.51, 2);
+  });
+});
+
+describe("window prompts", () => {
+  it("never mentions wind: no tool produces it", () => {
+    for (const prompt of Object.values(MOVE_SCORING_WINDOW_PROMPTS)) {
+      expect(prompt.toLowerCase()).not.toContain("wind");
+    }
   });
 });
 

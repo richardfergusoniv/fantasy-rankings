@@ -43,9 +43,12 @@ export function applyInjuryToProjection(
   },
 ): ProjectionMoments {
   const { weights } = opts;
-  const pos = (position === "QB" || position === "RB" || position === "WR" || position === "TE"
+  // K and DEF have their own spread constants; only a position with no
+  // constants of its own falls back to WR's (and to WR's values when a stored
+  // weights row predates the K/DEF entries).
+  const pos = (position === "QB" || position === "RB" || position === "WR" || position === "TE" || position === "K" || position === "DEF"
     ? position
-    : "WR") as SkillPosition;
+    : "WR") as SkillPosition | "K" | "DEF";
   const a = weights.spreadA[pos] ?? weights.spreadA.WR;
   const b = weights.spreadB[pos] ?? weights.spreadB.WR;
   const baseSigma = projectionSigma(pStar, a, b);
