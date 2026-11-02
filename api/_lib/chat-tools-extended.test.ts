@@ -789,8 +789,12 @@ describe("extended chat tools", () => {
         sit: { playerId: string } | null;
       }>;
       projectionDelta: number;
+      freshness: { dashboardAsOf: string; projectionsAsOf: string | null; valuesAsOf: string | null };
     };
     expect(result.ok).toBe(true);
+    expect(result.freshness.dashboardAsOf).toEqual(expect.any(String));
+    expect(result.freshness).toHaveProperty("projectionsAsOf");
+    expect(result.freshness).toHaveProperty("valuesAsOf");
     expect(result.swaps.some((swap) => swap.start.playerId === "p-bench")).toBe(true);
     expect(result.projectionDelta).toBeGreaterThan(0);
     const swap = result.swaps[0]!;

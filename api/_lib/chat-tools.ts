@@ -246,6 +246,15 @@ export async function loadDashboard(ctx: ChatToolContext): Promise<Dashboard> {
   return ctx.dashboardPromise;
 }
 
+/** Freshness markers for the move tools: when the dashboard behind the verdicts was built, and the as-of stamps of the projection and value boards it was built from. Injury statuses ride the dashboard build, so dashboardAsOf is their age too. */
+export function moveFreshness(dashboard: Dashboard) {
+  return {
+    dashboardAsOf: dashboard.asOf,
+    projectionsAsOf: dashboard.rankingsAsOf,
+    valuesAsOf: dashboard.fantasyCalcAsOf,
+  };
+}
+
 export function findLeague(dashboard: Dashboard, leagueId: string) {
   return dashboard.leagues.find((league) => league.id === leagueId) ?? null;
 }
@@ -957,6 +966,7 @@ async function toolEvaluateTrade(
     formatKey: league.seasonLongFormat.key,
     scoringWindow: windowKey,
     note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind the verdict and no written reasons: compose the explanation yourself and name the deciding factor.",
+    freshness: moveFreshness(dashboard),
     give: give.resolved,
     get: get.resolved,
     giveTotal,

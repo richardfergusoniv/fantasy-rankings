@@ -349,8 +349,12 @@ describe("dispatchChatTool", () => {
       rosterImpact: { seasonLong: { starterValueBefore: number; starterValueAfter: number; fillsHole: boolean } };
       primaryLabel: string;
       scoringWindow: string;
+      freshness: { dashboardAsOf: string; projectionsAsOf: string | null; valuesAsOf: string | null };
     };
     expect(result.ok).toBe(true);
+    expect(result.freshness.dashboardAsOf).toEqual(expect.any(String));
+    expect(result.freshness.projectionsAsOf).toBeNull();
+    expect(result.freshness.valuesAsOf).toBeNull();
     expect(result.giveTotal).toBe(8000);
     // Season Long in dynasty: pick has no redraft twin → 0 (do not mix dynasty pick value).
     expect(result.getTotal).toBe(6_000);
