@@ -117,6 +117,7 @@ import { scoreProjectedDefenseStats } from "./defense-scoring.js";
 import { loadChartExtrasSnapshot, type ChartExtrasSnapshot } from "./nflverse-chart-extras.js";
 import { analyticsSleeperPlayerId } from "./analytics-player-id.js";
 import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./player-insights.js";
+import { opportunityBySleeperId, usageProjectionFor } from "./usage-projection.js";
 import { buildStandings, rosterLimits, waiverStatus } from "./league-standings.js";
 import { loadTeamGameLines, type TeamGameLine } from "./team-game-lines.js";
 import {
@@ -1612,6 +1613,7 @@ export async function buildUserDashboard(
   // The snapshot is one season's; another season gets none rather than stale ranks.
   const storedInsights = await readPlayerInsightsSnapshot().catch(() => null);
   const insightsSnapshot = storedInsights?.season === season ? storedInsights : null;
+  const opportunityByPlayerId = opportunityBySleeperId(insightsSnapshot?.opportunity, insightsSnapshot?.sleeperByGsis);
   let analytics: z.infer<typeof analyticsSchema> = {
     asOf: null,
     throughWeek: null,
@@ -1918,6 +1920,11 @@ export async function buildUserDashboard(
       const projectionComponents = gamePhase === "final" || position === "DEF" || projection === null || isUnavailable
         ? null
         : (rankRow?.projectionComponents ?? null);
+      // Usage-blend inputs, scored under this league's settings from the
+      // player's expected-points components (no history for DEF or uncovered players).
+      const usage = position === "DEF"
+        ? null
+        : usageProjectionFor(opportunityByPlayerId.get(playerId), position ?? "", league.scoring_settings);
       // The book range only describes the pregame projection, so it goes once the game starts.
       const projectionRange = gamePhase === "pregame" || gamePhase === null
         ? (projection !== null && projection === pregameProjection && !isUnavailable ? (rankRow?.projectionRange ?? null) : null)
@@ -1953,6 +1960,8 @@ export async function buildUserDashboard(
         defenseComponents: defense?.components ?? null,
         projectionComponents,
         projectionRange,
+        usageProjection: usage?.usageProjection ?? null,
+        usageGames: usage?.usageGames ?? 0,
       };
     };
 
