@@ -246,6 +246,14 @@ export const leagueSchema = z.object({
   standings: z.array(standingsRowSchema).default([]),
   playoffs: leaguePlayoffsSchema.default({ teams: null, weekStart: null }),
   waivers: waiverStatusSchema.nullable().default(null),
+  /** Roster construction from the Sleeper league (size, bench, IR, taxi, trade deadline). Null on dashboards built before this field existed. */
+  rosterLimits: z.object({
+    rosterSize: z.number().int(),
+    benchSlots: z.number().int(),
+    irSlots: z.number().int(),
+    taxiSlots: z.number().int(),
+    tradeDeadlineWeek: z.number().int().nullable(),
+  }).nullable().default(null),
   /** FAAB bids for the top graded waiver adds (same grading as the chat assistant); FAAB leagues only. */
   waiverBids: z.array(waiverBidSchema).optional(),
 });
@@ -392,6 +400,7 @@ export const leagueIdentitySchema = leagueSchema.pick({
   tradeValuation: true,
   waivers: true,
   waiverBids: true,
+  rosterLimits: true,
 });
 
 export const leagueTeamSchema = leagueSchema.pick({

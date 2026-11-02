@@ -117,7 +117,7 @@ import { scoreProjectedDefenseStats } from "./defense-scoring.js";
 import { loadChartExtrasSnapshot, type ChartExtrasSnapshot } from "./nflverse-chart-extras.js";
 import { analyticsSleeperPlayerId } from "./analytics-player-id.js";
 import { readPlayerInsightsSnapshot, type PlayerInsightsSnapshot } from "./player-insights.js";
-import { buildStandings, waiverStatus } from "./league-standings.js";
+import { buildStandings, rosterLimits, waiverStatus } from "./league-standings.js";
 import { loadTeamGameLines, type TeamGameLine } from "./team-game-lines.js";
 import {
   BuildDeadlineError,
@@ -2251,6 +2251,7 @@ export async function buildUserDashboard(
       powerRankingsDynasty,
       ...buildStandings(rosters, ownRoster.roster_id, powerTeamName, league.settings),
       waivers: waiverStatus(league.settings, ownRoster, rosters.length),
+      rosterLimits: rosterLimits(league.roster_positions, league.settings),
     };
   });
 

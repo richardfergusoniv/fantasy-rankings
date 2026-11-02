@@ -26,6 +26,9 @@ export type SleeperLeagueSettings = {
   playoff_week_start?: number;
   waiver_type?: number;
   waiver_budget?: number;
+  reserve_slots?: number;
+  taxi_slots?: number;
+  trade_deadline?: number;
 };
 
 export type StandingsRow = {
@@ -122,6 +125,36 @@ const WAIVER_TYPES: Record<number, WaiverStatus["type"]> = {
   1: "reverse_standings",
   2: "faab",
 };
+
+export type RosterLimits = {
+  rosterSize: number;
+  benchSlots: number;
+  irSlots: number;
+  taxiSlots: number;
+  tradeDeadlineWeek: number | null;
+};
+
+/**
+ * Roster construction from the Sleeper league: roster_positions carries one
+ * entry per slot (starters, BN, IR, TAXI), and settings carries the IR/taxi
+ * counts and the trade deadline week when roster_positions is not the source.
+ * Null when the league carries no roster positions at all.
+ */
+export function rosterLimits(
+  rosterPositions: readonly string[] | undefined,
+  settings: SleeperLeagueSettings | undefined,
+): RosterLimits | null {
+  if (!rosterPositions || rosterPositions.length === 0) return null;
+  const count = (slot: string) => rosterPositions.filter((entry) => entry === slot).length;
+  const deadline = settings?.trade_deadline;
+  return {
+    rosterSize: rosterPositions.length,
+    benchSlots: count("BN"),
+    irSlots: typeof settings?.reserve_slots === "number" ? settings.reserve_slots : count("IR"),
+    taxiSlots: typeof settings?.taxi_slots === "number" ? settings.taxi_slots : count("TAXI"),
+    tradeDeadlineWeek: typeof deadline === "number" && deadline > 0 ? deadline : null,
+  };
+}
 
 export function waiverStatus(
   settings: SleeperLeagueSettings | undefined,

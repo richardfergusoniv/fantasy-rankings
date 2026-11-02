@@ -121,6 +121,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
           tradeValuation,
           waivers,
           waiverBids,
+          rosterLimits,
         }) => ({
           id,
           name,
@@ -133,6 +134,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
           seasonLongFormat,
           tradeValuation,
           waivers: waivers ?? null,
+          rosterLimits: rosterLimits ?? null,
           ...(waiverBids ? { waiverBids } : {}),
         }),
       ),

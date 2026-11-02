@@ -24,6 +24,8 @@ export type LeagueRulesSummary = {
   positionsRanked: string[];
   playoffs: { teams: number | null; weekStart: number | null; regularSeasonEndsWeek: number | null };
   waivers: League["waivers"];
+  /** Roster size, bench/IR/taxi slots and the trade deadline week; null when the dashboard predates the field. */
+  rosterLimits: League["rosterLimits"];
   unsupportedSettings: string[];
 };
 
@@ -86,6 +88,7 @@ export function summarizeLeagueRules(league: League): LeagueRulesSummary {
       regularSeasonEndsWeek: weekStart ? weekStart - 1 : null,
     },
     waivers: league.waivers ?? null,
+    rosterLimits: league.rosterLimits ?? null,
     unsupportedSettings: league.tradeValuation.unsupportedSettings,
   };
 }

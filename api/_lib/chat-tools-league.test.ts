@@ -97,6 +97,7 @@ const dashboard = {
       standings: [standing(1, "My Team", true, 4, 800), standing(2, "Rival", false, 4, 790)],
       playoffs: { teams: 1, weekStart: 11, positionKnown: true },
       waivers: { type: "faab", budget: 100, remaining: 80, position: 3, teams: 2 },
+      rosterLimits: { rosterSize: 25, benchSlots: 10, irSlots: 2, taxiSlots: 3, tradeDeadlineWeek: 11 },
     },
   ],
   rankings: [
@@ -137,6 +138,7 @@ describe("league chat tools", () => {
     expect(result.rules.hasSuperflex).toBe(false);
     expect(result.rules.playoffs).toEqual({ teams: 1, weekStart: 11, regularSeasonEndsWeek: 10 });
     expect(result.rules.waivers?.type).toBe("faab");
+    expect(result.rules.rosterLimits).toEqual({ rosterSize: 25, benchSlots: 10, irSlots: 2, taxiSlots: 3, tradeDeadlineWeek: 11 });
   });
 
   it("builds a bounded one-line prompt summary", () => {

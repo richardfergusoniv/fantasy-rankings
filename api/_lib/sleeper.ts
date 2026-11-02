@@ -62,6 +62,8 @@ export type SleeperLeague = {
     playoff_week_start?: number;
     /** 0 rolling, 1 reverse standings, 2 FAAB. */
     waiver_type?: number;
+    /** Week after which trades are blocked; absent or non-positive when the league has none. */
+    trade_deadline?: number;
     waiver_budget?: number;
   };
   total_rosters?: number;
