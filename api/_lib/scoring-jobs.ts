@@ -153,6 +153,9 @@ type SnapshotPlayerSource = {
   team: string | null;
   projection: number | null;
   vegasProjection: number | null;
+  /** Usage-blend inputs from the roster row; null for rankings-only rows. */
+  usageProjection: number | null;
+  usageGames: number;
   injuryStatus: string | null;
   isBye: boolean;
   gamePhase: "pregame" | "live" | "final" | null;
@@ -161,7 +164,7 @@ type SnapshotPlayerSource = {
   isWaiverPool: boolean;
 };
 
-function collectSnapshotPlayers(dashboard: Dashboard, leagueId: string): SnapshotPlayerSource[] {
+export function collectSnapshotPlayers(dashboard: Dashboard, leagueId: string): SnapshotPlayerSource[] {
   const league = dashboard.leagues.find((row) => row.id === leagueId);
   if (!league) return [];
 
@@ -179,6 +182,8 @@ function collectSnapshotPlayers(dashboard: Dashboard, leagueId: string): Snapsho
       isWaiverPool: existing.isWaiverPool || row.isWaiverPool,
       vegasProjection: row.vegasProjection ?? existing.vegasProjection,
       projection: row.projection ?? existing.projection,
+      usageProjection: row.usageProjection ?? existing.usageProjection,
+      usageGames: Math.max(row.usageGames, existing.usageGames),
     });
   };
 
@@ -191,6 +196,8 @@ function collectSnapshotPlayers(dashboard: Dashboard, leagueId: string): Snapsho
       team: player.team,
       projection: player.projection,
       vegasProjection: player.projection,
+      usageProjection: player.usageProjection ?? null,
+      usageGames: player.usageGames ?? 0,
       injuryStatus: player.injuryStatus,
       isBye: player.isBye,
       gamePhase: player.gamePhase,
@@ -209,6 +216,8 @@ function collectSnapshotPlayers(dashboard: Dashboard, leagueId: string): Snapsho
       team: player.team,
       projection: player.projection,
       vegasProjection: player.projection,
+      usageProjection: player.usageProjection ?? null,
+      usageGames: player.usageGames ?? 0,
       injuryStatus: player.injuryStatus,
       isBye: player.isBye,
       gamePhase: player.gamePhase,
@@ -228,6 +237,8 @@ function collectSnapshotPlayers(dashboard: Dashboard, leagueId: string): Snapsho
         team: ranking.team,
         projection: ranking.leagueProjection,
         vegasProjection: ranking.leagueProjection,
+        usageProjection: null,
+        usageGames: 0,
         injuryStatus: ranking.injuryStatus,
         isBye: ranking.isBye,
         gamePhase: null,
@@ -305,6 +316,8 @@ export async function runScoringDecisionSnapshot(
       position: player.position,
       team: player.team,
       vegasProjection: player.vegasProjection,
+      usageProjection: player.usageProjection,
+      usageGames: player.usageGames,
       injuryStatus: player.injuryStatus,
       isBye: player.isBye,
       gamePhase: player.gamePhase,
@@ -374,7 +387,7 @@ export async function runScoringDecisionSnapshot(
         wV: blend.wV,
         projection: player.projection,
         vegasProjection: player.vegasProjection,
-        usageProjection: null,
+        usageProjection: scored.usageProjection ?? null,
         vacatedTargetSharePts: null,
         vacatedCarriesPerGame: null,
         forecastWindMph: null,
