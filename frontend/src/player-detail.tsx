@@ -697,6 +697,9 @@ export function PlayerDetailSheet({
   const tierLabel = positionTierLabel(player.position, player.weeklyRank, leagueSize);
   const profileLabel = useProfileTag(leagueId, player.playerId, player.position);
   const projectionComponents = projectionComponentsForPlayer(player);
+  // Once the game is final, the book range stays on the card and the tick is
+  // where the player actually finished; the bar's scale stretches to fit it.
+  const finalActual = player.gamePhase === "final" && typeof player.actual === "number" && Number.isFinite(player.actual) ? player.actual : null;
   const defenseProjectionComponents = player.defenseComponents
     ? Object.entries(defenseComponentLabels).flatMap(([key, label]) => {
         const value = player.defenseComponents?.[key];
@@ -767,7 +770,13 @@ export function PlayerDetailSheet({
               <small>{player.weeklyProjection === null ? "No weekly projection" : player.weeklyRank === null ? "No weekly rank" : <>{positionLabel} <span className={rankToneClassName(player.weeklyRank)}>#{player.weeklyRank}</span></>}</small>
             </div>
             {player.projectionRange ? (
-              <RangeBar className="player-detail-range" range={player.projectionRange} value={player.weeklyProjection} domain={rangeDomain([player.projectionRange])} />
+              <RangeBar
+                className="player-detail-range"
+                range={player.projectionRange}
+                value={player.weeklyProjection}
+                domain={rangeDomain(finalActual !== null ? [player.projectionRange, { low: finalActual, high: finalActual }] : [player.projectionRange])}
+                valueNote={finalActual !== null ? `finished at ${formatDecimal(finalActual, 1)}` : undefined}
+              />
             ) : null}
           </div>
           <div>

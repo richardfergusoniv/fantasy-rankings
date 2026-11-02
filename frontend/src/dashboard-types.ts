@@ -68,7 +68,7 @@ export type PlayerSearchResult = {
   actual?: number | null;
   defenseComponents?: Dashboard["defenses"][number]["components"];
   projectionComponents?: Dashboard["rankings"][number]["projectionComponents"];
-  /** Lowest and highest book line for this week; only while the pregame projection stands. */
+  /** Lowest and highest book line for this week. Stays on the card after the game so the finish reads against it. */
   projectionRange?: { low: number; high: number } | null;
 };
 export type PlayerDetailTab = "overview" | "season" | "advanced" | "props";
