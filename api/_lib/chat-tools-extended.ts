@@ -55,6 +55,7 @@ import {
   leagueSeasonLongAssets,
   loadBoomBustSummary,
   loadDashboard,
+  moveFreshness,
   resolvePlayerIdentity,
   tradeLineupBeforeAfter,
   waiverAdjustments,
@@ -1137,6 +1138,7 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
       team: incoming.team,
       slot: incoming.lineupSlot,
       projection: incoming.projection,
+      projectionSource: incoming.projectionSource,
     };
     const sitStub = outgoing
       ? {
@@ -1146,6 +1148,7 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
         team: outgoing.team,
         slot: outgoing.lineupSlot,
         projection: outgoing.projection,
+        projectionSource: outgoing.projectionSource,
       }
       : null;
     return {
@@ -1162,6 +1165,7 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
     week: dashboard.week,
     scoringWindow: "week" as const,
     note: "Labels and scores are deterministic; do not re-rank. The payload carries raw evidence only and no written reasons: compose the explanation from the evidence and name the deciding factor.",
+    freshness: moveFreshness(dashboard),
     currentStarterProjection: Number(beforeProj.toFixed(2)),
     optimizedStarterProjection: Number(afterProj.toFixed(2)),
     projectionDelta: Number((afterProj - beforeProj).toFixed(2)),
@@ -1172,6 +1176,7 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
       position: p.position,
       slot: p.lineupSlot,
       projection: p.projection,
+      projectionSource: p.projectionSource,
     })),
   };
 }
@@ -1188,6 +1193,7 @@ export async function toolSuggestWaivers(
   const evidence = await loadMoveEvidenceIndex(dashboard);
   return {
     ...result,
+    freshness: moveFreshness(dashboard),
     suggestions: result.suggestions.map((row) => ({
       playerId: row.playerId,
       name: row.name,
@@ -1525,6 +1531,7 @@ export async function toolSuggestTrades(
     formatKey: league.seasonLongFormat.key,
     scoringWindow: tradeWindowKey,
     note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind each idea and no written reasons: compose the explanation yourself and name the deciding factor.",
+    freshness: moveFreshness(dashboard),
     myNeeds,
     mySurplus,
     suggestions: ideas.slice(0, limit),
