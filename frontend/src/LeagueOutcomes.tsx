@@ -63,7 +63,7 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
   const groups = cutAfter >= 0 ? [teams.slice(0, cutAfter + 1), teams.slice(cutAfter + 1)] : [teams];
 
   return (
-    <section className="power-view proj-view" aria-label="Playoff picture">
+    <section className="power-view proj-view">
       {me ? (
         <Card className="proj-hero gap-0 py-0 shadow-sm">
           <div className="proj-finish">
