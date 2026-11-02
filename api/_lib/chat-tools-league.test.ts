@@ -145,6 +145,7 @@ describe("league chat tools", () => {
     const line = leagueRulesPromptLine(summarizeLeagueRules(dashboard.leagues[0]!));
     expect(line).toContain("2x");
     expect(line).toContain("FAAB");
+    expect(line).toContain("roster 25 (10 bench, 2 IR, 3 taxi), trade deadline week 11");
     expect(line).not.toContain("\n");
     expect(line.length).toBeLessThanOrEqual(600);
   });
