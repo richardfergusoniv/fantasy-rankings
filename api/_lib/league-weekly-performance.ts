@@ -5,7 +5,7 @@ import { readUserDashboardCache } from "./dashboard-build.js";
 import type { Dashboard } from "./dashboard-schemas.js";
 import { isUnavailableStatus, liveForecastPoints } from "./lineup-optimizer.js";
 import { DEFAULT_LAST_REGULAR_WEEK, defaultFetchWeek, type SleeperMatchupRow } from "./league-schedule.js";
-import { bestLineupTotal, currentWeekLineupTotal, sleeperWeekPoints } from "./projected-standings.js";
+import { bestLineup, currentWeekLineupTotal, sleeperWeekPoints } from "./projected-standings.js";
 import { fetchJson, SLEEPER_BASE, withDeadline } from "./sleeper.js";
 import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projections.js";
 import { viewerBelongsToLeague } from "./viewer-league-access.js";
@@ -85,7 +85,7 @@ export async function loadLeagueWeeklyPerformance(
             throw new Error("Missing current lineup points.");
           }
           const points = projections
-            ? bestLineupTotal(roster.players, slots, sleeperWeekPoints(projections, league))
+            ? bestLineup(roster.players, slots, sleeperWeekPoints(projections, league)).total
             : currentWeekLineupTotal(roster.players, slots);
           if (!Number.isFinite(points)) throw new Error("Invalid projection.");
           return { rosterId, points };

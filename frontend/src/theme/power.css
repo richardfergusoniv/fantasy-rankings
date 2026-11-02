@@ -235,7 +235,6 @@
 /* Team card: shared summary above Players / Weekly performance. */
 .power-team-card-tabs { gap: 0; }
 .power-team-card-tabs > [role="tablist"] { width: auto; margin: 0 16px 12px; }
-.team-weekly-caption { margin: 0; padding: 4px 16px 12px; color: var(--dim); font-size: var(--type-caption); }
 .team-weekly-table { width: 100%; border-collapse: collapse; font-size: var(--type-body); font-variant-numeric: tabular-nums; }
 .team-weekly-table th, .team-weekly-table td { padding: 12px 10px; border-bottom: 1px solid var(--hairline); text-align: right; }
 .team-weekly-table th:first-child { padding-left: 16px; text-align: left; }
@@ -247,6 +246,3 @@
 .team-weekly-table .is-projected { background: var(--surface-2); }
 .team-weekly-denominator { color: var(--dim); font-size: var(--type-caption); }
 .team-weekly-table .team-weekly-unavailable { color: var(--dim); text-align: center; }
-.team-weekly-method { padding: 12px 16px; font-size: var(--type-caption); color: var(--dim); }
-.team-weekly-method summary { min-height: 44px; align-content: center; color: var(--text); cursor: pointer; font-size: var(--type-control); }
-.team-weekly-method p { margin: 8px 0; line-height: 1.5; }

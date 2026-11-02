@@ -21,7 +21,6 @@ export function LeagueWeeklyPerformance({ leagueId, rosterId, season, snapshotAs
   const missing = query.data.weeks.some((week) => !week.teams?.some((team) => team.rosterId === rosterId));
   return (
     <div className="team-weekly-performance">
-      <p className="team-weekly-caption">Regular season · Compared with every other team</p>
       <table className="team-weekly-table">
         <caption className="sr-only">Weekly points, all-play record and rank out of {query.data.teamCount} teams</caption>
         <thead><tr><th scope="col">Week</th><th scope="col">Points</th><th scope="col">All-play</th><th scope="col">Rank</th></tr></thead>
@@ -37,11 +36,6 @@ export function LeagueWeeklyPerformance({ leagueId, rosterId, season, snapshotAs
           </tr>;
         })}</tbody>
       </table>
-      <details className="team-weekly-method">
-        <summary>How this is scored</summary>
-        <p>All-play is wins–losses–ties against every other team’s score that week. Tied scores share a rank. Completed weeks use Sleeper’s recorded scores.</p>
-        <p>The current week follows current lineups and live forecasts. Later weeks use Sleeper’s weekly projections and the best lineup from each team’s current roster.</p>
-      </details>
       {missing ? <SectionError compact title="Some weeks are unavailable." onRetry={() => { void query.refetch(); }} retrying={query.isFetching} /> : null}
     </div>
   );

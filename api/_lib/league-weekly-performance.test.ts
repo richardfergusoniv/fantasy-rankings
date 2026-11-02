@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { WeekProjections } from "./sleeper-week-projections.js";
 import type { Dashboard } from "./dashboard-schemas.js";
 
 vi.mock("./db.js", () => ({ db: {}, schema: {} }));
@@ -7,6 +8,7 @@ vi.mock("./auth.js", () => ({ resolveSleeperUserId: vi.fn() }));
 vi.mock("./viewer-league-access.js", () => ({ viewerBelongsToLeague: vi.fn() }));
 
 import { allPlayResults, handleLeagueWeeklyPerformance, loadLeagueWeeklyPerformance } from "./league-weekly-performance.js";
+import { buildProjectedStandings } from "./projected-standings.js";
 import { readUserDashboardCache } from "./dashboard-build.js";
 import { resolveSleeperUserId } from "./auth.js";
 import { viewerBelongsToLeague } from "./viewer-league-access.js";
@@ -14,7 +16,7 @@ import { viewerBelongsToLeague } from "./viewer-league-access.js";
 type League = Dashboard["leagues"][number];
 const player = (id: string, projection: number) => ({ playerId: id, position: "QB", lineupSlot: "QB", isStarter: true, projection, actual: null, gamePhase: "pregame", gameTime: null, isBye: false, injuryStatus: null });
 const league = {
-  id: "league", rankingField: "ppr", standings: [1, 2, 3].map((rosterId) => ({ rosterId, wins: 1, losses: 0, ties: 0 })),
+  id: "league", rankingField: "ppr", standings: [1, 2, 3].map((rosterId) => ({ rosterId, teamName: `Team ${rosterId}`, pointsFor: 100, wins: 1, losses: 0, ties: 0 })),
   playoffs: { weekStart: 4 }, tradeStarterSlots: ["QB"], starters: [],
   tradeTeams: [1, 2, 3].map((rosterId) => ({ rosterId, players: [player(String(rosterId), 10 + rosterId)] })),
 } as unknown as League;
@@ -53,6 +55,20 @@ describe("weekly all-play", () => {
       expect(fetchWeek).toHaveBeenCalledTimes(1);
       expect(loadProjections).toHaveBeenCalledTimes(2);
     } finally { vi.useRealTimers(); }
+  });
+  it("matches Projected standings for the same future Sleeper week and league scoring", async () => {
+    const projections: WeekProjections = await options.loadProjections(2026, 3);
+    const scoredLeague = { ...league, scoringSettings: { pass_yd: 0.04, pass_td: 6 } };
+    projections.players.set("1", { opponent: "BUF", stats: { pass_yd: 299.3, pass_td: 2.3, pts_ppr: 99 } });
+    const result = await loadLeagueWeeklyPerformance(scoredLeague, 2026, 2, null, { ...options, loadProjections: async () => projections });
+    const standings = buildProjectedStandings({
+      league: scoredLeague, weeks: new Map([[3, projections]]), games: [{ week: 3, a: 1, b: 2 }],
+      throughWeek: 2, regularSeasonEndsWeek: 3, missingWeeks: [],
+    });
+    const game = standings.games[0]!;
+    expect(game.projectedA).toBe(25.77);
+    expect(result.weeks[2]!.teams!.find((team) => team.rosterId === 1)!.points).toBe(game.projectedA);
+    expect(result.weeks[2]!.teams!.find((team) => team.rosterId === 2)!.points).toBe(game.projectedB);
   });
   it("honors commissioner score overrides and valid zero scores", async () => {
     const result = await loadLeagueWeeklyPerformance(league, 2026, 2, null, { ...options, fetchWeek: async () => [{ roster_id: 1, points: 100, custom_points: 0 }, { roster_id: 2, points: -1 }, { roster_id: 3, points: 50 }] });
