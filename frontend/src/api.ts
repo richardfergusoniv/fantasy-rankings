@@ -16,6 +16,7 @@ import type { DraftCenter } from "../../api/draft-center";
 import type { DraftGradeResponse } from "../../api/_lib/draft-grade";
 import type { PfnTables, TeamWeekStats } from "../../api/_lib/pfn-tables";
 import type { PlayerNews } from "../../api/player-news";
+import type { LeagueWeeklyPerformance } from "../../api/_lib/league-weekly-performance";
 import type { ProjectedStandings } from "../../api/_lib/projected-standings";
 import type { HistoricalTrades } from "../../api/_lib/trades";
 import type { ValueHistory } from "../../api/_lib/value-history";
@@ -140,6 +141,9 @@ export const api = {
     refresh?: boolean;
     season?: number;
   }): Promise<HistoricalTrades> => request(`/api/trades/history${buildQuery(args)}`),
+
+  getLeagueWeeklyPerformance: (args: { leagueId: string }): Promise<LeagueWeeklyPerformance> =>
+    request(`/api/data/league-weekly-performance${buildQuery(args)}`),
 
   getProjectedStandings: (args: { leagueId: string }): Promise<ProjectedStandings> =>
     request(`/api/data/projected-standings${buildQuery(args)}`),
