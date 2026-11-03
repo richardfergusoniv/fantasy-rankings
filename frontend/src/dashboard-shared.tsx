@@ -31,6 +31,7 @@ import { RefreshIcon, SectionError } from "./section-error";
 import { dashboardFreshness } from "./dashboard-freshness";
 import { newsAbsoluteTimeLabel, newsItemTimeLabel, newsRelativeTimeLabel } from "./news-time";
 import { NewsTypeBadges } from "./news-badges";
+import { newsOutletLabel } from "./news-outlet";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { gameLineSummary, type TeamGameLineLike } from "./game-line-summary";
@@ -760,9 +761,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
 export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose: () => void }) {
   const isArticle = item.source === "article";
   const nowMs = useMinuteNow(isArticle);
-  const outletLabel = item.author && !isArticle
-    ? `${item.sourceLabel} · ${item.author}`
-    : item.sourceLabel;
+  const outletLabel = newsOutletLabel(item);
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
