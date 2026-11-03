@@ -553,7 +553,7 @@ function baseDashboard(): Dashboard {
       sourceUrl: "",
       entities: [
         {
-          id: "p1",
+          id: "WR:00-0038123",
           name: "Alpha Receiver",
           team: "KC",
           position: "WR",
