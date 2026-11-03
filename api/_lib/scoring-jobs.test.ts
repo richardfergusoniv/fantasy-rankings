@@ -8,6 +8,7 @@ import {
   __testParseSnapshotMetrics,
   collectSnapshotPlayers,
   pfnWeekKey,
+  ridgeTermInputs,
   scoringSnapshotId,
   sleeperTrendingWeekKey,
 } from "./scoring-jobs.js";
@@ -32,6 +33,36 @@ describe("snapshot holdout metrics", () => {
     expect(metrics.playerGames).toBe(3);
     // errors: (10-12)^2 + (14-10)^2 + (8-8)^2 = 4+16+0 = 20; rmse = sqrt(20/3)
     expect(metrics.rmse).toBeCloseTo(Math.sqrt(20 / 3), 5);
+  });
+});
+
+describe("ridgeTermInputs", () => {
+  const entity = {
+    rolling17: { target_share: 22 },
+    season: { target_share: 15 },
+  } as unknown as Dashboard["analytics"]["entities"][number];
+  const args = {
+    teamUsage: new Map([["KC", { playsPerGame: 62.4, proe: 4.1 }]]),
+    analyticsByPlayerId: new Map([["p-te", entity]]),
+    nflPlayers: { "p-rb": { years_exp: 6 } },
+  };
+
+  it("records team pace/PROE for QBs only", () => {
+    expect(ridgeTermInputs({ playerId: "p-qb", position: "QB", team: "KC" }, args)).toEqual({
+      teamPlaysPerGame: 62.4,
+      teamProe: 4.1,
+      teRoleTrendPts: null,
+      rbYearsExp: null,
+    });
+    expect(ridgeTermInputs({ playerId: "p-wr", position: "WR", team: "KC" }, args).teamPlaysPerGame).toBeNull();
+  });
+
+  it("records rolling-vs-season share trend for TEs only", () => {
+    expect(ridgeTermInputs({ playerId: "p-te", position: "TE", team: "KC" }, args).teRoleTrendPts).toBe(7);
+  });
+
+  it("records years of experience for RBs only", () => {
+    expect(ridgeTermInputs({ playerId: "p-rb", position: "RB", team: "KC" }, args).rbYearsExp).toBe(6);
   });
 });
 

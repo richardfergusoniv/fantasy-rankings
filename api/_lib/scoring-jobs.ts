@@ -19,6 +19,7 @@ import {
 import { encodeSourceCachePayload } from "./source-cache-payload.js";
 import { loadSleeperTrendingWeekly } from "./sleeper-trending.js";
 import { loadTeamWeekStats } from "./pfn-tables.js";
+import { loadNflPlayersMap } from "./nfl-players-cache.js";
 import { readNflState } from "./user-leagues.js";
 import { buildVacatedUsage } from "./vacated-usage.js";
 
@@ -166,6 +167,47 @@ type SnapshotPlayerSource = {
   isWaiverPool: boolean;
 };
 
+/**
+ * Candidate ridge-term inputs the refit needs to observe a coefficient for
+ * qbPaceProe / teRoleTrend / rbAgeWeekly (SCORING_SPEC candidate inputs).
+ * Recorded in the snapshot inputsJson; the blend ignores them while the
+ * weights stay 0. Draft capital has no stored source — omitted until one exists.
+ */
+export function ridgeTermInputs(
+  player: Pick<SnapshotPlayerSource, "playerId" | "position" | "team">,
+  args: {
+    teamUsage: ReadonlyMap<string, { playsPerGame: number; proe?: number }>;
+    analyticsByPlayerId: ReadonlyMap<string, Dashboard["analytics"]["entities"][number]>;
+    nflPlayers: Record<string, { years_exp?: number | null }> | null;
+  },
+): {
+  teamPlaysPerGame: number | null;
+  teamProe: number | null;
+  teRoleTrendPts: number | null;
+  rbYearsExp: number | null;
+} {
+  const empty = { teamPlaysPerGame: null, teamProe: null, teRoleTrendPts: null, rbYearsExp: null };
+  if (player.position === "QB") {
+    const usage = player.team ? args.teamUsage.get(player.team) : undefined;
+    return {
+      ...empty,
+      teamPlaysPerGame: usage?.playsPerGame ?? null,
+      teamProe: usage?.proe ?? null,
+    };
+  }
+  if (player.position === "TE") {
+    const entity = args.analyticsByPlayerId.get(player.playerId);
+    const trend = entity?.rolling17.target_share != null && entity?.season.target_share != null
+      ? entity.rolling17.target_share - entity.season.target_share
+      : null;
+    return { ...empty, teRoleTrendPts: trend === null ? null : Math.round(trend * 100) / 100 };
+  }
+  if (player.position === "RB") {
+    return { ...empty, rbYearsExp: args.nflPlayers?.[player.playerId]?.years_exp ?? null };
+  }
+  return empty;
+}
+
 export function collectSnapshotPlayers(dashboard: Dashboard, leagueId: string): SnapshotPlayerSource[] {
   const league = dashboard.leagues.find((row) => row.id === leagueId);
   if (!league) return [];
@@ -308,6 +350,22 @@ export async function runScoringDecisionSnapshot(
   const capturedAt = new Date();
   const toInsert: Array<typeof schema.scoringSnapshots.$inferInsert> = [];
 
+  // Ridge-term refit inputs, shared across leagues (dashboard-level sources).
+  const teamUsageByTeam = new Map(
+    (dashboard.analytics?.teamUsage ?? []).map((row) => [row.team, row]),
+  );
+  const analyticsByPlayerId = new Map(
+    (dashboard.analytics?.entities ?? [])
+      .filter((entity) => entity.playerId != null)
+      .map((entity) => [entity.playerId as string, entity]),
+  );
+  let nflPlayers: Record<string, { years_exp?: number | null }> | null = null;
+  try {
+    nflPlayers = await loadNflPlayersMap(false);
+  } catch {
+    nflPlayers = null;
+  }
+
   for (const league of dashboard.leagues) {
     const players = collectSnapshotPlayers(dashboard, league.id);
     // Cap per league to keep egress bounded (roster + top of board).
@@ -408,6 +466,7 @@ export async function runScoringDecisionSnapshot(
         usageProjection: scored.usageProjection ?? null,
         vacatedTargetSharePts: vacatedById.get(player.playerId)?.vacatedTargetSharePts ?? null,
         vacatedCarriesPerGame: vacatedById.get(player.playerId)?.vacatedCarriesPerGame ?? null,
+        ...ridgeTermInputs(player, { teamUsage: teamUsageByTeam, analyticsByPlayerId, nflPlayers }),
         forecastWindMph: null,
         injuryStatus: player.injuryStatus,
         isBye: player.isBye,
