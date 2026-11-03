@@ -464,7 +464,11 @@ export async function toolGetPlayerAdvanced(
     (args.leagueId ? requireLeague(dashboard, args.leagueId) : null)
     ?? defaultToolLeague(dashboard, ctx, { preferRosterOf: playerId });
 
-  const entity = dashboard.analytics.entities.find((row) => row.id === playerId) ?? null;
+  // Analytics entity ids are `POS:<gsis>`; Sleeper rosters resolve to playerId.
+  const entity =
+    dashboard.analytics.entities.find((row) => row.playerId === playerId)
+    ?? dashboard.analytics.entities.find((row) => row.id === playerId)
+    ?? null;
   const insights = dashboard.playerInsights;
   const depth = insights.depth[playerId] ?? null;
   const depthPrevious = insights.depthPrevious[playerId] ?? null;
