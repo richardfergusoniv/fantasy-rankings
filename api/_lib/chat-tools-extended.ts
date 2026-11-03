@@ -42,6 +42,7 @@ import {
   weekStatsForPlayer,
 } from "./prop-line-reads.js";
 import { loadTeamWeekStats } from "./pfn-tables.js";
+import { buildVacatedUsage } from "./vacated-usage.js";
 import { projectedPlayerPoints } from "./projected-standings.js";
 import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projections.js";
 import { DEFAULT_LAST_REGULAR_WEEK } from "./league-schedule.js";
@@ -1170,6 +1171,21 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
   );
 
   const weights = await loadActiveScoringWeights();
+  // Teammates Out or Doubtful vacate their season usage for the rest of the
+  // NFL team (SCORING_SPEC). The injured pool is the league's roster plus
+  // ranking rows — an out teammate missing from both contributes nothing.
+  let vacatedById: Map<string, { vacatedTargetSharePts: number; vacatedCarriesPerGame: number }> = new Map();
+  if (dashboard.week > 1) {
+    try {
+      const { stats } = await loadTeamWeekStats(dashboard.season);
+      vacatedById = buildVacatedUsage(
+        [...league.starters, ...league.bench, ...rankingById.values()],
+        stats.filter((row) => row.week >= 1 && row.week <= dashboard.week - 1),
+      );
+    } catch (error) {
+      console.error("[chat] vacated-usage load failed", error instanceof Error ? error.message : error);
+    }
+  }
   const toScored = (player: (typeof league.starters)[number]) => {
     const ranking = rankingById.get(player.playerId);
     return {
@@ -1185,6 +1201,8 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
       injuryStatus: player.injuryStatus,
       isBye: ranking?.isBye ?? player.isBye,
       gamePhase: player.gamePhase,
+      vacatedTargetSharePts: vacatedById.get(player.playerId)?.vacatedTargetSharePts ?? 0,
+      vacatedCarriesPerGame: vacatedById.get(player.playerId)?.vacatedCarriesPerGame ?? 0,
       actual: player.actual,
       projection: player.projection,
     };
