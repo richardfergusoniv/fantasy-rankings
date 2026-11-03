@@ -72,7 +72,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "get_player_news",
       description:
-        "Recent player news, including team- and league-scoped reports that affect the players in scope (QB changes, line injuries, coaching). Scope: one player, my roster, my opponent, or the whole league. Newest first.",
+        "Recent player news, including team- and league-scoped reports that affect the players in scope (QB changes, line injuries, coaching). Scope: one player, my roster, my opponent, or the whole league. Newest first. The response's coverage field distinguishes an empty result (\"empty\": genuinely no news) from a failed load (\"degraded\": items may be missing — say coverage was partial, not that nothing happened).",
       parameters: {
         type: "object",
         properties: {
@@ -310,7 +310,7 @@ export async function toolGetPlayerNews(
     : playerId
       ? [playerId]
       : [];
-  if (ids.length === 0) return { ok: true as const, items: [], note: "No players in scope." };
+  if (ids.length === 0) return { ok: true as const, coverage: "empty" as const, items: [], note: "No players in scope." };
 
   const limit = Math.min(30, Math.max(1, Math.floor(args.limit ?? 15)));
   const cutoff = retentionCutoff();
@@ -362,8 +362,12 @@ export async function toolGetPlayerNews(
   const seenPost = new Set<string>();
   const items = [];
   let scanned = 0;
-  while (items.length < limit && scanned < maxScan) {
-    const page = await db
+  // degraded: the scan threw mid-load — items may be partial, and an empty
+  // items list here means failure, not "no news".
+  let coverage: "ok" | "empty" | "degraded" = "ok";
+  try {
+    while (items.length < limit && scanned < maxScan) {
+      const page = await db
       .select({
         id: schema.sharedPlayerNews.id,
         playerId: schema.sharedPlayerNews.playerId,
@@ -390,34 +394,42 @@ export async function toolGetPlayerNews(
       .limit(Math.min(pageSize, maxScan - scanned))
       .offset(scanned);
 
-    if (page.length === 0) break;
-    scanned += page.length;
+      if (page.length === 0) break;
+      scanned += page.length;
 
-    for (const row of page) {
-      if (isSleeperTimestampOnlyNews(row)) continue;
-      // Player-scoped reads keep every row for that player; global scopes
-      // collapse a multi-player X roundup to one chat item.
-      if (scope !== "player") {
-        const postKey = newsPostDedupeKey(row);
-        if (seenPost.has(postKey)) continue;
-        seenPost.add(postKey);
+      for (const row of page) {
+        if (isSleeperTimestampOnlyNews(row)) continue;
+        // Player-scoped reads keep every row for that player; global scopes
+        // collapse a multi-player X roundup to one chat item.
+        if (scope !== "player") {
+          const postKey = newsPostDedupeKey(row);
+          if (seenPost.has(postKey)) continue;
+          seenPost.add(postKey);
+        }
+        items.push({
+          playerId: row.playerId,
+          player: row.player,
+          team: row.team,
+          scope: row.scope,
+          change: row.change,
+          newsType: row.newsType,
+          sourceLabel: row.sourceLabel,
+          sourceUrl: row.sourceUrl,
+          publishedAt: (row.publishedAt ?? row.createdAt).toISOString(),
+          source: row.source,
+        });
+        if (items.length >= limit) break;
       }
-      items.push({
-        playerId: row.playerId,
-        player: row.player,
-        team: row.team,
-        scope: row.scope,
-        change: row.change,
-        newsType: row.newsType,
-        sourceLabel: row.sourceLabel,
-        sourceUrl: row.sourceUrl,
-        publishedAt: (row.publishedAt ?? row.createdAt).toISOString(),
-        source: row.source,
-      });
-      if (items.length >= limit) break;
+      if (page.length < pageSize) break;
     }
-    if (page.length < pageSize) break;
+  } catch (err) {
+    coverage = "degraded";
+    console.error(
+      "[chat] player news load failed",
+      err instanceof Error ? err.message : String(err),
+    );
   }
+  if (coverage === "ok" && items.length === 0) coverage = "empty";
 
   const injuryRaw = await readSourceCacheValue(PLAYER_NEWS_SNAPSHOT_KEY);
   const notesPayloadRows = await db
@@ -465,6 +477,7 @@ export async function toolGetPlayerNews(
     ok: true as const,
     scope,
     leagueId: league?.id ?? null,
+    coverage,
     items,
     legacyItems,
     injurySnapshot: injuryByPlayer,
@@ -702,8 +715,9 @@ export type MovePlayerEvidence = {
   }>;
   /** A player-scoped news item in the last 7 days reported an injury, role,
    * depth-chart, or workload change — the data the S1/S2 rules reason over.
-   * false both when nothing matched and when the news load failed. */
-  roleChangeReported: boolean;
+   * "unavailable" when the news load failed, so a failed read is never
+   * mistaken for "no role change reported". */
+  roleChange: "reported" | "none" | "unavailable";
 };
 
 type MoveEvidenceIndex = {
@@ -807,6 +821,7 @@ export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveE
   // role context reports an injury/role/depth/workload change. One bounded
   // query over the dashboard's player ids; degrades to "none reported".
   const roleChangeIds = new Set<string>();
+  let roleChangeFailed = false;
   try {
     const ROLE_CHANGE_PATTERN = /injur|role|depth|starter|promot|demot|snap|workload|suspen/i;
     const ids = [
@@ -841,6 +856,7 @@ export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveE
       }
     }
   } catch (err) {
+    roleChangeFailed = true;
     console.error(
       "[chat] move evidence role-change load failed",
       err instanceof Error ? err.message : String(err),
@@ -878,7 +894,11 @@ export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveE
         season: rates?.season ?? null,
         game: gameLineForTeam(dashboard, player.team),
         propLines: propLinesByPlayer.get(player.playerId) ?? [],
-        roleChangeReported: roleChangeIds.has(player.playerId),
+        roleChange: roleChangeFailed
+          ? "unavailable"
+          : roleChangeIds.has(player.playerId)
+            ? "reported"
+            : "none",
       };
     },
   };
