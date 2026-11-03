@@ -28,7 +28,7 @@ describe("loadUpcomingOutlook", () => {
   it("uses the app projection this week and Sleeper's later weeks in league scoring", async () => {
     const loader = vi.fn(async (_s: number, w: number) => week(w, w === 10 ? {} : { p1: { rec: 5, rec_yd: 60 } }));
     const outlook = await loadUpcomingOutlook(2026, 8, league, players, loader);
-    expect(loader.mock.calls.map((c) => c[1])).toEqual([9, 10, 11]);
+    expect(loader.mock.calls.map((c) => c[1])).toEqual([9, 10, 11, 12, 13, 14, 15, 16, 17]);
     expect(outlook.lastWeek).toBe(11);
     const p1 = outlook.byPlayer.get("p1")!;
     expect(p1.weeks.map((r) => r.week)).toEqual([8, 9, 10, 11]);
@@ -40,6 +40,28 @@ describe("loadUpcomingOutlook", () => {
     expect(outlook.byPlayer.get("p2")!.weeks[0]!.projected).toBeNull();
   });
 
+  it("loads fantasy playoff weeks as a separate block", async () => {
+    const loader = vi.fn(async (_s: number, w: number) => week(w, { p1: { rec: 5, rec_yd: 60 } }));
+    const outlook = await loadUpcomingOutlook(2026, 8, league, players, loader);
+    expect(outlook.playoffs).not.toBeNull();
+    expect(outlook.playoffs!.firstWeek).toBe(12);
+    expect(outlook.playoffs!.lastWeek).toBe(17);
+    const p1 = outlook.playoffs!.byPlayer.get("p1")!;
+    expect(p1.weeks.map((r) => r.week)).toEqual([12, 13, 14, 15, 16, 17]);
+    expect(p1.weeks.every((r) => r.source === "sleeper")).toBe(true);
+    // Regular-season total still stops at week 11.
+    expect(outlook.byPlayer.get("p1")!.weeks.map((r) => r.week)).toEqual([8, 9, 10, 11]);
+  });
+
+  it("marks playoff weeks missing when Sleeper cannot supply them", async () => {
+    const outlook = await loadUpcomingOutlook(2026, 8, league, players, async (_s, w) => {
+      if (w === 15) throw new Error("down");
+      return week(w, { p1: { rec: 5, rec_yd: 60 } });
+    });
+    expect(outlook.playoffs!.missingWeeks).toEqual([15]);
+    expect(outlook.playoffs!.byPlayer.get("p1")!.weeks.map((r) => r.week)).toEqual([12, 13, 14, 16, 17]);
+  });
+
   it("lists weeks Sleeper could not supply and omits them from the totals", async () => {
     const outlook = await loadUpcomingOutlook(2026, 8, league, players, async (_s, w) => {
       if (w === 10) throw new Error("down");
@@ -49,11 +71,20 @@ describe("loadUpcomingOutlook", () => {
     expect(outlook.byPlayer.get("p1")!.weeks.map((r) => r.week)).toEqual([8, 9, 11]);
   });
 
-  it("returns nothing once the regular season is over", async () => {
-    const loader = vi.fn();
+  it("returns no regular weeks once the regular season is over but keeps playoff weeks", async () => {
+    const loader = vi.fn(async (_s: number, w: number) => week(w, { p1: { rec: 5, rec_yd: 60 } }));
     const outlook = await loadUpcomingOutlook(2026, 14, league, players, loader);
-    expect(loader).not.toHaveBeenCalled();
+    expect(loader.mock.calls.map((c) => c[1])).toEqual([15, 16, 17]);
     expect(outlook.firstWeek).toBeNull();
     expect(outlook.byPlayer.get("p1")!.weeks).toEqual([]);
+    const p1 = outlook.playoffs!.byPlayer.get("p1")!;
+    expect(p1.weeks[0]).toMatchObject({ week: 14, source: "app" });
+    expect(p1.weeks.slice(1).map((r) => r.week)).toEqual([15, 16, 17]);
+  });
+
+  it("returns no playoff block when the league has no playoffs configured", async () => {
+    const leagueNoPlayoffs = { ...league, playoffs: { teams: null, weekStart: null } } as unknown as Dashboard["leagues"][number];
+    const outlook = await loadUpcomingOutlook(2026, 8, leagueNoPlayoffs, players, async (_s, w) => week(w, {}));
+    expect(outlook.playoffs).toBeNull();
   });
 });
