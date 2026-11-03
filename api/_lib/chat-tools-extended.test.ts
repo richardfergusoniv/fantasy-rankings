@@ -1110,6 +1110,40 @@ describe("extended chat tools", () => {
     expect(serialized).not.toContain("no_usage_history");
   });
 
+  it("suggest_waivers picks the drop by dynasty value when the window is dynasty", () => {
+    const dashboard = baseDashboard();
+    const league = dashboard.leagues.find((row) => row.id === "lg1")!;
+    const devAsset = {
+      playerId: "p-dev", name: "Dev Stash", team: "BUF", position: "WR",
+      lineupSlot: null, isStarter: false, rank: 60, projection: 3,
+      projectionSource: "vegas" as const, actual: null, gamePhase: "pregame" as const,
+      gameTime: null, gamePeriod: null, gameClockSeconds: null,
+      opponent: "MIA", isAway: false, isBye: false, injuryStatus: null,
+      defenseComponents: null, projectionComponents: null,
+    };
+    league.bench = [
+      ...league.bench,
+      devAsset,
+      { ...devAsset, playerId: "p-vet", name: "Aging Vet", projection: 1 },
+    ];
+    league.rosteredPlayerIds = [...league.rosteredPlayerIds, "p-dev", "p-vet"];
+    const row = (formatKey: string, playerId: string, value: number) => ({
+      formatKey, playerId, name: playerId, team: "BUF", position: "WR" as const,
+      overallRank: 50, positionRank: 20, value, trend30Day: 0, isRookie: false,
+    });
+    dashboard.seasonLongRankings.push(
+      // p-dev: cheap now, valuable long-term. p-vet: the reverse.
+      row("redraft-1qb-12t-1ppr", "p-dev", 100),
+      row("redraft-1qb-12t-1ppr", "p-vet", 4_000),
+      row("dynasty-1qb-12t-1ppr", "p-dev", 6_000),
+      row("dynasty-1qb-12t-1ppr", "p-vet", 500),
+    );
+    const redraft = scoreWaiverSuggestions(dashboard, league, BUILTIN_SCORING_WEIGHTS, { limit: 5, scoringWindow: "season_long" });
+    const dynasty = scoreWaiverSuggestions(dashboard, league, BUILTIN_SCORING_WEIGHTS, { limit: 5, scoringWindow: "dynasty" });
+    expect(redraft.suggestions[0]?.dropCandidate?.playerId).toBe("p-dev");
+    expect(dynasty.suggestions[0]?.dropCandidate?.playerId).toBe("p-vet");
+  });
+
   it("saves FAAB bids for the top graded adds, the same grading as suggest_waivers", () => {
     const dashboard = baseDashboard();
     // A free agent who would start and outscore the lineup, so he grades above Pass.

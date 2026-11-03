@@ -91,11 +91,22 @@ export function scoreWaiverSuggestions(
     ? optimizeValueTradeRoster(rosterPlayers, slots, dynastyValueById)
     : null;
 
-  // Drop candidate: lowest-value bench player not in this week's best lineup.
+  // One window for every row and the response (dynasty only when the league supports it).
+  const waiverWindowKey: "week" | "season_long" | "dynasty" =
+    options.scoringWindow === "dynasty" && league.seasonLongFormat.isDynasty
+      ? "dynasty"
+      : options.scoringWindow === "season_long"
+        ? "season_long"
+        : "week";
+
+  // Drop candidate: lowest-value bench player not in this week's best lineup,
+  // valued under the selected window — a dynasty read must not sacrifice a
+  // developmental asset because his redraft value is thin.
+  const dropValueById = waiverWindowKey === "dynasty" ? dynastyValueById : seasonLongValueById;
   const bestIds = new Set(baseline.starters.map((p) => p.playerId));
   const dropCandidate = [...league.bench]
     .filter((p) => p.playerId !== "0" && !bestIds.has(p.playerId))
-    .map((p) => ({ player: p, value: valueById.get(p.playerId) ?? 0 }))
+    .map((p) => ({ player: p, value: dropValueById.get(p.playerId) ?? 0 }))
     .sort((a, b) => a.value - b.value)[0] ?? null;
 
   const powerRows = league.powerRankingsSeasonLong.length > 0
@@ -107,14 +118,6 @@ export function scoreWaiverSuggestions(
     const values = powerRows.map((row) => row.positionValues[pos]).sort((a, b) => a - b);
     medians[pos] = values.length ? values[Math.floor(values.length / 2)]! : 0;
   }
-
-  // One window for every row and the response (dynasty only when the league supports it).
-  const waiverWindowKey: "week" | "season_long" | "dynasty" =
-    options.scoringWindow === "dynasty" && league.seasonLongFormat.isDynasty
-      ? "dynasty"
-      : options.scoringWindow === "season_long"
-        ? "season_long"
-        : "week";
 
   const scored = pool.map((player) => {
     const weekly =
