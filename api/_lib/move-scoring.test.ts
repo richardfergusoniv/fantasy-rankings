@@ -113,6 +113,49 @@ describe("start/sit EXAMPLE (FLEX half-PPR WR A vs WR B)", () => {
     expect(result.week.score).toBe(0);
   });
 
+  it("tilts a close flex call toward variance when the lineup is an underdog", () => {
+    const rb = {
+      playerId: "rb",
+      name: "Safe RB",
+      position: "RB",
+      vegasProjection: 13,
+      usageProjection: 13,
+      usageGames: 5,
+    };
+    const wr = {
+      playerId: "wr",
+      name: "Volatile WR",
+      position: "WR",
+      vegasProjection: 12.5,
+      usageProjection: 12.5,
+      usageGames: 5,
+    };
+    const toWin = (pStar: number, position: string) => ({
+      playerId: position,
+      position,
+      team: "KC",
+      pStar,
+      opponentTeam: "LV",
+    });
+    // Opponent is much stronger — the user's lineup wins ~4%.
+    const opponent = [
+      { playerId: "oqb", position: "QB", team: "LV", pStar: 22, opponentTeam: "KC" },
+      { playerId: "orb", position: "RB", team: "LV", pStar: 16, opponentTeam: "KC" },
+    ];
+    const result = scoreStartSit({
+      player: rb,
+      alternative: wr,
+      yourLineupWithPlayer: [toWin(13, "RB")],
+      yourLineupWithAlternative: [toWin(12.5, "WR")],
+      opponentLineup: opponent,
+    });
+    // The means are a close call and the win chances sit inside the band, so
+    // the underdog context picks the higher-sigma WR.
+    expect(result.week.closeCall).toBe(true);
+    expect(result.week.tiebreak?.rule).toBe("flex_matchup_variance");
+    expect(result.week.tiebreak?.pickAfter).toBe("wr");
+  });
+
   it("uses Strong start when there is no eligible backup", () => {
     const result = scoreStartSit({
       player: {
