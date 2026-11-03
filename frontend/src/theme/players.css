@@ -447,3 +447,9 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .schedule-strip-cell.sos-tough strong { color: var(--stat-weakness-readable); }
 .schedule-strip-cell.is-bye strong { color: var(--dim); }
 .ranking-bid { color: var(--text); font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Media attachments on the news card modal (charts, film clips). */
+.news-card-modal .news-media { display: grid; gap: 8px; margin-top: 12px; }
+.news-card-modal .news-media .news-media-image img,
+.news-card-modal .news-media .news-media-video { display: block; width: 100%; max-height: 320px; object-fit: contain; border-radius: 8px; border: 1px solid var(--hairline); background: var(--surface-2); }
+.news-card-modal .news-media .news-media-image { min-height: 0; }

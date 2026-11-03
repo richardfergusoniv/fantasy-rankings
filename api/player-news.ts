@@ -102,6 +102,13 @@ export type PlayerNews = {
       tags: string[];
       /** player (default) | team | league. */
       scope: "player" | "team" | "league";
+      /** Media attached to the source post (images / video), max 4. */
+      media: Array<{
+        type: "image" | "video";
+        url: string;
+        previewUrl?: string;
+        alt?: string;
+      }>;
     }>;
   }>;
   emptyReason: string | null;
@@ -175,6 +182,7 @@ async function insertSharedDrafts(drafts: SharedNewsDraft[]): Promise<number> {
       score: draft.score,
       tags: draft.tags,
       scope: draft.scope,
+      media: draft.media,
       createdAt: new Date(),
     }));
     const result = await db
@@ -211,6 +219,7 @@ async function readStoredNews(isDynastyContext: boolean): Promise<Response> {
     score: schema.sharedPlayerNews.score,
     tags: schema.sharedPlayerNews.tags,
     scope: schema.sharedPlayerNews.scope,
+    media: schema.sharedPlayerNews.media,
   };
   const retentionWhere = and(
     or(
@@ -280,6 +289,7 @@ async function readStoredNews(isDynastyContext: boolean): Promise<Response> {
     score: item.score,
     tags: item.tags ?? [],
     scope: (item.scope ?? "player") as "player" | "team" | "league",
+    media: item.media ?? [],
   }));
 
   return json({

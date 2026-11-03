@@ -44,6 +44,7 @@ function item(partial: {
     score: partial.score ?? null,
     tags: partial.tags ?? [],
     scope,
+    media: [],
   };
 }
 

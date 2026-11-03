@@ -72,6 +72,7 @@ export type SharedNewsDraft = {
   score: number | null;
   tags: string[];
   scope: PlayerNewsScope;
+  media: NewsMediaItem[];
 };
 
 /**
@@ -85,6 +86,68 @@ const newsTagsFieldSchema = z.preprocess((value) => {
   if (!Array.isArray(value)) return value;
   return normalizeNewsTags(value.filter((entry): entry is string => typeof entry === "string"));
 }, z.array(z.string().min(1).max(32)).max(5).optional());
+
+// ---------------------------------------------------------------------------
+// Media attachments (optional on X ingest; images and video attached to posts)
+// ---------------------------------------------------------------------------
+
+/** Media attachment stored on a shared_player_news row (`media` jsonb). */
+export type NewsMediaItem = {
+  type: "image" | "video";
+  url: string;
+  /** Optional still image shown for videos (and while images load). */
+  previewUrl?: string;
+  alt?: string;
+};
+
+/** Ingest accepts `preview_url`; stored rows use camelCase `previewUrl`. */
+const newsMediaItemInputSchema = z
+  .object({
+    type: z.enum(["image", "video"]),
+    url: z.string().url().max(1000).refine(isHttpOrHttpsUrl, {
+      message: "media url must be an http or https URL.",
+    }),
+    preview_url: z.string().url().max(1000).refine(isHttpOrHttpsUrl, {
+      message: "media preview_url must be an http or https URL.",
+    }).optional(),
+    alt: z.string().max(300).optional(),
+  })
+  .transform((value): NewsMediaItem => ({
+    type: value.type,
+    url: value.url.trim(),
+    ...(value.preview_url?.trim() ? { previewUrl: value.preview_url.trim() } : {}),
+    ...(value.alt?.trim() ? { alt: value.alt.trim() } : {}),
+  }));
+
+const NEWS_MEDIA_MAX_ITEMS = 4;
+
+/**
+ * Optional `media` on X ingest: invalid entries are dropped (not rejected),
+ * same as unknown tags, so older payloads and partially-bad media arrays
+ * still ingest.
+ */
+const newsMediaFieldSchema = z.preprocess((value) => {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return value;
+  const out: NewsMediaItem[] = [];
+  for (const entry of value) {
+    const parsed = newsMediaItemInputSchema.safeParse(entry);
+    if (!parsed.success) continue;
+    out.push(parsed.data);
+    if (out.length >= NEWS_MEDIA_MAX_ITEMS) break;
+  }
+  return out;
+}, z
+  .array(
+    z.object({
+      type: z.enum(["image", "video"]),
+      url: z.string().min(1),
+      previewUrl: z.string().optional(),
+      alt: z.string().optional(),
+    }),
+  )
+  .max(NEWS_MEDIA_MAX_ITEMS)
+  .optional());
 
 export type NotesSnapshotEntry = {
   injuryNotes: string | null;
@@ -140,6 +203,12 @@ export const xNewsItemSchema = z
      * Unknown tags are dropped; they do not reject the item.
      */
     tags: newsTagsFieldSchema,
+    /**
+     * Optional media attached to the post (charts, graphs, film clips):
+     * `[{type: "image"|"video", url, preview_url?, alt?}]`, max 4.
+     * Invalid entries are dropped; they do not reject the item.
+     */
+    media: newsMediaFieldSchema,
   })
   .superRefine((item, ctx) => {
     const scope = item.scope ?? "player";
@@ -354,6 +423,7 @@ export function buildInjuryStatusDraft(input: {
     score: null,
     tags: [],
     scope: "player",
+    media: [],
   };
 }
 
@@ -392,6 +462,7 @@ export function buildInjuryNotesDraft(input: {
     score: null,
     tags: [],
     scope: "player",
+    media: [],
   };
 }
 
@@ -665,6 +736,7 @@ function xNewsDraftBase(item: XNewsItem): Omit<
     signal: item.signal?.trim() || null,
     score: item.score ?? item.source_priority ?? null,
     tags: normalizeNewsTags(item.tags),
+    media: item.media ?? [],
   };
 }
 

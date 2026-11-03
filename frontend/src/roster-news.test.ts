@@ -40,6 +40,7 @@ function news(items: Array<{
         score: null,
         tags: item.tags ?? [],
         scope: "player" as const,
+        media: [],
       })),
     }],
   };
