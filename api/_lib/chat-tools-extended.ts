@@ -1108,8 +1108,11 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
       name: player.name,
       position: player.position,
       team: player.team,
-      // Spec: V is league-scored projection. Omit usage so blend uses no-history (w_v=1).
+      // Spec: V is the league-scored projection; U rides the roster row from
+      // the dashboard build (null when the player has no usage history).
       vegasProjection: ranking?.leagueProjection ?? player.projection,
+      usageProjection: player.usageProjection ?? null,
+      usageGames: player.usageGames ?? 0,
       injuryStatus: player.injuryStatus,
       isBye: ranking?.isBye ?? player.isBye,
       gamePhase: player.gamePhase,

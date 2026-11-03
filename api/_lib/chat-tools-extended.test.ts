@@ -811,6 +811,26 @@ describe("extended chat tools", () => {
     expect(serialized).not.toContain("projection_edge");
   });
 
+  it("suggest_lineup verdicts move with the roster rows' usage projection", async () => {
+    type LineupResult = {
+      swaps: Array<{ start: { playerId: string }; verdict: { score: number } }>;
+    };
+    const benchSwapScore = async (usage: { usageProjection: number; usageGames: number } | null) => {
+      const dashboard = baseDashboard();
+      const bench = dashboard.leagues[0]!.bench[0]!;
+      if (usage) Object.assign(bench, usage);
+      const result = await toolSuggestLineup(ctxWithDashboard(dashboard), { leagueId: "lg1" }) as LineupResult;
+      return result.swaps.find((swap) => swap.start.playerId === "p-bench")?.verdict.score;
+    };
+    const baseline = await benchSwapScore(null);
+    const bearish = await benchSwapScore({ usageProjection: 8, usageGames: 6 });
+    const bullish = await benchSwapScore({ usageProjection: 20, usageGames: 6 });
+    expect(baseline).toBeDefined();
+    // WR w_v is 0.25, so U pulls the blended score toward itself both ways.
+    expect(bullish!).toBeGreaterThan(baseline!);
+    expect(bearish ?? Number.NEGATIVE_INFINITY).toBeLessThan(baseline!);
+  });
+
   it("move evidence resolves nflverse usage across the Sleeper/GSIS id mismatch", async () => {
     selectResults.push([]); // prop-line cache miss inside the evidence index
     const index = await loadMoveEvidenceIndex(baseDashboard());
