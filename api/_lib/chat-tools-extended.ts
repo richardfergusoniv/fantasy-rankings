@@ -72,7 +72,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "get_player_news",
       description:
-        "Recent player news. Scope: one player, my roster, my opponent, or the whole league. Newest first.",
+        "Recent player news, including team- and league-scoped reports that affect the players in scope (QB changes, line injuries, coaching). Scope: one player, my roster, my opponent, or the whole league. Newest first.",
       parameters: {
         type: "object",
         properties: {
@@ -322,9 +322,28 @@ export async function toolGetPlayerNews(
   const maxScan = scope === "player"
     ? pageSize
     : Math.max(limit * 20, 100);
+  // Team-/league-scoped rows (QB changes, line injuries, coaching) carry no
+  // playerId — join them through the teams of the players in scope instead.
+  const teamById = new Map(dashboard.rankings.map((row) => [row.playerId, row.team]));
+  const scopeTeams = [...new Set(
+    ids.map((id) => teamById.get(id)).filter((t): t is string => Boolean(t)),
+  )];
   const newsWhere = and(
-    inArray(schema.sharedPlayerNews.playerId, ids),
-    eq(schema.sharedPlayerNews.scope, "player"),
+    or(
+      and(
+        inArray(schema.sharedPlayerNews.playerId, ids),
+        eq(schema.sharedPlayerNews.scope, "player"),
+      ),
+      ...(scopeTeams.length
+        ? [and(
+            eq(schema.sharedPlayerNews.scope, "team"),
+            inArray(schema.sharedPlayerNews.team, scopeTeams),
+          )]
+        : []),
+      ...(scope === "roster" || scope === "league"
+        ? [eq(schema.sharedPlayerNews.scope, "league")]
+        : []),
+    ),
     or(
       and(
         sql`${schema.sharedPlayerNews.publishedAt} is not null`,
@@ -350,6 +369,7 @@ export async function toolGetPlayerNews(
         playerId: schema.sharedPlayerNews.playerId,
         player: schema.sharedPlayerNews.player,
         team: schema.sharedPlayerNews.team,
+        scope: schema.sharedPlayerNews.scope,
         change: schema.sharedPlayerNews.change,
         newsType: schema.sharedPlayerNews.newsType,
         roleContext: schema.sharedPlayerNews.roleContext,
@@ -386,6 +406,7 @@ export async function toolGetPlayerNews(
         playerId: row.playerId,
         player: row.player,
         team: row.team,
+        scope: row.scope,
         change: row.change,
         newsType: row.newsType,
         sourceLabel: row.sourceLabel,
