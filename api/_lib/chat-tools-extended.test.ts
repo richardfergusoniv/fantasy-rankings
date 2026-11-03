@@ -831,7 +831,23 @@ describe("extended chat tools", () => {
     expect(bearish ?? Number.NEGATIVE_INFINITY).toBeLessThan(baseline!);
   });
 
+  it("move evidence flags players with a role-change report in the last 7 days", async () => {
+    selectResults.push([
+      { playerId: "p-role", signal: "injury", roleContext: "Sleeper injury-status change detected by the scheduled check." },
+      { playerId: "p-quiet", signal: null, roleContext: "Posted by @someone on X." },
+      { playerId: "p-depth", signal: "depth_chart", roleContext: "Posted by @someone on X." },
+    ]);
+    selectResults.push([]); // prop-line cache miss inside the evidence index
+    const index = await loadMoveEvidenceIndex(baseDashboard());
+    const flag = (playerId: string) => index.forPlayer({ playerId, name: "Someone", team: "BUF", position: "WR" }).roleChangeReported;
+    expect(flag("p-role")).toBe(true);
+    expect(flag("p-depth")).toBe(true);
+    expect(flag("p-quiet")).toBe(false);
+    expect(flag("p-absent")).toBe(false);
+  });
+
   it("move evidence resolves nflverse usage across the Sleeper/GSIS id mismatch", async () => {
+    selectResults.push([]); // role-change query returns no rows
     selectResults.push([]); // prop-line cache miss inside the evidence index
     const index = await loadMoveEvidenceIndex(baseDashboard());
     // The stats fixture is keyed by the nflverse id "alpha"; the tool-side

@@ -632,6 +632,10 @@ export type MovePlayerEvidence = {
     underOdds: number | null;
     bookCount: number;
   }>;
+  /** A player-scoped news item in the last 7 days reported an injury, role,
+   * depth-chart, or workload change — the data the S1/S2 rules reason over.
+   * false both when nothing matched and when the news load failed. */
+  roleChangeReported: boolean;
 };
 
 type MoveEvidenceIndex = {
@@ -731,6 +735,50 @@ export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveE
     }
   }
 
+  // Role-change flag: player-scoped news in the last 7 days whose signal or
+  // role context reports an injury/role/depth/workload change. One bounded
+  // query over the dashboard's player ids; degrades to "none reported".
+  const roleChangeIds = new Set<string>();
+  try {
+    const ROLE_CHANGE_PATTERN = /injur|role|depth|starter|promot|demot|snap|workload|suspen/i;
+    const ids = [
+      ...new Set([
+        ...dashboard.leagues.flatMap((item) => [
+          ...item.starters.map((p) => p.playerId),
+          ...item.bench.map((p) => p.playerId),
+          ...item.rosteredPlayerIds,
+        ]),
+        ...dashboard.rankings.map((row) => row.playerId),
+      ]),
+    ].slice(0, 800);
+    const newsCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    for (let offset = 0; offset < ids.length; offset += 200) {
+      const rows = await db
+        .select({
+          playerId: schema.sharedPlayerNews.playerId,
+          signal: schema.sharedPlayerNews.signal,
+          roleContext: schema.sharedPlayerNews.roleContext,
+        })
+        .from(schema.sharedPlayerNews)
+        .where(and(
+          inArray(schema.sharedPlayerNews.playerId, ids.slice(offset, offset + 200)),
+          eq(schema.sharedPlayerNews.scope, "player"),
+          sql`coalesce(${schema.sharedPlayerNews.publishedAt}, ${schema.sharedPlayerNews.createdAt}) >= ${newsCutoff}`,
+        ))
+        .limit(2_000);
+      for (const row of rows) {
+        if (row.playerId && (ROLE_CHANGE_PATTERN.test(row.signal ?? "") || ROLE_CHANGE_PATTERN.test(row.roleContext))) {
+          roleChangeIds.add(row.playerId);
+        }
+      }
+    }
+  } catch (err) {
+    console.error(
+      "[chat] move evidence role-change load failed",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
   const propLinesByPlayer = new Map<string, MovePlayerEvidence["propLines"]>();
   try {
     const propWeek = await loadPropLineWeek({ season, week });
@@ -762,6 +810,7 @@ export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveE
         season: rates?.season ?? null,
         game: gameLineForTeam(dashboard, player.team),
         propLines: propLinesByPlayer.get(player.playerId) ?? [],
+        roleChangeReported: roleChangeIds.has(player.playerId),
       };
     },
   };
