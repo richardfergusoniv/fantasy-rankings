@@ -256,6 +256,6 @@ a[href].player-news-item { color: inherit; text-decoration: none; }
 
 /* Compact media thumbnails inside player news list rows. */
 .player-news-item .news-media.is-compact { display: flex; flex-wrap: wrap; gap: 6px; }
-.player-news-item .news-media-thumb { display: block; min-height: 0; width: 72px; height: 48px; border-radius: 6px; overflow: hidden; border: 1px solid var(--hairline); }
+.player-news-item .news-media-thumb { display: block; min-height: 0; width: 72px; height: 48px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--hairline); }
 .player-news-item .news-media-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.player-news-item .news-media.is-compact .news-media-video { width: 144px; height: 81px; border-radius: 6px; border: 1px solid var(--hairline); background: var(--surface-2); }
+.player-news-item .news-media.is-compact .news-media-video { width: 144px; height: 81px; border-radius: var(--radius-sm); border: 1px solid var(--hairline); background: var(--surface-2); }
