@@ -1082,7 +1082,7 @@ describe("extended chat tools", () => {
     const devAsset = {
       playerId: "p-dev", name: "Dev Stash", team: "BUF", position: "WR",
       lineupSlot: null, isStarter: false, rank: 60, projection: 3,
-      projectionSource: "vegas", actual: null, gamePhase: "pregame",
+      projectionSource: "vegas" as const, actual: null, gamePhase: "pregame" as const,
       gameTime: null, gamePeriod: null, gameClockSeconds: null,
       opponent: "MIA", isAway: false, isBye: false, injuryStatus: null,
       defenseComponents: null, projectionComponents: null,
