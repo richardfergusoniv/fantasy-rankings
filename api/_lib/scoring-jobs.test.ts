@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { Dashboard, RosterPlayer } from "./dashboard-schemas.js";
+import type { z } from "zod";
+import type { Dashboard, rosterPlayerSchema } from "./dashboard-schemas.js";
+
+type RosterPlayer = z.infer<typeof rosterPlayerSchema>;
 import { blendProjection } from "./move-scoring.js";
 import {
   __testParseSnapshotMetrics,

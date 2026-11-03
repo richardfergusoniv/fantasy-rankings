@@ -2136,28 +2136,35 @@ export async function buildUserDashboard(
     const rosteredSet = new Set(rosteredPlayerIds);
     const tradeWaiverPool: RosterPlayer[] = leagueRankings
       .filter((row) => ["QB", "RB", "WR", "TE"].includes(row.position) && !rosteredSet.has(row.playerId))
-      .map((row) => ({
-        playerId: row.playerId,
-        name: row.name,
-        team: row.team,
-        position: row.position,
-        lineupSlot: null,
-        isStarter: false,
-        rank: row.leagueRank,
-        projection: row.leagueProjection,
-        projectionSource: row.projectionSource,
-        actual: row.actual,
-        gamePhase: row.gamePhase ?? "pregame",
-        gameTime: row.gameTime,
-        gamePeriod: null,
-        gameClockSeconds: null,
-        opponent: row.opponent,
-        isAway: row.isAway,
-        isBye: row.isBye,
-        injuryStatus: row.injuryStatus,
-        defenseComponents: null,
-        projectionComponents: row.projectionComponents,
-      }))
+      .map((row) => {
+        // Same usage-blend inputs the roster rows carry, so waiver-pool
+        // snapshot rows blend too instead of always running Vegas-only.
+        const usage = usageProjectionFor(opportunityByPlayerId.get(row.playerId), row.position, league.scoring_settings);
+        return {
+          playerId: row.playerId,
+          name: row.name,
+          team: row.team,
+          position: row.position,
+          lineupSlot: null,
+          isStarter: false,
+          rank: row.leagueRank,
+          projection: row.leagueProjection,
+          projectionSource: row.projectionSource,
+          actual: row.actual,
+          gamePhase: row.gamePhase ?? "pregame",
+          gameTime: row.gameTime,
+          gamePeriod: null,
+          gameClockSeconds: null,
+          opponent: row.opponent,
+          isAway: row.isAway,
+          isBye: row.isBye,
+          injuryStatus: row.injuryStatus,
+          defenseComponents: null,
+          projectionComponents: row.projectionComponents,
+          usageProjection: usage?.usageProjection ?? null,
+          usageGames: usage?.usageGames ?? 0,
+        };
+      })
       .sort((a, b) => (b.projection ?? -1000) - (a.projection ?? -1000) || a.name.localeCompare(b.name));
     const powerRankingsWeek: z.infer<typeof powerRankingSchema>[] = leagueRankings.length === 0 ? [] : rosters
       .map((roster) => {
