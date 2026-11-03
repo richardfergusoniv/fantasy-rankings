@@ -460,6 +460,7 @@ describe("loadDraftGrade", () => {
       expect(result.grade?.draftDay).toEqual(result.grade?.today);
       // The default path falls back the same way: the draft grades on today's board.
       const legacy = await loadDraftGrade(dynasty, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d24", { start_time: Date.UTC(2024, 7, 15, 18) })], { d24: sleeperPicks }), loadBoard, minBoardPlayers: 1 });
+      expect(legacy.grade).not.toBeNull();
       expect(legacy.grade?.draftDay).toEqual(legacy.grade?.today);
     });
 
