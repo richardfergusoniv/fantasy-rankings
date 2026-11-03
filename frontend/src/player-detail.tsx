@@ -521,6 +521,7 @@ export function PlayerDetailSheet({
     startedAt: number;
     axis: "x" | "y" | "none" | null;
     horizontalBlocked: boolean;
+    interactiveBlocked: boolean;
   } | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
@@ -581,6 +582,10 @@ export function PlayerDetailSheet({
       startedAt: performance.now(),
       axis: null,
       horizontalBlocked: Boolean(target?.closest("canvas, svg, .player-value-trend, .boom-bust-panel, [data-player-chart]")),
+      // A touch that starts on a control belongs to the control: a quick tap
+      // with a downward roll otherwise reads as a flick and dismisses the
+      // sheet before the tap lands (the Props tab at scrollTop 0).
+      interactiveBlocked: Boolean(target?.closest("button, a, input, select, textarea, summary, [role='tab'], [role='button']")),
     };
     if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
     setSettling(false);
@@ -597,7 +602,9 @@ export function PlayerDetailSheet({
     gesture.rawDy = dy;
     if (gesture.axis === null) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
-      if (Math.abs(dx) > Math.abs(dy)) {
+      if (gesture.interactiveBlocked) {
+        gesture.axis = "none";
+      } else if (Math.abs(dx) > Math.abs(dy)) {
         gesture.axis = canGoBack && dx > 0 && !gesture.horizontalBlocked ? "x" : "none";
       } else {
         gesture.axis = sheetRef.current?.scrollTop === 0 && dy > 0 ? "y" : "none";
