@@ -13,7 +13,7 @@
  */
 import { readUserDashboardCache } from "../api/_lib/dashboard-build.js";
 import { db, schema } from "../api/_lib/db.js";
-import { storePlayoffOdds } from "../api/_lib/playoff-odds-store.js";
+import { PLAYOFF_ODDS_STORE_TTL_MS, storePlayoffOdds } from "../api/_lib/playoff-odds-store.js";
 import { playoffOddsFromProjections } from "../api/_lib/projected-playoff-odds.js";
 import { loadProjectedStandings } from "../api/_lib/projected-standings.js";
 
@@ -30,6 +30,16 @@ async function main(): Promise<number> {
       continue;
     }
     const { dashboard } = cached;
+    // Never publish odds computed from a snapshot older than the freshness
+    // the stored record claims: readers trust computedAt for the store TTL,
+    // so an older source snapshot would be served as fresh long past its
+    // real age. Skipped users fall back to the live compute on their next
+    // visit, same as a store miss.
+    if (Date.now() - cached.fetchedAtMs > PLAYOFF_ODDS_STORE_TTL_MS) {
+      skipped += dashboard.leagues.length;
+      console.log(`skip user ${sleeperUserId}: dashboard snapshot is stale`);
+      continue;
+    }
     for (const league of dashboard.leagues) {
       try {
         const projected = await loadProjectedStandings(league, dashboard.season, dashboard.week);
