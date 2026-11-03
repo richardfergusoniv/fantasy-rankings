@@ -88,7 +88,11 @@ const MAX_INGEST_BODY_BYTES = 8 * 1024 * 1024;
  *                   are dropped at validation (item still accepted). Producers
  *                   should send Sleeper `player_id` when known; `player_name`
  *                   (+ optional `team`) is a fallback. Last-name-only names
- *                   require `team` or the item is dropped.
+ *                   require `team` or the item is dropped. Optional
+ *                   `source_priority` (0-100) marks high-value accounts; it
+ *                   becomes the row's `score` only when `score` is absent,
+ *                   feeding ticker sort/prominence without overriding
+ *                   per-post scoring.
  * - prop-line-snapshots: inserts dated consensus prop-line rows into
  *                   `prop_line_snapshots` (line-movement history).
  * - sleeper-picks:  stores the normalized Sleeper Picks NFL board as one
