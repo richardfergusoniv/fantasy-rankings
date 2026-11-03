@@ -690,6 +690,27 @@ describe("extended chat tools", () => {
     ]);
   });
 
+  it("returns each news item's scope so team/league reports are distinguishable", async () => {
+    const base = {
+      id: "n1", playerId: "p1", player: "Alpha Receiver", team: "KC",
+      change: "Practice roundup", newsType: "roster", roleContext: "Posted on X.",
+      sourceLabel: "@beat", sourceUrl: "https://x.com/beat/status/1", externalId: "1",
+      publishedAt: new Date("2026-10-20T12:00:00Z"),
+      createdAt: new Date("2026-10-20T12:00:00Z"), source: "x",
+    };
+    selectResults.push(
+      [
+        { ...base, scope: "player" },
+        { ...base, id: "n2", playerId: null, player: null, scope: "team", change: "KC line shuffle", sourceUrl: "https://x.com/beat/status/2", externalId: "2" },
+      ],
+      [], [], [],
+    );
+    const result = await toolGetPlayerNews(ctxWithDashboard(), {
+      leagueId: "lg1", scope: "roster", limit: 10,
+    }) as { items: Array<{ scope: string | null }> };
+    expect(result.items.map((item) => item.scope)).toEqual(["player", "team"]);
+  });
+
   it("fills roster news from another page when a roundup fills the first page", async () => {
     const row = {
       id: "n1", playerId: "p1", player: "Alpha Receiver", team: "KC",
