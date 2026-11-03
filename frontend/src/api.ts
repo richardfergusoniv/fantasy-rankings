@@ -148,7 +148,7 @@ export const api = {
   getProjectedStandings: (args: { leagueId: string }): Promise<ProjectedStandings> =>
     request(`/api/data/projected-standings${buildQuery(args)}`),
 
-  getDraftGrade: (args: { leagueId: string }): Promise<DraftGradeResponse> =>
+  getDraftGrade: (args: { leagueId: string; kind?: "rookie" | "startup"; season?: string }): Promise<DraftGradeResponse> =>
     request(`/api/data/draft-grade${buildQuery(args)}`),
 
   listSavedChartViews: (_args?: EmptyArgs): Promise<{ views: SavedChartView[] }> => request("/api/chart-views"),

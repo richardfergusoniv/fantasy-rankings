@@ -153,8 +153,8 @@ describe("gradeDraft", () => {
     const today = board([...marketBoard].map(([id, value]) => [id, id === "p2" ? 450 : value] as [string, number]));
     const grades = gradeDraft({ ...options, picks: [...fair].reverse(), draftDayBoard: marketBoard, todayBoard: today });
     expect(grades.picks).toEqual([
-      { playerId: "p2", pickNo: 2, draftDay: { letter: "A+", percent: 100 }, today: { letter: "F", percent: 50 }, better: { yours: { playerId: "p4", name: "Name p4", position: "WR", team: "TM" }, best: { playerId: "p3", name: "Name p3", position: "RB", team: "TM" } } },
-      { playerId: "p7", pickNo: 7, draftDay: { letter: "A+", percent: 100 }, today: { letter: "A+", percent: 100 }, better: { yours: null, best: null } },
+      { playerId: "p2", name: "Name p2", position: "WR", team: "TM", pickNo: 2, draftDay: { letter: "A+", percent: 100 }, today: { letter: "F", percent: 50 }, better: { yours: { playerId: "p4", name: "Name p4", position: "WR", team: "TM" }, best: { playerId: "p3", name: "Name p3", position: "RB", team: "TM" } } },
+      { playerId: "p7", name: "Name p7", position: "RB", team: "TM", pickNo: 7, draftDay: { letter: "A+", percent: 100 }, today: { letter: "A+", percent: 100 }, better: { yours: null, best: null } },
     ]);
   });
 
@@ -299,7 +299,7 @@ describe("loadDraftGrade", () => {
 
   it("loads the draft-day board for the draft's Pacific date and today's board for today", async () => {
     const calls: Array<[string, string, number]> = [];
-    const grade = await loadDraftGrade(league, 1, {
+    const { grade } = await loadDraftGrade(league, 1, {
       seasonType: inSeason,
       fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }),
       loadBoard: async (formatKey, date, windowDays) => { calls.push([formatKey, date, windowDays]); return marketBoard; },
@@ -315,7 +315,7 @@ describe("loadDraftGrade", () => {
 
   it("names the strategies and the players they would have taken, on today's values", async () => {
     const today = board([...marketBoard].map(([id, value]) => [id, id === "p1" ? 100 : value] as [string, number]));
-    const grade = await loadDraftGrade(league, 1, {
+    const { grade } = await loadDraftGrade(league, 1, {
       seasonType: inSeason,
       fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }),
       loadBoard: async (_format, _date, windowDays) => (windowDays === 14 ? today : marketBoard),
@@ -328,12 +328,12 @@ describe("loadDraftGrade", () => {
 
   it("returns null when no draft is complete, or the only one is an auction", async () => {
     const loadBoard = async () => marketBoard;
-    expect(await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1", { status: "drafting" })], {}), loadBoard })).toBeNull();
-    expect(await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1", { type: "auction" })], { d1: sleeperPicks }), loadBoard })).toBeNull();
+    expect((await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1", { status: "drafting" })], {}), loadBoard })).grade).toBeNull();
+    expect((await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1", { type: "auction" })], { d1: sleeperPicks }), loadBoard })).grade).toBeNull();
   });
 
   it("grades the draft with the most picks when a league has more than one", async () => {
-    const grade = await loadDraftGrade(league, 1, {
+    const { grade } = await loadDraftGrade(league, 1, {
       seasonType: inSeason,
       fetchJson: fetcher([draft("rookie"), draft("startup")], { rookie: sleeperPicks.slice(0, 2), startup: sleeperPicks }),
       loadBoard: async () => marketBoard,
@@ -351,22 +351,22 @@ describe("loadDraftGrade", () => {
     };
     const dynasty = { id: "lg", seasonLongFormat: { key: "dynasty-1qb-12t-1ppr", isDynasty: true } };
     const deps = { seasonType: inSeason, loadBoard: async () => marketBoard, minBoardPlayers: 1 };
-    const established = await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: routing("prev-league") });
+    const established = (await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: routing("prev-league") })).grade;
     expect(established?.rookieHindsight).not.toBeNull();
     expect(established?.strategies).toBeNull();
-    const firstYear = await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: routing("0") });
+    const firstYear = (await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: routing("0") })).grade;
     expect(firstYear?.rookieHindsight).toBeNull();
     expect(firstYear?.strategies).not.toBeNull();
     // A redraft league keeps the strategies even though its Sleeper league has a previous one.
-    const redraft = await loadDraftGrade(league, 1, { ...deps, fetchJson: routing("prev-league") });
+    const redraft = (await loadDraftGrade(league, 1, { ...deps, fetchJson: routing("prev-league") })).grade;
     expect(redraft?.rookieHindsight).toBeNull();
     expect(redraft?.strategies).not.toBeNull();
   });
 
   it("returns null without a start time or when the draft-day board is missing", async () => {
     const loadBoard = async () => board([]);
-    expect(await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1", { start_time: null })], { d1: sleeperPicks }), loadBoard: async () => marketBoard, minBoardPlayers: 1 })).toBeNull();
-    expect(await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }), loadBoard })).toBeNull();
+    expect((await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1", { start_time: null })], { d1: sleeperPicks }), loadBoard: async () => marketBoard, minBoardPlayers: 1 })).grade).toBeNull();
+    expect((await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }), loadBoard })).grade).toBeNull();
   });
   it("looks back as far as draft day for today's board in the offseason, when unchanged redraft values are not stored", async () => {
     const windows = async (seasonType: string, formatKey: string) => {
@@ -402,8 +402,71 @@ describe("loadDraftGrade", () => {
       minBoardPlayers: 1,
     });
     // Without the setting the round would be the 4 rosters seen, which stops at pick 5 and misses the star at 6.
-    expect((await grade(8))?.picks[0]?.better.yours?.playerId).toBe("star");
-    expect((await grade(4))?.picks[0]?.better.yours).toBeNull();
+    expect((await grade(8)).grade?.picks[0]?.better.yours?.playerId).toBe("star");
+    expect((await grade(4)).grade?.picks[0]?.better.yours).toBeNull();
   });
 
+
+  describe("draft selection across the season chain", () => {
+    const dynasty = { id: "lg", seasonLongFormat: { key: "dynasty-1qb-12t-1ppr", isDynasty: true } };
+    const leagues: Record<string, unknown> = {
+      lg: { season: "2026", previous_league_id: "lg25", roster_positions: ["QB", "RB", "WR", "TE"] },
+      lg25: { season: "2025", previous_league_id: "lg24", roster_positions: ["QB", "RB", "WR", "TE"] },
+      lg24: { season: "2024", previous_league_id: "0", roster_positions: ["QB", "RB", "WR", "TE"] },
+    };
+    const draftsByLeague: Record<string, unknown[]> = {
+      lg: [draft("d26")],
+      lg25: [draft("d25", { start_time: Date.UTC(2025, 4, 10, 18) })],
+      lg24: [draft("d24", { start_time: Date.UTC(2024, 7, 15, 18) })],
+    };
+    const picksByDraft: Record<string, unknown[]> = { d26: sleeperPicks, d25: sleeperPicks, d24: sleeperPicks };
+    const chainFetcher = async <T>(url: string): Promise<T> => {
+      const leagueMatch = url.match(/\/league\/([^/]+)$/);
+      if (leagueMatch) return leagues[leagueMatch[1]!] as T;
+      const draftsMatch = url.match(/\/league\/([^/]+)\/drafts$/);
+      if (draftsMatch) return (draftsByLeague[draftsMatch[1]!] ?? []) as T;
+      const picksMatch = url.match(/\/draft\/([^/]+)\/picks$/);
+      if (picksMatch) return (picksByDraft[picksMatch[1]!] ?? []) as T;
+      throw new Error(`unexpected url ${url}`);
+    };
+    const deps = { seasonType: inSeason, fetchJson: chainFetcher, loadBoard: async () => marketBoard, minBoardPlayers: 1 };
+
+    it("grades the founding season's draft as the startup, with the strategy hindsight", async () => {
+      const result = await loadDraftGrade(dynasty, 1, { ...deps, selection: { kind: "startup" } });
+      expect(result.grade?.draftId).toBe("d24");
+      expect(result.grade?.strategies).not.toBeNull();
+      expect(result.grade?.rookieHindsight).toBeNull();
+      expect(result.availableDrafts).toEqual([
+        { kind: "rookie", season: "2026", draftId: "d26" },
+        { kind: "rookie", season: "2025", draftId: "d25" },
+        { kind: "startup", season: "2024", draftId: "d24" },
+      ]);
+    });
+
+    it("grades the newest rookie draft by default and an older one by season", async () => {
+      const latest = await loadDraftGrade(dynasty, 1, { ...deps, selection: { kind: "rookie" } });
+      expect(latest.grade?.draftId).toBe("d26");
+      expect(latest.grade?.rookieHindsight).not.toBeNull();
+      const older = await loadDraftGrade(dynasty, 1, { ...deps, selection: { kind: "rookie", season: "2025" } });
+      expect(older.grade?.draftId).toBe("d25");
+      expect(older.grade?.rookieHindsight).not.toBeNull();
+    });
+
+    it("grades a draft that predates stored values on today's board", async () => {
+      const loadBoard = async (_format: string, date: string) => (date.startsWith("2024") ? board([]) : marketBoard);
+      const result = await loadDraftGrade(dynasty, 1, { ...deps, loadBoard, selection: { kind: "startup" } });
+      expect(result.grade).not.toBeNull();
+      expect(result.grade?.draftDay).toEqual(result.grade?.today);
+      // The default path has no fallback: the same missing board leaves it ungraded.
+      const legacy = await loadDraftGrade(dynasty, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d24", { start_time: Date.UTC(2024, 7, 15, 18) })], { d24: sleeperPicks }), loadBoard, minBoardPlayers: 1 });
+      expect(legacy.grade).toBeNull();
+    });
+
+    it("ignores a selection for a non-dynasty league", async () => {
+      const result = await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }), loadBoard: async () => marketBoard, minBoardPlayers: 1, selection: { kind: "startup" } });
+      expect(result.grade?.draftId).toBe("d1");
+      expect(result.availableDrafts).toEqual([]);
+    });
+  });
 });
+

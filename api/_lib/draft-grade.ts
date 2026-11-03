@@ -72,6 +72,9 @@ export type BetterPicks = { yours: BetterPick | null; best: BetterPick | null };
 
 export type OwnPickGrade = {
   playerId: string;
+  name: string;
+  position: string;
+  team: string | null;
   pickNo: number;
   draftDay: PickGrade | null;
   today: PickGrade | null;
@@ -372,13 +375,20 @@ export function gradeDraft(args: {
   const named = (pick: GradedPick | null | undefined): BetterPick | null => (
     pick ? { playerId: pick.playerId, name: pick.name ?? "", position: pick.position, team: pick.team ?? null } : null
   );
-  const picks = [...onDraftDay].map(([playerId, grade]) => ({
-    playerId,
-    pickNo: pickNoOf.get(playerId) ?? 0,
-    draftDay: grade,
-    today: sinceThen?.get(playerId) ?? null,
-    better: { yours: named(view?.yoursPicks.get(playerId)), best: named(view?.bestPicks.get(playerId)) ?? named(rookie?.bestByPlayerId.get(playerId)) },
-  }));
+  const takenById = new Map(args.picks.map((pick) => [pick.playerId, pick]));
+  const picks = [...onDraftDay].map(([playerId, grade]) => {
+    const taken = takenById.get(playerId);
+    return {
+      playerId,
+      name: taken?.name ?? "",
+      position: taken?.position ?? "",
+      team: taken?.team ?? null,
+      pickNo: pickNoOf.get(playerId) ?? 0,
+      draftDay: grade,
+      today: sinceThen?.get(playerId) ?? null,
+      better: { yours: named(view?.yoursPicks.get(playerId)), best: named(view?.bestPicks.get(playerId)) ?? named(rookie?.bestByPlayerId.get(playerId)) },
+    };
+  });
   return { draftDay, today, picks, strategies: view ? { yours: strategyLabel(view.yours), best: strategyLabel(view.best) } : null, hindsight: view ? hindsightFrom(view, named) : null, rookieHindsight: rookie?.hindsight ?? null };
 }
 
@@ -412,7 +422,60 @@ export type LoadDraftGradeDeps = {
   /** The NFL season phase ("off", "pre", "regular", ...). */
   seasonType?: () => Promise<string>;
   minBoardPlayers?: number;
+  /** Grade a specific draft of a dynasty league instead of the current season's. */
+  selection?: DraftSelection;
 };
+
+/** A draft of the league the Hindsight view can grade, from the chain walk. */
+export type AvailableDraft = { kind: "rookie" | "startup"; season: string; draftId: string };
+
+export type DraftSelection = { kind: "rookie" | "startup"; season?: string };
+
+export type LoadDraftGradeResult = { grade: DraftGrade | null; availableDrafts: AvailableDraft[] };
+
+type ChainLeague = {
+  leagueId: string;
+  season: string | null;
+  previousLeagueId: string | null;
+  rosterPositions?: string[];
+};
+
+/** The league's season chain, newest first, following previous_league_id to the founding season. */
+async function loadLeagueChain(
+  get: <T>(url: string) => Promise<T>,
+  startLeagueId: string,
+): Promise<ChainLeague[]> {
+  const chain: ChainLeague[] = [];
+  const seen = new Set<string>();
+  let leagueId: string | null = startLeagueId;
+  while (leagueId && !seen.has(leagueId) && chain.length < 12) {
+    seen.add(leagueId);
+    const league: { season?: string; previous_league_id?: string | null; roster_positions?: string[] } | null = await get<{ season?: string; previous_league_id?: string | null; roster_positions?: string[] }>(
+      `${SLEEPER_BASE}/league/${leagueId}`,
+    ).catch(() => null);
+    if (!league || typeof league !== "object") break;
+    const previous: string | null = typeof league.previous_league_id === "string" && league.previous_league_id.length > 0 && league.previous_league_id !== "0"
+      ? league.previous_league_id
+      : null;
+    chain.push({ leagueId, season: league.season ?? null, previousLeagueId: previous, rosterPositions: league.roster_positions });
+    leagueId = previous;
+  }
+  return chain;
+}
+
+/** One season's completed non-auction drafts with their picks loaded. */
+async function loadSeasonDrafts(
+  get: <T>(url: string) => Promise<T>,
+  leagueId: string,
+): Promise<Array<{ draft: SleeperDraft; picks: GradedPick[] }>> {
+  const drafts = await get<SleeperDraft[]>(`${SLEEPER_BASE}/league/${leagueId}/drafts`).catch(() => [] as SleeperDraft[]);
+  // Auction picks are not made in value order, so a slot has no meaning there.
+  const complete = (Array.isArray(drafts) ? drafts : []).filter((draft) => draft.draft_id && draft.status === "complete" && draft.type !== "auction");
+  return Promise.all(complete.map(async (draft) => ({
+    draft,
+    picks: gradedPicks(await get<SleeperDraftPick[]>(`${SLEEPER_BASE}/draft/${draft.draft_id}/picks`)),
+  })));
+}
 
 function gradedPicks(picks: readonly SleeperDraftPick[]): GradedPick[] {
   return picks.flatMap((pick) => {
@@ -424,57 +487,146 @@ function gradedPicks(picks: readonly SleeperDraftPick[]): GradedPick[] {
   });
 }
 
+/** Boards, grading, and assembly for one loaded draft. */
+async function gradeLoadedDraft(args: {
+  loadBoard: (formatKey: string, asOfDateKey: string, windowDays: number) => Promise<ValueBoard>;
+  league: { id: string; seasonLongFormat: { key: string; isDynasty?: boolean } };
+  ownRosterId: number;
+  deps: LoadDraftGradeDeps;
+  loaded: { draft: SleeperDraft; picks: GradedPick[] };
+  slots: readonly string[] | undefined;
+  rookieDraft: boolean;
+  /** Grade on today's board when no stored board exists near the draft's date. */
+  currentFallback: boolean;
+}): Promise<DraftGrade | null> {
+  const startedAt = args.loaded.draft.start_time ?? args.loaded.draft.last_picked;
+  if (typeof startedAt !== "number") return null;
+  const formatKey = resolveFantasyCalcSnapshotFormatKey(args.league.seasonLongFormat.key);
+  // In the offseason redraft values that have not changed are not stored again, so today's board looks back as far as draft day's.
+  const seasonType = await (args.deps.seasonType ?? (async () => (await readNflState()).seasonType))();
+  const todayWindowDays = !isNflValueHistoryInSeason(seasonType) && isRedraftFormatKey(formatKey) ? DRAFT_DAY_WINDOW_DAYS : TODAY_WINDOW_DAYS;
+  const [storedDraftDayBoard, todayBoard] = await Promise.all([
+    args.loadBoard(formatKey, pacificDateKey(new Date(startedAt)), DRAFT_DAY_WINDOW_DAYS),
+    args.loadBoard(formatKey, pacificDateKey(args.deps.now?.() ?? new Date()), todayWindowDays),
+  ]);
+  // Drafts that predate stored values have no draft-day board. Grade them on
+  // today's board: the grade then measures what the picks are worth now.
+  const min = args.deps.minBoardPlayers ?? MIN_BOARD_PLAYERS;
+  const boardUsable = (board: ValueBoard) =>
+    board.size >= min && args.loaded.picks.some((pick) => isSkill(pick.position) && board.has(pick.playerId));
+  const draftDayBoard = args.currentFallback && !boardUsable(storedDraftDayBoard) && todayBoard.size >= min
+    ? todayBoard
+    : storedDraftDayBoard;
+  const grades = gradeDraft({
+    picks: args.loaded.picks,
+    ownRosterId: args.ownRosterId,
+    draftDayBoard,
+    todayBoard,
+    teams: args.loaded.draft.settings?.teams,
+    slots: args.slots,
+    minBoardPlayers: args.deps.minBoardPlayers,
+    rookieDraft: args.rookieDraft,
+  });
+  if (!grades.draftDay && !grades.today) return null;
+  return { draftId: args.loaded.draft.draft_id ?? "", ...grades };
+}
+
+/** The selection path: walk the season chain, classify each season's draft, grade the chosen one. */
+async function loadSelectedDraftGrade(
+  get: <T>(url: string) => Promise<T>,
+  loadBoard: (formatKey: string, asOfDateKey: string, windowDays: number) => Promise<ValueBoard>,
+  league: { id: string; seasonLongFormat: { key: string; isDynasty?: boolean } },
+  ownRosterId: number,
+  deps: LoadDraftGradeDeps,
+): Promise<LoadDraftGradeResult | null> {
+  const selection = deps.selection;
+  if (!selection) return null;
+  const chain = await loadLeagueChain(get, league.id);
+  if (chain.length === 0) return null;
+  const seasons = await Promise.all(chain.map(async (entry, index) => {
+    const loaded = await loadSeasonDrafts(get, entry.leagueId).catch(() => [] as Array<{ draft: SleeperDraft; picks: GradedPick[] }>);
+    const best = loaded.filter((row) => row.picks.length > 0).sort((a, b) => b.picks.length - a.picks.length)[0] ?? null;
+    if (!best) return null;
+    // The founding season's draft is the startup; every later season's is a rookie draft.
+    const kind = (index === chain.length - 1 ? "startup" : "rookie") as "rookie" | "startup";
+    return { entry, kind, loaded: best, season: entry.season ?? best.draft.season ?? "" };
+  }));
+  const available = seasons.filter((row): row is NonNullable<typeof row> => row !== null);
+  const availableDrafts: AvailableDraft[] = available.map((row) => ({
+    kind: row.kind,
+    season: row.season,
+    draftId: row.loaded.draft.draft_id ?? "",
+  }));
+  const chosen = selection.kind === "startup"
+    ? available.find((row) => row.kind === "startup")
+    : (selection.season
+      ? available.find((row) => row.kind === "rookie" && row.season === selection.season)
+      : undefined) ?? available.find((row) => row.kind === "rookie");
+  if (!chosen) return { grade: null, availableDrafts };
+  const grade = await gradeLoadedDraft({
+    loadBoard,
+    league,
+    ownRosterId,
+    deps,
+    loaded: chosen.loaded,
+    slots: chosen.entry.rosterPositions,
+    rookieDraft: chosen.kind === "rookie",
+    currentFallback: true,
+  });
+  return { grade, availableDrafts };
+}
+
 /** Grades the league's completed draft for one team; null when there is nothing to grade. */
 export async function loadDraftGrade(
   league: { id: string; seasonLongFormat: { key: string; isDynasty?: boolean } },
   ownRosterId: number,
   deps: LoadDraftGradeDeps = {},
-): Promise<DraftGrade | null> {
+): Promise<LoadDraftGradeResult> {
   const get = deps.fetchJson ?? fetchJson;
   const loadBoard = deps.loadBoard ?? loadValueBoard;
-  const drafts = await get<SleeperDraft[]>(`${SLEEPER_BASE}/league/${league.id}/drafts`);
-  // Auction picks are not made in value order, so a slot has no meaning there.
-  const complete = (Array.isArray(drafts) ? drafts : []).filter((draft) => draft.draft_id && draft.status === "complete" && draft.type !== "auction");
-  if (complete.length === 0) return null;
-
-  const loaded = await Promise.all(complete.map(async (draft) => ({
-    draft,
-    picks: gradedPicks(await get<SleeperDraftPick[]>(`${SLEEPER_BASE}/draft/${draft.draft_id}/picks`)),
-  })));
+  if (deps.selection && league.seasonLongFormat.isDynasty === true) {
+    const selected = await loadSelectedDraftGrade(get, loadBoard, league, ownRosterId, deps);
+    if (selected) return selected;
+  }
+  const loaded = await loadSeasonDrafts(get, league.id);
   // A dynasty league can hold a startup and a rookie draft in one season: grade the bigger one.
-  const best = loaded.sort((a, b) => b.picks.length - a.picks.length)[0];
-  if (!best || best.picks.length === 0) return null;
-
-  const startedAt = best.draft.start_time ?? best.draft.last_picked;
-  if (typeof startedAt !== "number") return null;
-  const formatKey = resolveFantasyCalcSnapshotFormatKey(league.seasonLongFormat.key);
-  // In the offseason redraft values that have not changed are not stored again, so today's board looks back as far as draft day's.
-  const seasonType = await (deps.seasonType ?? (async () => (await readNflState()).seasonType))();
-  const todayWindowDays = !isNflValueHistoryInSeason(seasonType) && isRedraftFormatKey(formatKey) ? DRAFT_DAY_WINDOW_DAYS : TODAY_WINDOW_DAYS;
-  const [draftDayBoard, todayBoard] = await Promise.all([
-    loadBoard(formatKey, pacificDateKey(new Date(startedAt)), DRAFT_DAY_WINDOW_DAYS),
-    loadBoard(formatKey, pacificDateKey(deps.now?.() ?? new Date()), todayWindowDays),
-  ]);
+  const best = [...loaded].sort((a, b) => b.picks.length - a.picks.length)[0];
+  if (!best || best.picks.length === 0) return { grade: null, availableDrafts: [] };
   const sleeperLeague = await get<{ roster_positions?: string[]; previous_league_id?: string | null }>(`${SLEEPER_BASE}/league/${league.id}`).catch(() => null);
-  const slots = sleeperLeague?.roster_positions;
   // The Draft Center's test for what kind of draft a dynasty league held: an established
   // dynasty (a previous league exists) drafts rookies; a first-year dynasty drafts a startup.
   const rookieDraft = league.seasonLongFormat.isDynasty === true
     && typeof sleeperLeague?.previous_league_id === "string"
     && sleeperLeague.previous_league_id.length > 0
     && sleeperLeague.previous_league_id !== "0";
-  const grades = gradeDraft({ picks: best.picks, ownRosterId, draftDayBoard, todayBoard, teams: best.draft.settings?.teams, slots, minBoardPlayers: deps.minBoardPlayers, rookieDraft });
-  if (!grades.draftDay && !grades.today) return null;
-  return { draftId: best.draft.draft_id ?? "", ...grades };
+  const grade = await gradeLoadedDraft({
+    loadBoard,
+    league,
+    ownRosterId,
+    deps,
+    loaded: best,
+    slots: sleeperLeague?.roster_positions,
+    rookieDraft,
+    currentFallback: false,
+  });
+  return { grade, availableDrafts: [] };
 }
 
-const querySchema = z.object({ leagueId: z.string().min(1) });
+const querySchema = z.object({
+  leagueId: z.string().min(1),
+  kind: z.enum(["rookie", "startup"]).optional(),
+  season: z.string().regex(/^\d{4}$/).optional(),
+});
 
 /** GET /api/data/draft-grade?leagueId= */
 export async function handleDraftGrade(req: Request): Promise<Response> {
   try {
     const url = new URL(req.url, "https://localhost");
-    const parsed = querySchema.safeParse({ leagueId: url.searchParams.get("leagueId") ?? "" });
+    const parsed = querySchema.safeParse({
+      leagueId: url.searchParams.get("leagueId") ?? "",
+      kind: url.searchParams.get("kind") ?? undefined,
+      season: url.searchParams.get("season") ?? undefined,
+    });
     if (!parsed.success) return badRequest("Invalid query params.", parsed.error.issues);
 
     const sleeperUserId = await resolveSleeperUserId(req);
@@ -487,11 +639,14 @@ export async function handleDraftGrade(req: Request): Promise<Response> {
     if (!cached || !league) return json({ ok: false, error: "League data is still loading. Try again shortly." }, 409);
 
     const ownRosterId = (league.standings ?? []).find((row) => row.isUser)?.rosterId ?? null;
-    if (ownRosterId === null) return json({ grade: null });
-    return json({ grade: await loadDraftGrade(league, ownRosterId) });
+    if (ownRosterId === null) return json({ grade: null, availableDrafts: [] });
+    const result = await loadDraftGrade(league, ownRosterId, {
+      selection: parsed.data.kind ? { kind: parsed.data.kind, season: parsed.data.season } : undefined,
+    });
+    return json({ grade: result.grade, availableDrafts: result.availableDrafts });
   } catch (err) {
     return internalError(err);
   }
 }
 
-export type DraftGradeResponse = { grade: DraftGrade | null };
+export type DraftGradeResponse = { grade: DraftGrade | null; availableDrafts: AvailableDraft[] };
