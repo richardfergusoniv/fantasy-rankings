@@ -37,6 +37,7 @@ import {
 import { actualComponentsForGame } from "./actual-components";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { NewsTypeBadges } from "./news-badges";
+import { newsOutletLabel } from "./news-outlet";
 import { faabBidLabel, formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { buildGameLogRows } from "./lib/game-log-rows";
 import { positionTierLabel } from "./lib/position-tier";
@@ -850,9 +851,7 @@ export function PlayerDetailSheet({
             <>
               {newsItems.slice(0, showAllNews ? 8 : 3).map((item) => {
                 const isArticle = item.source === "article";
-                const outletLabel = item.author && !isArticle
-                  ? `${item.sourceLabel} · ${item.author}`
-                  : item.sourceLabel;
+                const outletLabel = newsOutletLabel(item);
                 const timeLabel = newsItemTimeLabel(item, newsNowMs);
                 const header = (
                   <div>
