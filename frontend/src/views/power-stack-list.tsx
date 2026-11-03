@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { formatWhole } from "../lib/format-number";
-import { points } from "../shared";
+import { ModalPortal, points, useDialogFocusTrap } from "../shared";
+import { CloseGlyph } from "../components/glyphs";
 
 export type PowerStackSegment = { key: string; label: string; value: number };
 export type PowerStackTeam = { rosterId: number; rank: number; teamName: string; isUser: boolean; segments: PowerStackSegment[] };
@@ -59,5 +60,37 @@ export function PowerStackList({ teams, weekly, id }: { teams: PowerStackTeam[];
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The stacked position-value bars in a modal card, opened from the
+ * league-average table instead of expanding below it.
+ */
+export function PowerStackCard({ teams, weekly, onClose }: { teams: PowerStackTeam[]; weekly: boolean; onClose: () => void }) {
+  const dialogRef = useRef<HTMLElement | null>(null);
+  useDialogFocusTrap(dialogRef, onClose);
+  return (
+    <ModalPortal>
+      <div className="power-team-card-backdrop" onClick={onClose}>
+        <section
+          ref={dialogRef}
+          className="power-team-card power-stack-card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="power-stack-card-title"
+          tabIndex={-1}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="power-team-card-header">
+            <div className="power-team-card-heading">
+              <h2 id="power-stack-card-title">Every team by position</h2>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Close position value card"><CloseGlyph /></button>
+          </div>
+          <PowerStackList teams={teams} weekly={weekly} />
+        </section>
+      </div>
+    </ModalPortal>
   );
 }

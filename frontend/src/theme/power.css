@@ -22,6 +22,7 @@
 .power-position-values > span > strong { text-align: right; font-size: var(--type-body); font-weight: 700; }
 .power-position-values:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 .power-stack-list { display: grid; gap: 2px; margin-top: 10px; }
+.power-stack-card .power-stack-list { margin-top: 0; padding: 8px 10px 12px; }
 .power-stack-row { display: grid; width: 100%; grid-template-columns: 20px minmax(0, 118px) minmax(0, 1fr) 48px; gap: 8px; align-items: center; min-height: 32px; padding: 4px 6px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .power-stack-row:active { background: var(--surface-2); }
 .power-stack-rank { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
