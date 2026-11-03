@@ -614,6 +614,16 @@ export type MovePlayerEvidence = {
     carriesPerGame: number;
     pprPointsPerGame: number;
   } | null;
+  /** Season-to-date rates over every covered played week; pairs with `usage`
+   * (the last-3 window) so the model can tell a changed role from a hot week. */
+  season: {
+    games: number;
+    snapSharePct: number | null;
+    targetSharePct: number | null;
+    targetsPerGame: number;
+    carriesPerGame: number;
+    pprPointsPerGame: number;
+  } | null;
   game: ReturnType<typeof gameLineForTeam>;
   propLines: Array<{
     stat: string;
@@ -635,7 +645,7 @@ type MoveEvidenceIndex = {
 
 export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveEvidenceIndex> {
   const { season, week } = dashboard;
-  let usageFor: ((player: { playerId: string; name: string; team: string | null; position: string }) => MovePlayerEvidence["usage"]) | null = null;
+  let usageFor: ((player: { playerId: string; name: string; team: string | null; position: string }) => { usage: MovePlayerEvidence["usage"]; season: MovePlayerEvidence["season"] } | null) | null = null;
   if (week > 1) {
     try {
       const { stats, snaps } = await loadTeamWeekStats(season);
@@ -690,22 +700,27 @@ export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveE
         // empty must read as unavailable evidence, not zero production.
         // Without snap data at all, fall back to the last three stat weeks.
         const coveredPlayed = new Set([...played].filter((w) => statWeeks.has(w)));
-        const weeks = (played.size > 0 ? [...coveredPlayed] : statRows.map((row) => row.week))
-          .sort((a, b) => b - a)
-          .slice(0, 3);
-        if (weeks.length === 0) return null;
+        const seasonWeeks = (played.size > 0 ? [...coveredPlayed] : statRows.map((row) => row.week))
+          .sort((a, b) => b - a);
+        if (seasonWeeks.length === 0) return null;
         const snapByWeek = snapMapFor(player);
         const avg = (values: number[]) => round1dp(values.reduce((sum, v) => sum + v, 0) / values.length);
-        const shares = weeks
-          .map((w) => statByWeek.get(w)?.targetShare ?? (coveredPlayed.has(w) ? 0 : null))
-          .filter((v): v is number => v !== null);
+        const summarize = (weeks: number[]) => {
+          const shares = weeks
+            .map((w) => statByWeek.get(w)?.targetShare ?? (coveredPlayed.has(w) ? 0 : null))
+            .filter((v): v is number => v !== null);
+          return {
+            games: weeks.length,
+            snapSharePct: snapByWeek ? avg(weeks.map((w) => snapByWeek.get(w)?.offensePct ?? 0)) : null,
+            targetSharePct: shares.length ? avg(shares) : null,
+            targetsPerGame: avg(weeks.map((w) => statByWeek.get(w)?.targets ?? 0)),
+            carriesPerGame: avg(weeks.map((w) => statByWeek.get(w)?.carries ?? 0)),
+            pprPointsPerGame: avg(weeks.map((w) => statByWeek.get(w)?.fantasyPpr ?? 0)),
+          };
+        };
         return {
-          games: weeks.length,
-          snapSharePct: snapByWeek ? avg(weeks.map((w) => snapByWeek.get(w)?.offensePct ?? 0)) : null,
-          targetSharePct: shares.length ? avg(shares) : null,
-          targetsPerGame: avg(weeks.map((w) => statByWeek.get(w)?.targets ?? 0)),
-          carriesPerGame: avg(weeks.map((w) => statByWeek.get(w)?.carries ?? 0)),
-          pprPointsPerGame: avg(weeks.map((w) => statByWeek.get(w)?.fantasyPpr ?? 0)),
+          usage: summarize(seasonWeeks.slice(0, 3)),
+          season: summarize(seasonWeeks),
         };
       };
     } catch (err) {
@@ -740,11 +755,15 @@ export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveE
   }
 
   return {
-    forPlayer: (player) => ({
-      usage: usageFor ? usageFor(player) : null,
-      game: gameLineForTeam(dashboard, player.team),
-      propLines: propLinesByPlayer.get(player.playerId) ?? [],
-    }),
+    forPlayer: (player) => {
+      const rates = usageFor ? usageFor(player) : null;
+      return {
+        usage: rates?.usage ?? null,
+        season: rates?.season ?? null,
+        game: gameLineForTeam(dashboard, player.team),
+        propLines: propLinesByPlayer.get(player.playerId) ?? [],
+      };
+    },
   };
 }
 
