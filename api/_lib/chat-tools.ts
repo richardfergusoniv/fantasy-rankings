@@ -29,7 +29,7 @@ import { moveVerdict, scoreTrade } from "./move-scoring.js";
 import { teamOutlook, winPercent, winProbability } from "./win-probability.js";
 import { redraftTwinFormat } from "./season-long-format.js";
 import { loadActiveScoringWeights } from "./scoring-jobs.js";
-import { loadHistoricalTrades } from "./trades.js";
+import { loadHistoricalTrades, type HistoricalTrades } from "./trades.js";
 import { LEAGUE_CHAT_TOOL_DEFINITIONS } from "./chat-tools-league-defs.js";
 import { dispatchLeagueChatTool } from "./chat-tools-league.js";
 import {
@@ -164,7 +164,7 @@ export const CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "evaluate_trade",
       description:
-        "Evaluate a two-sided trade with deterministic move-scoring labels and fair-trade z bands. Explain the scores; never change them. The result carries the values behind the verdict and no written reasons; compose the explanation yourself from the values and margins.",
+        "Evaluate a two-sided trade with deterministic move-scoring labels and fair-trade z bands. Explain the scores; never change them. The result carries the values behind the verdict and no written reasons; compose the explanation yourself from the values and margins, and use marketContext — what this league has actually traded for the same positions — to say whether a deal like this has been accepted here.",
       parameters: {
         type: "object",
         properties: {
@@ -720,6 +720,23 @@ async function toolGetPowerRankings(
   };
 }
 
+function summarizeTradeTeam(team: HistoricalTrades["trades"][number]["teams"][number]) {
+  return {
+    teamName: team.teamName,
+    isUserTeam: team.isUserTeam,
+    players: team.assets.players.map((player) => ({
+      name: player.name,
+      position: player.position,
+    })),
+    picks: team.assets.picks.map((pick) => ({
+      description: pick.description,
+      season: pick.season,
+      round: pick.round,
+    })),
+    faabReceived: team.assets.faabReceived,
+  };
+}
+
 async function toolGetTradeHistory(
   ctx: ChatToolContext,
   args: { leagueId: string; season?: number; limit?: number },
@@ -740,23 +757,61 @@ async function toolGetTradeHistory(
       season: trade.season,
       week: trade.week,
       createdAt: trade.createdAt,
-      teams: trade.teams.map((team) => ({
-        teamName: team.teamName,
-        isUserTeam: team.isUserTeam,
-        players: team.assets.players.map((player) => ({
-          name: player.name,
-          position: player.position,
-        })),
-        picks: team.assets.picks.map((pick) => ({
-          description: pick.description,
-          season: pick.season,
-          round: pick.round,
-        })),
-        faabReceived: team.assets.faabReceived,
-      })),
+      teams: trade.teams.map(summarizeTradeTeam),
     })),
     sourceErrors: history.sourceErrors,
   };
+}
+
+/**
+ * What this league has actually paid in past trades. Chat scoring grades on
+ * fixed value bands; this gives the model the league's real market to sanity-
+ * check whether a deal like this has been accepted before. Empty when the
+ * history can't be loaded — same source as get_trade_history.
+ */
+export async function loadTradeMarketContext(
+  ctx: ChatToolContext,
+  leagueId: string,
+  positions: readonly string[],
+  limit = 8,
+): Promise<{
+  tradeCount: number;
+  seasons: number[];
+  trades: Array<{
+    id: string;
+    season: number;
+    week: number;
+    createdAt: string;
+    teams: Array<ReturnType<typeof summarizeTradeTeam>>;
+  }>;
+} | null> {
+  try {
+    const history = await loadHistoricalTrades(leagueId, false, ctx.sleeperUserId);
+    const involved = new Set(positions);
+    const sorted = history.trades
+      .slice()
+      .sort((a, b) => b.season - a.season || b.week - a.week || b.createdAt.localeCompare(a.createdAt));
+    const relevant = involved.size
+      ? sorted.filter((trade) =>
+        trade.teams.some((team) =>
+          team.assets.players.some((player) => involved.has(player.position))),
+      )
+      : sorted;
+    const pool = relevant.length > 0 ? relevant : sorted;
+    return {
+      tradeCount: history.trades.length,
+      seasons: history.seasons,
+      trades: pool.slice(0, limit).map((trade) => ({
+        id: trade.id,
+        season: trade.season,
+        week: trade.week,
+        createdAt: trade.createdAt,
+        teams: trade.teams.map(summarizeTradeTeam),
+      })),
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function resolveTradeAssets(
@@ -965,8 +1020,12 @@ async function toolEvaluateTrade(
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
     scoringWindow: windowKey,
-    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind the verdict and no written reasons: compose the explanation yourself and name the deciding factor.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind the verdict and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists this league's past trades involving the same positions — say whether a deal like this has been accepted here when it is non-null.",
     freshness: moveFreshness(dashboard),
+    marketContext: await loadTradeMarketContext(ctx, league.id, [
+      ...give.resolved.map((row) => row.position),
+      ...get.resolved.map((row) => row.position),
+    ]),
     give: give.resolved,
     get: get.resolved,
     giveTotal,
