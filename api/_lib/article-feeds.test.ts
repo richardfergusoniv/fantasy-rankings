@@ -18,6 +18,7 @@ import {
   normalizeHeadlineKey,
   parseFeedXml,
   passesHeadlineNoiseFilter,
+  passesSourceAllowlist,
   prunePffPremiumCache,
   stripHtml,
   truncateSummary,
@@ -52,6 +53,7 @@ function fixture(name: string): string {
 
 const fantasyPros: ArticleFeedSource = ARTICLE_FEED_SOURCES.find((s) => s.name === "FantasyPros")!;
 const pff: ArticleFeedSource = ARTICLE_FEED_SOURCES.find((s) => s.name === "PFF")!;
+const phillyVoice: ArticleFeedSource = ARTICLE_FEED_SOURCES.find((s) => s.name === "PhillyVoice")!;
 
 function roster(entries: PlayerNewsNameIndexEntry[]) {
   const index = buildPlayerNewsNameIndex(entries);
@@ -105,6 +107,53 @@ describe("filterArticleHeadline", () => {
       true,
     );
     expect(withNfl.pass).toBe(true);
+  });
+
+  it("keeps PhillyVoice Eagles/NFL items and drops Sixers from the sports fixture", () => {
+    expect(phillyVoice).toBeDefined();
+    expect(phillyVoice.teamHint).toBe("PHI");
+    expect(phillyVoice.allowlist).toEqual({ kind: "category", values: ["Eagles", "NFL"] });
+
+    const items = parseFeedXml(fixture("phillyvoice-sports.xml"));
+    expect(items).toHaveLength(2);
+
+    const kept = items.filter((item) =>
+      passesSourceAllowlist(phillyVoice, {
+        title: item.title,
+        url: item.url,
+        summary: item.summary,
+        categories: item.categories,
+      }),
+    );
+    expect(kept).toHaveLength(1);
+    expect(kept[0]!.title).toMatch(/snap count analysis/i);
+    expect(kept[0]!.categories.map((c) => c.toLowerCase())).toEqual(
+      expect.arrayContaining(["eagles", "nfl"]),
+    );
+
+    const sixers = items.find((item) => /sixers/i.test(item.title))!;
+    expect(sixers).toBeDefined();
+    expect(
+      passesSourceAllowlist(phillyVoice, {
+        title: sixers.title,
+        url: sixers.url,
+        summary: sixers.summary,
+        categories: sixers.categories,
+      }),
+    ).toBe(false);
+
+    // Jimmy Kempski snap-count posts must clear the full headline filter (roster "snaps").
+    const snap = filterArticleHeadline(
+      phillyVoice,
+      {
+        title: kept[0]!.title,
+        url: kept[0]!.url,
+        summary: kept[0]!.summary,
+        categories: kept[0]!.categories,
+      },
+      false,
+    );
+    expect(snap.pass).toBe(true);
   });
 
   it("requires a player mention or roster-action term", () => {
@@ -545,6 +594,7 @@ describe("feed list decisions", () => {
     const names = ARTICLE_FEED_SOURCES.map((s) => s.name);
     expect(names).toContain("ProFootballTalk");
     expect(names).toContain("PFF");
+    expect(names).toContain("PhillyVoice");
     expect(names).toContain("Denver Post");
     expect(names).toContain("Sun Sentinel");
     expect(names).toContain("SI OnSI");

@@ -267,6 +267,16 @@ export const ARTICLE_FEED_SOURCES: readonly ArticleFeedSource[] = [
     teamHint: "LV",
   },
   {
+    // Mixed sports section feed — keep Eagles/NFL categories only (drops Sixers/Flyers/etc.).
+    // Requires browser-like UA (ARTICLE_FEEDS_USER_AGENT). Do not use /sports/eagles/feed/ (404).
+    name: "PhillyVoice",
+    domain: "phillyvoice.com",
+    feedUrl: "https://www.phillyvoice.com/feed/section/sports/",
+    allowlist: { kind: "category", values: ["Eagles", "NFL"] },
+    downrank: false,
+    teamHint: "PHI",
+  },
+  {
     name: "Denver Post",
     domain: "denverpost.com",
     feedUrl:
