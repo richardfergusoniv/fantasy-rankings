@@ -32,6 +32,7 @@ import { dashboardFreshness } from "./dashboard-freshness";
 import { newsAbsoluteTimeLabel, newsItemTimeLabel, newsRelativeTimeLabel } from "./news-time";
 import { NewsTypeBadges } from "./news-badges";
 import { newsOutletLabel } from "./news-outlet";
+import { NewsMedia } from "./news-media";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
 import { gameLineSummary, type TeamGameLineLike } from "./game-line-summary";
@@ -780,6 +781,7 @@ export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose
         {item.roleContext ? (
           <DialogDescription className="text-sm leading-relaxed text-muted-foreground">{item.roleContext}</DialogDescription>
         ) : null}
+        <NewsMedia media={item.media} />
         {isHttpOrHttpsUrl(item.sourceUrl) ? (
           <a href={item.sourceUrl} target="_blank" rel="noreferrer">{outletLabel}<span className="sr-only"> (opens in a new tab)</span></a>
         ) : (

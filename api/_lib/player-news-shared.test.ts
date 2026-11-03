@@ -169,6 +169,44 @@ describe("xNewsItemSchema / xNewsBatchSchema", () => {
     const plain = xNewsItemSchema.parse(withoutScore);
     expect(buildXNewsDraft(plain, { playerId: "1", player: "J. Jefferson", team: "MIN" }).score).toBeNull();
   });
+
+  it("normalizes media attachments, drops invalid entries, and caps at 4", () => {
+    const parsed = xNewsItemSchema.parse({
+      ...validItem,
+      media: [
+        {
+          type: "image",
+          url: "https://pbs.twimg.com/media/chart.png",
+          preview_url: "https://pbs.twimg.com/media/chart-thumb.png",
+          alt: "Target share chart",
+        },
+        { type: "video", url: "https://video.twimg.com/clip.mp4" },
+        { type: "image", url: "javascript:alert(1)" },
+        { type: "gif", url: "https://x.com/gif.gif" },
+        "not-an-object",
+      ],
+    });
+    expect(parsed.media).toEqual([
+      {
+        type: "image",
+        url: "https://pbs.twimg.com/media/chart.png",
+        previewUrl: "https://pbs.twimg.com/media/chart-thumb.png",
+        alt: "Target share chart",
+      },
+      { type: "video", url: "https://video.twimg.com/clip.mp4" },
+    ]);
+  });
+
+  it("defaults media to an empty list and carries it into drafts", () => {
+    const parsed = xNewsItemSchema.parse(validItem);
+    expect(parsed.media).toBeUndefined();
+    const { drafts } = collectXNewsDrafts(
+      [parsed],
+      () => ["1"],
+      () => ({ player: "P", team: "MIN" }),
+    );
+    expect(drafts[0]?.media).toEqual([]);
+  });
 });
 
 describe("collectXNewsDrafts scope branching", () => {

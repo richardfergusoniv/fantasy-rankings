@@ -1045,6 +1045,7 @@ export function buildArticleNewsDrafts(input: {
     // 40 would incorrectly outrank ordinary articles. Baseline 55 / downrank 15.
     score: source.downrank ? 15 : 55,
     tags: [] as string[],
+    media: [],
   };
 
   switch (assignment.scope) {
@@ -1244,6 +1245,7 @@ async function insertArticleDrafts(drafts: SharedNewsDraft[]): Promise<number> {
       score: draft.score,
       tags: draft.tags,
       scope: draft.scope,
+      media: draft.media,
       createdAt: new Date(),
     }));
     const result = await db

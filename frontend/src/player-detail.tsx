@@ -38,6 +38,7 @@ import { actualComponentsForGame } from "./actual-components";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 import { NewsTypeBadges } from "./news-badges";
 import { newsOutletLabel } from "./news-outlet";
+import { NewsMedia } from "./news-media";
 import { faabBidLabel, formatCompactCount, formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
 import { buildGameLogRows } from "./lib/game-log-rows";
 import { positionTierLabel } from "./lib/position-tier";
@@ -875,6 +876,7 @@ export function PlayerDetailSheet({
                       <a className="player-news-headline" href={item.sourceUrl} target="_blank" rel="noreferrer"><strong>{item.change}</strong><span className="sr-only"> (opens in a new tab)</span></a>
                     )}
                     {item.roleContext ? <p>{item.roleContext}</p> : null}
+                    <NewsMedia media={item.media} compact />
                   </>
                 );
                 return isArticle && isHttpOrHttpsUrl(item.sourceUrl) ? (

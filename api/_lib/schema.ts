@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   real,
@@ -12,6 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { NewsMediaItem } from "./player-news-shared.js";
 
 /**
  * Postgres schema for Fantasy Rankings.
@@ -222,6 +224,8 @@ export const sharedPlayerNews = pgTable(
     tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
     /** player (default) | team | league — team/league rows skip player attach. */
     scope: text("scope", { enum: ["player", "team", "league"] }).notNull().default("player"),
+    /** Optional media attachments from the source post (images / video), max 4. */
+    media: jsonb("media").$type<NewsMediaItem[]>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
   (table) => [

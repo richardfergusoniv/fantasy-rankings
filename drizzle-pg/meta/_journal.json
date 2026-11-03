@@ -120,6 +120,13 @@
       "when": 1763600000000,
       "tag": "0017_shared_player_news_article_source",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1763800000000,
+      "tag": "0018_shared_player_news_media",
+      "breakpoints": true
     }
   ]
 }
