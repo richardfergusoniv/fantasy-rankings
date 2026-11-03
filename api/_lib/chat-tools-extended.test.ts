@@ -873,11 +873,18 @@ describe("extended chat tools", () => {
     ]);
     selectResults.push([]); // prop-line cache miss inside the evidence index
     const index = await loadMoveEvidenceIndex(baseDashboard());
-    const flag = (playerId: string) => index.forPlayer({ playerId, name: "Someone", team: "BUF", position: "WR" }).roleChangeReported;
-    expect(flag("p-role")).toBe(true);
-    expect(flag("p-depth")).toBe(true);
-    expect(flag("p-quiet")).toBe(false);
-    expect(flag("p-absent")).toBe(false);
+    const flag = (playerId: string) => index.forPlayer({ playerId, name: "Someone", team: "BUF", position: "WR" }).roleChange;
+    expect(flag("p-role")).toBe("reported");
+    expect(flag("p-depth")).toBe("reported");
+    expect(flag("p-quiet")).toBe("none");
+    expect(flag("p-absent")).toBe("none");
+  });
+
+  it("move evidence marks roleChange unavailable when the news load fails", async () => {
+    selectResults.push(Promise.reject(new Error("db down")) as unknown as never[]);
+    const index = await loadMoveEvidenceIndex(baseDashboard());
+    const flag = index.forPlayer({ playerId: "p-x", name: "Someone", team: "BUF", position: "WR" }).roleChange;
+    expect(flag).toBe("unavailable");
   });
 
   it("move evidence resolves nflverse usage across the Sleeper/GSIS id mismatch", async () => {
