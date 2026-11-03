@@ -801,6 +801,45 @@ export function PlayerDetailSheet({
           </div>
         ) : null}
         {toolLinks ? <ToolLinks ariaLabel={`Open ${player.name} in a tool`} links={toolLinks} /> : null}
+        {player.gamePhase === "final" && actualComponents.length > 0 ? (
+          <section className="dst-breakdown" aria-label={`${player.name} game stats`}>
+            <div className="section-heading"><h3>Game stats</h3></div>
+            <div className="dst-breakdown-grid">
+              {actualComponents.map((component) => (
+                <div key={component.key}>
+                  <span>{component.label}</span>
+                  <strong>{formatWhole(component.value)}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {player.position !== "DEF" && player.gamePhase !== "final" && projectionComponents.length > 0 ? (
+          <section className="dst-breakdown" aria-label={`${player.name} projection components`}>
+            <div className="section-heading"><h3>Projection components</h3></div>
+            <div className="dst-breakdown-grid">
+              {projectionComponents.map((component) => (
+                <div key={component.key}>
+                  <span>{component.label}</span>
+                  <strong>{component.isYards ? formatWhole(component.value) : formatDecimal(component.value, 2)}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+        {player.position === "DEF" && player.gamePhase !== "final" && defenseProjectionComponents.length > 0 ? (
+          <section className="dst-breakdown" aria-label={`${player.name} projection components`}>
+            <div className="section-heading"><h3>Projection components</h3></div>
+            <div className="dst-breakdown-grid">
+              {defenseProjectionComponents.map((component) => (
+                <div key={component.key}>
+                  <span>{component.label}</span>
+                  <strong>{component.isYards ? formatWhole(component.value) : formatDecimal(component.value, 2)}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
         <section className="player-news-section" aria-label={`${player.name} news`}>
           <div className="section-heading"><h3>Latest news</h3></div>
           {newsError && onRetryNews ? (
@@ -847,45 +886,6 @@ export function PlayerDetailSheet({
             </>
           ) : <div className="empty-inline compact">No recent news for this player.</div>}
         </section>
-        {player.gamePhase === "final" && actualComponents.length > 0 ? (
-          <section className="dst-breakdown" aria-label={`${player.name} game stats`}>
-            <div className="section-heading"><h3>Game stats</h3></div>
-            <div className="dst-breakdown-grid">
-              {actualComponents.map((component) => (
-                <div key={component.key}>
-                  <span>{component.label}</span>
-                  <strong>{formatWhole(component.value)}</strong>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-        {player.position !== "DEF" && player.gamePhase !== "final" && projectionComponents.length > 0 ? (
-          <section className="dst-breakdown" aria-label={`${player.name} projection components`}>
-            <div className="section-heading"><h3>Projection components</h3></div>
-            <div className="dst-breakdown-grid">
-              {projectionComponents.map((component) => (
-                <div key={component.key}>
-                  <span>{component.label}</span>
-                  <strong>{component.isYards ? formatWhole(component.value) : formatDecimal(component.value, 2)}</strong>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-        {player.position === "DEF" && player.gamePhase !== "final" && defenseProjectionComponents.length > 0 ? (
-          <section className="dst-breakdown" aria-label={`${player.name} projection components`}>
-            <div className="section-heading"><h3>Projection components</h3></div>
-            <div className="dst-breakdown-grid">
-              {defenseProjectionComponents.map((component) => (
-                <div key={component.key}>
-                  <span>{component.label}</span>
-                  <strong>{component.isYards ? formatWhole(component.value) : formatDecimal(component.value, 2)}</strong>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
         </div> : null}
         {activeTab === "season" ? (
           <div id="player-detail-season-panel" role="tabpanel" aria-labelledby="player-detail-season-tab">
