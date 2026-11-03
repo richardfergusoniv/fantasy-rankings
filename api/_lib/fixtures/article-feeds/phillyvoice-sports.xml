@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>PhillyVoice - Sports</title>
+    <link>https://www.phillyvoice.com/feed/section/sports/</link>
+    <item>
+      <title>Game ball, three stars, and snap count analysis: Week 8, Eagles at Commanders</title>
+      <link>https://www.phillyvoice.com/game-ball-three-stars-and-snap-count-analysis-week-8-eagles-commanders/</link>
+      <guid>https://www.phillyvoice.com/game-ball-three-stars-and-snap-count-analysis-week-8-eagles-commanders/</guid>
+      <pubDate>Mon, 02 Nov 2026 15:02:33 +0000</pubDate>
+      <description>In their Week 8 loss the Eagles played 69 snaps on offense. Snap counts and notes.</description>
+      <category>Sports</category>
+      <category>Eagles</category>
+      <category>NFL</category>
+      <category>Philadelphia</category>
+      <category>Eagles snap counts</category>
+    </item>
+    <item>
+      <title>Previewing Sixers-Pacers: Is Tyrese Haliburton back?</title>
+      <link>https://www.phillyvoice.com/sixers-vs-pacers-news-analysis-time-tv-channel/</link>
+      <guid>https://www.phillyvoice.com/sixers-vs-pacers-news-analysis-time-tv-channel/</guid>
+      <pubDate>Wed, 28 Oct 2026 13:14:45 +0000</pubDate>
+      <description>Can the Pacers return to contention with Haliburton back?</description>
+      <category>Sports</category>
+      <category>Sixers</category>
+      <category>NBA</category>
+      <category>Philadelphia</category>
+    </item>
+  </channel>
+</rss>
