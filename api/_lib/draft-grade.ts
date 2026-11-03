@@ -530,7 +530,9 @@ async function gradeLoadedDraft(args: {
     args.loadBoard(formatKey, pacificDateKey(args.deps.now?.() ?? new Date()), todayWindowDays),
   ]);
   // Drafts that predate stored values have no draft-day board. Grade them on
-  // today's board: the grade then measures what the picks are worth now.
+  // today's board: the grade then measures what the picks are worth now. This
+  // applies to the default path too, so a draft whose stored history was never
+  // backfilled still grades instead of returning null.
   const min = args.deps.minBoardPlayers ?? MIN_BOARD_PLAYERS;
   const boardUsable = (board: ValueBoard) =>
     board.size >= min && args.loaded.picks.some((pick) => isSkill(pick.position) && board.has(pick.playerId));
@@ -650,7 +652,7 @@ export async function loadDraftGrade(
     loaded: best,
     slots: sleeperLeague?.roster_positions,
     rookieDraft,
-    currentFallback: false,
+    currentFallback: true,
   });
   return { grade, availableDrafts: [] };
 }
