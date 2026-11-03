@@ -57,9 +57,15 @@ export function buildVacatedUsage(
     };
   };
 
+  // Callers often pass roster ∪ rankings; the same Out player can appear in
+  // both. Dedupe by playerId so each injured teammate vacates once.
+  const seen = new Set<string>();
   const byTeam = new Map<string, VacatedUsageCandidate[]>();
   for (const player of candidates) {
     if (!player.team || !SKILL_POSITIONS.has(player.position)) continue;
+    const key = player.playerId || `${player.team}:${player.name}:${player.position}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     const list = byTeam.get(player.team) ?? [];
     list.push(player);
     byTeam.set(player.team, list);

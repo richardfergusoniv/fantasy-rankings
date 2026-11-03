@@ -1178,8 +1178,14 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
   if (dashboard.week > 1) {
     try {
       const { stats } = await loadTeamWeekStats(dashboard.season);
+      const vacatedCandidates = new Map<string, (typeof league.starters)[number]>();
+      for (const player of [...league.starters, ...league.bench, ...rankingById.values()]) {
+        if (player.playerId && !vacatedCandidates.has(player.playerId)) {
+          vacatedCandidates.set(player.playerId, player);
+        }
+      }
       vacatedById = buildVacatedUsage(
-        [...league.starters, ...league.bench, ...rankingById.values()],
+        [...vacatedCandidates.values()],
         stats.filter((row) => row.week >= 1 && row.week <= dashboard.week - 1),
       );
     } catch (error) {

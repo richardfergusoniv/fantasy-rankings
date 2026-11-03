@@ -112,4 +112,26 @@ describe("buildVacatedUsage", () => {
     );
     expect(vacated.size).toBe(0);
   });
+
+  it("counts a duplicated Out player (roster ∩ rankings) only once", () => {
+    const stats = [
+      row("Hurt Wideout", "BUF", "WR", 1, { targetShare: 28, carries: 0 }),
+      row("Hurt Wideout", "BUF", "WR", 2, { targetShare: 22, carries: 0 }),
+      row("Healthy Wideout", "BUF", "WR", 1, { targetShare: 15 }),
+      row("Healthy Wideout", "BUF", "WR", 2, { targetShare: 15 }),
+    ];
+    const outPlayer = player("sleeper-hurt", "Hurt Wideout", "WR", "Out");
+    const vacated = buildVacatedUsage(
+      [
+        outPlayer,
+        outPlayer, // same Out player from roster and rankings
+        player("sleeper-healthy", "Healthy Wideout", "WR", null),
+      ],
+      stats,
+    );
+    expect(vacated.get("sleeper-healthy")).toEqual({
+      vacatedTargetSharePts: 25,
+      vacatedCarriesPerGame: 0,
+    });
+  });
 });
