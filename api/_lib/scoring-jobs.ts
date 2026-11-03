@@ -18,7 +18,9 @@ import {
 } from "./move-scoring.js";
 import { encodeSourceCachePayload } from "./source-cache-payload.js";
 import { loadSleeperTrendingWeekly } from "./sleeper-trending.js";
+import { loadTeamWeekStats } from "./pfn-tables.js";
 import { readNflState } from "./user-leagues.js";
+import { buildVacatedUsage } from "./vacated-usage.js";
 
 export function sleeperTrendingWeekKey(season: number, week: number): string {
   return `sleeper-trending:${season}-w${week}`;
@@ -310,6 +312,20 @@ export async function runScoringDecisionSnapshot(
     const players = collectSnapshotPlayers(dashboard, league.id);
     // Cap per league to keep egress bounded (roster + top of board).
     const limited = players.slice(0, 200);
+    // Teammates Out or Doubtful vacate their season usage for the rest of
+    // the team (SCORING_SPEC). Stat rows end at the previous week.
+    let vacatedById: Map<string, { vacatedTargetSharePts: number; vacatedCarriesPerGame: number }> = new Map();
+    if (week > 1) {
+      try {
+        const { stats } = await loadTeamWeekStats(season);
+        vacatedById = buildVacatedUsage(
+          limited,
+          stats.filter((row) => row.week >= 1 && row.week <= week - 1),
+        );
+      } catch (error) {
+        console.error("[scoring] vacated-usage load failed", error instanceof Error ? error.message : error);
+      }
+    }
     const toScored = (player: SnapshotPlayerSource) => ({
       playerId: player.playerId,
       name: player.name,
@@ -321,6 +337,8 @@ export async function runScoringDecisionSnapshot(
       injuryStatus: player.injuryStatus,
       isBye: player.isBye,
       gamePhase: player.gamePhase,
+      vacatedTargetSharePts: vacatedById.get(player.playerId)?.vacatedTargetSharePts ?? 0,
+      vacatedCarriesPerGame: vacatedById.get(player.playerId)?.vacatedCarriesPerGame ?? 0,
       projection: player.projection,
       actual: player.actual,
     });
@@ -388,8 +406,8 @@ export async function runScoringDecisionSnapshot(
         projection: player.projection,
         vegasProjection: player.vegasProjection,
         usageProjection: scored.usageProjection ?? null,
-        vacatedTargetSharePts: null,
-        vacatedCarriesPerGame: null,
+        vacatedTargetSharePts: vacatedById.get(player.playerId)?.vacatedTargetSharePts ?? null,
+        vacatedCarriesPerGame: vacatedById.get(player.playerId)?.vacatedCarriesPerGame ?? null,
         forecastWindMph: null,
         injuryStatus: player.injuryStatus,
         isBye: player.isBye,
