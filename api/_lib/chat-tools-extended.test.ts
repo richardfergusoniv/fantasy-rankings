@@ -1094,7 +1094,7 @@ describe("extended chat tools", () => {
     ];
     league.rosteredPlayerIds = [...league.rosteredPlayerIds, "p-dev", "p-vet"];
     const row = (formatKey: string, playerId: string, value: number) => ({
-      formatKey, playerId, name: playerId, team: "BUF", position: "WR",
+      formatKey, playerId, name: playerId, team: "BUF", position: "WR" as const,
       overallRank: 50, positionRank: 20, value, trend30Day: 0, isRookie: false,
     });
     dashboard.seasonLongRankings.push(
