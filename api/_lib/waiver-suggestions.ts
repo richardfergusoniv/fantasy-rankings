@@ -99,15 +99,21 @@ export function scoreWaiverSuggestions(
         ? "season_long"
         : "week";
 
-  // Drop candidate: lowest-value bench player not in this week's best lineup,
-  // valued under the selected window — a dynasty read must not sacrifice a
-  // developmental asset because his redraft value is thin.
+  // Drop candidates, valued under the selected window — a dynasty read must not
+  // sacrifice a developmental asset because his redraft value is thin. Each add
+  // is graded as a joint add/drop pair, not against one shared drop: the drop
+  // is the lowest-value non-lineup bench player AT THE ADD'S POSITION when one
+  // exists (you add a QB, you drop a QB), else the global lowest-value drop.
   const dropValueById = waiverWindowKey === "dynasty" ? dynastyValueById : seasonLongValueById;
   const bestIds = new Set(baseline.starters.map((p) => p.playerId));
-  const dropCandidate = [...league.bench]
+  const eligibleDrops = [...league.bench]
     .filter((p) => p.playerId !== "0" && !bestIds.has(p.playerId))
     .map((p) => ({ player: p, value: dropValueById.get(p.playerId) ?? 0 }))
-    .sort((a, b) => a.value - b.value)[0] ?? null;
+    .sort((a, b) => a.value - b.value);
+  const dropFor = (position: string) =>
+    eligibleDrops.find((row) => row.player.position === position)
+    ?? eligibleDrops[0]
+    ?? null;
 
   const powerRows = league.powerRankingsSeasonLong.length > 0
     ? league.powerRankingsSeasonLong
@@ -127,19 +133,22 @@ export function scoreWaiverSuggestions(
     const value = valueById.get(player.playerId) ?? 0;
     const position = weekly?.position ?? player.position;
 
-    const withAdd = [
-      ...rosterPlayers.filter((p) => !dropCandidate || p.playerId !== dropCandidate.player.playerId),
-      {
-        playerId: player.playerId,
-        name: weekly?.name ?? player.name,
-        position,
-        lineupSlot: null,
-        isStarter: false,
-        projection,
-        actual: null,
-        injuryStatus: player.injuryStatus ?? null,
-      },
+    const addRow = {
+      playerId: player.playerId,
+      name: weekly?.name ?? player.name,
+      position,
+      lineupSlot: null,
+      isStarter: false,
+      projection,
+      actual: null,
+      injuryStatus: player.injuryStatus ?? null,
+    };
+    const rosterWith = (dropId: string | null) => [
+      ...rosterPlayers.filter((p) => p.playerId !== dropId),
+      addRow,
     ];
+    const dropCandidate = dropFor(position);
+    const withAdd = rosterWith(dropCandidate?.player.playerId ?? null);
     const after = optimizeTradeRoster(withAdd, slots);
     const afterSl = optimizeValueTradeRoster(withAdd, slots, seasonLongValueById);
     const afterDy = baselineDy

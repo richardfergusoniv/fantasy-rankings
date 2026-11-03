@@ -1144,6 +1144,36 @@ describe("extended chat tools", () => {
     expect(dynasty.suggestions[0]?.dropCandidate?.playerId).toBe("p-vet");
   });
 
+  it("suggest_waivers pairs each add with a same-position drop when one exists", () => {
+    const dashboard = baseDashboard();
+    const league = dashboard.leagues.find((row) => row.id === "lg1")!;
+    const base = {
+      team: "BUF" as const,
+      lineupSlot: null, isStarter: false, rank: 60, projection: 2,
+      projectionSource: "vegas" as const, actual: null, gamePhase: "pregame" as const,
+      gameTime: null, gamePeriod: null, gameClockSeconds: null,
+      opponent: "MIA", isAway: false, isBye: false, injuryStatus: null,
+      defenseComponents: null, projectionComponents: null,
+    };
+    // The global cheapest drop is a QB; the cheapest WR is worth more. A WR
+    // add should pair with the WR drop, not the shared global minimum.
+    league.bench = [
+      ...league.bench,
+      { ...base, playerId: "p-qb", name: "Bench QB", position: "QB" },
+      { ...base, playerId: "p-wr", name: "Bench WR", position: "WR" },
+    ];
+    league.rosteredPlayerIds = [...league.rosteredPlayerIds, "p-qb", "p-wr"];
+    const row = (playerId: string, value: number) => ({
+      formatKey: "redraft-1qb-12t-1ppr", playerId, name: playerId, team: "BUF",
+      position: "WR" as const, overallRank: 50, positionRank: 20, value,
+      trend30Day: 0, isRookie: false,
+    });
+    dashboard.seasonLongRankings.push(row("p-qb", 100), row("p-wr", 900));
+    const result = scoreWaiverSuggestions(dashboard, league, BUILTIN_SCORING_WEIGHTS, { limit: 5, scoringWindow: "season_long" });
+    const wrAdd = result.suggestions.find((row) => row.position === "WR");
+    expect(wrAdd?.dropCandidate?.playerId).toBe("p-wr");
+  });
+
   it("saves FAAB bids for the top graded adds, the same grading as suggest_waivers", () => {
     const dashboard = baseDashboard();
     // A free agent who would start and outscore the lineup, so he grades above Pass.
