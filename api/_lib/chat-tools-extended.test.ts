@@ -912,6 +912,68 @@ describe("extended chat tools", () => {
     expect(evidence.usage?.snapSharePct).toBe(50);
   });
 
+  it("move evidence reports the season baseline beside the last-3 window", async () => {
+    const statRow = (week: number, targets: number) => ({
+      playerId: "gsis-trend",
+      name: "Trend Guy",
+      team: "BUF",
+      opponent: "NYJ",
+      position: "WR" as const,
+      week,
+      targets,
+      receptions: 0,
+      receivingYards: 0,
+      carries: 0,
+      rushingYards: 0,
+      receivingTds: 0,
+      rushingTds: 0,
+      passingTds: 0,
+      fantasyPpr: targets,
+      targetShare: 20,
+      completions: 0,
+      passAttempts: 0,
+      passingYards: 0,
+      interceptions: 0,
+      passingFirstDowns: 0,
+      rushingFirstDowns: 0,
+      receivingFirstDowns: 0,
+      sacksTaken: 0,
+      fumblesLost: 0,
+      passing2pt: 0,
+      rushing2pt: 0,
+      receiving2pt: 0,
+    });
+    const snapRow = (week: number, pct: number) => ({
+      name: "Trend Guy",
+      team: "BUF",
+      position: "WR" as const,
+      week,
+      offenseSnaps: 40,
+      offensePct: pct,
+    });
+    vi.mocked(loadTeamWeekStats).mockResolvedValueOnce({
+      season: 2026,
+      stats: [statRow(2, 2), statRow(3, 2), statRow(4, 6), statRow(5, 8), statRow(6, 10)],
+      snaps: [snapRow(2, 40), snapRow(3, 40), snapRow(4, 60), snapRow(5, 80), snapRow(6, 100)],
+    });
+    selectResults.push([]); // prop-line cache miss inside the evidence index
+    const index = await loadMoveEvidenceIndex(baseDashboard());
+    const evidence = index.forPlayer({
+      playerId: "sleeper-trend",
+      name: "Trend Guy",
+      team: "BUF",
+      position: "WR",
+    });
+    expect(evidence.usage?.games).toBe(3);
+    expect(evidence.usage?.targetsPerGame).toBe(8);
+    expect(evidence.usage?.snapSharePct).toBe(80);
+    expect(evidence.season?.games).toBe(5);
+    // (2 + 2 + 6 + 8 + 10) / 5 = 5.6 targets/game across the season.
+    expect(evidence.season?.targetsPerGame).toBe(5.6);
+    // (40 + 40 + 60 + 80 + 100) / 5 = 64% snaps across the season.
+    expect(evidence.season?.snapSharePct).toBe(64);
+  });
+
   it("move evidence excludes played weeks outside stats coverage and reports no coverage as unavailable", async () => {
     const statRow = (week: number, targets: number) => ({
       playerId: "gsis-zero",
