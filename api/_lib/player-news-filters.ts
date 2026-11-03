@@ -15,6 +15,19 @@ export function isSleeperTimestampOnlyNews(item: { roleContext: string }): boole
 }
 
 /**
+ * Interaction-bait patterns dropped from player news entirely: polls,
+ * "would you rather", vote/RT-bait posts. Applied to X ingest text (and
+ * aligned with the article headline filter) — stat lists, grades,
+ * projections, and analyst recommendations are kept.
+ */
+export const INTERACTION_BAIT_RE =
+  /\b(polls?\b|would you rather|wyr\b|you can only (?:pick|choose|keep) (?:one|\d)|who (?:you|ya) (?:got|start(?:ing)?|pick(?:ing)?)|which (?:one|player|team) (?:do you|would you|are you)|votes? for\b|rt (?:if|for)\b|like (?:if|for)\b|comment (?:your|who|which)|drop a (?:comment|gif))\b/i;
+
+export function isInteractionBaitPost(text: string): boolean {
+  return INTERACTION_BAIT_RE.test(text);
+}
+
+/**
  * Whether a news row should appear for the current league context.
  * No league context → treat as redraft (hide dynasty-tagged rows).
  */

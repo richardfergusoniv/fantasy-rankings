@@ -30,6 +30,7 @@ import {
   xNewsItemScope,
   type PlayerNewsNameIndex,
 } from "../_lib/player-news-shared.js";
+import { isInteractionBaitPost } from "../_lib/player-news-filters.js";
 import {
   buildXNewsMentionNeedles,
   resolveXNewsPlayerIdsForItem,
@@ -360,9 +361,14 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     return badRequest("Invalid player-news-x payload.", parsed.error.issues);
   }
 
+  // Drop interaction-bait posts (polls, "would you rather", vote/RT bait)
+  // before any resolution work; a bait-only batch may not need the index.
+  const items = parsed.data.items.filter((item) => !isInteractionBaitPost(item.text));
+  const filteredBait = parsed.data.items.length - items.length;
+
   // Team/league scopes do not resolve players — skip the Sleeper index so a
   // cache miss cannot 502 a team/league-only batch.
-  const needsPlayerIndex = parsed.data.items.some((item) => xNewsItemScope(item) === "player");
+  const needsPlayerIndex = items.some((item) => xNewsItemScope(item) === "player");
   let index: PlayerNewsNameIndex | null = null;
   let mentionNeedles: XNewsMentionNeedle[] = [];
   if (needsPlayerIndex) {
@@ -380,7 +386,7 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
   const playerIndex = index;
   const playerNeedles = mentionNeedles;
   const { drafts, unresolved } = collectXNewsDrafts(
-    parsed.data.items,
+    items,
     (item) => {
       if (!playerIndex) return [];
       return resolveXNewsPlayerIdsForItem(
@@ -499,6 +505,7 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
     ok: true,
     status: "committed",
     received: parsed.data.items.length,
+    filteredBait,
     resolved: unique.length,
     inserted,
     duplicates: Math.max(0, unique.length - inserted),
