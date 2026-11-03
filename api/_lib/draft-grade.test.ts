@@ -488,6 +488,61 @@ describe("loadDraftGrade", () => {
       ]);
     });
 
+    it("classifies a founding season's snake draft as a rookie draft when its startup was an auction", async () => {
+      const fetcher = makeFetcher(
+        { ...draftsByLeague, lg24: [draft("d24a", { type: "auction", start_time: Date.UTC(2024, 7, 15, 18) }), draft("d24r", { start_time: Date.UTC(2024, 4, 11, 18) })] },
+        { ...picksByDraft, d24r: sleeperPicks },
+      );
+      const rookie = await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: fetcher, selection: { kind: "rookie", season: "2024" } });
+      expect(rookie.grade?.draftId).toBe("d24r");
+      expect(rookie.grade?.rookieHindsight).not.toBeNull();
+      expect(rookie.availableDrafts.some((row) => row.kind === "startup")).toBe(false);
+      const startup = await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: fetcher, selection: { kind: "startup" } });
+      expect(startup.grade).toBeNull();
+    });
+
+    it("grades nothing for a selection whose chain cannot load, instead of the current draft", async () => {
+      const broken = async <T>(url: string): Promise<T> => {
+        if (url.endsWith("/league/lg")) throw new Error("gone");
+        return chainFetcher(url);
+      };
+      const result = await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: broken, selection: { kind: "startup" } });
+      expect(result.grade).toBeNull();
+      expect(result.availableDrafts).toEqual([]);
+    });
+
+    it("stops the chain walk at its time budget and offers no startup from a partial chain", async () => {
+      let calls = 0;
+      const now = () => new Date(Date.UTC(2026, 10, 2) + (calls++ === 0 ? 0 : 21_000));
+      const result = await loadDraftGrade(dynasty, 1, { ...deps, now, selection: { kind: "startup" } });
+      expect(result.grade).toBeNull();
+      expect(result.availableDrafts).toEqual([{ kind: "rookie", season: "2026", draftId: "d26" }]);
+    });
+
+    it("loses only the draft whose picks fail to load, not the whole season", async () => {
+      const broken = async <T>(url: string): Promise<T> => {
+        if (url.includes("/draft/d25/picks")) throw new Error("gone");
+        return chainFetcher(url);
+      };
+      const result = await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: broken, selection: { kind: "rookie" } });
+      expect(result.grade?.draftId).toBe("d26");
+      expect(result.availableDrafts.map((row) => row.draftId)).toEqual(["d26", "d24"]);
+    });
+
+    it("offers no founding-season drafts when one of their picks loads fails", async () => {
+      const fetcher = makeFetcher(
+        { ...draftsByLeague, lg24: [draft("d24", { start_time: Date.UTC(2024, 7, 15, 18) }), draft("d24r", { start_time: Date.UTC(2024, 4, 11, 18) })] },
+        { ...picksByDraft, d24r: sleeperPicks.slice(0, 4) },
+      );
+      const broken = async <T>(url: string): Promise<T> => {
+        if (url.includes("/draft/d24r/picks")) throw new Error("gone");
+        return fetcher(url);
+      };
+      const result = await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: broken, selection: { kind: "startup" } });
+      expect(result.grade).toBeNull();
+      expect(result.availableDrafts.map((row) => row.season)).toEqual(["2026", "2025"]);
+    });
+
     it("ignores a selection for a non-dynasty league", async () => {
       const result = await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }), loadBoard: async () => marketBoard, minBoardPlayers: 1, selection: { kind: "startup" } });
       expect(result.grade?.draftId).toBe("d1");

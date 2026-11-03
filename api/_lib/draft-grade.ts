@@ -441,14 +441,22 @@ type ChainLeague = {
 };
 
 /** The league's season chain, newest first, following previous_league_id to the founding season. */
+const CHAIN_WALK_BUDGET_MS = 20_000;
+
 async function loadLeagueChain(
   get: <T>(url: string) => Promise<T>,
   startLeagueId: string,
+  now: () => Date = () => new Date(),
 ): Promise<ChainLeague[]> {
   const chain: ChainLeague[] = [];
   const seen = new Set<string>();
+  const deadlineMs = now().getTime() + CHAIN_WALK_BUDGET_MS;
   let leagueId: string | null = startLeagueId;
   while (leagueId && !seen.has(leagueId) && chain.length < 12) {
+    // The walk is serial and each fetch can take up to the 15s source timeout,
+    // so a long chain on a slow day could outrun the function budget. Stop at
+    // the deadline and continue with the partial chain instead.
+    if (chain.length > 0 && now().getTime() > deadlineMs) break;
     seen.add(leagueId);
     const league: { season?: string; previous_league_id?: string | null; roster_positions?: string[] } | null = await get<{ season?: string; previous_league_id?: string | null; roster_positions?: string[] }>(
       `${SLEEPER_BASE}/league/${leagueId}`,
@@ -467,14 +475,26 @@ async function loadLeagueChain(
 async function loadSeasonDrafts(
   get: <T>(url: string) => Promise<T>,
   leagueId: string,
-): Promise<Array<{ draft: SleeperDraft; picks: GradedPick[] }>> {
+): Promise<{ loaded: Array<{ draft: SleeperDraft; picks: GradedPick[] }>; hasCompletedAuction: boolean; picksFailed: boolean }> {
   const drafts = await get<SleeperDraft[]>(`${SLEEPER_BASE}/league/${leagueId}/drafts`).catch(() => [] as SleeperDraft[]);
-  // Auction picks are not made in value order, so a slot has no meaning there.
-  const complete = (Array.isArray(drafts) ? drafts : []).filter((draft) => draft.draft_id && draft.status === "complete" && draft.type !== "auction");
-  return Promise.all(complete.map(async (draft) => ({
-    draft,
-    picks: gradedPicks(await get<SleeperDraftPick[]>(`${SLEEPER_BASE}/draft/${draft.draft_id}/picks`)),
-  })));
+  const all = Array.isArray(drafts) ? drafts : [];
+  // An auction's presence matters to classification even though it is never
+  // graded: auction picks are not made in value order, so a slot has no
+  // meaning there.
+  const hasCompletedAuction = all.some((draft) => draft.status === "complete" && draft.type === "auction");
+  const complete = all.filter((draft) => draft.draft_id && draft.status === "complete" && draft.type !== "auction");
+  let picksFailed = false;
+  const loaded = await Promise.all(complete.map(async (draft) => {
+    // A failed picks load empties only its own draft; the season's other
+    // drafts still grade. Callers that classify drafts need picksFailed:
+    // an emptied draft cannot be told apart from a small one by pick count.
+    const raw = await get<SleeperDraftPick[]>(`${SLEEPER_BASE}/draft/${draft.draft_id}/picks`).catch(() => {
+      picksFailed = true;
+      return [] as SleeperDraftPick[];
+    });
+    return { draft, picks: gradedPicks(raw) };
+  }));
+  return { loaded, hasCompletedAuction, picksFailed };
 }
 
 function gradedPicks(picks: readonly SleeperDraftPick[]): GradedPick[] {
@@ -541,7 +561,7 @@ async function loadSelectedDraftGrade(
 ): Promise<LoadDraftGradeResult | null> {
   const selection = deps.selection;
   if (!selection) return null;
-  const chain = await loadLeagueChain(get, league.id);
+  const chain = await loadLeagueChain(get, league.id, deps.now);
   if (chain.length === 0) return null;
   // The founding season's biggest draft is the startup; every other season's
   // biggest is a rookie draft. A chain that stops early (a league fetch failed,
@@ -549,11 +569,18 @@ async function loadSelectedDraftGrade(
   // offers no startup.
   const reachedRoot = chain[chain.length - 1]?.previousLeagueId === null;
   const available = (await Promise.all(chain.map(async (entry, index) => {
-    const loaded = await loadSeasonDrafts(get, entry.leagueId).catch(() => [] as Array<{ draft: SleeperDraft; picks: GradedPick[] }>);
-    const ranked = loaded.filter((row) => row.picks.length > 0).sort((a, b) => b.picks.length - a.picks.length);
+    const seasonDrafts = await loadSeasonDrafts(get, entry.leagueId).catch(() => ({ loaded: [] as Array<{ draft: SleeperDraft; picks: GradedPick[] }>, hasCompletedAuction: false, picksFailed: false }));
+    const ranked = seasonDrafts.loaded.filter((row) => row.picks.length > 0).sort((a, b) => b.picks.length - a.picks.length);
     const primary = ranked[0];
     if (!primary) return [];
-    const isStartupSeason = reachedRoot && index === chain.length - 1;
+    const isFoundingSeason = reachedRoot && index === chain.length - 1;
+    // When a founding draft's picks failed to load, which of the season's
+    // drafts is the startup cannot be told safely; offer none of them rather
+    // than hand the label to the wrong draft.
+    if (isFoundingSeason && seasonDrafts.picksFailed) return [];
+    // A completed auction in the founding season was the startup: it is never
+    // graded, and the season's snake drafts are its rookie drafts.
+    const isStartupSeason = isFoundingSeason && !seasonDrafts.hasCompletedAuction;
     const season = entry.season ?? primary.draft.season ?? "";
     const rows: Array<{ entry: ChainLeague; kind: "rookie" | "startup"; loaded: { draft: SleeperDraft; picks: GradedPick[] }; season: string }> = [
       { entry, kind: isStartupSeason ? "startup" : "rookie", loaded: primary, season },
@@ -562,11 +589,15 @@ async function loadSelectedDraftGrade(
     if (isStartupSeason && ranked[1]) rows.push({ entry, kind: "rookie", loaded: ranked[1], season });
     return rows;
   }))).flat();
-  const availableDrafts: AvailableDraft[] = available.map((row) => ({
-    kind: row.kind,
-    season: row.season,
-    draftId: row.loaded.draft.draft_id ?? "",
-  }));
+  // The picker sends a season back as a 4-digit year; a draft whose season
+  // cannot be named that way stays gradeable by kind but is not listed.
+  const availableDrafts: AvailableDraft[] = available
+    .filter((row) => /^\d{4}$/.test(row.season))
+    .map((row) => ({
+      kind: row.kind,
+      season: row.season,
+      draftId: row.loaded.draft.draft_id ?? "",
+    }));
   const chosen = selection.kind === "startup"
     ? available.find((row) => row.kind === "startup")
     : (selection.season
@@ -596,9 +627,11 @@ export async function loadDraftGrade(
   const loadBoard = deps.loadBoard ?? loadValueBoard;
   if (deps.selection && league.seasonLongFormat.isDynasty === true) {
     const selected = await loadSelectedDraftGrade(get, loadBoard, league, ownRosterId, deps);
-    if (selected) return selected;
+    // A selection whose chain cannot load grades nothing; falling back to the
+    // current season's draft would show it under the wrong tab.
+    return selected ?? { grade: null, availableDrafts: [] };
   }
-  const loaded = await loadSeasonDrafts(get, league.id);
+  const { loaded } = await loadSeasonDrafts(get, league.id);
   // A dynasty league can hold a startup and a rookie draft in one season: grade the bigger one.
   const best = [...loaded].sort((a, b) => b.picks.length - a.picks.length)[0];
   if (!best || best.picks.length === 0) return { grade: null, availableDrafts: [] };
