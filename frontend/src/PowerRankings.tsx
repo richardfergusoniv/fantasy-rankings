@@ -6,7 +6,7 @@ import { formatRecord, LeagueTeamCard, positionLabel } from "./league-team-card"
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { SegmentedControl, points, shortLeagueName } from "./shared";
 import { formatPercent, formatWhole } from "./lib/format-number";
-import { PowerStackList, type PowerStackTeam } from "./views/power-stack-list";
+import { PowerStackCard, type PowerStackTeam } from "./views/power-stack-list";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
 type League = Dashboard["leagues"][number];
@@ -171,9 +171,8 @@ export function PowerRankings({
         <button
           type="button"
           className="power-position-values"
-          aria-expanded={stacksOpen}
-          aria-controls="power-stack-list"
-          onClick={() => setStacksOpen((open) => !open)}
+          aria-haspopup="dialog"
+          onClick={() => setStacksOpen(true)}
         >
           {radarData.map((row) => (
             <span key={row.position}><span>{positionLabel(row.position)}</span><strong>{isWeekly ? points(row.average) : formatWhole(row.average)}</strong></span>
@@ -184,7 +183,7 @@ export function PowerRankings({
           <span className="sr-only">Every team by position</span>
           {isWeekly ? <span className="power-position-total-highlight"><span>Total</span><strong>{points(totalAverage)}</strong></span> : <span className={leagueAveragePicks !== null ? "power-position-total-highlight" : "power-position-total power-position-total-highlight"}><span>Total</span><strong>{formatWhole(leagueAverageDisplayTotal)}</strong></span>}
         </button>
-        {stacksOpen ? <PowerStackList id="power-stack-list" teams={stackTeams} weekly={isWeekly} /> : null}
+        {stacksOpen ? <PowerStackCard teams={stackTeams} weekly={isWeekly} onClose={() => setStacksOpen(false)} /> : null}
       </section>
 
       <section className="power-table-section" aria-labelledby="league-power-heading">
