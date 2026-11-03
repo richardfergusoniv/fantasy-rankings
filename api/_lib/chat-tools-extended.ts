@@ -1456,6 +1456,20 @@ export async function toolSuggestTrades(
       dynasty?: MoveVerdict;
     };
     fairness: ReturnType<typeof scoreTrade>["fairness"] | null;
+    utility: {
+      marketFairness: ReturnType<typeof scoreTrade>["fairness"] | null;
+      yourUtilityDelta: {
+        weekLineupPoints: number;
+        starterValue: number;
+        powerRank: number;
+        dynastyStarterValue?: number;
+      };
+      partnerUtilityDelta: {
+        teamName: string;
+        weekLineupPoints: number;
+        starterValue: number;
+      };
+    };
     rosterImpact: {
       week: { lineupPointsBefore: number; lineupPointsAfter: number };
       seasonLong: {
@@ -1612,10 +1626,43 @@ export async function toolSuggestTrades(
     const dyAfter = dynastyTotals
       ? optimizeValueTradeRoster(afterPlayers, slots, dynastyValueById)
       : null;
+    // Partner utility: the deal's before/after effect on the other roster too.
+    const partnerPlayers = partner.players.map((player) => ({
+      playerId: player.playerId,
+      name: player.name,
+      position: player.position,
+      lineupSlot: player.lineupSlot,
+      isStarter: player.isStarter,
+      projection: player.projection ?? projectionById.get(player.playerId) ?? null,
+      actual: player.actual,
+    }));
+    const partnerIncoming = give.map((asset) => ({
+      playerId: asset.playerId,
+      name: asset.name,
+      position: asset.position,
+      lineupSlot: null as string | null,
+      isStarter: false,
+      projection: projectionById.get(asset.playerId) ?? null,
+      actual: null as number | null,
+    }));
+    const partnerLineup = tradeLineupBeforeAfter({
+      roster: partnerPlayers,
+      slots,
+      giveIds: new Set(get.map((row) => row.playerId)),
+      incoming: partnerIncoming,
+    });
+    const partnerAfterPlayers = [
+      ...partnerPlayers.filter((player) => !get.some((row) => row.playerId === player.playerId)),
+      ...partnerIncoming,
+    ];
+    const partnerSlBefore = optimizeValueTradeRoster(partnerPlayers, slots, seasonLongValueById);
+    const partnerSlAfter = optimizeValueTradeRoster(partnerAfterPlayers, slots, seasonLongValueById);
     const move = scoreTrade({
       week: {
         yourLineupBefore: lineup.before,
         yourLineupAfter: lineup.after,
+        partnerLineupBefore: partnerLineup.before,
+        partnerLineupAfter: partnerLineup.after,
       },
       seasonLong: {
         give: seasonLongTotals.giveRows,
@@ -1663,6 +1710,22 @@ export async function toolSuggestTrades(
         ...(move.dynasty ? { dynasty: moveVerdict(move.dynasty) } : {}),
       },
       fairness: move.fairness ?? null,
+      utility: {
+        marketFairness: move.fairness ?? null,
+        yourUtilityDelta: {
+          weekLineupPoints: lineup.after - lineup.before,
+          starterValue: slAfter.score - Math.max(1, slBefore.score),
+          powerRank: (margin >= 0 ? Math.max(1, myRank - 1) : myRank + 1) - myRank,
+          ...(dynastyTotals && dyBefore && dyAfter
+            ? { dynastyStarterValue: dyAfter.score - Math.max(1, dyBefore.score) }
+            : {}),
+        },
+        partnerUtilityDelta: {
+          teamName: partner.teamName,
+          weekLineupPoints: partnerLineup.after - partnerLineup.before,
+          starterValue: partnerSlAfter.score - Math.max(1, partnerSlBefore.score),
+        },
+      },
       // The raw roster effects the labels are computed from: a value gap
       // alone does not explain a trade verdict when starter value or power
       // rank moves the other way.
@@ -1702,7 +1765,7 @@ export async function toolSuggestTrades(
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
     scoringWindow: tradeWindowKey,
-    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind each idea and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists what this league has actually traded recently — frame the suggestions against it when it is non-null.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind each idea and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists what this league has actually traded recently — frame the suggestions against it when it is non-null. utility separates market fairness (value z) from yourUtilityDelta (your lineup/starter-value/power-rank change) and partnerUtilityDelta (the other roster's change).",
     freshness: moveFreshness(dashboard),
     marketContext: await loadTradeMarketContext(ctx, league.id, []),
     myNeeds,

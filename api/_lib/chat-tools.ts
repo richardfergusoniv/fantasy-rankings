@@ -911,6 +911,59 @@ async function toolEvaluateTrade(
     : [];
   const seasonLongValue = new Map(seasonLongAssets.map((row) => [row.playerId, row.value]));
   const dynastyValue = new Map(dynastyAssets.map((row) => [row.playerId, row.value]));
+
+  // Partner utility: when every incoming asset sits on one other roster, grade
+  // the same before/after effects for them — a deal that hurts both teams is
+  // different from one where only the model's owner loses.
+  const getIds = new Set(args.getPlayerIds);
+  const partner = league.tradeTeams.find(
+    (team) => !team.isUser && team.players.length > 0
+      && args.getPlayerIds.every((id) => team.players.some((p) => p.playerId === id)),
+  ) ?? null;
+  let partnerUtility: {
+    teamName: string;
+    lineupPointsBefore: number;
+    lineupPointsAfter: number;
+    starterValueBefore: number;
+    starterValueAfter: number;
+  } | null = null;
+  if (partner) {
+    const partnerPlayers = partner.players.map((p) => ({
+      playerId: p.playerId,
+      name: p.name,
+      position: p.position,
+      lineupSlot: p.lineupSlot,
+      isStarter: p.isStarter,
+      projection: p.projection ?? projectionById.get(p.playerId) ?? null,
+      actual: p.actual,
+    }));
+    const partnerIncoming = give.resolved.map((asset) => ({
+      playerId: asset.playerId,
+      name: asset.name,
+      position: asset.position,
+      lineupSlot: null as string | null,
+      isStarter: false,
+      projection: projectionById.get(asset.playerId) ?? null,
+      actual: null as number | null,
+    }));
+    const partnerLineup = tradeLineupBeforeAfter({
+      roster: partnerPlayers,
+      slots,
+      giveIds: getIds,
+      incoming: partnerIncoming,
+    });
+    const partnerAfterPlayers = [
+      ...partnerPlayers.filter((p) => !getIds.has(p.playerId)),
+      ...partnerIncoming,
+    ];
+    partnerUtility = {
+      teamName: partner.teamName,
+      lineupPointsBefore: partnerLineup.before,
+      lineupPointsAfter: partnerLineup.after,
+      starterValueBefore: Math.max(1, optimizeValueTradeRoster(partnerPlayers, slots, seasonLongValue).score),
+      starterValueAfter: optimizeValueTradeRoster(partnerAfterPlayers, slots, seasonLongValue).score,
+    };
+  }
   const toWindowAssets = (
     rows: typeof give.resolved,
     valueMap: Map<string, number>,
@@ -974,6 +1027,12 @@ async function toolEvaluateTrade(
     week: {
       yourLineupBefore: lineup.before,
       yourLineupAfter: lineup.after,
+      ...(partnerUtility
+        ? {
+          partnerLineupBefore: partnerUtility.lineupPointsBefore,
+          partnerLineupAfter: partnerUtility.lineupPointsAfter,
+        }
+        : {}),
     },
     seasonLong: {
       give: seasonLongSide.giveRows,
@@ -1020,7 +1079,7 @@ async function toolEvaluateTrade(
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
     scoringWindow: windowKey,
-    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind the verdict and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists this league's past trades involving the same positions — say whether a deal like this has been accepted here when it is non-null.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind the verdict and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists this league's past trades involving the same positions — say whether a deal like this has been accepted here when it is non-null. utility separates market fairness (value z) from yourUtilityDelta (your lineup/starter-value/power-rank change) and partnerUtilityDelta (the other roster's change, null when incoming assets span multiple teams).",
     freshness: moveFreshness(dashboard),
     marketContext: await loadTradeMarketContext(ctx, league.id, [
       ...give.resolved.map((row) => row.position),
@@ -1040,6 +1099,28 @@ async function toolEvaluateTrade(
       ...(move.dynasty ? { dynasty: moveVerdict(move.dynasty) } : {}),
     },
     fairness: move.fairness ?? null,
+    // Three separate answers: is the deal market-fair, what does it do to your
+    // roster, and (when every incoming asset sits on one partner) what does it
+    // do to theirs. partnerUtilityDelta is null when the get side spans
+    // multiple rosters or free agents.
+    utility: {
+      marketFairness: move.fairness ?? null,
+      yourUtilityDelta: {
+        weekLineupPoints: lineup.after - lineup.before,
+        starterValue: seasonLongSide.starterAfter - seasonLongSide.starterBefore,
+        powerRank: myRankAfter - myRankBefore,
+        ...(dynastySide
+          ? { dynastyStarterValue: dynastySide.starterAfter - dynastySide.starterBefore }
+          : {}),
+      },
+      partnerUtilityDelta: partnerUtility
+        ? {
+          teamName: partnerUtility.teamName,
+          weekLineupPoints: partnerUtility.lineupPointsAfter - partnerUtility.lineupPointsBefore,
+          starterValue: partnerUtility.starterValueAfter - partnerUtility.starterValueBefore,
+        }
+        : null,
+    },
     // The raw roster effects the labels are computed from: a value gap
     // alone does not explain a trade verdict when starter value or power
     // rank moves the other way.

@@ -124,6 +124,36 @@ function baseDashboard(overrides: Partial<Dashboard> = {}): Dashboard {
             ],
             record: { wins: 4, losses: 2, ties: 0 },
           },
+          {
+            rosterId: 2,
+            ownerId: "sleeper-2",
+            teamName: "Rival",
+            isUser: false,
+            players: [
+              {
+                playerId: "p2",
+                name: "Beta Runner",
+                team: "BUF",
+                position: "RB",
+                lineupSlot: "RB",
+                isStarter: true,
+                rank: 5,
+                projection: 14.0,
+                projectionSource: "vegas",
+                actual: null,
+                gamePhase: "pregame",
+                gameTime: null,
+                opponent: "MIA",
+                isAway: true,
+                isBye: false,
+                injuryStatus: null,
+                defenseComponents: null,
+                projectionComponents: null,
+              },
+            ],
+            ownedPicks: [],
+            record: { wins: 3, losses: 3, ties: 0 },
+          },
         ],
         tradeWaiverPool: [],
         tradeStarterSlots: ["QB", "RB", "WR", "TE", "FLEX"],
@@ -346,6 +376,11 @@ describe("dispatchChatTool", () => {
       waiverAdjustment: { give: number; get: number };
       verdicts: { seasonLong: { label: string; score: number } };
       fairness: { band: string } | null;
+      utility: {
+        marketFairness: { band: string } | null;
+        yourUtilityDelta: { weekLineupPoints: number; starterValue: number; powerRank: number };
+        partnerUtilityDelta: { teamName: string; weekLineupPoints: number; starterValue: number } | null;
+      };
       rosterImpact: { seasonLong: { starterValueBefore: number; starterValueAfter: number; fillsHole: boolean } };
       primaryLabel: string;
       scoringWindow: string;
@@ -369,6 +404,21 @@ describe("dispatchChatTool", () => {
     expect(result.primaryLabel).toMatch(/Accept|Lean accept|Decline/);
     expect(result.verdicts.seasonLong.label).toBe(result.primaryLabel);
     expect(typeof result.rosterImpact.seasonLong.starterValueAfter).toBe("number");
+    // Utility split: fairness is the market z-band, your delta is the roster effect;
+    // the pick is not on any roster, so no single partner owns the whole get side.
+    expect(result.utility.marketFairness).toEqual(result.fairness);
+    expect(typeof result.utility.yourUtilityDelta.weekLineupPoints).toBe("number");
+    expect(result.utility.partnerUtilityDelta).toBeNull();
+
+    const playerOnly = await dispatchChatTool(
+      "evaluate_trade",
+      { leagueId: "lg1", givePlayerIds: ["p1"], getPlayerIds: ["p2"] },
+      ctxWithDashboard(baseDashboard()),
+    ) as { ok: boolean; utility: { partnerUtilityDelta: { teamName: string; weekLineupPoints: number } | null } };
+    expect(playerOnly.ok).toBe(true);
+    // All incoming assets sit on the Rival roster → partner delta computed.
+    expect(playerOnly.utility.partnerUtilityDelta).not.toBeNull();
+    expect(playerOnly.utility.partnerUtilityDelta?.teamName).toBe("Rival");
     // No engine prose or scoring internals reach the model.
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("\"reasons\"");
