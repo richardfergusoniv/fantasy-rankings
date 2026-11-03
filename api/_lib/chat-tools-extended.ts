@@ -538,10 +538,12 @@ export async function toolGetPlayerAdvanced(
 }
 
 /**
- * Each player's projected points for the rest of the regular season: this week
- * from the app's projection, later weeks from Sleeper's per-week projections
- * scored in the league's rules (which already reflect byes and injury timelines;
- * no row means bye or out that week). Weeks Sleeper cannot supply are listed.
+ * Each player's projected points for remaining regular-season weeks, plus a
+ * separate playoff block when the league configures playoffs: this week from
+ * the app's projection, later weeks from Sleeper's per-week projections scored
+ * in the league's rules (which already reflect byes and injury timelines; no
+ * row means bye or out that week). Weeks Sleeper cannot supply are listed on
+ * each block.
  */
 export async function loadUpcomingOutlook(
   season: number,
@@ -1038,7 +1040,7 @@ export async function toolGetProjections(
       upcoming: outlook.byPlayer.get(player.playerId) ?? null,
       upcomingPlayoffs: outlook.playoffs?.byPlayer.get(player.playerId) ?? null,
     })),
-    upcomingNote: `upcoming: projected points per remaining regular-season week (through week ${outlook.lastWeek}) and their total.${outlook.playoffs ? ` upcomingPlayoffs: same, but only the fantasy playoff weeks ${outlook.playoffs.firstWeek}-${outlook.playoffs.lastWeek}.` : ""} This week is the app's projection; later weeks are Sleeper's per-week projections in this league's scoring, which already reflect byes and injury timelines (0 or a missing week means bye or out). Third-party projections, not a guarantee.${outlook.missingWeeks.length ? ` Week(s) ${outlook.missingWeeks.join(", ")} could not be loaded.` : ""} restOfSeason is trade value, not points.`,
+    upcomingNote: `upcoming: projected points per remaining regular-season week (through week ${outlook.lastWeek}) and their total.${outlook.playoffs ? ` upcomingPlayoffs: same, but only the fantasy playoff weeks ${outlook.playoffs.firstWeek}-${outlook.playoffs.lastWeek}.` : ""} This week is the app's projection; later weeks are Sleeper's per-week projections in this league's scoring, which already reflect byes and injury timelines (0 or a missing week means bye or out). Third-party projections, not a guarantee.${outlook.missingWeeks.length ? ` Week(s) ${outlook.missingWeeks.join(", ")} could not be loaded.` : ""}${outlook.playoffs?.missingWeeks.length ? ` Playoff week(s) ${outlook.playoffs.missingWeeks.join(", ")} could not be loaded.` : ""} restOfSeason is trade value, not points.`,
     propLines,
     projectionAccuracy: accuracy,
   };
