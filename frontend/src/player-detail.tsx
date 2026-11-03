@@ -438,6 +438,39 @@ function PlayerRosterBadge({
   );
 }
 
+// TEMPORARY DIAGNOSTIC for the Props-tab close bug: the last few sheet
+// events are kept in sessionStorage and printed on the sheet, so the exact
+// close path can be read off the device that reproduces it. Remove once the
+// bug is fixed.
+type SheetCloseDebugEvent = { at: string; kind: string; detail: string };
+const SHEET_CLOSE_DEBUG_KEY = "player-sheet-close-debug";
+
+function readSheetCloseDebug(): SheetCloseDebugEvent[] {
+  try {
+    const raw = window.sessionStorage.getItem(SHEET_CLOSE_DEBUG_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as SheetCloseDebugEvent[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function recordSheetCloseDebug(kind: string, detail: string): void {
+  try {
+    const events = [...readSheetCloseDebug(), { at: new Date().toLocaleTimeString("en-GB"), kind, detail }].slice(-4);
+    window.sessionStorage.setItem(SHEET_CLOSE_DEBUG_KEY, JSON.stringify(events));
+  } catch {
+    // Storage unavailable; the diagnostic just stays blank.
+  }
+}
+
+function describeSheetTarget(target: Element | null): string {
+  if (!target) return "none";
+  const id = target.id ? "#" + target.id : "";
+  const cls = typeof target.className === "string" && target.className !== "" ? "." + target.className.split(" ").join(".") : "";
+  return target.tagName.toLowerCase() + id + cls;
+}
+
 export function PlayerDetailSheet({
   player,
   week,
@@ -524,25 +557,39 @@ export function PlayerDetailSheet({
     axis: "x" | "y" | "none" | null;
     horizontalBlocked: boolean;
     interactiveBlocked: boolean;
+    startTarget: string;
+    startScrollTop: number;
   } | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const [settling, setSettling] = useState(false);
   const [contentDirection, setContentDirection] = useState<"back" | "none">("none");
   const [activeTab, setActiveTab] = useState<PlayerDetailTab>("overview");
+  const [debugEvents] = useState<SheetCloseDebugEvent[]>(() => readSheetCloseDebug());
+  const closeWithReason = useCallback((reason: string, detail = "") => {
+    recordSheetCloseDebug("close", detail ? reason + " " + detail : reason);
+    onClose();
+  }, [onClose]);
+  const prevTabRef = useRef<PlayerDetailTab>("overview");
+  useEffect(() => {
+    if (prevTabRef.current !== activeTab) {
+      prevTabRef.current = activeTab;
+      recordSheetCloseDebug("tab", activeTab);
+    }
+  }, [activeTab]);
   const newsNowMs = useMinuteNow(newsItems.some((item) => item.source === "article"));
-  useDialogFocusTrap(sheetRef, onClose, isModal && !suspended);
+  useDialogFocusTrap(sheetRef, () => closeWithReason("escape"), isModal && !suspended);
   useEffect(() => {
     if (isModal || suspended) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        closeWithReason("escape-docked");
       }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isModal, onClose, suspended]);
+  }, [isModal, closeWithReason, suspended]);
 
   const resetDrag = useCallback((animate: boolean) => {
     if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
@@ -565,6 +612,7 @@ export function PlayerDetailSheet({
     gestureRef.current = null;
     resetDrag(false);
     setActiveTab("overview");
+    recordSheetCloseDebug("open", player.name);
   }, [player.playerId, resetDrag]);
 
   const beginTouch = (event: ReactTouchEvent<HTMLElement>) => {
@@ -588,6 +636,8 @@ export function PlayerDetailSheet({
       // with a downward roll otherwise reads as a flick and dismisses the
       // sheet before the tap lands (the Props tab at scrollTop 0).
       interactiveBlocked: Boolean(target?.closest("button, a, input, select, textarea, summary, [role='tab'], [role='button']")),
+      startTarget: describeSheetTarget(target),
+      startScrollTop: sheetRef.current?.scrollTop ?? -1,
     };
     if (settleTimerRef.current) window.clearTimeout(settleTimerRef.current);
     setSettling(false);
@@ -657,7 +707,7 @@ export function PlayerDetailSheet({
     if (gesture.axis === "y") {
       const velocity = gesture.rawDy / elapsed;
       if (gesture.rawDy > 110 || (gesture.rawDy > 34 && velocity > 0.5)) {
-        onClose();
+        closeWithReason("swipe", "dy=" + Math.round(gesture.rawDy) + " v=" + velocity.toFixed(2) + " start=" + gesture.startTarget + " blocked=" + gesture.interactiveBlocked + " scroll0=" + gesture.startScrollTop);
         return;
       }
       resetDrag(true);
@@ -759,7 +809,7 @@ export function PlayerDetailSheet({
           </div>
           <div className="player-detail-actions">
             {canGoBack ? <button type="button" onClick={navigateBack} aria-label="Previous player"><BackGlyph /></button> : null}
-            <button type="button" onClick={onClose} aria-label="Close player details"><CloseGlyph /></button>
+            <button type="button" onClick={() => closeWithReason("button")} aria-label="Close player details"><CloseGlyph /></button>
           </div>
         </div>
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as PlayerDetailTab)} className="player-detail-tabs">
@@ -770,6 +820,13 @@ export function PlayerDetailSheet({
             <TabsTrigger id="player-detail-props-tab" value="props" aria-controls="player-detail-props-panel">Props</TabsTrigger>
           </TabsList>
         </Tabs>
+        {debugEvents.length > 0 ? (
+          <div aria-hidden="true" style={{ fontSize: 10, lineHeight: 1.6, color: "var(--dim)", paddingTop: 8, whiteSpace: "pre-wrap" }}>
+            {debugEvents.map((entry, index) => (
+              <div key={index}>debug {entry.at} {entry.kind} {entry.detail}</div>
+            ))}
+          </div>
+        ) : null}
         {activeTab === "overview" ? <div id="player-detail-overview-panel" role="tabpanel" aria-labelledby="player-detail-overview-tab">
         <div className="player-detail-values">
           <div>
@@ -941,7 +998,7 @@ export function PlayerDetailSheet({
 
   return (
     <ModalPortal>
-      <div className="player-detail-backdrop" onClick={onClose}>
+      <div className="player-detail-backdrop" onClick={() => closeWithReason("backdrop")}>
         {sheet}
       </div>
     </ModalPortal>
