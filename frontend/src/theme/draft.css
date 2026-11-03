@@ -10,6 +10,7 @@
 .draft-controls > label { grid-column: 1 / -1; min-width: 0; }
 .draft-controls .position-tabs { min-width: 0; }
 .draft-my-team { display: grid; gap: 12px; }
+.draft-hindsight-tabs { display: grid; gap: 8px; }
 .draft-my-team .section-heading { margin-top: 0; }
 .draft-remove-link,
 .drafted-elsewhere button b { min-height: 44px; flex: none; border: 0; background: transparent; color: var(--link); font-size: var(--type-caption); font-weight: 700; }

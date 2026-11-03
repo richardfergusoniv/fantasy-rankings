@@ -428,6 +428,7 @@ export function DraftCenter({
         </div>
       ) : draftIsFinal && mode === "altPicks" ? (
         <DraftBetterPicks
+          dynasty={league.seasonLongFormat.isDynasty}
           leagueId={league.id}
           players={recapPicks}
           secondaryOf={draftSecondaryLine}

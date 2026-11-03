@@ -6,12 +6,12 @@ import { ordinal } from "../projected-standings-view";
 import { personalQueryKey, useViewerIdentity } from "../viewer-scope";
 
 /** The league's draft grade for the signed-in team; both the summary card and the recap table read it. */
-export function useDraftGrade(leagueId: string) {
+export function useDraftGrade(leagueId: string, selection?: { kind: "rookie" | "startup"; season?: string }) {
   // The grade depends on who is signed in, so it is keyed (and cleared on sign-out) like the other personal queries.
   const viewer = useViewerIdentity();
   return useQuery({
-    queryKey: personalQueryKey(viewer, "draft-grade", leagueId),
-    queryFn: () => api.getDraftGrade({ leagueId }),
+    queryKey: personalQueryKey(viewer, "draft-grade", leagueId, selection?.kind ?? "default", selection?.season ?? ""),
+    queryFn: () => api.getDraftGrade({ leagueId, kind: selection?.kind, season: selection?.season }),
     staleTime: 30 * 60_000,
     refetchOnWindowFocus: false,
     retry: false,

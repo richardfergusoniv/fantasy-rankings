@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { BetterPick, RookiePickReplay } from "../../../api/_lib/draft-grade";
+import { SegmentedControl } from "../shared";
 import { useDraftGrade } from "./draft-grade-card";
 import { HindsightCard, HindsightSheet, RookieHindsightCard, timingText } from "./hindsight-card";
 
@@ -42,18 +43,42 @@ function RookieBestCell({ row, secondaryOf, onOpenPlayer }: {
 }
 
 /** Once the draft is final: at each of the team's picks, who the user's strategy and the best strategy would have taken, on today's values. */
-export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer }: {
+export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer, dynasty = false }: {
   leagueId: string;
   players: readonly BetterPicksPlayer[];
   secondaryOf: (position: string, team: string | null) => string | null;
   onOpenPlayer: (playerId: string) => void;
+  /** Dynasty leagues split Hindsight into the rookie drafts and the startup draft. */
+  dynasty?: boolean;
 }) {
-  const query = useDraftGrade(leagueId);
+  const [kind, setKind] = useState<"rookie" | "startup">("rookie");
+  const [season, setSeason] = useState<string | undefined>(undefined);
+  const selection = dynasty ? { kind, season: kind === "rookie" ? season : undefined } : undefined;
+  const query = useDraftGrade(leagueId, selection);
   const [sheetOpen, setSheetOpen] = useState(false);
   const byId = new Map(players.map((player) => [player.playerId, player]));
+  const available = query.data?.availableDrafts ?? [];
+  const rookieDrafts = available.filter((draft) => draft.kind === "rookie");
+  const hasStartup = available.some((draft) => draft.kind === "startup");
+  // A first-year dynasty has no rookie draft yet, and an established one may be
+  // viewed before this year's: land on whichever kind the league actually has.
+  useEffect(() => {
+    if (!dynasty || query.isPending || available.length === 0) return;
+    if (kind === "rookie" && rookieDrafts.length === 0 && hasStartup) setKind("startup");
+    else if (kind === "startup" && !hasStartup && rookieDrafts.length > 0) setKind("rookie");
+    else if (season !== undefined && !rookieDrafts.some((draft) => draft.season === season)) setSeason(undefined);
+  }, [dynasty, query.isPending, available, kind, rookieDrafts, hasStartup, season]);
   const strategies = query.data?.grade?.strategies ?? null;
   // Kickers and defenses have no value to compare, so they carry no grade and are left out.
-  const entries = strategies ? (query.data?.grade?.picks ?? []).filter((entry) => byId.has(entry.playerId) && (entry.draftDay !== null || entry.today !== null)) : [];
+  // Older drafts are not in the local pick list, so their rows resolve names from the grade itself.
+  const entries = strategies ? (query.data?.grade?.picks ?? []).filter((entry) => (byId.has(entry.playerId) || entry.name !== "") && (entry.draftDay !== null || entry.today !== null)) : [];
+  const gradePickById = new Map((query.data?.grade?.picks ?? []).map((entry) => [entry.playerId, entry]));
+  const nameOf = (playerId: string) => {
+    const local = byId.get(playerId);
+    if (local) return local;
+    const graded = gradePickById.get(playerId);
+    return graded && graded.name !== "" ? { playerId, name: graded.name, secondary: secondaryOf(graded.position, graded.team) } : undefined;
+  };
   // When the user's strategy is already the best one, a single column says so.
   const sameStrategy = strategies?.yours.name === strategies?.best.name && strategies?.yours.timing === strategies?.best.timing;
 
@@ -62,6 +87,29 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
 
   return (
     <section className="draft-my-team">
+      {dynasty && ((rookieDrafts.length > 0 && hasStartup) || rookieDrafts.length > 1) ? (
+        <div className="draft-hindsight-tabs">
+          {rookieDrafts.length > 0 && hasStartup ? (
+            <SegmentedControl
+              value={kind}
+              onChange={(next) => setKind(next)}
+              label="Draft kind"
+              options={[
+                { value: "rookie" as const, label: "Rookie" },
+                { value: "startup" as const, label: "Startup" },
+              ]}
+            />
+          ) : null}
+          {kind === "rookie" && rookieDrafts.length > 1 ? (
+            <SegmentedControl
+              value={season ?? rookieDrafts[0]!.season}
+              onChange={(next) => setSeason(next)}
+              label="Rookie draft season"
+              options={rookieDrafts.map((draft) => ({ value: draft.season, label: draft.season }))}
+            />
+          ) : null}
+        </div>
+      ) : null}
       {rookie ? (
         <RookieHindsightCard rookie={rookie} />
       ) : hindsight && entries.length > 0 ? (
@@ -72,7 +120,7 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
             onOpenChange={setSheetOpen}
             hindsight={hindsight}
             entries={entries}
-            nameOf={(playerId) => byId.get(playerId)}
+            nameOf={nameOf}
             secondaryOf={secondaryOf}
           />
         </>
@@ -104,12 +152,14 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer 
           </div>
           {entries.map((entry) => {
             const player = byId.get(entry.playerId);
+            const displayName = player?.name ?? entry.name;
+            const displaySecondary = player?.secondary ?? secondaryOf(entry.position, entry.team);
             return (
               <div className="draft-row draft-better-row" role="listitem" key={entry.playerId}>
                 <div className="draft-better-cell">
-                  <button type="button" className="draft-better-open" onClick={() => onOpenPlayer(entry.playerId)} aria-label={`Pick ${entry.pickNo}: view ${player?.name ?? "player"} details and news`}>
-                    <strong>{player?.name}</strong>
-                    <small>{[`Pick ${entry.pickNo}`, player?.secondary].filter(Boolean).join(" · ")}</small>
+                  <button type="button" className="draft-better-open" onClick={() => onOpenPlayer(entry.playerId)} aria-label={`Pick ${entry.pickNo}: view ${displayName || "player"} details and news`}>
+                    <strong>{displayName}</strong>
+                    <small>{[`Pick ${entry.pickNo}`, displaySecondary].filter(Boolean).join(" · ")}</small>
                   </button>
                 </div>
                 <BetterCell label={strategies?.yours.name ?? "Your strategy"} better={entry.better.yours} secondaryOf={secondaryOf} onOpenPlayer={onOpenPlayer} />
