@@ -84,11 +84,12 @@ const MAX_INGEST_BODY_BYTES = 8 * 1024 * 1024;
  *                   Team/league scopes store one row with player_id null
  *                   (dedupe by post_id + scope, plus team for team scope).
  *                   Insert uses bare ON CONFLICT DO NOTHING (all unique
- *                   indexes), then refreshes `tags` by id so dynasty /
- *                   source-role tags from a resent item survive. Unknown tags
- *                   are dropped at validation (item still accepted). Optional
- *                   `media` attachments (image/video urls, max 4) store on the
- *                   row and render on the news card; invalid entries drop like
+ *                   indexes), then refreshes `tags` and `media` by id so
+ *                   dynasty / source-role tags and late-arriving attachments
+ *                   from a resent item survive. Unknown tags are dropped at
+ *                   validation (item still accepted). Optional `media`
+ *                   attachments (image/video urls, max 4) store on the row and
+ *                   render on the news card; invalid entries drop like
  *                   unknown tags. Producers
  *                   should send Sleeper `player_id` when known; `player_name`
  *                   (+ optional `team`) is a fallback. Last-name-only names
@@ -465,16 +466,20 @@ async function handlePlayerNewsX(req: Request): Promise<Response> {
         }
       }
     }
-    // Refresh tags by deterministic id so resent X items (same id, skipped by
-    // ON CONFLICT) still pick up source-role / dynasty tags. One statement per
-    // chunk; no-ops when the id was never inserted (e.g. url-only collision
-    // with a different id).
-    const tagPayload = chunk.map((row) => ({ id: row.id, tags: row.tags }));
+    // Refresh tags + media by deterministic id so resent X items (same id,
+    // skipped by ON CONFLICT) still pick up source-role / dynasty tags and
+    // late-arriving or corrected media. One statement per chunk; no-ops when
+    // the id was never inserted (e.g. url-only collision with a different id).
+    const refreshPayload = chunk.map((row) => ({
+      id: row.id,
+      tags: row.tags,
+      media: row.media,
+    }));
     await db.execute(sql`
       UPDATE shared_player_news AS spn
-      SET tags = v.tags
-      FROM jsonb_to_recordset(${JSON.stringify(tagPayload)}::jsonb)
-        AS v(id text, tags text[])
+      SET tags = v.tags, media = v.media
+      FROM jsonb_to_recordset(${JSON.stringify(refreshPayload)}::jsonb)
+        AS v(id text, tags text[], media jsonb)
       WHERE spn.id = v.id
     `);
   }
