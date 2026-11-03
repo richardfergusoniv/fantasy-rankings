@@ -514,21 +514,26 @@ export function articleHeadlineDedupeKey(
 const OTHER_SPORTS_RE =
   /\b(nba|mlb|nhl|wnba|mlb|ncaa|cfb|college football|ncaaf|march madness|ufc|mma|pga|golf|soccer|premier league|mls|formula\s*1|f1|tennis|wimbledon|world series|stanley cup|olympics)\b/i;
 
+// "predictions" is intentionally absent: analyst projection/prediction
+// articles (stat lines, grades, recommendations) should be kept.
 const BETTING_RE =
-  /\b(promo code|betting bonus|best bets?|odds|props?|parlay|against the spread|\bats\b|spread picks?|moneyline|over\/under|betting odds|sportsbook|draftkings promo|fanduel promo|predictions?)\b/i;
+  /\b(promo code|betting bonus|best bets?|odds|props?|parlay|against the spread|\bats\b|spread picks?|moneyline|over\/under|betting odds|sportsbook|draftkings promo|fanduel promo)\b/i;
 
 const HOW_TO_WATCH_RE =
   /\b(how to watch|where to watch|kickoff time|start time|tv (?:channel|schedule)|live stream|streaming options)\b/i;
 
 const GALLERY_RE = /\b(photos?|gallery|photo gallery|best pictures)\b/i;
 const MOCK_DRAFT_RE = /\b(mock draft|7[- ]round mock)\b/i;
-const QUIZ_RE = /\b(quiz|poll|trivia)\b/i;
+// Polls, quizzes, and "would you rather" bait — dropped even when the
+// headline names a player. Aligned with INTERACTION_BAIT_RE on X ingest.
+const QUIZ_RE =
+  /\b(quiz|polls?|trivia|would you rather|who (?:you|ya) (?:got|start(?:ing)?|pick(?:ing)?)|which (?:one|player|team) (?:do you|would you|are you))\b/i;
 const MERCH_RE = /\b(uniforms?|tickets?|merch|merchandise|giveaway|coupon)\b/i;
 const HOT_TAKE_RE = /\b(skip bayless|stephen a\.? smith|hot take|unpopular opinion)\b/i;
 
 /** Roster-action / fantasy-relevance terms that keep an item without a player name. */
 export const ROSTER_ACTION_RE =
-  /\b(injury(?:\s+status|\s+report)?|placed on ir|\bir\b|activated|signed|released|waived|traded|trade|depth chart|starter|starting|role|snaps?|usage|targets?|routes?|backfield|waiver|waivers|start\/sit|start-sit|buy[- ]low|sell[- ]high|stash|rankings?|practice report|did not practice|full participant|limited|questionable|doubtful|ruled out|out for|week[- ]to[- ]week|pup|nfi)\b/i;
+  /\b(injury(?:\s+status|\s+report)?|placed on ir|\bir\b|activated|signed|released|waived|traded|trade|depth chart|starter|starting|role|snaps?|usage|targets?|routes?|backfield|waiver|waivers|start\/sit|start-sit|buy[- ]low|sell[- ]high|stash|rankings?|practice report|did not practice|full participant|limited|questionable|doubtful|ruled out|out for|week[- ]to[- ]week|pup|nfi|snap counts?|target share|air yards|grades?|graded|projections?|projected|recommendations?|film|all[- ]?22|stock (?:up|down)|risers?|fallers?|overrated|underrated|tiers?|power rankings?|top[- ]?\d+|receptions?|carries|touchdowns?|yards)\b/i;
 
 export type HeadlineFilterInput = {
   title: string;

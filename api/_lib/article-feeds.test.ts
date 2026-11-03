@@ -71,6 +71,31 @@ describe("headline noise filter", () => {
     expect(passesHeadlineNoiseFilter({ title: "Skip Bayless reacts", url: "https://x.com/a" }).pass).toBe(false);
   });
 
+  it("drops polls and 'would you rather' bait even with a player name", () => {
+    expect(
+      passesHeadlineNoiseFilter({ title: "Would you rather have Jefferson or Chase?", url: "https://x.com/a" }).pass,
+    ).toBe(false);
+    expect(
+      passesHeadlineNoiseFilter({ title: "Poll: which player do you start in Week 10?", url: "https://x.com/a" }).pass,
+    ).toBe(false);
+    expect(
+      passesHeadlineNoiseFilter({ title: "Who you got: Bijan or Gibbs?", url: "https://x.com/a" }).pass,
+    ).toBe(false);
+  });
+
+  it("keeps analyst predictions, grades, projections, and recommendations", () => {
+    const keep = [
+      "Week 10 stat predictions for every fantasy-relevant player",
+      "PFF grades: top-10 wide receivers after Week 9",
+      "Updated rest-of-season projections for the Lions backfield",
+      "Analyst recommendations: buy low on Puka Nacua",
+      "Stock up, stock down after Sunday's film review",
+    ];
+    for (const title of keep) {
+      expect(passesHeadlineNoiseFilter({ title, url: "https://x.com/a" }).pass, title).toBe(true);
+    }
+  });
+
   it("keeps fantasy-relevant NFL headlines", () => {
     expect(
       passesHeadlineNoiseFilter({
