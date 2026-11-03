@@ -129,6 +129,12 @@ export const xNewsItemSchema = z
     signal: z.string().min(1).max(80).optional(),
     score: z.number().int().min(0).max(100).optional(),
     /**
+     * Optional source-priority hint (0-100) from the scanner for high-value
+     * accounts. Used as the row's score only when `score` is absent, so it
+     * feeds ticker sort/prominence without overriding per-post scoring.
+     */
+    source_priority: z.number().int().min(0).max(100).optional(),
+    /**
      * Optional tags: dynasty, cryptic, and/or one X source-role tag
      * (`insider` | `beat` | `analyst` | `rumor` | `team-account` | `player`).
      * Unknown tags are dropped; they do not reject the item.
@@ -657,7 +663,7 @@ function xNewsDraftBase(item: XNewsItem): Omit<
     externalId: postId,
     publishedAt: new Date(item.published_at),
     signal: item.signal?.trim() || null,
-    score: item.score ?? null,
+    score: item.score ?? item.source_priority ?? null,
     tags: normalizeNewsTags(item.tags),
   };
 }

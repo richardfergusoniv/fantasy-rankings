@@ -157,6 +157,18 @@ describe("xNewsItemSchema / xNewsBatchSchema", () => {
       "dynasty",
     ]);
   });
+
+  it("uses source_priority as the draft score only when score is absent", () => {
+    const withBoth = xNewsItemSchema.parse({ ...validItem, source_priority: 40 });
+    expect(buildXNewsDraft(withBoth, { playerId: "1", player: "J. Jefferson", team: "MIN" }).score).toBe(90);
+
+    const { score: _score, ...withoutScore } = validItem;
+    const priorityOnly = xNewsItemSchema.parse({ ...withoutScore, source_priority: 40 });
+    expect(buildXNewsDraft(priorityOnly, { playerId: "1", player: "J. Jefferson", team: "MIN" }).score).toBe(40);
+
+    const plain = xNewsItemSchema.parse(withoutScore);
+    expect(buildXNewsDraft(plain, { playerId: "1", player: "J. Jefferson", team: "MIN" }).score).toBeNull();
+  });
 });
 
 describe("collectXNewsDrafts scope branching", () => {
