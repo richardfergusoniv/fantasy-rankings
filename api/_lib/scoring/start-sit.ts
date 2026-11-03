@@ -140,11 +140,38 @@ export function scoreStartSit(input: StartSitInput): StartSitResult {
         });
       }
     } else if (closeCall) {
-      reasons.push({
-        factor: "close_call",
-        source: "win_chance",
-        effect: "Flex band close call; lineup win chances within 1 point",
-      });
+      // Matchup-aware variance: when the win chances don't separate the
+      // options, the matchup context picks the risk profile — a projected
+      // underdog wants the higher-variance player, a favorite the safer one.
+      const UNDERDOG_TILT = 0.45;
+      const FAVORITE_TILT = 0.55;
+      const preferVariance = winWithPlayer < UNDERDOG_TILT;
+      const preferSafety = winWithPlayer > FAVORITE_TILT;
+      const playerSigma = playerBlend.moments.sigma;
+      const altSigma = altBlend.moments.sigma;
+      const altIsTilt =
+        (preferVariance && altSigma > playerSigma)
+        || (preferSafety && altSigma < playerSigma);
+      if (altIsTilt && input.alternative.playerId !== input.player.playerId) {
+        tiebreak = {
+          rule: "flex_matchup_variance",
+          pickBefore: input.player.playerId,
+          pickAfter: input.alternative.playerId,
+        };
+        reasons.push({
+          factor: "close_call_variance",
+          source: "win_chance",
+          effect: preferVariance
+            ? `Projected underdog: flex band favors the higher-variance option (${input.alternative.name})`
+            : `Projected favorite: flex band favors the safer option (${input.alternative.name})`,
+        });
+      } else {
+        reasons.push({
+          factor: "close_call",
+          source: "win_chance",
+          effect: "Flex band close call; lineup win chances within 1 point",
+        });
+      }
     }
   }
 
