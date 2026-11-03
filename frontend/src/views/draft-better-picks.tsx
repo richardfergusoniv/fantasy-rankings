@@ -87,17 +87,19 @@ export function DraftBetterPicks({ leagueId, players, secondaryOf, onOpenPlayer,
 
   return (
     <section className="draft-my-team">
-      {dynasty && rookieDrafts.length > 0 && hasStartup ? (
+      {dynasty && ((rookieDrafts.length > 0 && hasStartup) || rookieDrafts.length > 1) ? (
         <div className="draft-hindsight-tabs">
-          <SegmentedControl
-            value={kind}
-            onChange={(next) => setKind(next)}
-            label="Draft kind"
-            options={[
-              { value: "rookie" as const, label: "Rookie" },
-              { value: "startup" as const, label: "Startup" },
-            ]}
-          />
+          {rookieDrafts.length > 0 && hasStartup ? (
+            <SegmentedControl
+              value={kind}
+              onChange={(next) => setKind(next)}
+              label="Draft kind"
+              options={[
+                { value: "rookie" as const, label: "Rookie" },
+                { value: "startup" as const, label: "Startup" },
+              ]}
+            />
+          ) : null}
           {kind === "rookie" && rookieDrafts.length > 1 ? (
             <SegmentedControl
               value={season ?? rookieDrafts[0]!.season}

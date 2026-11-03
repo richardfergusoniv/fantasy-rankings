@@ -543,15 +543,25 @@ async function loadSelectedDraftGrade(
   if (!selection) return null;
   const chain = await loadLeagueChain(get, league.id);
   if (chain.length === 0) return null;
-  const seasons = await Promise.all(chain.map(async (entry, index) => {
+  // The founding season's biggest draft is the startup; every other season's
+  // biggest is a rookie draft. A chain that stops early (a league fetch failed,
+  // a cycle, the cap) never proved its last season is the founding one, so it
+  // offers no startup.
+  const reachedRoot = chain[chain.length - 1]?.previousLeagueId === null;
+  const available = (await Promise.all(chain.map(async (entry, index) => {
     const loaded = await loadSeasonDrafts(get, entry.leagueId).catch(() => [] as Array<{ draft: SleeperDraft; picks: GradedPick[] }>);
-    const best = loaded.filter((row) => row.picks.length > 0).sort((a, b) => b.picks.length - a.picks.length)[0] ?? null;
-    if (!best) return null;
-    // The founding season's draft is the startup; every later season's is a rookie draft.
-    const kind = (index === chain.length - 1 ? "startup" : "rookie") as "rookie" | "startup";
-    return { entry, kind, loaded: best, season: entry.season ?? best.draft.season ?? "" };
-  }));
-  const available = seasons.filter((row): row is NonNullable<typeof row> => row !== null);
+    const ranked = loaded.filter((row) => row.picks.length > 0).sort((a, b) => b.picks.length - a.picks.length);
+    const primary = ranked[0];
+    if (!primary) return [];
+    const isStartupSeason = reachedRoot && index === chain.length - 1;
+    const season = entry.season ?? primary.draft.season ?? "";
+    const rows: Array<{ entry: ChainLeague; kind: "rookie" | "startup"; loaded: { draft: SleeperDraft; picks: GradedPick[] }; season: string }> = [
+      { entry, kind: isStartupSeason ? "startup" : "rookie", loaded: primary, season },
+    ];
+    // A founding season can hold a separate rookie draft next to its startup.
+    if (isStartupSeason && ranked[1]) rows.push({ entry, kind: "rookie", loaded: ranked[1], season });
+    return rows;
+  }))).flat();
   const availableDrafts: AvailableDraft[] = available.map((row) => ({
     kind: row.kind,
     season: row.season,

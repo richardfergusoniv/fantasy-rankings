@@ -420,15 +420,16 @@ describe("loadDraftGrade", () => {
       lg24: [draft("d24", { start_time: Date.UTC(2024, 7, 15, 18) })],
     };
     const picksByDraft: Record<string, unknown[]> = { d26: sleeperPicks, d25: sleeperPicks, d24: sleeperPicks };
-    const chainFetcher = async <T>(url: string): Promise<T> => {
+    const makeFetcher = (draftsMap: Record<string, unknown[]>, picksMap: Record<string, unknown[]>) => async <T>(url: string): Promise<T> => {
       const leagueMatch = url.match(/\/league\/([^/]+)$/);
       if (leagueMatch) return leagues[leagueMatch[1]!] as T;
       const draftsMatch = url.match(/\/league\/([^/]+)\/drafts$/);
-      if (draftsMatch) return (draftsByLeague[draftsMatch[1]!] ?? []) as T;
+      if (draftsMatch) return (draftsMap[draftsMatch[1]!] ?? []) as T;
       const picksMatch = url.match(/\/draft\/([^/]+)\/picks$/);
-      if (picksMatch) return (picksByDraft[picksMatch[1]!] ?? []) as T;
+      if (picksMatch) return (picksMap[picksMatch[1]!] ?? []) as T;
       throw new Error(`unexpected url ${url}`);
     };
+    const chainFetcher = makeFetcher(draftsByLeague, picksByDraft);
     const deps = { seasonType: inSeason, fetchJson: chainFetcher, loadBoard: async () => marketBoard, minBoardPlayers: 1 };
 
     it("grades the founding season's draft as the startup, with the strategy hindsight", async () => {
@@ -460,6 +461,31 @@ describe("loadDraftGrade", () => {
       // The default path has no fallback: the same missing board leaves it ungraded.
       const legacy = await loadDraftGrade(dynasty, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d24", { start_time: Date.UTC(2024, 7, 15, 18) })], { d24: sleeperPicks }), loadBoard, minBoardPlayers: 1 });
       expect(legacy.grade).toBeNull();
+    });
+
+    it("keeps a founding season's separate rookie draft next to its startup", async () => {
+      const fetcher = makeFetcher(
+        { ...draftsByLeague, lg24: [draft("d24", { start_time: Date.UTC(2024, 7, 15, 18) }), draft("d24r", { start_time: Date.UTC(2024, 4, 11, 18) })] },
+        { ...picksByDraft, d24r: sleeperPicks.slice(0, 4) },
+      );
+      const rookie = await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: fetcher, selection: { kind: "rookie", season: "2024" } });
+      expect(rookie.grade?.draftId).toBe("d24r");
+      expect(rookie.grade?.rookieHindsight).not.toBeNull();
+      expect(rookie.availableDrafts).toContainEqual({ kind: "rookie", season: "2024", draftId: "d24r" });
+      expect(rookie.availableDrafts).toContainEqual({ kind: "startup", season: "2024", draftId: "d24" });
+    });
+
+    it("offers no startup when the chain stops before the founding season", async () => {
+      const broken = async <T>(url: string): Promise<T> => {
+        if (url.endsWith("/league/lg24")) throw new Error("gone");
+        return chainFetcher(url);
+      };
+      const result = await loadDraftGrade(dynasty, 1, { ...deps, fetchJson: broken, selection: { kind: "startup" } });
+      expect(result.grade).toBeNull();
+      expect(result.availableDrafts).toEqual([
+        { kind: "rookie", season: "2026", draftId: "d26" },
+        { kind: "rookie", season: "2025", draftId: "d25" },
+      ]);
     });
 
     it("ignores a selection for a non-dynasty league", async () => {
