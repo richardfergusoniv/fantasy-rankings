@@ -350,8 +350,13 @@ describe("dispatchChatTool", () => {
       primaryLabel: string;
       scoringWindow: string;
       freshness: { dashboardAsOf: string; projectionsAsOf: string | null; valuesAsOf: string | null };
+      marketContext: { tradeCount: number } | null;
     };
     expect(result.ok).toBe(true);
+    // The market block is present either way — null when history can't load.
+    if (result.marketContext != null) {
+      expect(result.marketContext.tradeCount).toBeGreaterThanOrEqual(0);
+    }
     expect(result.freshness.dashboardAsOf).toEqual(expect.any(String));
     expect(result.freshness.projectionsAsOf).toBeNull();
     expect(result.freshness.valuesAsOf).toBeNull();
