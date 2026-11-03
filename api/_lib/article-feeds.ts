@@ -107,7 +107,7 @@ export type ArticleFeedSource = {
  * Working native + direct HTML/JSON/sitemap sources. Skipped (Richard): paywalled
  * Athletic / Fantasy Points / ETR / Footballguys /articles; RotoWire news blurbs;
  * Google News; Underdog; 4for4. USA Today wires + Pewter Report stay listed as
- * disabled after Vercel IPs returned 402/403.
+ * disabled after Vercel IPs returned 402/403; Bucs Nation covers TB instead.
  */
 export const ARTICLE_FEED_SOURCES: readonly ArticleFeedSource[] = [
   {
@@ -345,7 +345,16 @@ export const ARTICLE_FEED_SOURCES: readonly ArticleFeedSource[] = [
     downrank: false,
     teamHint: "TB",
     disabled: true,
-    disabledReason: "HTTP 403 Cloudflare challenge from Vercel",
+    disabledReason: "HTTP 403 Cloudflare challenge from Vercel (confirmed 2026-11: still 403 even with a browser UA; Bucs Nation added as the TB replacement)",
+  },
+  {
+    // SB Nation Bucs blog — reachable Atom feed, replaces Pewter Report for TB.
+    name: "Bucs Nation",
+    domain: "bucsnation.com",
+    feedUrl: "https://www.bucsnation.com/rss/index.xml",
+    allowlist: { kind: "none" },
+    downrank: false,
+    teamHint: "TB",
   },
 ];
 
