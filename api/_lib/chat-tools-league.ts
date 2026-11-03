@@ -16,6 +16,7 @@ import {
 import { summarizeLeagueRules } from "./league-rules.js";
 import { playoffOddsFromProjections } from "./projected-playoff-odds.js";
 import { loadProjectedStandings } from "./projected-standings.js";
+import { loadStoredPlayoffOdds } from "./playoff-odds-store.js";
 
 type League = Dashboard["leagues"][number];
 const POSITIONS = ["QB", "RB", "WR", "TE"] as const;
@@ -229,7 +230,8 @@ export async function toolGetPlayoffOdds(ctx: ChatToolContext, args: { leagueId:
   const dashboard = await loadDashboard(ctx);
   const league = findLeague(dashboard, args.leagueId);
   if (!league) return { ok: false as const, error: "League not found for this user." };
-  const projected = await loadProjectedStandings(league, dashboard.season, dashboard.week);
+  const stored = await loadStoredPlayoffOdds(ctx.sleeperUserId, league.id, dashboard.season, dashboard.week);
+  const projected = stored?.projected ?? (await loadProjectedStandings(league, dashboard.season, dashboard.week));
   if ("error" in projected) return { ok: false as const, error: projected.error };
   if (projected.playoffTeams < 1) {
     return { ok: false as const, error: "Playoff settings are not available for this league." };
@@ -238,7 +240,7 @@ export async function toolGetPlayoffOdds(ctx: ChatToolContext, args: { leagueId:
   if (projected.medianMatchup) {
     return { ok: false as const, error: "Playoff odds are not available for leagues that also play the weekly median." };
   }
-  const odds = playoffOddsFromProjections(projected);
+  const odds = stored?.odds ?? playoffOddsFromProjections(projected);
   const mine = odds.teams.find((team) => team.isUser) ?? null;
   return {
     ok: true as const,
@@ -279,7 +281,8 @@ export async function toolGetProjectedStandings(ctx: ChatToolContext, args: { le
   const dashboard = await loadDashboard(ctx);
   const league = findLeague(dashboard, args.leagueId);
   if (!league) return { ok: false as const, error: "League not found for this user." };
-  const result = await loadProjectedStandings(league, dashboard.season, dashboard.week);
+  const stored = await loadStoredPlayoffOdds(ctx.sleeperUserId, league.id, dashboard.season, dashboard.week);
+  const result = stored?.projected ?? (await loadProjectedStandings(league, dashboard.season, dashboard.week));
   if ("error" in result) return { ok: false as const, error: result.error };
   const names = new Map(result.teams.map((team) => [team.rosterId, team.teamName]));
   return {
