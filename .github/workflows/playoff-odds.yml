@@ -1,0 +1,45 @@
+name: Playoff odds precompute
+
+# Runs the 20,000-trial playoff-odds Monte Carlo here, on Actions minutes,
+# instead of inside Vercel functions, where Fluid Active CPU is the Hobby
+# plan's tightest meter. The app serves the stored results and computes live
+# only when no fresh row exists. See scripts/compute-playoff-odds.ts.
+# Needs the DATABASE_URL repo secret (the app's Supabase connection string);
+# without it the run skips itself with a warning.
+
+on:
+  schedule:
+    - cron: "23 */2 * * *"
+  workflow_run:
+    workflows: ["Props daily pull"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playoff-odds-precompute
+  cancel-in-progress: false
+
+jobs:
+  compute:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Compute and store playoff odds for every linked user
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::warning::DATABASE_URL secret is not set; skipping the precompute."
+            exit 0
+          fi
+          npm run odds:compute

@@ -25,6 +25,7 @@ import { playoffOddsFromProjections } from "./projected-playoff-odds.js";
 import { DEFAULT_LAST_REGULAR_WEEK, loadScheduleGames, type FetchWeek } from "./league-schedule.js";
 import { fetchJson, SLEEPER_BASE } from "./sleeper.js";
 import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projections.js";
+import { loadStoredPlayoffOdds } from "./playoff-odds-store.js";
 import { viewerBelongsToLeague } from "./viewer-league-access.js";
 
 type League = Dashboard["leagues"][number];
@@ -513,6 +514,10 @@ export async function handleProjectedStandings(req: Request): Promise<Response> 
     const cached = await readUserDashboardCache(sleeperUserId);
     const league = cached?.dashboard.leagues.find((item) => item.id === parsed.data.leagueId);
     if (!cached || !league) return json({ ok: false, error: "League data is still loading. Try again shortly." }, 409);
+
+    // Precomputed by the Playoff odds Actions workflow; live compute is the fallback.
+    const stored = await loadStoredPlayoffOdds(sleeperUserId, parsed.data.leagueId, cached.dashboard.season, cached.dashboard.week);
+    if (stored) return json(stored.projected);
 
     const result = await loadProjectedStandings(league, cached.dashboard.season, cached.dashboard.week);
     if ("error" in result) return json({ ok: false, error: result.error }, 422);
