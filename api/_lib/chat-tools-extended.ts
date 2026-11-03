@@ -489,11 +489,17 @@ export async function toolGetPlayerAdvanced(
   try {
     const extras = await readChartExtrasSnapshot();
     if (extras) {
+      // Chart extras are keyed by nflverse play-by-play ids, which the
+      // analytics entity carries as `POS:<gsis>` — the Sleeper id never joins.
+      const gsisId = entity?.id.includes(":") ? entity.id.split(":")[1] : null;
+      const snapName = entity?.name ?? weekly?.name ?? null;
       chartExtras = {
-        player: extras.players[playerId] ?? null,
+        player: (gsisId ? extras.players[gsisId] : undefined) ?? null,
         team: team ? extras.teams[team] ?? null : null,
-        recentSnaps: extras.snaps
-          .filter((row) => row.player === (entity?.name ?? weekly?.name) || (team != null && row.team === team && row.position === position))
+        // Name match only — a team/position fallback would return a
+        // teammate's snaps as this player's.
+        recentSnaps: snapName == null ? [] : extras.snaps
+          .filter((row) => row.player === snapName)
           .slice(-6),
       };
     }

@@ -118,8 +118,11 @@ vi.mock("./nflverse-chart-extras.js", () => ({
   readChartExtrasSnapshot: vi.fn(async () => ({
     fetchedAt: new Date().toISOString(),
     season: 2026,
-    snaps: [{ week: 6, player: "Alpha Receiver", team: "KC", position: "WR", offensePct: 0.88 }],
-    players: { p1: { rzTargetShare: 0.22 } },
+    snaps: [
+      { week: 6, player: "Alpha Receiver", team: "KC", position: "WR", offensePct: 0.88 },
+      { week: 6, player: "Beta Teammate", team: "KC", position: "WR", offensePct: 0.72 },
+    ],
+    players: { "00-0038123": { rzTargetShare: 0.22 } },
     teams: { KC: { proe: 1.5 } },
   })),
 }));
@@ -718,6 +721,16 @@ describe("extended chat tools", () => {
     expect(result.ok).toBe(true);
     expect(result.analytics?.seasonGames).toBe(6);
     expect(result.depth?.rank).toBe(1);
+  });
+
+  it("get_player_advanced joins chart extras by gsis and never leaks teammate snaps", async () => {
+    const result = await toolGetPlayerAdvanced(ctxWithDashboard(), { playerId: "p1", leagueId: "lg1" }) as {
+      ok: boolean;
+      chartExtras: { player: { rzTargetShare: number } | null; recentSnaps: Array<{ player: string }> };
+    };
+    expect(result.ok).toBe(true);
+    expect(result.chartExtras.player?.rzTargetShare).toBe(0.22);
+    expect(result.chartExtras.recentSnaps.map((row) => row.player)).toEqual(["Alpha Receiver"]);
   });
 
   // This test does seconds of real async work (live-shaped projection
