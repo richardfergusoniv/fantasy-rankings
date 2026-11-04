@@ -9,6 +9,7 @@ import {
 import {
   BUILD_DEADLINE_MS,
   buildUserDashboard,
+  loadOrBuildUserDashboard,
   readGlobalDashboardSnapshot,
   refreshFantasyCalcCache,
   writeGlobalDashboardSnapshot,
@@ -36,7 +37,7 @@ import { loadXProducerPrioritySet } from "../_lib/x-producer-priority.js";
 import { refreshArticleFeeds } from "../_lib/article-feeds.js";
 
 /**
- * GET /api/cron/jobs?job=rebuild-dashboard | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-player-insights | refresh-nfl-players | backfill-value-history | backfill-pick-value-history | finalize-accuracy | snapshot-sleeper-trending | scoring-decision-snapshot | scoring-weights-refit | x-producer-priority | refresh-article-feeds
+ * GET /api/cron/jobs?job=rebuild-dashboard[&user=<allowlisted sleeper id>] | refresh-fantasycalc | read-dashboard-snapshot | refresh-team-situational | refresh-chart-extras | refresh-player-insights | refresh-nfl-players | backfill-value-history | backfill-pick-value-history | finalize-accuracy | snapshot-sleeper-trending | scoring-decision-snapshot | scoring-weights-refit | x-producer-priority | refresh-article-feeds
  *
  * One function for the scheduled jobs (Vercel's 12-function budget).
  * Vercel Cron invokes with GET; auth is `Authorization: Bearer <CRON_SECRET>`
@@ -89,7 +90,42 @@ import { refreshArticleFeeds } from "../_lib/article-feeds.js";
  *   Idempotent (ETag + unique indexes). Scheduled from GitHub Actions.
  */
 
-async function handleRebuildDashboard(): Promise<Response> {
+/** Sleeper user ids the rebuild job may refresh besides the owner (comma-separated env var). */
+function readExtraRebuildUserIds(): Set<string> {
+  return new Set(
+    (process.env.REBUILD_EXTRA_SLEEPER_USER_IDS ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
+  );
+}
+
+async function handleRebuildDashboard(url: URL): Promise<Response> {
+  const requestedUser = url.searchParams.get("user")?.trim();
+  if (requestedUser) {
+    // An explicitly allowlisted extra user (e.g. a league-mate whose cache
+    // should refresh on the daily schedule without opening the app).
+    if (!readExtraRebuildUserIds().has(requestedUser)) {
+      return forbidden("Requested user is not on the rebuild allowlist.");
+    }
+    // The guarded user-load path: the cross-instance lease dedupes a build
+    // already running elsewhere, and the publish guard refuses to overwrite
+    // the user's existing snapshot with an incomplete build. A failed build
+    // falls back to the stored snapshot instead of writing over it.
+    const loaded = await loadOrBuildUserDashboard(requestedUser, true);
+    return json({
+      ok: !loaded.fellBack,
+      job: "rebuild-dashboard",
+      user: requestedUser,
+      status: loaded.dashboard.status,
+      fellBack: loaded.fellBack,
+      season: loaded.dashboard.season,
+      week: loaded.dashboard.week,
+      leagues: loaded.dashboard.leagues.length,
+      asOf: loaded.dashboard.asOf,
+      errors: loaded.dashboard.sourceErrors,
+    });
+  }
   const ownerId = readOwnerSleeperUserId();
   if (!ownerId) {
     console.error("[cron] OWNER_SLEEPER_USER_ID is not set");
@@ -246,7 +282,7 @@ export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url, "https://localhost");
   const job = url.searchParams.get("job");
   try {
-    if (job === "rebuild-dashboard") return await handleRebuildDashboard();
+    if (job === "rebuild-dashboard") return await handleRebuildDashboard(url);
     if (job === "refresh-fantasycalc") return await handleRefreshFantasyCalc();
     if (job === "read-dashboard-snapshot") return await handleReadDashboardSnapshot();
     if (job === "refresh-team-situational") return await handleRefreshTeamSituational();
