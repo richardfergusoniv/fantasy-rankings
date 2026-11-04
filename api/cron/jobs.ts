@@ -111,6 +111,9 @@ async function handleRebuildDashboard(): Promise<Response> {
     week: dashboard.week,
     leagues: dashboard.leagues.length,
     asOf: dashboard.asOf,
+    // The workflow log is the first place a "partial" status gets looked at;
+    // carry the source errors so a failing league/source is named there.
+    errors: dashboard.sourceErrors,
   });
 }
 
