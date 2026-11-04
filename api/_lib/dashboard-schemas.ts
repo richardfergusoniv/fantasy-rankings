@@ -200,6 +200,29 @@ export const waiverBidSchema = z.object({
   high: z.number().int(),
 });
 
+/** A graded waiver add cached on the league for every league type — the dollar
+ * bid for FAAB leagues, a priority note for rolling/reverse-standings leagues. */
+export const waiverGradeSchema = z.object({
+  playerId: z.string(),
+  name: z.string(),
+  position: z.string(),
+  team: z.string().nullable(),
+  projection: z.number().nullable(),
+  label: z.enum(["Must add", "Add", "Watch"]),
+  score: z.number(),
+  dropCandidate: z.object({
+    playerId: z.string(),
+    name: z.string(),
+    value: z.number(),
+  }).nullable(),
+  bid: z.object({
+    kind: z.enum(["faab", "priority"]),
+    low: z.number().optional(),
+    high: z.number().optional(),
+    note: z.string(),
+  }).nullable(),
+});
+
 /** The user's waiver standing: FAAB budget (FAAB leagues) and priority. */
 export const waiverStatusSchema = z.object({
   type: z.enum(["faab", "rolling", "reverse_standings"]).nullable(),
@@ -259,6 +282,8 @@ export const leagueSchema = z.object({
   }).nullable().default(null),
   /** FAAB bids for the top graded waiver adds (same grading as the chat assistant); FAAB leagues only. */
   waiverBids: z.array(waiverBidSchema).optional(),
+  /** Graded waiver adds cached for every league type (same grading as the chat assistant); null on caches built before this field existed. */
+  waiverGrades: z.array(waiverGradeSchema).optional(),
 });
 
 export const weeklySnapPointSchema = z.object({
@@ -403,6 +428,7 @@ export const leagueIdentitySchema = leagueSchema.pick({
   tradeValuation: true,
   waivers: true,
   waiverBids: true,
+  waiverGrades: true,
   rosterLimits: true,
 });
 

@@ -257,11 +257,51 @@ export type WaiverBid = { playerId: string; label: "Must add" | "Add" | "Watch";
  * three times (~150 ms in a superflex league), and this runs inside every refresh.
  */
 export function waiverBidsFor(dashboard: Dashboard, league: League, weights: ScoringWeightsParams, limit = 15): WaiverBid[] {
-  if (league.waivers?.type !== "faab") return [];
+  return waiverCacheFor(dashboard, league, weights, limit).bids;
+}
+
+/** One graded waiver add cached on the league for every league type (FAAB and priority alike). */
+export type WaiverGradeRow = {
+  playerId: string;
+  name: string;
+  position: string;
+  team: string | null;
+  projection: number | null;
+  label: WaiverBid["label"];
+  score: number;
+  dropCandidate: { playerId: string; name: string; value: number } | null;
+  bid: { kind: "faab" | "priority"; low?: number; high?: number; note: string } | null;
+};
+
+/**
+ * Grades the waiver pool once and returns both cached outputs: FAAB dollar bids
+ * (FAAB leagues only) and the visible graded rows every league type stores —
+ * a priority league's rows carry the priority note from suggestFaabBid instead
+ * of a dollar bid. Pass rows stay hidden, matching the default waiver list.
+ */
+export function waiverCacheFor(dashboard: Dashboard, league: League, weights: ScoringWeightsParams, limit = 15): { bids: WaiverBid[]; grades: WaiverGradeRow[] } {
   const result = scoreWaiverSuggestions(dashboard, league, weights, { limit, scoringWindow: "week", poolSize: 15 });
-  return result.suggestions.flatMap((row) => {
+  const bids: WaiverBid[] = [];
+  const grades: WaiverGradeRow[] = [];
+  for (const row of result.suggestions) {
+    if (row.hidden || row.primaryLabel === "Pass") continue;
     const bid = row.bid;
-    if (row.hidden || !bid || bid.kind !== "faab" || row.primaryLabel === "Pass") return [];
-    return [{ playerId: row.playerId, label: row.primaryLabel as WaiverBid["label"], low: bid.low, high: bid.high }];
-  });
+    if (league.waivers?.type === "faab" && bid?.kind === "faab") {
+      bids.push({ playerId: row.playerId, label: row.primaryLabel as WaiverBid["label"], low: bid.low, high: bid.high });
+    }
+    grades.push({
+      playerId: row.playerId,
+      name: row.name,
+      position: row.position,
+      team: row.team,
+      projection: row.projection,
+      label: row.primaryLabel as WaiverGradeRow["label"],
+      score: row.primaryScore,
+      dropCandidate: row.dropCandidate,
+      bid: bid
+        ? { kind: bid.kind, ...(bid.kind === "faab" ? { low: bid.low, high: bid.high } : {}), note: bid.note }
+        : null,
+    });
+  }
+  return { bids, grades };
 }

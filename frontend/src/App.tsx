@@ -496,6 +496,7 @@ function assembleStreamedDashboard(
       playoffs: powerData?.playoffs ?? { teams: null, weekStart: null },
       waivers: identity.waivers ?? null,
       waiverBids: identity.waiverBids,
+      waiverGrades: identity.waiverGrades,
     };
   });
   return {

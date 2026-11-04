@@ -1,6 +1,6 @@
 import { waitUntil } from "@vercel/functions";
 import { upcomingSchedule } from "./upcoming-schedule.js";
-import { waiverBidsFor } from "./waiver-suggestions.js";
+import { waiverCacheFor } from "./waiver-suggestions.js";
 import { and, desc, eq, inArray, like } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "./db.js";
@@ -2298,13 +2298,18 @@ export async function buildUserDashboard(
     gameLines,
     sourceErrors: [...new Set(sourceErrors)],
   });
-  // FAAB bids for the top graded waiver adds, graded exactly as the chat assistant
-  // grades them. Best-effort: a failure leaves the leagues without bids.
+  // Graded waiver adds for the top free agents (FAAB bids and priority grades),
+  // graded exactly as the chat assistant grades them. Best-effort: a failure
+  // leaves the leagues without cached waiver output.
   try {
     // Dynamic import: scoring-jobs imports this module, so a static import would be circular.
     const { loadActiveScoringWeights } = await import("./scoring-jobs.js");
     const weights = await loadActiveScoringWeights();
-    for (const league of dashboard.leagues) league.waiverBids = waiverBidsFor(dashboard, league, weights);
+    for (const league of dashboard.leagues) {
+      const cache = waiverCacheFor(dashboard, league, weights);
+      league.waiverBids = cache.bids;
+      league.waiverGrades = cache.grades;
+    }
   } catch (error) {
     console.error("[dashboard-build] waiver bids failed", error);
   }
