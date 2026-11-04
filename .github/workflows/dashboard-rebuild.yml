@@ -15,6 +15,13 @@ name: Dashboard rebuild
 # Pacific-hour skip guard would drop every run. The rebuild is
 # idempotent — every scheduled trigger must call the endpoint. Manual
 # dispatches always run.
+#
+# After the owner rebuild, a second step refreshes the allowlisted
+# extra users (the league-mates whose dashboards should stay fresh
+# without them opening the app). The endpoint rebuilds one allowlisted
+# user per call; the allowlist itself is the app's
+# REBUILD_EXTRA_SLEEPER_USER_IDS variable in Vercel, and the step's
+# EXTRA_USER_IDS list must name the same users.
 
 on:
   schedule:
@@ -60,3 +67,28 @@ jobs:
           assert (result.get('leagues') or 0) >= 1, f"rebuild leagues: {result}"
           print(f"rebuild verified: week {result.get('week')}, asOf {result.get('asOf')}")
           EOF
+      - name: Rebuild allowlisted extra users
+        # One call per user. The response JSON is printed either way, so
+        # a partial build names its failing sources in this step's log;
+        # a partial build or a fallback to the stored snapshot fails
+        # the step, same as the owner rebuild above.
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-ten.vercel.app' }}
+          EXTRA_USER_IDS: "862451998895755264,990769229651587072"
+        run: |
+          IFS=',' read -ra USER_IDS <<< "$EXTRA_USER_IDS"
+          for USER_ID in "${USER_IDS[@]}"; do
+            echo "Rebuilding extra user $USER_ID"
+            curl -sS --fail-with-body --max-time 600 \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              "$APP_BASE_URL/api/cron/jobs?job=rebuild-dashboard&user=$USER_ID" | tee /tmp/rebuild-extra.json
+            python3 - "$USER_ID" <<'EOF'
+          import json, sys
+          user = sys.argv[1]
+          result = json.load(open('/tmp/rebuild-extra.json'))
+          assert result.get('ok') is True and result.get('status') == 'ok', f"extra user {user} rebuild failed: {result}"
+          assert (result.get('leagues') or 0) >= 1, f"extra user {user} rebuild leagues: {result}"
+          print(f"extra user {user} rebuild verified: week {result.get('week')}, asOf {result.get('asOf')}")
+          EOF
+          done
