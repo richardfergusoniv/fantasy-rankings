@@ -190,6 +190,31 @@ describe("per-section dashboard cache", () => {
     expect(assembled!.leagues[0]).toMatchObject({ standings, playoffs: { teams: 6, weekStart: 15, positionKnown: false }, waivers, opponentTeam: { rosterId: 2 } });
   });
 
+  it("carries waiverBids and waiverGrades through the meta section split", () => {
+    const waiverBids = [{ playerId: "fa1", label: "Add" as const, low: 3, high: 8 }];
+    const waiverGrades = [{
+      playerId: "fa1",
+      name: "Free Agent WR",
+      position: "WR",
+      team: "TB",
+      projection: 11.5,
+      label: "Add" as const,
+      score: 0.42,
+      dropCandidate: { playerId: "p-bench", name: "Hot Bench", value: 1200 },
+      bid: { kind: "priority" as const, note: "No bid. You have waiver priority 2 of 14." },
+    }];
+    const withGrades: Dashboard = {
+      ...sampleDashboard,
+      leagues: sampleDashboard.leagues.map((league) => ({ ...league, waiverBids, waiverGrades })),
+    };
+    const sections = splitDashboardIntoSections(withGrades);
+    expect(sections.meta.leagues[0]?.waiverBids).toEqual(waiverBids);
+    expect(sections.meta.leagues[0]?.waiverGrades).toEqual(waiverGrades);
+    const assembled = assembleDashboardFromSections(sections);
+    expect(assembled!.leagues[0]?.waiverBids).toEqual(waiverBids);
+    expect(assembled!.leagues[0]?.waiverGrades).toEqual(waiverGrades);
+  });
+
   it("still parses a dashboard cached before standings, waivers and game lines existed", () => {
     const { gameLines: _gameLines, ...legacy } = sampleDashboard;
     const legacyLeagues = legacy.leagues.map(({ standings: _s, playoffs: _p, waivers: _w, ...league }) => league);

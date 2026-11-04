@@ -121,6 +121,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
           tradeValuation,
           waivers,
           waiverBids,
+          waiverGrades,
           rosterLimits,
         }) => ({
           id,
@@ -136,6 +137,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
           waivers: waivers ?? null,
           rosterLimits: rosterLimits ?? null,
           ...(waiverBids ? { waiverBids } : {}),
+          ...(waiverGrades ? { waiverGrades } : {}),
         }),
       ),
     },
@@ -403,6 +405,7 @@ export function assembleDashboardFromSections(
       playoffs: leagueRow?.playoffs ?? { teams: null, weekStart: null },
       waivers: identity.waivers ?? null,
       ...(identity.waiverBids ? { waiverBids: identity.waiverBids } : {}),
+      ...(identity.waiverGrades ? { waiverGrades: identity.waiverGrades } : {}),
     };
   });
 
