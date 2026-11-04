@@ -5,6 +5,14 @@ import { db, schema } from "./db.js";
 import { splitCsvLine } from "./chart-metric-transforms.js";
 import { SOURCE_TIMEOUT_MS } from "./sleeper.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
+import {
+  buildAnalytics,
+  NFLVERSE_PLAYER_STATS_2025_URL,
+  NFLVERSE_PLAYER_STATS_2026_URL,
+  type AnalyticsPrecompute,
+} from "./analytics-build.js";
+import { analyticsEntitySchema, teamUsageSchema } from "./dashboard-schemas.js";
+import { readChartExtrasSnapshot } from "./nflverse-chart-extras.js";
 
 /**
  * Free weekly player data that Sleeper does not show, stored as one compact
@@ -16,6 +24,9 @@ import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cac
  *   expected, rush yards over expected, time to throw, aggressiveness.
  * - Depth charts (nflverse, ESPN-sourced): each player's rank at his
  *   position on the latest daily chart.
+ * - Dashboard analytics (nflverse weekly player stats): entities and
+ *   team usage precomputed here (analytics-build.ts), so dashboard
+ *   builds read the result instead of parsing the raw stats files.
  *
  * Expected points and Next Gen rows are keyed by gsis id (the analytics
  * entity id); depth rows by Sleeper player id.
@@ -78,6 +89,20 @@ export const playerInsightsSnapshotSchema = z.object({
    * instead of treating an empty `{}` default as a fresh cache hit.
    */
   sleeperByGsis: z.record(z.string(), z.string()).optional(),
+  /**
+   * Dashboard analytics precomputed from the nflverse weekly stats files
+   * by this refresh (analytics-build.ts): buildAnalytics output plus when
+   * it ran. Optional (no default) for the same reason as sleeperByGsis:
+   * snapshots cached before the precompute existed omit the key, and the
+   * loader treats their absence as stale (see
+   * playerInsightsNeedsAnalyticsMigration).
+   */
+  analytics: z.object({
+    computedAt: z.string(),
+    throughWeek: z.number().int().nullable(),
+    entities: z.array(analyticsEntitySchema),
+    teamUsage: z.array(teamUsageSchema),
+  }).optional(),
 });
 
 export type PlayerInsightsSnapshot = z.infer<typeof playerInsightsSnapshotSchema>;
@@ -373,7 +398,7 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
   ]);
   const { depth, asOf: depthAsOf } = depthFromRows(depthRows, ids.sleeperByGsis);
   const depthPrevious = previousDepthFromRows(depthRows, ids.sleeperByGsis);
-  return {
+  const snapshot: PlayerInsightsSnapshot = {
     fetchedAt: new Date().toISOString(),
     season: SEASON,
     opportunity: parseOpportunity(opportunityCsv),
@@ -383,6 +408,38 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
     depthPrevious,
     sleeperByGsis: Object.fromEntries(ids.sleeperByGsis),
   };
+  const analytics = await computeAnalyticsPrecompute(snapshot);
+  if (analytics) snapshot.analytics = analytics;
+  return snapshot;
+}
+
+/**
+ * Dashboard analytics from the nflverse weekly stats files (previous and
+ * current season), computed here so builds never download or parse them.
+ * Chart extras come from the stored snapshot the refresh-chart-extras job
+ * maintains (null when none is stored, the same input a build used to
+ * pass). A failed stats download or parse leaves the precompute out and
+ * the loader keeps the previous one.
+ */
+async function computeAnalyticsPrecompute(insights: PlayerInsightsSnapshot): Promise<AnalyticsPrecompute | undefined> {
+  const statsTimeoutMs = Math.max(SOURCE_TIMEOUT_MS, 30_000);
+  const [previousCsv, currentCsv, extras] = await Promise.all([
+    fetchCsv(NFLVERSE_PLAYER_STATS_2025_URL, statsTimeoutMs).catch(() => null),
+    fetchCsv(NFLVERSE_PLAYER_STATS_2026_URL, statsTimeoutMs).catch(() => null),
+    readChartExtrasSnapshot().catch(() => null),
+  ]);
+  if (!previousCsv || !currentCsv) return undefined;
+  try {
+    const built = buildAnalytics(previousCsv, currentCsv, SEASON, extras, insights);
+    return {
+      computedAt: new Date().toISOString(),
+      throughWeek: built.throughWeek,
+      entities: built.entities,
+      teamUsage: built.teamUsage,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 /** A fetch that came back mostly empty keeps the previous snapshot. */
@@ -404,6 +461,13 @@ export function playerInsightsNeedsSleeperIdMigration(snapshot: PlayerInsightsSn
   return map === undefined || Object.keys(map).length === 0;
 }
 
+/** Snapshots cached before the analytics precompute have no stored
+ * entities; force a refresh so builds stop reporting advanced stats
+ * unavailable instead of waiting out the cache window. */
+export function playerInsightsNeedsAnalyticsMigration(snapshot: PlayerInsightsSnapshot): boolean {
+  return snapshot.analytics === undefined;
+}
+
 /** Keep a prior gsis→Sleeper map when a refresh parsed an empty players.csv map. */
 export function retainSleeperByGsisFromPrevious(
   snapshot: PlayerInsightsSnapshot,
@@ -417,7 +481,8 @@ export function retainSleeperByGsisFromPrevious(
 function snapshotIsFresh(snapshot: PlayerInsightsSnapshot): boolean {
   return Date.now() - Date.parse(snapshot.fetchedAt) < PLAYER_INSIGHTS_CACHE_MS
     && !playerInsightsNeedsSleeperIdMigration(snapshot)
-    && !playerInsightsNeedsComponentsMigration(snapshot);
+    && !playerInsightsNeedsComponentsMigration(snapshot)
+    && !playerInsightsNeedsAnalyticsMigration(snapshot);
 }
 
 // ---------------------------------------------------------------------------
@@ -467,6 +532,8 @@ export async function loadPlayerInsightsSnapshot(options?: { force?: boolean }):
       snapshot.depthAsOf = previous.depthAsOf;
       snapshot.depthPrevious = previous.depthPrevious;
     }
+    // A stats pull that failed this run keeps the last good precompute.
+    if (!snapshot.analytics && previous?.analytics) snapshot.analytics = previous.analytics;
     retainSleeperByGsisFromPrevious(snapshot, previous);
     await writePlayerInsightsSnapshot(snapshot);
     return snapshot;
@@ -481,6 +548,7 @@ export type PlayerInsightsRefreshResult = {
   opportunity: number;
   ngs: number;
   depth: number;
+  analytics: number;
   fetchedAt: string | null;
 };
 
@@ -492,6 +560,7 @@ function refreshResult(status: PlayerInsightsRefreshResult["status"], snapshot: 
     opportunity: snapshot ? Object.keys(snapshot.opportunity).length : 0,
     ngs: snapshot ? Object.keys(snapshot.ngs).length : 0,
     depth: snapshot ? Object.keys(snapshot.depth).length : 0,
+    analytics: snapshot?.analytics?.entities.length ?? 0,
     fetchedAt: snapshot?.fetchedAt ?? null,
   };
 }

@@ -12,6 +12,7 @@ const {
   parseOpportunity,
   playerInsightsNeedsComponentsMigration,
   parsePlayerIds,
+  playerInsightsNeedsAnalyticsMigration,
   playerInsightsNeedsSleeperIdMigration,
   playerInsightsSnapshotSchema,
   retainSleeperByGsisFromPrevious,
@@ -197,6 +198,36 @@ describe("playerInsightsSnapshotSchema", () => {
     });
     expect(parsed.depthPrevious).toEqual({});
     expect(parsed.sleeperByGsis).toBeUndefined();
+  });
+});
+
+describe("playerInsightsNeedsAnalyticsMigration", () => {
+  const base = {
+    fetchedAt: "2026-10-22T18:00:00.000Z",
+    season: 2026 as const,
+    opportunity: {},
+    ngs: {},
+    depth: {},
+    depthAsOf: null,
+    depthPrevious: {},
+  };
+
+  it("flags snapshots that omit the analytics precompute", () => {
+    expect(playerInsightsNeedsAnalyticsMigration({ ...base })).toBe(true);
+    expect(playerInsightsNeedsAnalyticsMigration({
+      ...base,
+      analytics: { computedAt: "2026-10-22T18:00:00.000Z", throughWeek: 7, entities: [], teamUsage: [] },
+    })).toBe(false);
+  });
+
+  it("parses snapshots with and without the precompute", () => {
+    const without = playerInsightsSnapshotSchema.parse({ ...base });
+    expect(without.analytics).toBeUndefined();
+    const withPrecompute = playerInsightsSnapshotSchema.parse({
+      ...base,
+      analytics: { computedAt: "2026-10-22T18:00:00.000Z", throughWeek: null, entities: [], teamUsage: [] },
+    });
+    expect(withPrecompute.analytics?.throughWeek).toBeNull();
   });
 });
 
