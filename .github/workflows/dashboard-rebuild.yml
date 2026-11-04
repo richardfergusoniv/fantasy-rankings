@@ -68,22 +68,32 @@ jobs:
           print(f"rebuild verified: week {result.get('week')}, asOf {result.get('asOf')}")
           EOF
       - name: Rebuild allowlisted extra users
-        # One call per user. The response JSON is printed either way, so
-        # a partial build names its failing sources in this step's log;
-        # a partial build or a fallback to the stored snapshot fails
-        # the step, same as the owner rebuild above.
+        # Runs even when the owner rebuild failed (the calls are
+        # independent), just not when the run is cancelled. One call
+        # per user, and every user gets an attempt: each response is
+        # printed either way, so a partial build names its failing
+        # sources in this step's log, and any failure (request error,
+        # partial build, or a fallback to the stored snapshot) fails
+        # the step after the loop, same bar as the owner rebuild.
+        if: ${{ !cancelled() }}
+        shell: bash
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_BASE_URL: ${{ vars.APP_BASE_URL || 'https://fantasy-rankings-ten.vercel.app' }}
           EXTRA_USER_IDS: "862451998895755264,990769229651587072"
         run: |
+          FAILED=0
           IFS=',' read -ra USER_IDS <<< "$EXTRA_USER_IDS"
           for USER_ID in "${USER_IDS[@]}"; do
             echo "Rebuilding extra user $USER_ID"
-            curl -sS --fail-with-body --max-time 600 \
+            if ! curl -sS --fail-with-body --max-time 600 \
               -H "Authorization: Bearer $CRON_SECRET" \
-              "$APP_BASE_URL/api/cron/jobs?job=rebuild-dashboard&user=$USER_ID" | tee /tmp/rebuild-extra.json
-            python3 - "$USER_ID" <<'EOF'
+              "$APP_BASE_URL/api/cron/jobs?job=rebuild-dashboard&user=$USER_ID" | tee /tmp/rebuild-extra.json; then
+              echo "extra user $USER_ID rebuild request failed"
+              FAILED=1
+              continue
+            fi
+            python3 - "$USER_ID" <<'EOF' || FAILED=1
           import json, sys
           user = sys.argv[1]
           result = json.load(open('/tmp/rebuild-extra.json'))
@@ -92,3 +102,8 @@ jobs:
           print(f"extra user {user} rebuild verified: week {result.get('week')}, asOf {result.get('asOf')}")
           EOF
           done
+          if [ "$FAILED" -ne 0 ]; then
+            echo "one or more extra user rebuilds failed"
+            exit 1
+          fi
+          echo "all extra user rebuilds verified"
