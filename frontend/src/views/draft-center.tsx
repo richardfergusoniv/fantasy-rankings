@@ -326,7 +326,7 @@ export function DraftCenter({
 
   const myTeamSection = (
     <section className="draft-my-team">
-      <div className="section-heading"><h2>My team</h2><span>{myTeamPlayers.length} players</span></div>
+      <div className="section-heading"><h2>My team</h2></div>
       {myTeamPlayers.length > 0 ? (
         <div className="draft-board data-table-frame" role="list" aria-label="My team players">
           <div className="draft-row draft-table-head draft-my-team-row" aria-hidden="true">

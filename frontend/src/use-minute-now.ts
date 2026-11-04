@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-/** Re-render once a minute so relative article timestamps stay fresh. */
+/** Re-render once a minute so relative news timestamps stay fresh. */
 export function useMinuteNow(enabled = true): number {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {

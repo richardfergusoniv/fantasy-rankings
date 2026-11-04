@@ -761,7 +761,7 @@ export function MatchupDataModal({ matchup, season, week, onClose, onOpenTeam, t
 
 export function NewsCardModal({ item, onClose }: { item: PlayerNewsItem; onClose: () => void }) {
   const isArticle = item.source === "article";
-  const nowMs = useMinuteNow(isArticle);
+  const nowMs = useMinuteNow(Boolean(item.sourcePublishedAt));
   const outletLabel = newsOutletLabel(item);
 
   return (

@@ -1,18 +1,22 @@
 /**
  * News timestamp labels. Kept free of React/UI imports so vitest can cover them.
+ * Absolute stamps use Pacific time so ticker, player-card, and news-modal labels match.
  */
 
+const NEWS_TIME_ZONE = "America/Los_Angeles";
+
 export function newsAbsoluteTimeLabel(value: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: NEWS_TIME_ZONE,
   }).format(new Date(value));
 }
 
-/** Relative time for article news ("just now" / "5m ago" / "3h ago"); older falls back to absolute. */
+/** Relative time ("just now" / "5m ago" / "3h ago"); older falls back to absolute Pacific. */
 export function newsRelativeTimeLabel(value: string, nowMs = Date.now()): string {
   const time = new Date(value).getTime();
   if (!Number.isFinite(time)) return "Recent";
@@ -27,12 +31,11 @@ export function newsRelativeTimeLabel(value: string, nowMs = Date.now()): string
   return newsAbsoluteTimeLabel(value);
 }
 
-/** Article items use relative time; X / Sleeper keep the absolute stamp. */
+/** Same relative/absolute treatment for every news source (article, X, Sleeper). */
 export function newsItemTimeLabel(
   item: { source?: string | null; sourcePublishedAt?: string | null },
   nowMs = Date.now(),
 ): string {
   if (!item.sourcePublishedAt) return "Recent";
-  if (item.source === "article") return newsRelativeTimeLabel(item.sourcePublishedAt, nowMs);
-  return newsAbsoluteTimeLabel(item.sourcePublishedAt);
+  return newsRelativeTimeLabel(item.sourcePublishedAt, nowMs);
 }
