@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { newsItemTimeLabel, newsRelativeTimeLabel } from "./news-time";
+import { newsAbsoluteTimeLabel, newsItemTimeLabel, newsRelativeTimeLabel } from "./news-time";
 
 const NOW = Date.parse("2026-10-30T22:00:00Z");
 
@@ -13,7 +13,7 @@ describe("newsRelativeTimeLabel", () => {
 });
 
 describe("newsItemTimeLabel", () => {
-  it("uses relative time for articles and absolute for other sources", () => {
+  it("uses the same relative treatment for every news source", () => {
     expect(
       newsItemTimeLabel(
         { source: "article", sourcePublishedAt: "2026-10-30T21:55:00Z" },
@@ -25,7 +25,16 @@ describe("newsItemTimeLabel", () => {
         { source: "x", sourcePublishedAt: "2026-10-30T21:55:00Z" },
         NOW,
       ),
-    ).not.toBe("5m ago");
+    ).toBe("5m ago");
     expect(newsItemTimeLabel({ source: "article", sourcePublishedAt: null })).toBe("Recent");
+  });
+
+  it("falls back to a Pacific absolute stamp after a week", () => {
+    const label = newsItemTimeLabel(
+      { source: "x", sourcePublishedAt: "2026-10-01T18:00:00Z" },
+      NOW,
+    );
+    expect(label).toBe(newsAbsoluteTimeLabel("2026-10-01T18:00:00Z"));
+    expect(label).toMatch(/Oct/);
   });
 });

@@ -24,7 +24,7 @@ export function DraftRecap({ leagueId, picks, selectedPlayerId, onOpenPlayer }: 
 
   return (
     <section className="draft-my-team">
-      <div className="section-heading"><h2>My team</h2><span>{picks.length} players</span></div>
+      <div className="section-heading"><h2>My team</h2></div>
       {picks.length > 0 ? (
         <div className="draft-board data-table-frame" role="list" aria-label="My team players">
           <div className="draft-row draft-table-head draft-recap-row" aria-hidden="true">

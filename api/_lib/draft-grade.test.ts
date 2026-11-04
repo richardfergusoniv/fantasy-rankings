@@ -4,8 +4,11 @@ import {
   expectedValue,
   GRADE_LETTERS,
   gradeDraft,
+  gradedPicks,
   gradeLetter,
   loadDraftGrade,
+  ownRosterIdFromDraft,
+  ownRosterIdFromLeague,
   pickGrades,
   placeOf,
   schoolGrade,
@@ -13,6 +16,7 @@ import {
   type GradedPick,
   type ValueBoard,
 } from "./draft-grade.js";
+import type { SleeperPlayer } from "./sleeper.js";
 
 const board = (entries: Array<[string, number]>): ValueBoard => new Map(entries);
 const positionOf: Record<string, string> = { p1: "RB", p2: "WR", p3: "RB", p4: "WR", p5: "QB", p6: "TE", p7: "RB", p8: "WR" };
@@ -287,6 +291,34 @@ describe("shiftDateKey", () => {
   });
 });
 
+describe("ownRosterIdFromLeague / ownRosterIdFromDraft", () => {
+  it("prefers standings, then power, then trade teams", () => {
+    expect(ownRosterIdFromLeague({
+      standings: [{ isUser: true, rosterId: 3 }],
+      powerRankingsWeek: [{ isUser: true, rosterId: 9 }],
+      tradeTeams: [{ isUser: true, rosterId: 8 }],
+    })).toBe(3);
+    expect(ownRosterIdFromLeague({
+      standings: [],
+      powerRankingsWeek: [{ isUser: false, rosterId: 1 }, { isUser: true, rosterId: 4 }],
+    })).toBe(4);
+    expect(ownRosterIdFromLeague({
+      standings: [],
+      tradeTeams: [{ isUser: true, rosterId: 7 }],
+    })).toBe(7);
+    expect(ownRosterIdFromLeague({ standings: [] })).toBeNull();
+  });
+
+  it("maps the Sleeper user through draft_order like Draft Center", () => {
+    expect(ownRosterIdFromDraft({
+      draft_order: { "user-1": 2 },
+      slot_to_roster_id: { "2": 5 },
+    }, "user-1")).toBe(5);
+    expect(ownRosterIdFromDraft({ draft_order: { "user-1": 2 } }, "user-1")).toBeNull();
+    expect(ownRosterIdFromDraft({ draft_order: {}, slot_to_roster_id: { "1": 1 } }, "user-1")).toBeNull();
+  });
+});
+
 describe("loadDraftGrade", () => {
   const league = { id: "lg", seasonLongFormat: { key: "redraft-1qb-10t-0.5ppr" } };
   const inSeason = async () => "regular";
@@ -367,6 +399,51 @@ describe("loadDraftGrade", () => {
     const loadBoard = async () => board([]);
     expect((await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1", { start_time: null })], { d1: sleeperPicks }), loadBoard: async () => marketBoard, minBoardPlayers: 1 })).grade).toBeNull();
     expect((await loadDraftGrade(league, 1, { seasonType: inSeason, fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }), loadBoard })).grade).toBeNull();
+  });
+
+  it("resolves the user's roster from the draft when standings omit isUser", async () => {
+    const { grade } = await loadDraftGrade(league, null, {
+      seasonType: inSeason,
+      sleeperUserId: "user-1",
+      fetchJson: fetcher([draft("d1", { draft_order: { "user-1": 1 }, slot_to_roster_id: { "1": 1 } })], { d1: sleeperPicks }),
+      loadBoard: async () => marketBoard,
+      minBoardPlayers: 1,
+    });
+    expect(grade?.draftDay).not.toBeNull();
+    expect(await loadDraftGrade(league, null, {
+      seasonType: inSeason,
+      fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }),
+      loadBoard: async () => marketBoard,
+      minBoardPlayers: 1,
+    })).toEqual({ grade: null, availableDrafts: [] });
+  });
+
+  it("fills missing pick positions from the Sleeper players map so grades still populate", async () => {
+    // Older Sleeper drafts often omit metadata.position; without the players dump every pick
+    // looks non-skill and gradeDraft returns null (blank My Team / Hindsight grades).
+    const barePicks = fair.map((p) => ({ pick_no: p.pickNo, roster_id: p.rosterId, player_id: p.playerId, metadata: { first_name: "Name", last_name: p.playerId } }));
+    const players = Object.fromEntries(
+      fair.map((p) => [p.playerId, { full_name: `Name ${p.playerId}`, position: p.position, team: "TM" } satisfies SleeperPlayer]),
+    );
+    expect(gradedPicks(barePicks)).toEqual(expect.arrayContaining([expect.objectContaining({ playerId: "p1", position: "" })]));
+    expect(gradedPicks(barePicks, players)).toEqual(expect.arrayContaining([expect.objectContaining({ playerId: "p1", position: "RB" })]));
+    const withoutPlayers = await loadDraftGrade(league, 1, {
+      seasonType: inSeason,
+      fetchJson: fetcher([draft("d1")], { d1: barePicks }),
+      loadBoard: async () => marketBoard,
+      loadPlayers: async () => ({}),
+      minBoardPlayers: 1,
+    });
+    expect(withoutPlayers.grade).toBeNull();
+    const withPlayers = await loadDraftGrade(league, 1, {
+      seasonType: inSeason,
+      fetchJson: fetcher([draft("d1")], { d1: barePicks }),
+      loadBoard: async () => marketBoard,
+      loadPlayers: async () => players,
+      minBoardPlayers: 1,
+    });
+    expect(withPlayers.grade?.draftDay).not.toBeNull();
+    expect(withPlayers.grade?.picks.some((entry) => entry.draftDay !== null)).toBe(true);
   });
   it("looks back as far as draft day for today's board in the offseason, when unchanged redraft values are not stored", async () => {
     const windows = async (seasonType: string, formatKey: string) => {
