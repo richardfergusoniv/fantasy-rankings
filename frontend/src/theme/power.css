@@ -13,15 +13,14 @@
 .radar-average { fill: var(--dim); fill-opacity: .06; stroke: var(--dim); stroke-width: 1.5; }
 .radar-team { fill: var(--chart-team); fill-opacity: .16; stroke: var(--chart-team); stroke-width: 2.2; }
 .radar-dot { fill: var(--chart-team); stroke: var(--surface); stroke-width: 1.5; }
-.power-position-values { display: grid; width: 100%; padding: 0; cursor: pointer; text-align: left; font: inherit; color: var(--text); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 8px; overflow: clip; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--hairline); }
-.power-position-values > span:not(.sr-only) { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 7px; min-width: 0; padding: 8px 9px; background: var(--surface); }
+.power-position-values { display: grid; width: 100%; padding: 0; color: var(--text); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin-top: 8px; overflow: clip; border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--hairline); }
+.power-position-values > span { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 2px 7px; min-width: 0; padding: 8px 9px; background: var(--surface); }
 .power-position-values > .power-position-total { grid-column: 1 / -1; }
 .power-position-values > .power-position-total-highlight { background: var(--roster-highlight-bg); }
 .power-position-values > .power-position-total-highlight span, .power-position-values > .power-position-total-highlight strong { color: var(--roster-highlight); }
 .power-position-values > span > span { align-self: center; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .power-position-values > span > strong { text-align: right; font-size: var(--type-body); font-weight: 700; }
-.power-position-values:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
-.power-stack-list { display: grid; gap: 2px; margin-top: 10px; }
+.power-stack-list { display: grid; gap: 2px; margin-top: 0; }
 .power-stack-card .power-stack-list { margin-top: 0; padding: 8px 10px 12px; }
 .power-stack-row { display: grid; width: 100%; grid-template-columns: 20px minmax(0, 118px) minmax(0, 1fr) 48px; gap: 8px; align-items: center; min-height: 32px; padding: 4px 6px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .power-stack-row:active { background: var(--surface-2); }
@@ -245,5 +244,8 @@
 .team-weekly-table tbody th span, .team-weekly-table small { display: block; }
 .team-weekly-table small { margin-top: 4px; color: var(--dim); font-size: var(--type-caption); font-weight: 400; }
 .team-weekly-table .is-projected { background: var(--surface-2); }
+.team-weekly-table .is-total th,
+.team-weekly-table .is-total td { font-weight: 700; border-bottom: 1px solid var(--border); }
+.team-weekly-table .is-total th span { font-weight: 700; }
 .team-weekly-denominator { color: var(--dim); font-size: var(--type-caption); }
 .team-weekly-table .team-weekly-unavailable { color: var(--dim); text-align: center; }
