@@ -5,6 +5,14 @@ import { db, schema } from "./db.js";
 import { splitCsvLine } from "./chart-metric-transforms.js";
 import { SOURCE_TIMEOUT_MS } from "./sleeper.js";
 import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cache-payload.js";
+import {
+  buildAnalytics,
+  NFLVERSE_PLAYER_STATS_2025_URL,
+  NFLVERSE_PLAYER_STATS_2026_URL,
+  type AnalyticsPrecompute,
+} from "./analytics-build.js";
+import { analyticsEntitySchema, teamUsageSchema } from "./dashboard-schemas.js";
+import { readChartExtrasSnapshot, refreshChartExtrasSnapshot } from "./nflverse-chart-extras.js";
 
 /**
  * Free weekly player data that Sleeper does not show, stored as one compact
@@ -16,6 +24,9 @@ import { decodeSourceCachePayload, encodeSourceCachePayload } from "./source-cac
  *   expected, rush yards over expected, time to throw, aggressiveness.
  * - Depth charts (nflverse, ESPN-sourced): each player's rank at his
  *   position on the latest daily chart.
+ * - Dashboard analytics (nflverse weekly player stats): entities and
+ *   team usage precomputed here (analytics-build.ts), so dashboard
+ *   builds read the result instead of parsing the raw stats files.
  *
  * Expected points and Next Gen rows are keyed by gsis id (the analytics
  * entity id); depth rows by Sleeper player id.
@@ -78,6 +89,20 @@ export const playerInsightsSnapshotSchema = z.object({
    * instead of treating an empty `{}` default as a fresh cache hit.
    */
   sleeperByGsis: z.record(z.string(), z.string()).optional(),
+  /**
+   * Dashboard analytics precomputed from the nflverse weekly stats files
+   * by this refresh (analytics-build.ts): buildAnalytics output plus when
+   * it ran. Optional (no default) for the same reason as sleeperByGsis:
+   * snapshots cached before the precompute existed omit the key, and the
+   * loader treats their absence as stale (see
+   * playerInsightsNeedsAnalyticsMigration).
+   */
+  analytics: z.object({
+    computedAt: z.string(),
+    throughWeek: z.number().int().nullable(),
+    entities: z.array(analyticsEntitySchema),
+    teamUsage: z.array(teamUsageSchema),
+  }).optional(),
 });
 
 export type PlayerInsightsSnapshot = z.infer<typeof playerInsightsSnapshotSchema>;
@@ -356,7 +381,52 @@ async function fetchRecentDepthRows(url: string): Promise<Record<string, string>
   }
 }
 
-export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnapshot> {
+/**
+ * The downloads the analytics precompute needs, started up front (see
+ * fetchPlayerInsightsSnapshot): each promise carries its own catch, so a
+ * failure resolves to null here and the compute step decides what to keep.
+ */
+interface AnalyticsDownloads {
+  extrasRefresh: Promise<unknown>;
+  previousCsv: Promise<string | null>;
+  currentCsv: Promise<string | null>;
+}
+
+function startAnalyticsDownloads(): AnalyticsDownloads {
+  const statsTimeoutMs = Math.max(SOURCE_TIMEOUT_MS, 30_000);
+  return {
+    extrasRefresh: refreshChartExtrasSnapshot().catch((error: unknown) => {
+      console.error(
+        "[player-insights] chart extras refresh failed; keeping the stored extras",
+        error instanceof Error ? error.message : error,
+      );
+      return null;
+    }),
+    previousCsv: fetchCsv(NFLVERSE_PLAYER_STATS_2025_URL, statsTimeoutMs).catch((error: unknown) => {
+      console.error(
+        "[player-insights] 2025 player stats download failed; keeping the previous analytics precompute",
+        error instanceof Error ? error.message : error,
+      );
+      return null;
+    }),
+    currentCsv: fetchCsv(NFLVERSE_PLAYER_STATS_2026_URL, statsTimeoutMs).catch((error: unknown) => {
+      console.error(
+        "[player-insights] 2026 player stats download failed; keeping the previous analytics precompute",
+        error instanceof Error ? error.message : error,
+      );
+      return null;
+    }),
+  };
+}
+
+export async function fetchPlayerInsightsSnapshot(
+  previous: PlayerInsightsSnapshot | null = null,
+): Promise<PlayerInsightsSnapshot> {
+  // Start the analytics downloads alongside the insights fetches below: each
+  // phase carries a 30s+ timeout and the cron function caps at 60s, so
+  // running them serially afterwards risks the platform terminating the run
+  // before the snapshot is written.
+  const downloads = startAnalyticsDownloads();
   const [opportunityCsv, receivingCsv, rushingCsv, passingCsv, idsCsv, depthRows] = await Promise.all([
     fetchCsv(FF_OPPORTUNITY_2026_URL),
     fetchCsv(NGS_URLS.receiving),
@@ -373,7 +443,7 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
   ]);
   const { depth, asOf: depthAsOf } = depthFromRows(depthRows, ids.sleeperByGsis);
   const depthPrevious = previousDepthFromRows(depthRows, ids.sleeperByGsis);
-  return {
+  const snapshot: PlayerInsightsSnapshot = {
     fetchedAt: new Date().toISOString(),
     season: SEASON,
     opportunity: parseOpportunity(opportunityCsv),
@@ -383,6 +453,63 @@ export async function fetchPlayerInsightsSnapshot(): Promise<PlayerInsightsSnaps
     depthPrevious,
     sleeperByGsis: Object.fromEntries(ids.sleeperByGsis),
   };
+  // Retention runs before the precompute so analytics derive from the same
+  // merged snapshot the loader would store, not from a degraded fresh pull.
+  applyInsightsRetentionFallbacks(snapshot, previous);
+  const analytics = await computeAnalyticsPrecompute(snapshot, downloads);
+  if (analytics) snapshot.analytics = analytics;
+  return snapshot;
+}
+
+/**
+ * Dashboard analytics from the nflverse weekly stats files (previous and
+ * current season), computed here so builds never download or parse them.
+ * The downloads were started alongside the insights fetches (see
+ * startAnalyticsDownloads); chart extras are refreshed first (best effort)
+ * and read only once that refresh settles: builds used to keep the extras
+ * cache fresh as a side effect of loading it, so this refresh owns that
+ * job now. A failed refresh keeps the stored snapshot, and a failed stats
+ * download or parse leaves the precompute out and the loader keeps the
+ * previous one. A stats file that downloads but carries no current-season
+ * games is treated the same way, so a degenerate file cannot replace the
+ * last good precompute.
+ */
+async function computeAnalyticsPrecompute(
+  insights: PlayerInsightsSnapshot,
+  downloads: AnalyticsDownloads,
+): Promise<AnalyticsPrecompute | undefined> {
+  await downloads.extrasRefresh;
+  const [previousCsv, currentCsv, extras] = await Promise.all([
+    downloads.previousCsv,
+    downloads.currentCsv,
+    readChartExtrasSnapshot().catch((error: unknown) => {
+      console.error(
+        "[player-insights] chart extras read failed; computing analytics without extras",
+        error instanceof Error ? error.message : error,
+      );
+      return null;
+    }),
+  ]);
+  if (!previousCsv || !currentCsv) return undefined;
+  try {
+    const built = buildAnalytics(previousCsv, currentCsv, SEASON, extras, insights);
+    if (built.throughWeek === null) {
+      console.error("[player-insights] current-season stats carried no games; keeping the previous analytics precompute");
+      return undefined;
+    }
+    return {
+      computedAt: new Date().toISOString(),
+      throughWeek: built.throughWeek,
+      entities: built.entities,
+      teamUsage: built.teamUsage,
+    };
+  } catch (error) {
+    console.error(
+      "[player-insights] analytics build failed; keeping the previous analytics precompute",
+      error instanceof Error ? error.message : error,
+    );
+    return undefined;
+  }
 }
 
 /** A fetch that came back mostly empty keeps the previous snapshot. */
@@ -404,6 +531,13 @@ export function playerInsightsNeedsSleeperIdMigration(snapshot: PlayerInsightsSn
   return map === undefined || Object.keys(map).length === 0;
 }
 
+/** Snapshots cached before the analytics precompute have no stored
+ * entities; force a refresh so builds stop reporting advanced stats
+ * unavailable instead of waiting out the cache window. */
+export function playerInsightsNeedsAnalyticsMigration(snapshot: PlayerInsightsSnapshot): boolean {
+  return snapshot.analytics === undefined;
+}
+
 /** Keep a prior gsis→Sleeper map when a refresh parsed an empty players.csv map. */
 export function retainSleeperByGsisFromPrevious(
   snapshot: PlayerInsightsSnapshot,
@@ -414,10 +548,33 @@ export function retainSleeperByGsisFromPrevious(
   if (prior && Object.keys(prior).length > 0) snapshot.sleeperByGsis = prior;
 }
 
+/**
+ * Keep last-good slices when a fetch came back empty: the NGS and depth
+ * rows of a failed source and the gsis→Sleeper map of an empty
+ * players.csv parse. The fetch applies these before the analytics
+ * precompute reads the snapshot, and the loader applies them again
+ * (idempotent) before storing, so the stored snapshot and the precompute
+ * are always derived from the same merged data.
+ */
+export function applyInsightsRetentionFallbacks(
+  snapshot: PlayerInsightsSnapshot,
+  previous: PlayerInsightsSnapshot | null,
+): void {
+  if (!previous) return;
+  if (Object.keys(snapshot.ngs).length === 0) snapshot.ngs = previous.ngs;
+  if (Object.keys(snapshot.depth).length === 0) {
+    snapshot.depth = previous.depth;
+    snapshot.depthAsOf = previous.depthAsOf;
+    snapshot.depthPrevious = previous.depthPrevious;
+  }
+  retainSleeperByGsisFromPrevious(snapshot, previous);
+}
+
 function snapshotIsFresh(snapshot: PlayerInsightsSnapshot): boolean {
   return Date.now() - Date.parse(snapshot.fetchedAt) < PLAYER_INSIGHTS_CACHE_MS
     && !playerInsightsNeedsSleeperIdMigration(snapshot)
-    && !playerInsightsNeedsComponentsMigration(snapshot);
+    && !playerInsightsNeedsComponentsMigration(snapshot)
+    && !playerInsightsNeedsAnalyticsMigration(snapshot);
 }
 
 // ---------------------------------------------------------------------------
@@ -458,16 +615,14 @@ export async function loadPlayerInsightsSnapshot(options?: { force?: boolean }):
     return previous;
   }
   try {
-    const snapshot = await fetchPlayerInsightsSnapshot();
+    const snapshot = await fetchPlayerInsightsSnapshot(previous);
     if (!looksComplete(snapshot)) return previous;
-    // A Next Gen Stats or depth source that failed this run keeps its last good rows.
-    if (Object.keys(snapshot.ngs).length === 0 && previous) snapshot.ngs = previous.ngs;
-    if (Object.keys(snapshot.depth).length === 0 && previous) {
-      snapshot.depth = previous.depth;
-      snapshot.depthAsOf = previous.depthAsOf;
-      snapshot.depthPrevious = previous.depthPrevious;
-    }
-    retainSleeperByGsisFromPrevious(snapshot, previous);
+    // A Next Gen Stats or depth source that failed this run keeps its last
+    // good rows (already applied inside the fetch, before the precompute;
+    // this repeat keeps the stored snapshot on the same merged data).
+    applyInsightsRetentionFallbacks(snapshot, previous);
+    // A stats pull that failed this run keeps the last good precompute.
+    if (!snapshot.analytics && previous?.analytics) snapshot.analytics = previous.analytics;
     await writePlayerInsightsSnapshot(snapshot);
     return snapshot;
   } catch {
@@ -481,6 +636,7 @@ export type PlayerInsightsRefreshResult = {
   opportunity: number;
   ngs: number;
   depth: number;
+  analytics: number;
   fetchedAt: string | null;
 };
 
@@ -492,6 +648,7 @@ function refreshResult(status: PlayerInsightsRefreshResult["status"], snapshot: 
     opportunity: snapshot ? Object.keys(snapshot.opportunity).length : 0,
     ngs: snapshot ? Object.keys(snapshot.ngs).length : 0,
     depth: snapshot ? Object.keys(snapshot.depth).length : 0,
+    analytics: snapshot?.analytics?.entities.length ?? 0,
     fetchedAt: snapshot?.fetchedAt ?? null,
   };
 }

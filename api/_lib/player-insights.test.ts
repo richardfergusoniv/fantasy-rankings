@@ -12,9 +12,11 @@ const {
   parseOpportunity,
   playerInsightsNeedsComponentsMigration,
   parsePlayerIds,
+  playerInsightsNeedsAnalyticsMigration,
   playerInsightsNeedsSleeperIdMigration,
   playerInsightsSnapshotSchema,
   retainSleeperByGsisFromPrevious,
+  applyInsightsRetentionFallbacks,
 } = await import("./player-insights");
 
 describe("csvObjects", () => {
@@ -200,6 +202,36 @@ describe("playerInsightsSnapshotSchema", () => {
   });
 });
 
+describe("playerInsightsNeedsAnalyticsMigration", () => {
+  const base = {
+    fetchedAt: "2026-10-22T18:00:00.000Z",
+    season: 2026 as const,
+    opportunity: {},
+    ngs: {},
+    depth: {},
+    depthAsOf: null,
+    depthPrevious: {},
+  };
+
+  it("flags snapshots that omit the analytics precompute", () => {
+    expect(playerInsightsNeedsAnalyticsMigration({ ...base })).toBe(true);
+    expect(playerInsightsNeedsAnalyticsMigration({
+      ...base,
+      analytics: { computedAt: "2026-10-22T18:00:00.000Z", throughWeek: 7, entities: [], teamUsage: [] },
+    })).toBe(false);
+  });
+
+  it("parses snapshots with and without the precompute", () => {
+    const without = playerInsightsSnapshotSchema.parse({ ...base });
+    expect(without.analytics).toBeUndefined();
+    const withPrecompute = playerInsightsSnapshotSchema.parse({
+      ...base,
+      analytics: { computedAt: "2026-10-22T18:00:00.000Z", throughWeek: null, entities: [], teamUsage: [] },
+    });
+    expect(withPrecompute.analytics?.throughWeek).toBeNull();
+  });
+});
+
 describe("playerInsightsNeedsSleeperIdMigration", () => {
   const base = {
     fetchedAt: "2026-10-22T18:00:00.000Z",
@@ -225,5 +257,57 @@ describe("playerInsightsNeedsSleeperIdMigration", () => {
     const populated = { ...base, sleeperByGsis: { "00-2": "4034" } };
     retainSleeperByGsisFromPrevious(populated, { ...base, sleeperByGsis: { "00-1": "12526" } });
     expect(populated.sleeperByGsis).toEqual({ "00-2": "4034" });
+  });
+});
+
+describe("applyInsightsRetentionFallbacks", () => {
+  const base = {
+    fetchedAt: "2026-10-22T18:00:00.000Z",
+    season: 2026 as const,
+    opportunity: {},
+    ngs: {},
+    depth: {},
+    depthAsOf: null,
+    depthPrevious: {},
+    sleeperByGsis: {},
+  };
+
+  it("fills empty NGS, depth, and id map slices from the previous snapshot", () => {
+    const next = { ...base };
+    applyInsightsRetentionFallbacks(next, {
+      ...base,
+      ngs: { "00-1": { separation: 2.7 } },
+      depth: { "12526": { position: "WR", rank: 1 } },
+      depthAsOf: "2026-10-21T00:00:00.000Z",
+      depthPrevious: { "12526": { position: "WR", rank: 2 } },
+      sleeperByGsis: { "00-1": "12526" },
+    });
+    expect(next.ngs).toEqual({ "00-1": { separation: 2.7 } });
+    expect(next.depth).toEqual({ "12526": { position: "WR", rank: 1 } });
+    expect(next.depthAsOf).toBe("2026-10-21T00:00:00.000Z");
+    expect(next.depthPrevious).toEqual({ "12526": { position: "WR", rank: 2 } });
+    expect(next.sleeperByGsis).toEqual({ "00-1": "12526" });
+  });
+
+  it("keeps populated fresh slices and tolerates a missing previous snapshot", () => {
+    const next = {
+      ...base,
+      ngs: { "00-2": { separation: 3.1 } },
+      depth: { "4034": { position: "WR", rank: 3 } },
+      sleeperByGsis: { "00-2": "4034" },
+    };
+    applyInsightsRetentionFallbacks(next, {
+      ...base,
+      ngs: { "00-1": { separation: 2.7 } },
+      depth: { "12526": { position: "WR", rank: 1 } },
+      sleeperByGsis: { "00-1": "12526" },
+    });
+    expect(next.ngs).toEqual({ "00-2": { separation: 3.1 } });
+    expect(next.depth).toEqual({ "4034": { position: "WR", rank: 3 } });
+    expect(next.sleeperByGsis).toEqual({ "00-2": "4034" });
+
+    const untouched = { ...base };
+    applyInsightsRetentionFallbacks(untouched, null);
+    expect(untouched).toEqual(base);
   });
 });
