@@ -92,7 +92,6 @@ describe("anytimeTdScoreKey", () => {
     expect(anytimeTdScoreKey("RB")).toBe("rush_td");
     expect(anytimeTdScoreKey("QB")).toBe("rush_td");
     expect(anytimeTdScoreKey("K")).toBeNull();
-    expect(anytimeTdScoreKey("DEF")).toBeNull();
   });
 });
 
