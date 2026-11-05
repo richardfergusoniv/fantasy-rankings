@@ -476,6 +476,10 @@ export function buildDashboardCacheWrites(args: {
         // the player card's adds/drops and schedule strip read them from this row.
         playerTrending: sections.players.playerTrending,
         upcomingGames: sections.players.upcomingGames,
+        // Spreads/totals/implied points (small: ~16 games). weeklyChartRankings
+        // stays omitted on purpose — it duplicates rankings and costs a full
+        // second table; assembly falls back to rankings.
+        gameLines: sections.players.gameLines,
       };
       const sectionPayloads: Array<{ section: DashboardCacheSection; data: unknown }> = [
         { section: "meta", data: sections.meta },
