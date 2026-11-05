@@ -252,8 +252,11 @@ def main() -> int:
         wrong_source = [r["name"] for r in ks if r["projectionSource"] in ("vegas", "first_down")]
         if wrong_source:
             errors.append(f"K SOURCE {lid}: {wrong_source}")
+        # Non-zero only: unavailable-player suppression writes leagueProjection
+        # 0 with source fallback, so an IR/Out kicker legitimately reads
+        # (fallback, 0). A fallback row carrying real points is the leak.
         ghost = [r["name"] for r in ks
-                 if r["projectionSource"] == "fallback" and r["leagueProjection"] is not None]
+                 if r["projectionSource"] == "fallback" and r["leagueProjection"] not in (None, 0)]
         if ghost:
             errors.append(f"K FALLBACK-WITH-PROJECTION {lid}: {ghost}")
         sleeper_count = sum(1 for r in ks if r["projectionSource"] == "sleeper")
