@@ -186,14 +186,15 @@
   --roster-highlight-soft: light-dark(#b5e8e1, #1a4540);
   --on-roster-highlight: light-dark(#ffffff, #04201d);
   --chart-team: var(--roster-highlight);
-  /* Power stacked bars: one teal shade per position, darkest first (lightest first in dark mode). */
-  --position-shade-qb: light-dark(#115e59, #a5f3fc);
-  --position-shade-rb: light-dark(#0f766e, #5eead4);
-  --position-shade-wr: light-dark(#0d9488, #2dd4bf);
-  --position-shade-te: light-dark(#14968a, #14b8a6);
-  --position-shade-flex: light-dark(#1fb5a5, #0f766e);
-  --position-shade-k: light-dark(#3bcfbf, #115e59);
-  --position-shade-def: light-dark(#7ee0d1, #0c4f48);
+  /* Power stacked bars: one muted teal per position, darkest first (lightest first in dark mode).
+     Kept well below --roster-highlight's saturation so the bright teal still means "your team". */
+  --position-shade-qb: light-dark(#244042, #d3e2e3);
+  --position-shade-rb: light-dark(#345c60, #b1cbcd);
+  --position-shade-wr: light-dark(#44797e, #8fb4b7);
+  --position-shade-te: light-dark(#56999f, #709fa4);
+  --position-shade-flex: light-dark(#77b1b6, #588589);
+  --position-shade-k: light-dark(#9cc6c9, #466a6d);
+  --position-shade-def: light-dark(#c3dddf, #365154);
   --ink: var(--foreground);
   --segment-track: light-dark(#e1e5ec, #242a33);
   --opponent-row: light-dark(#dde3ec, #323a46);

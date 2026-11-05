@@ -22,7 +22,7 @@
 .power-position-values > span > strong { text-align: right; font-size: var(--type-body); font-weight: 700; }
 .power-stack-list { display: grid; gap: 1px; margin-top: 0; }
 .power-stack-card .power-stack-list { margin-top: 0; padding: 8px 10px 12px; }
-.power-stack-row { display: grid; width: 100%; grid-template-columns: 18px minmax(0, 110px) minmax(0, 1fr) 44px; gap: 6px; align-items: center; min-height: 28px; padding: 2px 4px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; }
+.power-stack-row { display: grid; width: 100%; grid-template-columns: 18px minmax(0, 110px) minmax(0, 1fr) 44px; gap: 6px; align-items: center; min-height: 36px; padding: 2px 4px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; }
 button.power-stack-row { cursor: pointer; }
 button.power-stack-row:active { background: var(--surface-2); }
 .power-stack-rank { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
