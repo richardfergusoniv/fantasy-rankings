@@ -82,6 +82,33 @@ def test_rush_fd_omitted_not_fabricated():
         assert "rush_fd_proxy" not in p["components"][lid]
 
 
+def test_rb_anytime_td_scores_as_rush_td_not_rec_td():
+    """RB anytime TD uses rush_td (app contract); unequal multipliers must not use rec_td."""
+    from props_aggregator.projections import anytime_td_score_key, build_projections
+
+    assert anytime_td_score_key("RB") == "rush_td"
+    assert anytime_td_score_key("WR") == "rec_td"
+    leagues = [{
+        "league_id": "diff-td",
+        "name": "Unequal TD",
+        "scoring_settings": {
+            "rush_yd": 0.1, "rec": 0.5, "rec_yd": 0.1,
+            "rush_td": 6.0, "rec_td": 4.0,
+        },
+    }]
+    rows = [
+        _row("James Cook", "rush_yards", line=50.0),
+        _row("James Cook", "receptions", line=2.0),
+        _row("James Cook", "anytime_td", td_prob=0.5),
+    ]
+    positions = {"james cook": {"position": "RB", "team": "BUF",
+                                "sleeper_id": "9999", "full_name": "James Cook"}}
+    p = build_projections(rows, leagues, positions)[0]
+    # 50*0.1 + 2*0.5 + 0.5*6 (rush_td) = 5 + 1 + 3 = 9. Not 0.5*4 from rec_td.
+    assert p["leagues"]["diff-td"] == 9.0
+    assert p["components"]["diff-td"]["anytime_td"] == 3.0
+
+
 def test_display_name_uses_sleeper_canonical():
     """'Josh Palmer' is emitted as Sleeper's 'Joshua Palmer'."""
     p = _proj(_wr_rows("Josh Palmer"), POSITIONS)
