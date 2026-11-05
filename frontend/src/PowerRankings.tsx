@@ -15,7 +15,10 @@ export function PowerRankings({
   onOpenLeagueTeam,
 }: {
   league: League;
-  onOpenLeagueTeam?: (rosterId: number) => void;
+  onOpenLeagueTeam?: (
+    rosterId: number,
+    horizon?: { scope?: "week" | "restOfSeason"; mode?: "seasonLong" | "dynasty" },
+  ) => void;
 }) {
   const [scope, setScope] = useState<"week" | "restOfSeason">("week");
   const [mode, setMode] = useState<"seasonLong" | "dynasty">("seasonLong");
@@ -158,7 +161,13 @@ export function PowerRankings({
         <div className="section-heading power-section-heading">
           <h2 id="power-stack-heading">Power rankings</h2>
         </div>
-        <PowerStackList teams={stackTeams} weekly={isWeekly} onOpenTeam={onOpenLeagueTeam} />
+        <PowerStackList
+          teams={stackTeams}
+          weekly={isWeekly}
+          onOpenTeam={onOpenLeagueTeam
+            ? (rosterId) => onOpenLeagueTeam(rosterId, { scope: isWeekly ? "week" : "restOfSeason", mode: activeMode })
+            : undefined}
+        />
       </section>
     </section>
   );
