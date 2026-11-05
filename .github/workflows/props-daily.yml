@@ -293,6 +293,13 @@ jobs:
 
       - name: Build strength of schedule
         if: steps.guard.outputs.go == 'true'
+        # Coverage follows the users the dashboard rebuild refreshes: owner +
+        # the same allowlisted extras dashboard-rebuild.yml names. The
+        # REBUILD_EXTRA_SLEEPER_USER_IDS repo variable must match the Vercel
+        # variable of the same name (and that workflow's EXTRA_USER_IDS).
+        env:
+          OWNER_SLEEPER_USER_ID: ${{ vars.OWNER_SLEEPER_USER_ID }}
+          REBUILD_EXTRA_SLEEPER_USER_IDS: ${{ vars.REBUILD_EXTRA_SLEEPER_USER_IDS }}
         run: node pipeline/build_matchup_grades.mjs
 
       - name: Validate strength of schedule

@@ -42,14 +42,13 @@ const GAMES_CACHE = path.join(DATA_DIR, "nflverse_games_cache.csv");
 const PLAYERS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const GAMES_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
-const LEAGUES = [
-  { id: "1389344450517430272", name: "NY Sack Exchange II" },
-  { id: "1355920300633513984", name: "Tits Out for The Ladz XII" },
-  { id: "1317270144682070016", name: "C2C superconference" },
-  { id: "1312127020972404736", name: "Hoe Ass Dynasty" },
-  { id: "1311470531635052544", name: "Tainticklers" },
-  { id: "1306489414548979712", name: "Dynastical Cucks" },
-];
+// Coverage follows the users the dashboard rebuild keeps fresh — the owner
+// plus the allowlisted extras — resolved from Sleeper at run time. A league
+// nobody rebuilds simply stops producing grades.
+const REFRESHED_USER_IDS = [
+  process.env.OWNER_SLEEPER_USER_ID,
+  ...(process.env.REBUILD_EXTRA_SLEEPER_USER_IDS ?? "").split(","),
+].map((id) => id?.trim()).filter(Boolean);
 
 // ---------------------------------------------------------------------------
 // Scorer: VERBATIM copy of scoreProjectedPlayerStats + settingValue from
@@ -216,8 +215,22 @@ async function main() {
   );
 
   // Fetch league scoring settings + weekly actuals.
+  if (REFRESHED_USER_IDS.length === 0) {
+    throw new Error("no refreshed users configured; set OWNER_SLEEPER_USER_ID and/or REBUILD_EXTRA_SLEEPER_USER_IDS");
+  }
+  const seenLeagueIds = new Set();
+  const leagueDefs = [];
+  for (const userId of REFRESHED_USER_IDS) {
+    const userLeagues = await fetchJson(`https://api.sleeper.app/v1/user/${userId}/leagues/nfl/${SEASON}`, `leagues for user ${userId}`);
+    for (const row of userLeagues ?? []) {
+      if (!row.league_id || seenLeagueIds.has(row.league_id)) continue;
+      seenLeagueIds.add(row.league_id);
+      leagueDefs.push({ id: row.league_id, name: row.name ?? row.league_id });
+    }
+  }
+  console.log(`matchup grades covering ${leagueDefs.length} leagues across ${REFRESHED_USER_IDS.length} refreshed users: ${leagueDefs.map((l) => l.name).join(", ")}`);
   const leagueSettings = [];
-  for (const league of LEAGUES) {
+  for (const league of leagueDefs) {
     const def = await fetchJson(`https://api.sleeper.app/v1/league/${league.id}`, `league ${league.name}`);
     leagueSettings.push({ ...league, scoring_settings: def.scoring_settings ?? {} });
   }
