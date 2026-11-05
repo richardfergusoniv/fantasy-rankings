@@ -25,6 +25,7 @@
 .power-stack-row { display: grid; width: 100%; grid-template-columns: 18px minmax(0, 110px) minmax(0, 1fr) 44px; gap: 6px; align-items: center; min-height: 36px; padding: 2px 4px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; }
 button.power-stack-row { cursor: pointer; }
 button.power-stack-row:active { background: var(--surface-2); }
+@media (pointer: coarse) { button.power-stack-row { min-height: 44px; } }
 .power-stack-rank { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .power-stack-name { overflow: hidden; font-size: var(--type-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .power-stack-total { text-align: right; font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums; }
