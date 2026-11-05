@@ -49,6 +49,8 @@ const LEAGUES = [
   { id: "1312127020972404736", name: "Hoe Ass Dynasty" },
   { id: "1311470531635052544", name: "Tainticklers" },
   { id: "1306489414548979712", name: "Dynastical Cucks" },
+  { id: "1395778377847177216", name: "NLG LMMFFL" },
+  { id: "1382391637480599552", name: "No Cucks No Glory" },
 ];
 
 // ---------------------------------------------------------------------------
