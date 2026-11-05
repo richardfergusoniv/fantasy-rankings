@@ -445,7 +445,11 @@ async function loadPlayerNews(playerId: string, isDynastyContext: boolean, limit
         newsType: row.newsType,
         sourceLabel: row.sourceLabel,
         sourceUrl: row.sourceUrl,
-        publishedAt: (row.publishedAt ?? row.createdAt).toISOString(),
+        // publishedAt is the source's publication time and may be null for
+        // undated sources — never present ingestedAt (when the row was stored)
+        // as the news date; label those items undated instead.
+        publishedAt: row.publishedAt?.toISOString() ?? null,
+        ingestedAt: row.createdAt.toISOString(),
         source: row.source,
       }));
   } catch {
