@@ -168,6 +168,29 @@ describe("writeUserDashboardCache payload set (buildDashboardCacheWrites)", () =
     expect(envelope.data.upcomingGames).toEqual({ DAL: [{ week: 8, opponent: "ARI", isAway: false }] });
   });
 
+  it("keeps game lines through the players row and the assembled dashboard", () => {
+    const fetchedAt = new Date("2026-10-12T03:00:00.000Z");
+    const gameLines = [{ team: "KC", opponent: "BUF", isHome: true, spread: -3, total: 47.5, impliedPoints: 25.25 }];
+    const writes = buildDashboardCacheWrites({
+      cacheKey: "dashboard:user:user-1",
+      dashboard: { ...sampleDashboard, gameLines },
+      fetchedAt,
+      live: false,
+      encode: encodeSourceCachePayload,
+      serializeFull: serializeDashboardForCache,
+    });
+    const hit = dashboardFromSectionRows({
+      sleeperUserId: "user-1",
+      rows: writesAsRows(writes),
+      decode: decodeSourceCachePayload,
+      parseSectionData: parseStoredSectionData,
+      nowMs: fetchedAt.getTime() + 1_000,
+      ttlMs: sectionCacheTtlMs,
+    });
+    expect(hit).not.toBeNull();
+    expect(hit!.dashboard.gameLines).toEqual(gameLines);
+  });
+
   it("only writes the full key for the global snapshot", () => {
     const writes = buildDashboardCacheWrites({
       cacheKey: "dashboard-live-projections-v25",
