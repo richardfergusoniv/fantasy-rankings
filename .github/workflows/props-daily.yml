@@ -304,6 +304,11 @@ jobs:
 
       - name: Validate strength of schedule
         if: steps.guard.outputs.go == 'true'
+        # The validator resolves expected coverage from Sleeper for the same
+        # refreshed users the build step uses, so it needs the same inputs.
+        env:
+          OWNER_SLEEPER_USER_ID: ${{ vars.OWNER_SLEEPER_USER_ID }}
+          REBUILD_EXTRA_SLEEPER_USER_IDS: ${{ vars.REBUILD_EXTRA_SLEEPER_USER_IDS }}
         run: python3 pipeline/scripts/validate_matchup_grades.py pipeline/data/staged_matchup_grades.json
 
       - name: Push strength of schedule
