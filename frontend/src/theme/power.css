@@ -30,7 +30,7 @@ button.power-stack-row:active { background: var(--surface-2); }
 .power-stack-name { overflow: hidden; font-size: var(--type-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .power-stack-total { text-align: right; font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums; }
 .power-stack-row.is-user .power-stack-rank, .power-stack-row.is-user .power-stack-name, .power-stack-row.is-user .power-stack-total { color: var(--roster-highlight); }
-.power-stack-bar { display: flex; gap: 1px; height: 10px; min-width: 0; border-radius: 2px; overflow: hidden; }
+.power-stack-bar { display: flex; gap: 1px; height: 14px; min-width: 0; border-radius: 2px; overflow: hidden; }
 .power-stack-bar i { display: block; height: 100%; min-width: 0; }
 .power-stack-row.is-user .power-stack-bar { outline: 1.5px solid var(--roster-highlight); outline-offset: 1px; }
 .power-list-item { display: block; }
