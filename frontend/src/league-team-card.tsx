@@ -246,7 +246,7 @@ export function LeagueTeamCard({
           <Tabs key={`${league.id}:${team.rosterId}`} defaultValue="players" className="power-team-card-tabs">
             <TabsList aria-label={`${team.teamName} team details`}>
               <TabsTrigger value="players" id={`${tabsId}-players-tab`} aria-controls={`${tabsId}-players-panel`}>Players</TabsTrigger>
-              <TabsTrigger value="weekly" id={`${tabsId}-weekly-tab`} aria-controls={`${tabsId}-weekly-panel`}>Weekly</TabsTrigger>
+              <TabsTrigger value="weekly" id={`${tabsId}-weekly-tab`} aria-controls={`${tabsId}-weekly-panel`}>All-play</TabsTrigger>
             </TabsList>
             <TabsContent value="players" id={`${tabsId}-players-panel`} aria-labelledby={`${tabsId}-players-tab`}>
               <div className="power-team-card-positions" role="list" aria-label={`${team.teamName} position values`}>

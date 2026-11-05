@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import type { api, ApiResponse } from "./api";
-import type { MatchupSelection } from "./dashboard-types";
-import { formatRecord, LeagueTeamCard, positionLabel } from "./league-team-card";
-import { weeklyOpponentRosterId } from "./power-opponent";
+import { positionLabel } from "./league-team-card";
 import { SegmentedControl, points, shortLeagueName } from "./shared";
 import { formatPercent, formatWhole } from "./lib/format-number";
-import { PowerStackCard, type PowerStackTeam } from "./views/power-stack-list";
+import { PowerStackList, type PowerStackTeam } from "./views/power-stack-list";
 
 type Dashboard = ApiResponse<typeof api, "getDashboard">;
 type League = Dashboard["leagues"][number];
@@ -14,25 +12,11 @@ type PowerPosition = "QB" | "RB" | "WR" | "TE" | "FLEX" | "K" | "DEF";
 
 export function PowerRankings({
   league,
-  dashboard,
-  onPlayerIntent,
-  onOpenPlayer,
-  onOpenMatchup,
-  playerCardOpen,
-  selectedPlayerId = null,
 }: {
   league: League;
-  dashboard: Dashboard;
-  onPlayerIntent: (playerId: string) => void;
-  onOpenPlayer: (playerId: string) => void;
-  onOpenMatchup?: (matchup: MatchupSelection) => void;
-  playerCardOpen: boolean;
-  selectedPlayerId?: string | null;
 }) {
   const [scope, setScope] = useState<"week" | "restOfSeason">("week");
   const [mode, setMode] = useState<"seasonLong" | "dynasty">("seasonLong");
-  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
-  const [stacksOpen, setStacksOpen] = useState(false);
   const isDynastyLeague = league.seasonLongFormat.isDynasty;
   const activeMode = isDynastyLeague ? mode : "seasonLong";
   const isWeekly = scope !== "restOfSeason";
@@ -46,25 +30,14 @@ export function PowerRankings({
   if (isWeekly && league.rankingPositions.includes("K")) positions.push("K");
   if (isWeekly && league.rankingPositions.includes("DEF")) positions.push("DEF");
 
-  const closeTeamCard = () => setSelectedTeamId(null);
-
-  useEffect(() => {
-    setSelectedTeamId(null);
-    setStacksOpen(false);
-  }, [league.id]);
-
   const displayedTeams = useMemo(
     () => [...powerRankings].sort((a, b) => a.rank - b.rank),
     [powerRankings],
   );
-  const opponentRosterId = isWeekly
-    ? weeklyOpponentRosterId(league.opponentTeam?.name, league.tradeTeams, league.opponentTeam?.rosterId)
-    : null;
   const isDynastyView = scope === "restOfSeason" && activeMode === "dynasty";
   const leagueAveragePicks = isDynastyView && powerRankings.length > 0
     ? powerRankings.reduce((total, team) => total + team.futurePickValue, 0) / powerRankings.length
     : null;
-  const selectedTeam = selectedTeamId === null ? null : powerRankings.find((team) => team.rosterId === selectedTeamId) ?? null;
 
   const radarData = positions.map((position) => {
     const values = powerRankings.map((team) => team.positionValues[position]);
@@ -168,67 +141,23 @@ export function PowerRankings({
           </svg>
         </div>
         <p className="power-position-table-label">League average</p>
-        <button
-          type="button"
-          className="power-position-values"
-          aria-haspopup="dialog"
-          onClick={() => setStacksOpen(true)}
-        >
+        <div className="power-position-values">
           {radarData.map((row) => (
             <span key={row.position}><span>{positionLabel(row.position)}</span><strong>{isWeekly ? points(row.average) : formatWhole(row.average)}</strong></span>
           ))}
           {leagueAveragePicks !== null ? (
             <span><span>PICKS</span><strong>{formatWhole(leagueAveragePicks)}</strong></span>
           ) : null}
-          <span className="sr-only">Every team by position</span>
           {isWeekly ? <span className="power-position-total-highlight"><span>Total</span><strong>{points(totalAverage)}</strong></span> : <span className={leagueAveragePicks !== null ? "power-position-total-highlight" : "power-position-total power-position-total-highlight"}><span>Total</span><strong>{formatWhole(leagueAverageDisplayTotal)}</strong></span>}
-        </button>
-        {stacksOpen ? <PowerStackCard teams={stackTeams} weekly={isWeekly} onClose={() => setStacksOpen(false)} /> : null}
+        </div>
       </section>
 
-      <section className="power-table-section" aria-labelledby="league-power-heading">
+      <section className="power-table-section" aria-labelledby="power-stack-heading">
         <div className="section-heading power-section-heading">
-          <h2 id="league-power-heading">League power rankings</h2>
+          <h2 id="power-stack-heading">Every team by position</h2>
         </div>
-        <div className="power-table" role="list">
-          {displayedTeams.map((team) => {
-            const isOpponent = opponentRosterId !== null && team.rosterId === opponentRosterId;
-            return (
-              <div className="power-list-item" role="listitem" key={team.rosterId}>
-                <button
-                  type="button"
-                  className={`power-row power-row-toggle${team.isUser ? " is-user" : ""}${isOpponent ? " is-opponent" : ""}`}
-                  aria-haspopup="dialog"
-                  onClick={() => setSelectedTeamId(team.rosterId)}
-                >
-                  <strong className="power-rank"><span className="sr-only">Rank </span>{team.rank}</strong>
-                  <span className="power-team">
-                    <strong>{team.teamName}<span className="power-team-record"> · {formatRecord(team.record)}</span></strong>
-                    {isOpponent ? <span className="sr-only">This week's opponent</span> : null}
-                  </span>
-                  <span className="power-total"><strong>{isWeekly ? points(team.totalValue) : formatWhole(team.totalValue)}</strong><span className="sr-only">{isWeekly ? " projected points" : " roster value"}</span></span>
-                </button>
-              </div>
-            );
-          })}
-        </div>
+        <PowerStackList teams={stackTeams} weekly={isWeekly} />
       </section>
-      {selectedTeam ? (
-        <LeagueTeamCard
-          team={selectedTeam}
-          league={league}
-          dashboard={dashboard}
-          scope={isWeekly ? "week" : "restOfSeason"}
-          mode={activeMode}
-          powerRankings={powerRankings}
-          playerCardOpen={playerCardOpen}
-          selectedPlayerId={selectedPlayerId}
-          onPlayerIntent={onPlayerIntent}
-          onOpenPlayer={onOpenPlayer}
-          onOpenMatchup={onOpenMatchup}
-          onClose={closeTeamCard}
-        />
-      ) : null}
     </section>
   );
 }
