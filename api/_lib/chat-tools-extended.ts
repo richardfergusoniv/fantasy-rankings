@@ -72,7 +72,7 @@ export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
     function: {
       name: "get_player_news",
       description:
-        "Recent player news, including team- and league-scoped reports that affect the players in scope (QB changes, line injuries, coaching). Scope: one player, my roster, my opponent, or the whole league. Newest first. The response's coverage field distinguishes an empty result (\"empty\": genuinely no news) from a failed load (\"degraded\": items may be missing — say coverage was partial, not that nothing happened).",
+        "Recent player news, including team- and league-scoped reports that affect the players in scope (QB changes, line injuries, coaching). Scope: one player, my roster, my opponent, or the whole league. Newest first. The response's coverage field distinguishes an empty result (\"empty\": genuinely no news) from a failed load (\"degraded\": items may be missing — say coverage was partial, not that nothing happened). Dates: publishedAt is the source's own publication time and can be null; ingestedAt is when the item entered the store, not when the news happened — report null-publishedAt items as undated (or \"ingested <date>\"), never as if ingestedAt were the event date.",
       parameters: {
         type: "object",
         properties: {
@@ -415,7 +415,11 @@ export async function toolGetPlayerNews(
           newsType: row.newsType,
           sourceLabel: row.sourceLabel,
           sourceUrl: row.sourceUrl,
-          publishedAt: (row.publishedAt ?? row.createdAt).toISOString(),
+          // publishedAt is the source's publication time (null for undated
+          // sources); ingestedAt is when the row was stored — label undated
+          // items instead of presenting ingestion time as the news date.
+          publishedAt: row.publishedAt?.toISOString() ?? null,
+          ingestedAt: row.createdAt.toISOString(),
           source: row.source,
         });
         if (items.length >= limit) break;
