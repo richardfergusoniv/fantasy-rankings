@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  draftSelectionFromSearch,
   draftSurplusByTeam,
   expectedValue,
   GRADE_LETTERS,
@@ -9,6 +10,7 @@ import {
   loadDraftGrade,
   ownRosterIdFromDraft,
   ownRosterIdFromLeague,
+  ownRosterIdFromPicks,
   pickGrades,
   placeOf,
   schoolGrade,
@@ -317,6 +319,34 @@ describe("ownRosterIdFromLeague / ownRosterIdFromDraft", () => {
     expect(ownRosterIdFromDraft({ draft_order: { "user-1": 2 } }, "user-1")).toBeNull();
     expect(ownRosterIdFromDraft({ draft_order: {}, slot_to_roster_id: { "1": 1 } }, "user-1")).toBeNull();
   });
+
+  it("maps the Sleeper user through pick picked_by when the draft list omits slot_to_roster_id", () => {
+    expect(ownRosterIdFromPicks([
+      { pick_no: 1, roster_id: 7, picked_by: "other", player_id: "p1" },
+      { pick_no: 2, roster_id: 5, picked_by: "user-1", player_id: "p2" },
+    ], "user-1")).toBe(5);
+    expect(ownRosterIdFromPicks([{ pick_no: 1, roster_id: 7, picked_by: "other", player_id: "p1" }], "user-1")).toBeNull();
+  });
+});
+
+describe("draftSelectionFromSearch", () => {
+  it("ignores the path-injected kind=draft-grade from /api/data/[kind]", () => {
+    expect(draftSelectionFromSearch(new URLSearchParams("leagueId=lg&kind=draft-grade"))).toBeUndefined();
+    expect(draftSelectionFromSearch(new URLSearchParams("leagueId=lg"))).toBeUndefined();
+  });
+
+  it("reads draftKind (and a clean kind=rookie|startup) for dynasty Hindsight", () => {
+    expect(draftSelectionFromSearch(new URLSearchParams("leagueId=lg&draftKind=rookie&season=2026"))).toEqual({
+      kind: "rookie",
+      season: "2026",
+    });
+    expect(draftSelectionFromSearch(new URLSearchParams("leagueId=lg&kind=startup"))).toEqual({ kind: "startup", season: undefined });
+    // Path param wins get("kind"); draftKind still selects the draft.
+    expect(draftSelectionFromSearch(new URLSearchParams("kind=draft-grade&leagueId=lg&draftKind=rookie"))).toEqual({
+      kind: "rookie",
+      season: undefined,
+    });
+  });
 });
 
 describe("loadDraftGrade", () => {
@@ -325,8 +355,15 @@ describe("loadDraftGrade", () => {
   const sleeperPicks = fair.map((p) => ({ pick_no: p.pickNo, roster_id: p.rosterId, player_id: p.playerId, metadata: { position: p.position, first_name: "Name", last_name: p.playerId, team: "TM" } }));
   const draft = (id: string, extra: Record<string, unknown> = {}) => ({ draft_id: id, status: "complete", type: "snake", start_time: Date.UTC(2026, 8, 3, 23, 41), ...extra });
   const fetcher = (drafts: unknown[], picksByDraft: Record<string, unknown[]>) => async <T>(url: string): Promise<T> => {
-    const match = url.match(/\/draft\/([^/]+)\/picks$/);
-    return (match ? picksByDraft[match[1]!] ?? [] : drafts) as T;
+    const picksMatch = url.match(/\/draft\/([^/]+)\/picks$/);
+    if (picksMatch) return (picksByDraft[picksMatch[1]!] ?? []) as T;
+    // /draft/:id detail (slot_to_roster_id lives here, not on the league list).
+    const detailMatch = url.match(/\/draft\/([^/]+)$/);
+    if (detailMatch) {
+      const found = (drafts as Array<{ draft_id?: string }>).find((row) => row.draft_id === detailMatch[1]);
+      return (found ?? drafts[0]) as T;
+    }
+    return drafts as T;
   };
 
   it("loads the draft-day board for the draft's Pacific date and today's board for today", async () => {
@@ -378,6 +415,7 @@ describe("loadDraftGrade", () => {
     const routing = (previousLeagueId: string | null) => async <T>(url: string): Promise<T> => {
       if (url.endsWith("/league/lg/drafts")) return [draft("d1")] as T;
       if (/\/draft\/[^/]+\/picks$/.test(url)) return sleeperPicks as T;
+      if (/\/draft\/[^/]+$/.test(url)) return draft("d1") as T;
       if (url.endsWith("/league/lg")) return { roster_positions: ["QB", "RB", "WR", "TE"], previous_league_id: previousLeagueId } as T;
       throw new Error(`unexpected url ${url}`);
     };
@@ -410,6 +448,36 @@ describe("loadDraftGrade", () => {
       minBoardPlayers: 1,
     });
     expect(grade?.draftDay).not.toBeNull();
+    // League draft lists omit slot_to_roster_id; detail hydration (or picked_by) still resolves.
+    const listOnly = [draft("d1", { draft_order: { "user-1": 1 } })];
+    const detailHydrated = async <T>(url: string): Promise<T> => {
+      if (/\/draft\/d1$/.test(url)) {
+        return draft("d1", { draft_order: { "user-1": 1 }, slot_to_roster_id: { "1": 1 } }) as T;
+      }
+      return fetcher(listOnly, { d1: sleeperPicks })(url);
+    };
+    expect((await loadDraftGrade(league, null, {
+      seasonType: inSeason,
+      sleeperUserId: "user-1",
+      fetchJson: detailHydrated,
+      loadBoard: async () => marketBoard,
+      minBoardPlayers: 1,
+    })).grade?.draftDay).not.toBeNull();
+    const picksOnly = sleeperPicks.map((pick, index) => ({
+      ...pick,
+      picked_by: pick.roster_id === 1 && index === 0 ? "user-1" : "other",
+    }));
+    const noSlotMap = async <T>(url: string): Promise<T> => {
+      if (/\/draft\/d1$/.test(url)) return draft("d1", { draft_order: { "user-1": 1 } }) as T;
+      return fetcher(listOnly, { d1: picksOnly })(url);
+    };
+    expect((await loadDraftGrade(league, null, {
+      seasonType: inSeason,
+      sleeperUserId: "user-1",
+      fetchJson: noSlotMap,
+      loadBoard: async () => marketBoard,
+      minBoardPlayers: 1,
+    })).grade?.draftDay).not.toBeNull();
     expect(await loadDraftGrade(league, null, {
       seasonType: inSeason,
       fetchJson: fetcher([draft("d1")], { d1: sleeperPicks }),
@@ -504,6 +572,14 @@ describe("loadDraftGrade", () => {
       if (draftsMatch) return (draftsMap[draftsMatch[1]!] ?? []) as T;
       const picksMatch = url.match(/\/draft\/([^/]+)\/picks$/);
       if (picksMatch) return (picksMap[picksMatch[1]!] ?? []) as T;
+      const detailMatch = url.match(/\/draft\/([^/]+)$/);
+      if (detailMatch) {
+        for (const rows of Object.values(draftsMap)) {
+          const found = rows.find((row) => (row as { draft_id?: string }).draft_id === detailMatch[1]);
+          if (found) return found as T;
+        }
+        return draft(detailMatch[1]!) as T;
+      }
       throw new Error(`unexpected url ${url}`);
     };
     const chainFetcher = makeFetcher(draftsByLeague, picksByDraft);

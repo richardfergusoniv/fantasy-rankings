@@ -149,7 +149,8 @@ export const api = {
     request(`/api/data/projected-standings${buildQuery(args)}`),
 
   getDraftGrade: (args: { leagueId: string; kind?: "rookie" | "startup"; season?: string }): Promise<DraftGradeResponse> =>
-    request(`/api/data/draft-grade${buildQuery(args)}`),
+    // Query param must be draftKind, not kind: /api/data/[kind] injects kind=draft-grade.
+    request(`/api/data/draft-grade${buildQuery({ leagueId: args.leagueId, draftKind: args.kind, season: args.season })}`),
 
   listSavedChartViews: (_args?: EmptyArgs): Promise<{ views: SavedChartView[] }> => request("/api/chart-views"),
 
