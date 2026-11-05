@@ -657,7 +657,22 @@ export function App() {
     if (selectedMatchup && pair(selectedMatchup) === pair(matchup)) return;
     setSelectedMatchup(matchup);
   }, [selectedMatchup, setSelectedMatchup]);
-  const [rosterCardRosterId, setRosterCardRosterId] = useState<number | null>(null);
+  type RosterCardSelection = {
+    rosterId: number;
+    scope: "week" | "restOfSeason";
+    mode: "seasonLong" | "dynasty";
+  };
+  const [rosterCard, setRosterCard] = useState<RosterCardSelection | null>(null);
+  const openLeagueTeam = useCallback((
+    rosterId: number,
+    horizon?: { scope?: RosterCardSelection["scope"]; mode?: RosterCardSelection["mode"] },
+  ) => {
+    setRosterCard({
+      rosterId,
+      scope: horizon?.scope ?? "week",
+      mode: horizon?.mode ?? "seasonLong",
+    });
+  }, []);
   const [commandBarOpen, setCommandBarOpen] = useState(false);
   const [failedResyncAsOf, setFailedResyncAsOf] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -937,7 +952,7 @@ export function App() {
     );
   }, [dashboard, league]);
   useEffect(() => {
-    setRosterCardRosterId(null);
+    setRosterCard(null);
   }, [league?.id]);
   const leagueDashboard = useMemo<Dashboard | undefined>(() => {
     if (!dashboard || !league) return dashboard;
@@ -1288,9 +1303,16 @@ export function App() {
   const activeDashboard = leagueDashboard ?? dashboard;
   const selectedPlayerId = dashboardUrl.state.playerId;
   const rosterTeam = playerHistory.current ? leaguePowerTeamForPlayer(league, playerHistory.current.playerId) : null;
-  const rosterCardTeam = rosterCardRosterId === null
+  const rosterCardPowerRankings = rosterCard === null
     ? null
-    : league.powerRankingsWeek.find((team) => team.rosterId === rosterCardRosterId) ?? null;
+    : rosterCard.scope === "week"
+      ? league.powerRankingsWeek
+      : rosterCard.mode === "dynasty"
+        ? league.powerRankingsDynasty
+        : league.powerRankingsSeasonLong;
+  const rosterCardTeam = rosterCard === null || rosterCardPowerRankings === null
+    ? null
+    : rosterCardPowerRankings.find((team) => team.rosterId === rosterCard.rosterId) ?? null;
   const rosterCardOnTop = rosterCardTeam !== null && selectedMatchup === null && teamCardTeam === null;
   const showAvailableBadge = playerHistory.current !== null && rosterTeam === null && !playerHistory.current.isRostered;
   const waiversHref = waiversSearchPreservingContext(dashboardUrl.state);
@@ -1371,11 +1393,11 @@ export function App() {
       onOpenTeam={setTeamCardTeam}
       onBack={playerHistory.back}
       canGoBack={playerHistory.canGoBack}
-      onClose={() => { setRosterCardRosterId(null); setTeamCardTeam(null); playerHistory.close(); closeLinkedPlayer(); }}
+      onClose={() => { setRosterCard(null); setTeamCardTeam(null); playerHistory.close(); closeLinkedPlayer(); }}
       presentation={inspectorPresentation}
       rosterTeamName={rosterTeam?.teamName ?? null}
       rosterLabel={rosterTeam ? `Open ${rosterTeam.teamName}, ${formatRecord(rosterTeam.record)} record, rank ${rosterTeam.rank}` : null}
-      onOpenRosterTeam={rosterTeam ? () => setRosterCardRosterId(rosterTeam.rosterId) : undefined}
+      onOpenRosterTeam={rosterTeam ? () => openLeagueTeam(rosterTeam.rosterId) : undefined}
       waiversHref={showAvailableBadge ? waiversHref : undefined}
       onOpenWaivers={showAvailableBadge ? () => dashboardUrl.commit({ tab: "waivers" }) : undefined}
       suspended={rosterCardOnTop || teamCardTeam !== null}
@@ -1551,9 +1573,9 @@ export function App() {
                 />
               </Suspense>
             )
-            : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onComparePlayers={openComparison} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={(rosterId) => setRosterCardRosterId(rosterId)} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
+            : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onComparePlayers={openComparison} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={openLeagueTeam} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
             : tab === "outcomes" ? <Suspense fallback={<SectionLoading label="Loading playoff picture…" />}><LazyLeagueOutcomes leagueId={league.id} queryKey={personalQueryKey(viewer, "projected-standings", league.id)} /></Suspense>
-            : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} /></Suspense>
+            : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} onOpenLeagueTeam={openLeagueTeam} /></Suspense>
             : tab === "draft" ? <Suspense fallback={<SectionLoading label="Loading draft…" />}><LazyDraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} loading={draftQuery.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} /></Suspense>
             : tab === "trade" ? (
               <Suspense fallback={<SectionLoading label="Loading trade…" />}>
@@ -1574,7 +1596,7 @@ export function App() {
                 dashboard={activeDashboard}
                 league={league}
                 onOpenMatchup={setSelectedMatchup}
-                onOpenLeagueTeam={(rosterId) => setRosterCardRosterId(rosterId)}
+                onOpenLeagueTeam={openLeagueTeam}
                 rankingPosition={dashboardUrl.state.position}
                 rankingHorizon={dashboardUrl.state.horizon}
                 rankingQuery={dashboardUrl.state.query}
@@ -1615,21 +1637,21 @@ export function App() {
         />
       ) : null}
       {teamCardTeam ? <Suspense fallback={null}><LazyConnectedTeamCard team={teamCardTeam} dashboard={activeDashboard} leagueId={league.id} onOpenMatchup={openMatchupFromTeamCard} matchupHref={(matchup) => toolLinkSearch(dashboardUrl.state, { matchup })} onClose={() => setTeamCardTeam(null)} /></Suspense> : null}
-      {rosterCardTeam ? (
+      {rosterCard && rosterCardTeam && rosterCardPowerRankings ? (
         <LeagueTeamCard
           team={rosterCardTeam}
           league={league}
           dashboard={activeDashboard}
-          scope="week"
-          mode="seasonLong"
-          powerRankings={league.powerRankingsWeek}
+          scope={rosterCard.scope}
+          mode={rosterCard.mode}
+          powerRankings={rosterCardPowerRankings}
           playerCardOpen={!rosterCardOnTop}
           layer="above-player"
           selectedPlayerId={selectedPlayerId}
           onPlayerIntent={prefetchDashboardPlayer}
           onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
           onOpenMatchup={setSelectedMatchup}
-          onClose={() => setRosterCardRosterId(null)}
+          onClose={() => setRosterCard(null)}
         />
       ) : null}
       <CommandBar
