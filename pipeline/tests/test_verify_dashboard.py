@@ -114,3 +114,49 @@ def test_anytime_td_score_key_matches_app_contract():
     assert module.anytime_td_score_key("RB") == "rush_td"
     assert module.anytime_td_score_key("QB") == "rush_td"
     assert module.anytime_td_score_key("UNK") == "rush_td"
+
+
+def test_persist_diagnostics_writes_full_error_list():
+    import tempfile
+
+    module = _module()
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "verify_dashboard_errors.json"
+        errors = [f"err-{i}" for i in range(40)]
+        warnings = ["warn-a"]
+        written = module.persist_diagnostics(
+            path,
+            errors=errors,
+            warnings=warnings,
+            week=9,
+            as_of="2026-11-04T12:00:00.000Z",
+        )
+        assert written == path
+        payload = json.loads(path.read_text())
+        assert payload["ok"] is False
+        assert payload["errorCount"] == 40
+        assert payload["warningCount"] == 1
+        assert payload["errors"] == errors
+        assert payload["warnings"] == warnings
+        assert payload["week"] == 9
+
+
+def test_diagnostics_path_honors_env():
+    import os
+    import tempfile
+
+    module = _module()
+    with tempfile.TemporaryDirectory() as tmp:
+        staged = Path(tmp) / "staged_for_push.json"
+        override = Path(tmp) / "custom" / "errors.json"
+        previous = os.environ.get("VERIFY_ERRORS_PATH")
+        try:
+            os.environ["VERIFY_ERRORS_PATH"] = str(override)
+            assert module.diagnostics_path(staged) == override
+            del os.environ["VERIFY_ERRORS_PATH"]
+            assert module.diagnostics_path(staged) == Path(tmp) / "verify_dashboard_errors.json"
+        finally:
+            if previous is None:
+                os.environ.pop("VERIFY_ERRORS_PATH", None)
+            else:
+                os.environ["VERIFY_ERRORS_PATH"] = previous

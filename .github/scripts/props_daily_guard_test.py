@@ -52,16 +52,18 @@ def run_record(
     }
 
 
-def jobs(pull_conclusion: str) -> dict:
+def jobs(verify_conclusion: str, pull_conclusion: str | None = None) -> dict:
+    pull = pull_conclusion if pull_conclusion is not None else verify_conclusion
     return {
         "jobs": [
             {
                 "name": "pull",
-                "conclusion": "success",
+                "conclusion": "success" if verify_conclusion == "success" else "failure",
                 "steps": [
-                    {"name": "Pacific-time guard (scheduled runs only)", "conclusion": "success"},
-                    {"name": guard.PULL_STEP_NAME, "conclusion": pull_conclusion},
-                    {"name": "Push projections to Vercel", "conclusion": pull_conclusion},
+                    {"name": "Skip if today's pull already succeeded", "conclusion": "success"},
+                    {"name": "Pull providers and build projections", "conclusion": pull},
+                    {"name": "Push projections to Vercel", "conclusion": pull},
+                    {"name": guard.VERIFY_STEP_NAME, "conclusion": verify_conclusion},
                 ],
             }
         ]
@@ -86,25 +88,12 @@ class Fetch:
         return {"workflow_runs": self.pages.get(page, [])}
 
 
-def snapshot(rankings_as_of: str | None) -> dict:
-    return {"ok": True, "dashboard": {"asOf": "2026-10-07T17:00:00.000Z", "rankingsAsOf": rankings_as_of}}
-
-
 class GuardTests(unittest.TestCase):
-    def execute(self, env: dict, fetch: Fetch, now: datetime = LATE_MORNING, read_snapshot=None):
+    def execute(self, env: dict, fetch: Fetch, now: datetime = LATE_MORNING):
         output = tempfile.NamedTemporaryFile(delete=False)
         summary = tempfile.NamedTemporaryFile(delete=False)
         output.close()
         summary.close()
-        calls: list[str] = []
-
-        def default_reader(url: str, secret: str) -> dict:
-            calls.append(url)
-            self.assertEqual(secret, env.get("CRON_SECRET", CRON_SECRET))
-            self.assertTrue(url.endswith("/api/cron/jobs?job=read-dashboard-snapshot"))
-            self.assertNotIn(CRON_SECRET, url)
-            # 2026-10-06 10:00Z is the previous Pacific date relative to Oct 7.
-            return snapshot("2026-10-06T10:00:00Z")
 
         env = {
             "GITHUB_REPOSITORY": REPO,
@@ -123,7 +112,6 @@ class GuardTests(unittest.TestCase):
             fetch,
             now=now,
             stdout=stdout,
-            read_snapshot=read_snapshot or default_reader,
         )
         text = stdout.getvalue()
         summary_text = Path(summary.name).read_text(encoding="utf-8")
@@ -135,7 +123,6 @@ class GuardTests(unittest.TestCase):
             "output": Path(output.name).read_text(encoding="utf-8"),
             "summary": summary_text,
             "fetch": fetch,
-            "snapshot_calls": calls,
         }
 
     def test_pacific_date_follows_daylight_saving(self):
@@ -169,13 +156,13 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(result["code"], 0)
         self.assertEqual(result["output"], "go=false\n")
         self.assertIn("::warning::", result["stdout"])
-        self.assertIn("today's data is missing", result["stdout"])
+        self.assertIn("today's validated pull is missing", result["stdout"])
         self.assertIn("workflow_dispatch", result["stdout"])
         self.assertIn(guard.cutoff_label(), result["summary"])
         self.assertNotIn(str(SKIPPED_RUN_ID), result["stdout"])
         self.assertNotIn("::notice::", result["stdout"])
 
-    def test_schedule_skips_after_pull_step_succeeded_today(self):
+    def test_schedule_skips_after_verify_step_succeeded_today(self):
         pull_id = 42
         fetch = Fetch(
             pages={
@@ -195,11 +182,23 @@ class GuardTests(unittest.TestCase):
         self.assertIn("::notice::", result["stdout"])
         self.assertIn("Pacific date 2026-10-07", result["stdout"])
         self.assertIn("workflow_dispatch run 42", result["stdout"])
-        self.assertIn(guard.PULL_STEP_NAME, result["summary"])
+        self.assertIn(guard.VERIFY_STEP_NAME, result["summary"])
         self.assertIn("### Props daily pull skipped", result["summary"])
         self.assertIn(f"https://github.com/{REPO}/actions/runs/42", result["summary"])
         self.assertNotIn("secret-token", result["stdout"])
         self.assertNotIn("secret-token", result["summary"])
+
+    def test_pull_success_without_verify_does_not_skip(self):
+        # A run that pulled but never validated must not block a retry.
+        pull_id = 42
+        fetch = Fetch(
+            pages={1: [run_record(pull_id, "2026-10-07T15:00:00Z")]},
+            job_map={pull_id: jobs("skipped", pull_conclusion="success")},
+        )
+        result = self.execute({"GITHUB_EVENT_NAME": "schedule"}, fetch, now=BEFORE_CUTOFF)
+        self.assertEqual(result["output"], "go=true\n")
+        self.assertNotIn("::notice::", result["stdout"])
+        self.assertTrue(any("/jobs?" in url for url in fetch.urls))
 
     def test_previous_pacific_date_does_not_count(self):
         yesterday = 7
@@ -227,16 +226,7 @@ class GuardTests(unittest.TestCase):
 
     def test_dispatch_always_runs_without_calling_the_api(self):
         fetch = Fetch(pages={1: [run_record(42, "2026-10-07T16:00:00Z")]}, job_map={42: jobs("success")})
-
-        def reader(url: str, secret: str) -> dict:
-            raise AssertionError("dispatch must not read the snapshot")
-
-        result = self.execute(
-            {"GITHUB_EVENT_NAME": "workflow_dispatch"},
-            fetch,
-            now=LATE_MORNING,
-            read_snapshot=reader,
-        )
+        result = self.execute({"GITHUB_EVENT_NAME": "workflow_dispatch"}, fetch, now=LATE_MORNING)
         self.assertEqual(result["code"], 0)
         self.assertEqual(result["output"], "go=true\n")
         self.assertIn("workflow_dispatch", result["stdout"])
@@ -299,87 +289,8 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(just_before["output"], "go=true\n")
         self.assertEqual(at_cutoff["output"], "go=false\n")
         self.assertIn("::warning::", at_cutoff["stdout"])
-        self.assertIn("today's data is missing", at_cutoff["summary"])
+        self.assertIn("today's validated pull is missing", at_cutoff["summary"])
         self.assertIn("manual workflow_dispatch", at_cutoff["summary"])
-
-    def test_snapshot_today_skips_without_checking_actions(self):
-        fetch = Fetch(pages={1: []}, job_map={})
-
-        def reader(url: str, secret: str) -> dict:
-            self.assertEqual(secret, CRON_SECRET)
-            return snapshot("2026-10-07T10:00:00Z")
-
-        result = self.execute({"GITHUB_EVENT_NAME": "schedule"}, fetch, now=LATE_MORNING, read_snapshot=reader)
-        self.assertEqual(result["output"], "go=false\n")
-        self.assertIn("::notice::", result["stdout"])
-        self.assertIn("rankingsAsOf", result["summary"])
-        self.assertIn("Pacific date 2026-10-07", result["summary"])
-        self.assertNotIn("::warning::", result["stdout"])
-        self.assertNotIn("today's data is missing", result["stdout"])
-        self.assertEqual(fetch.urls, [])
-
-    def test_snapshot_read_failure_falls_back_to_actions(self):
-        def reader(url: str, secret: str) -> dict:
-            raise guard.SnapshotError(f"snapshot HTTP 503 mentioning {secret}")
-
-        empty = Fetch(pages={1: []}, job_map={})
-        proceeded = self.execute(
-            {"GITHUB_EVENT_NAME": "schedule"},
-            empty,
-            now=BEFORE_CUTOFF,
-            read_snapshot=reader,
-        )
-        self.assertEqual(proceeded["output"], "go=true\n")
-        self.assertIn("::warning::", proceeded["stdout"])
-        self.assertIn("Fell back to this workflow's Actions run history", proceeded["summary"])
-        self.assertIn("[redacted]", proceeded["summary"])
-        self.assertNotIn(CRON_SECRET, proceeded["summary"])
-
-        pull_id = 42
-        found = Fetch(
-            pages={1: [run_record(pull_id, "2026-10-07T15:00:00Z")]},
-            job_map={pull_id: jobs("success")},
-        )
-        skipped = self.execute(
-            {"GITHUB_EVENT_NAME": "schedule"},
-            found,
-            now=BEFORE_CUTOFF,
-            read_snapshot=reader,
-        )
-        self.assertEqual(skipped["output"], "go=false\n")
-        self.assertIn("::notice::", skipped["stdout"])
-        self.assertIn("Fell back to this workflow's Actions run history", skipped["summary"])
-        self.assertIn("run 42", skipped["summary"])
-        self.assertIn("[redacted]", skipped["stdout"])
-
-    def test_rankings_as_of_accepts_the_dashboard_timestamp(self):
-        # built_at is UTC Z. asOf on the same payload is not the props clock.
-        payload = snapshot("2026-10-07T10:00:00.123Z")
-        stamp = guard.rankings_timestamp(payload)
-        self.assertIsNotNone(stamp)
-        assert stamp is not None
-        self.assertEqual(guard.pacific_date(stamp), "2026-10-07")
-        offset = guard.rankings_timestamp(snapshot("2026-10-07T03:00:00-07:00"))
-        self.assertIsNotNone(offset)
-        assert offset is not None
-        self.assertEqual(guard.pacific_date(offset), "2026-10-07")
-        self.assertIsNone(guard.rankings_timestamp(snapshot(None)))
-
-    def test_snapshot_http_error_omits_the_secret(self):
-        def opener(request, timeout=30):
-            self.assertEqual(request.get_header("Authorization"), f"Bearer {CRON_SECRET}")
-            raise urllib.error.HTTPError(
-                request.full_url,
-                503,
-                "unavailable",
-                Message(),
-                io.BytesIO(f"secret {CRON_SECRET}".encode()),
-            )
-
-        with self.assertRaises(guard.SnapshotError) as caught:
-            guard.read_snapshot_json("https://example.test/api/cron/jobs?job=read-dashboard-snapshot", CRON_SECRET, opener)
-        self.assertIn("HTTP 503", str(caught.exception))
-        self.assertNotIn(CRON_SECRET, str(caught.exception))
 
     def test_github_get_error_omits_the_token(self):
         def opener(request, timeout=30):

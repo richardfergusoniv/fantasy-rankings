@@ -53,6 +53,10 @@ Usage: verify_dashboard.py <staged_for_push.json> <staged_matchup_grades.json>
 Requires CRON_SECRET. Fetches the stored snapshot from $DASHBOARD_URL, or from
 $APP_BASE_URL/api/cron/jobs?job=read-dashboard-snapshot. That route is the
 same cron secret the rebuild already uses; it is not a public dashboard read.
+On failure the full error (and warning) lists are written to
+$VERIFY_ERRORS_PATH (default: verify_dashboard_errors.json next to the staged
+projections file) before exit 1, so the workflow can upload the artifact even
+though stdout only shows the first 25 errors.
 Exit 0 on pass, 1 on fail, 2 on usage or missing secret.
 """
 from __future__ import annotations
@@ -80,6 +84,37 @@ STAT_MAP = {
     "receptions": "rec",
 }
 SKILL_POSITIONS = ("QB", "RB", "WR", "TE")
+CONSOLE_ERROR_LIMIT = 25
+
+
+def diagnostics_path(staged_projections: Path) -> Path:
+    raw = (os.environ.get("VERIFY_ERRORS_PATH") or "").strip()
+    if raw:
+        return Path(raw)
+    return staged_projections.with_name("verify_dashboard_errors.json")
+
+
+def persist_diagnostics(
+    path: Path,
+    *,
+    errors: list[str],
+    warnings: list[str],
+    week: object,
+    as_of: object,
+) -> Path:
+    """Write the full failure payload before the process exits non-zero."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "ok": False,
+        "week": week,
+        "asOf": as_of,
+        "errorCount": len(errors),
+        "warningCount": len(warnings),
+        "errors": errors,
+        "warnings": warnings,
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n")
+    return path
 
 
 def stored_snapshot_request(url: str, secret: str) -> dict:
@@ -292,9 +327,18 @@ def main() -> int:
     for w in warnings:
         print("  WARN:", w)
     if errors:
-        print(f"FAIL: {len(errors)} problem(s)")
-        for e in errors[:25]:
+        out = persist_diagnostics(
+            diagnostics_path(Path(sys.argv[1])),
+            errors=errors,
+            warnings=warnings,
+            week=dash.get("week"),
+            as_of=dash.get("asOf"),
+        )
+        print(f"FAIL: {len(errors)} problem(s); full list written to {out}")
+        for e in errors[:CONSOLE_ERROR_LIMIT]:
             print(" ", e)
+        if len(errors) > CONSOLE_ERROR_LIMIT:
+            print(f"  ... and {len(errors) - CONSOLE_ERROR_LIMIT} more (see {out})")
         return 1
     print(f"PASS: dashboard matches staged files (week {dash['week']}, asOf {dash['asOf']})")
     return 0
