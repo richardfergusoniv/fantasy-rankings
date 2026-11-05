@@ -70,6 +70,19 @@ describe("parseAnalyticsRows", () => {
     const reversed = parseAnalyticsRows(serialize(GAME_ROWS, [...COLUMNS].reverse()));
     expect(reversed).toEqual(forward);
   });
+
+  it("drops fractional-week rows entirely, defenses included", () => {
+    const rows = parseAnalyticsRows(serialize([
+      { week: "1", player_display_name: "James Cook", position: "RB", def_sacks: "1", season: "2026", game_id: "2026_01_MIA_BUF", team: "BUF", season_type: "REG", player_id: "00-0037237", rushing_yards: "80", carries: "15" },
+      { week: "1.5", player_display_name: "James Cook", position: "RB", def_sacks: "7", season: "2026", game_id: "2026_01_MIA_BUF", team: "BUF", season_type: "REG", player_id: "00-0037237", rushing_yards: "500", carries: "15" },
+    ], COLUMNS));
+    // Only the week-1 player row and its defense survive; the fractional
+    // row's yards and sacks reach nothing.
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.week === 1)).toBe(true);
+    const defense = rows.find((row) => row.position === "DEF");
+    expect(defense?.values.sacks).toBe(1);
+  });
 });
 
 describe("buildAnalytics", () => {
@@ -97,6 +110,18 @@ describe("buildAnalytics", () => {
     expect(defense?.playerId).toBe("BUF");
 
     expect(built.teamUsage.some((usage) => usage.team === "BUF")).toBe(true);
+  });
+
+  it("keeps throughWeek integral when a fractional-week row is the latest in the file", () => {
+    const fractionalCsv = serialize([
+      { week: "1", player_display_name: "Allen, Josh", position: "QB", season: "2026", game_id: "2026_01_MIA_BUF", team: "BUF", season_type: "REG", player_id: "00-0034796", passing_yards: "300", completions: "20", attempts: "30" },
+      { week: "2.5", player_display_name: "Allen, Josh", position: "QB", season: "2026", game_id: "2026_02_BUF_NYJ", team: "BUF", season_type: "REG", player_id: "00-0034796", passing_yards: "999", completions: "30", attempts: "40" },
+    ], COLUMNS);
+    const built = buildAnalytics("", fractionalCsv, 2026, null, null);
+    expect(built.throughWeek).toBe(1);
+    const qb = built.entities.find((entity) => entity.id === "QB:00-0034796");
+    expect(qb?.seasonGames).toBe(1);
+    expect(qb?.season.passing_yards).toBe(300);
   });
 });
 

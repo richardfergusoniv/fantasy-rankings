@@ -381,9 +381,52 @@ async function fetchRecentDepthRows(url: string): Promise<Record<string, string>
   }
 }
 
+/**
+ * The downloads the analytics precompute needs, started up front (see
+ * fetchPlayerInsightsSnapshot): each promise carries its own catch, so a
+ * failure resolves to null here and the compute step decides what to keep.
+ */
+interface AnalyticsDownloads {
+  extrasRefresh: Promise<unknown>;
+  previousCsv: Promise<string | null>;
+  currentCsv: Promise<string | null>;
+}
+
+function startAnalyticsDownloads(): AnalyticsDownloads {
+  const statsTimeoutMs = Math.max(SOURCE_TIMEOUT_MS, 30_000);
+  return {
+    extrasRefresh: refreshChartExtrasSnapshot().catch((error: unknown) => {
+      console.error(
+        "[player-insights] chart extras refresh failed; keeping the stored extras",
+        error instanceof Error ? error.message : error,
+      );
+      return null;
+    }),
+    previousCsv: fetchCsv(NFLVERSE_PLAYER_STATS_2025_URL, statsTimeoutMs).catch((error: unknown) => {
+      console.error(
+        "[player-insights] 2025 player stats download failed; keeping the previous analytics precompute",
+        error instanceof Error ? error.message : error,
+      );
+      return null;
+    }),
+    currentCsv: fetchCsv(NFLVERSE_PLAYER_STATS_2026_URL, statsTimeoutMs).catch((error: unknown) => {
+      console.error(
+        "[player-insights] 2026 player stats download failed; keeping the previous analytics precompute",
+        error instanceof Error ? error.message : error,
+      );
+      return null;
+    }),
+  };
+}
+
 export async function fetchPlayerInsightsSnapshot(
   previous: PlayerInsightsSnapshot | null = null,
 ): Promise<PlayerInsightsSnapshot> {
+  // Start the analytics downloads alongside the insights fetches below: each
+  // phase carries a 30s+ timeout and the cron function caps at 60s, so
+  // running them serially afterwards risks the platform terminating the run
+  // before the snapshot is written.
+  const downloads = startAnalyticsDownloads();
   const [opportunityCsv, receivingCsv, rushingCsv, passingCsv, idsCsv, depthRows] = await Promise.all([
     fetchCsv(FF_OPPORTUNITY_2026_URL),
     fetchCsv(NGS_URLS.receiving),
@@ -413,7 +456,7 @@ export async function fetchPlayerInsightsSnapshot(
   // Retention runs before the precompute so analytics derive from the same
   // merged snapshot the loader would store, not from a degraded fresh pull.
   applyInsightsRetentionFallbacks(snapshot, previous);
-  const analytics = await computeAnalyticsPrecompute(snapshot);
+  const analytics = await computeAnalyticsPrecompute(snapshot, downloads);
   if (analytics) snapshot.analytics = analytics;
   return snapshot;
 }
@@ -421,30 +464,50 @@ export async function fetchPlayerInsightsSnapshot(
 /**
  * Dashboard analytics from the nflverse weekly stats files (previous and
  * current season), computed here so builds never download or parse them.
- * Chart extras are refreshed first (best effort): builds used to keep the
- * extras cache fresh as a side effect of loading it, so this refresh owns
- * that job now. A failed refresh keeps the stored snapshot, and a failed
- * stats download or parse leaves the precompute out and the loader keeps
- * the previous one.
+ * The downloads were started alongside the insights fetches (see
+ * startAnalyticsDownloads); chart extras are refreshed first (best effort)
+ * and read only once that refresh settles: builds used to keep the extras
+ * cache fresh as a side effect of loading it, so this refresh owns that
+ * job now. A failed refresh keeps the stored snapshot, and a failed stats
+ * download or parse leaves the precompute out and the loader keeps the
+ * previous one. A stats file that downloads but carries no current-season
+ * games is treated the same way, so a degenerate file cannot replace the
+ * last good precompute.
  */
-async function computeAnalyticsPrecompute(insights: PlayerInsightsSnapshot): Promise<AnalyticsPrecompute | undefined> {
-  await refreshChartExtrasSnapshot().catch(() => null);
-  const statsTimeoutMs = Math.max(SOURCE_TIMEOUT_MS, 30_000);
+async function computeAnalyticsPrecompute(
+  insights: PlayerInsightsSnapshot,
+  downloads: AnalyticsDownloads,
+): Promise<AnalyticsPrecompute | undefined> {
+  await downloads.extrasRefresh;
   const [previousCsv, currentCsv, extras] = await Promise.all([
-    fetchCsv(NFLVERSE_PLAYER_STATS_2025_URL, statsTimeoutMs).catch(() => null),
-    fetchCsv(NFLVERSE_PLAYER_STATS_2026_URL, statsTimeoutMs).catch(() => null),
-    readChartExtrasSnapshot().catch(() => null),
+    downloads.previousCsv,
+    downloads.currentCsv,
+    readChartExtrasSnapshot().catch((error: unknown) => {
+      console.error(
+        "[player-insights] chart extras read failed; computing analytics without extras",
+        error instanceof Error ? error.message : error,
+      );
+      return null;
+    }),
   ]);
   if (!previousCsv || !currentCsv) return undefined;
   try {
     const built = buildAnalytics(previousCsv, currentCsv, SEASON, extras, insights);
+    if (built.throughWeek === null) {
+      console.error("[player-insights] current-season stats carried no games; keeping the previous analytics precompute");
+      return undefined;
+    }
     return {
       computedAt: new Date().toISOString(),
       throughWeek: built.throughWeek,
       entities: built.entities,
       teamUsage: built.teamUsage,
     };
-  } catch {
+  } catch (error) {
+    console.error(
+      "[player-insights] analytics build failed; keeping the previous analytics precompute",
+      error instanceof Error ? error.message : error,
+    );
     return undefined;
   }
 }

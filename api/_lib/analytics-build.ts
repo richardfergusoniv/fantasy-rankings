@@ -270,7 +270,10 @@ export function parseAnalyticsRows(csv: string): StatRow[] {
     const week = Number(row.week);
     const gameId = row.game_id ?? "";
     const team = canonicalTeam(row.team ?? row.recent_team ?? "");
-    if (!Number.isFinite(season) || !Number.isFinite(week) || !gameId || !team) continue;
+    // Weeks must be integers: the stored snapshot schema validates throughWeek
+    // and the weekly entries as ints, so one fractional-week source row would
+    // make the whole snapshot fail its read-side parse.
+    if (!Number.isFinite(season) || !Number.isInteger(week) || !gameId || !team) continue;
     const gameKey = `${season}:${gameId}`;
     const gameTeams = teamsByGame.get(gameKey) ?? new Set<string>();
     gameTeams.add(team);

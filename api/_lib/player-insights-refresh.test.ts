@@ -55,6 +55,9 @@ const STATS_2026_CSV = [
 ].join("\n");
 
 let idsCsv = IDS_CSV_MAPPED;
+let stats2026Csv = STATS_2026_CSV;
+let failStats2026 = false;
+let errorSpy: ReturnType<typeof vi.spyOn>;
 
 function gzipArrayBuffer(text: string): ArrayBuffer {
   const buffer = gzipSync(text);
@@ -64,13 +67,25 @@ function gzipArrayBuffer(text: string): ArrayBuffer {
 function installFetchStub(): void {
   const fetchStub = vi.fn(async (input: unknown) => {
     const url = String(input);
+    // Fetch starts are logged in the shared event log at call time, so tests
+    // can assert which downloads were kicked off before others completed.
     // No body: the depth reader throws and the fetch falls back to no rows.
     if (url === DEPTH_CHARTS_2026_URL) return { ok: true, body: null };
     if (url.endsWith(".gz")) return { ok: true, arrayBuffer: async () => gzipArrayBuffer(NGS_CSV) };
-    if (url === FF_OPPORTUNITY_2026_URL) return { ok: true, text: async () => OPPORTUNITY_CSV };
+    if (url === FF_OPPORTUNITY_2026_URL) {
+      extras.events.push("fetch:opportunity");
+      return { ok: true, text: async () => OPPORTUNITY_CSV };
+    }
     if (url === PLAYER_IDS_URL) return { ok: true, text: async () => idsCsv };
-    if (url === NFLVERSE_PLAYER_STATS_2025_URL) return { ok: true, text: async () => STATS_HEADER };
-    if (url === NFLVERSE_PLAYER_STATS_2026_URL) return { ok: true, text: async () => STATS_2026_CSV };
+    if (url === NFLVERSE_PLAYER_STATS_2025_URL) {
+      extras.events.push("fetch:stats2025");
+      return { ok: true, text: async () => STATS_HEADER };
+    }
+    if (url === NFLVERSE_PLAYER_STATS_2026_URL) {
+      extras.events.push("fetch:stats2026");
+      if (failStats2026) throw new Error("stats 2026 download exploded");
+      return { ok: true, text: async () => stats2026Csv };
+    }
     throw new Error(`unexpected fetch: ${url}`);
   });
   vi.stubGlobal("fetch", fetchStub);
@@ -99,15 +114,19 @@ function previousSnapshot(overrides: Partial<PlayerInsightsSnapshot>): PlayerIns
 describe("fetchPlayerInsightsSnapshot analytics precompute", () => {
   beforeEach(() => {
     idsCsv = IDS_CSV_MAPPED;
+    stats2026Csv = STATS_2026_CSV;
+    failStats2026 = false;
     extras.stored = null;
     extras.refreshed = null;
     extras.failRefresh = false;
     extras.events = [];
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     installFetchStub();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    errorSpy.mockRestore();
   });
 
   it("derives analytics from retained data when the fresh ID map and NGS come back empty", async () => {
@@ -151,5 +170,39 @@ describe("fetchPlayerInsightsSnapshot analytics precompute", () => {
     const entity = snapshot.analytics?.entities.find((entry) => entry.id === "WR:00-1");
     expect(entity?.season.rz_target_share).toBe(11);
     expect(snapshot.analytics?.teamUsage.find((row) => row.team === "KC")?.proe).toBe(1.5);
+    // The failure is logged as an extras problem, distinct from a stats one.
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("chart extras refresh failed"),
+      expect.anything(),
+    );
+  });
+
+  it("starts the analytics downloads before the insights fetches complete", async () => {
+    await fetchPlayerInsightsSnapshot(null);
+    // The extras refresh and both stats downloads are kicked off up front,
+    // ahead of the insights fetches, instead of after they resolve.
+    for (const started of ["refresh", "fetch:stats2025", "fetch:stats2026"]) {
+      expect(extras.events.indexOf(started)).toBeGreaterThanOrEqual(0);
+      expect(extras.events.indexOf(started)).toBeLessThan(extras.events.indexOf("fetch:opportunity"));
+    }
+    // The extras read still happens only after the refresh settles.
+    expect(extras.events.indexOf("refresh")).toBeLessThan(extras.events.indexOf("read"));
+  });
+
+  it("leaves the precompute out when the current-season stats file carries no games", async () => {
+    stats2026Csv = STATS_HEADER;
+    const snapshot = await fetchPlayerInsightsSnapshot(null);
+    expect(snapshot.analytics).toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("carried no games"));
+  });
+
+  it("logs a stats download failure and leaves the precompute out", async () => {
+    failStats2026 = true;
+    const snapshot = await fetchPlayerInsightsSnapshot(null);
+    expect(snapshot.analytics).toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("2026 player stats download failed"),
+      expect.anything(),
+    );
   });
 });
