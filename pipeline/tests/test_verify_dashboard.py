@@ -79,12 +79,24 @@ def test_td_probability_error_flags_mismatched_values():
     assert error is not None and error.startswith("TD Star WR rec_td:")
 
 
-def test_td_probability_error_uses_rec_td_for_non_qb_positions():
+def test_td_probability_error_uses_rush_td_for_rb():
+    # RBs map anytime TD to rush_td (same as the app's adaptVegasStatsForScorer).
     module = _module()
     rb = {"player": "Workhorse RB", "position": "RB", "td_probability": 0.35}
-    assert module.td_probability_error(rb, {"rec_td": 0.35, "rush_td": 0.1}) is None
-    error = module.td_probability_error(rb, {"rec_td": None, "rush_td": 0.35})
-    assert error is not None and "rec_td" in error
+    assert module.td_probability_error(rb, {"rush_td": 0.35, "rec_td": 0.1}) is None
+    error = module.td_probability_error(rb, {"rush_td": None, "rec_td": 0.35})
+    assert error is not None and "rush_td" in error
+
+
+def test_td_probability_error_uses_rec_td_for_wr_and_te():
+    module = _module()
+    wr = {"player": "X Receiver", "position": "WR", "td_probability": 0.22}
+    assert module.td_probability_error(wr, {"rec_td": 0.22, "rush_td": 0.05}) is None
+    te_error = module.td_probability_error(
+        {"player": "Tight End", "position": "TE", "td_probability": 0.18},
+        {"rec_td": None, "rush_td": 0.18},
+    )
+    assert te_error is not None and "rec_td" in te_error
 
 
 def test_td_probability_error_uses_rush_td_for_qb():
@@ -93,3 +105,12 @@ def test_td_probability_error_uses_rush_td_for_qb():
     assert module.td_probability_error(qb, {"rush_td": 0.2}) is None
     error = module.td_probability_error(qb, {"rush_td": 0.05})
     assert error is not None and error.startswith("TD Scrambling QB rush_td:")
+
+
+def test_anytime_td_score_key_matches_app_contract():
+    module = _module()
+    assert module.anytime_td_score_key("WR") == "rec_td"
+    assert module.anytime_td_score_key("TE") == "rec_td"
+    assert module.anytime_td_score_key("RB") == "rush_td"
+    assert module.anytime_td_score_key("QB") == "rush_td"
+    assert module.anytime_td_score_key("UNK") == "rush_td"

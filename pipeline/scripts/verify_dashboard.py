@@ -93,6 +93,18 @@ def stored_snapshot_request(url: str, secret: str) -> dict:
     return dashboard
 
 
+def anytime_td_score_key(position: str | None) -> str:
+    """Sleeper scoring key for an anytime-TD probability by position.
+
+    Canonical contract shared with projections.py and
+    api/_lib/player-projection-merge.ts: WR/TE → rec_td, else rush_td
+    (QB and RB). Do not mirror under both keys.
+    """
+    if position in ("WR", "TE"):
+        return "rec_td"
+    return "rush_td"
+
+
 def td_probability_error(player: dict, components: dict) -> str | None:
     """Compare staged anytime-TD probability to dashboard components.
 
@@ -104,8 +116,8 @@ def td_probability_error(player: dict, components: dict) -> str | None:
     td_prob = player.get("td_probability")
     if td_prob is None:
         return None
-    # Match projections.py: anytime TD scores as rush_td for QBs, rec_td otherwise.
-    td_key = "rush_td" if player["position"] == "QB" else "rec_td"
+    # Match projections.py / adaptVegasStatsForScorer.
+    td_key = anytime_td_score_key(player.get("position"))
     dv = components.get(td_key)
     if dv is None or abs(dv - td_prob) > 1e-9:
         return f"TD {player['player']} {td_key}: dash={dv} staged={td_prob}"

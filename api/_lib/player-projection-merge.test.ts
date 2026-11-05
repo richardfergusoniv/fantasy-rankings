@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { rankingSchema } from "./dashboard-schemas.js";
 import {
+  anytimeTdScoreKey,
   applyActualRanks,
   applyDefenseActualRanks,
   bookRangePoints,
@@ -83,6 +84,17 @@ function snapshot(source: string, projections: ProjectionSnapshot["projections"]
     projections,
   };
 }
+
+describe("anytimeTdScoreKey", () => {
+  it("maps anytime TD to one canonical Sleeper key per position", () => {
+    expect(anytimeTdScoreKey("WR")).toBe("rec_td");
+    expect(anytimeTdScoreKey("TE")).toBe("rec_td");
+    expect(anytimeTdScoreKey("RB")).toBe("rush_td");
+    expect(anytimeTdScoreKey("QB")).toBe("rush_td");
+    expect(anytimeTdScoreKey("K")).toBeNull();
+    expect(anytimeTdScoreKey("DEF")).toBeNull();
+  });
+});
 
 describe("projectionBoardIsUsable", () => {
   it("keeps a thin Vegas board that has at least one non-K player", () => {

@@ -118,11 +118,21 @@ function adaptVegasStatsForScorer(
         ? (tdProbability.anytime_td ?? tdProbability.anytime ?? tdProbability.touchdown ?? tdProbability.td ?? null)
         : null;
     if (typeof fallbackTouchdownProbability === "number" && Number.isFinite(fallbackTouchdownProbability)) {
-      if (position === "WR" || position === "TE") normalized.rec_td = fallbackTouchdownProbability;
-      else if (position === "QB" || position === "RB") normalized.rush_td = fallbackTouchdownProbability;
+      // Canonical anytime-TD key (shared with pipeline projections.py /
+      // verify_dashboard.py). One key only — never both (double-count).
+      // WR/TE → rec_td; QB/RB → rush_td.
+      const tdKey = anytimeTdScoreKey(position);
+      if (tdKey) normalized[tdKey] = fallbackTouchdownProbability;
     }
   }
   return normalized;
+}
+
+/** Sleeper scoring key for an anytime-TD probability, or null when unused. */
+export function anytimeTdScoreKey(position: Ranking["position"]): "rec_td" | "rush_td" | null {
+  if (position === "WR" || position === "TE") return "rec_td";
+  if (position === "QB" || position === "RB") return "rush_td";
+  return null;
 }
 
 /**

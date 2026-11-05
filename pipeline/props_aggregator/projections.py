@@ -53,6 +53,18 @@ STAT_MAP = {
 }
 
 
+def anytime_td_score_key(position: str | None) -> str:
+    """Sleeper scoring key for an anytime-TD probability by position.
+
+    Must match api/_lib/player-projection-merge.ts adaptVegasStatsForScorer:
+    WR/TE → rec_td, QB/RB (and anything else with an anytime-TD line) → rush_td.
+    Do not write the same probability under both keys (double-count risk).
+    """
+    if position in ("WR", "TE"):
+        return "rec_td"
+    return "rush_td"
+
+
 def american_to_prob(odds: float | None) -> float | None:
     if odds is None:
         return None
@@ -331,7 +343,7 @@ def build_projections(consensus_rows: list[dict], leagues: list[dict],
                         comp[stat] = round(pts, 2)
                 total += pts
             if td_prob is not None:
-                td_key = "rush_td" if position == "QB" else "rec_td"
+                td_key = anytime_td_score_key(position)
                 td_pts = td_prob * float(s.get(td_key, 0) or 0)
                 comp["anytime_td"] = round(td_pts, 2)
                 total += td_pts
