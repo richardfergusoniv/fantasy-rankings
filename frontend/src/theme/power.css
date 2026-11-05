@@ -22,14 +22,15 @@
 .power-position-values > span > strong { text-align: right; font-size: var(--type-body); font-weight: 700; }
 .power-stack-list { display: grid; gap: 1px; margin-top: 0; }
 .power-stack-card .power-stack-list { margin-top: 0; padding: 8px 10px 12px; }
-.power-stack-row { display: grid; width: 100%; grid-template-columns: 18px minmax(0, 110px) minmax(0, 1fr) 44px; gap: 6px; align-items: center; min-height: 28px; padding: 2px 4px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; }
+.power-stack-row { display: grid; width: 100%; grid-template-columns: 18px minmax(0, 110px) minmax(0, 1fr) 44px; gap: 6px; align-items: center; min-height: 36px; padding: 2px 4px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; }
 button.power-stack-row { cursor: pointer; }
 button.power-stack-row:active { background: var(--surface-2); }
+@media (pointer: coarse) { button.power-stack-row { min-height: 44px; } }
 .power-stack-rank { color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .power-stack-name { overflow: hidden; font-size: var(--type-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .power-stack-total { text-align: right; font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums; }
 .power-stack-row.is-user .power-stack-rank, .power-stack-row.is-user .power-stack-name, .power-stack-row.is-user .power-stack-total { color: var(--roster-highlight); }
-.power-stack-bar { display: flex; gap: 1px; height: 10px; min-width: 0; border-radius: 2px; overflow: hidden; }
+.power-stack-bar { display: flex; gap: 1px; height: 14px; min-width: 0; border-radius: 2px; overflow: hidden; }
 .power-stack-bar i { display: block; height: 100%; min-width: 0; }
 .power-stack-row.is-user .power-stack-bar { outline: 1.5px solid var(--roster-highlight); outline-offset: 1px; }
 .power-list-item { display: block; }
