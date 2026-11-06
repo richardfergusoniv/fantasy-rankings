@@ -195,7 +195,10 @@ export type RosUnknownPlayerWeek = { week: number; players: string[] };
  * `startedInWeeks` names each week the added player lands in the after-lineup.
  * The note states no reason: whether the start came from a bye or from
  * out-projecting a starter cannot be proven from the optimized lineup alone,
- * so no cause is attributed.
+ * so no cause is attributed. One exception: on the add's own confirmed
+ * schedule bye there is no note at all - the optimizer fills a slot with his
+ * real 0 when he is the only option, and a player who cannot play has not
+ * started for you in any sense the note could mean.
  */
 export function rosLineupDelta(args: {
   before: readonly RosterInput[];
@@ -234,6 +237,8 @@ export function rosLineupDelta(args: {
       && OPTIMIZER_POSITIONS.has(player.position ?? "")
       && all.findIndex((other) => other.playerId === player.playerId) === index,
   );
+  const addPlayer = args.addId ? args.after.find((player) => player.playerId === args.addId) : undefined;
+  const addByeWeek = addPlayer ? byeWeekOf(addPlayer) : null;
   for (const week of args.ros.coveredWeeks) {
     const projections = args.ros.weeks.get(week);
     if (!projections) continue;
@@ -269,10 +274,13 @@ export function rosLineupDelta(args: {
       delta: Number((after.score - before.score).toFixed(2)),
       addSlot: addStarter?.lineupSlot ?? null,
     });
-    if (addStarter && args.addId) {
+    if (addStarter && args.addId && addByeWeek !== week) {
       // Neutral by design: the optimized lineup shows THAT the add starts,
       // not WHY - a bye or an out-projection cannot be proven from this
-      // lineup alone, so no reason is stated.
+      // lineup alone, so no reason is stated. The add's own confirmed bye is
+      // the one week with no note: the slot is filled with his real 0 only
+      // because the optimizer always fills slots, and "starts for you" in a
+      // week he cannot play would be a false claim, not a neutral one.
       startedInWeeks.push({
         week,
         note: `Starts for you in week ${week}.`,
@@ -382,4 +390,4 @@ export function injuryExposureFacts(args: {
 /** Weeks through the fantasy regular-season end (playoff weekStart − 1). */
 export function regularSeasonEndWeek(league: Pick<League, "playoffs">): number {
   return league.playoffs?.weekStart ? league.playoffs.weekStart - 1 : DEFAULT_LAST_REGULAR_WEEK;
-    }
+}
