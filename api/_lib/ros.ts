@@ -19,11 +19,35 @@ import { scoreProjectedDefenseStats } from "./defense-scoring.js";
 import { optimizeTradeRoster, type OptimizablePlayer } from "./lineup-optimizer.js";
 import { scoreSleeperPlayerProjection } from "./player-projection-merge.js";
 import { DEFAULT_LAST_REGULAR_WEEK } from "./league-schedule.js";
+import { canonicalTeam } from "./sleeper.js";
 import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projections.js";
 
 type League = Dashboard["leagues"][number];
 
 type LeagueScoring = Pick<League, "scoringSettings" | "rankingField">;
+
+/**
+ * League-scored points for one future-week projection row, or null when the
+ * row carries no usable score: neither a league-scored value nor the selected
+ * fallback field exists. An explicit 0 in the fallback field is a real score;
+ * a missing one is unknown, and callers must not silently treat it as 0.
+ */
+function rosPlayerPointsOrNull(
+  player: { position: string },
+  entry: { stats: Record<string, number> } | undefined,
+  league: LeagueScoring,
+): number | null {
+  if (!entry) return null;
+  const fallback = league.rankingField === "halfPpr" ? entry.stats.pts_half_ppr : entry.stats.pts_ppr;
+  if (player.position === "DEF") {
+    const scored = league.scoringSettings ? scoreProjectedDefenseStats(entry.stats, league.scoringSettings) : null;
+    return scored ?? fallback ?? null;
+  }
+  const scored = league.scoringSettings
+    ? scoreSleeperPlayerProjection(player.position as "QB", entry.stats, league.scoringSettings)
+    : null;
+  return scored ?? fallback ?? null;
+}
 
 /** League-scored points for one future-week projection row (same rule as projected-standings: no row → 0). */
 export function rosPlayerPoints(
@@ -31,16 +55,7 @@ export function rosPlayerPoints(
   entry: { stats: Record<string, number> } | undefined,
   league: LeagueScoring,
 ): number {
-  if (!entry) return 0;
-  const fallback = league.rankingField === "halfPpr" ? entry.stats.pts_half_ppr : entry.stats.pts_ppr;
-  if (player.position === "DEF") {
-    const scored = league.scoringSettings ? scoreProjectedDefenseStats(entry.stats, league.scoringSettings) : null;
-    return scored ?? fallback ?? 0;
-  }
-  const scored = league.scoringSettings
-    ? scoreSleeperPlayerProjection(player.position as "QB", entry.stats, league.scoringSettings)
-    : null;
-  return scored ?? fallback ?? 0;
+  return rosPlayerPointsOrNull(player, entry, league) ?? 0;
 }
 
 export type RosContext = {
@@ -79,10 +94,17 @@ export async function loadRosContext(
   };
 }
 
+/** NFL byes only ever fall inside this window; a gap outside it is a data gap, not a bye. */
+const BYE_WINDOW = { first: 5, last: 14 } as const;
+
 /**
- * Team → bye week from the season schedule: the first week of the NFL bye
- * window where the team has no game. A team with a game every week gets no
- * entry.
+ * Team → bye week from the season schedule. A bye is inferred only from
+ * positive completeness evidence, never from absence alone: the team must
+ * play in exactly `lastWeek - 1` distinct weeks (a complete NFL season is 17
+ * games over 18 weeks) AND the single missing week must fall inside the NFL
+ * bye window. Any other shape — a partial schedule, an omitted game, an
+ * extra gap — yields no entry, so a missing projection row stays disclosed
+ * as unknown instead of being misread as a real bye-week 0.
  */
 export function byeWeeksByTeam(
   schedule: ReadonlyArray<{ week?: number; home?: string; away?: string }>,
@@ -100,13 +122,17 @@ export function byeWeeksByTeam(
     }
   }
   const out = new Map<string, number>();
+  const first = Math.max(1, BYE_WINDOW.first);
+  const last = Math.min(lastWeek, BYE_WINDOW.last);
   for (const [team, played] of playedByTeam) {
-    for (let week = 1; week <= lastWeek; week += 1) {
-      if (!played.has(week)) {
-        out.set(team, week);
-        break;
-      }
+    // Completeness first: without a full slate of games a missing week is a
+    // data gap, not evidence of a bye.
+    if (played.size !== lastWeek - 1) continue;
+    const missingInWindow: number[] = [];
+    for (let week = first; week <= last; week += 1) {
+      if (!played.has(week)) missingInWindow.push(week);
     }
+    if (missingInWindow.length === 1) out.set(team, missingInWindow[0]!);
   }
   return out;
 }
@@ -164,28 +190,41 @@ export function rosLineupDelta(args: {
   byeWeeks?: ReadonlyMap<string, number>;
   teamById?: ReadonlyMap<string, string>;
   nameById?: ReadonlyMap<string, string>;
+  /** Canonicalizes roster-team aliases (LA/JAC/WSH/LVR) to the schedule's team keys. */
+  normalizeTeam?: (team: string) => string;
 }): { totalDelta: number; weeks: RosWeekLineup[]; startedInWeeks: RosStartNote[]; unknownPlayerWeeks: RosUnknownPlayerWeek[] } {
   const weeks: RosWeekLineup[] = [];
   const startedInWeeks: RosStartNote[] = [];
   const unknownPlayerWeeks: RosUnknownPlayerWeek[] = [];
+  const normalize = args.normalizeTeam ?? canonicalTeam;
+  /** The player's schedule bye week, when his team is known and has one. */
+  const byeWeekOf = (player: RosterInput): number | null => {
+    const team = player.team ?? args.teamById?.get(player.playerId);
+    if (team == null || team === "") return null;
+    return args.byeWeeks?.get(normalize(team)) ?? null;
+  };
   // Every player on either roster must be known for the comparison to be
   // sound: the optimizer is not linear, so an unknown player scored 0 can
   // change which added or dropped player starts and distort the delta even
-  // though he appears on both sides.
+  // though he appears on both sides. Draft picks are assets, not players:
+  // they never have a projection row or a team, so they are excluded rather
+  // than allowed to zero out every covered week.
   const rostered = [...args.before, ...args.after].filter(
     (player, index, all) =>
       player.playerId !== "0"
+      && player.position !== "PICK"
       && all.findIndex((other) => other.playerId === player.playerId) === index,
   );
   for (const week of args.ros.coveredWeeks) {
     const projections = args.ros.weeks.get(week);
     if (!projections) continue;
-    // A rostered player with no row this week is a real 0 only when the
-    // schedule says his team is on bye; otherwise his week is unknown.
+    // A rostered player with no usable score this week (no row, or a row
+    // with neither a league-scored value nor the selected fallback field) is
+    // a real 0 only when the schedule says his team is on bye; otherwise his
+    // week is unknown.
     const unknown = rostered.filter((player) => {
-      if (projections.players.has(player.playerId)) return false;
-      const team = player.team ?? args.teamById?.get(player.playerId);
-      return team == null || team === "" || args.byeWeeks?.get(team) !== week;
+      if (rosPlayerPointsOrNull(player, projections.players.get(player.playerId), args.league) != null) return false;
+      return byeWeekOf(player) !== week;
     });
     if (unknown.length > 0) {
       unknownPlayerWeeks.push({
@@ -194,8 +233,13 @@ export function rosLineupDelta(args: {
       });
       continue;
     }
+    // A player whose team is on a schedule bye scores a real 0 even when a
+    // stale cached row (e.g. from before a trade to a team with a different
+    // bye) still holds points for him.
     const pointsOf = (player: RosterInput) =>
-      rosPlayerPoints(player, projections.players.get(player.playerId), args.league);
+      byeWeekOf(player) === week
+        ? 0
+        : rosPlayerPoints(player, projections.players.get(player.playerId), args.league);
     const before = optimizeTradeRoster(toOptimizable(args.before, pointsOf), [...args.slots]);
     const after = optimizeTradeRoster(toOptimizable(args.after, pointsOf), [...args.slots]);
     const addStarter = args.addId ? after.starters.find((player) => player.playerId === args.addId) : undefined;
@@ -232,16 +276,27 @@ export function rosLineupDelta(args: {
  * covered week are named as unknown instead of being dropped from the math.
  */
 export function injuryExposureFacts(args: {
-  roster: readonly { playerId: string; name: string; position: string; injuryStatus?: string | null }[];
-  involved: ReadonlyArray<{ playerId: string; name: string; injuryStatus?: string | null }>;
+  roster: readonly { playerId: string; name: string; position: string; team?: string | null; injuryStatus?: string | null }[];
+  involved: ReadonlyArray<{ playerId: string; name: string; position?: string; team?: string | null; injuryStatus?: string | null }>;
   ros: RosContext;
   league: Pick<League, "scoringSettings" | "rankingField">;
   isDesignated: (status: string | null | undefined) => boolean;
+  byeWeeks?: ReadonlyMap<string, number>;
+  teamById?: ReadonlyMap<string, string>;
+  /** Canonicalizes roster-team aliases (LA/JAC/WSH/LVR) to the schedule's team keys. */
+  normalizeTeam?: (team: string) => string;
 }): {
   designatedPlayers: string[];
   designatedProjectedShare: number | null;
   absentPlayers: string[];
+  partialPlayers: string[];
 } {
+  const normalize = args.normalizeTeam ?? canonicalTeam;
+  const byeWeekOf = (player: { playerId: string; team?: string | null }): number | null => {
+    const team = player.team ?? args.teamById?.get(player.playerId);
+    if (team == null || team === "") return null;
+    return args.byeWeeks?.get(normalize(team)) ?? null;
+  };
   const designatedPlayers = args.involved
     .filter((player) => args.isDesignated(player.injuryStatus))
     .map((player) => `${player.name} (${player.injuryStatus})`);
@@ -250,24 +305,31 @@ export function injuryExposureFacts(args: {
   );
   // Presence is tracked over roster ∪ involved — an incoming player with no
   // future projection row is named unknown, not silently dropped.
-  const checked = new Map<string, { playerId: string; name: string }>();
+  const checked = new Map<string, { playerId: string; name: string; position: string; team?: string | null }>();
   for (const player of [...args.roster, ...args.involved]) {
-    checked.set(player.playerId, player);
+    checked.set(player.playerId, { ...player, position: player.position ?? "" });
   }
   const present = new Set<string>();
+  // Covered non-bye weeks where the player has no usable row: the share sums
+  // other players' points for those weeks, so the gap must be disclosed, not
+  // dropped from the math. A schedule bye is a real 0, never a gap; a stale
+  // cached row on a bye week counts 0, never its stale points.
+  const gapWeeksById = new Map<string, number>();
   let designatedTotal = 0;
   let rosterTotal = 0;
   for (const week of args.ros.coveredWeeks) {
     const projections = args.ros.weeks.get(week);
     if (!projections) continue;
     for (const player of checked.values()) {
-      if (!projections.players.has(player.playerId)) continue;
-      present.add(player.playerId);
+      if (byeWeekOf(player) === week) continue;
+      const points = rosPlayerPointsOrNull(player, projections.players.get(player.playerId), args.league);
+      if (points != null) present.add(player.playerId);
+      else gapWeeksById.set(player.playerId, (gapWeeksById.get(player.playerId) ?? 0) + 1);
     }
     for (const player of args.roster) {
-      const entry = projections.players.get(player.playerId);
-      if (!entry) continue;
-      const points = rosPlayerPoints(player, entry, args.league);
+      if (byeWeekOf(player) === week) continue;
+      const points = rosPlayerPointsOrNull(player, projections.players.get(player.playerId), args.league);
+      if (points == null) continue;
       rosterTotal += points;
       if (designatedIds.has(player.playerId)) designatedTotal += points;
     }
@@ -275,10 +337,14 @@ export function injuryExposureFacts(args: {
   const absentPlayers = [...checked.values()]
     .filter((player) => !present.has(player.playerId))
     .map((player) => player.name);
+  const partialPlayers = [...checked.values()]
+    .filter((player) => present.has(player.playerId) && (gapWeeksById.get(player.playerId) ?? 0) > 0)
+    .map((player) => player.name);
   return {
     designatedPlayers,
     designatedProjectedShare: rosterTotal > 0 ? Number((designatedTotal / rosterTotal).toFixed(3)) : null,
     absentPlayers,
+    partialPlayers,
   };
 }
 
