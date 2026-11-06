@@ -1391,4 +1391,4 @@ export function parseToolCallArguments(raw: string | undefined): unknown {
   } catch {
     return { __parseError: "Tool arguments were not valid JSON.", raw };
   }
-  }
+}
