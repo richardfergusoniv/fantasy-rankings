@@ -1486,7 +1486,14 @@ export async function toolSuggestTrades(
     .filter((row): row is Asset => row != null)
     .sort((a, b) => b.value - a.value);
 
-  type RosDelta = { pointsDelta: number; coveredWeeks: number[]; missingWeeks: number[]; asOf: string | null; partial: boolean };
+  type RosDelta = {
+    pointsDelta: number;
+    coveredWeeks: number[];
+    missingWeeks: number[];
+    unknownPlayerWeeks: { week: number; players: string[] }[];
+    asOf: string | null;
+    partial: boolean;
+  };
   const ideas: Array<{
     partner: string;
     give: Asset[];
@@ -1714,13 +1721,17 @@ export async function toolSuggestTrades(
     ];
     const partnerSlBefore = optimizeValueTradeRoster(partnerPlayers, slots, seasonLongValueById);
     const partnerSlAfter = optimizeValueTradeRoster(partnerAfterPlayers, slots, seasonLongValueById);
-    // Rest-of-season lineup points for both sides (same covered weeks and
-    // coverage before/after) plus descriptive injury exposure for the
-    // involved assets — current designations only, not a risk score.
+    // Rest-of-season lineup points for both sides, excluding and disclosing
+    // weeks where any player on either roster has no projection row (and no
+    // schedule bye), plus descriptive injury exposure for the involved
+    // assets — current designations only, not a risk score.
     let yourRos: RosDelta | null = null;
     let partnerRos: RosDelta | null = null;
     let ideaExposure: { designatedPlayers: string[]; designatedProjectedShare: number | null; absentPlayers: string[] } | null = null;
     if (rosWeeks) {
+      const rosTeamById = new Map(
+        [...rosterPlayers, ...partnerPlayers].map((p) => [p.playerId, p.team ?? ""] as const),
+      );
       const own = rosLineupDelta({
         before: rosterPlayers,
         after: afterPlayers,
@@ -1728,12 +1739,26 @@ export async function toolSuggestTrades(
         league,
         ros: rosWeeks,
         byeWeeks: rosByeWeeks,
-        teamById: new Map(rosterPlayers.map((p) => [p.playerId, p.team ?? ""])),
+        teamById: rosTeamById,
         nameById: new Map(rosterPlayers.map((p) => [p.playerId, p.name])),
       });
-      yourRos = { pointsDelta: own.totalDelta, coveredWeeks: rosWeeks.coveredWeeks, missingWeeks: rosWeeks.missingWeeks, asOf: rosWeeks.asOf, partial: rosWeeks.missingWeeks.length > 0 };
-      const theirs = rosLineupDelta({ before: partnerPlayers, after: partnerAfterPlayers, slots, league, ros: rosWeeks, byeWeeks: rosByeWeeks });
-      partnerRos = { pointsDelta: theirs.totalDelta, coveredWeeks: rosWeeks.coveredWeeks, missingWeeks: rosWeeks.missingWeeks, asOf: rosWeeks.asOf, partial: rosWeeks.missingWeeks.length > 0 };
+      yourRos = {
+        pointsDelta: own.totalDelta,
+        coveredWeeks: rosWeeks.coveredWeeks,
+        missingWeeks: rosWeeks.missingWeeks,
+        unknownPlayerWeeks: own.unknownPlayerWeeks,
+        asOf: rosWeeks.asOf,
+        partial: rosWeeks.missingWeeks.length > 0 || own.unknownPlayerWeeks.length > 0,
+      };
+      const theirs = rosLineupDelta({ before: partnerPlayers, after: partnerAfterPlayers, slots, league, ros: rosWeeks, byeWeeks: rosByeWeeks, teamById: rosTeamById });
+      partnerRos = {
+        pointsDelta: theirs.totalDelta,
+        coveredWeeks: rosWeeks.coveredWeeks,
+        missingWeeks: rosWeeks.missingWeeks,
+        unknownPlayerWeeks: theirs.unknownPlayerWeeks,
+        asOf: rosWeeks.asOf,
+        partial: rosWeeks.missingWeeks.length > 0 || theirs.unknownPlayerWeeks.length > 0,
+      };
       const statusById = new Map(
         [...rosterPlayers, ...partnerPlayers].map((p) => [p.playerId, p.injuryStatus ?? null] as const),
       );
