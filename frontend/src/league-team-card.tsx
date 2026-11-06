@@ -6,6 +6,8 @@ import { compareByFantasyPosition } from "./fantasy-position-order";
 import { weeklyOpponentRosterId } from "./power-opponent";
 import { DepthChangeMark, MatchupTag, ModalPortal, depthChange, leagueRank, points, useDialogFocusTrap } from "./shared";
 import { formatWhole } from "./lib/format-number";
+import { MoveBar } from "./components/move-bar";
+import { movementPercent } from "./dashboard-shared";
 import { displayedMatchupPoints } from "../../api/_lib/lineup-optimizer";
 import { teamOutlook, winPercent, winProbability } from "./views/win-probability";
 import { CloseGlyph } from "./components/glyphs";
@@ -152,7 +154,6 @@ export function LeagueTeamCard({
     const metric = weekMetric
       ? points(weekMetric.value)
       : formatWhole(season?.value ?? 0);
-    const metricLabel = weekMetric ? weekMetric.label : "VALUE";
     const slotChip = scope === "week" && player.isStarter ? starterSlotChip(player) : null;
     const isSelected = selectedPlayerId === player.playerId;
     const depthMove = depthChange(dashboard.playerInsights?.depth[player.playerId], dashboard.playerInsights?.depthPrevious?.[player.playerId]);
@@ -191,7 +192,7 @@ export function LeagueTeamCard({
           </span>
           <span className="ranking-meta-line"><span className="ranking-football-meta matchup-meta-group"><span className="ranking-meta-position">{positionLabel(player.position)}</span><MatchupTag team={player.team} opponent={player.opponent} isAway={player.isAway} isBye={player.isBye} position={player.position} entry={sosEntry} onClick={openMatchup} />{depthMove ? <DepthChangeMark change={depthMove} /> : null}</span></span>
         </span>
-        <span className="ranking-proj"><strong>{metric}</strong><span>{metricLabel}</span></span>
+        <span className="ranking-proj"><strong>{metric}</strong>{weekMetric ? <span>{weekMetric.label}</span> : <MoveBar movePercent={season ? movementPercent(season.value, season.trend30Day) : null} className="is-end" />}</span>
       </div>
     );
   };
