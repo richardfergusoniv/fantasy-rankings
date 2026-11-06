@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   byeWeeksByTeam,
   injuryExposureFacts,
@@ -113,6 +113,18 @@ describe("loadRosContext deadlines", () => {
     const context = await loadRosContext(2025, 10, 11, loader, Date.now() + 30);
     expect(context.coveredWeeks).toEqual([10]);
     expect(context.missingWeeks).toEqual([11]);
+  });
+
+  it("clears the deadline timer once the load settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const timersBefore = vi.getTimerCount();
+      const context = await loadRosContext(2025, 10, 11, (_season, week) => Promise.resolve(weekRows(week, { a: 1 })), Date.now() + 60_000);
+      expect(context.coveredWeeks).toEqual([10, 11]);
+      expect(vi.getTimerCount()).toBe(timersBefore);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("without a deadline, slow loads are awaited as before", async () => {
@@ -301,6 +313,22 @@ describe("rosLineupDelta", () => {
       { week: 10, players: ["mystery"] },
       { week: 11, players: ["mystery"] },
     ]);
+  });
+
+  it("an IDP player without projections never blocks coverage", () => {
+    const result = rosLineupDelta({
+      before: [{ playerId: "a", position: "RB" }, { playerId: "lb1", position: "LB" }],
+      after: [{ playerId: "add", position: "RB" }, { playerId: "lb1", position: "LB" }],
+      slots,
+      league,
+      ros: ros({ 10: { a: 10, add: 12 } }),
+      addId: "add",
+    });
+    // lb1 plays a position the optimizer never evaluates: his missing row
+    // does not exclude the week, and the RB swap delta is still computed.
+    expect(result.unknownPlayerWeeks).toEqual([]);
+    expect(result.weeks).toHaveLength(1);
+    expect(result.totalDelta).toBe(2);
   });
 
   it("uncovered weeks contribute nothing", () => {
