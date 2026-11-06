@@ -16,7 +16,7 @@
  */
 import type { Dashboard } from "./dashboard-schemas.js";
 import { scoreProjectedDefenseStats } from "./defense-scoring.js";
-import { optimizeTradeRoster, type OptimizablePlayer } from "./lineup-optimizer.js";
+import { OPTIMIZER_POSITIONS, optimizeTradeRoster, type OptimizablePlayer } from "./lineup-optimizer.js";
 import { scoreSleeperPlayerProjection } from "./player-projection-merge.js";
 import { DEFAULT_LAST_REGULAR_WEEK } from "./league-schedule.js";
 import { canonicalTeam } from "./sleeper.js";
@@ -88,12 +88,13 @@ export async function loadRosContext(
     load.catch(() => undefined);
     const remainingMs = deadlineAtMs - Date.now();
     if (remainingMs <= 0) return Promise.reject(new Error("ROS projection load skipped: deadline reached"));
-    return Promise.race([
-      load,
-      new Promise<never>((_resolve, reject) => {
-        setTimeout(() => reject(new Error("ROS projection load timed out: deadline reached")), remainingMs);
-      }),
-    ]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error("ROS projection load timed out: deadline reached")), remainingMs);
+    });
+    // Clear the timer the moment the race settles so settled loads never
+    // leave pending timers behind under concurrent chat traffic.
+    return Promise.race([load, timeout]).finally(() => clearTimeout(timer));
   };
   const results = await Promise.allSettled(wanted.map((week) => withinBudget(loadProjections(season, week))));
   const weeks = new Map<number, WeekProjections>();
@@ -220,16 +221,17 @@ export function rosLineupDelta(args: {
     if (team == null || team === "") return null;
     return args.byeWeeks?.get(normalize(team)) ?? null;
   };
-  // Every player on either roster must be known for the comparison to be
-  // sound: the optimizer is not linear, so an unknown player scored 0 can
-  // change which added or dropped player starts and distort the delta even
-  // though he appears on both sides. Draft picks are assets, not players:
-  // they never have a projection row or a team, so they are excluded rather
-  // than allowed to zero out every covered week.
+  // Every optimizer-eligible player on either roster must be known for the
+  // comparison to be sound: the optimizer is not linear, so an unknown
+  // player scored 0 can change which added or dropped player starts and
+  // distort the delta even though he appears on both sides. Two groups never
+  // influence either optimized lineup, so they cannot block coverage: draft
+  // picks (assets, not players - no projection row or team) and positions the
+  // optimizer never evaluates (e.g. IDP in leagues that roster them).
   const rostered = [...args.before, ...args.after].filter(
     (player, index, all) =>
       player.playerId !== "0"
-      && player.position !== "PICK"
+      && OPTIMIZER_POSITIONS.has(player.position ?? "")
       && all.findIndex((other) => other.playerId === player.playerId) === index,
   );
   for (const week of args.ros.coveredWeeks) {
@@ -380,4 +382,4 @@ export function injuryExposureFacts(args: {
 /** Weeks through the fantasy regular-season end (playoff weekStart − 1). */
 export function regularSeasonEndWeek(league: Pick<League, "playoffs">): number {
   return league.playoffs?.weekStart ? league.playoffs.weekStart - 1 : DEFAULT_LAST_REGULAR_WEEK;
-}
+    }
