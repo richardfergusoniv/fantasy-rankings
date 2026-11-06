@@ -201,12 +201,17 @@ export const waiverBidSchema = z.object({
 });
 
 /** Rest-of-season evidence for one graded add: per-week lineup-points delta
- * over the covered (successfully loaded) weeks. `partial` means some weeks
- * failed to load, so the total covers only coveredWeeks. */
+ * over the covered (successfully loaded) weeks where every moved player has
+ * a projection row. `missingWeeks` names weeks that failed to load;
+ * `unknownPlayerWeeks` names loaded weeks excluded because a rostered
+ * player had no row and no schedule bye. `partial` flags either kind of gap,
+ * so the total covers only the fully known weeks. */
 export const waiverRosSchema = z.object({
   pointsGained: z.number(),
   coveredWeeks: z.array(z.number().int()),
   missingWeeks: z.array(z.number().int()),
+  // Optional: caches written before this field existed still validate.
+  unknownPlayerWeeks: z.array(z.object({ week: z.number().int(), players: z.array(z.string()) })).optional(),
   asOf: z.string().nullable(),
   partial: z.boolean(),
   startsInWeeks: z.array(z.object({ week: z.number().int(), note: z.string() })),
