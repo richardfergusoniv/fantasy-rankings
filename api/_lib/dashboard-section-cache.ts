@@ -112,6 +112,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
           id,
           name,
           scoringLabel,
+          scoringSettings,
           rankingField,
           rosteredPlayerIds,
           rosterAssignments,
@@ -127,6 +128,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
           id,
           name,
           scoringLabel,
+          scoringSettings,
           rankingField,
           rosteredPlayerIds,
           rosterAssignments,
@@ -644,4 +646,4 @@ export function resolveSectionHitFromRows<S extends DashboardCacheSection>(args:
     live: dashboardSnapshotIsLive(fullDashboard),
     fetchedAtMs: args.fullFetchedAt?.getTime() ?? 0,
   };
-}
+  }
