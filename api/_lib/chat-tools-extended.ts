@@ -1529,6 +1529,7 @@ export async function toolSuggestTrades(
       designatedPlayers: string[];
       designatedProjectedShare: number | null;
       absentPlayers: string[];
+      partialPlayers: string[];
     } | null;
     rosterImpact: {
       week: { lineupPointsBefore: number; lineupPointsAfter: number };
@@ -1727,10 +1728,12 @@ export async function toolSuggestTrades(
     // assets — current designations only, not a risk score.
     let yourRos: RosDelta | null = null;
     let partnerRos: RosDelta | null = null;
-    let ideaExposure: { designatedPlayers: string[]; designatedProjectedShare: number | null; absentPlayers: string[] } | null = null;
+    let ideaExposure: { designatedPlayers: string[]; designatedProjectedShare: number | null; absentPlayers: string[]; partialPlayers: string[] } | null = null;
     if (rosWeeks) {
+      // Team lookup spans every roster in the league: an incoming player whose
+      // team is missing here turns his known bye into an excluded unknown week.
       const rosTeamById = new Map(
-        [...rosterPlayers, ...partnerPlayers].map((p) => [p.playerId, p.team ?? ""] as const),
+        [...rosterPlayers, ...league.tradeTeams.flatMap((team) => team.players)].map((p) => [p.playerId, p.team ?? ""] as const),
       );
       const own = rosLineupDelta({
         before: rosterPlayers,
@@ -1763,15 +1766,18 @@ export async function toolSuggestTrades(
         [...rosterPlayers, ...partnerPlayers].map((p) => [p.playerId, p.injuryStatus ?? null] as const),
       );
       ideaExposure = injuryExposureFacts({
-        roster: rosterPlayers.map((p) => ({ playerId: p.playerId, name: p.name, position: p.position, injuryStatus: p.injuryStatus })),
+        roster: rosterPlayers.map((p) => ({ playerId: p.playerId, name: p.name, position: p.position, team: p.team, injuryStatus: p.injuryStatus })),
         involved: [...give, ...get].map((a) => ({
           playerId: a.playerId,
           name: a.name,
+          position: a.position,
           injuryStatus: statusById.get(a.playerId) ?? null,
         })),
         ros: rosWeeks,
         league,
         isDesignated: (status) => status != null && status !== "",
+        byeWeeks: rosByeWeeks,
+        teamById: rosTeamById,
       });
     }
     const move = scoreTrade({
@@ -1885,7 +1891,7 @@ export async function toolSuggestTrades(
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
     scoringWindow: tradeWindowKey,
-    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind each idea and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists what this league has actually traded recently — frame the suggestions against it when it is non-null. utility separates market fairness (value z) from yourUtilityDelta (your lineup/starter-value/power-rank change) and partnerUtilityDelta (the other roster's change). utility.*.restOfSeason is the lineup-points change summed over weeks with full projection coverage: partial:true means some weeks are not counted (missingWeeks names weeks with no data at all; unknownPlayerWeeks names weeks where a player on either roster has no projection and was not on a schedule bye), and a null restOfSeason means 'no projection coverage', not zero. injuryExposure lists current designations and the share of remaining projected points they carry; it is descriptive, not a risk score.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind each idea and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists what this league has actually traded recently — frame the suggestions against it when it is non-null. utility separates market fairness (value z) from yourUtilityDelta (your lineup/starter-value/power-rank change) and partnerUtilityDelta (the other roster's change). utility.*.restOfSeason is the lineup-points change summed over weeks with full projection coverage: partial:true means some weeks are not counted (missingWeeks names weeks with no data at all; unknownPlayerWeeks names weeks where a player on either roster has no projection and was not on a schedule bye), and a null restOfSeason means 'no projection coverage', not zero. injuryExposure lists current designations and the share of remaining projected points they carry; it is descriptive, not a risk score: absentPlayers names players with no usable projection in any covered week, partialPlayers names players missing a covered non-bye week.",
     freshness: moveFreshness(dashboard),
     marketContext: await loadTradeMarketContext(ctx, league.id, []),
     myNeeds,
@@ -2064,4 +2070,4 @@ export async function dispatchExtendedChatTool(
     default:
       return null;
   }
-}
+        }
