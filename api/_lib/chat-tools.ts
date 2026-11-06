@@ -1073,12 +1073,22 @@ async function toolEvaluateTrade(
     weights,
   });
 
-  // Rest-of-season lineup points for both sides: same covered weeks and same
-  // player coverage before/after, so a missing week or player row cannot
-  // manufacture a gain. Descriptive injury exposure rides along — current
+  // Rest-of-season lineup points for both sides over the weeks where every
+  // player on either roster has projection coverage: weeks that failed to
+  // load and weeks where any rostered player has no row (and no schedule bye)
+  // are excluded from both sides and disclosed, so missing data cannot
+  // manufacture a gain.
+  // Descriptive injury exposure rides along — current
   // designations only, never a future-injury probability. Best-effort: a load
   // failure leaves restOfSeason null rather than blocking the eval.
-  type RosDelta = { pointsDelta: number; coveredWeeks: number[]; missingWeeks: number[]; asOf: string | null; partial: boolean };
+  type RosDelta = {
+    pointsDelta: number;
+    coveredWeeks: number[];
+    missingWeeks: number[];
+    unknownPlayerWeeks: { week: number; players: string[] }[];
+    asOf: string | null;
+    partial: boolean;
+  };
   let yourRos: RosDelta | null = null;
   let partnerRos: RosDelta | null = null;
   let injuryExposure: { designatedPlayers: string[]; designatedProjectedShare: number | null; absentPlayers: string[] } | null = null;
@@ -1090,6 +1100,9 @@ async function toolEvaluateTrade(
         [...league.starters, ...league.bench, ...league.tradeTeams.flatMap((t) => t.players)]
           .map((p) => [p.playerId, p.injuryStatus] as const),
       );
+      const rosTeamById = new Map(
+        [...myPlayers, ...(partner?.players ?? [])].map((p) => [p.playerId, p.team ?? ""] as const),
+      );
       const own = rosLineupDelta({
         before: myPlayers,
         after: afterPlayers,
@@ -1097,18 +1110,32 @@ async function toolEvaluateTrade(
         league,
         ros,
         byeWeeks,
-        teamById: new Map(myPlayers.map((p) => [p.playerId, p.team ?? ""])),
+        teamById: rosTeamById,
         nameById: new Map(myPlayers.map((p) => [p.playerId, p.name])),
       });
-      yourRos = { pointsDelta: own.totalDelta, coveredWeeks: ros.coveredWeeks, missingWeeks: ros.missingWeeks, asOf: ros.asOf, partial: ros.missingWeeks.length > 0 };
+      yourRos = {
+        pointsDelta: own.totalDelta,
+        coveredWeeks: ros.coveredWeeks,
+        missingWeeks: ros.missingWeeks,
+        unknownPlayerWeeks: own.unknownPlayerWeeks,
+        asOf: ros.asOf,
+        partial: ros.missingWeeks.length > 0 || own.unknownPlayerWeeks.length > 0,
+      };
       if (partner) {
         const partnerBefore = partner.players.map((p) => ({ playerId: p.playerId, position: p.position, team: p.team }));
         const partnerAfter = [
           ...partnerBefore.filter((p) => !getIds.has(p.playerId)),
           ...give.resolved.map((a) => ({ playerId: a.playerId, position: a.position, team: null })),
         ];
-        const theirs = rosLineupDelta({ before: partnerBefore, after: partnerAfter, slots, league, ros, byeWeeks });
-        partnerRos = { pointsDelta: theirs.totalDelta, coveredWeeks: ros.coveredWeeks, missingWeeks: ros.missingWeeks, asOf: ros.asOf, partial: ros.missingWeeks.length > 0 };
+        const theirs = rosLineupDelta({ before: partnerBefore, after: partnerAfter, slots, league, ros, byeWeeks, teamById: rosTeamById });
+        partnerRos = {
+          pointsDelta: theirs.totalDelta,
+          coveredWeeks: ros.coveredWeeks,
+          missingWeeks: ros.missingWeeks,
+          unknownPlayerWeeks: theirs.unknownPlayerWeeks,
+          asOf: ros.asOf,
+          partial: ros.missingWeeks.length > 0 || theirs.unknownPlayerWeeks.length > 0,
+        };
       }
       injuryExposure = injuryExposureFacts({
         roster: myPlayers.map((p) => ({ playerId: p.playerId, name: p.name, position: p.position, injuryStatus: p.injuryStatus })),
@@ -1145,7 +1172,7 @@ async function toolEvaluateTrade(
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
     scoringWindow: windowKey,
-    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind the verdict and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists this league's past trades involving the same positions — say whether a deal like this has been accepted here when it is non-null. utility separates market fairness (value z) from yourUtilityDelta (your lineup/starter-value/power-rank change) and partnerUtilityDelta (the other roster's change, null when incoming assets span multiple teams). utility.*.restOfSeason is the lineup-points change summed over the weeks with projection coverage — partial:true names weeks with no data, so a null pointsDelta means 'no projection coverage', not zero. injuryExposure lists current designations and the share of remaining projected points they carry; it is descriptive, not a risk score.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind the verdict and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists this league's past trades involving the same positions — say whether a deal like this has been accepted here when it is non-null. utility separates market fairness (value z) from yourUtilityDelta (your lineup/starter-value/power-rank change) and partnerUtilityDelta (the other roster's change, null when incoming assets span multiple teams). utility.*.restOfSeason is the lineup-points change summed over weeks with full projection coverage for the traded players — partial:true means some weeks are not counted: missingWeeks names weeks with no data at all, unknownPlayerWeeks names weeks where a player on either roster has no projection and was not on a schedule bye. A null restOfSeason means 'no projection coverage', not zero. injuryExposure lists current designations and the share of remaining projected points they carry; it is descriptive, not a risk score.",
     freshness: moveFreshness(dashboard),
     marketContext: await loadTradeMarketContext(ctx, league.id, [
       ...give.resolved.map((row) => row.position),
@@ -1364,4 +1391,4 @@ export function parseToolCallArguments(raw: string | undefined): unknown {
   } catch {
     return { __parseError: "Tool arguments were not valid JSON.", raw };
   }
-}
+            }
