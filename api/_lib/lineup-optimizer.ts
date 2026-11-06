@@ -15,7 +15,8 @@ export type OptimizablePlayer = {
   isBye?: boolean;
 };
 
-const skillPositions = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
+/** Positions the lineup optimizer evaluates; anything else (e.g. IDP) cannot influence an optimized lineup. */
+export const OPTIMIZER_POSITIONS: ReadonlySet<string> = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
 
 const unavailableStatuses = new Set([
   "out",
@@ -539,7 +540,7 @@ function tradePoints(player: OptimizablePlayer, now: number): number {
 
 /** Best weekly lineup for a trade grade. Locked starters stay in their slot and count actual points. */
 export function optimizeTradeRoster<T extends OptimizablePlayer>(players: T[], slots: string[], now = Date.now()): OptimizedTradeRoster<T> {
-  const eligiblePlayers = players.filter((player) => skillPositions.has(player.position) && !isVacantLineupSlot(player));
+  const eligiblePlayers = players.filter((player) => OPTIMIZER_POSITIONS.has(player.position) && !isVacantLineupSlot(player));
   const lockedStarters = eligiblePlayers.filter((player) => player.isStarter && isLineupLocked(player, now));
   const movable = eligiblePlayers.filter((player) => !isLineupLocked(player, now));
   const assignments: Array<T | undefined> = Array.from({ length: slots.length });
@@ -603,4 +604,4 @@ export function optimizeValueTradeRoster<T extends OptimizablePlayer>(
     };
   });
   return optimizeTradeRoster(ranked, slots, now);
-}
+            }
