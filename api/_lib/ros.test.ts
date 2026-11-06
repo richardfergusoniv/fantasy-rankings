@@ -92,6 +92,38 @@ describe("loadRosContext", () => {
   });
 });
 
+describe("loadRosContext deadlines", () => {
+  it("an in-flight load that outlives the budget becomes a disclosed missing week", async () => {
+    const slow = (_season: number, week: number) =>
+      new Promise<WeekProjections>((resolve) => setTimeout(() => resolve(weekRows(week, { a: 1 })), 150));
+    const startedAt = Date.now();
+    const context = await loadRosContext(2025, 10, 11, slow, startedAt + 30);
+    // Both weeks are too slow for a 30ms budget: disclosed missing, and the
+    // call returned at the deadline rather than after the 150ms loads.
+    expect(context.missingWeeks).toEqual([10, 11]);
+    expect(context.coveredWeeks).toEqual([]);
+    expect(Date.now() - startedAt).toBeLessThan(150);
+  });
+
+  it("weeks that beat the deadline stay covered while slower ones go missing", async () => {
+    const loader = (_season: number, week: number) =>
+      week === 10
+        ? Promise.resolve(weekRows(week, { a: 1 }))
+        : new Promise<WeekProjections>((resolve) => setTimeout(() => resolve(weekRows(week, { a: 1 })), 150));
+    const context = await loadRosContext(2025, 10, 11, loader, Date.now() + 30);
+    expect(context.coveredWeeks).toEqual([10]);
+    expect(context.missingWeeks).toEqual([11]);
+  });
+
+  it("without a deadline, slow loads are awaited as before", async () => {
+    const slow = (_season: number, week: number) =>
+      new Promise<WeekProjections>((resolve) => setTimeout(() => resolve(weekRows(week, { a: 1 })), 20));
+    const context = await loadRosContext(2025, 10, 10, slow);
+    expect(context.coveredWeeks).toEqual([10]);
+    expect(context.missingWeeks).toEqual([]);
+  });
+});
+
 describe("rosLineupDelta", () => {
   const slots = ["RB", "RB"];
 
