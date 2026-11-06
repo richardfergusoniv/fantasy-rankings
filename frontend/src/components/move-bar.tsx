@@ -34,7 +34,8 @@ export function MoveBar({ movePercent, className }: { movePercent: number | null
   const label = moveBarLabel(movePercent);
   return (
     <span className={["move-bar", `is-${span.direction}`, className].filter(Boolean).join(" ")} role="img" aria-label={label} title={label}>
-      {span.width > 0 ? <b style={{ left: `${span.left}%`, width: `${span.width}%` }} /> : null}
+      {/* Anchor each fill at the tick so the CSS minimum width only ever grows away from it. */}
+      {span.width > 0 ? <b style={span.direction === "down" ? { right: "50%", width: `${span.width}%` } : { left: "50%", width: `${span.width}%` }} /> : null}
       <u />
     </span>
   );
