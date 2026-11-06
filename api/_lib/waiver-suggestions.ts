@@ -135,6 +135,8 @@ export function scoreWaiverSuggestions(
     medians[pos] = values.length ? values[Math.floor(values.length / 2)]! : 0;
   }
 
+  // ROS evidence closures, evaluated only for the suggestions returned.
+  const rosDeferred = new Map<string, () => WaiverRosEvidence>();
   const scored = pool.map((player) => {
     const weekly =
       dashboard.rankings.find((row) => row.playerId === player.playerId && row.leagueId === league.id)
@@ -203,48 +205,55 @@ export function scoreWaiverSuggestions(
         ? move.seasonLong
         : move.week;
 
-    // Rest-of-season lineup points for this exact add/drop pair. Weeks where
-    // any rostered player has no projection row (and no schedule bye) are
-    // excluded from both sides and disclosed in unknownPlayerWeeks, so missing
-    // data cannot manufacture a gain. Evidence only — labels keep their market-price scale.
-    const ros = options.ros && options.ros.context.coveredWeeks.length > 0
-      ? (() => {
+    // Rest-of-season lineup points for this exact add/drop pair — DEFERRED:
+    // computing it optimizes both lineups once per covered week, so it runs
+    // only for the suggestions actually returned (see below), not for every
+    // candidate in the pool. Weeks where any rostered player has no projection
+    // row (and no schedule bye) are excluded from both sides and disclosed in
+    // unknownPlayerWeeks, so missing data cannot manufacture a gain. Evidence
+    // only — labels keep their market-price scale.
+    if (options.ros && options.ros.context.coveredWeeks.length > 0) {
+      const rosOptions = options.ros;
+      rosDeferred.set(player.playerId, () => {
         const delta = rosLineupDelta({
           before: rosterPlayers,
           after: withAdd,
           slots,
           league,
-          ros: options.ros!.context,
+          ros: rosOptions.context,
           addId: player.playerId,
           addName: weekly?.name ?? player.name,
-          byeWeeks: options.ros!.byeWeeks,
+          byeWeeks: rosOptions.byeWeeks,
           teamById: new Map(rosterPlayers.map((p) => [p.playerId, p.team ?? ""])),
           nameById: new Map(rosterPlayers.map((p) => [p.playerId, p.name])),
         });
         const exposure = injuryExposureFacts({
           roster: [...league.starters, ...league.bench],
           involved: [
-            { playerId: player.playerId, name: weekly?.name ?? player.name, injuryStatus: player.injuryStatus ?? null },
-            ...(dropCandidate ? [{ playerId: dropCandidate.player.playerId, name: dropCandidate.player.name, injuryStatus: dropCandidate.player.injuryStatus ?? null }] : []),
+            { playerId: player.playerId, name: weekly?.name ?? player.name, position, team: weekly?.team ?? player.team ?? null, injuryStatus: player.injuryStatus ?? null },
+            ...(dropCandidate ? [{ playerId: dropCandidate.player.playerId, name: dropCandidate.player.name, position: dropCandidate.player.position, team: dropCandidate.player.team ?? null, injuryStatus: dropCandidate.player.injuryStatus ?? null }] : []),
           ],
-          ros: options.ros!.context,
+          ros: rosOptions.context,
           league,
           isDesignated: (status) => isUnavailableForScoring(status) || isQuestionable(status) || (status != null && status !== ""),
+          byeWeeks: rosOptions.byeWeeks,
+          teamById: new Map(rosterPlayers.map((p) => [p.playerId, p.team ?? ""])),
         });
         return {
           pointsGained: delta.totalDelta,
-          coveredWeeks: options.ros!.context.coveredWeeks,
-          missingWeeks: options.ros!.context.missingWeeks,
+          coveredWeeks: rosOptions.context.coveredWeeks,
+          missingWeeks: rosOptions.context.missingWeeks,
           unknownPlayerWeeks: delta.unknownPlayerWeeks,
-          asOf: options.ros!.context.asOf,
-          partial: options.ros!.context.missingWeeks.length > 0 || delta.unknownPlayerWeeks.length > 0,
+          asOf: rosOptions.context.asOf,
+          partial: rosOptions.context.missingWeeks.length > 0 || delta.unknownPlayerWeeks.length > 0,
           startsInWeeks: delta.startedInWeeks,
           designatedPlayers: exposure.designatedPlayers,
           designatedProjectedShare: exposure.designatedProjectedShare,
           absentPlayers: exposure.absentPlayers,
-        };
-      })()
-      : null;
+          partialPlayers: exposure.partialPlayers,
+        } satisfies WaiverRosEvidence;
+      });
+    }
 
     return {
       playerId: player.playerId,
@@ -260,7 +269,7 @@ export function scoreWaiverSuggestions(
           value: valueById.get(dropCandidate.player.playerId) ?? 0,
         }
         : null,
-      ros,
+      ros: null as WaiverRosEvidence | null,
       verdicts: {
         week: moveVerdict(move.week),
         seasonLong: moveVerdict(move.seasonLong),
@@ -280,6 +289,11 @@ export function scoreWaiverSuggestions(
   // nothing stronger is available so the tool still has something to explain.
   const nonPass = ranked.filter((row) => !row.hidden);
   const visible = (nonPass.length > 0 ? nonPass : ranked).slice(0, limit);
+  // Only the returned suggestions pay for ROS lineup optimization.
+  for (const row of visible) {
+    const computeRos = rosDeferred.get(row.playerId);
+    if (computeRos) row.ros = computeRos();
+  }
 
   return {
     ok: true as const,
@@ -288,7 +302,7 @@ export function scoreWaiverSuggestions(
     scoringWindow: waiverWindowKey,
     // FAAB budget / waiver priority, so bids and timing can be advised.
     waivers: league.waivers ?? null,
-    note: "Labels and scores are deterministic; do not re-rank. The payload carries raw evidence only and no written reasons: compose the explanation from the evidence and name the deciding factor. Pass adds are omitted from lists unless nothing stronger is available or the user asks. Each suggestion's ros is the rest-of-season lineup-points change vs the paired drop, summed only over weeks with full projection coverage: partial:true means some weeks are not counted (missingWeeks names weeks with no data at all; unknownPlayerWeeks names weeks where a player on either roster has no projection and was not on a schedule bye), and a null ros means 'no projection coverage', not zero. startsInWeeks names weeks the add lands in the lineup; it states no reason, so do not attribute one. designatedPlayers and designatedProjectedShare are current injury designations and their share of remaining projected points - descriptive facts, not a risk score - and absentPlayers names players with no projection row in any covered week.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries raw evidence only and no written reasons: compose the explanation from the evidence and name the deciding factor. Pass adds are omitted from lists unless nothing stronger is available or the user asks. Each suggestion's ros is the rest-of-season lineup-points change vs the paired drop, summed only over weeks with full projection coverage: partial:true means some weeks are not counted (missingWeeks names weeks with no data at all; unknownPlayerWeeks names weeks where a player on either roster has no projection and was not on a schedule bye), and a null ros means 'no projection coverage', not zero. startsInWeeks names weeks the add lands in the lineup; it states no reason, so do not attribute one. designatedPlayers and designatedProjectedShare are current injury designations and their share of remaining projected points - descriptive facts, not a risk score - absentPlayers names players with no usable projection row in any covered week, and partialPlayers names players missing a covered non-bye week.",
     weakPositions,
     suggestions: visible.map((row) => ({
       ...row,
@@ -327,6 +341,7 @@ export type WaiverRosEvidence = {
   designatedPlayers: string[];
   designatedProjectedShare: number | null;
   absentPlayers: string[];
+  partialPlayers: string[];
 };
 
 export type WaiverGradeRow = {
@@ -380,4 +395,4 @@ export function waiverCacheFor(
     });
   }
   return { bids, grades };
-}
+                                                                     }
