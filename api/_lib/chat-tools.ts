@@ -7,7 +7,8 @@ import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { weeklyOpponentRosterId } from "./opponent-roster.js";
 import type { Dashboard } from "./dashboard-schemas.js";
-import { loadOrBuildUserDashboard, readUserDashboardCache } from "./dashboard-build.js";
+import { loadOrBuildUserDashboard, readUserDashboardCache, ROS_LOAD_MIN_REMAINING_MS } from "./dashboard-build.js";
+import { remainingMsUntil } from "./actual-stats-candidates.js";
 import { db, schema } from "./db.js";
 import { DYNASTY_NEWS_TAG, isSleeperTimestampOnlyNews } from "./player-news-filters.js";
 import { retentionCutoff } from "./player-news-shared.js";
@@ -70,12 +71,27 @@ export type ChatToolContext = {
   dashboardPromise?: Promise<Dashboard>;
   /** Ranking window the user is viewing — drives which score the model explains. */
   scoringWindow?: "week" | "season_long" | "dynasty";
+  /** Wall-clock instant the chat answer is due; optional ROS loading stops when the remaining budget cannot cover it. */
+  chatDeadlineAtMs?: number;
   /**
    * League the user is currently viewing (resolved server-side). Used as the
    * default when a tool call omits leagueId, instead of always leagues[0].
    */
   defaultLeagueId?: string;
 };
+
+/**
+ * Optional ROS evidence lives inside the chat deadline: a slow projection
+ * pull must not eat the remaining answer budget, so loading stops once the
+ * remaining time cannot cover it and the tool answers without ROS.
+ */
+export function chatRosBudgetAllows(ctx: ChatToolContext): boolean {
+  if (ctx.chatDeadlineAtMs == null) return true;
+  const remainingMs = remainingMsUntil(ctx.chatDeadlineAtMs);
+  if (remainingMs >= ROS_LOAD_MIN_REMAINING_MS) return true;
+  console.error("[chat] skipping optional ROS loading: remaining chat budget", remainingMs, "ms");
+  return false;
+}
 
 export type OpenAiToolDefinition = {
   type: "function";
@@ -1093,8 +1109,10 @@ async function toolEvaluateTrade(
   let partnerRos: RosDelta | null = null;
   let injuryExposure: { designatedPlayers: string[]; designatedProjectedShare: number | null; absentPlayers: string[]; partialPlayers: string[] } | null = null;
   try {
-    const ros = await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league));
-    if (ros.coveredWeeks.length > 0) {
+    const ros = chatRosBudgetAllows(ctx)
+      ? await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league))
+      : null;
+    if (ros && ros.coveredWeeks.length > 0) {
       const byeWeeks = new Map(Object.entries(dashboard.byeWeeks ?? {}));
       const statusById = new Map(
         [...league.starters, ...league.bench, ...league.tradeTeams.flatMap((t) => t.players)]
@@ -1397,4 +1415,4 @@ export function parseToolCallArguments(raw: string | undefined): unknown {
   } catch {
     return { __parseError: "Tool arguments were not valid JSON.", raw };
   }
-}
+                      }
