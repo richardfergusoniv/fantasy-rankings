@@ -1110,7 +1110,7 @@ async function toolEvaluateTrade(
   let injuryExposure: { designatedPlayers: string[]; designatedProjectedShare: number | null; absentPlayers: string[]; partialPlayers: string[] } | null = null;
   try {
     const ros = chatRosBudgetAllows(ctx)
-      ? await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league))
+      ? await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league), undefined, ctx.chatDeadlineAtMs)
       : null;
     if (ros && ros.coveredWeeks.length > 0) {
       const byeWeeks = new Map(Object.entries(dashboard.byeWeeks ?? {}));
@@ -1415,4 +1415,4 @@ export function parseToolCallArguments(raw: string | undefined): unknown {
   } catch {
     return { __parseError: "Tool arguments were not valid JSON.", raw };
   }
-                      }
+  }
