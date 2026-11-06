@@ -288,7 +288,7 @@ export function scoreWaiverSuggestions(
     scoringWindow: waiverWindowKey,
     // FAAB budget / waiver priority, so bids and timing can be advised.
     waivers: league.waivers ?? null,
-    note: "Labels and scores are deterministic; do not re-rank. The payload carries raw evidence only and no written reasons: compose the explanation from the evidence and name the deciding factor. Pass adds are omitted from lists unless nothing stronger is available or the user asks.",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries raw evidence only and no written reasons: compose the explanation from the evidence and name the deciding factor. Pass adds are omitted from lists unless nothing stronger is available or the user asks. Each suggestion's ros is the rest-of-season lineup-points change vs the paired drop, summed only over weeks with full projection coverage: partial:true means some weeks are not counted (missingWeeks names weeks with no data at all; unknownPlayerWeeks names weeks where a player on either roster has no projection and was not on a schedule bye), and a null ros means 'no projection coverage', not zero. startsInWeeks names weeks the add lands in the lineup; it states no reason, so do not attribute one. designatedPlayers and designatedProjectedShare are current injury designations and their share of remaining projected points - descriptive facts, not a risk score - and absentPlayers names players with no projection row in any covered week.",
     weakPositions,
     suggestions: visible.map((row) => ({
       ...row,
