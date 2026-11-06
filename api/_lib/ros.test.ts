@@ -449,6 +449,51 @@ describe("injuryExposureFacts", () => {
     expect(facts.designatedProjectedShare).toBe(0);
   });
 
+  it("a bye-only covered span is fully known, never absent", () => {
+    const facts = injuryExposureFacts({
+      roster: [{ playerId: "a", name: "A", position: "RB", team: "KC", injuryStatus: null }],
+      involved: [],
+      // Week 14 is KC's bye and the only covered week: a's whole span is a
+      // known 0, not an unknown projection.
+      ros: ros({ 14: {} }),
+      league,
+      isDesignated,
+      byeWeeks: new Map([["KC", 14]]),
+    });
+    expect(facts.absentPlayers).toEqual([]);
+    expect(facts.partialPlayers).toEqual([]);
+  });
+
+  it("an unknown non-bye week alongside a bye still reads as absent", () => {
+    const facts = injuryExposureFacts({
+      roster: [{ playerId: "a", name: "A", position: "RB", team: "KC", injuryStatus: null }],
+      involved: [],
+      // Week 13 has no usable row for a (not a bye) and week 14 is his bye:
+      // the unknown week keeps him disclosed as absent.
+      ros: ros({ 13: {}, 14: {} }),
+      league,
+      isDesignated,
+      byeWeeks: new Map([["KC", 14]]),
+    });
+    expect(facts.absentPlayers).toEqual(["A"]);
+  });
+
+  it("vacant slots and draft picks never appear as absent players", () => {
+    const facts = injuryExposureFacts({
+      roster: [
+        { playerId: "0", name: "", position: "RB", injuryStatus: null },
+        { playerId: "a", name: "A", position: "RB", injuryStatus: null },
+      ],
+      involved: [{ playerId: "pick1", name: "2027 1st", position: "PICK", injuryStatus: null }],
+      ros: ros({ 10: { a: 10 } }),
+      league,
+      isDesignated,
+    });
+    // Neither the empty-string vacant slot nor the pick is a player with an
+    // unknown projection.
+    expect(facts.absentPlayers).toEqual([]);
+  });
+
   it("a stale bye-week row counts 0 in the exposure share", () => {
     const facts = injuryExposureFacts({
       roster: [
