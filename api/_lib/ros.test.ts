@@ -83,11 +83,14 @@ describe("rosLineupDelta", () => {
     expect(result.totalDelta).toBe(10);
     expect(result.weeks.map((row) => row.delta)).toEqual([3, 7]);
     expect(result.startedInWeeks.map((row) => row.week)).toEqual([10, 11]);
-    expect(result.startedInWeeks[0]!.note).toContain("out-projects the last starter");
+    expect(result.startedInWeeks.map((row) => row.note)).toEqual([
+      "Starts for you in week 10.",
+      "Starts for you in week 11.",
+    ]);
     expect(result.unknownPlayerWeeks).toEqual([]);
   });
 
-  it("names the bye reason from the schedule map", () => {
+  it("keeps the start note neutral even when a before-starter is on bye", () => {
     const result = rosLineupDelta({
       before: [
         { playerId: "a", position: "RB", team: "KC" },
@@ -106,7 +109,11 @@ describe("rosLineupDelta", () => {
       teamById: new Map([["a", "KC"]]),
       nameById: new Map([["a", "Starter A"]]),
     });
-    expect(result.startedInWeeks[0]!.note).toBe("Starts for you in week 10 (Starter A's bye).");
+    // Regression: the lineup shows the add starts, not why - the bye is a
+    // fact about the week but cannot be proven to be the cause, so the note
+    // must not name it (or any out-projection claim) as the reason.
+    expect(result.startedInWeeks[0]!.note).toBe("Starts for you in week 10.");
+    expect(result.startedInWeeks[0]!.note).not.toContain("bye");
   });
 
   it("a missing projection row for an involved player excludes and discloses the week", () => {
