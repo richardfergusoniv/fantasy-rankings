@@ -49,7 +49,7 @@ import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projec
 import { DEFAULT_LAST_REGULAR_WEEK } from "./league-schedule.js";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 import { PLAYER_NEWS_SNAPSHOT_KEY } from "./sleeper.js";
-import {
+import { chatRosBudgetAllows,
   defaultToolLeague,
   findLeague,
   gameLineForTeam,
@@ -63,8 +63,7 @@ import {
   tradeLineupBeforeAfter,
   waiverAdjustments,
   type ChatToolContext,
-  type OpenAiToolDefinition,
-} from "./chat-tools.js";
+  type OpenAiToolDefinition, } from "./chat-tools.js";
 import { loadActiveScoringWeights } from "./scoring-jobs.js";
 
 export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
@@ -1386,8 +1385,9 @@ export async function toolSuggestWaivers(
   const league = requireLeague(dashboard, args.leagueId);
   if (!league) return { ok: false as const, error: "League not found for this user." };
   const weights = await loadActiveScoringWeights();
-  // Rest-of-season coverage for the graded adds — best-effort, never blocks.
-  const rosOptions = await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league))
+  // Rest-of-season coverage for the graded adds — best-effort, never blocks,
+  // and skipped when the remaining chat budget cannot cover the load.
+  const rosOptions = !chatRosBudgetAllows(ctx) ? undefined : await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league))
     .then((context) => context.coveredWeeks.length > 0
       ? { context, byeWeeks: new Map(Object.entries(dashboard.byeWeeks ?? {})) }
       : undefined)
@@ -1436,8 +1436,9 @@ export async function toolSuggestTrades(
     : seasonLongAssets;
   const valueById = new Map(seasonLongAssets.map((row) => [row.playerId, row]));
   const dynastyValueById = new Map(dynastyAssets.map((row) => [row.playerId, row.value]));
-  // Rest-of-season coverage shared by every idea below — best-effort.
-  const rosContext = await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league))
+  // Rest-of-season coverage shared by every idea below — best-effort, and
+  // skipped when the remaining chat budget cannot cover the load.
+  const rosContext = !chatRosBudgetAllows(ctx) ? null : await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league))
     .catch((error) => {
       console.error("[suggest_trades] ROS coverage load failed", error instanceof Error ? error.message : error);
       return null;
@@ -2070,4 +2071,4 @@ export async function dispatchExtendedChatTool(
     default:
       return null;
   }
-        }
+    }
