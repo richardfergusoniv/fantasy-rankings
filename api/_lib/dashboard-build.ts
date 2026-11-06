@@ -149,6 +149,8 @@ export const USER_DASHBOARD_CACHE_MS = 10 * 60 * 1000; // 10 minutes
 /** Shorter cache while any rostered game is live so lineup totals can refresh. */
 export const LIVE_DASHBOARD_CACHE_MS = 150 * 1000;
 export const BUILD_DEADLINE_MS = 55_000; // stay inside the 60s function budget
+/** Remaining budget below which optional ROS loading is skipped entirely, and the margin kept in reserve when it runs. */
+export const ROS_LOAD_MIN_REMAINING_MS = 10_000;
 /** Lease TTL: longer than the deadline so a build always releases or expires. */
 export const BUILD_LEASE_TTL_MS = 90_000;
 
@@ -1793,16 +1795,30 @@ export async function buildUserDashboard(
     const weights = await loadActiveScoringWeights();
     const byeWeeks = byeWeekMap;
     // One ROS context per league end week — covered weeks differ when leagues
-    // start the playoffs on different weeks.
-    const rosByEndWeek = new Map<number, RosContext>();
+    // start the playoffs on different weeks. Optional evidence lives inside
+    // the build deadline: a slow projection pull must not turn an otherwise
+    // successful build into a deadline failure, so loading stops once the
+    // remaining budget cannot cover it and the build publishes without ROS.
+    const rosByEndWeek = new Map<number, RosContext | null>();
     for (const league of dashboard.leagues) {
       const endWeek = regularSeasonEndWeek(league);
-      let context = rosByEndWeek.get(endWeek);
-      if (!context) {
-        context = await loadRosContext(dashboard.season, dashboard.week + 1, endWeek);
+      let context = rosByEndWeek.get(endWeek) ?? null;
+      if (!context && !rosByEndWeek.has(endWeek)) {
+        const remainingMs = remainingMsUntil(buildDeadlineAt);
+        if (remainingMs >= ROS_LOAD_MIN_REMAINING_MS) {
+          // Bounded wait: the pull continues in the background (its cache
+          // write still lands), but the build stops waiting before the
+          // deadline and publishes this league without ROS evidence.
+          context = await Promise.race([
+            loadRosContext(dashboard.season, dashboard.week + 1, endWeek),
+            new Promise<null>((resolve) => {
+              setTimeout(resolve, Math.max(1, remainingMs - ROS_LOAD_MIN_REMAINING_MS));
+            }),
+          ]);
+        }
         rosByEndWeek.set(endWeek, context);
       }
-      const cache = waiverCacheFor(dashboard, league, weights, 15, context.coveredWeeks.length > 0 ? { context, byeWeeks } : undefined);
+      const cache = waiverCacheFor(dashboard, league, weights, 15, context && context.coveredWeeks.length > 0 ? { context, byeWeeks } : undefined);
       league.waiverBids = cache.bids;
       league.waiverGrades = cache.grades;
     }
@@ -2411,4 +2427,4 @@ export function kickUserDashboardBuild(
     },
     { retryFailed: options?.retryFailed },
   );
-}
+  }
