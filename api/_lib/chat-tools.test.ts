@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Dashboard } from "./dashboard-schemas.js";
 import {
+  chatRosBudgetAllows,
   defaultToolLeague,
   dispatchChatTool,
   gameLineForTeam,
@@ -603,5 +604,26 @@ describe("gameLineForTeam", () => {
     expect(gameLineForTeam(dashboard, "LA")).toMatchObject({ opponent: "SEA", spread: -3 });
     expect(gameLineForTeam(dashboard, null)).toBeNull();
     expect(gameLineForTeam(dashboard, "KC")).toBeNull();
+  });
+});
+
+describe("chatRosBudgetAllows", () => {
+  const ctx = (chatDeadlineAtMs?: number): ChatToolContext => ({
+    userId: "u1",
+    sleeperUserId: "s1",
+    chatDeadlineAtMs,
+  });
+
+  it("allows ROS loading when no chat deadline is stamped", () => {
+    expect(chatRosBudgetAllows(ctx())).toBe(true);
+  });
+
+  it("allows ROS loading while the remaining chat budget covers it", () => {
+    expect(chatRosBudgetAllows(ctx(Date.now() + 30_000))).toBe(true);
+  });
+
+  it("skips optional ROS loading when the remaining budget cannot cover it", () => {
+    expect(chatRosBudgetAllows(ctx(Date.now() + 5_000))).toBe(false);
+    expect(chatRosBudgetAllows(ctx(Date.now() - 1))).toBe(false);
   });
 });
