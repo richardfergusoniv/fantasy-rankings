@@ -218,6 +218,8 @@ export const waiverRosSchema = z.object({
   designatedPlayers: z.array(z.string()),
   designatedProjectedShare: z.number().nullable(),
   absentPlayers: z.array(z.string()),
+  // Optional: caches written before this field existed still validate.
+  partialPlayers: z.array(z.string()).optional(),
 });
 
 /** A graded waiver add cached on the league for every league type — the dollar
