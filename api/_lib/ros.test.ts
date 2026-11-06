@@ -29,16 +29,47 @@ const ros = (weeks: Record<number, Record<string, number>>): RosContext => ({
 
 describe("byeWeeksByTeam", () => {
   const normalize = (team: string) => team.toUpperCase();
+  // A complete 4-team schedule: every team plays every week 1-18. Removing a
+  // game's week models a bye (one missing week) or an omitted game (data gap).
+  const fullSchedule = (omit: { home: string; away: string; weeks: number[] }[] = []) => {
+    const games: { week?: number; home?: string; away?: string }[] = [];
+    for (let week = 1; week <= 18; week += 1) {
+      games.push({ week, home: "KC", away: "BUF" }, { week, home: "JAX", away: "DEN" });
+    }
+    return games.filter(
+      (game) => !omit.some((o) => o.weeks.includes(game.week!) && [o.home, o.away].includes(game.home!) && [o.home, o.away].includes(game.away!)),
+    );
+  };
 
-  it.each([
-    ["first gap is the bye week", [{ week: 1, home: "KC", away: "BUF" }, { week: 7, home: "KC", away: "BUF" }], "KC", 2],
-    ["earliest gap wins", [{ week: 1, home: "KC", away: "BUF" }, { week: 5, home: "KC", away: "BUF" }, { week: 8, home: "KC", away: "BUF" }], "KC", 2],
-    ["team playing every week gets no entry", [{ week: 1, home: "KC", away: "BUF" }, { week: 2, home: "KC", away: "BUF" }], "KC", undefined, 2],
-    ["normalization applies", [{ week: 1, home: "Jax", away: "BUF" }, { week: 2, home: "BUF", away: "KC" }], "JAX", 2],
-    ["games without a week are skipped", [{ home: "KC", away: "BUF" }, { week: 2, home: "KC", away: "BUF" }], "KC", 1],
-  ])("%s", (_label, schedule, team, expected, lastWeek = 18) => {
-    const map = byeWeeksByTeam(schedule, normalize, lastWeek);
-    expect(map.get(team)).toBe(expected);
+  it("the single missing window week is the bye", () => {
+    const map = byeWeeksByTeam(fullSchedule([{ home: "KC", away: "BUF", weeks: [10] }]), normalize);
+    expect(map.get("KC")).toBe(10);
+    expect(map.get("BUF")).toBe(10);
+    expect(map.get("JAX")).toBeUndefined();
+  });
+
+  it("normalization applies to schedule teams", () => {
+    const schedule = fullSchedule([{ home: "JAX", away: "DEN", weeks: [12] }])
+      .map((game) => ({ ...game, home: game.home === "JAX" ? "Jac" : game.home }));
+    expect(byeWeeksByTeam(schedule, normalize).get("JAC")).toBe(12);
+  });
+
+  it("games without a week are skipped", () => {
+    const schedule = [...fullSchedule([{ home: "KC", away: "BUF", weeks: [10] }]), { home: "KC", away: "BUF" }];
+    expect(byeWeeksByTeam(schedule, normalize).get("KC")).toBe(10);
+  });
+
+  it("an omitted game inside the bye window means no bye is inferred", () => {
+    // Regression: the schedule is missing KC's week-9 game and KC's real bye is
+    // week 12. Two window gaps cannot be told apart, so the week must stay
+    // disclosed-unknown rather than misread as a real bye 0.
+    const map = byeWeeksByTeam(fullSchedule([{ home: "KC", away: "BUF", weeks: [9, 12] }]), normalize);
+    expect(map.get("KC")).toBeUndefined();
+  });
+
+  it("a gap outside the bye window is a data gap, not a bye", () => {
+    const map = byeWeeksByTeam(fullSchedule([{ home: "KC", away: "BUF", weeks: [2] }]), normalize);
+    expect(map.get("KC")).toBeUndefined();
   });
 });
 
@@ -253,6 +284,104 @@ describe("rosLineupDelta", () => {
     });
     expect(result.weeks).toHaveLength(1);
   });
+
+  it.each(["K", "DEF"])("counts %s starters in lineup totals", (position) => {
+    const result = rosLineupDelta({
+      before: [{ playerId: "drop", position }],
+      after: [{ playerId: "add", position }],
+      slots: [position],
+      league,
+      ros: ros({ 10: { drop: 5, add: 9 } }),
+      addId: "add",
+    });
+    expect(result.weeks).toEqual([
+      { week: 10, before: 5, after: 9, delta: 4, addSlot: position },
+    ]);
+    expect(result.totalDelta).toBe(4);
+  });
+
+  it("a draft pick asset never blocks coverage", () => {
+    // Regression: a traded pick has no projection row and no team — treating it
+    // as a rostered player used to exclude every covered week and report a
+    // misleading zero delta.
+    const result = rosLineupDelta({
+      before: [{ playerId: "a", position: "RB" }, { playerId: "b", position: "RB" }],
+      after: [
+        { playerId: "a", position: "RB" },
+        { playerId: "add", position: "RB" },
+        { playerId: "pick-2027-1", position: "PICK", name: "2027 1st" },
+      ],
+      slots,
+      league,
+      ros: ros({ 10: { a: 10, b: 5, add: 8 }, 11: { a: 10, b: 5, add: 12 } }),
+      addId: "add",
+    });
+    expect(result.weeks.map((row) => row.delta)).toEqual([3, 7]);
+    expect(result.totalDelta).toBe(10);
+    expect(result.unknownPlayerWeeks).toEqual([]);
+  });
+
+  it("roster team aliases resolve to schedule bye teams", () => {
+    // Regression: Sleeper roster rows keep the source alias (LA) while the
+    // schedule/bye map is keyed canonically (LAR); the alias used to defeat
+    // the bye lookup and exclude the whole week as unknown.
+    const result = rosLineupDelta({
+      before: [{ playerId: "a", position: "RB" }, { playerId: "gone", position: "RB", team: "LA" }],
+      after: [{ playerId: "a", position: "RB" }, { playerId: "add", position: "RB" }],
+      slots,
+      league,
+      ros: ros({ 10: { a: 10, add: 4 } }),
+      addId: "add",
+      byeWeeks: new Map([["LAR", 10]]),
+    });
+    expect(result.totalDelta).toBe(4);
+    expect(result.unknownPlayerWeeks).toEqual([]);
+  });
+
+  it("a stale projection row on the player's bye week scores a real 0", () => {
+    // Regression: a cached row from before a move to a team with a different
+    // bye used to count its points on the new team's bye.
+    const result = rosLineupDelta({
+      before: [{ playerId: "a", position: "RB" }, { playerId: "b", position: "RB", team: "KC" }],
+      after: [{ playerId: "a", position: "RB" }, { playerId: "b", position: "RB", team: "KC" }],
+      slots,
+      league,
+      ros: ros({ 10: { a: 10, b: 9 } }),
+      byeWeeks: new Map([["KC", 10]]),
+    });
+    expect(result.weeks).toEqual([{ week: 10, before: 10, after: 10, delta: 0, addSlot: null }]);
+  });
+
+  it("a row without a usable score excludes and discloses the week", () => {
+    // Regression: in a half-PPR league a row carrying only pts_ppr used to be
+    // counted as covered but scored a silent 0, manufacturing a delta.
+    const halfPpr = { scoringSettings: undefined, rankingField: "halfPpr" } as const;
+    const result = rosLineupDelta({
+      before: [{ playerId: "a", position: "RB" }, { playerId: "gone", position: "RB" }],
+      after: [{ playerId: "a", position: "RB" }, { playerId: "add", position: "RB" }],
+      slots,
+      league: halfPpr,
+      ros: ros({ 10: { a: 10, gone: 5, add: 8 } }),
+      addId: "add",
+    });
+    expect(result.weeks).toHaveLength(0);
+    expect(result.totalDelta).toBe(0);
+    expect(result.unknownPlayerWeeks).toEqual([{ week: 10, players: ["a", "gone", "add"] }]);
+  });
+
+  it("an explicit zero fallback is a real score, not unknown", () => {
+    const result = rosLineupDelta({
+      before: [{ playerId: "a", position: "RB" }, { playerId: "b", position: "RB" }],
+      after: [{ playerId: "a", position: "RB" }, { playerId: "add", position: "RB" }],
+      slots,
+      league,
+      ros: ros({ 10: { a: 10, b: 0, add: 8 } }),
+      addId: "add",
+    });
+    // b's explicit 0 counts: before a+b=10, after a+add=18.
+    expect(result.weeks).toEqual([{ week: 10, before: 10, after: 18, delta: 8, addSlot: "RB" }]);
+    expect(result.unknownPlayerWeeks).toEqual([]);
+  });
 });
 
 describe("injuryExposureFacts", () => {
@@ -286,6 +415,57 @@ describe("injuryExposureFacts", () => {
       isDesignated,
     });
     expect(facts.designatedProjectedShare).toBeNull();
+  });
+
+  it("names players missing a covered non-bye week as partial", () => {
+    const facts = injuryExposureFacts({
+      roster: [
+        { playerId: "a", name: "A", position: "RB", injuryStatus: null },
+        { playerId: "b", name: "B", position: "RB", injuryStatus: "Out" },
+      ],
+      involved: [{ playerId: "b", name: "B", position: "RB", injuryStatus: "Out" }],
+      ros: ros({ 10: { a: 10, b: 10 }, 11: { a: 10 } }),
+      league,
+      isDesignated,
+    });
+    // b is covered in week 10 but missing in week 11: disclosed as partial,
+    // not silently dropped from that week's total.
+    expect(facts.partialPlayers).toEqual(["B"]);
+    expect(facts.absentPlayers).toEqual([]);
+    expect(facts.designatedProjectedShare).toBe(0.333);
+  });
+
+  it("a schedule bye is a real 0, never a coverage gap", () => {
+    const facts = injuryExposureFacts({
+      roster: [{ playerId: "a", name: "A", position: "RB", team: "KC", injuryStatus: null }],
+      involved: [],
+      ros: ros({ 10: { a: 10 }, 11: {} }),
+      league,
+      isDesignated,
+      byeWeeks: new Map([["KC", 11]]),
+    });
+    expect(facts.partialPlayers).toEqual([]);
+    expect(facts.absentPlayers).toEqual([]);
+    expect(facts.designatedProjectedShare).toBe(0);
+  });
+
+  it("a stale bye-week row counts 0 in the exposure share", () => {
+    const facts = injuryExposureFacts({
+      roster: [
+        { playerId: "a", name: "A", position: "RB", team: "KC", injuryStatus: "Out" },
+        { playerId: "b", name: "B", position: "RB", injuryStatus: null },
+      ],
+      involved: [{ playerId: "a", name: "A", position: "RB", team: "KC", injuryStatus: "Out" }],
+      // Week 10 is KC's bye but a stale cached row still holds points for a.
+      ros: ros({ 10: { a: 10, b: 10 }, 11: { a: 10, b: 10 } }),
+      league,
+      isDesignated,
+      byeWeeks: new Map([["KC", 10]]),
+    });
+    // a's stale week-10 points are ignored: designated 10 / total 30.
+    expect(facts.designatedProjectedShare).toBe(0.333);
+    expect(facts.partialPlayers).toEqual([]);
+    expect(facts.absentPlayers).toEqual([]);
   });
 });
 
