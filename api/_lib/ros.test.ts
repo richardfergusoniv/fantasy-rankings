@@ -191,6 +191,33 @@ describe("rosLineupDelta", () => {
     expect(result.startedInWeeks[0]!.note).not.toContain("bye");
   });
 
+  it("suppresses the start note on the add's own confirmed bye week", () => {
+    // Regression: the add is the only second-RB option and week 10 is his
+    // confirmed bye. The optimizer fills the slot with his real 0 (the stale
+    // 99 row is correctly overridden), so he lands in the after-lineup - but
+    // "Starts for you in week 10." would claim a start he cannot make. The
+    // note is suppressed; the week row and the honest -5 delta stay.
+    const result = rosLineupDelta({
+      before: [
+        { playerId: "a", position: "RB" },
+        { playerId: "b", position: "RB" },
+      ],
+      after: [
+        { playerId: "a", position: "RB" },
+        { playerId: "add", position: "RB", team: "KC" },
+      ],
+      slots,
+      league,
+      ros: ros({ 10: { a: 10, b: 5, add: 99 }, 11: { a: 10, b: 5, add: 12 } }),
+      addId: "add",
+      byeWeeks: new Map([["KC", 10]]),
+    });
+    expect(result.weeks.map((row) => [row.week, row.delta])).toEqual([[10, -5], [11, 7]]);
+    expect(result.weeks[0]!.addSlot).toBe("RB");
+    expect(result.startedInWeeks.map((row) => row.week)).toEqual([11]);
+    expect(result.startedInWeeks[0]!.note).toBe("Starts for you in week 11.");
+  });
+
   it("a missing projection row for an involved player excludes and discloses the week", () => {
     // Reproduces the reviewed defect: the dropped player has no row, so he used
     // to score 0 on the before side only and the move was credited +4 of points
