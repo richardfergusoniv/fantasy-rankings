@@ -30,6 +30,7 @@ import {
 } from "./player-news-shared.js";
 import { VALUE_HISTORY_CHART_MIN_DATE } from "./player-value-history.js";
 import { scoreWaiverSuggestions } from "./waiver-suggestions.js";
+import { injuryExposureFacts, loadRosContext, regularSeasonEndWeek, rosLineupDelta } from "./ros.js";
 import { loadPropLineWeek, type PropLineWeekPayload } from "./prop-line-week.js";
 import {
   buildPropHistory,
@@ -48,7 +49,7 @@ import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projec
 import { DEFAULT_LAST_REGULAR_WEEK } from "./league-schedule.js";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 import { PLAYER_NEWS_SNAPSHOT_KEY } from "./sleeper.js";
-import {
+import { chatRosBudgetAllows, chatRosYieldAtMs,
   defaultToolLeague,
   findLeague,
   gameLineForTeam,
@@ -62,8 +63,7 @@ import {
   tradeLineupBeforeAfter,
   waiverAdjustments,
   type ChatToolContext,
-  type OpenAiToolDefinition,
-} from "./chat-tools.js";
+  type OpenAiToolDefinition, } from "./chat-tools.js";
 import { loadActiveScoringWeights } from "./scoring-jobs.js";
 
 export const EXTENDED_CHAT_TOOL_DEFINITIONS: OpenAiToolDefinition[] = [
@@ -1385,7 +1385,17 @@ export async function toolSuggestWaivers(
   const league = requireLeague(dashboard, args.leagueId);
   if (!league) return { ok: false as const, error: "League not found for this user." };
   const weights = await loadActiveScoringWeights();
-  const result = scoreWaiverSuggestions(dashboard, league, weights, { limit: args.limit, position: args.position, scoringWindow: ctx.scoringWindow });
+  // Rest-of-season coverage for the graded adds — best-effort, never blocks,
+  // and skipped when the remaining chat budget cannot cover the load.
+  const rosOptions = !chatRosBudgetAllows(ctx) ? undefined : await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league), undefined, chatRosYieldAtMs(ctx))
+    .then((context) => context.coveredWeeks.length > 0
+      ? { context, byeWeeks: new Map(Object.entries(dashboard.byeWeeks ?? {})) }
+      : undefined)
+    .catch((error) => {
+      console.error("[suggest_waivers] ROS coverage load failed", error instanceof Error ? error.message : error);
+      return undefined;
+    });
+  const result = scoreWaiverSuggestions(dashboard, league, weights, { limit: args.limit, position: args.position, scoringWindow: ctx.scoringWindow, ros: rosOptions });
   const evidence = await loadMoveEvidenceIndex(dashboard);
   return {
     ...result,
@@ -1404,6 +1414,9 @@ export async function toolSuggestWaivers(
       verdicts: row.verdicts,
       evidence: evidence.forPlayer({ ...row, team: row.team ?? null }),
       bid: row.bid,
+      // Rest-of-season lineup points gained vs the paired drop — null when no
+      // week had projection coverage; partial:true names the missing weeks.
+      ros: row.ros ?? null,
     })),
   };
 }
@@ -1423,6 +1436,15 @@ export async function toolSuggestTrades(
     : seasonLongAssets;
   const valueById = new Map(seasonLongAssets.map((row) => [row.playerId, row]));
   const dynastyValueById = new Map(dynastyAssets.map((row) => [row.playerId, row.value]));
+  // Rest-of-season coverage shared by every idea below — best-effort, and
+  // skipped when the remaining chat budget cannot cover the load.
+  const rosContext = !chatRosBudgetAllows(ctx) ? null : await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league), undefined, chatRosYieldAtMs(ctx))
+    .catch((error) => {
+      console.error("[suggest_trades] ROS coverage load failed", error instanceof Error ? error.message : error);
+      return null;
+    });
+  const rosWeeks = rosContext && rosContext.coveredWeeks.length > 0 ? rosContext : null;
+  const rosByeWeeks = new Map(Object.entries(dashboard.byeWeeks ?? {}));
   const seasonLongValueById = new Map(seasonLongAssets.map((row) => [row.playerId, row.value]));
   const weights = await loadActiveScoringWeights();
   const me = league.tradeTeams.find((team) => team.isUser);
@@ -1465,6 +1487,14 @@ export async function toolSuggestTrades(
     .filter((row): row is Asset => row != null)
     .sort((a, b) => b.value - a.value);
 
+  type RosDelta = {
+    pointsDelta: number;
+    coveredWeeks: number[];
+    missingWeeks: number[];
+    unknownPlayerWeeks: { week: number; players: string[] }[];
+    asOf: string | null;
+    partial: boolean;
+  };
   const ideas: Array<{
     partner: string;
     give: Asset[];
@@ -1487,13 +1517,21 @@ export async function toolSuggestTrades(
         starterValue: number;
         powerRank: number;
         dynastyStarterValue?: number;
+        restOfSeason?: RosDelta | null;
       };
       partnerUtilityDelta: {
         teamName: string;
         weekLineupPoints: number;
         starterValue: number;
+        restOfSeason?: RosDelta | null;
       };
     };
+    injuryExposure?: {
+      designatedPlayers: string[];
+      designatedProjectedShare: number | null;
+      absentPlayers: string[];
+      partialPlayers: string[];
+    } | null;
     rosterImpact: {
       week: { lineupPointsBefore: number; lineupPointsAfter: number };
       seasonLong: {
@@ -1618,6 +1656,8 @@ export async function toolSuggestTrades(
       playerId: player.playerId,
       name: player.name,
       position: player.position,
+      team: player.team,
+      injuryStatus: player.injuryStatus,
       lineupSlot: player.lineupSlot,
       isStarter: player.isStarter,
       projection: player.projection ?? projectionById.get(player.playerId) ?? null,
@@ -1655,6 +1695,8 @@ export async function toolSuggestTrades(
       playerId: player.playerId,
       name: player.name,
       position: player.position,
+      team: player.team,
+      injuryStatus: player.injuryStatus,
       lineupSlot: player.lineupSlot,
       isStarter: player.isStarter,
       projection: player.projection ?? projectionById.get(player.playerId) ?? null,
@@ -1681,6 +1723,64 @@ export async function toolSuggestTrades(
     ];
     const partnerSlBefore = optimizeValueTradeRoster(partnerPlayers, slots, seasonLongValueById);
     const partnerSlAfter = optimizeValueTradeRoster(partnerAfterPlayers, slots, seasonLongValueById);
+    // Rest-of-season lineup points for both sides, excluding and disclosing
+    // weeks where any player on either roster has no projection row (and no
+    // schedule bye), plus descriptive injury exposure for the involved
+    // assets — current designations only, not a risk score.
+    let yourRos: RosDelta | null = null;
+    let partnerRos: RosDelta | null = null;
+    let ideaExposure: { designatedPlayers: string[]; designatedProjectedShare: number | null; absentPlayers: string[]; partialPlayers: string[] } | null = null;
+    if (rosWeeks) {
+      // Team lookup spans every roster in the league: an incoming player whose
+      // team is missing here turns his known bye into an excluded unknown week.
+      const rosTeamById = new Map(
+        [...rosterPlayers, ...league.tradeTeams.flatMap((team) => team.players)].map((p) => [p.playerId, p.team ?? ""] as const),
+      );
+      const own = rosLineupDelta({
+        before: rosterPlayers,
+        after: afterPlayers,
+        slots,
+        league,
+        ros: rosWeeks,
+        byeWeeks: rosByeWeeks,
+        teamById: rosTeamById,
+        nameById: new Map(rosterPlayers.map((p) => [p.playerId, p.name])),
+      });
+      yourRos = {
+        pointsDelta: own.totalDelta,
+        coveredWeeks: rosWeeks.coveredWeeks,
+        missingWeeks: rosWeeks.missingWeeks,
+        unknownPlayerWeeks: own.unknownPlayerWeeks,
+        asOf: rosWeeks.asOf,
+        partial: rosWeeks.missingWeeks.length > 0 || own.unknownPlayerWeeks.length > 0,
+      };
+      const theirs = rosLineupDelta({ before: partnerPlayers, after: partnerAfterPlayers, slots, league, ros: rosWeeks, byeWeeks: rosByeWeeks, teamById: rosTeamById });
+      partnerRos = {
+        pointsDelta: theirs.totalDelta,
+        coveredWeeks: rosWeeks.coveredWeeks,
+        missingWeeks: rosWeeks.missingWeeks,
+        unknownPlayerWeeks: theirs.unknownPlayerWeeks,
+        asOf: rosWeeks.asOf,
+        partial: rosWeeks.missingWeeks.length > 0 || theirs.unknownPlayerWeeks.length > 0,
+      };
+      const statusById = new Map(
+        [...rosterPlayers, ...partnerPlayers].map((p) => [p.playerId, p.injuryStatus ?? null] as const),
+      );
+      ideaExposure = injuryExposureFacts({
+        roster: rosterPlayers.map((p) => ({ playerId: p.playerId, name: p.name, position: p.position, team: p.team, injuryStatus: p.injuryStatus })),
+        involved: [...give, ...get].map((a) => ({
+          playerId: a.playerId,
+          name: a.name,
+          position: a.position,
+          injuryStatus: statusById.get(a.playerId) ?? null,
+        })),
+        ros: rosWeeks,
+        league,
+        isDesignated: (status) => status != null && status !== "",
+        byeWeeks: rosByeWeeks,
+        teamById: rosTeamById,
+      });
+    }
     const move = scoreTrade({
       week: {
         yourLineupBefore: lineup.before,
@@ -1743,13 +1843,16 @@ export async function toolSuggestTrades(
           ...(dynastyTotals && dyBefore && dyAfter
             ? { dynastyStarterValue: dyAfter.score - Math.max(1, dyBefore.score) }
             : {}),
+          restOfSeason: yourRos,
         },
         partnerUtilityDelta: {
           teamName: partner.teamName,
           weekLineupPoints: partnerLineup.after - partnerLineup.before,
           starterValue: partnerSlAfter.score - Math.max(1, partnerSlBefore.score),
+          restOfSeason: partnerRos,
         },
       },
+      injuryExposure: ideaExposure,
       // The raw roster effects the labels are computed from: a value gap
       // alone does not explain a trade verdict when starter value or power
       // rank moves the other way.
@@ -1789,7 +1892,7 @@ export async function toolSuggestTrades(
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
     scoringWindow: tradeWindowKey,
-    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind each idea and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists what this league has actually traded recently — frame the suggestions against it when it is non-null. utility separates market fairness (value z) from yourUtilityDelta (your lineup/starter-value/power-rank change) and partnerUtilityDelta (the other roster's change).",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind each idea and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists what this league has actually traded recently — frame the suggestions against it when it is non-null. utility separates market fairness (value z) from yourUtilityDelta (your lineup/starter-value/power-rank change) and partnerUtilityDelta (the other roster's change). utility.*.restOfSeason is the lineup-points change summed over weeks with full projection coverage: partial:true means some weeks are not counted (missingWeeks names weeks with no data at all; unknownPlayerWeeks names weeks where a player on either roster has no projection and was not on a schedule bye), and a null restOfSeason means 'no projection coverage', not zero. Optimized ROS comparisons cover only QB, RB, WR, TE, K and DEF: positions the lineup optimizer never starts (such as individual defensive players) are excluded from the comparison entirely, not treated as unknown. injuryExposure lists current designations and the share of remaining projected points they carry; it is descriptive, not a risk score: absentPlayers names players with no usable projection in any covered week, partialPlayers names players missing a covered non-bye week.",
     freshness: moveFreshness(dashboard),
     marketContext: await loadTradeMarketContext(ctx, league.id, []),
     myNeeds,
@@ -1968,4 +2071,4 @@ export async function dispatchExtendedChatTool(
     default:
       return null;
   }
-}
+        }

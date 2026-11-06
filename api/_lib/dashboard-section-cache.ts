@@ -112,6 +112,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
           id,
           name,
           scoringLabel,
+          scoringSettings,
           rankingField,
           rosteredPlayerIds,
           rosterAssignments,
@@ -127,6 +128,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
           id,
           name,
           scoringLabel,
+          scoringSettings,
           rankingField,
           rosteredPlayerIds,
           rosterAssignments,
@@ -171,6 +173,7 @@ export function splitDashboardIntoSections(dashboard: Dashboard): DashboardSecti
       defenses: dashboard.defenses,
       strengthOfSchedule: dashboard.strengthOfSchedule ?? [],
       upcomingGames: dashboard.upcomingGames ?? {},
+      byeWeeks: dashboard.byeWeeks ?? {},
       playerTrending: dashboard.playerTrending ?? {},
       playerInsights: dashboard.playerInsights ?? emptyPlayerInsights,
       gameLines: dashboard.gameLines ?? [],
@@ -427,6 +430,7 @@ export function assembleDashboardFromSections(
     defenses: players.data.defenses,
     playerTrending: players.data.playerTrending ?? {},
     upcomingGames: players.data.upcomingGames ?? {},
+    byeWeeks: players.data.byeWeeks ?? {},
     playerInsights: players.data.playerInsights ?? emptyPlayerInsights,
     analytics: analytics.data.analytics,
     strengthOfSchedule: players.data.strengthOfSchedule ?? [],
@@ -480,6 +484,9 @@ export function buildDashboardCacheWrites(args: {
         // stays omitted on purpose — it duplicates rankings and costs a full
         // second table; assembly falls back to rankings.
         gameLines: sections.players.gameLines,
+        // Team → bye week (32 entries) — waiver ROS evidence and the chat
+        // assistant read it from this row.
+        byeWeeks: sections.players.byeWeeks,
       };
       const sectionPayloads: Array<{ section: DashboardCacheSection; data: unknown }> = [
         { section: "meta", data: sections.meta },
@@ -639,4 +646,4 @@ export function resolveSectionHitFromRows<S extends DashboardCacheSection>(args:
     live: dashboardSnapshotIsLive(fullDashboard),
     fetchedAtMs: args.fullFetchedAt?.getTime() ?? 0,
   };
-}
+  }

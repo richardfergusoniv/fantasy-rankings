@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Dashboard } from "./dashboard-schemas.js";
 import {
+  chatRosBudgetAllows,
+  chatRosYieldAtMs,
   defaultToolLeague,
   dispatchChatTool,
   gameLineForTeam,
@@ -603,5 +605,37 @@ describe("gameLineForTeam", () => {
     expect(gameLineForTeam(dashboard, "LA")).toMatchObject({ opponent: "SEA", spread: -3 });
     expect(gameLineForTeam(dashboard, null)).toBeNull();
     expect(gameLineForTeam(dashboard, "KC")).toBeNull();
+  });
+});
+
+describe("chatRosBudgetAllows", () => {
+  const ctx = (chatDeadlineAtMs?: number): ChatToolContext => ({
+    userId: "u1",
+    sleeperUserId: "s1",
+    chatDeadlineAtMs,
+  });
+
+  it("allows ROS loading when no chat deadline is stamped", () => {
+    expect(chatRosBudgetAllows(ctx())).toBe(true);
+  });
+
+  it("allows ROS loading while the remaining chat budget covers it", () => {
+    expect(chatRosBudgetAllows(ctx(Date.now() + 30_000))).toBe(true);
+  });
+
+  it("skips optional ROS loading when the remaining budget cannot cover it", () => {
+    expect(chatRosBudgetAllows(ctx(Date.now() + 5_000))).toBe(false);
+    expect(chatRosBudgetAllows(ctx(Date.now() - 1))).toBe(false);
+  });
+
+  it("reserves answer time: ROS yields before the deadline, not at it", () => {
+    const deadlineAtMs = Date.now() + 25_000;
+    // The yield instant sits 10s ahead of the hard deadline, leaving the
+    // model room to serialize the tool result and finish the answer.
+    expect(chatRosYieldAtMs(ctx(deadlineAtMs))).toBe(deadlineAtMs - 10_000);
+    // A deadline 15s out leaves only 5s of load window: ROS is skipped.
+    expect(chatRosBudgetAllows(ctx(Date.now() + 15_000))).toBe(false);
+    // 25s out leaves 15s of load window: ROS runs.
+    expect(chatRosBudgetAllows(ctx(deadlineAtMs))).toBe(true);
   });
 });

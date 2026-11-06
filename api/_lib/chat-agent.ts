@@ -87,6 +87,7 @@ export async function runChatAgent(args: RunChatAgentArgs): Promise<RunChatAgent
     args.systemPrompt ?? buildChatSystemPrompt(scoringWindow),
   );
   const deadlineMs = args.deadlineMs ?? CHAT_AGENT_DEADLINE_MS;
+  args.ctx.chatDeadlineAtMs = Date.now() + deadlineMs;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), deadlineMs);
   let modelUsed = "";

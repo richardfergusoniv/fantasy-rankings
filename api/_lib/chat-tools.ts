@@ -7,7 +7,8 @@ import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { weeklyOpponentRosterId } from "./opponent-roster.js";
 import type { Dashboard } from "./dashboard-schemas.js";
-import { loadOrBuildUserDashboard, readUserDashboardCache } from "./dashboard-build.js";
+import { loadOrBuildUserDashboard, readUserDashboardCache, ROS_LOAD_MIN_REMAINING_MS } from "./dashboard-build.js";
+import { remainingMsUntil } from "./actual-stats-candidates.js";
 import { db, schema } from "./db.js";
 import { DYNASTY_NEWS_TAG, isSleeperTimestampOnlyNews } from "./player-news-filters.js";
 import { retentionCutoff } from "./player-news-shared.js";
@@ -26,6 +27,7 @@ import {
   type OptimizablePlayer,
 } from "./lineup-optimizer.js";
 import { moveVerdict, scoreTrade } from "./move-scoring.js";
+import { injuryExposureFacts, loadRosContext, regularSeasonEndWeek, rosLineupDelta } from "./ros.js";
 import { teamOutlook, winPercent, winProbability } from "./win-probability.js";
 import { redraftTwinFormat } from "./season-long-format.js";
 import { loadActiveScoringWeights } from "./scoring-jobs.js";
@@ -69,12 +71,38 @@ export type ChatToolContext = {
   dashboardPromise?: Promise<Dashboard>;
   /** Ranking window the user is viewing — drives which score the model explains. */
   scoringWindow?: "week" | "season_long" | "dynasty";
+  /** Wall-clock instant the chat answer is due; optional ROS loading stops when the remaining budget cannot cover it. */
+  chatDeadlineAtMs?: number;
   /**
    * League the user is currently viewing (resolved server-side). Used as the
    * default when a tool call omits leagueId, instead of always leagues[0].
    */
   defaultLeagueId?: string;
 };
+
+/**
+ * Instant by which optional ROS evidence must yield: the chat deadline minus
+ * a reserve for serializing the tool result and the model's final answer, so
+ * ROS loading never consumes the time the answer itself needs.
+ */
+export function chatRosYieldAtMs(ctx: ChatToolContext): number | undefined {
+  return ctx.chatDeadlineAtMs == null ? undefined : ctx.chatDeadlineAtMs - ROS_LOAD_MIN_REMAINING_MS;
+}
+
+/**
+ * Optional ROS evidence lives inside the chat deadline: a slow projection
+ * pull must not eat the remaining answer budget, so loading starts only when
+ * the remaining time before the yield instant covers it, and the tool answers
+ * without ROS otherwise.
+ */
+export function chatRosBudgetAllows(ctx: ChatToolContext): boolean {
+  const yieldAtMs = chatRosYieldAtMs(ctx);
+  if (yieldAtMs == null) return true;
+  const remainingMs = remainingMsUntil(yieldAtMs);
+  if (remainingMs >= ROS_LOAD_MIN_REMAINING_MS) return true;
+  console.error("[chat] skipping optional ROS loading: remaining chat budget", remainingMs, "ms");
+  return false;
+}
 
 export type OpenAiToolDefinition = {
   type: "function";
@@ -884,6 +912,8 @@ async function toolEvaluateTrade(
     playerId: p.playerId,
     name: p.name,
     position: p.position,
+    team: p.team,
+    injuryStatus: p.injuryStatus,
     lineupSlot: p.lineupSlot,
     isStarter: p.isStarter,
     projection: p.projection ?? projectionById.get(p.playerId) ?? null,
@@ -893,6 +923,8 @@ async function toolEvaluateTrade(
     playerId: asset.playerId,
     name: asset.name,
     position: asset.position,
+    team: null,
+    injuryStatus: null,
     lineupSlot: null as string | null,
     isStarter: false,
     projection: projectionById.get(asset.playerId) ?? null,
@@ -936,6 +968,8 @@ async function toolEvaluateTrade(
       playerId: p.playerId,
       name: p.name,
       position: p.position,
+      team: p.team,
+      injuryStatus: p.injuryStatus,
       lineupSlot: p.lineupSlot,
       isStarter: p.isStarter,
       projection: p.projection ?? projectionById.get(p.playerId) ?? null,
@@ -945,6 +979,8 @@ async function toolEvaluateTrade(
       playerId: asset.playerId,
       name: asset.name,
       position: asset.position,
+      team: null,
+      injuryStatus: null,
       lineupSlot: null as string | null,
       isStarter: false,
       projection: projectionById.get(asset.playerId) ?? null,
@@ -1064,6 +1100,94 @@ async function toolEvaluateTrade(
     weights,
   });
 
+  // Rest-of-season lineup points for both sides over the weeks where every
+  // player on either roster has projection coverage: weeks that failed to
+  // load and weeks where any rostered player has no row (and no schedule bye)
+  // are excluded from both sides and disclosed, so missing data cannot
+  // manufacture a gain.
+  // Descriptive injury exposure rides along — current
+  // designations only, never a future-injury probability. Best-effort: a load
+  // failure leaves restOfSeason null rather than blocking the eval.
+  type RosDelta = {
+    pointsDelta: number;
+    coveredWeeks: number[];
+    missingWeeks: number[];
+    unknownPlayerWeeks: { week: number; players: string[] }[];
+    asOf: string | null;
+    partial: boolean;
+  };
+  let yourRos: RosDelta | null = null;
+  let partnerRos: RosDelta | null = null;
+  let injuryExposure: { designatedPlayers: string[]; designatedProjectedShare: number | null; absentPlayers: string[]; partialPlayers: string[] } | null = null;
+  try {
+    const ros = chatRosBudgetAllows(ctx)
+      ? await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league), undefined, chatRosYieldAtMs(ctx))
+      : null;
+    if (ros && ros.coveredWeeks.length > 0) {
+      const byeWeeks = new Map(Object.entries(dashboard.byeWeeks ?? {}));
+      const statusById = new Map(
+        [...league.starters, ...league.bench, ...league.tradeTeams.flatMap((t) => t.players)]
+          .map((p) => [p.playerId, p.injuryStatus] as const),
+      );
+      // Team lookup spans every roster in the league, not just the two sides:
+      // an incoming player whose team is missing here turns his known bye into
+      // an excluded unknown week, and multi-roster deals have no single partner.
+      const rosTeamById = new Map(
+        [...myPlayers, ...league.tradeTeams.flatMap((team) => team.players)].map((p) => [p.playerId, p.team ?? ""] as const),
+      );
+      const own = rosLineupDelta({
+        before: myPlayers,
+        after: afterPlayers,
+        slots,
+        league,
+        ros,
+        byeWeeks,
+        teamById: rosTeamById,
+        nameById: new Map(myPlayers.map((p) => [p.playerId, p.name])),
+      });
+      yourRos = {
+        pointsDelta: own.totalDelta,
+        coveredWeeks: ros.coveredWeeks,
+        missingWeeks: ros.missingWeeks,
+        unknownPlayerWeeks: own.unknownPlayerWeeks,
+        asOf: ros.asOf,
+        partial: ros.missingWeeks.length > 0 || own.unknownPlayerWeeks.length > 0,
+      };
+      if (partner) {
+        const partnerBefore = partner.players.map((p) => ({ playerId: p.playerId, position: p.position, team: p.team }));
+        const partnerAfter = [
+          ...partnerBefore.filter((p) => !getIds.has(p.playerId)),
+          ...give.resolved.map((a) => ({ playerId: a.playerId, position: a.position, team: null })),
+        ];
+        const theirs = rosLineupDelta({ before: partnerBefore, after: partnerAfter, slots, league, ros, byeWeeks, teamById: rosTeamById });
+        partnerRos = {
+          pointsDelta: theirs.totalDelta,
+          coveredWeeks: ros.coveredWeeks,
+          missingWeeks: ros.missingWeeks,
+          unknownPlayerWeeks: theirs.unknownPlayerWeeks,
+          asOf: ros.asOf,
+          partial: ros.missingWeeks.length > 0 || theirs.unknownPlayerWeeks.length > 0,
+        };
+      }
+      injuryExposure = injuryExposureFacts({
+        roster: myPlayers.map((p) => ({ playerId: p.playerId, name: p.name, position: p.position, team: p.team, injuryStatus: p.injuryStatus })),
+        involved: [...give.resolved, ...get.resolved].map((a) => ({
+          playerId: a.playerId,
+          name: a.name,
+          position: a.position,
+          injuryStatus: statusById.get(a.playerId) ?? null,
+        })),
+        ros,
+        league,
+        isDesignated: (status) => status != null && status !== "",
+        byeWeeks,
+        teamById: rosTeamById,
+      });
+    }
+  } catch (error) {
+    console.error("[evaluate_trade] ROS evidence failed", error instanceof Error ? error.message : error);
+  }
+
   // Primary follows the chat scoring window (default Week N).
   const windowKey: "week" | "season_long" | "dynasty" =
     ctx.scoringWindow === "week"
@@ -1083,7 +1207,7 @@ async function toolEvaluateTrade(
     leagueId: league.id,
     formatKey: league.seasonLongFormat.key,
     scoringWindow: windowKey,
-    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind the verdict and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists this league's past trades involving the same positions — say whether a deal like this has been accepted here when it is non-null. utility separates market fairness (value z) from yourUtilityDelta (your lineup/starter-value/power-rank change) and partnerUtilityDelta (the other roster's change, null when incoming assets span multiple teams).",
+    note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind the verdict and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists this league's past trades involving the same positions — say whether a deal like this has been accepted here when it is non-null. utility separates market fairness (value z) from yourUtilityDelta (your lineup/starter-value/power-rank change) and partnerUtilityDelta (the other roster's change, null when incoming assets span multiple teams). utility.*.restOfSeason is the lineup-points change summed over weeks with full projection coverage for the traded players — partial:true means some weeks are not counted: missingWeeks names weeks with no data at all, unknownPlayerWeeks names weeks where a player on either roster has no projection and was not on a schedule bye. A null restOfSeason means 'no projection coverage', not zero. Optimized ROS comparisons cover only QB, RB, WR, TE, K and DEF: positions the lineup optimizer never starts (such as individual defensive players) are excluded from the comparison entirely, not treated as unknown. injuryExposure lists current designations and the share of remaining projected points they carry; it is descriptive, not a risk score: absentPlayers names players with no usable projection in any covered week, partialPlayers names players missing a covered non-bye week (their share of the total is understated for those weeks).",
     freshness: moveFreshness(dashboard),
     marketContext: await loadTradeMarketContext(ctx, league.id, [
       ...give.resolved.map((row) => row.position),
@@ -1116,15 +1240,21 @@ async function toolEvaluateTrade(
         ...(dynastySide
           ? { dynastyStarterValue: dynastySide.starterAfter - dynastySide.starterBefore }
           : {}),
+        restOfSeason: yourRos,
       },
       partnerUtilityDelta: partnerUtility
         ? {
           teamName: partnerUtility.teamName,
           weekLineupPoints: partnerUtility.lineupPointsAfter - partnerUtility.lineupPointsBefore,
           starterValue: partnerUtility.starterValueAfter - partnerUtility.starterValueBefore,
+          restOfSeason: partnerRos,
         }
         : null,
     },
+    // Descriptive injury exposure (current designations + share of remaining
+    // projected points they carry; players absent from every future
+    // projection are named, not dropped). Not a risk score.
+    injuryExposure,
     // The raw roster effects the labels are computed from: a value gap
     // alone does not explain a trade verdict when starter value or power
     // rank moves the other way.
@@ -1296,4 +1426,4 @@ export function parseToolCallArguments(raw: string | undefined): unknown {
   } catch {
     return { __parseError: "Tool arguments were not valid JSON.", raw };
   }
-}
+  }
