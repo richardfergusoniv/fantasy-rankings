@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { RangeBar, rangeDomain, type ProjectionRange } from "../components/range-bar";
+import { MoveBar } from "../components/move-bar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1121,7 +1122,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
                       <span className={row.movement30Day > 0 ? "is-up" : "is-down"}><MoveTriangle direction={row.movement30Day > 0 ? "up" : "down"} />{Number.isFinite(row.movement30Day) ? formatPercent(Math.abs(row.movement30Day)) : "from 0"}</span>
                     ) : null}
                   </span>
-                  <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : row.projectionRange ? <><RangeBar className="is-end is-phone-only" range={row.projectionRange} value={row.projection} domain={rangeMax} /><span className="is-desktop-only">{row.projectionLabel}</span></> : <span>{row.projectionLabel}</span>}</span>
+                  <span className="ranking-proj"><strong>{isSeasonLong ? formatWhole(row.projection ?? 0) : formatProjectionPoints(row.projection, row.projectionSource)}</strong>{!isSeasonLong && row.projection === null ? <span>No projection</span> : row.projectionRange ? <><RangeBar className="is-end is-phone-only" range={row.projectionRange} value={row.projection} domain={rangeMax} /><span className="is-desktop-only">{row.projectionLabel}</span></> : isSeasonLong ? <MoveBar movePercent={row.movement30Day} className="is-end" /> : <span>{row.projectionLabel}</span>}</span>
                 </>
               );
               const openPlayer = () => {
