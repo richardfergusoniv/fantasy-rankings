@@ -10,8 +10,16 @@ import { suggestFaabBid } from "./faab-bid.js";
 import type { WaiverLabel } from "./scoring/labels.js";
 import type { ScoringWeightsParams } from "./scoring/weights.js";
 import { redraftTwinFormat } from "./season-long-format.js";
+import { injuryExposureFacts, rosLineupDelta, type RosContext } from "./ros.js";
+import { isUnavailableForScoring, isQuestionable } from "./scoring/injury.js";
 
 type League = Dashboard["leagues"][number];
+
+/** Rest-of-season evidence context: covered weeks + the schedule-derived bye map. */
+export type RosOptions = {
+  context: RosContext;
+  byeWeeks?: ReadonlyMap<string, number>;
+};
 
 /** The league format's season-long values (dynasty values in dynasty leagues). */
 function formatAssets(dashboard: Dashboard, league: League) {
@@ -36,6 +44,8 @@ export function scoreWaiverSuggestions(
     scoringWindow?: "week" | "season_long" | "dynasty" | null;
     /** Grade only this many free agents, the highest weekly projections first (the build's speed cap). */
     poolSize?: number;
+    /** Optional rest-of-season evidence (per-week lineup points). */
+    ros?: RosOptions;
   } = {},
 ) {
   const limit = Math.min(20, Math.max(1, Math.floor(options.limit ?? 10)));
@@ -192,6 +202,47 @@ export function scoreWaiverSuggestions(
         ? move.seasonLong
         : move.week;
 
+    // Rest-of-season lineup points for this exact add/drop pair: same covered
+    // weeks and player coverage on both sides, so missing data cannot
+    // manufacture a gain. Evidence only — labels keep their market-price scale.
+    const ros = options.ros && options.ros.context.coveredWeeks.length > 0
+      ? (() => {
+        const delta = rosLineupDelta({
+          before: rosterPlayers,
+          after: withAdd,
+          slots,
+          league,
+          ros: options.ros!.context,
+          addId: player.playerId,
+          addName: weekly?.name ?? player.name,
+          byeWeeks: options.ros!.byeWeeks,
+          teamById: new Map(rosterPlayers.map((p) => [p.playerId, p.team ?? ""])),
+          nameById: new Map(rosterPlayers.map((p) => [p.playerId, p.name])),
+        });
+        const exposure = injuryExposureFacts({
+          roster: [...league.starters, ...league.bench],
+          involved: [
+            { playerId: player.playerId, name: weekly?.name ?? player.name, injuryStatus: player.injuryStatus ?? null },
+            ...(dropCandidate ? [{ playerId: dropCandidate.player.playerId, name: dropCandidate.player.name, injuryStatus: dropCandidate.player.injuryStatus ?? null }] : []),
+          ],
+          ros: options.ros!.context,
+          league,
+          isDesignated: (status) => isUnavailableForScoring(status) || isQuestionable(status) || (status != null && status !== ""),
+        });
+        return {
+          pointsGained: delta.totalDelta,
+          coveredWeeks: options.ros!.context.coveredWeeks,
+          missingWeeks: options.ros!.context.missingWeeks,
+          asOf: options.ros!.context.asOf,
+          partial: options.ros!.context.missingWeeks.length > 0,
+          startsInWeeks: delta.startedInWeeks,
+          designatedPlayers: exposure.designatedPlayers,
+          designatedProjectedShare: exposure.designatedProjectedShare,
+          absentPlayers: exposure.absentPlayers,
+        };
+      })()
+      : null;
+
     return {
       playerId: player.playerId,
       name: weekly?.name ?? player.name,
@@ -206,6 +257,7 @@ export function scoreWaiverSuggestions(
           value: valueById.get(dropCandidate.player.playerId) ?? 0,
         }
         : null,
+      ros,
       verdicts: {
         week: moveVerdict(move.week),
         seasonLong: moveVerdict(move.seasonLong),
@@ -261,6 +313,18 @@ export function waiverBidsFor(dashboard: Dashboard, league: League, weights: Sco
 }
 
 /** One graded waiver add cached on the league for every league type (FAAB and priority alike). */
+export type WaiverRosEvidence = {
+  pointsGained: number;
+  coveredWeeks: number[];
+  missingWeeks: number[];
+  asOf: string | null;
+  partial: boolean;
+  startsInWeeks: { week: number; note: string }[];
+  designatedPlayers: string[];
+  designatedProjectedShare: number | null;
+  absentPlayers: string[];
+};
+
 export type WaiverGradeRow = {
   playerId: string;
   name: string;
@@ -271,6 +335,7 @@ export type WaiverGradeRow = {
   score: number;
   dropCandidate: { playerId: string; name: string; value: number } | null;
   bid: { kind: "faab" | "priority"; low?: number; high?: number; note: string } | null;
+  ros?: WaiverRosEvidence | null;
 };
 
 /**
@@ -279,8 +344,14 @@ export type WaiverGradeRow = {
  * a priority league's rows carry the priority note from suggestFaabBid instead
  * of a dollar bid. Pass rows stay hidden, matching the default waiver list.
  */
-export function waiverCacheFor(dashboard: Dashboard, league: League, weights: ScoringWeightsParams, limit = 15): { bids: WaiverBid[]; grades: WaiverGradeRow[] } {
-  const result = scoreWaiverSuggestions(dashboard, league, weights, { limit, scoringWindow: "week", poolSize: 15 });
+export function waiverCacheFor(
+  dashboard: Dashboard,
+  league: League,
+  weights: ScoringWeightsParams,
+  limit = 15,
+  ros?: RosOptions,
+): { bids: WaiverBid[]; grades: WaiverGradeRow[] } {
+  const result = scoreWaiverSuggestions(dashboard, league, weights, { limit, scoringWindow: "week", poolSize: 15, ros });
   const bids: WaiverBid[] = [];
   const grades: WaiverGradeRow[] = [];
   for (const row of result.suggestions) {
@@ -301,6 +372,7 @@ export function waiverCacheFor(dashboard: Dashboard, league: League, weights: Sc
       bid: bid
         ? { kind: bid.kind, ...(bid.kind === "faab" ? { low: bid.low, high: bid.high } : {}), note: bid.note }
         : null,
+      ros: row.ros ?? null,
     });
   }
   return { bids, grades };

@@ -200,6 +200,21 @@ export const waiverBidSchema = z.object({
   high: z.number().int(),
 });
 
+/** Rest-of-season evidence for one graded add: per-week lineup-points delta
+ * over the covered (successfully loaded) weeks. `partial` means some weeks
+ * failed to load, so the total covers only coveredWeeks. */
+export const waiverRosSchema = z.object({
+  pointsGained: z.number(),
+  coveredWeeks: z.array(z.number().int()),
+  missingWeeks: z.array(z.number().int()),
+  asOf: z.string().nullable(),
+  partial: z.boolean(),
+  startsInWeeks: z.array(z.object({ week: z.number().int(), note: z.string() })),
+  designatedPlayers: z.array(z.string()),
+  designatedProjectedShare: z.number().nullable(),
+  absentPlayers: z.array(z.string()),
+});
+
 /** A graded waiver add cached on the league for every league type — the dollar
  * bid for FAAB leagues, a priority note for rolling/reverse-standings leagues. */
 export const waiverGradeSchema = z.object({
@@ -221,6 +236,8 @@ export const waiverGradeSchema = z.object({
     high: z.number().optional(),
     note: z.string(),
   }).nullable(),
+  /** Rest-of-season lineup-points evidence; null on caches built before it existed or when no future weeks loaded. */
+  ros: waiverRosSchema.nullable().optional(),
 });
 
 /** The user's waiver standing: FAAB budget (FAAB leagues) and priority. */
@@ -406,6 +423,8 @@ export const dashboardResponse = z.object({
   strengthOfSchedule: z.array(strengthOfScheduleEntrySchema),
   /** Each NFL team's next four games (this week first), for the player card's schedule strip. */
   upcomingGames: z.record(z.string(), z.array(upcomingGameSchema)).optional(),
+  /** Team → bye week from the season schedule (the only bye source). Null when the schedule failed to load. */
+  byeWeeks: z.record(z.string(), z.number().int()).optional(),
   gameLines: z.array(teamGameLineSchema).default([]),
   sourceErrors: z.array(z.string()),
 });
@@ -475,6 +494,7 @@ export const dashboardPlayersSchema = dashboardResponse.pick({
   playerTrending: true,
   playerInsights: true,
   gameLines: true,
+  byeWeeks: true,
 });
 
 /** Trade teams + starter slots (Matchup/Monitor/Power/Trade). Waiver pool is separate. */

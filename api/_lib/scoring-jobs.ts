@@ -22,6 +22,7 @@ import { loadTeamWeekStats } from "./pfn-tables.js";
 import { loadNflPlayersMap } from "./nfl-players-cache.js";
 import { readNflState } from "./user-leagues.js";
 import { buildVacatedUsage } from "./vacated-usage.js";
+import { canonicalTeam, fetchJsonWithRetry, SLEEPER_BASE } from "./sleeper.js";
 
 export function sleeperTrendingWeekKey(season: number, week: number): string {
   return `sleeper-trending:${season}-w${week}`;
@@ -366,6 +367,27 @@ export async function runScoringDecisionSnapshot(
     nflPlayers = null;
   }
 
+  // Bye map from the actual NFL season schedule (the only source of bye
+  // truth) plus the shared rest-of-season coverage — recorded on every row
+  // so a replay can see which weeks were covered and when projections were
+  // pulled.
+  let byeWeekByTeam = new Map<string, number>();
+  let rosCoverage: { coveredWeeks: number[]; missingWeeks: number[]; asOf: string | null } | null = null;
+  try {
+    const { byeWeeksByTeam, loadRosContext, regularSeasonEndWeek } = await import("./ros.js");
+    const schedule = await fetchJsonWithRetry<Array<{ week?: number; home?: string; away?: string }>>(
+      `${SLEEPER_BASE.replace("/v1", "")}/schedule/nfl/regular/${season}`,
+    );
+    byeWeekByTeam = byeWeeksByTeam(schedule, canonicalTeam);
+    const endWeek = Math.max(...dashboard.leagues.map((league) => regularSeasonEndWeek(league)));
+    if (week + 1 <= endWeek) {
+      const ros = await loadRosContext(season, week + 1, endWeek);
+      rosCoverage = { coveredWeeks: ros.coveredWeeks, missingWeeks: ros.missingWeeks, asOf: ros.asOf };
+    }
+  } catch (error) {
+    console.error("[scoring] decision-snapshot bye/ROS context failed", error instanceof Error ? error.message : error);
+  }
+
   for (const league of dashboard.leagues) {
     const players = collectSnapshotPlayers(dashboard, league.id);
     // Cap per league to keep egress bounded (roster + top of board).
@@ -472,6 +494,10 @@ export async function runScoringDecisionSnapshot(
         isBye: player.isBye,
         isRostered: player.isRostered,
         isWaiverPool: player.isWaiverPool,
+        byeWeek: player.team ? byeWeekByTeam.get(player.team) ?? null : null,
+        rosAsOf: rosCoverage?.asOf ?? null,
+        rosCoveredWeeks: rosCoverage?.coveredWeeks ?? null,
+        rosMissingWeeks: rosCoverage?.missingWeeks ?? null,
       };
       // Never write the no-alternative placeholder (100 / Strong start).
       const scores = {

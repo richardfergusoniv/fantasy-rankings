@@ -30,6 +30,7 @@ import {
 } from "./player-news-shared.js";
 import { VALUE_HISTORY_CHART_MIN_DATE } from "./player-value-history.js";
 import { scoreWaiverSuggestions } from "./waiver-suggestions.js";
+import { injuryExposureFacts, loadRosContext, regularSeasonEndWeek, rosLineupDelta } from "./ros.js";
 import { loadPropLineWeek, type PropLineWeekPayload } from "./prop-line-week.js";
 import {
   buildPropHistory,
@@ -1385,7 +1386,16 @@ export async function toolSuggestWaivers(
   const league = requireLeague(dashboard, args.leagueId);
   if (!league) return { ok: false as const, error: "League not found for this user." };
   const weights = await loadActiveScoringWeights();
-  const result = scoreWaiverSuggestions(dashboard, league, weights, { limit: args.limit, position: args.position, scoringWindow: ctx.scoringWindow });
+  // Rest-of-season coverage for the graded adds — best-effort, never blocks.
+  const rosOptions = await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league))
+    .then((context) => context.coveredWeeks.length > 0
+      ? { context, byeWeeks: new Map(Object.entries(dashboard.byeWeeks ?? {})) }
+      : undefined)
+    .catch((error) => {
+      console.error("[suggest_waivers] ROS coverage load failed", error instanceof Error ? error.message : error);
+      return undefined;
+    });
+  const result = scoreWaiverSuggestions(dashboard, league, weights, { limit: args.limit, position: args.position, scoringWindow: ctx.scoringWindow, ros: rosOptions });
   const evidence = await loadMoveEvidenceIndex(dashboard);
   return {
     ...result,
@@ -1404,6 +1414,9 @@ export async function toolSuggestWaivers(
       verdicts: row.verdicts,
       evidence: evidence.forPlayer({ ...row, team: row.team ?? null }),
       bid: row.bid,
+      // Rest-of-season lineup points gained vs the paired drop — null when no
+      // week had projection coverage; partial:true names the missing weeks.
+      ros: row.ros ?? null,
     })),
   };
 }
@@ -1423,6 +1436,14 @@ export async function toolSuggestTrades(
     : seasonLongAssets;
   const valueById = new Map(seasonLongAssets.map((row) => [row.playerId, row]));
   const dynastyValueById = new Map(dynastyAssets.map((row) => [row.playerId, row.value]));
+  // Rest-of-season coverage shared by every idea below — best-effort.
+  const rosContext = await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league))
+    .catch((error) => {
+      console.error("[suggest_trades] ROS coverage load failed", error instanceof Error ? error.message : error);
+      return null;
+    });
+  const rosWeeks = rosContext && rosContext.coveredWeeks.length > 0 ? rosContext : null;
+  const rosByeWeeks = new Map(Object.entries(dashboard.byeWeeks ?? {}));
   const seasonLongValueById = new Map(seasonLongAssets.map((row) => [row.playerId, row.value]));
   const weights = await loadActiveScoringWeights();
   const me = league.tradeTeams.find((team) => team.isUser);
@@ -1465,6 +1486,7 @@ export async function toolSuggestTrades(
     .filter((row): row is Asset => row != null)
     .sort((a, b) => b.value - a.value);
 
+  type RosDelta = { pointsDelta: number; coveredWeeks: number[]; missingWeeks: number[]; asOf: string | null; partial: boolean };
   const ideas: Array<{
     partner: string;
     give: Asset[];
@@ -1487,13 +1509,20 @@ export async function toolSuggestTrades(
         starterValue: number;
         powerRank: number;
         dynastyStarterValue?: number;
+        restOfSeason?: RosDelta | null;
       };
       partnerUtilityDelta: {
         teamName: string;
         weekLineupPoints: number;
         starterValue: number;
+        restOfSeason?: RosDelta | null;
       };
     };
+    injuryExposure?: {
+      designatedPlayers: string[];
+      designatedProjectedShare: number | null;
+      absentPlayers: string[];
+    } | null;
     rosterImpact: {
       week: { lineupPointsBefore: number; lineupPointsAfter: number };
       seasonLong: {
@@ -1618,6 +1647,8 @@ export async function toolSuggestTrades(
       playerId: player.playerId,
       name: player.name,
       position: player.position,
+      team: player.team,
+      injuryStatus: player.injuryStatus,
       lineupSlot: player.lineupSlot,
       isStarter: player.isStarter,
       projection: player.projection ?? projectionById.get(player.playerId) ?? null,
@@ -1655,6 +1686,8 @@ export async function toolSuggestTrades(
       playerId: player.playerId,
       name: player.name,
       position: player.position,
+      team: player.team,
+      injuryStatus: player.injuryStatus,
       lineupSlot: player.lineupSlot,
       isStarter: player.isStarter,
       projection: player.projection ?? projectionById.get(player.playerId) ?? null,
@@ -1681,6 +1714,41 @@ export async function toolSuggestTrades(
     ];
     const partnerSlBefore = optimizeValueTradeRoster(partnerPlayers, slots, seasonLongValueById);
     const partnerSlAfter = optimizeValueTradeRoster(partnerAfterPlayers, slots, seasonLongValueById);
+    // Rest-of-season lineup points for both sides (same covered weeks and
+    // coverage before/after) plus descriptive injury exposure for the
+    // involved assets — current designations only, not a risk score.
+    let yourRos: RosDelta | null = null;
+    let partnerRos: RosDelta | null = null;
+    let ideaExposure: { designatedPlayers: string[]; designatedProjectedShare: number | null; absentPlayers: string[] } | null = null;
+    if (rosWeeks) {
+      const own = rosLineupDelta({
+        before: rosterPlayers,
+        after: afterPlayers,
+        slots,
+        league,
+        ros: rosWeeks,
+        byeWeeks: rosByeWeeks,
+        teamById: new Map(rosterPlayers.map((p) => [p.playerId, p.team ?? ""])),
+        nameById: new Map(rosterPlayers.map((p) => [p.playerId, p.name])),
+      });
+      yourRos = { pointsDelta: own.totalDelta, coveredWeeks: rosWeeks.coveredWeeks, missingWeeks: rosWeeks.missingWeeks, asOf: rosWeeks.asOf, partial: rosWeeks.missingWeeks.length > 0 };
+      const theirs = rosLineupDelta({ before: partnerPlayers, after: partnerAfterPlayers, slots, league, ros: rosWeeks, byeWeeks: rosByeWeeks });
+      partnerRos = { pointsDelta: theirs.totalDelta, coveredWeeks: rosWeeks.coveredWeeks, missingWeeks: rosWeeks.missingWeeks, asOf: rosWeeks.asOf, partial: rosWeeks.missingWeeks.length > 0 };
+      const statusById = new Map(
+        [...rosterPlayers, ...partnerPlayers].map((p) => [p.playerId, p.injuryStatus ?? null] as const),
+      );
+      ideaExposure = injuryExposureFacts({
+        roster: rosterPlayers.map((p) => ({ playerId: p.playerId, name: p.name, position: p.position, injuryStatus: p.injuryStatus })),
+        involved: [...give, ...get].map((a) => ({
+          playerId: a.playerId,
+          name: a.name,
+          injuryStatus: statusById.get(a.playerId) ?? null,
+        })),
+        ros: rosWeeks,
+        league,
+        isDesignated: (status) => status != null && status !== "",
+      });
+    }
     const move = scoreTrade({
       week: {
         yourLineupBefore: lineup.before,
@@ -1743,13 +1811,16 @@ export async function toolSuggestTrades(
           ...(dynastyTotals && dyBefore && dyAfter
             ? { dynastyStarterValue: dyAfter.score - Math.max(1, dyBefore.score) }
             : {}),
+          restOfSeason: yourRos,
         },
         partnerUtilityDelta: {
           teamName: partner.teamName,
           weekLineupPoints: partnerLineup.after - partnerLineup.before,
           starterValue: partnerSlAfter.score - Math.max(1, partnerSlBefore.score),
+          restOfSeason: partnerRos,
         },
       },
+      injuryExposure: ideaExposure,
       // The raw roster effects the labels are computed from: a value gap
       // alone does not explain a trade verdict when starter value or power
       // rank moves the other way.
