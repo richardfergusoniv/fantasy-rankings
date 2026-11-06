@@ -84,6 +84,7 @@ describe("rosLineupDelta", () => {
     expect(result.weeks.map((row) => row.delta)).toEqual([3, 7]);
     expect(result.startedInWeeks.map((row) => row.week)).toEqual([10, 11]);
     expect(result.startedInWeeks[0]!.note).toContain("out-projects the last starter");
+    expect(result.unknownPlayerWeeks).toEqual([]);
   });
 
   it("names the bye reason from the schedule map", () => {
@@ -108,7 +109,10 @@ describe("rosLineupDelta", () => {
     expect(result.startedInWeeks[0]!.note).toBe("Starts for you in week 10 (Starter A's bye).");
   });
 
-  it("a missing projection row scores 0 in both before and after equally", () => {
+  it("a missing projection row for an involved player excludes and discloses the week", () => {
+    // Reproduces the reviewed defect: the dropped player has no row, so he used
+    // to score 0 on the before side only and the move was credited +4 of points
+    // the data does not contain. The week is now excluded from both sides.
     const result = rosLineupDelta({
       before: [{ playerId: "a", position: "RB" }, { playerId: "gone", position: "RB" }],
       after: [{ playerId: "a", position: "RB" }, { playerId: "add", position: "RB" }],
@@ -116,9 +120,117 @@ describe("rosLineupDelta", () => {
       league,
       ros: ros({ 10: { a: 10, add: 4 } }),
       addId: "add",
+      nameById: new Map([["gone", "Dropped Guy"]]),
     });
-    // before: a + gone(0) = 10; after: a(10) benches add? slots RB,RB -> a+add=14? add=4 > 0
+    expect(result.totalDelta).toBe(0);
+    expect(result.weeks).toHaveLength(0);
+    expect(result.unknownPlayerWeeks).toEqual([{ week: 10, players: ["Dropped Guy"] }]);
+  });
+
+  it("partial player coverage excludes only the affected weeks", () => {
+    const result = rosLineupDelta({
+      before: [{ playerId: "a", position: "RB" }, { playerId: "gone", position: "RB" }],
+      after: [{ playerId: "a", position: "RB" }, { playerId: "add", position: "RB" }],
+      slots,
+      league,
+      ros: ros({ 10: { a: 10, gone: 5, add: 8 }, 11: { a: 10, add: 12 } }),
+      addId: "add",
+    });
+    // week 10 fully known: before a+gone=15, after a+add=18 (+3); week 11 excluded.
+    expect(result.weeks.map((row) => row.delta)).toEqual([3]);
+    expect(result.totalDelta).toBe(3);
+    expect(result.unknownPlayerWeeks).toEqual([{ week: 11, players: ["gone"] }]);
+  });
+
+  it("a shared player with no row can change which moved player starts, so the week is excluded", () => {
+    // Regression for the nonlinear-optimizer hole: one RB slot, shared back C
+    // has no row. Scoring C as 0 starts the dropped player before (5) and the
+    // added player after (3), manufacturing a -2 delta; if C's true projection
+    // were 10 he would start on both sides and the delta would be 0. The week
+    // must be excluded, not zeroed.
+    const oneSlot = ["RB"];
+    const result = rosLineupDelta({
+      before: [{ playerId: "c", position: "RB", name: "Shared Back" }, { playerId: "drop", position: "RB" }],
+      after: [{ playerId: "c", position: "RB", name: "Shared Back" }, { playerId: "add", position: "RB" }],
+      slots: oneSlot,
+      league,
+      ros: ros({ 10: { drop: 5, add: 3 } }),
+      addId: "add",
+    });
+    expect(result.totalDelta).toBe(0);
+    expect(result.weeks).toHaveLength(0);
+    expect(result.unknownPlayerWeeks).toEqual([{ week: 10, players: ["Shared Back"] }]);
+  });
+
+  it("a missing row for an uninvolved bench player also excludes the week", () => {
+    const result = rosLineupDelta({
+      before: [
+        { playerId: "a", position: "RB" },
+        { playerId: "b", position: "RB" },
+        { playerId: "drop", position: "RB" },
+      ],
+      after: [
+        { playerId: "a", position: "RB" },
+        { playerId: "b", position: "RB" },
+        { playerId: "add", position: "RB" },
+      ],
+      slots,
+      league,
+      // b (uninvolved) has no row: the week no longer counts.
+      ros: ros({ 10: { a: 10, drop: 5, add: 8 } }),
+      addId: "add",
+    });
+    expect(result.weeks).toHaveLength(0);
+    expect(result.totalDelta).toBe(0);
+    expect(result.unknownPlayerWeeks).toEqual([{ week: 10, players: ["b"] }]);
+  });
+
+  it("a schedule bye makes the involved player's missing row a real 0", () => {
+    const result = rosLineupDelta({
+      before: [{ playerId: "a", position: "RB" }, { playerId: "gone", position: "RB", team: "KC" }],
+      after: [{ playerId: "a", position: "RB" }, { playerId: "add", position: "RB" }],
+      slots,
+      league,
+      ros: ros({ 10: { a: 10, add: 4 } }),
+      addId: "add",
+      byeWeeks: new Map([["KC", 10]]),
+    });
+    // gone is on a schedule bye: before a+0=10, after a+add=14.
     expect(result.totalDelta).toBe(4);
+    expect(result.unknownPlayerWeeks).toEqual([]);
+  });
+
+  it("an unknown team cannot confirm a bye, so the week is excluded", () => {
+    const result = rosLineupDelta({
+      before: [{ playerId: "a", position: "RB" }, { playerId: "gone", position: "RB" }],
+      after: [{ playerId: "a", position: "RB" }, { playerId: "add", position: "RB" }],
+      slots,
+      league,
+      ros: ros({ 10: { a: 10, add: 4 } }),
+      addId: "add",
+      byeWeeks: new Map([["KC", 10]]),
+    });
+    expect(result.weeks).toHaveLength(0);
+    expect(result.unknownPlayerWeeks).toEqual([{ week: 10, players: ["gone"] }]);
+  });
+
+  it("an add with no projection rows anywhere cannot manufacture a loss", () => {
+    const result = rosLineupDelta({
+      before: [{ playerId: "a", position: "RB" }, { playerId: "b", position: "RB" }],
+      after: [{ playerId: "a", position: "RB" }, { playerId: "mystery", position: "RB" }],
+      slots,
+      league,
+      ros: ros({ 10: { a: 10, b: 5 }, 11: { a: 10, b: 5 } }),
+      addId: "mystery",
+    });
+    // mystery scores 0 on the after side only in every covered week: with no
+    // coverage for him at all, the move reports no delta, not a manufactured -5.
+    expect(result.totalDelta).toBe(0);
+    expect(result.weeks).toHaveLength(0);
+    expect(result.unknownPlayerWeeks).toEqual([
+      { week: 10, players: ["mystery"] },
+      { week: 11, players: ["mystery"] },
+    ]);
   });
 
   it("uncovered weeks contribute nothing", () => {
