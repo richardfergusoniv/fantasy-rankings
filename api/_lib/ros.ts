@@ -5,9 +5,13 @@
  * Data discipline (roster-aware scoring plan):
  * - A week that fails to load is unknown: excluded from totals and disclosed
  *   in `missingWeeks`, never silently filled or averaged in.
- * - A player with no projection row is unknown (bye, out, or simply not
- *   projected): he scores 0 in the lineup math — the same rule the projected
- *   standings use — and disclosure happens through the absent-player list.
+ * - A week counts toward the delta only when every player on either roster
+ *   has a projection row or a schedule bye. The optimizer is not linear: an
+ *   unknown player scored 0 can change which added or dropped player starts,
+ *   so even a missing bench row can distort the comparison. Weeks with any
+ *   unknown rostered player are excluded from both sides and disclosed in
+ *   `unknownPlayerWeeks`. Players missing from every covered week are also
+ *   named in the absent-player list.
  * - Byes come from the NFL schedule (byeWeeksByTeam), not from missing rows.
  */
 import type { Dashboard } from "./dashboard-schemas.js";
@@ -132,10 +136,17 @@ export type RosWeekLineup = {
 
 export type RosStartNote = { week: number; note: string };
 
+/** A covered week excluded from the delta because a moved player's week is unknown. */
+export type RosUnknownPlayerWeek = { week: number; players: string[] };
+
 /**
- * Per-week optimized lineup totals for two roster variants over the same
- * covered weeks — a missing week or player row moves both sides equally, so
- * it cannot manufacture a delta.
+ * Per-week optimized lineup totals for two roster variants over the weeks
+ * where every rostered player has projection coverage. A week that failed
+ * to load never enters the loop. A week where ANY player on either roster
+ * has no projection row and no schedule bye is excluded from BOTH sides and
+ * disclosed in `unknownPlayerWeeks`: the optimizer is not linear, so a
+ * zeroed unknown can change which moved player starts, and no subset of the
+ * roster is safe to score 0.
  *
  * `startedInWeeks` names each week the added player lands in the after-lineup,
  * with the schedule-derived reason: a before-starter whose team is on bye that
@@ -152,12 +163,36 @@ export function rosLineupDelta(args: {
   byeWeeks?: ReadonlyMap<string, number>;
   teamById?: ReadonlyMap<string, string>;
   nameById?: ReadonlyMap<string, string>;
-}): { totalDelta: number; weeks: RosWeekLineup[]; startedInWeeks: RosStartNote[] } {
+}): { totalDelta: number; weeks: RosWeekLineup[]; startedInWeeks: RosStartNote[]; unknownPlayerWeeks: RosUnknownPlayerWeek[] } {
   const weeks: RosWeekLineup[] = [];
   const startedInWeeks: RosStartNote[] = [];
+  const unknownPlayerWeeks: RosUnknownPlayerWeek[] = [];
+  // Every player on either roster must be known for the comparison to be
+  // sound: the optimizer is not linear, so an unknown player scored 0 can
+  // change which added or dropped player starts and distort the delta even
+  // though he appears on both sides.
+  const rostered = [...args.before, ...args.after].filter(
+    (player, index, all) =>
+      player.playerId !== "0"
+      && all.findIndex((other) => other.playerId === player.playerId) === index,
+  );
   for (const week of args.ros.coveredWeeks) {
     const projections = args.ros.weeks.get(week);
     if (!projections) continue;
+    // A rostered player with no row this week is a real 0 only when the
+    // schedule says his team is on bye; otherwise his week is unknown.
+    const unknown = rostered.filter((player) => {
+      if (projections.players.has(player.playerId)) return false;
+      const team = player.team ?? args.teamById?.get(player.playerId);
+      return team == null || team === "" || args.byeWeeks?.get(team) !== week;
+    });
+    if (unknown.length > 0) {
+      unknownPlayerWeeks.push({
+        week,
+        players: unknown.map((player) => player.name ?? args.nameById?.get(player.playerId) ?? player.playerId),
+      });
+      continue;
+    }
     const pointsOf = (player: RosterInput) =>
       rosPlayerPoints(player, projections.players.get(player.playerId), args.league);
     const before = optimizeTradeRoster(toOptimizable(args.before, pointsOf), [...args.slots]);
@@ -188,6 +223,7 @@ export function rosLineupDelta(args: {
     totalDelta: Number(weeks.reduce((sum, row) => sum + row.delta, 0).toFixed(2)),
     weeks,
     startedInWeeks,
+    unknownPlayerWeeks,
   };
 }
 
