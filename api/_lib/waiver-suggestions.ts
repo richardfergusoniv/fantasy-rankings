@@ -146,6 +146,7 @@ export function scoreWaiverSuggestions(
     const addRow = {
       playerId: player.playerId,
       name: weekly?.name ?? player.name,
+      team: weekly?.team ?? player.team ?? null,
       position,
       lineupSlot: null,
       isStarter: false,
@@ -202,9 +203,10 @@ export function scoreWaiverSuggestions(
         ? move.seasonLong
         : move.week;
 
-    // Rest-of-season lineup points for this exact add/drop pair: same covered
-    // weeks and player coverage on both sides, so missing data cannot
-    // manufacture a gain. Evidence only — labels keep their market-price scale.
+    // Rest-of-season lineup points for this exact add/drop pair. Weeks where
+    // any rostered player has no projection row (and no schedule bye) are
+    // excluded from both sides and disclosed in unknownPlayerWeeks, so missing
+    // data cannot manufacture a gain. Evidence only — labels keep their market-price scale.
     const ros = options.ros && options.ros.context.coveredWeeks.length > 0
       ? (() => {
         const delta = rosLineupDelta({
@@ -233,8 +235,9 @@ export function scoreWaiverSuggestions(
           pointsGained: delta.totalDelta,
           coveredWeeks: options.ros!.context.coveredWeeks,
           missingWeeks: options.ros!.context.missingWeeks,
+          unknownPlayerWeeks: delta.unknownPlayerWeeks,
           asOf: options.ros!.context.asOf,
-          partial: options.ros!.context.missingWeeks.length > 0,
+          partial: options.ros!.context.missingWeeks.length > 0 || delta.unknownPlayerWeeks.length > 0,
           startsInWeeks: delta.startedInWeeks,
           designatedPlayers: exposure.designatedPlayers,
           designatedProjectedShare: exposure.designatedProjectedShare,
@@ -317,6 +320,7 @@ export type WaiverRosEvidence = {
   pointsGained: number;
   coveredWeeks: number[];
   missingWeeks: number[];
+  unknownPlayerWeeks: { week: number; players: string[] }[];
   asOf: string | null;
   partial: boolean;
   startsInWeeks: { week: number; note: string }[];
