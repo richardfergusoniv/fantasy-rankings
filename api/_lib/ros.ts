@@ -148,9 +148,10 @@ export type RosUnknownPlayerWeek = { week: number; players: string[] };
  * zeroed unknown can change which moved player starts, and no subset of the
  * roster is safe to score 0.
  *
- * `startedInWeeks` names each week the added player lands in the after-lineup,
- * with the schedule-derived reason: a before-starter whose team is on bye that
- * week, or the add simply outscoring the last prior starter.
+ * `startedInWeeks` names each week the added player lands in the after-lineup.
+ * The note states no reason: whether the start came from a bye or from
+ * out-projecting a starter cannot be proven from the optimized lineup alone,
+ * so no cause is attributed.
  */
 export function rosLineupDelta(args: {
   before: readonly RosterInput[];
@@ -206,16 +207,12 @@ export function rosLineupDelta(args: {
       addSlot: addStarter?.lineupSlot ?? null,
     });
     if (addStarter && args.addId) {
-      const byeStarter = before.starters.find((player) => {
-        const team = args.teamById?.get(player.playerId);
-        return team != null && args.byeWeeks?.get(team) === week;
-      });
-      const byeName = byeStarter ? (args.nameById?.get(byeStarter.playerId) ?? byeStarter.playerId) : null;
+      // Neutral by design: the optimized lineup shows THAT the add starts,
+      // not WHY - a bye or an out-projection cannot be proven from this
+      // lineup alone, so no reason is stated.
       startedInWeeks.push({
         week,
-        note: byeName
-          ? `Starts for you in week ${week} (${byeName}'s bye).`
-          : `Starts for you in week ${week} (${args.addName ?? args.addId} out-projects the last starter).`,
+        note: `Starts for you in week ${week}.`,
       });
     }
   }
