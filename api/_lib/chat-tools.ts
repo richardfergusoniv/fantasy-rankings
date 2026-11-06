@@ -81,13 +81,24 @@ export type ChatToolContext = {
 };
 
 /**
+ * Instant by which optional ROS evidence must yield: the chat deadline minus
+ * a reserve for serializing the tool result and the model's final answer, so
+ * ROS loading never consumes the time the answer itself needs.
+ */
+export function chatRosYieldAtMs(ctx: ChatToolContext): number | undefined {
+  return ctx.chatDeadlineAtMs == null ? undefined : ctx.chatDeadlineAtMs - ROS_LOAD_MIN_REMAINING_MS;
+}
+
+/**
  * Optional ROS evidence lives inside the chat deadline: a slow projection
- * pull must not eat the remaining answer budget, so loading stops once the
- * remaining time cannot cover it and the tool answers without ROS.
+ * pull must not eat the remaining answer budget, so loading starts only when
+ * the remaining time before the yield instant covers it, and the tool answers
+ * without ROS otherwise.
  */
 export function chatRosBudgetAllows(ctx: ChatToolContext): boolean {
-  if (ctx.chatDeadlineAtMs == null) return true;
-  const remainingMs = remainingMsUntil(ctx.chatDeadlineAtMs);
+  const yieldAtMs = chatRosYieldAtMs(ctx);
+  if (yieldAtMs == null) return true;
+  const remainingMs = remainingMsUntil(yieldAtMs);
   if (remainingMs >= ROS_LOAD_MIN_REMAINING_MS) return true;
   console.error("[chat] skipping optional ROS loading: remaining chat budget", remainingMs, "ms");
   return false;
@@ -1110,7 +1121,7 @@ async function toolEvaluateTrade(
   let injuryExposure: { designatedPlayers: string[]; designatedProjectedShare: number | null; absentPlayers: string[]; partialPlayers: string[] } | null = null;
   try {
     const ros = chatRosBudgetAllows(ctx)
-      ? await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league), undefined, ctx.chatDeadlineAtMs)
+      ? await loadRosContext(dashboard.season, dashboard.week + 1, regularSeasonEndWeek(league), undefined, chatRosYieldAtMs(ctx))
       : null;
     if (ros && ros.coveredWeeks.length > 0) {
       const byeWeeks = new Map(Object.entries(dashboard.byeWeeks ?? {}));
