@@ -307,9 +307,15 @@ export function injuryExposureFacts(args: {
   // future projection row is named unknown, not silently dropped.
   const checked = new Map<string, { playerId: string; name: string; position: string; team?: string | null }>();
   for (const player of [...args.roster, ...args.involved]) {
+    // Vacant starter slots and draft picks are not players: neither has a
+    // projection row, so without this filter they surface as unknowns.
+    if (player.playerId === "0" || player.position === "PICK") continue;
     checked.set(player.playerId, { ...player, position: player.position ?? "" });
   }
   const present = new Set<string>();
+  // Players whose covered weeks are entirely byes: that span is a known 0, so
+  // they must not be reported as unknown.
+  const byeCovered = new Set<string>();
   // Covered non-bye weeks where the player has no usable row: the share sums
   // other players' points for those weeks, so the gap must be disclosed, not
   // dropped from the math. A schedule bye is a real 0, never a gap; a stale
@@ -321,7 +327,10 @@ export function injuryExposureFacts(args: {
     const projections = args.ros.weeks.get(week);
     if (!projections) continue;
     for (const player of checked.values()) {
-      if (byeWeekOf(player) === week) continue;
+      if (byeWeekOf(player) === week) {
+        byeCovered.add(player.playerId);
+        continue;
+      }
       const points = rosPlayerPointsOrNull(player, projections.players.get(player.playerId), args.league);
       if (points != null) present.add(player.playerId);
       else gapWeeksById.set(player.playerId, (gapWeeksById.get(player.playerId) ?? 0) + 1);
@@ -335,7 +344,10 @@ export function injuryExposureFacts(args: {
     }
   }
   const absentPlayers = [...checked.values()]
-    .filter((player) => !present.has(player.playerId))
+    // Absent means an actual unknown non-bye week (or no evidence at all): a
+    // player whose covered span is entirely byes is fully known, not absent.
+    .filter((player) => !present.has(player.playerId)
+      && (!byeCovered.has(player.playerId) || (gapWeeksById.get(player.playerId) ?? 0) > 0))
     .map((player) => player.name);
   const partialPlayers = [...checked.values()]
     .filter((player) => present.has(player.playerId) && (gapWeeksById.get(player.playerId) ?? 0) > 0)
