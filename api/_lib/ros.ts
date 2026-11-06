@@ -75,10 +75,27 @@ export async function loadRosContext(
   fromWeek: number,
   throughWeek: number,
   loadProjections: (season: number, week: number) => Promise<WeekProjections> = loadWeekProjections,
+  deadlineAtMs?: number,
 ): Promise<RosContext> {
   const wanted = Array.from({ length: Math.max(0, throughWeek - fromWeek + 1) }, (_, i) => fromWeek + i)
     .filter((week) => week >= 1 && week <= 18);
-  const results = await Promise.allSettled(wanted.map((week) => loadProjections(season, week)));
+  // Optional caller deadline (the chat agent's answer budget): a week whose
+  // load cannot finish in time is disclosed as missing, so a slow projection
+  // pull can never run the caller past its deadline. The abandoned load keeps
+  // running in the background and still warms the cache.
+  const withinBudget = (load: Promise<WeekProjections>): Promise<WeekProjections> => {
+    if (deadlineAtMs == null) return load;
+    load.catch(() => undefined);
+    const remainingMs = deadlineAtMs - Date.now();
+    if (remainingMs <= 0) return Promise.reject(new Error("ROS projection load skipped: deadline reached"));
+    return Promise.race([
+      load,
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(() => reject(new Error("ROS projection load timed out: deadline reached")), remainingMs);
+      }),
+    ]);
+  };
+  const results = await Promise.allSettled(wanted.map((week) => withinBudget(loadProjections(season, week))));
   const weeks = new Map<number, WeekProjections>();
   const missingWeeks: number[] = [];
   results.forEach((result, i) => {
