@@ -175,6 +175,13 @@ button.power-stack-row:active { background: var(--surface-2); }
 .proj-row { grid-template-columns: 26px minmax(0, 1fr) 52px 76px; }
 .proj-team { display: flex; align-items: center; gap: 6px; }
 .proj-team > strong { display: block; min-width: 0; }
+.proj-row.is-openable { position: relative; cursor: pointer; }
+.proj-row.is-openable:active { background: var(--surface-2); }
+.proj-team-open { display: block; min-width: 0; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-body); font-weight: 600; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.proj-team-open::after { content: ""; position: absolute; inset: 0; }
+.proj-team-open:focus-visible { outline: none; }
+.proj-team-open:focus-visible::after { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: var(--radius); }
+.power-row.is-user .proj-team-open { color: var(--roster-highlight); }
 /* `.power-team > span` would otherwise block-clip the move mark and the Yours pill. */
 .power-team.proj-team > .proj-move { display: inline-flex; margin-top: 0; overflow: visible; }
 .power-team.proj-team > .status-badge { display: inline-flex; margin-top: 0; overflow: visible; }

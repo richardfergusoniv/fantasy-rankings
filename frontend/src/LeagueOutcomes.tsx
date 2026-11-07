@@ -22,7 +22,16 @@ function MoveMark({ moved }: { moved: number }) {
   return <span className={`proj-move ${moved > 0 ? "is-up" : "is-down"}`}><i aria-hidden="true" />{Math.abs(moved)}<span className="sr-only">{moved > 0 ? " places up from today" : " places down from today"}</span></span>;
 }
 
-export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; queryKey: readonly unknown[] }) {
+export function LeagueOutcomes({
+  leagueId,
+  queryKey,
+  onOpenTeam,
+}: {
+  leagueId: string;
+  queryKey: readonly unknown[];
+  /** Opens a team's league team card; the whole row is its tap target. */
+  onOpenTeam?: (rosterId: number) => void;
+}) {
   const [previewWeek, setPreviewWeek] = useState<number | null>(null);
   const query = useQuery({
     queryKey,
@@ -92,10 +101,15 @@ export function LeagueOutcomes({ leagueId, queryKey }: { leagueId: string; query
             <div className="power-table" role="table" aria-label={groups.length > 1 ? (groupIndex === 0 ? "Projected playoff teams" : "Projected teams outside the cut") : "Playoff picture"}>
               {group.map((team) => (
                 <div className="power-list-item" key={team.rosterId}>
-                  <div className={`power-row proj-row${team.isUser ? " is-user" : ""}${team.playoffOdds != null ? " has-odds" : ""}`} role="row">
+                  <div className={`power-row proj-row${team.isUser ? " is-user" : ""}${team.playoffOdds != null ? " has-odds" : ""}${onOpenTeam ? " is-openable" : ""}`} role="row">
                     <strong className="power-rank" role="cell">{team.rank}</strong>
                     <div className="power-team proj-team" role="cell">
-                      <strong>{team.teamName}</strong>
+                      {onOpenTeam ? (
+                        // The name is the button; its ::after stretches the tap target over the whole row.
+                        <button type="button" className="proj-team-open" aria-haspopup="dialog" aria-label={`Open ${team.teamName} team card`} onClick={() => onOpenTeam(team.rosterId)}>
+                          {team.teamName}
+                        </button>
+                      ) : <strong>{team.teamName}</strong>}
                       <MoveMark moved={placesMoved(team.currentRank, team.rank)} />
                     </div>
                     <div className="power-total" role="cell"><strong>{recordLabel(team.projectedRecord)}</strong></div>

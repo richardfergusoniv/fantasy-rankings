@@ -1574,7 +1574,7 @@ export function App() {
               </Suspense>
             )
             : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onComparePlayers={openComparison} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={openLeagueTeam} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
-            : tab === "outcomes" ? <Suspense fallback={<SectionLoading label="Loading playoff picture…" />}><LazyLeagueOutcomes leagueId={league.id} queryKey={personalQueryKey(viewer, "projected-standings", league.id)} /></Suspense>
+            : tab === "outcomes" ? <Suspense fallback={<SectionLoading label="Loading playoff picture…" />}><LazyLeagueOutcomes leagueId={league.id} queryKey={personalQueryKey(viewer, "projected-standings", league.id)} onOpenTeam={(rosterId) => openLeagueTeam(rosterId, { scope: "restOfSeason", mode: "seasonLong" })} /></Suspense>
             : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} onOpenLeagueTeam={openLeagueTeam} /></Suspense>
             : tab === "draft" ? <Suspense fallback={<SectionLoading label="Loading draft…" />}><LazyDraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} loading={draftQuery.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} /></Suspense>
             : tab === "trade" ? (
