@@ -6,10 +6,13 @@ import {
   defaultToolLeague,
   dispatchChatTool,
   gameLineForTeam,
+  loadBoomBustSummary,
+  opponentDefenseSos,
   parseToolCallArguments,
   waiverAdjustments,
   type ChatToolContext,
 } from "./chat-tools.js";
+import { loadSleeperPlayerWeeklySeason } from "./sleeper.js";
 
 vi.mock("./db.js", () => ({ db: {}, schema: {} }));
 vi.mock("./trades.js", () => ({
@@ -19,6 +22,15 @@ vi.mock("./trades.js", () => ({
     asOf: new Date().toISOString(),
     isStale: false,
     sourceErrors: [],
+  })),
+}));
+vi.mock("./prop-line-week.js", () => ({
+  loadPropLineWeek: vi.fn(async () => ({
+    season: 2026,
+    week: 7,
+    pulledAt: "2026-10-24T18:00:00.000Z",
+    sleeperPulledAt: null,
+    lines: [],
   })),
 }));
 vi.mock("./sleeper.js", async (importOriginal) => {
@@ -524,6 +536,92 @@ describe("dispatchChatTool", () => {
     expect(result.playerId).toBe("p1");
     expect(result.weekly?.leagueProjection).toBe(18.2);
     expect(result.seasonLongValues[0]?.value).toBe(8000);
+  });
+
+  it("get_player_card weekly includes range, usage, and gameTime", async () => {
+    const dashboard = baseDashboard();
+    dashboard.rankings[0] = {
+      ...dashboard.rankings[0]!,
+      projectionRange: { low: 10.1, high: 19.4 },
+      gameTime: "2026-11-15T17:00:00.000Z",
+    };
+    dashboard.leagues[0]!.starters[0] = {
+      ...dashboard.leagues[0]!.starters[0]!,
+      usageProjection: 8.61,
+      usageGames: 6,
+      gameTime: "2026-11-15T17:00:00.000Z",
+      projectionRange: { low: 10.1, high: 19.4 },
+    };
+    const result = await dispatchChatTool(
+      "get_player_card",
+      { playerId: "p1", leagueId: "lg1" },
+      ctxWithDashboard(dashboard),
+    ) as {
+      ok: boolean;
+      weekly: {
+        projectionRange: { low: number; high: number } | null;
+        usageProjection: number | null;
+        usageGames: number;
+        gameTime: string | null;
+      };
+    };
+    expect(result.ok).toBe(true);
+    expect(result.weekly.projectionRange).toEqual({ low: 10.1, high: 19.4 });
+    expect(result.weekly.usageProjection).toBe(8.61);
+    expect(result.weekly.usageGames).toBe(6);
+    expect(result.weekly.gameTime).toBe("2026-11-15T17:00:00.000Z");
+  });
+
+  it("get_my_leagues roster stubs include gameTime", async () => {
+    const dashboard = baseDashboard();
+    dashboard.leagues[0]!.starters[0] = {
+      ...dashboard.leagues[0]!.starters[0]!,
+      gameTime: "2026-11-15T17:00:00.000Z",
+    };
+    const result = await dispatchChatTool("get_my_leagues", {}, ctxWithDashboard(dashboard)) as {
+      ok: boolean;
+      leagues: Array<{ roster: Array<{ playerId: string; gameTime: string | null }> }>;
+    };
+    expect(result.ok).toBe(true);
+    expect(result.leagues[0]?.roster.find((row) => row.playerId === "p1")?.gameTime)
+      .toBe("2026-11-15T17:00:00.000Z");
+  });
+
+  it("loadBoomBustSummary keeps aggregates and returns last-N weeklyScores", async () => {
+    vi.mocked(loadSleeperPlayerWeeklySeason).mockResolvedValueOnce([
+      { week: 6, game_id: "g6", status: "active", rec: 5, rec_yd: 80 },
+      { week: 7, game_id: "g7", status: "active", rec: 3, rec_yd: 40 },
+      { week: 8, game_id: "g8", status: "active", rec: 7, rec_yd: 110 },
+    ] as never);
+    const result = await loadBoomBustSummary({
+      leagueId: "lg1",
+      playerId: "p1",
+      position: "WR",
+      scoringSettings: { rec: 0.5, rec_yd: 0.1 },
+    });
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    expect(result.games).toBe(3);
+    expect(result.weeklyScores).toHaveLength(3);
+    expect(result.weeklyScores.map((row) => row.week)).toEqual([6, 7, 8]);
+    expect(result.weeklyScores[2]?.points).toBe(14.5); // 7*0.5 + 110*0.1
+    expect(result.floor).toEqual(expect.any(Number));
+    expect(result.median).toEqual(expect.any(Number));
+  });
+
+  it("opponentDefenseSos reads the opponent defense cell", () => {
+    const dashboard = baseDashboard();
+    dashboard.strengthOfSchedule = [{
+      leagueId: "lg1",
+      season: 2026,
+      throughWeek: 6,
+      computedAt: new Date().toISOString(),
+      table: {
+        LV: { WR: { avg: 22.4, weeks: 4, rank: 3 }, QB: { avg: 19, weeks: 4, rank: 11 }, RB: { avg: 16, weeks: 4, rank: 9 }, TE: { avg: 11, weeks: 4, rank: 12 } },
+      },
+    }];
+    expect(opponentDefenseSos(dashboard, "lg1", "LV", "WR")).toEqual({ avg: 22.4, rank: 3 });
+    expect(opponentDefenseSos(dashboard, "lg1", "KC", "WR")).toBeNull();
   });
 
   it("rejects unknown player ids and missing identity args", async () => {
