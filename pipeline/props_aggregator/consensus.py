@@ -9,10 +9,21 @@ median of book votes, so it only gets more robust as more books are added.
 A ``contested`` flag marks rows where the surviving book votes still
 disagree drastically. It is observability only and never changes the
 consensus line.
+
+One group shape gets no consensus row at all: a ladder-only group, where
+every record is over-only (no two-way price anywhere) and the records span
+at least two distinct lines. Those are threshold markets (e.g. Polymarket
+2.5+ / 3.5+ TDs), not lines: with no cross-book anchor and no two-way
+market, any single number would be invented (the single-book median of
+2.5/3.5 is 3.0, a line nobody posted). Dropping the group lets the
+projections completeness gate fall back for that player instead.
+anytime_td is exempt: it is a binary over-only market by design, and
+projections consume its td_probability, never the line.
 """
 from __future__ import annotations
 
 import re
+import sys
 from statistics import median
 
 from .schema import PropRecord, normalize_player, utcnow_iso
@@ -108,6 +119,22 @@ def _book_votes(recs: list[PropRecord]) -> tuple[list[tuple[float, PropRecord]],
     return votes, anchor
 
 
+def _is_ladder_only(stat: str, recs: list[PropRecord]) -> bool:
+    """True when a group is only an over-only alt-line ladder.
+
+    Every record lacks an under price (threshold markets post over-only
+    rungs) and the records span at least two distinct lines, so there is
+    no single posted line to take as the expectation. A single over-only
+    line is a real posted line (DFS-platform style) and is kept, as is any
+    group where at least one record carries a two-way price.
+    """
+    if stat == "anytime_td":
+        return False
+    if any(r.under_odds is not None for r in recs):
+        return False
+    return len({float(r.line) for r in recs}) >= 2
+
+
 def _display_book_names(votes: list[PropRecord]) -> list[str]:
     """Most common raw spelling per normalized book, for readable output."""
     from collections import Counter
@@ -133,6 +160,15 @@ def build_consensus(records: list[PropRecord]) -> list[dict]:
     out: list[dict] = []
     for key, recs in groups.items():
         player, stat = display[key], key[1]
+        if _is_ladder_only(stat, recs):
+            books = sorted({r.book or r.provider for r in recs})
+            providers = sorted({r.provider for r in recs})
+            lines = sorted({float(r.line) for r in recs})
+            print(f"  [consensus] WARNING: dropped ladder-only group "
+                  f"{player} {stat}: no two-way line anywhere; "
+                  f"books={books} providers={providers} lines={lines}",
+                  file=sys.stderr)
+            continue
         votes, anchor = _book_votes(recs)
         lines = [line for line, _ in votes]
         vote_recs = [rec for _, rec in votes]

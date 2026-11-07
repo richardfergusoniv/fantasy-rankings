@@ -190,3 +190,99 @@ def test_anytime_td_range_uses_the_per_book_probabilities():
     ]
     row = build_consensus(recs)[0]
     assert row["td_probability_min"] < row["td_probability"] < row["td_probability_max"]
+
+
+def test_ladder_only_group_is_dropped(capsys):
+    # The Deshaun Watson Week 10 shape: the only pass_tds records anywhere
+    # are two over-only threshold rungs (2.5+ / 3.5+) from one book. There
+    # is no two-way line to take as the expectation, so the group must not
+    # produce a consensus row at all (the single-book median of the rungs
+    # would invent a 3.0 line nobody posted).
+    recs = [
+        _rec("propline", "polymarket_us", "Deshaun Watson", "pass_tds", 2.5,
+             over=122, under=None),
+        _rec("propline", "polymarket_us", "Deshaun Watson", "pass_tds", 3.5,
+             over=186, under=None),
+    ]
+    out = build_consensus(recs)
+    assert out == []
+    err = capsys.readouterr().err
+    assert "Deshaun Watson" in err and "pass_tds" in err
+
+
+def test_anytime_td_ladder_is_exempt():
+    # anytime_td is a binary over-only market by design, and projections
+    # consume its td_probability, never the line: ladders stay.
+    recs = [
+        _rec("propline", "polymarket_us", "Deshaun Watson", "anytime_td", 0.5,
+             over=200, under=None),
+        _rec("propline", "polymarket_us", "Deshaun Watson", "anytime_td", 1.5,
+             over=700, under=None),
+    ]
+    out = build_consensus(recs)
+    assert len(out) == 1
+    assert out[0]["stat"] == "anytime_td"
+    assert out[0]["td_probability"] is not None
+
+
+def test_single_over_only_line_is_kept():
+    # A single over-only line is a real posted line (DFS-platform style),
+    # not a ladder: it stays.
+    recs = [_rec("propline", "pick6", "Deshaun Watson", "pass_tds", 1.5,
+                 over=-130, under=None)]
+    out = build_consensus(recs)
+    assert len(out) == 1
+    assert out[0]["consensus_line"] == 1.5
+
+
+def test_two_books_over_only_same_line_is_kept():
+    # Multiple books, all over-only, but a single distinct line value:
+    # that is one agreed line, not a ladder.
+    recs = [
+        _rec("propline", "booka", "Deshaun Watson", "pass_tds", 1.5,
+             over=-130, under=None),
+        _rec("moneyline", "bookb", "Deshaun Watson", "pass_tds", 1.5,
+             over=-125, under=None),
+    ]
+    out = build_consensus(recs)
+    assert len(out) == 1
+    assert out[0]["book_count"] == 2
+    assert out[0]["consensus_line"] == 1.5
+
+
+def test_group_with_any_two_way_record_is_untouched():
+    # One two-way record anywhere in the group means the existing anchor
+    # logic applies exactly as before: polymarket's provisional median is
+    # 3.0 and draftkings' is 1.5, so the anchor is 2.25, polymarket votes
+    # its 2.5 rung, draftkings votes 1.5, consensus is the median 2.0.
+    recs = [
+        _rec("propline", "polymarket_us", "Deshaun Watson", "pass_tds", 2.5,
+             over=122, under=None),
+        _rec("propline", "polymarket_us", "Deshaun Watson", "pass_tds", 3.5,
+             over=186, under=None),
+        _rec("moneyline", "draftkings", "Deshaun Watson", "pass_tds", 1.5),
+    ]
+    out = build_consensus(recs)
+    assert len(out) == 1
+    row = out[0]
+    assert row["consensus_line"] == 2.0
+    assert row["book_count"] == 2
+    assert row["min_line"] == 1.5
+    assert row["max_line"] == 2.5
+    assert row["alt_lines_filtered"] == 1
+
+
+def test_multi_book_two_way_group_output_unchanged():
+    recs = [
+        _rec("a", "dk", "Patrick Mahomes", "pass_tds", 2.5),
+        _rec("b", "fd", "Patrick Mahomes", "pass_tds", 1.5),
+        _rec("c", "mgm", "Patrick Mahomes", "pass_tds", 2.5),
+    ]
+    out = build_consensus(recs)
+    assert len(out) == 1
+    row = out[0]
+    assert row["consensus_line"] == 2.5
+    assert row["book_count"] == 3
+    assert row["min_line"] == 1.5
+    assert row["max_line"] == 2.5
+    assert row["line_spread"] == 1.0
