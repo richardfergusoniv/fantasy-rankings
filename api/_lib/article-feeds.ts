@@ -18,6 +18,7 @@ import {
   normalizeNewsTeam,
   retentionCutoff,
   stableNewsId,
+  withPracticeStatusTag,
   type NflNewsTeamCode,
   type PlayerNewsNameIndex,
   type PlayerNewsNameIndexEntry,
@@ -1030,21 +1031,27 @@ export function buildArticleNewsDrafts(input: {
   // Always set external_id so team/league partial uniques (0016) and the
   // player (source, external_id, player_id) unique can dedupe on conflict.
   const externalId = articleExternalId(sourceUrl);
-  const base = {
+  const tagged = withPracticeStatusTag({
     change: headline,
-    newsType: "headline" as const,
     roleContext: summary,
+    signal: null,
+    tags: [],
+  });
+  const base = {
+    change: tagged.change,
+    newsType: "headline" as const,
+    roleContext: tagged.roleContext ?? summary,
     source: "article" as const,
     sourceLabel: source.name,
     sourceUrl,
     author: null,
     externalId,
     publishedAt,
-    signal: null,
+    signal: tagged.signal,
     // Explicit scores: null sorts as -1 in the ticker, so a "downrank" value of
     // 40 would incorrectly outrank ordinary articles. Baseline 55 / downrank 15.
     score: source.downrank ? 15 : 55,
-    tags: [] as string[],
+    tags: tagged.tags,
     media: [],
   };
 

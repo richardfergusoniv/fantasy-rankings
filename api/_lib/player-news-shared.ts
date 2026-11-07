@@ -2,10 +2,16 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { isHttpOrHttpsUrl } from "./http-url.js";
 import { isAllowedNewsTag } from "./player-news-badges.js";
+import {
+  PRACTICE_NEWS_TAG,
+  isMaterialPracticeStatusNote,
+} from "./player-news-filters.js";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 
 export {
   DYNASTY_NEWS_TAG,
+  PRACTICE_NEWS_TAG,
+  isMaterialPracticeStatusNote,
   isSleeperTimestampOnlyNews,
   newsVisibleInContext,
   SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT,
@@ -297,6 +303,26 @@ export function normalizeNewsTags(tags: readonly string[] | null | undefined): s
 }
 
 /**
+ * Attach the practice tag (and default signal) when change/roleContext text
+ * describes a material practice-status note. Keeps existing tags/signal.
+ */
+export function withPracticeStatusTag<T extends {
+  change: string;
+  roleContext?: string | null;
+  signal?: string | null;
+  tags?: readonly string[] | null;
+}>(draft: T): T & { tags: string[]; signal: string | null } {
+  const tags = normalizeNewsTags(draft.tags);
+  const material = isMaterialPracticeStatusNote(draft.change, draft.roleContext);
+  if (material && !tags.includes(PRACTICE_NEWS_TAG) && tags.length < 5) {
+    tags.push(PRACTICE_NEWS_TAG);
+  }
+  const signal = draft.signal?.trim()
+    || (material ? PRACTICE_NEWS_TAG : null);
+  return { ...draft, tags, signal };
+}
+
+/**
  * In-batch / write dedupe.
  * - player: one row per (post, player)
  * - team: one row per (post, team)
@@ -340,6 +366,7 @@ export function signalToNewsType(signal: string | null | undefined): PlayerNewsK
     case "injury":
     case "status":
     case "roster":
+    case "practice":
     case "":
       return "roster";
     default:
@@ -723,19 +750,25 @@ function xNewsDraftBase(item: XNewsItem): Omit<
 > {
   const handle = item.author_handle.replace(/^@/, "");
   const postId = item.post_id.trim();
-  return {
+  const tagged = withPracticeStatusTag({
     change: item.text.trim(),
-    newsType: signalToNewsType(item.signal),
     roleContext: `Posted by @${handle} on X.`,
+    signal: item.signal?.trim() || null,
+    tags: item.tags,
+  });
+  return {
+    change: tagged.change,
+    newsType: signalToNewsType(tagged.signal),
+    roleContext: tagged.roleContext ?? `Posted by @${handle} on X.`,
     source: "x",
     sourceLabel: `@${handle}`,
     sourceUrl: item.source_url.trim(),
     author: `@${handle}`,
     externalId: postId,
     publishedAt: new Date(item.published_at),
-    signal: item.signal?.trim() || null,
+    signal: tagged.signal,
     score: item.score ?? item.source_priority ?? null,
-    tags: normalizeNewsTags(item.tags),
+    tags: tagged.tags,
     media: item.media ?? [],
   };
 }

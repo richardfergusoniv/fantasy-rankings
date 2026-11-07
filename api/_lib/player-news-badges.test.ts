@@ -106,6 +106,13 @@ describe("selectNewsBadges", () => {
         scope: "league",
       }).secondary.map((badge) => badge.label),
     ).toEqual(["Dynasty", "League"]);
+    expect(
+      selectNewsBadges({
+        source: "x",
+        tags: ["beat", "practice"],
+        scope: "player",
+      }).secondary.map((badge) => badge.label),
+    ).toEqual(["Practice"]);
   });
 
   it("keeps Player primary and leads secondaries with Cryptic for player+cryptic", () => {

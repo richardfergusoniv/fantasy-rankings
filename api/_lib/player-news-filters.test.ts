@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isInteractionBaitPost } from "./player-news-filters.js";
+import {
+  PRACTICE_NEWS_TAG,
+  isInteractionBaitPost,
+  isMaterialPracticeStatusNote,
+} from "./player-news-filters.js";
+import { withPracticeStatusTag } from "./player-news-shared.js";
 
 describe("isInteractionBaitPost", () => {
   it("drops polls and 'would you rather' posts", () => {
@@ -21,5 +26,31 @@ describe("isInteractionBaitPost", () => {
     ).toBe(false);
     expect(isInteractionBaitPost("Snap counts: Mason played 78% while Aaron Jones sat")).toBe(false);
     expect(isInteractionBaitPost("Justin Jefferson is questionable for Sunday")).toBe(false);
+  });
+});
+
+describe("material practice-status notes", () => {
+  it("accepts Shakir-form missed practice / personal notes", () => {
+    expect(isMaterialPracticeStatusNote("Khalil Shakir missed Friday practice, personal")).toBe(true);
+    expect(isMaterialPracticeStatusNote("Shakir DNP Friday — personal matter")).toBe(true);
+    expect(isMaterialPracticeStatusNote("Doubs limited in Friday practice")).toBe(true);
+    expect(isMaterialPracticeStatusNote("Jefferson returns to practice")).toBe(true);
+  });
+
+  it("rejects trivial practice chatter without a status change", () => {
+    expect(isMaterialPracticeStatusNote("Shakir was at practice today")).toBe(false);
+    expect(isMaterialPracticeStatusNote("Bills practice notes and media availability")).toBe(false);
+  });
+
+  it("tags drafts with practice signal for material notes", () => {
+    const tagged = withPracticeStatusTag({
+      change: "Khalil Shakir missed Friday practice, personal",
+      roleContext: "Beat report via team notes.",
+      signal: null,
+      tags: ["beat"],
+    });
+    expect(tagged.tags).toContain(PRACTICE_NEWS_TAG);
+    expect(tagged.tags).toContain("beat");
+    expect(tagged.signal).toBe(PRACTICE_NEWS_TAG);
   });
 });

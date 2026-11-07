@@ -3,7 +3,7 @@
  * Kept free of DOM / DB so vitest and the frontend can share one mapping.
  */
 
-import { DYNASTY_NEWS_TAG } from "./player-news-filters.js";
+import { DYNASTY_NEWS_TAG, PRACTICE_NEWS_TAG } from "./player-news-filters.js";
 
 /** Source-role tags the X producer attaches (exactly one per X item). */
 export const X_SOURCE_ROLE_TAGS = [
@@ -27,6 +27,7 @@ export const CRYPTIC_NEWS_TAG = "cryptic";
 /** Tags accepted on ingest; unknown values are dropped, not rejected. */
 export const ALLOWED_NEWS_TAGS = [
   DYNASTY_NEWS_TAG,
+  PRACTICE_NEWS_TAG,
   CRYPTIC_NEWS_TAG,
   ...X_SOURCE_ROLE_TAGS,
 ] as const;
@@ -215,6 +216,10 @@ export function selectNewsBadges(item: NewsBadgeItem): NewsBadges {
 
   if (tags.includes(CRYPTIC_NEWS_TAG)) {
     secondary.push({ key: "cryptic", label: "Cryptic", tone: "muted" });
+  }
+
+  if (tags.includes(PRACTICE_NEWS_TAG)) {
+    secondary.push({ key: "practice", label: "Practice", tone: "neutral" });
   }
 
   if (tags.includes(DYNASTY_NEWS_TAG)) {
