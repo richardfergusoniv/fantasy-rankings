@@ -42,7 +42,7 @@ vi.mock("./prop-line-week.js", () => ({
   loadPropLineWeek: vi.fn(async () => ({
     season: 2026,
     week: 7,
-    pulledAt: null,
+    pulledAt: "2026-10-24T18:00:00.000Z",
     sleeperPulledAt: null,
     lines: [
       {
@@ -384,23 +384,42 @@ describe("extended chat tools", () => {
       ok: boolean;
       swaps: Array<{
         verdict: { label: string; score: number; unit: string };
-        start: { playerId: string; evidence: { usage: unknown; game: unknown; propLines: unknown[] } };
+        start: {
+          playerId: string;
+          projectionRange: { low: number; high: number } | null;
+          usageProjection: number | null;
+          usageGames: number;
+          gameTime: string | null;
+          strengthOfSchedule: { avg: number; rank: number } | null;
+          evidence: { usage: unknown; game: unknown; propLines: unknown[] };
+        };
         sit: { playerId: string } | null;
       }>;
       projectionDelta: number;
-      freshness: { dashboardAsOf: string; projectionsAsOf: string | null; valuesAsOf: string | null };
+      freshness: {
+        dashboardAsOf: string;
+        projectionsAsOf: string | null;
+        valuesAsOf: string | null;
+        propsPulledAt: string | null;
+      };
     };
     expect(result.ok).toBe(true);
     expect(result.freshness.dashboardAsOf).toEqual(expect.any(String));
     expect(result.freshness).toHaveProperty("projectionsAsOf");
     expect(result.freshness).toHaveProperty("valuesAsOf");
+    expect(result.freshness.propsPulledAt).toBe("2026-10-24T18:00:00.000Z");
     expect(result.swaps.some((swap) => swap.start.playerId === "p-bench")).toBe(true);
     expect(result.projectionDelta).toBeGreaterThan(0);
-    const swap = result.swaps[0]!;
+    const swap = result.swaps.find((row) => row.start.playerId === "p-bench")!;
     expect(swap.verdict.label.length).toBeGreaterThan(0);
     expect(swap.verdict.unit.length).toBeGreaterThan(0);
     expect(swap.start.evidence).toBeDefined();
     expect(Array.isArray(swap.start.evidence.propLines)).toBe(true);
+    expect(swap.start.projectionRange).toEqual({ low: 10.0, high: 18.5 });
+    expect(swap.start.usageProjection).toBe(13.8);
+    expect(swap.start.usageGames).toBe(6);
+    expect(swap.start.gameTime).toBe("2026-11-15T20:25:00.000Z");
+    expect(swap.start.strengthOfSchedule).toEqual({ avg: 24.0, rank: 1 });
     // No engine prose or scoring internals reach the model.
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("\"reasons\"");
@@ -409,6 +428,32 @@ describe("extended chat tools", () => {
     expect(serialized).not.toContain("no_usage_history");
     expect(serialized).not.toContain("projection_edge");
   });
+
+  it("get_projections week stubs expose range, usage, and gameTime", async () => {
+    selectResults.push([]); // projection accuracy
+    const result = await toolGetProjections(ctxWithDashboard(), {
+      leagueId: "lg1",
+      scope: "player",
+      playerId: "p1",
+    }) as {
+      ok: boolean;
+      players: Array<{
+        week: {
+          projectionRange: { low: number; high: number } | null;
+          usageProjection: number | null;
+          usageGames: number;
+          gameTime: string | null;
+        };
+      }>;
+    };
+    expect(result.ok).toBe(true);
+    expect(result.players[0]?.week).toMatchObject({
+      projectionRange: { low: 9.5, high: 16.2 },
+      usageProjection: 11.4,
+      usageGames: 6,
+      gameTime: "2026-11-15T17:00:00.000Z",
+    });
+  }, 15_000);
 
   it("suggest_lineup verdicts move with the roster rows' usage projection", async () => {
     type LineupResult = {

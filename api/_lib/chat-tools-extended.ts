@@ -49,7 +49,7 @@ import { loadWeekProjections, type WeekProjections } from "./sleeper-week-projec
 import { DEFAULT_LAST_REGULAR_WEEK } from "./league-schedule.js";
 import { decodeSourceCachePayload } from "./source-cache-payload.js";
 import { PLAYER_NEWS_SNAPSHOT_KEY } from "./sleeper.js";
-import { chatRosBudgetAllows, chatRosYieldAtMs,
+import {   chatRosBudgetAllows, chatRosYieldAtMs,
   defaultToolLeague,
   findLeague,
   gameLineForTeam,
@@ -59,6 +59,7 @@ import { chatRosBudgetAllows, chatRosYieldAtMs,
   loadTradeMarketContext,
   loadDashboard,
   moveFreshness,
+  opponentDefenseSos,
   resolvePlayerIdentity,
   tradeLineupBeforeAfter,
   waiverAdjustments,
@@ -1009,6 +1010,12 @@ export async function toolGetProjections(
       ?? null;
     const ros = valueById.get(id) ?? null;
     const roster = [...league.starters, ...league.bench].find((p) => p.playerId === id);
+    const adviceFields = {
+      projectionRange: weekly?.projectionRange ?? roster?.projectionRange ?? null,
+      usageProjection: roster?.usageProjection ?? null,
+      usageGames: roster?.usageGames ?? 0,
+      gameTime: weekly?.gameTime ?? roster?.gameTime ?? null,
+    };
     return {
       playerId: id,
       name: weekly?.name ?? ros?.name ?? roster?.name ?? id,
@@ -1022,6 +1029,7 @@ export async function toolGetProjections(
           projectionSource: weekly.projectionSource,
           opponent: weekly.opponent,
           isBye: weekly.isBye,
+          ...adviceFields,
         }
         : {
           leagueProjection: roster?.projection ?? null,
@@ -1030,6 +1038,7 @@ export async function toolGetProjections(
           projectionSource: roster?.projectionSource ?? null,
           opponent: roster?.opponent ?? null,
           isBye: roster?.isBye ?? false,
+          ...adviceFields,
         },
       restOfSeason: ros
         ? { value: ros.value, overallRank: ros.overallRank, positionRank: ros.positionRank, trend30Day: ros.trend30Day }
@@ -1327,26 +1336,27 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
       alternative: alternative ? toScored(alternative) : null,
       weights,
     });
-    const startStub = {
-      playerId: incoming.playerId,
-      name: incoming.name,
-      position: incoming.position,
-      team: incoming.team,
-      slot: incoming.lineupSlot,
-      projection: incoming.projection,
-      projectionSource: incoming.projectionSource,
+    const lineupStub = (player: (typeof league.starters)[number]) => {
+      const ranking = rankingById.get(player.playerId);
+      const opponent = ranking?.opponent ?? player.opponent ?? null;
+      return {
+        playerId: player.playerId,
+        name: player.name,
+        position: player.position,
+        team: player.team,
+        slot: player.lineupSlot,
+        projection: player.projection,
+        projectionSource: player.projectionSource,
+        projectionRange: ranking?.projectionRange ?? player.projectionRange ?? null,
+        usageProjection: player.usageProjection ?? null,
+        usageGames: player.usageGames ?? 0,
+        gameTime: ranking?.gameTime ?? player.gameTime ?? null,
+        opponent,
+        strengthOfSchedule: opponentDefenseSos(dashboard, league.id, opponent, player.position),
+      };
     };
-    const sitStub = outgoing
-      ? {
-        playerId: outgoing.playerId,
-        name: outgoing.name,
-        position: outgoing.position,
-        team: outgoing.team,
-        slot: outgoing.lineupSlot,
-        projection: outgoing.projection,
-        projectionSource: outgoing.projectionSource,
-      }
-      : null;
+    const startStub = lineupStub(incoming);
+    const sitStub = outgoing ? lineupStub(outgoing) : null;
     return {
       slot,
       verdict: moveVerdict(scored.week),
@@ -1361,7 +1371,7 @@ export async function toolSuggestLineup(ctx: ChatToolContext, args: { leagueId: 
     week: dashboard.week,
     scoringWindow: "week" as const,
     note: "Labels and scores are deterministic; do not re-rank. The payload carries raw evidence only and no written reasons: compose the explanation from the evidence and name the deciding factor.",
-    freshness: moveFreshness(dashboard),
+    freshness: await moveFreshness(dashboard),
     currentStarterProjection: Number(beforeProj.toFixed(2)),
     optimizedStarterProjection: Number(afterProj.toFixed(2)),
     projectionDelta: Number((afterProj - beforeProj).toFixed(2)),
@@ -1399,7 +1409,7 @@ export async function toolSuggestWaivers(
   const evidence = await loadMoveEvidenceIndex(dashboard);
   return {
     ...result,
-    freshness: moveFreshness(dashboard),
+    freshness: await moveFreshness(dashboard),
     suggestions: result.suggestions.map((row) => ({
       playerId: row.playerId,
       name: row.name,
@@ -1893,7 +1903,7 @@ export async function toolSuggestTrades(
     formatKey: league.seasonLongFormat.key,
     scoringWindow: tradeWindowKey,
     note: "Labels and scores are deterministic; do not re-rank. The payload carries the values and margins behind each idea and no written reasons: compose the explanation yourself and name the deciding factor. marketContext lists what this league has actually traded recently — frame the suggestions against it when it is non-null. utility separates market fairness (value z) from yourUtilityDelta (your lineup/starter-value/power-rank change) and partnerUtilityDelta (the other roster's change). utility.*.restOfSeason is the lineup-points change summed over weeks with full projection coverage: partial:true means some weeks are not counted (missingWeeks names weeks with no data at all; unknownPlayerWeeks names weeks where a player on either roster has no projection and was not on a schedule bye), and a null restOfSeason means 'no projection coverage', not zero. Optimized ROS comparisons cover only QB, RB, WR, TE, K and DEF: positions the lineup optimizer never starts (such as individual defensive players) are excluded from the comparison entirely, not treated as unknown. injuryExposure lists current designations and the share of remaining projected points they carry; it is descriptive, not a risk score: absentPlayers names players with no usable projection in any covered week, partialPlayers names players missing a covered non-bye week.",
-    freshness: moveFreshness(dashboard),
+    freshness: await moveFreshness(dashboard),
     marketContext: await loadTradeMarketContext(ctx, league.id, []),
     myNeeds,
     mySurplus,
