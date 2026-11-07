@@ -929,8 +929,8 @@
 }
 .game-board {
   display: grid;
-  gap: 14px;
-  padding: 16px 20px;
+  gap: 10px;
+  padding: 14px 20px 4px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
   background: var(--surface);
@@ -954,7 +954,7 @@
 }
 .game-board-team {
   display: grid;
-  gap: 6px;
+  gap: 2px;
   min-width: 0;
 }
 .game-board-team.is-home {
@@ -1008,19 +1008,24 @@
 .game-board-implied > strong.is-leading {
   color: var(--action);
 }
+/* Spread and Total side by side, small, so the middle column stays narrow between the teams. */
 .game-board-market {
   display: grid;
+  grid-auto-flow: column;
+  align-self: center;
   justify-items: center;
   gap: 10px;
-  padding-top: 50px;
   text-align: center;
 }
 .game-board-market div {
   display: grid;
-  gap: 2px;
+  gap: 1px;
+}
+.game-board-market dt {
+  font-size: 11px;
 }
 .game-board-market dd {
-  font-size: var(--type-body);
+  font-size: var(--type-caption);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1036,15 +1041,13 @@
 .game-board-split i.is-leading {
   background: var(--action);
 }
-.game-board-compares {
-  border-bottom: 1px solid var(--hairline);
-}
+/* The last row ends at the card's edge, so .game-board-compares needs no rule under it. */
 .game-board-compare {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  min-height: 44px;
+  min-height: 34px;
   border-top: 1px solid var(--hairline);
   font-size: var(--type-body);
   font-weight: 600;
@@ -1083,7 +1086,7 @@
     background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%;
   }
   .game-board {
-    padding: 14px 16px;
+    padding: 12px 14px 4px;
   }
   .game-board-team strong,
   .game-board .game-board-team-link .matchup-reference-button-label {

@@ -63,6 +63,8 @@ Three jobs, three looks (`theme/badges.css`). One meaning per color.
 - Waivers rows show Sleeper's 24-hour adds as a 40px bar scaled to the most-added player in the list (`--positive`), and a suggested FAAB bid ("$5–13") for the top graded adds. The bid comes from the chat assistant's waiver grading (`api/_lib/waiver-suggestions.ts`), saved by each refresh for the 15 highest-projected free agents per FAAB league.
 
 - League team cards keep their summary above Players / Weekly tabs. Players contains position totals and the roster; Weekly performance shows regular-season points, all-play wins–losses–ties and competition rank against every other team. Actual and Projected rows are explicitly labeled. Missing source data stays unavailable rather than becoming a zero score.
+- Every team list opens the same league team card: Power's bars, Projected's playoff picture (rest-of-season values) and roster badges. On Projected the team name is the button and its tap target stretches across the row.
+- Chart popups go full screen on a phone and the plot grows into the spare height (never shorter than `min(55dvh, 420px)`), so the zoom control, plot, player picker and key fill the screen with no gap below.
 
 ## Rules
 

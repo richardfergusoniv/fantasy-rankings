@@ -63,11 +63,12 @@
     border: 1px solid var(--hairline);
     border-radius: var(--radius-xl);
   }
-  /* Content-sized so the body scrollport can reach zoom controls, inspector, and key. */
+  /* At least content-sized so the body scrollport can reach zoom controls, inspector, and key;
+     grows into any spare height so the plot fills the screen instead of leaving a gap below. */
   .monitor-chart-expand-card .monitor-expanded-chart {
     display: flex;
     flex-direction: column;
-    flex: 0 0 auto;
+    flex: 1 0 auto;
     min-height: 0;
     height: auto;
   }
@@ -77,16 +78,16 @@
   .monitor-chart-expand-card .monitor-expanded-chart .scatter-chart-shell,
   .monitor-chart-expand-card .monitor-expanded-chart .monitor-value-chart {
     display: flex;
-    flex: none;
+    flex: 1 0 auto;
     flex-direction: column;
     min-height: 0;
     height: auto;
     max-height: none;
   }
   .monitor-chart-expand-card .monitor-expanded-chart .scatter-axis-rail {
-    flex: none;
-    height: min(55dvh, 420px);
-    min-height: 220px;
+    flex: 1 0 auto;
+    height: auto;
+    min-height: max(220px, min(55dvh, 420px));
   }
   .monitor-chart-expand-card .monitor-expanded-chart .scatter-frame {
     flex: 1 1 auto;
@@ -94,9 +95,9 @@
     height: 100%;
   }
   .monitor-chart-expand-card .monitor-expanded-chart > .scatter-frame {
-    flex: none;
-    height: min(55dvh, 420px);
-    min-height: 220px;
+    flex: 1 0 auto;
+    height: auto;
+    min-height: max(220px, min(55dvh, 420px));
   }
   .monitor-chart-expand-card .monitor-expanded-chart .chart-key {
     flex: none;
