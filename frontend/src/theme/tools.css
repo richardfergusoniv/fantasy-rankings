@@ -1008,19 +1008,24 @@
 .game-board-implied > strong.is-leading {
   color: var(--action);
 }
+/* Spread and Total side by side, small, so the middle column stays narrow between the teams. */
 .game-board-market {
   display: grid;
+  grid-auto-flow: column;
   align-self: center;
   justify-items: center;
-  gap: 6px;
+  gap: 10px;
   text-align: center;
 }
 .game-board-market div {
   display: grid;
-  gap: 2px;
+  gap: 1px;
+}
+.game-board-market dt {
+  font-size: 11px;
 }
 .game-board-market dd {
-  font-size: var(--type-body);
+  font-size: var(--type-caption);
   font-weight: 700;
   white-space: nowrap;
 }
