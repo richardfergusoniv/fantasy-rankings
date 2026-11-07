@@ -164,6 +164,53 @@ beforeEach(() => {
 });
 
 describe("extended chat tools", () => {
+  it("get_player_news surfaces practice-tagged Shakir-form notes", async () => {
+    selectResults.push(
+      [
+        {
+          id: "n-shakir",
+          playerId: "p1",
+          player: "Alpha Receiver",
+          team: "KC",
+          scope: "player",
+          change: "Khalil Shakir missed Friday practice, personal",
+          newsType: "roster",
+          roleContext: "Beat report via team notes.",
+          signal: "practice",
+          tags: ["practice", "beat"],
+          sourceLabel: "@beat",
+          sourceUrl: "https://x.com/beat/status/99",
+          externalId: "99",
+          publishedAt: new Date("2026-10-20T12:00:00Z"),
+          createdAt: new Date("2026-10-20T12:00:00Z"),
+          source: "x",
+        },
+      ],
+      [],
+      [],
+      [],
+    );
+    const result = await toolGetPlayerNews(ctxWithDashboard(), {
+      leagueId: "lg1",
+      scope: "player",
+      playerId: "p1",
+      limit: 5,
+    }) as {
+      ok: boolean;
+      items: Array<{
+        change: string;
+        tags: string[];
+        signal: string | null;
+        roleContext: string;
+      }>;
+    };
+    expect(result.ok).toBe(true);
+    expect(result.items[0]?.change).toContain("missed Friday practice");
+    expect(result.items[0]?.tags).toContain("practice");
+    expect(result.items[0]?.signal).toBe("practice");
+    expect(result.items[0]?.roleContext).toContain("Beat report");
+  });
+
   it("get_player_news returns scoped shared news", async () => {
     selectResults.push(
       [

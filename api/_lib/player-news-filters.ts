@@ -10,6 +10,26 @@ export const SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT =
 /** Tag for dynasty-only X posts; redraft contexts hide these rows. */
 export const DYNASTY_NEWS_TAG = "dynasty";
 
+/**
+ * Tag for material practice-status notes (missed / limited / DNP / return),
+ * not trivial “was at practice” chatter. Surfaces via get_player_news tags.
+ */
+export const PRACTICE_NEWS_TAG = "practice";
+
+/**
+ * Fantasy-material practice status: absence, limited/full participation callouts,
+ * personal-reason DNPs, or an explicit return to practice. Ordinary “at practice”
+ * mentions without a status change stay ineligible.
+ */
+export const MATERIAL_PRACTICE_STATUS_RE =
+  /\b(?:missed(?:\s+\w+)?\s+practice|did\s+not\s+practice|\bdnp\b|held\s+out(?:\s+of\s+practice)?|limited(?:\s+participant)?|full\s+participant|returns?\s+to\s+practice|back\s+at\s+practice|practice[^.]{0,40}\bpersonal\b)\b/i;
+
+export function isMaterialPracticeStatusNote(...parts: Array<string | null | undefined>): boolean {
+  const text = parts.filter((part) => typeof part === "string" && part.trim().length > 0).join("\n");
+  if (!text.trim()) return false;
+  return MATERIAL_PRACTICE_STATUS_RE.test(text);
+}
+
 export function isSleeperTimestampOnlyNews(item: { roleContext: string }): boolean {
   return item.roleContext === SLEEPER_TIMESTAMP_ONLY_ROLE_CONTEXT;
 }

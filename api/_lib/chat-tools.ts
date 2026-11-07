@@ -462,6 +462,8 @@ async function loadPlayerNews(playerId: string, isDynastyContext: boolean, limit
         change: schema.sharedPlayerNews.change,
         newsType: schema.sharedPlayerNews.newsType,
         roleContext: schema.sharedPlayerNews.roleContext,
+        signal: schema.sharedPlayerNews.signal,
+        tags: schema.sharedPlayerNews.tags,
         sourceLabel: schema.sharedPlayerNews.sourceLabel,
         sourceUrl: schema.sharedPlayerNews.sourceUrl,
         publishedAt: schema.sharedPlayerNews.publishedAt,
@@ -497,6 +499,9 @@ async function loadPlayerNews(playerId: string, isDynastyContext: boolean, limit
       .map((row) => ({
         change: row.change,
         newsType: row.newsType,
+        roleContext: row.roleContext,
+        signal: row.signal,
+        tags: row.tags ?? [],
         sourceLabel: row.sourceLabel,
         sourceUrl: row.sourceUrl,
         // publishedAt is the source's publication time and may be null for

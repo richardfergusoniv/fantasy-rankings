@@ -378,6 +378,8 @@ export async function toolGetPlayerNews(
         change: schema.sharedPlayerNews.change,
         newsType: schema.sharedPlayerNews.newsType,
         roleContext: schema.sharedPlayerNews.roleContext,
+        signal: schema.sharedPlayerNews.signal,
+        tags: schema.sharedPlayerNews.tags,
         sourceLabel: schema.sharedPlayerNews.sourceLabel,
         sourceUrl: schema.sharedPlayerNews.sourceUrl,
         externalId: schema.sharedPlayerNews.externalId,
@@ -414,6 +416,9 @@ export async function toolGetPlayerNews(
           scope: row.scope,
           change: row.change,
           newsType: row.newsType,
+          roleContext: row.roleContext,
+          signal: row.signal,
+          tags: row.tags ?? [],
           sourceLabel: row.sourceLabel,
           sourceUrl: row.sourceUrl,
           // publishedAt is the source's publication time (null for undated
@@ -828,7 +833,7 @@ export async function loadMoveEvidenceIndex(dashboard: Dashboard): Promise<MoveE
   const roleChangeIds = new Set<string>();
   let roleChangeFailed = false;
   try {
-    const ROLE_CHANGE_PATTERN = /injur|role|depth|starter|promot|demot|snap|workload|suspen/i;
+    const ROLE_CHANGE_PATTERN = /injur|role|depth|starter|promot|demot|snap|workload|suspen|practice|\bdnp\b/i;
     const ids = [
       ...new Set([
         ...dashboard.leagues.flatMap((item) => [
