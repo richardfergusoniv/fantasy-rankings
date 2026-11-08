@@ -27,7 +27,7 @@ import {
 import { formatPercent } from "../lib/format-number";
 import { teamOutlook, winPercent, winProbability } from "./win-probability";
 import { AdvantageList } from "./advantage-list";
-import { advantageRows } from "./matchup-advantage";
+import { advantageRows, rankStartersBySlot } from "./matchup-advantage";
 
 export {
   isOptimizedLineupChanged,
@@ -179,14 +179,26 @@ export function Lineup({
   // live-aware projection the score card totals.
   const advantage = useMemo(() => {
     if (activeMode !== "advantage" || !theirs) return [];
-    const count = Math.max(mine.length, theirs.length);
-    const sideOf = (player: RosterPlayer | undefined) => (player && player.playerId !== "0"
+    // Each team is re-dealt on its own: best RB against best RB, worst WR against worst WR,
+    // FLEX the weakest of the group. Finished games count what was scored, so players move.
+    const rank = (starters: readonly RosterPlayer[]) => rankStartersBySlot(
+      starters.map((player) => ({
+        slot: player.lineupSlot ?? player.position,
+        position: player.playerId === "0" ? null : player.position,
+        player: player.playerId === "0" ? null : player,
+      })),
+      (player) => liveForecastPoints(player, nowMs),
+    );
+    const rankedMine = rank(mine);
+    const rankedTheirs = rank(theirs);
+    const count = Math.max(rankedMine.length, rankedTheirs.length);
+    const sideOf = (player: RosterPlayer | null | undefined) => (player
       ? { playerId: player.playerId, name: player.name, points: liveForecastPoints(player, nowMs) }
       : null);
     return advantageRows(Array.from({ length: count }, (_, index) => ({
-      slot: mine[index]?.lineupSlot ?? theirs[index]?.lineupSlot ?? "—",
-      mine: sideOf(mine[index]),
-      theirs: sideOf(theirs[index]),
+      slot: rankedMine[index]?.slot ?? rankedTheirs[index]?.slot ?? "—",
+      mine: sideOf(rankedMine[index]?.player),
+      theirs: sideOf(rankedTheirs[index]?.player),
     })));
   }, [activeMode, mine, theirs, nowMs]);
   const starterCount = Math.max(mine.length, theirs?.length ?? 0);
