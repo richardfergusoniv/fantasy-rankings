@@ -32,6 +32,8 @@ export function advantageRows(slots: readonly AdvantageSlotInput[]): AdvantageRo
 }
 
 const FLEX_SLOTS = new Set(["FLEX", "SUPER_FLEX", "REC_FLEX", "WRRB_FLEX"]);
+/** Positions whose dedicated slot has the same name (QB in a QB slot). Anything else is left where it sits. */
+const DEALABLE_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
 
 /** One lineup slot as the league lists it, with whoever currently holds it. */
 export type StarterSlot<T> = {
@@ -51,14 +53,23 @@ export type StarterSlot<T> = {
  * what he scored and slides up or down against everyone still projected. A player
  * with no value sorts last. Ties keep the league's slot order. Slots keep their
  * league order; only the players move.
+ *
+ * Only starters this can place with confidence are moved: an offensive or K/DEF
+ * position sitting in its own slot or in a FLEX-type slot. An empty slot stays empty,
+ * and anything else (an IDP slot such as DL or IDP_FLEX, a player whose position is
+ * unknown) stays exactly where the league put him.
  */
 export function rankStartersBySlot<T>(
   starters: readonly StarterSlot<T>[],
   valueOf: (player: T) => number | null,
 ): Array<{ slot: string; player: T | null }> {
+  const dealable = (starter: StarterSlot<T>): starter is StarterSlot<T> & { player: T; position: string } => {
+    if (!starter.player || !starter.position || !DEALABLE_POSITIONS.has(starter.position)) return false;
+    return FLEX_SLOTS.has(starter.slot) || starter.slot === starter.position;
+  };
   const byPosition = new Map<string, Array<{ player: T; value: number | null; order: number }>>();
   starters.forEach((starter, order) => {
-    if (!starter.player || !starter.position) return;
+    if (!dealable(starter)) return;
     const group = byPosition.get(starter.position) ?? [];
     group.push({ player: starter.player, value: valueOf(starter.player), order });
     byPosition.set(starter.position, group);
@@ -75,13 +86,14 @@ export function rankStartersBySlot<T>(
     next.set(position, index + 1);
     return byPosition.get(position)?.[index]?.player ?? null;
   };
-  const dealt: Array<T | null> = starters.map(() => null);
+  // Whoever is not dealt keeps his own slot; dealt slots start empty.
+  const dealt: Array<T | null> = starters.map((starter) => (dealable(starter) ? null : starter.player));
   // Dedicated slots first, so what is left over at each position is what FLEX holds.
   starters.forEach((starter, index) => {
-    if (!FLEX_SLOTS.has(starter.slot)) dealt[index] = take(starter.slot);
+    if (dealable(starter) && !FLEX_SLOTS.has(starter.slot)) dealt[index] = take(starter.position);
   });
   starters.forEach((starter, index) => {
-    if (FLEX_SLOTS.has(starter.slot) && starter.position) dealt[index] = take(starter.position);
+    if (dealable(starter) && FLEX_SLOTS.has(starter.slot)) dealt[index] = take(starter.position);
   });
   return starters.map((starter, index) => ({ slot: starter.slot, player: dealt[index] ?? null }));
 }

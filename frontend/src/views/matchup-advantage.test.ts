@@ -122,6 +122,31 @@ describe("rankStartersBySlot", () => {
     expect(names(ranked)).toEqual(["QB:qb", "RB:-", "FLEX:flex-2", "FLEX:flex-1", "K:kicker", "DEF:defense"]);
   });
 
+  it("does not let an empty dedicated slot use up a player meant for a later slot", () => {
+    // Empty WR, an occupied WR, and a WR in FLEX: the occupied slot and FLEX both stay filled.
+    const ranked = rankStartersBySlot([
+      slot("WR", "WR", null), slot("WR", "WR", guy("wr-low", 5)), slot("FLEX", "WR", guy("wr-high", 14)),
+    ], value);
+    expect(names(ranked)).toEqual(["WR:-", "WR:wr-high", "FLEX:wr-low"]);
+  });
+
+  it("leaves IDP slots and unknown positions exactly where the league put them", () => {
+    const ranked = rankStartersBySlot([
+      slot("QB", "—", guy("unknown-qb", 6)),
+      slot("DL", "DE", guy("end", 8)),
+      slot("IDP_FLEX", "LB", guy("backer", 11)),
+      slot("RB", "RB", guy("rb-low", 3)), slot("RB", "RB", guy("rb-high", 12)),
+    ], value);
+    expect(names(ranked)).toEqual(["QB:unknown-qb", "DL:end", "IDP_FLEX:backer", "RB:rb-high", "RB:rb-low"]);
+  });
+
+  it("does not take a real QB for a slot holding a player of unknown position", () => {
+    const ranked = rankStartersBySlot([
+      slot("QB", "—", guy("unknown", 6)), slot("SUPER_FLEX", "QB", guy("real-qb", 18)),
+    ], value);
+    expect(names(ranked)).toEqual(["QB:unknown", "SUPER_FLEX:real-qb"]);
+  });
+
   it("does not mutate its input", () => {
     const input = [slot("RB", "RB", guy("low", 1)), slot("RB", "RB", guy("high", 9))];
     rankStartersBySlot(input, value);
