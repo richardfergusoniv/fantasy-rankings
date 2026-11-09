@@ -121,6 +121,50 @@ describe("xNewsItemSchema / xNewsBatchSchema", () => {
     expect(xNewsBatchSchema.safeParse({ items: [{ ...validItem, source_url: "not-a-url" }] }).success).toBe(false);
   });
 
+  it("truncates oversized text so a mixed batch still parses", () => {
+    const noteTweet = "Week 9 fantasy football advanced stats".padEnd(8107, ".");
+    const justOver = "B".repeat(4001);
+    const atCap = "C".repeat(4000);
+    const parsed = xNewsBatchSchema.safeParse({
+      items: [
+        { ...validItem, post_id: "100", text: "Short update." },
+        {
+          ...validItem,
+          post_id: "2119731739979567159",
+          source_url: "https://x.com/corbin_young21/status/2119731739979567159",
+          text: noteTweet,
+        },
+        { ...validItem, post_id: "101", text: justOver },
+        { ...validItem, post_id: "102", text: atCap },
+      ],
+    });
+
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.items).toHaveLength(4);
+    expect(parsed.data.items[0]?.text).toBe("Short update.");
+    expect(parsed.data.items[1]?.text).toBe(noteTweet.slice(0, 4000));
+    expect(parsed.data.items[1]?.text).toHaveLength(4000);
+    expect(parsed.data.items[1]?.post_id).toBe("2119731739979567159");
+    expect(parsed.data.items[2]?.text).toBe(justOver.slice(0, 4000));
+    expect(parsed.data.items[2]?.text).toHaveLength(4000);
+    expect(parsed.data.items[3]?.text).toBe(atCap);
+
+    const { drafts } = collectXNewsDrafts(
+      parsed.data.items,
+      () => ["4046"],
+      () => ({ player: "Justin Jefferson", team: "MIN" }),
+    );
+    expect(drafts.map((draft) => draft.externalId)).toEqual([
+      "100",
+      "2119731739979567159",
+      "101",
+      "102",
+    ]);
+    expect(drafts[1]?.change).toBe(noteTweet.slice(0, 4000));
+    expect(drafts[1]?.change).toHaveLength(4000);
+  });
+
   it("rejects javascript/data/file source_url values", () => {
     expect(xNewsItemSchema.safeParse({ ...validItem, source_url: "javascript:alert(1)" }).success).toBe(false);
     expect(xNewsItemSchema.safeParse({ ...validItem, source_url: "data:text/html,hi" }).success).toBe(false);
