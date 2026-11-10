@@ -168,6 +168,17 @@ const sourceSchema = z.enum(["sleeper", "x", "nflverse", "article"]);
 const xNewsScopeSchema = z.enum(["player", "team", "league"]);
 
 /**
+ * Stored X post body cap. The scanner sends full `note_tweet.text` with no
+ * cap; truncate instead of rejecting so one long post cannot 400 the batch.
+ */
+const X_NEWS_TEXT_MAX_CHARS = 4000;
+
+function clampXNewsText(value: unknown): unknown {
+  if (typeof value !== "string" || value.length <= X_NEWS_TEXT_MAX_CHARS) return value;
+  return value.slice(0, X_NEWS_TEXT_MAX_CHARS);
+}
+
+/**
  * X ingest producer contract:
  * - scope "player" (default): Prefer `player_id` (Sleeper id) whenever known.
  *   Name matching is a fallback and will drop ambiguous last-name-only rows
@@ -187,7 +198,7 @@ export const xNewsItemSchema = z
      * name resolve). Ignored / forbidden for scope "league".
      */
     team: z.string().min(1).max(8).optional(),
-    text: z.string().min(1).max(4000),
+    text: z.preprocess(clampXNewsText, z.string().min(1).max(X_NEWS_TEXT_MAX_CHARS)),
     author_handle: z.string().min(1).max(80),
     // z.string().url() accepts javascript:/data:/file:; allowlist http(s) only.
     source_url: z.string().url().max(500).refine(isHttpOrHttpsUrl, {
