@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import type { Dashboard } from "../dashboard-types";
+import type { Dashboard, PlayerNews, PlayerNewsItem } from "../dashboard-types";
+import { newsItemTimeLabel } from "../news-time";
+import { monitorNews } from "./monitor-news";
 import { shortLeagueName } from "../shared";
 import { formatPercent } from "../lib/format-number";
 import { sortMonitorSummaries, summarizeLeagueForMonitor, type MonitorLeagueSummary } from "./monitor-summary";
@@ -57,7 +59,12 @@ function LeagueRow({ name, summary, record, onOpen }: {
  * projected margin and any lineup problem. Tapping a league opens the usual
  * Matchup screen for it.
  */
-export function MonitorHome({ dashboard, onOpenLeague }: { dashboard: Dashboard; onOpenLeague: (leagueId: string) => void }) {
+export function MonitorHome({ dashboard, news, onOpenLeague, onOpenNews }: {
+  dashboard: Dashboard;
+  news: PlayerNews | undefined;
+  onOpenLeague: (leagueId: string) => void;
+  onOpenNews: (item: PlayerNewsItem) => void;
+}) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), TICK_MS);
@@ -69,6 +76,7 @@ export function MonitorHome({ dashboard, onOpenLeague }: { dashboard: Dashboard;
       summary: summarizeLeagueForMonitor(league, nowMs),
     })).map((row) => ({ ...row, issues: row.summary.issues })),
   ), [dashboard.leagues, nowMs]);
+  const topNews = useMemo(() => monitorNews(news, dashboard.leagues, nowMs), [news, dashboard.leagues, nowMs]);
   const attention = rows.filter((row) => row.issues.length > 0).length;
   return (
     <section className="league-monitor" aria-labelledby="league-monitor-title">
@@ -87,6 +95,25 @@ export function MonitorHome({ dashboard, onOpenLeague }: { dashboard: Dashboard;
           />
         ))}
       </div>
+      {topNews.length > 0 ? (
+        <section className="league-monitor-news" aria-labelledby="league-monitor-news-title">
+          <h3 id="league-monitor-news-title">Player news</h3>
+          <ul>
+            {topNews.map(({ item, leagues }) => (
+              <li key={item.id}>
+                <button type="button" onClick={() => onOpenNews(item)} aria-label={`${item.player}: ${item.change}`}>
+                  <strong>{item.player}{item.team ? <span> · {item.team}</span> : null}</strong>
+                  <span className="league-monitor-news-text">{item.change}</span>
+                  <small>
+                    {leagues.slice(0, 2).map((league) => shortLeagueName(league.name)).join(", ")}
+                    {leagues.length > 2 ? ` +${leagues.length - 2}` : ""} · {newsItemTimeLabel(item, nowMs)}
+                  </small>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </section>
   );
 }

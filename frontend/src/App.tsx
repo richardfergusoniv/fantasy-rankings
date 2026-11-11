@@ -908,11 +908,13 @@ export function App() {
   // Same effective league as the rendered dashboard (cached + streamed meta).
   // No league yet → redraft (exclude dynasty-tagged rows) per product default.
   const leagueIsDynasty = isDynastyNewsContext(dashboard?.leagues, selectedLeagueId);
+  // Monitor spans every league, so it needs dynasty-tagged news whenever any league is dynasty; the rest of the app keeps the selected league's context.
+  const newsFetchesDynasty = leagueIsDynasty || (showMonitor && Boolean(dashboard?.leagues.some((item) => item.seasonLongFormat.isDynasty)));
   const newsQuery = useQuery({
-    queryKey: personalQueryKey(viewer, "player-news", leagueIsDynasty ? "dynasty" : "redraft"),
+    queryKey: personalQueryKey(viewer, "player-news", newsFetchesDynasty ? "dynasty" : "redraft"),
     queryFn: async () => {
       try {
-        return await withClientDeadline(api.getPlayerNews({ dynasty: leagueIsDynasty }), 8_000);
+        return await withClientDeadline(api.getPlayerNews({ dynasty: newsFetchesDynasty }), 8_000);
       } catch (error) {
         signOutForPersonalData(error);
         throw error;
@@ -1327,6 +1329,8 @@ export function App() {
             <h1 className="sr-only">Monitor</h1>
             <MonitorHome
               dashboard={dashboard}
+              news={newsQuery.data}
+              onOpenNews={setTickerNews}
               onOpenLeague={(id) => {
                 chooseLeague(id);
                 setShowMonitor(false);
@@ -1334,6 +1338,7 @@ export function App() {
             />
           </main>
         </div>
+        {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
       </div>
     );
   }
