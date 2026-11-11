@@ -54,6 +54,8 @@ import { formatRecord } from "../league-team-card";
 import { leaguePowerTeamForPlayer } from "../league-roster";
 import { WindowVirtualList } from "../virtual-list";
 import { assignTiers, groupByTier } from "../lib/tiers";
+import { AssistantCard, AssistantFacts, AssistantSheet, AssistantTable } from "../components/assistant-card";
+import { waiverAssistantAnswer } from "./waiver-assistant";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
 import { ListPagination } from "../components/state-blocks";
@@ -575,7 +577,33 @@ export function ConnectedTeamCard({
   );
 }
 
-export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, onOpenLeagueTeam, rankingPosition, rankingHorizon, rankingQuery, onRankingFiltersChange, linkedPlayerId, onOpenLinkedPlayer }: { dashboard: Dashboard; league: League; availableOnly: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void; onOpenLeagueTeam?: (rosterId: number) => void; rankingPosition: RankingPosition | null; rankingHorizon: RankingHorizon | null; rankingQuery: string | null; onRankingFiltersChange: (filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => void } & PlayerLink) {
+function WaiverAssistant({ answer, week, onAsk }: { answer: NonNullable<ReturnType<typeof waiverAssistantAnswer>>; week: number; onAsk?: (question: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const sentence = `${answer.label}: add ${answer.add.name}${answer.drop ? `, drop ${answer.drop.name}` : ""}${answer.bid ? `, bid ${answer.bid}` : ""}`;
+  return (
+    <>
+      <AssistantCard eyebrow="best move" onOpen={() => setOpen(true)} label={sentence}>
+        <span className="assistant-card-answer">
+          <strong>+ {answer.add.name} <span className="assistant-card-position">{answer.add.position}</span></strong>
+          {answer.bid ? <span className="assistant-card-chance">{answer.bid}</span> : null}
+        </span>
+      </AssistantCard>
+      <AssistantSheet
+        open={open}
+        onOpenChange={setOpen}
+        title={`Why ${answer.add.name}`}
+        description={`Week ${week}. The same grading the chat assistant uses.`}
+        question={`Why should I add ${answer.add.name}${answer.drop ? ` and drop ${answer.drop.name}` : ""}?`}
+        onAsk={(question) => onAsk?.(question)}
+      >
+        <AssistantTable title="Add and drop" columns={[answer.add.name, answer.drop?.name ?? "No drop"]} rows={answer.compare} />
+        <AssistantFacts title="Behind the grade" facts={answer.facts} />
+      </AssistantSheet>
+    </>
+  );
+}
+
+export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, onOpenLeagueTeam, rankingPosition, rankingHorizon, rankingQuery, onRankingFiltersChange, linkedPlayerId, onOpenLinkedPlayer, onAsk }: { dashboard: Dashboard; league: League; availableOnly: boolean; onOpenMatchup?: (matchup: MatchupSelection) => void; onOpenLeagueTeam?: (rosterId: number) => void; rankingPosition: RankingPosition | null; rankingHorizon: RankingHorizon | null; rankingQuery: string | null; onRankingFiltersChange: (filters: { position: RankingPosition | null; horizon: RankingHorizon | null; query: string | null }) => void; onAsk?: (question: string) => void } & PlayerLink) {
   const [position, setPosition] = useState<PositionFilter>(rankingPosition ?? "QB");
   const [query, setQuery] = useState(rankingQuery ?? "");
   const [rankingMode, setRankingMode] = useState<RankingHorizon>(rankingHorizon ?? "week");
@@ -906,6 +934,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
         ? (b.sortProjection ?? Number.NEGATIVE_INFINITY) - (a.sortProjection ?? Number.NEGATIVE_INFINITY) || a.rank - b.rank
         : a.rank - b.rank);
   }, [availableOnly, dashboard.seasonLongRankings, effectiveHorizon, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, league.seasonLongFormat.key, leagueDefenses, leagueRankings, powerTeamByPlayerId, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
+  const waiverAnswer = useMemo(() => (availableOnly ? waiverAssistantAnswer(league, dashboard.playerTrending) : null), [availableOnly, dashboard.playerTrending, league]);
   const visibleRows = rows.slice(0, visibleRowCount);
   // Tiers come from the whole list, so paging in more rows never moves a tier line.
   const tierGroups = useMemo(() => {
@@ -1027,6 +1056,7 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
         </>
       ) : (
         <>
+          {availableOnly && waiverAnswer ? <WaiverAssistant answer={waiverAnswer} week={dashboard.week} onAsk={onAsk} /> : null}
           <SegmentedControl
             className="compact-control"
             value={effectiveHorizon}

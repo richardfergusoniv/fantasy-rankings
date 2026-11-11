@@ -55,6 +55,24 @@ export function AssistantTable({ title, columns, rows }: {
   );
 }
 
+/** Facts about one thing, label and value per row. */
+export function AssistantFacts({ title, facts }: { title: string; facts: ReadonlyArray<{ label: string; value: ReactNode }> }) {
+  if (facts.length === 0) return null;
+  return (
+    <section className="assistant-facts" aria-label={title}>
+      <h3>{title}</h3>
+      <dl>
+        {facts.map((fact) => (
+          <div key={fact.label}>
+            <dt>{fact.label}</dt>
+            <dd>{fact.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 /** The detail sheet behind an Assistant card. "Ask a follow-up" is the only thing that calls the chat. */
 export function AssistantSheet({ open, onOpenChange, title, description, question, onAsk, children }: {
   open: boolean;

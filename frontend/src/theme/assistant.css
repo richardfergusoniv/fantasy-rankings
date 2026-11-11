@@ -22,3 +22,12 @@
 .assistant-table td { padding: 8px 0 8px 12px; border-top: 1px solid var(--row-divider); text-align: right; font-size: var(--type-body); font-weight: 500; }
 .assistant-table tbody tr > th { border-top: 1px solid var(--row-divider); }
 .assistant-table td.is-edge { color: var(--winner); font-weight: 700; }
+
+.assistant-facts { display: grid; gap: 6px; }
+.assistant-facts h3 { margin: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.assistant-facts dl { display: grid; margin: 0; }
+.assistant-facts dl > div { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 12px; padding: 8px 0; border-top: 1px solid var(--row-divider); }
+.assistant-facts dt { font-size: var(--type-body); }
+.assistant-facts dd { margin: 0; font-size: var(--type-body); font-weight: 500; text-align: right; }
+.assistant-card-position { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.assistant-card-detail { color: var(--dim); font-size: var(--type-caption); }

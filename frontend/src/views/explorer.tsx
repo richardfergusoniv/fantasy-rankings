@@ -85,6 +85,7 @@ export function Explorer({
             onRankingFiltersChange={onRankingFiltersChange}
             linkedPlayerId={linkedPlayerId}
             onOpenLinkedPlayer={onOpenLinkedPlayer}
+            onAsk={onAsk}
           />
         </Suspense>
       );
