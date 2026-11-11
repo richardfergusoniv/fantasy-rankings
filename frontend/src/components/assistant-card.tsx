@@ -89,7 +89,8 @@ export function AssistantSheet({ open, onOpenChange, title, description, questio
       <DialogContent className="assistant-sheet">
         <DialogCloseButton label="Close details" />
         <DialogTitle className="assistant-sheet-title">{title}</DialogTitle>
-        <DialogDescription className="assistant-sheet-description">{description}</DialogDescription>
+        {/* Read by screen readers only: the sheet shows no helper text. */}
+        <DialogDescription className="sr-only">{description}</DialogDescription>
         <div className="assistant-sheet-body">{children}</div>
         <Button type="button" variant="outline" className="assistant-sheet-ask" onClick={() => { onOpenChange(false); onAsk(question); }}>
           Ask a follow-up

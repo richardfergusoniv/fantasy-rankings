@@ -12,7 +12,6 @@
 
 .assistant-sheet { width: min(calc(100% - 32px), 520px); max-height: calc(100dvh - 48px); display: grid; gap: 12px; overflow-y: auto; overscroll-behavior: contain; padding: 16px; }
 .assistant-sheet-title { margin: 0; padding-right: 32px; font-size: var(--type-display); line-height: 1.1; font-weight: 700; letter-spacing: -.02em; }
-.assistant-sheet-description { margin: 0; color: var(--dim); font-size: var(--type-caption); }
 .assistant-sheet-body { display: grid; gap: 14px; }
 .assistant-sheet-ask { min-height: 44px; }
 .assistant-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
