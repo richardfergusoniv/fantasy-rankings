@@ -707,7 +707,14 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     const leftRow = rowOf(leftPlayerId);
     const rightRow = rowOf(rightPlayerId);
     if (!leftRow || !rightRow) return null;
+    // Live clocks aren't on ranking rows; roster rows (yours and this week's opponent) carry them, so a game in progress is judged on time left.
+    const rosterRows = [...league.starters, ...league.bench, ...(league.opponentTeam?.starters ?? []), ...(league.opponentTeam?.bench ?? [])];
+    const clockOf = (playerId: string) => {
+      const found = rosterRows.find((candidate) => candidate.playerId === playerId);
+      return { gamePeriod: found?.gamePeriod ?? null, gameClockSeconds: found?.gameClockSeconds ?? null };
+    };
     const asVerdictPlayer = (row: typeof leftRow, entity: ComparisonEntity): VerdictPlayer => ({
+      ...clockOf(row.playerId),
       playerId: row.playerId,
       name: entity.name,
       position: row.position,

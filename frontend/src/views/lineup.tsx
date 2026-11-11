@@ -158,14 +158,18 @@ function LineupAssistant({ answer, week, onAsk }: { answer: LineupAssistantAnswe
               : []),
           ]}
         />
-        {answer.swaps.map((swap) => (
-          <AssistantTable
-            key={`${swap.slot}-${swap.playerIn.playerId}`}
-            title={`${swap.slot}: start ${swap.playerIn.name}, bench ${swap.playerOut.name} (+${swap.gain.toFixed(1)})`}
-            columns={[swap.playerIn.name, swap.playerOut.name]}
-            rows={startSitFactors(swapFactorInput(swap.playerIn), swapFactorInput(swap.playerOut))}
-          />
-        ))}
+        {answer.swaps.map((swap) => {
+          const emptySlot = swap.playerOut.playerId === "0";
+          const outName = emptySlot ? "Empty slot" : swap.playerOut.name;
+          return (
+            <AssistantTable
+              key={`${swap.slot}-${swap.playerIn.playerId}`}
+              title={emptySlot ? `${swap.slot}: start ${swap.playerIn.name} (+${swap.gain.toFixed(1)})` : `${swap.slot}: start ${swap.playerIn.name}, bench ${swap.playerOut.name} (+${swap.gain.toFixed(1)})`}
+              columns={[swap.playerIn.name, outName]}
+              rows={startSitFactors(swapFactorInput(swap.playerIn), swapFactorInput(swap.playerOut))}
+            />
+          );
+        })}
       </AssistantSheet>
     </>
   );

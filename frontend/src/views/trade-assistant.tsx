@@ -4,6 +4,7 @@ import type { TradeIdea } from "../../../api/_lib/trade-ideas";
 import { api } from "../api";
 import { AssistantCard, AssistantFacts, AssistantSheet, AssistantTable } from "../components/assistant-card";
 import { tradeIdeaDetails } from "./trade-idea-details";
+import { personalQueryKey, useViewerIdentity } from "../viewer-scope";
 
 /** Ideas shown above the calculator. */
 const IDEAS_SHOWN = 3;
@@ -56,8 +57,10 @@ export function TradeAssistant({ leagueId, week, enabled, onLoad, onAsk }: {
   onLoad: (idea: TradeIdea) => void;
   onAsk?: (question: string) => void;
 }) {
+  // Ideas are worked out for the signed-in viewer's roster, so they live under the viewer's key and are cleared on an account change.
+  const viewer = useViewerIdentity();
   const query = useQuery({
-    queryKey: ["trade-ideas", leagueId],
+    queryKey: personalQueryKey(viewer, "trade-ideas", leagueId),
     queryFn: () => api.getTradeIdeas({ leagueId }),
     enabled,
     staleTime: 10 * 60 * 1000,

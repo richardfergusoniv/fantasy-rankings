@@ -1017,10 +1017,10 @@ export function App() {
     if (localStorage.getItem("fantasy-rankings-league") !== resolved) localStorage.setItem("fantasy-rankings-league", resolved);
   }, [dashboard, dashboardUrl.commit, dashboardUrl.state.league, selectedLeagueId]);
 
-  function chooseLeague(id: string) {
+  function chooseLeague(id: string, nextTab?: Tab) {
     setSelectedLeagueId(id);
     localStorage.setItem("fantasy-rankings-league", id);
-    dashboardUrl.commit({ league: id, playerId: null, ...CLEARED_TOOL_SELECTIONS });
+    dashboardUrl.commit({ league: id, ...(nextTab ? { tab: nextTab } : {}), playerId: null, ...CLEARED_TOOL_SELECTIONS });
   }
 
   const openLinkedPlayer = useCallback((playerId: string) => {
@@ -1339,7 +1339,8 @@ export function App() {
               news={newsQuery.data}
               onOpenNews={setTickerNews}
               onOpenLeague={(id) => {
-                chooseLeague(id);
+                // Always lands on Matchup, whichever screen was open before Monitor.
+                chooseLeague(id, "team");
                 setShowMonitor(false);
               }}
             />

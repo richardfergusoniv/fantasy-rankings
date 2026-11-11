@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PPFD_ACTUAL_PPR_SCORING, scoreWeeklyActual } from "./finalize-accuracy.js";
+import { PPFD_ACTUAL_PPR_SCORING, advanceBackfillCursor, scoreWeeklyActual, weeksToBackfill } from "./finalize-accuracy.js";
 
 describe("scoreWeeklyActual", () => {
   it("scores PPFD league actuals in canonical PPR", () => {
@@ -47,5 +47,19 @@ describe("scoreWeeklyActual", () => {
 
   it("returns null for empty stats", () => {
     expect(scoreWeeklyActual("RB", {}, "ppr")).toBeNull();
+  });
+});
+
+describe("backfill cursor", () => {
+  it("lists only the finished weeks after the cursor, in order, without repeats", () => {
+    expect(weeksToBackfill([6, 4, 5, 5, 9, 7], 0)).toEqual([4, 5, 6, 7, 9]);
+    expect(weeksToBackfill([4, 5, 6, 7, 9], 6)).toEqual([7, 9]);
+    expect(weeksToBackfill([4, 5], 9)).toEqual([]);
+  });
+
+  it("advances through an unbroken run of good weeks and stops at the first error", () => {
+    expect(advanceBackfillCursor(0, [{ week: 4, ok: true }, { week: 5, ok: true }, { week: 6, ok: false }, { week: 7, ok: true }])).toBe(5);
+    expect(advanceBackfillCursor(3, [])).toBe(3);
+    expect(advanceBackfillCursor(3, [{ week: 4, ok: false }])).toBe(3);
   });
 });

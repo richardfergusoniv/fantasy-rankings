@@ -235,7 +235,7 @@ async function handleFinalizeAccuracy(url: URL): Promise<Response> {
   const week = weekRaw ? parseNonNegativeInt(weekRaw, NaN) : undefined;
   // backfill=1 catches up every finished week (grades missing actuals, fills First Down); repeat until done.
   if (url.searchParams.get("backfill") === "1") {
-    return json(await backfillProjectionAccuracy({ season: Number.isFinite(season) ? season : undefined }));
+    return json(await backfillProjectionAccuracy({ season: Number.isFinite(season) ? season : undefined, reset: url.searchParams.get("reset") === "1" }));
   }
   const result = await finalizeProjectionAccuracy({
     season: Number.isFinite(season) ? season : undefined,

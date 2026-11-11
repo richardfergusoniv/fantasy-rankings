@@ -36,6 +36,14 @@ describe("startSitVerdict", () => {
     expect(verdict.chance).toBeGreaterThan(80);
   });
 
+  it("judges a game in progress on the time left, not the pregame projection", () => {
+    // A was projected for 20 but has scored 2 with one minute left in the 4th quarter.
+    const live = player("A", 20, { gamePhase: "live", actual: 2, gamePeriod: 4, gameClockSeconds: 60 });
+    const verdict = startSitVerdict(live, player("B", 10), NOW)!;
+    expect(verdict.startIndex).toBe(1);
+    expect(verdict.points[0]).toBeLessThan(3);
+  });
+
   it("returns null when a player has no forecast", () => {
     expect(startSitVerdict(player("A", 10), player("V", null, { playerId: "0" }), NOW)).toBeNull();
   });

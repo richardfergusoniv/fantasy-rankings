@@ -36,4 +36,25 @@ describe("lineupAssistantAnswer", () => {
     expect(answer.winBefore).toBeNull();
     expect(answer.winAfter).toBeNull();
   });
+
+  it("reports the real substitution when the optimizer also moves a starter between slots", () => {
+    // A is the WR starter (10), B sits at FLEX (20), bench C (15): the best lineup is B at WR, C at FLEX.
+    const league = {
+      starters: [p("A", 10, { lineupSlot: "WR" }), p("B", 20, { lineupSlot: "FLEX" })],
+      bench: [p("C", 15, { isStarter: false, lineupSlot: null })],
+      opponentTeam: null,
+    } as unknown as Pick<League, "starters" | "bench" | "opponentTeam">;
+    const answer = lineupAssistantAnswer(league, NOW)!;
+    expect(answer.swaps).toHaveLength(1);
+    expect(answer.swaps[0]!.playerIn.playerId).toBe("C");
+    expect(answer.swaps[0]!.playerOut.playerId).toBe("A");
+    expect(answer.swaps[0]!.gain).toBe(5);
+    expect(answer.gain).toBe(5);
+  });
+
+  it("treats a filled empty slot as the incoming player replacing nobody", () => {
+    const answer = lineupAssistantAnswer(league([p("0", 0, { name: "", lineupSlot: "WR", position: "WR" }), p("b", 12)], [p("c", 9, { isStarter: false, lineupSlot: null })]), NOW)!;
+    expect(answer.swaps[0]!.playerIn.playerId).toBe("c");
+    expect(answer.swaps[0]!.playerOut.playerId).toBe("0");
+  });
 });
