@@ -11,6 +11,7 @@ export function AskSheet({
   context,
   horizon,
   leagueId,
+  initialQuestion = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -18,6 +19,8 @@ export function AskSheet({
   horizon: "week" | "ros" | "dynasty" | null;
   /** League the user is viewing — chat defaults team questions to it. */
   leagueId?: string | null;
+  /** Asked as soon as the sheet opens (an Assistant card's follow-up). */
+  initialQuestion?: string | null;
 }) {
   // Pin the sheet and its overlay to the visual viewport while open. The
   // sheet's CSS anchors to the --vv-* variables, so when the on-screen
@@ -44,7 +47,7 @@ export function AskSheet({
           <DialogDescription className="sr-only">Ask questions about your leagues, answered from your data.</DialogDescription>
         </div>
         <DialogCloseButton />
-        <ChatPanel horizon={horizon} leagueId={leagueId} variant="sheet" suggestions={context.suggestions} />
+        <ChatPanel horizon={horizon} leagueId={leagueId} variant="sheet" suggestions={context.suggestions} initialQuestion={initialQuestion} />
       </DialogContent>
     </Dialog>
   );

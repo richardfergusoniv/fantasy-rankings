@@ -637,10 +637,17 @@ export function App() {
   const playerHistory = usePlayerCardHistory();
   const [tickerNews, setTickerNews] = useState<PlayerNewsItem | null>(null);
   const [askOpen, setAskOpen] = useState(false);
+  // A question an Assistant card hands to chat; cleared when the sheet closes.
+  const [askQuestion, setAskQuestion] = useState<string | null>(null);
+  const askWithQuestion = useCallback((question: string) => {
+    setAskQuestion(question);
+    setAskOpen(true);
+  }, []);
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
   // The sheet is mounted only while open, so Radix has no trigger to hand focus back to.
   const changeAskOpen = useCallback((open: boolean) => {
     setAskOpen(open);
+    if (!open) setAskQuestion(null);
     if (!open) requestAnimationFrame(() => askButtonRef.current?.focus());
   }, []);
   // The matchup dialog lives in the URL (`mu`), so opening it is a history step and Back from a tool brings it back.
@@ -1460,7 +1467,7 @@ export function App() {
       ) : null}
       {askOpen ? (
         <Suspense fallback={null}>
-          <LazyAskSheet open={askOpen} onOpenChange={changeAskOpen} context={askContextForTab(tab)} horizon={dashboardUrl.state.horizon} leagueId={league?.id ?? null} />
+          <LazyAskSheet open={askOpen} onOpenChange={changeAskOpen} context={askContextForTab(tab)} horizon={dashboardUrl.state.horizon} leagueId={league?.id ?? null} initialQuestion={askQuestion} />
         </Suspense>
       ) : null}
       <div role="region" aria-label="League and week" className="league-sticky">
@@ -1650,6 +1657,7 @@ export function App() {
                 onOpenLinkedPlayer={openLinkedPlayer}
                 comparePlayerId={tab === "comparison" ? dashboardUrl.state.comparePlayerId : null}
                 compareSecondPlayerId={tab === "comparison" ? dashboardUrl.state.compareSecondPlayerId : null}
+                onAsk={askWithQuestion}
               />
             ) : null}
           </FeatureErrorBoundary>

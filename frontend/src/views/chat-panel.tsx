@@ -52,6 +52,7 @@ export function ChatPanel({
   leagueId = null,
   variant = "page",
   suggestions = CHAT_SUGGESTIONS,
+  initialQuestion = null,
 }: {
   /** Ranking horizon the user is viewing — chat explains that window's scores. */
   horizon?: "week" | "ros" | "dynasty" | null;
@@ -60,6 +61,8 @@ export function ChatPanel({
   /** "sheet" keeps past chats behind a History toggle so the thread has the room. */
   variant?: "page" | "sheet";
   suggestions?: readonly string[];
+  /** Asked once, as soon as the panel opens (an Assistant card's follow-up). */
+  initialQuestion?: string | null;
 }) {
   const listId = useId();
   const inputId = useId();
@@ -166,6 +169,14 @@ export function ChatPanel({
     composerFirstRectRef.current = composerRef.current?.getBoundingClientRect() ?? null;
   }
 
+  // An Assistant card's follow-up is asked once, the first time the panel is ready.
+  const askedInitial = useRef(false);
+  useEffect(() => {
+    if (!initialQuestion || askedInitial.current || sending || unavailable || loadingChat) return;
+    askedInitial.current = true;
+    void send(initialQuestion);
+  }, [initialQuestion, sending, unavailable, loadingChat]);
+
   function applySuggestion(text: string) {
     setDraft(text.slice(0, CHAT_MAX_INPUT_CHARS));
     inputRef.current?.focus();
@@ -202,11 +213,11 @@ export function ChatPanel({
     }
   }
 
-  async function send() {
-    const text = draft.trim().slice(0, CHAT_MAX_INPUT_CHARS);
+  async function send(question?: string) {
+    const text = (question ?? draft).trim().slice(0, CHAT_MAX_INPUT_CHARS);
     if (!text || sending || unavailable || loadingChat) return;
     setError(null);
-    setDraft("");
+    if (question === undefined) setDraft("");
     const userMessage: ChatMessage = { id: newId(), role: "user", content: text };
     const history = historyForRequest(messages);
     if (!hasMessages) captureComposerRect();

@@ -45,6 +45,7 @@ export function Explorer({
   onOpenLinkedPlayer,
   comparePlayerId,
   compareSecondPlayerId,
+  onAsk,
 }: {
   mode: ExplorerMode;
   dashboard: Dashboard;
@@ -64,6 +65,8 @@ export function Explorer({
   comparePlayerId?: string | null;
   /** Second Comparison slot (the `c2` URL parameter). */
   compareSecondPlayerId?: string | null;
+  /** Hands a question to the Ask sheet (an Assistant card's follow-up). */
+  onAsk?: (question: string) => void;
 } & PlayerLink): ReactNode {
   switch (mode) {
     case "rankings":
@@ -95,6 +98,7 @@ export function Explorer({
             compareSecondPlayerId={compareSecondPlayerId ?? null}
             onOpenPlayer={onOpenPlayer}
             onOpenMatchup={onOpenMatchup}
+            onAsk={onAsk}
           />
         </Suspense>
       );
@@ -109,13 +113,14 @@ export function Explorer({
  * Comparison seeded from the URL. The tool applies a seed once per key, so the key
  * advances each time the requested player changes and a repeated link re-seeds.
  */
-function SeededComparison({ dashboard, league, comparePlayerId, compareSecondPlayerId, onOpenPlayer, onOpenMatchup }: {
+function SeededComparison({ dashboard, league, comparePlayerId, compareSecondPlayerId, onOpenPlayer, onOpenMatchup, onAsk }: {
   dashboard: Dashboard;
   league: League;
   comparePlayerId: string | null;
   compareSecondPlayerId: string | null;
   onOpenPlayer: (playerId: string) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
+  onAsk?: (question: string) => void;
 }) {
   const seedId = `${comparePlayerId ?? ""}|${compareSecondPlayerId ?? ""}`;
   const seed = useRef<{ id: string | null; key: number }>({ id: null, key: 0 });
@@ -135,6 +140,7 @@ function SeededComparison({ dashboard, league, comparePlayerId, compareSecondPla
       initialKey={seed.current.key}
       onOpenPlayer={onOpenPlayer}
       onOpenMatchup={onOpenMatchup}
+      onAsk={onAsk}
     />
   );
 }
