@@ -1,0 +1,41 @@
+/* Assistant cards: the answer on the screen, with its reasons in a sheet. */
+.assistant-card { display: grid; gap: 8px; width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--card); color: var(--text); text-align: left; font: inherit; cursor: pointer; box-shadow: var(--shadow-sm, none); }
+.assistant-card:hover { background: var(--secondary); }
+.assistant-card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.assistant-card-eyebrow { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.assistant-card-more { color: var(--link); font-size: var(--type-caption); font-weight: 600; }
+.assistant-card-answer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.assistant-card-answer strong { overflow: hidden; font-size: var(--type-section); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.assistant-card-chance { flex: none; padding: 0 10px; min-height: var(--badge-height); display: inline-flex; align-items: center; border-radius: var(--radius-pill); background: var(--action); color: var(--on-accent); font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums; }
+.assistant-card-bar { display: flex; height: 8px; overflow: hidden; border-radius: var(--radius-xs); background: var(--border); }
+.assistant-card-bar > span { background: var(--roster-highlight); }
+
+.assistant-sheet { width: min(calc(100% - 32px), 520px); max-height: calc(100dvh - 48px); display: grid; gap: 12px; overflow-y: auto; overscroll-behavior: contain; padding: 16px; }
+.assistant-sheet-title { margin: 0; padding-right: 32px; font-size: var(--type-display); line-height: 1.1; font-weight: 700; letter-spacing: -.02em; }
+.assistant-sheet-body { display: grid; gap: 14px; }
+.assistant-sheet-ask { min-height: 44px; }
+.assistant-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.assistant-table caption { padding: 0 0 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: left; }
+.assistant-table thead th { padding: 0 0 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: right; }
+.assistant-table tbody th { padding: 8px 8px 8px 0; font-size: var(--type-body); font-weight: 400; text-align: left; }
+.assistant-table td { padding: 8px 0 8px 12px; border-top: 1px solid var(--row-divider); text-align: right; font-size: var(--type-body); font-weight: 500; }
+.assistant-table tbody tr > th { border-top: 1px solid var(--row-divider); }
+.assistant-table td.is-edge { color: var(--winner); font-weight: 700; }
+
+.assistant-facts { display: grid; gap: 6px; }
+.assistant-facts h3 { margin: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.assistant-facts dl { display: grid; margin: 0; }
+.assistant-facts dl > div { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 12px; padding: 8px 0; border-top: 1px solid var(--row-divider); }
+.assistant-facts dt { font-size: var(--type-body); }
+.assistant-facts dd { margin: 0; font-size: var(--type-body); font-weight: 500; text-align: right; }
+.assistant-card-position { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.assistant-card-detail { color: var(--dim); font-size: var(--type-caption); }
+
+/* Trade ideas above the calculator. */
+.trade-ideas { display: grid; gap: 12px; margin-bottom: 12px; }
+.trade-idea { display: grid; gap: 8px; }
+.assistant-card-trade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.assistant-card-trade > span { display: grid; min-width: 0; }
+.assistant-card-trade small { color: var(--dim); font-size: var(--type-caption); }
+.assistant-card-trade strong { font-size: var(--type-body); font-weight: 700; overflow-wrap: anywhere; }
+.trade-idea .trade-idea-load { min-height: 44px; border: 0; border-radius: var(--radius); background: var(--action); color: var(--on-accent); font: inherit; font-size: var(--type-control); font-weight: 700; cursor: pointer; }

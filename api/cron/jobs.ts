@@ -27,7 +27,7 @@ import { withDeadline } from "../_lib/sleeper.js";
 import { refreshTeamSituationalSnapshot } from "../_lib/team-situational.js";
 import { refreshChartExtrasSnapshot } from "../_lib/nflverse-chart-extras.js";
 import { refreshPlayerInsightsSnapshot } from "../_lib/player-insights.js";
-import { finalizeProjectionAccuracy } from "../_lib/finalize-accuracy.js";
+import { backfillProjectionAccuracy, finalizeProjectionAccuracy } from "../_lib/finalize-accuracy.js";
 import {
   runScoringDecisionSnapshot,
   runScoringWeightsRefit,
@@ -76,7 +76,7 @@ import { refreshArticleFeeds } from "../_lib/article-feeds.js";
  *   dynasty presets only; batched upserts with no full-table verification
  *   reads. Invoke manually until `done` — do not schedule against production
  *   without pacing.
- * - finalize-accuracy: Tuesday refill of last week's projection_accuracy
+ * - finalize-accuracy[&backfill=1]: Tuesday refill of last week's projection_accuracy
  *   actuals from Sleeper weekly stats (PPR for the PPFD league).
  * - snapshot-sleeper-trending: weekly Sleeper adds/drops into source_cache
  *   keyed sleeper-trending:{season}-w{week} (168h lookback).
@@ -233,6 +233,10 @@ async function handleFinalizeAccuracy(url: URL): Promise<Response> {
   const weekRaw = url.searchParams.get("week");
   const season = seasonRaw ? parseNonNegativeInt(seasonRaw, NaN) : undefined;
   const week = weekRaw ? parseNonNegativeInt(weekRaw, NaN) : undefined;
+  // backfill=1 catches up every finished week (grades missing actuals, fills First Down); repeat until done.
+  if (url.searchParams.get("backfill") === "1") {
+    return json(await backfillProjectionAccuracy({ season: Number.isFinite(season) ? season : undefined, reset: url.searchParams.get("reset") === "1" }));
+  }
   const result = await finalizeProjectionAccuracy({
     season: Number.isFinite(season) ? season : undefined,
     week: Number.isFinite(week) ? week : undefined,

@@ -4,17 +4,22 @@
  * No new Vercel function.
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, lt } from "drizzle-orm";
 import { readGlobalDashboardSnapshot } from "./dashboard-build.js";
 import { db, schema } from "./db.js";
 import { scoreProjectedPlayerStats } from "./fantasy-scoring.js";
+import { firstDownLookup } from "./first-down-points.js";
+import { vegasProjectionPayloadSchema } from "./ingest-helpers.js";
 import { finalizeScoringSnapshotActuals } from "./scoring-jobs.js";
 import {
   DYNASTICAL_CUCKS_LEAGUE_ID,
+  SLEEPER_BASE,
+  fetchJsonWithRetry,
   loadSleeperPlayerWeeklySeason,
   sleeperActualStats,
   type SleeperWeeklyStatRow,
 } from "./sleeper.js";
+import { decodeSourceCachePayload } from "./source-cache-payload.js";
 import { readNflState } from "./user-leagues.js";
 
 /** Canonical full-PPR — matches the PPFD league's disclosed PPR-proxy projections. */
@@ -43,8 +48,14 @@ export type FinalizeAccuracyResult = {
   skipped: number;
   errors: number;
   snapshotsUpdated?: number;
+  /** True when the week had more rows than one call reads, so some were not looked at. */
+  truncated?: boolean;
+  /** False when copying the finals onto scoring snapshots failed. */
+  snapshotsOk?: boolean;
 };
 
+/** Most rows one week's grading or First Down fill reads in a call; a week this big is reported, not silently cut short. */
+export const ACCURACY_ROW_LIMIT = 2_000;
 const WEEKLY_FETCH_CONCURRENCY = 6;
 const UPSERT_CHUNK = 40;
 
@@ -120,7 +131,7 @@ async function flushAccuracyUpdates(
  * player_value_snapshots. Also copies finals onto scoring_snapshots.
  */
 export async function finalizeProjectionAccuracy(
-  opts: { season?: number; week?: number } = {},
+  opts: { season?: number; week?: number; /** Only grade rows that have no actual yet (a backfill). */ onlyMissing?: boolean } = {},
 ): Promise<FinalizeAccuracyResult> {
   let season = opts.season;
   let week = opts.week;
@@ -138,9 +149,10 @@ export async function finalizeProjectionAccuracy(
       and(
         eq(schema.projectionAccuracy.season, season),
         eq(schema.projectionAccuracy.week, week),
+        opts.onlyMissing ? isNull(schema.projectionAccuracy.actualScore) : undefined,
       ),
     )
-    .limit(2_000);
+    .limit(ACCURACY_ROW_LIMIT);
 
   const dashboard = await readGlobalDashboardSnapshot().catch(() => null);
   const settingsByLeague = new Map<string, Record<string, number>>();
@@ -150,6 +162,23 @@ export async function finalizeProjectionAccuracy(
         settingsByLeague.set(league.id, league.scoringSettings);
       }
     }
+  }
+
+  // The snapshot holds only the owner's leagues, but accuracy rows are saved for every viewer's leagues:
+  // a backfill reads the rest from Sleeper so one outside league can't block every later week.
+  if (opts.onlyMissing) {
+    const outside = [...new Set(rows.map((row) => row.leagueId))].filter(
+      (leagueId) => leagueId !== DYNASTICAL_CUCKS_LEAGUE_ID && !settingsByLeague.has(leagueId),
+    );
+    await mapPool(outside, WEEKLY_FETCH_CONCURRENCY, async (leagueId) => {
+      try {
+        const league = await fetchJsonWithRetry<{ scoring_settings?: Record<string, number> | null }>(`${SLEEPER_BASE}/league/${encodeURIComponent(leagueId)}`);
+        if (league.scoring_settings && Object.keys(league.scoring_settings).length > 0) settingsByLeague.set(leagueId, league.scoring_settings);
+      } catch {
+        // Left out: its rows count as errors below and the week is tried again next call.
+      }
+      return null;
+    });
   }
 
   let updated = 0;
@@ -173,6 +202,13 @@ export async function finalizeProjectionAccuracy(
     try {
       const isPpfd = row.leagueId === DYNASTICAL_CUCKS_LEAGUE_ID || row.scoring === "ppfd";
       const leagueSettings = settingsByLeague.get(row.leagueId);
+
+      // A backfill must not save an approximate score: without the league's own scoring settings the row
+      // stays ungraded and the week stays pending, instead of falling back to a PPR/half-PPR label.
+      if (opts.onlyMissing && !isPpfd && !leagueSettings) {
+        errors += 1;
+        continue;
+      }
 
       // Non-PPFD rows already filled by saveProjectionAccuracy at game-final use
       // the league's live scoring. Do not overwrite them with a PPR/half-PPR proxy
@@ -238,5 +274,196 @@ export async function finalizeProjectionAccuracy(
     skipped,
     errors,
     snapshotsUpdated: snapshots.updated,
+    truncated: rows.length >= ACCURACY_ROW_LIMIT,
+    snapshotsOk: snapshots.ok,
+  };
+}
+
+
+export type BackfillAccuracyResult = {
+  ok: boolean;
+  job: "finalize-accuracy-backfill";
+  season: number;
+  /** Weeks graded or filled in this call, oldest first. */
+  weeksProcessed: number[];
+  /** Weeks that still have rows without an actual; call again to continue. */
+  weeksRemaining: number[];
+  actualsGraded: number;
+  firstDownFilled: number;
+  errors: number;
+  /** True when no week before the current one is waiting to be graded. */
+  done: boolean;
+};
+
+const backfillCursorKey = (season: number) => `accuracy-backfill-cursor-v1:${season}`;
+
+/** The last week the backfill finished for a season (0 when none). Weeks up to it are not looked at again. */
+async function readBackfillCursor(season: number): Promise<number> {
+  try {
+    const rows = await db.select().from(schema.sourceCache).where(eq(schema.sourceCache.cacheKey, backfillCursorKey(season))).limit(1);
+    const payload = rows[0] ? decodeSourceCachePayload(rows[0].payload) as { lastWeek?: unknown } : null;
+    return typeof payload?.lastWeek === "number" && Number.isInteger(payload.lastWeek) ? payload.lastWeek : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function writeBackfillCursor(season: number, lastWeek: number): Promise<void> {
+  const payload = JSON.stringify({ lastWeek });
+  const fetchedAt = new Date();
+  await db.insert(schema.sourceCache).values({ cacheKey: backfillCursorKey(season), payload, fetchedAt }).onConflictDoUpdate({
+    target: schema.sourceCache.cacheKey,
+    set: { payload, fetchedAt },
+  });
+}
+
+/**
+ * The weeks still to do, in order: finished weeks after the cursor. A week whose
+ * only missing actuals are players who never played would otherwise be re-checked
+ * on every call and use up the time budget before later weeks are reached.
+ */
+export function weeksToBackfill(weeksWithRows: readonly number[], cursor: number): number[] {
+  return [...new Set(weeksWithRows)].filter((week) => week > cursor).sort((a, b) => a - b);
+}
+
+/**
+ * A week is complete only when nothing errored and every row was looked at. A week
+ * with more rows than one call reads stays pending (and the job reports not done)
+ * instead of being passed silently with rows left unfilled.
+ */
+export function backfillWeekCompleted(week: { errors: number; truncated: boolean; snapshotsOk?: boolean }): boolean {
+  return week.errors === 0 && !week.truncated && week.snapshotsOk !== false;
+}
+
+/**
+ * Whether a First Down board can stand beside a projection captured at `capturedAt`. A board built
+ * after the capture would be a later forecast than the props projection it is paired with, so the
+ * row is left empty instead (only the latest board per week is stored, so the earlier one is gone).
+ */
+export function firstDownBoardPrecedesCapture(builtAt: string, capturedAt: Date): boolean {
+  const built = Date.parse(builtAt);
+  return Number.isFinite(built) && built <= capturedAt.getTime();
+}
+
+/** Start no new week once this much of the budget is spent: one week's Sleeper loads take 10-30 seconds. */
+const BACKFILL_BUDGET_MS = 20_000;
+
+/**
+ * Fills First Down's projection into rows saved before it was recorded, from the
+ * First Down snapshot stored for the same week. Returns how many rows it filled.
+ */
+export async function fillFirstDownProjections(season: number, week: number): Promise<{ filled: number; truncated: boolean }> {
+  const snapshotRows = await db
+    .select()
+    .from(schema.vegasProjectionSnapshots)
+    .where(and(eq(schema.vegasProjectionSnapshots.season, season), eq(schema.vegasProjectionSnapshots.week, week)));
+  let snapshot: ReturnType<typeof vegasProjectionPayloadSchema.parse> | null = null;
+  for (const row of snapshotRows.sort((a, b) => b.builtAt.getTime() - a.builtAt.getTime())) {
+    try {
+      const payload = vegasProjectionPayloadSchema.parse(JSON.parse(row.payload));
+      if (payload.source === "first_down") {
+        snapshot = payload;
+        break;
+      }
+    } catch {
+      continue;
+    }
+  }
+  if (!snapshot) return { filled: 0, truncated: false };
+  const lookup = firstDownLookup(snapshot);
+  const rows = await db
+    .select()
+    .from(schema.projectionAccuracy)
+    .where(and(eq(schema.projectionAccuracy.season, season), eq(schema.projectionAccuracy.week, week), isNull(schema.projectionAccuracy.firstDownProjection)))
+    .limit(ACCURACY_ROW_LIMIT);
+  const updates = rows.flatMap((row) => {
+    if (!firstDownBoardPrecedesCapture(snapshot!.built_at, row.capturedAt)) return [];
+    const points = lookup({ leagueId: row.leagueId, name: row.playerName, position: row.position });
+    return points === null ? [] : [{ id: row.id, firstDownProjection: Math.round(points * 100) }];
+  });
+  for (let index = 0; index < updates.length; index += UPSERT_CHUNK) {
+    await Promise.all(
+      updates.slice(index, index + UPSERT_CHUNK).map((update) =>
+        db.update(schema.projectionAccuracy).set({ firstDownProjection: update.firstDownProjection }).where(eq(schema.projectionAccuracy.id, update.id)),
+      ),
+    );
+  }
+  return { filled: updates.length, truncated: rows.length >= ACCURACY_ROW_LIMIT };
+}
+
+/**
+ * Catches up every finished week of the season: grades rows that never got an
+ * actual and fills in First Down's projection. Oldest week first, within a time
+ * budget, so a call that runs out of time can simply be repeated.
+ */
+export async function backfillProjectionAccuracy(opts: { season?: number; budgetMs?: number; /** Ignore the saved cursor and go through every finished week again. */ reset?: boolean } = {}): Promise<BackfillAccuracyResult> {
+  const startedAt = Date.now();
+  const budgetMs = opts.budgetMs ?? BACKFILL_BUDGET_MS;
+  const state = await readNflState(true);
+  const season = opts.season ?? state.season;
+  // The current week is still being played; the Tuesday job grades it once it is over.
+  const finishedBefore = season === state.season ? state.week : 19;
+
+  const weekRows = await db
+    .selectDistinct({ week: schema.projectionAccuracy.week })
+    .from(schema.projectionAccuracy)
+    .where(and(eq(schema.projectionAccuracy.season, season), lt(schema.projectionAccuracy.week, finishedBefore)))
+    .orderBy(asc(schema.projectionAccuracy.week));
+  // A reset clears the saved cursor first, so a failed first week can't leave the old one in place.
+  if (opts.reset) await writeBackfillCursor(season, 0);
+  const cursor = opts.reset ? 0 : await readBackfillCursor(season);
+  const weeks = weeksToBackfill(weekRows.map((row) => row.week), cursor);
+
+  const weeksProcessed: number[] = [];
+  let cursorNow = cursor;
+  let actualsGraded = 0;
+  let firstDownFilled = 0;
+  let errors = 0;
+  for (const week of weeks) {
+    // One week's Sleeper loads take 10-30 seconds and the function stops at 60, so no new week starts late.
+    if (Date.now() - startedAt > budgetMs) break;
+    let completed = false;
+    try {
+      const fill = await fillFirstDownProjections(season, week);
+      firstDownFilled += fill.filled;
+      const missing = await db
+        .select({ id: schema.projectionAccuracy.id })
+        .from(schema.projectionAccuracy)
+        .where(and(eq(schema.projectionAccuracy.season, season), eq(schema.projectionAccuracy.week, week), isNull(schema.projectionAccuracy.actualScore)))
+        .limit(1);
+      if (missing.length > 0) {
+        const result = await finalizeProjectionAccuracy({ season, week, onlyMissing: true });
+        actualsGraded += result.updated;
+        errors += result.errors;
+        completed = backfillWeekCompleted({ errors: result.errors, truncated: fill.truncated || result.truncated === true, snapshotsOk: result.snapshotsOk });
+      } else {
+        // Every projection is graded, but an earlier call may have failed to write finals onto the snapshots.
+        const snapshots = await finalizeScoringSnapshotActuals({ season, week }).catch(() => ({ ok: false, scanned: 0, updated: 0 }));
+        completed = backfillWeekCompleted({ errors: 0, truncated: fill.truncated, snapshotsOk: snapshots.ok });
+      }
+    } catch (error) {
+      console.error("[finalize-accuracy] backfill failed for week", week, error instanceof Error ? error.message : error);
+      errors += 1;
+    }
+    weeksProcessed.push(week);
+    // Stop at the first week that isn't complete: the cursor can't pass it, and it is tried again next call.
+    if (!completed) break;
+    // Saved week by week, so a call cut off by the time limit still keeps the weeks it finished.
+    cursorNow = week;
+    await writeBackfillCursor(season, week);
+  }
+
+  const unprocessed = weeks.filter((week) => week > cursorNow);
+  return {
+    ok: errors === 0,
+    job: "finalize-accuracy-backfill",
+    season,
+    weeksProcessed,
+    weeksRemaining: unprocessed,
+    actualsGraded,
+    firstDownFilled,
+    errors,
+    // Rows left without an actual after grading are players who didn't play (no stat line), so only unprocessed weeks count.
+    done: unprocessed.length === 0,
   };
 }

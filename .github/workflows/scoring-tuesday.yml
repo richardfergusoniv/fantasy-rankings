@@ -40,7 +40,30 @@ jobs:
           print(f"finalize-accuracy: week {result.get('week')} updated {result.get('updated')}")
           EOF
 
+      - name: Catch up older weeks (missing actuals, First Down projections)
+        run: |
+          # Each call works through finished weeks oldest first inside a time budget;
+          # repeat until it reports done (at most 8 calls).
+          for attempt in 1 2 3 4 5 6 7 8; do
+            curl -sS --fail-with-body --max-time 120 \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              "$APP_BASE_URL/api/cron/jobs?job=finalize-accuracy&backfill=1" | tee /tmp/backfill.json
+            echo
+            if python3 -c "import json,sys; r=json.load(open('/tmp/backfill.json')); sys.exit(0 if r.get('done') else 1)"; then
+              break
+            fi
+            sleep 5
+          done
+          python3 - <<'EOF'
+          import json
+          result = json.load(open('/tmp/backfill.json'))
+          assert result.get('done') is True, f"accuracy backfill not finished: {result}"
+          print(f"accuracy backfill: weeks {result.get('weeksProcessed')} graded {result.get('actualsGraded')} first-down {result.get('firstDownFilled')}")
+          EOF
+
       - name: Scoring weights refit (candidate + guardrails)
+        # Runs even when the backfill above did not finish: the refit does not depend on it.
+        if: ${{ !cancelled() }}
         continue-on-error: true
         run: |
           curl -sS --fail-with-body --max-time 300 \

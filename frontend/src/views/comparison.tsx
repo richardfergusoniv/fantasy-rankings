@@ -12,6 +12,8 @@ import { useProfileTag } from "../lib/use-profile-tag";
 import { formatCompactCount, formatDecimal } from "../lib/format-number";
 import { comparisonShortName } from "../lib/short-name";
 import { OutcomeBox, outcomeDomain, type OutcomeSummary } from "../components/outcome-box";
+import { AssistantCard, AssistantSheet, AssistantTable } from "../components/assistant-card";
+import { startSitFactors, startSitVerdict, type FactorInput, type VerdictPlayer } from "./start-sit-verdict";
 import { DepthChangeMark, depthChange, MatchupTag, ProfileChips, SegmentedControl, type StrengthOfScheduleEntryLike } from "../shared";
 import { isHiddenHalfPointPropStat, propStatDef } from "../../../api/_lib/prop-line-reads";
 import { EmptyState } from "../components/state-blocks";
@@ -481,7 +483,46 @@ function comparisonSection(dataset: ToolDataset, position: BasePosition, league:
   return { dataset, headline, groups };
 }
 
-function ComparisonView({ dashboard, league, window, onWindowChange, validPositions, initialPlayer, initialSecondPlayer, initialKey, onOpenPlayer, onOpenMatchup }: {
+function ComparisonAssistant({ answer, names, week, onAsk }: {
+  answer: { verdict: NonNullable<ReturnType<typeof startSitVerdict>>; factors: ReturnType<typeof startSitFactors> };
+  names: readonly [string, string];
+  week: number;
+  onAsk?: (question: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const { verdict, factors } = answer;
+  const winner = verdict.startIndex === null ? null : names[verdict.startIndex];
+  const other = verdict.startIndex === null ? null : names[verdict.startIndex === 0 ? 1 : 0];
+  const headline = winner ?? "Too close to call";
+  const sentence = winner && other ? `Start ${winner} over ${other}, ${verdict.chance}% to outscore` : `${names[0]} and ${names[1]} are a coin flip`;
+  return (
+    <>
+      <AssistantCard eyebrow={winner ? "start" : "start/sit"} onOpen={() => setOpen(true)} label={sentence}>
+        <span className="assistant-card-answer">
+          <strong>{headline}</strong>
+          <span className="assistant-card-chance">{winner ? `${verdict.chance}%` : "50%"}</span>
+        </span>
+        <span className="assistant-card-bar" aria-hidden="true"><span style={{ width: `${winner ? verdict.chance : 50}%` }} /></span>
+      </AssistantCard>
+      <AssistantSheet
+        open={open}
+        onOpenChange={setOpen}
+        title={winner ? `Why ${winner}` : "Why it's close"}
+        description={`Week ${week}. Everything behind the answer, side by side. The better side of each row is highlighted.`}
+        question={`Who should I start this week, ${names[0]} or ${names[1]}, and why?`}
+        onAsk={(question) => onAsk?.(question)}
+      >
+        <AssistantTable
+          title={`${verdict.chance === 50 ? "Chance to outscore" : `${winner} outscores ${other}`}: ${verdict.chance}%`}
+          columns={names}
+          rows={factors}
+        />
+      </AssistantSheet>
+    </>
+  );
+}
+
+function ComparisonView({ dashboard, league, window, onWindowChange, validPositions, initialPlayer, initialSecondPlayer, initialKey, onOpenPlayer, onOpenMatchup, onAsk }: {
   dashboard: Dashboard;
   league: League;
   window: AnalyticsWindow;
@@ -492,6 +533,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
   initialKey: number;
   onOpenPlayer?: (playerId: string) => void;
   onOpenMatchup?: (matchup: MatchupSelection) => void;
+  onAsk?: (question: string) => void;
 }) {
   const pfnQuery = useQuery({
     queryKey: ["pfn-tables"],
@@ -658,6 +700,62 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
     const second = pick(rightPlayerId);
     return first && second ? [first, second] as const : null;
   })();
+  // The Assistant's answer for this pair, from the same projections the rest of the page shows.
+  const assistant = (() => {
+    if (!left || !right || !leftPlayerId || !rightPlayerId) return null;
+    const rowOf = (playerId: string) => dashboard.rankings.find((item) => item.leagueId === league.id && item.playerId === playerId);
+    const leftRow = rowOf(leftPlayerId);
+    const rightRow = rowOf(rightPlayerId);
+    if (!leftRow || !rightRow) return null;
+    // Live clocks aren't on ranking rows; roster rows (yours and this week's opponent) carry them, so a game in progress is judged on time left.
+    const rosterRows = [...league.starters, ...league.bench, ...(league.opponentTeam?.starters ?? []), ...(league.opponentTeam?.bench ?? [])];
+    const clockOf = (playerId: string) => {
+      const found = rosterRows.find((candidate) => candidate.playerId === playerId);
+      return { gamePeriod: found?.gamePeriod ?? null, gameClockSeconds: found?.gameClockSeconds ?? null };
+    };
+    const asVerdictPlayer = (row: typeof leftRow, entity: ComparisonEntity): VerdictPlayer => ({
+      ...clockOf(row.playerId),
+      playerId: row.playerId,
+      name: entity.name,
+      position: row.position,
+      projection: row.leagueProjection ?? (league.rankingField === "ppr" ? row.ppr : row.halfPpr),
+      actual: row.actual,
+      gamePhase: row.gamePhase,
+      gameTime: row.gameTime,
+      injuryStatus: row.injuryStatus,
+      isBye: entity.isBye,
+    });
+    const verdict = startSitVerdict(asVerdictPlayer(leftRow, left), asVerdictPlayer(rightRow, right));
+    if (!verdict) return null;
+    const ranges = new Map((boomBustQuery.data?.rows ?? []).map((range) => [range.playerId, range]));
+    const factorInput = (row: typeof leftRow, entity: ComparisonEntity, index: 0 | 1): FactorInput => {
+      const advanced = resolved[index]?.advanced?.values ?? {};
+      const season = ranges.get(row.playerId);
+      const value = (key: string) => {
+        const found = resolved[index]?.projection?.values[key] ?? advanced[key];
+        return typeof found === "number" && Number.isFinite(found) ? found : null;
+      };
+      return {
+        // The forecast the verdict used (time left in a live game), not the pregame number.
+        projection: verdict.points[index],
+        vegasProjection: row.vegasProjection,
+        sleeperProjection: row.sleeperProjection,
+        bookRange: projectionRanges[index],
+        season: season ? { floor: season.floor, median: season.median, ceiling: season.ceiling } : null,
+        injuryStatus: row.injuryStatus,
+        isBye: entity.isBye,
+        opponent: entity.opponent ? `${entity.isAway ? "@" : "vs"} ${entity.opponent}` : null,
+        matchupRank: value("matchupPositionRank"),
+        targetShare: value("target_share"),
+        snapShare: value("snap_share"),
+        opportunityShare: value("opportunity_share"),
+      };
+    };
+    return {
+      verdict,
+      factors: startSitFactors(factorInput(leftRow, left, 0), factorInput(rightRow, right, 1)),
+    };
+  })();
   const sections = left && right && position ? [
     comparisonSection("projections", position, league, resolved[0]?.projection, resolved[1]?.projection, [...boomBustRows, ...propRows]),
     comparisonSection("advanced", position, league, resolved[0]?.advanced, resolved[1]?.advanced),
@@ -679,6 +777,14 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
       ) : left && right ? (
         <section className="comparison-board" aria-label={`${left.name} and ${right.name} comparison`}>
           <ComparisonBoardHeader left={left} right={right} leftPlayerId={leftPlayerId} rightPlayerId={rightPlayerId} trending={dashboard.playerTrending ?? {}} depth={dashboard.playerInsights?.depth ?? {}} depthPrevious={dashboard.playerInsights?.depthPrevious ?? {}} leagueSize={league.seasonLongFormat.numTeams} leagueId={league.id} playerLists={[dashboard.rankings, dashboard.seasonLongRankings]} sosEntry={sosEntry} onOpenPlayer={onOpenPlayer} onOpenMatchup={onOpenMatchup} />
+          {assistant ? (
+            <ComparisonAssistant
+              answer={assistant}
+              names={[comparisonShortName(left.name, right.name), comparisonShortName(right.name, left.name)]}
+              week={dashboard.week}
+              onAsk={onAsk}
+            />
+          ) : null}
           <Tabs value={sectionTab} onValueChange={(value) => setSectionTab(value as "projections" | "advanced")} className="comparison-section-tabs">
             <TabsList aria-label="Comparison data">
               <TabsTrigger id="comparison-projections-tab" value="projections" aria-controls="comparison-projections-panel">Week {dashboard.week}</TabsTrigger>
@@ -711,7 +817,7 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
   );
 }
 
-export function ComparisonTool({ dashboard, league, initialPlayer = null, initialSecondPlayer = null, initialKey = 0, onOpenPlayer, onOpenMatchup }: { dashboard: Dashboard; league: League; initialPlayer?: PlayerSelection | null; initialSecondPlayer?: PlayerSelection | null; initialKey?: number; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void }) {
+export function ComparisonTool({ dashboard, league, initialPlayer = null, initialSecondPlayer = null, initialKey = 0, onOpenPlayer, onOpenMatchup, onAsk }: { dashboard: Dashboard; league: League; initialPlayer?: PlayerSelection | null; initialSecondPlayer?: PlayerSelection | null; initialKey?: number; onOpenPlayer?: (playerId: string) => void; onOpenMatchup?: (matchup: MatchupSelection) => void; onAsk?: (question: string) => void }) {
   const validPositions = useMemo(() => basePositionOrder.filter((item) => league.rankingPositions.includes(item)), [league.rankingPositions]);
   const [window, setWindow] = useState<AnalyticsWindow>("season");
 
@@ -728,6 +834,7 @@ export function ComparisonTool({ dashboard, league, initialPlayer = null, initia
         initialKey={initialKey}
         onOpenPlayer={onOpenPlayer}
         onOpenMatchup={onOpenMatchup}
+        onAsk={onAsk}
       />
     </div>
   );

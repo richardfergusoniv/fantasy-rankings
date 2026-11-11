@@ -178,6 +178,16 @@ export function resolveTradeMode(
   return null;
 }
 
+/**
+ * Whether the app opens on Monitor for this link. A link that names a screen
+ * (`tab`, even `tab=team`), a player or a matchup goes where it points; only
+ * a link with none of those (the plain app address, or just a league) lands on Monitor.
+ */
+export function opensOnMonitor(search: string): boolean {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  return !params.has("tab") && !params.has("player") && !params.has("mu");
+}
+
 export function parseDashboardSearch(search: string): DashboardUrlState {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
   const rawTab = params.get("tab");

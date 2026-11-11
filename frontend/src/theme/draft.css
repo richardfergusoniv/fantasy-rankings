@@ -259,3 +259,7 @@ a[href].player-news-item { color: inherit; text-decoration: none; }
 .player-news-item .news-media-thumb { display: block; min-height: 0; width: 72px; height: 48px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--hairline); }
 .player-news-item .news-media-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .player-news-item .news-media.is-compact .news-media-video { width: 144px; height: 81px; border-radius: var(--radius-sm); border: 1px solid var(--hairline); background: var(--surface-2); }
+
+/* Draft board with one position chosen: each tier is its own table. */
+.draft-tiers { display: grid; gap: 12px; }
+.draft-tier-head { padding: 8px 10px; border-bottom: 1px solid var(--row-divider); background: var(--secondary); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }

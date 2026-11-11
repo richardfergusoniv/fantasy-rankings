@@ -46,12 +46,13 @@ import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPos
 import { withStreamedAnalytics } from "./dashboard-analytics";
 import { isSectionWaiting, sectionBuildFailed, shouldShowProgressiveShell } from "./dashboard-loading";
 import { FeatureErrorBoundary } from "./error-boundary";
-import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
+import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, opensOnMonitor, serializeDashboardSearch, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
 import { createPlayerResolver, type DashboardPlayerRow, type PlayerLinkResolver } from "./tool-player-link";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
 import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
+import { MonitorHome } from "./views/monitor-home";
 import { supabase } from "./supabase";
 import { personalQueryKey, snapshotViewer, useViewerIdentity } from "./viewer-scope";
 import { useDashboardUrl } from "./use-dashboard-url";
@@ -636,10 +637,17 @@ export function App() {
   const playerHistory = usePlayerCardHistory();
   const [tickerNews, setTickerNews] = useState<PlayerNewsItem | null>(null);
   const [askOpen, setAskOpen] = useState(false);
+  // A question an Assistant card hands to chat; cleared when the sheet closes.
+  const [askQuestion, setAskQuestion] = useState<string | null>(null);
+  const askWithQuestion = useCallback((question: string) => {
+    setAskQuestion(question);
+    setAskOpen(true);
+  }, []);
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
   // The sheet is mounted only while open, so Radix has no trigger to hand focus back to.
   const changeAskOpen = useCallback((open: boolean) => {
     setAskOpen(open);
+    if (!open) setAskQuestion(null);
     if (!open) requestAnimationFrame(() => askButtonRef.current?.focus());
   }, []);
   // The matchup dialog lives in the URL (`mu`), so opening it is a history step and Back from a tool brings it back.
@@ -676,6 +684,15 @@ export function App() {
   const [commandBarOpen, setCommandBarOpen] = useState(false);
   const [failedResyncAsOf, setFailedResyncAsOf] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // The app opens on Monitor (every league at a glance) unless the link points at a specific screen or player.
+  const [showMonitor, setShowMonitor] = useState(() => opensOnMonitor(window.location.search));
+  // Monitor has no history entry of its own, so Back and Forward must leave it and show the screen the browser returns to.
+  useEffect(() => {
+    if (!showMonitor) return;
+    const leaveMonitor = () => setShowMonitor(false);
+    window.addEventListener("popstate", leaveMonitor);
+    return () => window.removeEventListener("popstate", leaveMonitor);
+  }, [showMonitor]);
   const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
   const [browserViewerId, setBrowserViewerId] = useState<string | null | undefined>(undefined);
   // Tagged with the Sleeper account it was read for: after an account switch
@@ -818,6 +835,8 @@ export function App() {
       queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "dashboard-section") });
       queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "projected-standings") });
       queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "league-weekly-performance") });
+      // Trade ideas are worked out from the dashboard, so they are fetched again once the new one is in place.
+      queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "trade-ideas") });
     },
     onError: async (error: unknown, _variables, owner) => {
       // A stale 401 from the previous viewer's token must not sign out the new one.
@@ -902,11 +921,13 @@ export function App() {
   // Same effective league as the rendered dashboard (cached + streamed meta).
   // No league yet → redraft (exclude dynasty-tagged rows) per product default.
   const leagueIsDynasty = isDynastyNewsContext(dashboard?.leagues, selectedLeagueId);
+  // Monitor spans every league, so it needs dynasty-tagged news whenever any league is dynasty; the rest of the app keeps the selected league's context.
+  const newsFetchesDynasty = leagueIsDynasty || (showMonitor && Boolean(dashboard?.leagues.some((item) => item.seasonLongFormat.isDynasty)));
   const newsQuery = useQuery({
-    queryKey: personalQueryKey(viewer, "player-news", leagueIsDynasty ? "dynasty" : "redraft"),
+    queryKey: personalQueryKey(viewer, "player-news", newsFetchesDynasty ? "dynasty" : "redraft"),
     queryFn: async () => {
       try {
-        return await withClientDeadline(api.getPlayerNews({ dynasty: leagueIsDynasty }), 8_000);
+        return await withClientDeadline(api.getPlayerNews({ dynasty: newsFetchesDynasty }), 8_000);
       } catch (error) {
         signOutForPersonalData(error);
         throw error;
@@ -1002,10 +1023,10 @@ export function App() {
     if (localStorage.getItem("fantasy-rankings-league") !== resolved) localStorage.setItem("fantasy-rankings-league", resolved);
   }, [dashboard, dashboardUrl.commit, dashboardUrl.state.league, selectedLeagueId]);
 
-  function chooseLeague(id: string) {
+  function chooseLeague(id: string, nextTab?: Tab) {
     setSelectedLeagueId(id);
     localStorage.setItem("fantasy-rankings-league", id);
-    dashboardUrl.commit({ league: id, playerId: null, ...CLEARED_TOOL_SELECTIONS });
+    dashboardUrl.commit({ league: id, ...(nextTab ? { tab: nextTab } : {}), playerId: null, ...CLEARED_TOOL_SELECTIONS });
   }
 
   const openLinkedPlayer = useCallback((playerId: string) => {
@@ -1148,9 +1169,11 @@ export function App() {
     [dashboard, leagueDashboard],
   );
 
-  const isRefreshing = tab === "draft" ? draftRefresh.isPending : refresh.isPending;
+  // Monitor shows scores, lineups and news for every league, so it refreshes the dashboard even when the screen behind it is Draft.
+  const refreshesDraft = tab === "draft" && !showMonitor;
+  const isRefreshing = refreshesDraft ? draftRefresh.isPending : refresh.isPending;
   const refreshCurrentView = () => {
-    if (tab === "draft") draftRefresh.mutate();
+    if (refreshesDraft) draftRefresh.mutate();
     else {
       refresh.mutate();
       queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "player-news") });
@@ -1300,6 +1323,42 @@ export function App() {
     );
   }
 
+  if (showMonitor) {
+    return (
+      <div className="app-shell">
+        <SkipLink />
+        <SafeAreaTopScrim backgroundColor="var(--bg)" />
+        <div role="region" aria-label="League and week" className="league-sticky">
+          <div className="week-line">
+            <div><span className="live-dot" /> NFL {dashboard.season} · Week {dashboard.week}</div>
+            <div className="week-actions">
+              {supabase ? <AccountMenu /> : null}
+              <ThemeToggle />
+              <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label="Refresh scores and rankings"><RefreshIcon spinning={isRefreshing} /></button>
+            </div>
+          </div>
+          <DashboardPartialNotes dashboard={dashboard} />
+        </div>
+        <div className="app-workspace">
+          <main id="main-content" tabIndex={-1}>
+            <h1 className="sr-only">Monitor</h1>
+            <MonitorHome
+              dashboard={dashboard}
+              news={newsQuery.data}
+              onOpenNews={setTickerNews}
+              onOpenLeague={(id) => {
+                // Always lands on Matchup, whichever screen was open before Monitor.
+                chooseLeague(id, "team");
+                setShowMonitor(false);
+              }}
+            />
+          </main>
+        </div>
+        {tickerNews ? <NewsCardModal item={tickerNews} onClose={() => setTickerNews(null)} /> : null}
+      </div>
+    );
+  }
+
   const activeDashboard = leagueDashboard ?? dashboard;
   const selectedPlayerId = dashboardUrl.state.playerId;
   const rosterTeam = playerHistory.current ? leaguePowerTeamForPlayer(league, playerHistory.current.playerId) : null;
@@ -1417,7 +1476,7 @@ export function App() {
       ) : null}
       {askOpen ? (
         <Suspense fallback={null}>
-          <LazyAskSheet open={askOpen} onOpenChange={changeAskOpen} context={askContextForTab(tab)} horizon={dashboardUrl.state.horizon} leagueId={league?.id ?? null} />
+          <LazyAskSheet open={askOpen} onOpenChange={changeAskOpen} context={askContextForTab(tab)} horizon={dashboardUrl.state.horizon} leagueId={league?.id ?? null} initialQuestion={askQuestion} />
         </Suspense>
       ) : null}
       <div role="region" aria-label="League and week" className="league-sticky">
@@ -1434,6 +1493,7 @@ export function App() {
           <div className="week-line">
             <div><span className="live-dot" /> NFL {dashboard.season} · Week {dashboard.week}</div>
             <div className="week-actions">
+            <button type="button" className="all-leagues-button" onClick={() => setShowMonitor(true)}>All leagues</button>
             <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />
             {supabase ? <AccountMenu /> : null}
             <ThemeToggle />
@@ -1573,7 +1633,7 @@ export function App() {
                 />
               </Suspense>
             )
-            : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onComparePlayers={openComparison} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={openLeagueTeam} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} />
+            : tab === "team" ? <Lineup league={league} dashboard={activeDashboard} onComparePlayers={openComparison} onOpenMatchup={setSelectedMatchup} onOpenLeagueTeam={openLeagueTeam} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} onAsk={askWithQuestion} />
             : tab === "outcomes" ? <Suspense fallback={<SectionLoading label="Loading playoff picture…" />}><LazyLeagueOutcomes leagueId={league.id} queryKey={personalQueryKey(viewer, "projected-standings", league.id)} onOpenTeam={(rosterId) => openLeagueTeam(rosterId, { scope: "restOfSeason", mode: "seasonLong" })} /></Suspense>
             : tab === "power" ? <Suspense fallback={<SectionLoading label="Loading power rankings…" />}><LazyPowerRankings league={league} onOpenLeagueTeam={openLeagueTeam} /></Suspense>
             : tab === "draft" ? <Suspense fallback={<SectionLoading label="Loading draft…" />}><LazyDraftCenter dashboard={activeDashboard} league={league} data={draftQuery.data} loading={draftQuery.isPending} onOpenMatchup={setSelectedMatchup} draftPosition={dashboardUrl.state.draftPosition} draftQuery={dashboardUrl.state.draftQuery} draftRoom={dashboardUrl.state.draftRoom} onDraftFiltersChange={publishDraftFilters} linkedPlayerId={selectedPlayerId} onOpenLinkedPlayer={openLinkedPlayer} /></Suspense>
@@ -1587,6 +1647,7 @@ export function App() {
                   onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
                   initialPartnerRosterId={parsePartnerRosterId(dashboardUrl.state.tradePartner)}
                   onPartnerSelect={(rosterId) => dashboardUrl.commit({ tradePartner: rosterId === null ? null : String(rosterId) })}
+                  onAsk={askWithQuestion}
                 />
               </Suspense>
             )
@@ -1606,6 +1667,7 @@ export function App() {
                 onOpenLinkedPlayer={openLinkedPlayer}
                 comparePlayerId={tab === "comparison" ? dashboardUrl.state.comparePlayerId : null}
                 compareSecondPlayerId={tab === "comparison" ? dashboardUrl.state.compareSecondPlayerId : null}
+                onAsk={askWithQuestion}
               />
             ) : null}
           </FeatureErrorBoundary>
