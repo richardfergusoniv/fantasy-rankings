@@ -1,6 +1,6 @@
 {
  "source": "pfn-nfl-hq",
- "fetched_at": "2026-11-11T01:53:17.411330Z",
+ "fetched_at": "2026-11-11T21:27:26.516029Z",
  "tables": {
   "offensive-line": {
    "label": "O-Line",
@@ -27,8 +27,8 @@
      "rank": 1,
      "team": "LAR",
      "team_name": "Los Angeles Rams",
-     "grade": 91.3,
-     "pass_block": 87.3,
+     "grade": 91.5,
+     "pass_block": 87.6,
      "run_block": 88.2,
      "pen_per_game": 1.7
     },
@@ -36,8 +36,8 @@
      "rank": 2,
      "team": "SF",
      "team_name": "San Francisco 49ers",
-     "grade": 87.6,
-     "pass_block": 84.0,
+     "grade": 87.9,
+     "pass_block": 84.5,
      "run_block": 86.5,
      "pen_per_game": 1.4
     },
@@ -46,7 +46,7 @@
      "team": "DEN",
      "team_name": "Denver Broncos",
      "grade": 86.9,
-     "pass_block": 82.4,
+     "pass_block": 82.5,
      "run_block": 83.6,
      "pen_per_game": 1.3
     },
@@ -54,8 +54,8 @@
      "rank": 4,
      "team": "KC",
      "team_name": "Kansas City Chiefs",
-     "grade": 85.5,
-     "pass_block": 81.3,
+     "grade": 85.6,
+     "pass_block": 81.5,
      "run_block": 84.4,
      "pen_per_game": 1.5
     },
@@ -63,53 +63,53 @@
      "rank": 5,
      "team": "ATL",
      "team_name": "Atlanta Falcons",
-     "grade": 84.4,
-     "pass_block": 81.9,
-     "run_block": 80.4,
-     "pen_per_game": 1.4
+     "grade": 85.6,
+     "pass_block": 83.0,
+     "run_block": 80.6,
+     "pen_per_game": 1.3
     },
     {
      "rank": 6,
      "team": "DAL",
      "team_name": "Dallas Cowboys",
-     "grade": 84.0,
-     "pass_block": 81.4,
+     "grade": 83.7,
+     "pass_block": 80.9,
      "run_block": 83.3,
      "pen_per_game": 1.2
     },
     {
      "rank": 7,
-     "team": "PIT",
-     "team_name": "Pittsburgh Steelers",
-     "grade": 83.1,
-     "pass_block": 78.7,
-     "run_block": 81.8,
-     "pen_per_game": 1.1
-    },
-    {
-     "rank": 8,
      "team": "CHI",
      "team_name": "Chicago Bears",
-     "grade": 83.0,
-     "pass_block": 77.1,
+     "grade": 83.2,
+     "pass_block": 77.5,
      "run_block": 83.0,
      "pen_per_game": 1.7
     },
     {
-     "rank": 9,
+     "rank": 8,
      "team": "DET",
      "team_name": "Detroit Lions",
-     "grade": 82.3,
-     "pass_block": 80.8,
+     "grade": 82.4,
+     "pass_block": 81.0,
      "run_block": 78.6,
      "pen_per_game": 2.8
+    },
+    {
+     "rank": 9,
+     "team": "PIT",
+     "team_name": "Pittsburgh Steelers",
+     "grade": 82.3,
+     "pass_block": 77.3,
+     "run_block": 81.8,
+     "pen_per_game": 1.1
     },
     {
      "rank": 10,
      "team": "BUF",
      "team_name": "Buffalo Bills",
-     "grade": 81.6,
-     "pass_block": 75.8,
+     "grade": 81.1,
+     "pass_block": 75.1,
      "run_block": 85.5,
      "pen_per_game": 2.3
     },
@@ -117,8 +117,8 @@
      "rank": 11,
      "team": "CIN",
      "team_name": "Cincinnati Bengals",
-     "grade": 79.6,
-     "pass_block": 79.6,
+     "grade": 80.1,
+     "pass_block": 80.3,
      "run_block": 76.3,
      "pen_per_game": 1.9
     },
@@ -127,43 +127,43 @@
      "team": "IND",
      "team_name": "Indianapolis Colts",
      "grade": 78.4,
-     "pass_block": 75.2,
+     "pass_block": 75.3,
      "run_block": 78.4,
      "pen_per_game": 1.4
     },
     {
      "rank": 13,
-     "team": "ARI",
-     "team_name": "Arizona Cardinals",
-     "grade": 76.8,
-     "pass_block": 77.3,
-     "run_block": 73.9,
-     "pen_per_game": 2.1
-    },
-    {
-     "rank": 14,
      "team": "NO",
      "team_name": "New Orleans Saints",
-     "grade": 76.7,
-     "pass_block": 79.4,
+     "grade": 77.1,
+     "pass_block": 80.1,
      "run_block": 71.6,
      "pen_per_game": 1.4
     },
     {
-     "rank": 15,
+     "rank": 14,
      "team": "NE",
      "team_name": "New England Patriots",
-     "grade": 76.2,
-     "pass_block": 73.4,
+     "grade": 76.9,
+     "pass_block": 74.8,
      "run_block": 75.6,
      "pen_per_game": 2.0
+    },
+    {
+     "rank": 15,
+     "team": "ARI",
+     "team_name": "Arizona Cardinals",
+     "grade": 76.7,
+     "pass_block": 77.1,
+     "run_block": 73.9,
+     "pen_per_game": 2.1
     },
     {
      "rank": 16,
      "team": "JAX",
      "team_name": "Jacksonville Jaguars",
-     "grade": 75.5,
-     "pass_block": 79.3,
+     "grade": 75.1,
+     "pass_block": 78.6,
      "run_block": 77.3,
      "pen_per_game": 2.8
     },
@@ -171,8 +171,8 @@
      "rank": 17,
      "team": "TB",
      "team_name": "Tampa Bay Buccaneers",
-     "grade": 74.4,
-     "pass_block": 71.9,
+     "grade": 74.7,
+     "pass_block": 72.4,
      "run_block": 78.7,
      "pen_per_game": 2.8
     },
@@ -180,8 +180,8 @@
      "rank": 18,
      "team": "SEA",
      "team_name": "Seattle Seahawks",
-     "grade": 73.4,
-     "pass_block": 72.8,
+     "grade": 73.1,
+     "pass_block": 72.1,
      "run_block": 73.4,
      "pen_per_game": 1.7
     },
@@ -189,8 +189,8 @@
      "rank": 19,
      "team": "LV",
      "team_name": "Las Vegas Raiders",
-     "grade": 73.4,
-     "pass_block": 80.5,
+     "grade": 72.8,
+     "pass_block": 79.5,
      "run_block": 63.3,
      "pen_per_game": 1.4
     },
@@ -198,89 +198,89 @@
      "rank": 20,
      "team": "BAL",
      "team_name": "Baltimore Ravens",
-     "grade": 72.5,
-     "pass_block": 70.7,
+     "grade": 72.2,
+     "pass_block": 70.1,
      "run_block": 73.8,
-     "pen_per_game": 2.4
+     "pen_per_game": 2.6
     },
     {
      "rank": 21,
-     "team": "MIN",
-     "team_name": "Minnesota Vikings",
-     "grade": 70.9,
-     "pass_block": 73.1,
-     "run_block": 69.9,
-     "pen_per_game": 2.3
-    },
-    {
-     "rank": 22,
      "team": "GB",
      "team_name": "Green Bay Packers",
-     "grade": 70.8,
-     "pass_block": 80.2,
+     "grade": 71.4,
+     "pass_block": 81.2,
      "run_block": 59.4,
      "pen_per_game": 2.1
     },
     {
-     "rank": 23,
-     "team": "TEN",
-     "team_name": "Tennessee Titans",
-     "grade": 70.7,
-     "pass_block": 77.7,
-     "run_block": 66.6,
-     "pen_per_game": 2.1
-    },
-    {
-     "rank": 24,
+     "rank": 22,
      "team": "NYJ",
      "team_name": "New York Jets",
-     "grade": 70.4,
-     "pass_block": 67.0,
+     "grade": 71.1,
+     "pass_block": 68.1,
      "run_block": 75.2,
      "pen_per_game": 1.8
     },
     {
-     "rank": 25,
-     "team": "WAS",
-     "team_name": "Washington Commanders",
-     "grade": 69.9,
-     "pass_block": 71.9,
-     "run_block": 69.4,
-     "pen_per_game": 2.5
+     "rank": 23,
+     "team": "MIN",
+     "team_name": "Minnesota Vikings",
+     "grade": 70.0,
+     "pass_block": 71.7,
+     "run_block": 69.9,
+     "pen_per_game": 2.3
     },
     {
-     "rank": 26,
+     "rank": 24,
+     "team": "TEN",
+     "team_name": "Tennessee Titans",
+     "grade": 70.0,
+     "pass_block": 76.4,
+     "run_block": 66.6,
+     "pen_per_game": 2.1
+    },
+    {
+     "rank": 25,
      "team": "NYG",
      "team_name": "New York Giants",
-     "grade": 69.4,
-     "pass_block": 75.7,
+     "grade": 69.6,
+     "pass_block": 76.1,
      "run_block": 65.5,
      "pen_per_game": 2.0
     },
     {
+     "rank": 26,
+     "team": "WAS",
+     "team_name": "Washington Commanders",
+     "grade": 69.5,
+     "pass_block": 71.2,
+     "run_block": 69.4,
+     "pen_per_game": 2.5
+    },
+    {
      "rank": 27,
-     "team": "CAR",
-     "team_name": "Carolina Panthers",
-     "grade": 69.3,
-     "pass_block": 67.6,
-     "run_block": 75.5,
-     "pen_per_game": 2.6
+     "team": "CLE",
+     "team_name": "Cleveland Browns",
+     "grade": 68.7,
+     "pass_block": 66.4,
+     "run_block": 72.4,
+     "pen_per_game": 2.8
     },
     {
      "rank": 28,
-     "team": "CLE",
-     "team_name": "Cleveland Browns",
-     "grade": 67.9,
-     "pass_block": 64.9,
-     "run_block": 72.4,
-     "pen_per_game": 2.8
+     "team": "CAR",
+     "team_name": "Carolina Panthers",
+     "grade": 68.4,
+     "pass_block": 66.1,
+     "run_block": 75.5,
+     "pen_per_game": 2.6
     },
     {
      "rank": 29,
      "team": "PHI",
      "team_name": "Philadelphia Eagles",
-     "grade": 67.6,
-     "pass_block": 67.8,
+     "grade": 68.3,
+     "pass_block": 69.0,
      "run_block": 69.1,
      "pen_per_game": 2.0
     },
@@ -288,8 +288,8 @@
      "rank": 30,
      "team": "HOU",
      "team_name": "Houston Texans",
-     "grade": 67.6,
-     "pass_block": 75.1,
+     "grade": 67.8,
+     "pass_block": 75.6,
      "run_block": 64.6,
      "pen_per_game": 2.4
     },
@@ -297,8 +297,8 @@
      "rank": 31,
      "team": "MIA",
      "team_name": "Miami Dolphins",
-     "grade": 65.1,
-     "pass_block": 62.4,
+     "grade": 65.0,
+     "pass_block": 62.2,
      "run_block": 70.1,
      "pen_per_game": 2.4
     },
@@ -306,8 +306,8 @@
      "rank": 32,
      "team": "LAC",
      "team_name": "Los Angeles Chargers",
-     "grade": 63.4,
-     "pass_block": 63.9,
+     "grade": 63.2,
+     "pass_block": 63.5,
      "run_block": 68.2,
      "pen_per_game": 3.1
     }
