@@ -17,7 +17,11 @@ export type MonitorNewsEntry = {
   leagues: Array<{ id: string; name: string }>;
 };
 
-type RosterLeague = Pick<League, "id" | "name" | "starters" | "bench"> & { seasonLongFormat: Pick<League["seasonLongFormat"], "isDynasty"> };
+type RosterLeague = Pick<League, "id" | "name" | "starters" | "bench"> & {
+  seasonLongFormat: Pick<League["seasonLongFormat"], "isDynasty">;
+  /** Every roster in the league; the user's entry also holds players in IR and taxi slots, which starters and bench leave out. */
+  tradeTeams?: ReadonlyArray<{ isUser: boolean; players: ReadonlyArray<{ playerId: string }> }>;
+};
 
 /**
  * The most important news about players you roster in any league: newest three
@@ -33,11 +37,14 @@ export function monitorNews(
   if (!news || limit <= 0) return [];
   const leaguesByPlayer = new Map<string, RosterLeague[]>();
   for (const league of leagues) {
-    for (const player of [...league.starters, ...league.bench]) {
-      if (player.playerId === "0") continue;
-      const list = leaguesByPlayer.get(player.playerId) ?? [];
+    const owned = new Set<string>();
+    for (const player of [...league.starters, ...league.bench, ...(league.tradeTeams?.find((team) => team.isUser)?.players ?? [])]) {
+      if (player.playerId !== "0") owned.add(player.playerId);
+    }
+    for (const playerId of owned) {
+      const list = leaguesByPlayer.get(playerId) ?? [];
       list.push(league);
-      leaguesByPlayer.set(player.playerId, list);
+      leaguesByPlayer.set(playerId, list);
     }
   }
 

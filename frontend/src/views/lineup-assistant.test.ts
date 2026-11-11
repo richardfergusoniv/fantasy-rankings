@@ -57,4 +57,20 @@ describe("lineupAssistantAnswer", () => {
     expect(answer.swaps[0]!.playerIn.playerId).toBe("c");
     expect(answer.swaps[0]!.playerOut.playerId).toBe("0");
   });
+
+  it("pairs each incoming player with an outgoing player of the same position", () => {
+    // QB A (10) and WR B (20) start; bench QB C (15) and WR D (30). Each position gets its own upgrade.
+    const league = {
+      starters: [p("A", 10, { position: "QB", lineupSlot: "QB" }), p("B", 20, { lineupSlot: "WR" })],
+      bench: [p("C", 15, { position: "QB", isStarter: false, lineupSlot: null }), p("D", 30, { isStarter: false, lineupSlot: null })],
+      opponentTeam: null,
+    } as unknown as Pick<League, "starters" | "bench" | "opponentTeam">;
+    const answer = lineupAssistantAnswer(league, NOW)!;
+    const byIn = Object.fromEntries(answer.swaps.map((swap) => [swap.playerIn.playerId, swap]));
+    expect(byIn.C!.playerOut.playerId).toBe("A");
+    expect(byIn.C!.gain).toBe(5);
+    expect(byIn.D!.playerOut.playerId).toBe("B");
+    expect(byIn.D!.gain).toBe(10);
+    expect(answer.gain).toBe(15);
+  });
 });

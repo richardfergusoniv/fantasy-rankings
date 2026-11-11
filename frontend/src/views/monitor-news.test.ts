@@ -54,6 +54,14 @@ describe("monitorNews", () => {
     expect(monitorNews(feed([a, b]), [roster("L1", "One", ["p1", "p2"])], NOW)).toHaveLength(1);
   });
 
+  it("includes players held only in IR or taxi slots", () => {
+    const withReserve = { ...(roster("L1", "One", ["p1"]) as object), tradeTeams: [{ isUser: true, players: [{ playerId: "p1" }, { playerId: "ir1" }] }, { isUser: false, players: [{ playerId: "rival" }] }] } as never;
+    const feedItems = feed([item({ id: "ir", playerId: "ir1" }), item({ id: "rival", playerId: "rival" })]);
+    const result = monitorNews(feedItems, [withReserve], NOW);
+    expect(result.map((entry) => entry.item.id)).toEqual(["ir"]);
+    expect(result[0]!.leagues.map((league) => league.id)).toEqual(["L1"]);
+  });
+
   it("ignores team and league news and returns nothing without a feed", () => {
     expect(monitorNews(feed([item({ id: "t", scope: "team" })]), [roster("L1", "One", ["p1"])], NOW)).toEqual([]);
     expect(monitorNews(undefined, [], NOW)).toEqual([]);

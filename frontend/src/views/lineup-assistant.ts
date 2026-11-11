@@ -45,20 +45,32 @@ export function lineupAssistantAnswer(league: Pick<League, "starters" | "bench" 
     }
     return true;
   });
-  // Biggest improvement first: best incoming player replaces the worst outgoing one.
-  const sortedIns = [...ins].sort((a, b) => points(b) - points(a));
-  const sortedOuts = [...outs].sort((a, b) => (a.playerId === "0" ? -1 : points(a)) - (b.playerId === "0" ? -1 : points(b)));
-  const swaps: LineupSwap[] = sortedIns.flatMap((playerIn, index) => {
-    const playerOut = sortedOuts[index];
-    if (!playerOut) return [];
+  // Pair each incoming player with an outgoing one who can really be replaced by him: the same
+  // position first (best in for worst out), then whoever is left (a FLEX slot takes any skill position).
+  const byPoints = (a: RosterPlayer, b: RosterPlayer) => points(b) - points(a);
+  const remainingIns = [...ins].sort(byPoints);
+  const remainingOuts = [...outs].sort((a, b) => -byPoints(a, b));
+  const pairs: Array<{ playerIn: RosterPlayer; playerOut: RosterPlayer }> = [];
+  for (const playerIn of [...remainingIns]) {
+    const matchIndex = remainingOuts.findIndex((candidate) => candidate.playerId !== "0" && candidate.position === playerIn.position);
+    if (matchIndex < 0) continue;
+    pairs.push({ playerIn, playerOut: remainingOuts[matchIndex]! });
+    remainingOuts.splice(matchIndex, 1);
+    remainingIns.splice(remainingIns.indexOf(playerIn), 1);
+  }
+  for (const playerIn of remainingIns) {
+    const playerOut = remainingOuts.shift();
+    if (playerOut) pairs.push({ playerIn, playerOut });
+  }
+  const swaps: LineupSwap[] = pairs.map(({ playerIn, playerOut }) => {
     const slotIndex = optimized.starters.findIndex((player) => player.playerId === playerIn.playerId);
     const slotPlayer = league.starters[slotIndex] ?? playerOut;
-    return [{
+    return {
       slot: (slotPlayer.lineupSlot ?? slotPlayer.position).replace("_", " "),
       playerIn,
       playerOut,
       gain: Number((points(playerIn) - points(playerOut)).toFixed(1)),
-    }];
+    };
   });
   const total = sumLiveForecast(optimized.starters, now) ?? 0;
   const before = sumLiveForecast(league.starters, now) ?? 0;
