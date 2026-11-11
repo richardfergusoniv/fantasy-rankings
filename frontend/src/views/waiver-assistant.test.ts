@@ -34,7 +34,7 @@ describe("waiverAssistantAnswer", () => {
     expect(answer.drop?.name).toBe("C. Dunn");
     expect(answer.bid).toBe("$5–13");
     expect(answer.compare.find((row) => row.label === "Projection this week")?.values).toEqual(["9.4", "3.2"]);
-    expect(answer.compare.find((row) => row.label === "Injury")?.values).toEqual(["None", "Questionable"]);
+    expect(answer.compare.find((row) => row.label === "Injury")?.values).toEqual(["—", "Questionable"]);
     expect(answer.facts.find((fact) => fact.label === "Sleeper adds, 24 hours")?.value).toBe("1,240");
   });
 
@@ -48,6 +48,15 @@ describe("waiverAssistantAnswer", () => {
     expect(answer.facts.find((fact) => fact.label === "Starts in week 12")?.value).toBe("Starter bye");
     expect(answer.facts.find((fact) => fact.label === "Out in those weeks")?.value).toBe("Okafor");
     expect(answer.facts.find((fact) => fact.label === "Waiver priority")?.value).toBe("You're 3rd in line.");
+  });
+
+  it("shows the add's own injury status, and a dash when it isn't known", () => {
+    const withInjury = waiverAssistantAnswer(league([grade({})]), {}, new Map([["add", "Questionable"]]))!;
+    expect(withInjury.compare.find((row) => row.label === "Injury")?.values).toEqual(["Questionable", "Questionable"]);
+    const unknown = waiverAssistantAnswer(league([grade({})]), {})!;
+    expect(unknown.compare.find((row) => row.label === "Injury")?.values).toEqual(["—", "Questionable"]);
+    const healthy = waiverAssistantAnswer(league([grade({})]), {}, new Map([["add", null]]))!;
+    expect(healthy.compare.find((row) => row.label === "Injury")?.values).toEqual(["None", "Questionable"]);
   });
 
   it("works when there is no drop to suggest", () => {

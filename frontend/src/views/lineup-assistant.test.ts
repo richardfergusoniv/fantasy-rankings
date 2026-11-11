@@ -50,6 +50,8 @@ describe("lineupAssistantAnswer", () => {
     expect(answer.swaps[0]!.playerOut.playerId).toBe("A");
     expect(answer.swaps[0]!.gain).toBe(5);
     expect(answer.gain).toBe(5);
+    // B stays a starter but has to move from FLEX up to WR.
+    expect(answer.slotMoves.map((move) => [move.player.playerId, move.from, move.to])).toEqual([["B", "FLEX", "WR"]]);
   });
 
   it("treats a filled empty slot as the incoming player replacing nobody", () => {

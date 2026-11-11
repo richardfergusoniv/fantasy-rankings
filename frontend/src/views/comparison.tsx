@@ -736,7 +736,8 @@ function ComparisonView({ dashboard, league, window, onWindowChange, validPositi
         return typeof found === "number" && Number.isFinite(found) ? found : null;
       };
       return {
-        projection: row.leagueProjection ?? (league.rankingField === "ppr" ? row.ppr : row.halfPpr),
+        // The forecast the verdict used (time left in a live game), not the pregame number.
+        projection: verdict.points[index],
         vegasProjection: row.vegasProjection,
         sleeperProjection: row.sleeperProjection,
         bookRange: projectionRanges[index],

@@ -934,7 +934,12 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
         ? (b.sortProjection ?? Number.NEGATIVE_INFINITY) - (a.sortProjection ?? Number.NEGATIVE_INFINITY) || a.rank - b.rank
         : a.rank - b.rank);
   }, [availableOnly, dashboard.seasonLongRankings, effectiveHorizon, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, league.seasonLongFormat.key, leagueDefenses, leagueRankings, powerTeamByPlayerId, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
-  const waiverAnswer = useMemo(() => (availableOnly ? waiverAssistantAnswer(league, dashboard.playerTrending) : null), [availableOnly, dashboard.playerTrending, league]);
+  const waiverAnswer = useMemo(
+    () => (availableOnly
+      ? waiverAssistantAnswer(league, dashboard.playerTrending, new Map(dashboard.rankings.filter((row) => row.leagueId === league.id).map((row) => [row.playerId, row.injuryStatus])))
+      : null),
+    [availableOnly, dashboard.playerTrending, dashboard.rankings, league],
+  );
   const visibleRows = rows.slice(0, visibleRowCount);
   // Tiers come from the whole list, so paging in more rows never moves a tier line.
   const tierGroups = useMemo(() => {

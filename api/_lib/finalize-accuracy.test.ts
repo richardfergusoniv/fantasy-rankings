@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PPFD_ACTUAL_PPR_SCORING, advanceBackfillCursor, backfillWeekCompleted, scoreWeeklyActual, weeksToBackfill } from "./finalize-accuracy.js";
+import { PPFD_ACTUAL_PPR_SCORING, backfillWeekCompleted, firstDownBoardPrecedesCapture, scoreWeeklyActual, weeksToBackfill } from "./finalize-accuracy.js";
 
 describe("scoreWeeklyActual", () => {
   it("scores PPFD league actuals in canonical PPR", () => {
@@ -56,12 +56,6 @@ describe("backfill cursor", () => {
     expect(weeksToBackfill([4, 5, 6, 7, 9], 6)).toEqual([7, 9]);
     expect(weeksToBackfill([4, 5], 9)).toEqual([]);
   });
-
-  it("advances through an unbroken run of good weeks and stops at the first error", () => {
-    expect(advanceBackfillCursor(0, [{ week: 4, ok: true }, { week: 5, ok: true }, { week: 6, ok: false }, { week: 7, ok: true }])).toBe(5);
-    expect(advanceBackfillCursor(3, [])).toBe(3);
-    expect(advanceBackfillCursor(3, [{ week: 4, ok: false }])).toBe(3);
-  });
 });
 
 describe("backfillWeekCompleted", () => {
@@ -69,5 +63,23 @@ describe("backfillWeekCompleted", () => {
     expect(backfillWeekCompleted({ errors: 0, truncated: false })).toBe(true);
     expect(backfillWeekCompleted({ errors: 2, truncated: false })).toBe(false);
     expect(backfillWeekCompleted({ errors: 0, truncated: true })).toBe(false);
+  });
+
+  it("is not complete when copying finals onto scoring snapshots failed", () => {
+    expect(backfillWeekCompleted({ errors: 0, truncated: false, snapshotsOk: false })).toBe(false);
+    expect(backfillWeekCompleted({ errors: 0, truncated: false, snapshotsOk: true })).toBe(true);
+    expect(backfillWeekCompleted({ errors: 0, truncated: false })).toBe(true);
+  });
+});
+
+describe("firstDownBoardPrecedesCapture", () => {
+  const captured = new Date("2026-10-18T16:00:00Z");
+  it("uses a board built before the projection was captured", () => {
+    expect(firstDownBoardPrecedesCapture("2026-10-17T20:00:00Z", captured)).toBe(true);
+    expect(firstDownBoardPrecedesCapture("2026-10-18T16:00:00Z", captured)).toBe(true);
+  });
+  it("leaves the row empty for a board built after the capture, or an unreadable date", () => {
+    expect(firstDownBoardPrecedesCapture("2026-10-18T16:00:01Z", captured)).toBe(false);
+    expect(firstDownBoardPrecedesCapture("not a date", captured)).toBe(false);
   });
 });

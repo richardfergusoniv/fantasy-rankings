@@ -48,6 +48,8 @@ export type FinalizeAccuracyResult = {
   snapshotsUpdated?: number;
   /** True when the week had more rows than one call reads, so some were not looked at. */
   truncated?: boolean;
+  /** False when copying the finals onto scoring snapshots failed. */
+  snapshotsOk?: boolean;
 };
 
 /** Most rows one week's grading or First Down fill reads in a call; a week this big is reported, not silently cut short. */
@@ -182,6 +184,13 @@ export async function finalizeProjectionAccuracy(
       const isPpfd = row.leagueId === DYNASTICAL_CUCKS_LEAGUE_ID || row.scoring === "ppfd";
       const leagueSettings = settingsByLeague.get(row.leagueId);
 
+      // A backfill must not save an approximate score: without the league's own scoring settings the row
+      // stays ungraded and the week stays pending, instead of falling back to a PPR/half-PPR label.
+      if (opts.onlyMissing && !isPpfd && !leagueSettings) {
+        errors += 1;
+        continue;
+      }
+
       // Non-PPFD rows already filled by saveProjectionAccuracy at game-final use
       // the league's live scoring. Do not overwrite them with a PPR/half-PPR proxy
       // when full settings are unavailable.
@@ -247,6 +256,7 @@ export async function finalizeProjectionAccuracy(
     errors,
     snapshotsUpdated: snapshots.updated,
     truncated: rows.length >= ACCURACY_ROW_LIMIT,
+    snapshotsOk: snapshots.ok,
   };
 }
 
@@ -302,22 +312,22 @@ export function weeksToBackfill(weeksWithRows: readonly number[], cursor: number
  * with more rows than one call reads stays pending (and the job reports not done)
  * instead of being passed silently with rows left unfilled.
  */
-export function backfillWeekCompleted(week: { errors: number; truncated: boolean }): boolean {
-  return week.errors === 0 && !week.truncated;
+export function backfillWeekCompleted(week: { errors: number; truncated: boolean; snapshotsOk?: boolean }): boolean {
+  return week.errors === 0 && !week.truncated && week.snapshotsOk !== false;
 }
 
-/** The cursor after this call: the end of the unbroken run of weeks that finished without errors. */
-export function advanceBackfillCursor(cursor: number, outcomes: ReadonlyArray<{ week: number; ok: boolean }>): number {
-  let next = cursor;
-  for (const outcome of outcomes) {
-    if (!outcome.ok) break;
-    next = outcome.week;
-  }
-  return next;
+/**
+ * Whether a First Down board can stand beside a projection captured at `capturedAt`. A board built
+ * after the capture would be a later forecast than the props projection it is paired with, so the
+ * row is left empty instead (only the latest board per week is stored, so the earlier one is gone).
+ */
+export function firstDownBoardPrecedesCapture(builtAt: string, capturedAt: Date): boolean {
+  const built = Date.parse(builtAt);
+  return Number.isFinite(built) && built <= capturedAt.getTime();
 }
 
 /** Start no new week once this much of the budget is spent: one week's Sleeper loads take 10-30 seconds. */
-const BACKFILL_BUDGET_MS = 35_000;
+const BACKFILL_BUDGET_MS = 20_000;
 
 /**
  * Fills First Down's projection into rows saved before it was recorded, from the
@@ -348,6 +358,7 @@ export async function fillFirstDownProjections(season: number, week: number): Pr
     .where(and(eq(schema.projectionAccuracy.season, season), eq(schema.projectionAccuracy.week, week), isNull(schema.projectionAccuracy.firstDownProjection)))
     .limit(ACCURACY_ROW_LIMIT);
   const updates = rows.flatMap((row) => {
+    if (!firstDownBoardPrecedesCapture(snapshot!.built_at, row.capturedAt)) return [];
     const points = lookup({ leagueId: row.leagueId, name: row.playerName, position: row.position });
     return points === null ? [] : [{ id: row.id, firstDownProjection: Math.round(points * 100) }];
   });
@@ -379,16 +390,20 @@ export async function backfillProjectionAccuracy(opts: { season?: number; budget
     .from(schema.projectionAccuracy)
     .where(and(eq(schema.projectionAccuracy.season, season), lt(schema.projectionAccuracy.week, finishedBefore)))
     .orderBy(asc(schema.projectionAccuracy.week));
+  // A reset clears the saved cursor first, so a failed first week can't leave the old one in place.
+  if (opts.reset) await writeBackfillCursor(season, 0);
   const cursor = opts.reset ? 0 : await readBackfillCursor(season);
   const weeks = weeksToBackfill(weekRows.map((row) => row.week), cursor);
 
   const weeksProcessed: number[] = [];
-  const outcomes: Array<{ week: number; ok: boolean }> = [];
+  let cursorNow = cursor;
   let actualsGraded = 0;
   let firstDownFilled = 0;
   let errors = 0;
   for (const week of weeks) {
+    // One week's Sleeper loads take 10-30 seconds and the function stops at 60, so no new week starts late.
     if (Date.now() - startedAt > budgetMs) break;
+    let completed = false;
     try {
       const fill = await fillFirstDownProjections(season, week);
       firstDownFilled += fill.filled;
@@ -401,22 +416,23 @@ export async function backfillProjectionAccuracy(opts: { season?: number; budget
         const result = await finalizeProjectionAccuracy({ season, week, onlyMissing: true });
         actualsGraded += result.updated;
         errors += result.errors;
-        outcomes.push({ week, ok: backfillWeekCompleted({ errors: result.errors, truncated: fill.truncated || result.truncated === true }) });
+        completed = backfillWeekCompleted({ errors: result.errors, truncated: fill.truncated || result.truncated === true, snapshotsOk: result.snapshotsOk });
       } else {
-        outcomes.push({ week, ok: backfillWeekCompleted({ errors: 0, truncated: fill.truncated }) });
+        completed = backfillWeekCompleted({ errors: 0, truncated: fill.truncated });
       }
-      weeksProcessed.push(week);
     } catch (error) {
       console.error("[finalize-accuracy] backfill failed for week", week, error instanceof Error ? error.message : error);
       errors += 1;
-      outcomes.push({ week, ok: false });
     }
+    weeksProcessed.push(week);
+    // Stop at the first week that isn't complete: the cursor can't pass it, and it is tried again next call.
+    if (!completed) break;
+    // Saved week by week, so a call cut off by the time limit still keeps the weeks it finished.
+    cursorNow = week;
+    await writeBackfillCursor(season, week);
   }
-  const nextCursor = advanceBackfillCursor(cursor, outcomes);
-  if (nextCursor > cursor) await writeBackfillCursor(season, nextCursor);
 
-  // A week that errored stays after the cursor and is tried again next call.
-  const unprocessed = weeks.filter((week) => week > nextCursor);
+  const unprocessed = weeks.filter((week) => week > cursorNow);
   return {
     ok: errors === 0,
     job: "finalize-accuracy-backfill",

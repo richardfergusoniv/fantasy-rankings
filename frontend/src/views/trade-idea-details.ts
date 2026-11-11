@@ -19,7 +19,7 @@ export function tradeIdeaDetails(idea: TradeIdea): TradeIdeaDetails {
   const compare: TradeIdeaDetails["compare"] = [
     { label: "Players", values: [names(idea.give), names(idea.get)] },
     { label: "Positions", values: [idea.give.map((a) => a.position).join(", "), idea.get.map((a) => a.position).join(", ")] },
-    { label: "Market value", values: [whole(idea.giveTotal), whole(idea.getTotal)], edge: idea.getTotal === idea.giveTotal ? null : idea.getTotal > idea.giveTotal ? 1 : 0 },
+    { label: "Season-long value", values: [whole(idea.giveTotal), whole(idea.getTotal)], edge: idea.getTotal === idea.giveTotal ? null : idea.getTotal > idea.giveTotal ? 1 : 0 },
   ];
   const yours: TradeIdeaDetails["yours"] = [
     { label: "Verdict", value: `${idea.verdict} (${idea.verdictScore.toFixed(0)})` },
@@ -35,6 +35,6 @@ export function tradeIdeaDetails(idea: TradeIdea): TradeIdeaDetails {
   if (idea.injuryExposure && idea.injuryExposure.designatedPlayers.length > 0) yours.push({ label: "Injury designations", value: idea.injuryExposure.designatedPlayers.join(", ") });
   if (idea.injuryExposure && idea.injuryExposure.absentPlayers.length > 0) yours.push({ label: "Out in those weeks", value: idea.injuryExposure.absentPlayers.join(", ") });
   const theirs: TradeIdeaDetails["theirs"] = [{ label: "Lineup this week", value: signed(idea.partnerWeekDelta) }];
-  if (idea.partnerRestOfSeason) theirs.push({ label: "Rest-of-season points", value: signed(idea.partnerRestOfSeason.pointsDelta) });
+  if (idea.partnerRestOfSeason) theirs.push({ label: "Rest-of-season points", value: `${signed(idea.partnerRestOfSeason.pointsDelta)}${idea.partnerRestOfSeason.partial ? " (some weeks missing)" : ""}` });
   return { compare, yours, theirs };
 }

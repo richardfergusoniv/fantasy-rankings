@@ -60,4 +60,11 @@ describe("assignTiers size limit", () => {
     expect(Math.max(...sizes.values())).toBeLessThanOrEqual(12);
     expect(Math.min(...sizes.values())).toBeGreaterThanOrEqual(2);
   });
+
+  it("keeps every tier within the maximum when all values are equal", () => {
+    const sizes = new Map<number, number>();
+    for (const tier of assignTiers(Array.from({ length: 24 }, () => 100))) sizes.set(tier, (sizes.get(tier) ?? 0) + 1);
+    expect(Math.max(...sizes.values())).toBeLessThanOrEqual(12);
+    expect(Math.min(...sizes.values())).toBeGreaterThanOrEqual(2);
+  });
 });

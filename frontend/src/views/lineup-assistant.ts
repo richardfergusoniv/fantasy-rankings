@@ -10,8 +10,13 @@ export type LineupSwap = {
   gain: number;
 };
 
+/** A starter who stays in the lineup but changes slot (for example from FLEX to WR) so the swaps can be carried out. */
+export type LineupSlotMove = { player: RosterPlayer; from: string; to: string };
+
 export type LineupAssistantAnswer = {
   swaps: LineupSwap[];
+  /** Slot changes for players who stay in the lineup; do these along with the swaps. */
+  slotMoves: LineupSlotMove[];
   /** Total points the changes add. */
   gain: number;
   /** Your win chance in percent before and after the changes; null without an opponent. */
@@ -72,6 +77,18 @@ export function lineupAssistantAnswer(league: Pick<League, "starters" | "bench" 
       gain: Number((points(playerIn) - points(playerOut)).toFixed(1)),
     };
   });
+  // Players who stay starters but sit in a different slot in the best lineup (a FLEX starter moving up to WR).
+  const slotName = (index: number) => {
+    const slotPlayer = league.starters[index];
+    return slotPlayer ? (slotPlayer.lineupSlot ?? slotPlayer.position).replace("_", " ") : "";
+  };
+  const slotMoves: LineupSlotMove[] = [];
+  optimized.starters.forEach((player, newIndex) => {
+    if (player.playerId === "0") return;
+    const oldIndex = league.starters.findIndex((candidate) => candidate.playerId === player.playerId);
+    if (oldIndex < 0 || oldIndex === newIndex || slotName(oldIndex) === slotName(newIndex)) return;
+    slotMoves.push({ player, from: slotName(oldIndex), to: slotName(newIndex) });
+  });
   const total = sumLiveForecast(optimized.starters, now) ?? 0;
   const before = sumLiveForecast(league.starters, now) ?? 0;
   const gain = Number((total - before).toFixed(1));
@@ -84,6 +101,7 @@ export function lineupAssistantAnswer(league: Pick<League, "starters" | "bench" 
   };
   return {
     swaps: swaps.sort((a, b) => b.gain - a.gain),
+    slotMoves,
     gain,
     winBefore: winOf(league.starters),
     winAfter: winOf(optimized.starters),

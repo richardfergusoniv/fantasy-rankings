@@ -36,6 +36,8 @@ const weeksPhrase = (weeks: readonly number[]) => (weeks.length === 0 ? "none" :
 export function waiverAssistantAnswer(
   league: Pick<League, "waiverGrades" | "starters" | "bench">,
   trending: Record<string, { adds: number | null } | undefined> | undefined,
+  /** Injury status by player id (null = healthy); a player missing from it has an unknown status. */
+  injuryById?: ReadonlyMap<string, string | null>,
 ): WaiverAssistantAnswer | null {
   const grade = bestWaiverGrade(league.waiverGrades);
   if (!grade) return null;
@@ -50,7 +52,8 @@ export function waiverAssistantAnswer(
     { label: "Team", values: [grade.team ?? "—", dropRow?.team ?? "—"] },
     { label: "Projection this week", values: [points(grade.projection), points(dropRow?.projection)] },
   ];
-  if (dropRow?.injuryStatus) compare.push({ label: "Injury", values: ["None", dropRow.injuryStatus] });
+  const addInjury = injuryById?.has(grade.playerId) ? injuryById.get(grade.playerId) ?? "None" : "—";
+  if (dropRow?.injuryStatus || (addInjury !== "None" && addInjury !== "—")) compare.push({ label: "Injury", values: [addInjury, dropRow?.injuryStatus ?? "None"] });
   if (grade.dropCandidate) compare.push({ label: "Season value", values: ["—", grade.dropCandidate.value.toLocaleString("en-US")] });
 
   const facts: WaiverAssistantAnswer["facts"] = [{ label: "Grade", value: `${grade.label} (${grade.score.toFixed(0)})` }];

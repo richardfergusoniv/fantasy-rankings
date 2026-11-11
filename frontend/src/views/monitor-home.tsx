@@ -45,8 +45,8 @@ function LeagueRow({ name, summary, record, onOpen }: {
       ) : null}
       {needsAttention ? (
         <span className="league-monitor-issues">
-          {summary.issues.map((issue) => (
-            <Badge key={`${issue.kind}-${issue.label}`} variant="warning" size="compact" className="status-badge">{issue.label}</Badge>
+          {summary.issues.map((issue, index) => (
+            <Badge key={`${index}-${issue.kind}-${issue.label}`} variant="warning" size="compact" className="status-badge">{issue.label}</Badge>
           ))}
         </span>
       ) : null}

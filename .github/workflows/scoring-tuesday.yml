@@ -62,6 +62,8 @@ jobs:
           EOF
 
       - name: Scoring weights refit (candidate + guardrails)
+        # Runs even when the backfill above did not finish: the refit does not depend on it.
+        if: ${{ !cancelled() }}
         continue-on-error: true
         run: |
           curl -sS --fail-with-body --max-time 300 \

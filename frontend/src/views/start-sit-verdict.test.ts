@@ -44,6 +44,11 @@ describe("startSitVerdict", () => {
     expect(verdict.points[0]).toBeLessThan(3);
   });
 
+  it("gives no start/sit answer when either game is already final", () => {
+    expect(startSitVerdict(player("A", 10, { gamePhase: "final", actual: 25 }), player("B", 14), NOW)).toBeNull();
+    expect(startSitVerdict(player("A", 10), player("B", 14, { gamePhase: "final", actual: 3 }), NOW)).toBeNull();
+  });
+
   it("returns null when a player has no forecast", () => {
     expect(startSitVerdict(player("A", 10), player("V", null, { playerId: "0" }), NOW)).toBeNull();
   });

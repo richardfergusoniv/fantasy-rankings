@@ -22,6 +22,8 @@ export const COIN_FLIP_BAND = 2;
  * Matchup win chance, so the two screens agree.
  */
 export function startSitVerdict(a: VerdictPlayer, b: VerdictPlayer, now = Date.now()): StartSitVerdict | null {
+  // A player whose game is over can't be started, so there is no start/sit question to answer.
+  if (a.gamePhase === "final" || b.gamePhase === "final") return null;
   const first = teamOutlook([a], now);
   const second = teamOutlook([b], now);
   if (!first || !second) return null;

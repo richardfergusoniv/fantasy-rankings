@@ -10,7 +10,7 @@ const idea = (over: Partial<TradeIdea> = {}): TradeIdea => ({
   week: { lineupBefore: 120, lineupAfter: 123.2 },
   seasonLong: { starterValueBefore: 9000, starterValueAfter: 9400, powerRankBefore: 4, powerRankAfter: 2, fillsHole: true },
   restOfSeason: { pointsDelta: 21.5, coveredWeeks: [12, 13, 14], partial: false },
-  partnerWeekDelta: -1.1, partnerRestOfSeason: { pointsDelta: -8 },
+  partnerWeekDelta: -1.1, partnerRestOfSeason: { pointsDelta: -8, partial: false }, window: "season_long",
   injuryExposure: { designatedPlayers: ["A. Whitfield"], absentPlayers: [] },
   ...over,
 });
@@ -19,7 +19,7 @@ describe("tradeIdeaDetails", () => {
   it("lays out both sides, marking the higher market value as the edge", () => {
     const { compare } = tradeIdeaDetails(idea());
     expect(compare[0]!.values).toEqual(["D. Mercer", "A. Whitfield"]);
-    expect(compare.find((r) => r.label === "Market value")).toMatchObject({ values: ["5,200", "5,600"], edge: 1 });
+    expect(compare.find((r) => r.label === "Season-long value")).toMatchObject({ values: ["5,200", "5,600"], edge: 1 });
   });
 
   it("describes what the trade does to your team and theirs", () => {
@@ -30,6 +30,11 @@ describe("tradeIdeaDetails", () => {
     expect(yours.find((r) => r.label === "Rest-of-season points")?.value).toBe("+21.5 over weeks 12–14");
     expect(yours.find((r) => r.label === "Injury designations")?.value).toBe("A. Whitfield");
     expect(theirs).toEqual([{ label: "Lineup this week", value: "−1.1" }, { label: "Rest-of-season points", value: "−8.0" }]);
+  });
+
+  it("says when the partner's rest-of-season total is missing weeks", () => {
+    const { theirs } = tradeIdeaDetails(idea({ partnerRestOfSeason: { pointsDelta: -8, partial: true } }));
+    expect(theirs[1]).toEqual({ label: "Rest-of-season points", value: "−8.0 (some weeks missing)" });
   });
 
   it("leaves out rest-of-season and injury rows when there is no data", () => {

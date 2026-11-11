@@ -1175,6 +1175,8 @@ export function App() {
     else {
       refresh.mutate();
       queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "player-news") });
+      // Trade ideas are worked out from the dashboard, so they are fetched again after a refresh.
+      queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "trade-ideas") });
     }
   };
 

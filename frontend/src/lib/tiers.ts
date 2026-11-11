@@ -66,15 +66,21 @@ export function assignTiers(values: ReadonlyArray<number | null | undefined>, op
     let previousCut = from;
     for (let part = 1; part < parts; part += 1) {
       const target = from + Math.round((length * part) / parts);
+      const partsLeft = parts - part;
       let best = -1;
       let bestDrop = -1;
+      let bestDistance = Number.POSITIVE_INFINITY;
       for (let cut = target - reach; cut <= target + reach; cut += 1) {
-        // A cut after known[cut - 1] opens a tier at known[cut].
-        if (cut - previousCut < minTierSize || to - cut < minTierSize) continue;
+        // A cut after known[cut - 1] opens a tier at known[cut]; both sides must stay within the size limits.
+        const left = cut - previousCut;
+        const right = to - cut;
+        if (left < minTierSize || left > maxTierSize || right < minTierSize || right > maxTierSize * partsLeft) continue;
         const drop = drops[cut - 1] ?? 0;
-        if (drop > bestDrop) {
+        const distance = Math.abs(cut - target);
+        if (drop > bestDrop || (drop === bestDrop && distance < bestDistance)) {
           bestDrop = drop;
           best = cut;
+          bestDistance = distance;
         }
       }
       if (best < 0) continue;

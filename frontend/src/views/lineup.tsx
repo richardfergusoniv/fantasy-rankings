@@ -158,6 +158,12 @@ function LineupAssistant({ answer, week, onAsk }: { answer: LineupAssistantAnswe
               : []),
           ]}
         />
+        {answer.slotMoves.length > 0 ? (
+          <AssistantFacts
+            title="Also move"
+            facts={answer.slotMoves.map((move) => ({ label: move.player.name, value: `${move.from} → ${move.to}` }))}
+          />
+        ) : null}
         {answer.swaps.map((swap) => {
           const emptySlot = swap.playerOut.playerId === "0";
           const outName = emptySlot ? "Empty slot" : swap.playerOut.name;

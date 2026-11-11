@@ -4,6 +4,7 @@ import type { TradeIdea } from "../../../api/_lib/trade-ideas";
 import { api } from "../api";
 import { AssistantCard, AssistantFacts, AssistantSheet, AssistantTable } from "../components/assistant-card";
 import { tradeIdeaDetails } from "./trade-idea-details";
+import { SectionError } from "../section-error";
 import { personalQueryKey, useViewerIdentity } from "../viewer-scope";
 
 /** Ideas shown above the calculator. */
@@ -67,7 +68,12 @@ export function TradeAssistant({ leagueId, week, enabled, onLoad, onAsk }: {
     retry: false,
   });
   const ideas = query.data?.ideas.slice(0, IDEAS_SHOWN) ?? [];
-  if (!enabled || ideas.length === 0) return null;
+  if (!enabled) return null;
+  // Not loaded yet (or none found): nothing to show. A failure gets a retry, because the calculator below still works without it.
+  if (query.isError && !query.data) {
+    return <SectionError compact title="Trade ideas didn’t load." onRetry={() => { void query.refetch(); }} retrying={query.isFetching} />;
+  }
+  if (ideas.length === 0) return null;
   return (
     <section className="trade-ideas" aria-label="Trade ideas from the Assistant">
       {ideas.map((idea) => (

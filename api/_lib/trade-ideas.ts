@@ -34,11 +34,14 @@ export type TradeIdea = {
   giveTotal: number;
   getTotal: number;
   week: { lineupBefore: number; lineupAfter: number };
+  /** Starter value and power rank before and after, in the league's own window (dynasty values in a dynasty league). */
   seasonLong: { starterValueBefore: number; starterValueAfter: number; powerRankBefore: number; powerRankAfter: number; fillsHole: boolean };
+  /** The window the verdict and the roster effect above are judged in. */
+  window: "season_long" | "dynasty";
   /** Lineup points over the rest of the season; null when those weeks weren't available. */
   restOfSeason: { pointsDelta: number; coveredWeeks: number[]; partial: boolean } | null;
   partnerWeekDelta: number;
-  partnerRestOfSeason: { pointsDelta: number } | null;
+  partnerRestOfSeason: { pointsDelta: number; partial: boolean } | null;
   injuryExposure: { designatedPlayers: string[]; absentPlayers: string[] } | null;
 };
 
@@ -61,10 +64,12 @@ export function toTradeIdea(suggestion: Suggestion): TradeIdea {
     giveTotal: suggestion.giveTotal,
     getTotal: suggestion.getTotal,
     week: { lineupBefore: suggestion.rosterImpact.week.lineupPointsBefore, lineupAfter: suggestion.rosterImpact.week.lineupPointsAfter },
-    seasonLong: suggestion.rosterImpact.seasonLong,
+    // A dynasty league is judged on dynasty values, like the League calculator; market totals stay season-long.
+    seasonLong: suggestion.primaryWindow === "dynasty" && suggestion.rosterImpact.dynasty ? suggestion.rosterImpact.dynasty : suggestion.rosterImpact.seasonLong,
+    window: suggestion.primaryWindow === "dynasty" && suggestion.rosterImpact.dynasty ? "dynasty" : "season_long",
     restOfSeason: ros ? { pointsDelta: ros.pointsDelta, coveredWeeks: ros.coveredWeeks, partial: ros.partial } : null,
     partnerWeekDelta: suggestion.utility.partnerUtilityDelta.weekLineupPoints,
-    partnerRestOfSeason: partnerRos ? { pointsDelta: partnerRos.pointsDelta } : null,
+    partnerRestOfSeason: partnerRos ? { pointsDelta: partnerRos.pointsDelta, partial: partnerRos.partial } : null,
     injuryExposure: suggestion.injuryExposure
       ? { designatedPlayers: suggestion.injuryExposure.designatedPlayers, absentPlayers: suggestion.injuryExposure.absentPlayers }
       : null,
@@ -87,11 +92,12 @@ export async function handleTradeIdeas(req: Request): Promise<Response> {
       return json({ ok: false, error: "League data is still loading. Try again shortly." }, 409);
     }
 
+    const isDynasty = cached.dashboard.leagues.find((league) => league.id === parsed.data.leagueId)?.seasonLongFormat.isDynasty === true;
     const ctx: ChatToolContext = {
       userId: "",
       sleeperUserId,
       dashboardPromise: Promise.resolve(cached.dashboard),
-      scoringWindow: "season_long",
+      scoringWindow: isDynasty ? "dynasty" : "season_long",
       chatDeadlineAtMs: Date.now() + BUDGET_MS,
     };
     const result = await toolSuggestTrades(ctx, { leagueId: parsed.data.leagueId, limit: IDEA_LIMIT });
