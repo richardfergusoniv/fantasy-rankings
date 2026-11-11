@@ -46,8 +46,12 @@ export type FinalizeAccuracyResult = {
   skipped: number;
   errors: number;
   snapshotsUpdated?: number;
+  /** True when the week had more rows than one call reads, so some were not looked at. */
+  truncated?: boolean;
 };
 
+/** Most rows one week's grading or First Down fill reads in a call; a week this big is reported, not silently cut short. */
+export const ACCURACY_ROW_LIMIT = 2_000;
 const WEEKLY_FETCH_CONCURRENCY = 6;
 const UPSERT_CHUNK = 40;
 
@@ -144,7 +148,7 @@ export async function finalizeProjectionAccuracy(
         opts.onlyMissing ? isNull(schema.projectionAccuracy.actualScore) : undefined,
       ),
     )
-    .limit(2_000);
+    .limit(ACCURACY_ROW_LIMIT);
 
   const dashboard = await readGlobalDashboardSnapshot().catch(() => null);
   const settingsByLeague = new Map<string, Record<string, number>>();
@@ -242,6 +246,7 @@ export async function finalizeProjectionAccuracy(
     skipped,
     errors,
     snapshotsUpdated: snapshots.updated,
+    truncated: rows.length >= ACCURACY_ROW_LIMIT,
   };
 }
 
@@ -292,6 +297,15 @@ export function weeksToBackfill(weeksWithRows: readonly number[], cursor: number
   return [...new Set(weeksWithRows)].filter((week) => week > cursor).sort((a, b) => a - b);
 }
 
+/**
+ * A week is complete only when nothing errored and every row was looked at. A week
+ * with more rows than one call reads stays pending (and the job reports not done)
+ * instead of being passed silently with rows left unfilled.
+ */
+export function backfillWeekCompleted(week: { errors: number; truncated: boolean }): boolean {
+  return week.errors === 0 && !week.truncated;
+}
+
 /** The cursor after this call: the end of the unbroken run of weeks that finished without errors. */
 export function advanceBackfillCursor(cursor: number, outcomes: ReadonlyArray<{ week: number; ok: boolean }>): number {
   let next = cursor;
@@ -309,7 +323,7 @@ const BACKFILL_BUDGET_MS = 35_000;
  * Fills First Down's projection into rows saved before it was recorded, from the
  * First Down snapshot stored for the same week. Returns how many rows it filled.
  */
-export async function fillFirstDownProjections(season: number, week: number): Promise<number> {
+export async function fillFirstDownProjections(season: number, week: number): Promise<{ filled: number; truncated: boolean }> {
   const snapshotRows = await db
     .select()
     .from(schema.vegasProjectionSnapshots)
@@ -326,13 +340,13 @@ export async function fillFirstDownProjections(season: number, week: number): Pr
       continue;
     }
   }
-  if (!snapshot) return 0;
+  if (!snapshot) return { filled: 0, truncated: false };
   const lookup = firstDownLookup(snapshot);
   const rows = await db
     .select()
     .from(schema.projectionAccuracy)
     .where(and(eq(schema.projectionAccuracy.season, season), eq(schema.projectionAccuracy.week, week), isNull(schema.projectionAccuracy.firstDownProjection)))
-    .limit(2_000);
+    .limit(ACCURACY_ROW_LIMIT);
   const updates = rows.flatMap((row) => {
     const points = lookup({ leagueId: row.leagueId, name: row.playerName, position: row.position });
     return points === null ? [] : [{ id: row.id, firstDownProjection: Math.round(points * 100) }];
@@ -344,7 +358,7 @@ export async function fillFirstDownProjections(season: number, week: number): Pr
       ),
     );
   }
-  return updates.length;
+  return { filled: updates.length, truncated: rows.length >= ACCURACY_ROW_LIMIT };
 }
 
 /**
@@ -376,7 +390,8 @@ export async function backfillProjectionAccuracy(opts: { season?: number; budget
   for (const week of weeks) {
     if (Date.now() - startedAt > budgetMs) break;
     try {
-      firstDownFilled += await fillFirstDownProjections(season, week);
+      const fill = await fillFirstDownProjections(season, week);
+      firstDownFilled += fill.filled;
       const missing = await db
         .select({ id: schema.projectionAccuracy.id })
         .from(schema.projectionAccuracy)
@@ -386,9 +401,9 @@ export async function backfillProjectionAccuracy(opts: { season?: number; budget
         const result = await finalizeProjectionAccuracy({ season, week, onlyMissing: true });
         actualsGraded += result.updated;
         errors += result.errors;
-        outcomes.push({ week, ok: result.errors === 0 });
+        outcomes.push({ week, ok: backfillWeekCompleted({ errors: result.errors, truncated: fill.truncated || result.truncated === true }) });
       } else {
-        outcomes.push({ week, ok: true });
+        outcomes.push({ week, ok: backfillWeekCompleted({ errors: 0, truncated: fill.truncated }) });
       }
       weeksProcessed.push(week);
     } catch (error) {

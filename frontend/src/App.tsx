@@ -1160,9 +1160,11 @@ export function App() {
     [dashboard, leagueDashboard],
   );
 
-  const isRefreshing = tab === "draft" ? draftRefresh.isPending : refresh.isPending;
+  // Monitor shows scores, lineups and news for every league, so it refreshes the dashboard even when the screen behind it is Draft.
+  const refreshesDraft = tab === "draft" && !showMonitor;
+  const isRefreshing = refreshesDraft ? draftRefresh.isPending : refresh.isPending;
   const refreshCurrentView = () => {
-    if (tab === "draft") draftRefresh.mutate();
+    if (refreshesDraft) draftRefresh.mutate();
     else {
       refresh.mutate();
       queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "player-news") });
