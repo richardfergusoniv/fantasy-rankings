@@ -25,13 +25,13 @@ import { DraftBetterPicks } from "./draft-better-picks";
 import { DraftRecap } from "./draft-recap";
 import { boardExcludedPlayerIds, gradedDraftFor, leagueDraftIsFinal } from "../draft-final";
 import { LoadingBlock, ListPagination } from "../components/state-blocks";
+import { assignTiers } from "../lib/tiers";
 
 type DraftRow = DraftCenterData["adp"][number] & {
   adpSource: "ffc" | "fantasycalc" | "projection";
   marketValue: number | null;
   marketRank: number | null;
   rookie: boolean;
-  tier: number;
   gap: number | null;
   injuryStatus: string | null;
   weeklyRank: number | null;
@@ -44,6 +44,9 @@ type DraftRow = DraftCenterData["adp"][number] & {
   defenseComponents?: PlayerSearchResult["defenseComponents"];
   projectionComponents?: PlayerSearchResult["projectionComponents"];
 };
+
+const TIERED_POSITIONS = ["QB", "RB", "WR", "TE"] as const;
+const boardRowKey = (row: { format: string; playerId: string | null; name: string }) => `${row.format}-${row.playerId ?? row.name}`;
 
 type DraftPlayerOpenSource = Pick<DraftRow, "playerId" | "name" | "team" | "position"> & Partial<Omit<DraftRow, "playerId" | "name" | "team" | "position">>;
 
@@ -203,7 +206,6 @@ export function DraftCenter({
       marketValue: season?.value ?? null,
       marketRank,
       rookie: season?.isRookie ?? false,
-      tier: Math.ceil(count / 10),
       gap: marketRank === null ? null : row.adp - marketRank,
       injuryStatus,
       weeklyRank: null,
@@ -239,7 +241,6 @@ export function DraftCenter({
         marketValue: row.value,
         marketRank,
         rookie: true,
-        tier: Math.ceil(count / 10),
         gap: null,
         injuryStatus: injuryByPlayer.get(row.playerId) ?? injuryByName.get(comparablePlayerName(row.name)) ?? null,
         weeklyRank: null,
@@ -278,6 +279,18 @@ export function DraftCenter({
     if (!completedDraft || liveDraft) return available;
     return available.sort((a, b) => (b.marketValue ?? -1) - (a.marketValue ?? -1));
   }, [boardExcluded, completedDraft, effectiveDraftPosition, liveDraft, query, rows]);
+  // Tiers are per position, over the players still available, from market value (a drop-off in value starts a tier).
+  const tierByRowKey = useMemo(() => {
+    const byKey = new Map<string, number>();
+    for (const position of TIERED_POSITIONS) {
+      const pool = rows
+        .filter((row) => row.position === position && !boardExcluded.has(row.playerId ?? ""))
+        .sort((a, b) => (b.marketValue ?? -1) - (a.marketValue ?? -1) || a.adp - b.adp);
+      const tiers = assignTiers(pool.map((row) => row.marketValue));
+      pool.forEach((row, index) => byKey.set(boardRowKey(row), tiers[index] ?? 1));
+    }
+    return byKey;
+  }, [boardExcluded, rows]);
   const draftPositionIsEligible = (value: string) => value !== "K" && value !== "DEF" || league.rankingPositions.includes(value as "K" | "DEF");
   const seenOwnPickIds = new Set<string>();
   const ownPicks = syncedLeagueDrafts.flatMap((draft) => draft.ownRosterId === null ? [] : draft.picks.filter((pick) => pick.rosterId === draft.ownRosterId)).filter((pick) => {
@@ -378,38 +391,62 @@ export function DraftCenter({
     </div>
   );
 
-  const draftBoard = loading ? <LoadingBlock label="Loading draft values…" /> : filteredRows.length > 0 ? (
-    <div className={`draft-board data-table-frame${draftIsFinal ? " is-final" : ""}`} role="list" aria-label="Draft player board">
-      <div className="draft-row draft-table-head" aria-hidden="true">
-        <span aria-hidden="true">Player</span>
-        <span aria-hidden="true">Pos</span>
-        <span aria-hidden="true">Val</span>
-        <span className="sr-only">Actions</span>
+  const renderBoardRow = (row: DraftRow) => {
+    const secondary = row.team?.trim() || null;
+    const isSelected = Boolean(linkedPlayerId && row.playerId === linkedPlayerId);
+    return (
+      <div className={`draft-row${isSelected ? " is-player-selected" : ""}`} role="listitem" key={boardRowKey(row)}>
+        <button type="button" className={`draft-player-open${secondary ? "" : " is-single-line"}`} onClick={() => openDraftPlayer(row)} disabled={!row.playerId} aria-label={`View ${row.name} details and news${isSelected ? ", selected" : ""}`}>
+          <span className="draft-player-name-line">
+            <strong>{row.name}</strong>
+            {isSelected ? <span className="player-selected-chip">Selected</span> : null}
+            {row.rookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" /> : null}
+          </span>
+          {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
+        </button>
+        <span><span className="sr-only">Position </span>{row.position === "DEF" ? "DST" : row.position}</span>
+        <span><strong>{row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{formatWhole(row.marketValue)}</>}</strong></span>
+        {draftIsFinal ? null : <span className="draft-row-actions">
+          <button type="button" className="draft-icon-button" disabled={!row.playerId} onClick={() => row.playerId && addToMyTeam(row.playerId)} aria-label={`Add ${row.name} to my team`} title="Add to my team"><Plus aria-hidden="true" /></button>
+          {liveDraft ? null : <button type="button" className="draft-icon-button draft-taken-button" disabled={!row.playerId} onClick={() => row.playerId && markTaken(row.playerId)} aria-label={`Drafted by another team, ${row.name}`} title="Drafted by another team"><UserX aria-hidden="true" /></button>}
+        </span>}
       </div>
-      {filteredRows.slice(0, visibleDraftCount).map((row) => {
-        const secondary = row.team?.trim() || null;
-        const isSelected = Boolean(linkedPlayerId && row.playerId === linkedPlayerId);
-        return (
-          <div className={`draft-row${isSelected ? " is-player-selected" : ""}`} role="listitem" key={`${row.format}-${row.playerId ?? row.name}`}>
-            <button type="button" className={`draft-player-open${secondary ? "" : " is-single-line"}`} onClick={() => openDraftPlayer(row)} disabled={!row.playerId} aria-label={`View ${row.name} details and news${isSelected ? ", selected" : ""}`}>
-              <span className="draft-player-name-line">
-                <strong>{row.name}</strong>
-                {isSelected ? <span className="player-selected-chip">Selected</span> : null}
-                {row.rookie ? <DesignationBadge code="R" label="Rookie" title="Rookie" /> : null}
-              </span>
-              {secondary ? <small className="draft-player-meta">{secondary}</small> : null}
-            </button>
-            <span><span className="sr-only">Position </span>{row.position === "DEF" ? "DST" : row.position}</span>
-            <span><strong>{row.marketValue === null ? <><span className="sr-only">Market value not listed</span><span aria-hidden="true">—</span></> : <><span className="sr-only">Market value </span>{formatWhole(row.marketValue)}</>}</strong></span>
-            {draftIsFinal ? null : <span className="draft-row-actions">
-              <button type="button" className="draft-icon-button" disabled={!row.playerId} onClick={() => row.playerId && addToMyTeam(row.playerId)} aria-label={`Add ${row.name} to my team`} title="Add to my team"><Plus aria-hidden="true" /></button>
-              {liveDraft ? null : <button type="button" className="draft-icon-button draft-taken-button" disabled={!row.playerId} onClick={() => row.playerId && markTaken(row.playerId)} aria-label={`Drafted by another team, ${row.name}`} title="Drafted by another team"><UserX aria-hidden="true" /></button>}
-            </span>}
-          </div>
-        );
-      })}
-      <div role="listitem"><ListPagination className="draft-list-pagination" hideCount shown={visibleDraftCount} total={filteredRows.length} step={160} onMore={() => setVisibleDraftCount((count) => count + 160)} /></div>
+    );
+  };
+
+  const visibleBoardRows = filteredRows.slice(0, visibleDraftCount);
+  const boardHead = (
+    <div className="draft-row draft-table-head" aria-hidden="true">
+      <span aria-hidden="true">Player</span>
+      <span aria-hidden="true">Pos</span>
+      <span aria-hidden="true">Val</span>
+      <span className="sr-only">Actions</span>
     </div>
+  );
+  // With one position chosen, the board is one table per tier; "All" and "Rookies" mix positions, so they stay one table.
+  const tieredBoard = (TIERED_POSITIONS as readonly string[]).includes(effectiveDraftPosition);
+  const tierTables = tieredBoard
+    ? [...new Set(visibleBoardRows.map((row) => tierByRowKey.get(boardRowKey(row)) ?? 1))].sort((x, y) => x - y)
+    : [];
+  const draftBoard = loading ? <LoadingBlock label="Loading draft values…" /> : filteredRows.length > 0 ? (
+    tieredBoard ? (
+      <div className="draft-tiers">
+        {tierTables.map((tier, tableIndex) => (
+          <div key={tier} className={`draft-board data-table-frame draft-tier${draftIsFinal ? " is-final" : ""}`} role="list" aria-label={`Tier ${tier}`}>
+            <div className="draft-tier-head" role="presentation">Tier {tier}</div>
+            {tableIndex === 0 ? boardHead : null}
+            {visibleBoardRows.filter((row) => (tierByRowKey.get(boardRowKey(row)) ?? 1) === tier).map(renderBoardRow)}
+            {tableIndex === tierTables.length - 1 ? <div role="listitem"><ListPagination className="draft-list-pagination" hideCount shown={visibleDraftCount} total={filteredRows.length} step={160} onMore={() => setVisibleDraftCount((count) => count + 160)} /></div> : null}
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div className={`draft-board data-table-frame${draftIsFinal ? " is-final" : ""}`} role="list" aria-label="Draft player board">
+        {boardHead}
+        {visibleBoardRows.map(renderBoardRow)}
+        <div role="listitem"><ListPagination className="draft-list-pagination" hideCount shown={visibleDraftCount} total={filteredRows.length} step={160} onMore={() => setVisibleDraftCount((count) => count + 160)} /></div>
+      </div>
+    )
   ) : <div className="empty-inline">No available players match these filters.</div>;
 
   function openDraftPlayer(player: DraftPlayerOpenSource) {

@@ -53,6 +53,7 @@ import {
 import { formatRecord } from "../league-team-card";
 import { leaguePowerTeamForPlayer } from "../league-roster";
 import { WindowVirtualList } from "../virtual-list";
+import { assignTiers, groupByTier } from "../lib/tiers";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { perGame, perGameRank } from "./team-per-game";
 import { ListPagination } from "../components/state-blocks";
@@ -906,6 +907,11 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
         : a.rank - b.rank);
   }, [availableOnly, dashboard.seasonLongRankings, effectiveHorizon, effectivePosition, includedPositions, isSeasonLong, league.rankingField, league.rosteredPlayerIds, league.seasonLongFormat.key, leagueDefenses, leagueRankings, powerTeamByPlayerId, rookiePlayerIds, rosterTeamByPlayer, seasonFormatKey, weeklyContextByPlayerId]);
   const visibleRows = rows.slice(0, visibleRowCount);
+  // Tiers come from the whole list, so paging in more rows never moves a tier line.
+  const tierGroups = useMemo(() => {
+    const tiers = assignTiers(rows.map((row) => row.projection));
+    return groupByTier<(typeof visibleRows)[number]>(visibleRows, tiers);
+  }, [rows, visibleRowCount]);
   // One scale for every range bar in the list, so bars compare across rows.
   const rangeMax = useMemo(() => rangeDomain(rows.map((row) => row.projectionRange)), [rows]);
   // Waivers: Sleeper adds in the last 24 hours, each bar scaled to the most-added player in the list.
@@ -1029,9 +1035,12 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
             options={rankingHorizonOptions}
           />
           <div className="ranking-list">
-            <WindowVirtualList count={visibleRows.length} estimateSize={RANKINGS_ROW_HEIGHT} getKey={(index) => visibleRows[index]?.key ?? index}>
+            {tierGroups.map((group) => (
+            <section key={group.tier} className="ranking-tier" aria-labelledby={`ranking-tier-${group.tier}`}>
+            <h3 id={`ranking-tier-${group.tier}`} className="ranking-tier-head">Tier {group.tier}</h3>
+            <WindowVirtualList count={group.items.length} estimateSize={RANKINGS_ROW_HEIGHT} getKey={(index) => group.items[index]?.key ?? index}>
             {(index) => {
-              const row = visibleRows[index];
+              const row = group.items[index];
               if (!row) return null;
               const isMine = !availableOnly && myRoster.has(row.key);
               const detail = allPlayerDetailsById.get(row.key) ?? null;
@@ -1147,6 +1156,8 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
               );
             }}
             </WindowVirtualList>
+            </section>
+            ))}
             {rows.length > 0 && visibleRowCount < rows.length ? (
               <ListPagination shown={visibleRowCount} total={rows.length} step={120} onMore={() => setVisibleRowCount((count) => count + 120)} />
             ) : null}

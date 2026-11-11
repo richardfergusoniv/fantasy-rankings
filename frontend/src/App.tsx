@@ -46,12 +46,13 @@ import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPos
 import { withStreamedAnalytics } from "./dashboard-analytics";
 import { isSectionWaiting, sectionBuildFailed, shouldShowProgressiveShell } from "./dashboard-loading";
 import { FeatureErrorBoundary } from "./error-boundary";
-import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, serializeDashboardSearch, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
+import { CLEARED_TOOL_SELECTIONS, DEFAULT_DASHBOARD_TAB, effectiveTradeMode, serializeDashboardSearch, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
 import { createPlayerResolver, type DashboardPlayerRow, type PlayerLinkResolver } from "./tool-player-link";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
 import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
+import { MonitorHome } from "./views/monitor-home";
 import { supabase } from "./supabase";
 import { personalQueryKey, snapshotViewer, useViewerIdentity } from "./viewer-scope";
 import { useDashboardUrl } from "./use-dashboard-url";
@@ -676,6 +677,11 @@ export function App() {
   const [commandBarOpen, setCommandBarOpen] = useState(false);
   const [failedResyncAsOf, setFailedResyncAsOf] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // The app opens on Monitor (every league at a glance) unless the link points at a specific screen or player.
+  const [showMonitor, setShowMonitor] = useState(() => {
+    const { tab: urlTab, playerId, matchup } = dashboardUrl.state;
+    return urlTab === DEFAULT_DASHBOARD_TAB && !playerId && !matchup;
+  });
   const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
   const [browserViewerId, setBrowserViewerId] = useState<string | null | undefined>(undefined);
   // Tagged with the Sleeper account it was read for: after an account switch
@@ -1300,6 +1306,38 @@ export function App() {
     );
   }
 
+  if (showMonitor) {
+    return (
+      <div className="app-shell">
+        <SkipLink />
+        <SafeAreaTopScrim backgroundColor="var(--bg)" />
+        <div role="region" aria-label="League and week" className="league-sticky">
+          <div className="week-line">
+            <div><span className="live-dot" /> NFL {dashboard.season} · Week {dashboard.week}</div>
+            <div className="week-actions">
+              {supabase ? <AccountMenu /> : null}
+              <ThemeToggle />
+              <button className="refresh-button" onClick={refreshCurrentView} disabled={isRefreshing} aria-label="Refresh scores and rankings"><RefreshIcon spinning={isRefreshing} /></button>
+            </div>
+          </div>
+          <DashboardPartialNotes dashboard={dashboard} />
+        </div>
+        <div className="app-workspace">
+          <main id="main-content" tabIndex={-1}>
+            <h1 className="sr-only">Monitor</h1>
+            <MonitorHome
+              dashboard={dashboard}
+              onOpenLeague={(id) => {
+                chooseLeague(id);
+                setShowMonitor(false);
+              }}
+            />
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   const activeDashboard = leagueDashboard ?? dashboard;
   const selectedPlayerId = dashboardUrl.state.playerId;
   const rosterTeam = playerHistory.current ? leaguePowerTeamForPlayer(league, playerHistory.current.playerId) : null;
@@ -1434,6 +1472,7 @@ export function App() {
           <div className="week-line">
             <div><span className="live-dot" /> NFL {dashboard.season} · Week {dashboard.week}</div>
             <div className="week-actions">
+            <button type="button" className="all-leagues-button" onClick={() => setShowMonitor(true)}>All leagues</button>
             <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />
             {supabase ? <AccountMenu /> : null}
             <ThemeToggle />

@@ -461,3 +461,9 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 .news-card-modal .news-media .news-media-image img,
 .news-card-modal .news-media .news-media-video { display: block; width: 100%; max-height: 320px; object-fit: contain; border-radius: var(--radius); border: 1px solid var(--hairline); background: var(--surface-2); }
 .news-card-modal .news-media .news-media-image { min-height: 0; }
+
+/* Rankings and Waivers: each tier is its own table. */
+.ranking-list { display: grid; gap: 12px; border: 0; border-radius: 0; background: transparent; overflow: visible; }
+.ranking-tier { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--card); overflow: clip; }
+.ranking-tier-head { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--row-divider); background: var(--secondary); color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
+.ranking-tier .ranking-row:last-child { border-bottom: 0; }
