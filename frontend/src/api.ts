@@ -14,6 +14,7 @@ import type { SavedChartView, SavedChartViewInput } from "../../api/chart-views"
 import type { Dashboard, DashboardSection } from "../../api/_lib/dashboard-schemas";
 import type { DraftCenter } from "../../api/draft-center";
 import type { DraftGradeResponse } from "../../api/_lib/draft-grade";
+import type { TradeIdeasResponse } from "../../api/_lib/trade-ideas";
 import type { PfnTables, TeamWeekStats } from "../../api/_lib/pfn-tables";
 import type { PlayerNews } from "../../api/player-news";
 import type { LeagueWeeklyPerformance } from "../../api/_lib/league-weekly-performance";
@@ -151,6 +152,9 @@ export const api = {
   getDraftGrade: (args: { leagueId: string; kind?: "rookie" | "startup"; season?: string }): Promise<DraftGradeResponse> =>
     // Query param must be draftKind, not kind: /api/data/[kind] injects kind=draft-grade.
     request(`/api/data/draft-grade${buildQuery({ leagueId: args.leagueId, draftKind: args.kind, season: args.season })}`),
+
+  getTradeIdeas: (args: { leagueId: string }): Promise<TradeIdeasResponse> =>
+    request(`/api/data/trade-ideas${buildQuery({ leagueId: args.leagueId })}`),
 
   listSavedChartViews: (_args?: EmptyArgs): Promise<{ views: SavedChartView[] }> => request("/api/chart-views"),
 

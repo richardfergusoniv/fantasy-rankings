@@ -45,6 +45,8 @@ import { useUnsavedLeaveWarning } from "../unsaved-input";
 import { formatWhole } from "../lib/format-number";
 import { CloseGlyph, MoveTriangle } from "../components/glyphs";
 import { EmptyState } from "../components/state-blocks";
+import { TradeAssistant } from "./trade-assistant";
+import type { TradeIdea } from "../../../api/_lib/trade-ideas";
 
 export function TradeAssetRow({ asset, onRemove, onOpenPlayer }: { asset: TradeAsset; onRemove: () => void; onOpenPlayer: (playerId: string) => void }) {
   return (
@@ -1018,6 +1020,7 @@ export function TradeCalculator({
   onOpenPlayer,
   initialPartnerRosterId = null,
   onPartnerSelect,
+  onAsk,
 }: {
   dashboard: Dashboard;
   league: League;
@@ -1028,7 +1031,11 @@ export function TradeCalculator({
   initialPartnerRosterId?: number | null;
   /** Called when the user picks or clears a partner, so the URL can follow. */
   onPartnerSelect?: (rosterId: number | null) => void;
+  /** Hands a question to the Ask sheet (an Assistant card's follow-up). */
+  onAsk?: (question: string) => void;
 }) {
+  // An idea loaded from the Assistant: the partner change below clears the "get" side, so the players wait here until it lands.
+  const pendingIdeaRef = useRef<{ giveIds: string[]; getIds: string[] } | null>(null);
   const [giveIds, setGiveIds] = useState<string[]>([]);
   const [getIds, setGetIds] = useState<string[]>([]);
   useUnsavedLeaveWarning(giveIds.length + getIds.length > 0);
@@ -1089,7 +1096,10 @@ export function TradeCalculator({
   // The URL is the source of truth while this tool is open (a new link, or Back).
   useEffect(() => {
     setTheirRosterId(initialPartnerRosterId);
-    setGetIds([]);
+    const pending = pendingIdeaRef.current;
+    pendingIdeaRef.current = null;
+    setGetIds(pending?.getIds ?? []);
+    if (pending) setGiveIds(pending.giveIds);
   }, [initialPartnerRosterId]);
 
   useEffect(() => {
@@ -1155,6 +1165,19 @@ export function TradeCalculator({
     const setter = side === "give" ? setGiveIds : setGetIds;
     setter((ids) => ids.includes(id) ? ids.filter((row) => row !== id) : [...ids, id]);
   };
+  const loadIdea = (idea: TradeIdea) => {
+    if (idea.partnerRosterId === null) return;
+    const ids = { giveIds: idea.give.map((asset) => asset.playerId), getIds: idea.get.map((asset) => asset.playerId) };
+    if (idea.partnerRosterId === theirRosterId || !onPartnerSelect) {
+      setTheirRosterId(idea.partnerRosterId);
+      setGiveIds(ids.giveIds);
+      setGetIds(ids.getIds);
+      return;
+    }
+    pendingIdeaRef.current = ids;
+    setTheirRosterId(idea.partnerRosterId);
+    onPartnerSelect(idea.partnerRosterId);
+  };
   return (
     <section className="trade-view">
       <h2 className="sr-only">Trade</h2>
@@ -1183,6 +1206,8 @@ export function TradeCalculator({
           />
         ) : null}
       </div>
+
+      <TradeAssistant leagueId={league.id} week={dashboard.week} enabled={tradeMode === "league"} onLoad={loadIdea} onAsk={onAsk} />
 
       {tradeMode === "history" ? (
         <TradeHistoryView dashboard={dashboard} league={league} />

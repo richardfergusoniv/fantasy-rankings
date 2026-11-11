@@ -30,3 +30,12 @@
 .assistant-facts dd { margin: 0; font-size: var(--type-body); font-weight: 500; text-align: right; }
 .assistant-card-position { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .assistant-card-detail { color: var(--dim); font-size: var(--type-caption); }
+
+/* Trade ideas above the calculator. */
+.trade-ideas { display: grid; gap: 12px; margin-bottom: 12px; }
+.trade-idea { display: grid; gap: 8px; }
+.assistant-card-trade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.assistant-card-trade > span { display: grid; min-width: 0; }
+.assistant-card-trade small { color: var(--dim); font-size: var(--type-caption); }
+.assistant-card-trade strong { font-size: var(--type-body); font-weight: 700; overflow-wrap: anywhere; }
+.trade-idea .trade-idea-load { min-height: 44px; border: 0; border-radius: var(--radius); background: var(--action); color: var(--on-accent); font: inherit; font-size: var(--type-control); font-weight: 700; cursor: pointer; }

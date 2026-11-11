@@ -1638,6 +1638,7 @@ export function App() {
                   onOpenPlayer={(playerId) => { openDashboardPlayer(playerId); }}
                   initialPartnerRosterId={parsePartnerRosterId(dashboardUrl.state.tradePartner)}
                   onPartnerSelect={(rosterId) => dashboardUrl.commit({ tradePartner: rosterId === null ? null : String(rosterId) })}
+                  onAsk={askWithQuestion}
                 />
               </Suspense>
             )
