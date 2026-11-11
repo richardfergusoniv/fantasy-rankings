@@ -1,8 +1,5 @@
 /* Monitor: the page the app opens on, one row per league. */
 .league-monitor { display: grid; gap: 12px; }
-.league-monitor-intro { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 14px 16px; }
-.league-monitor-intro h2 { margin: 0; font-size: var(--type-display); line-height: 1.05; font-weight: 700; letter-spacing: -.02em; }
-.league-monitor-intro span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: right; }
 .league-monitor-list { display: grid; border-top: 1px solid var(--hairline); }
 .league-monitor-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; min-height: 56px; padding: 10px 2px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
 .league-monitor-row:hover { background: var(--secondary); }
