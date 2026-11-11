@@ -98,6 +98,7 @@ import {
   projectionBoardIsUsable,
   type SleeperProjection,
 } from "./player-projection-merge.js";
+import { firstDownLookup } from "./first-down-points.js";
 import { appendDailyValueSnapshots } from "./player-value-history.js";
 import {
   isActiveNflRosterPlayer,
@@ -820,7 +821,8 @@ async function loadDashboardVegasLines(): Promise<z.infer<typeof vegasLineSchema
   }
 }
 
-async function saveProjectionAccuracy(dashboard: Dashboard): Promise<void> {
+async function saveProjectionAccuracy(dashboard: Dashboard, firstDownSnapshot: VegasProjectionPayload | null = null): Promise<void> {
+  const firstDownPoints = firstDownLookup(firstDownSnapshot);
   const vegasById = new Map(dashboard.rankings.map((row) => [`${row.leagueId}:${row.playerId}`, row]));
   for (const league of dashboard.leagues) {
     const playerRows = [
@@ -845,6 +847,8 @@ async function saveProjectionAccuracy(dashboard: Dashboard): Promise<void> {
         !isPpfdLeague && gamePhase === "final" && player.actual !== null
           ? Math.round(player.actual * 100)
           : null;
+      // First Down's projection for the same player in this league's scoring, saved beside the props one.
+      const firstDown = firstDownPoints({ leagueId: league.id, name: player.name, position: player.position, team: player.team });
       return [{
         id: `${dashboard.season}:${dashboard.week}:${league.id}:${player.playerId}`,
         season: dashboard.season,
@@ -855,6 +859,7 @@ async function saveProjectionAccuracy(dashboard: Dashboard): Promise<void> {
         playerName: player.name,
         position: player.position,
         vegasProjection: Math.round(vegasProjection * 100),
+        firstDownProjection: firstDown === null ? null : Math.round(firstDown * 100),
         actualScore,
         capturedAt: new Date(dashboard.asOf),
         // Used only for conflict-update branching below (not a DB column).
@@ -884,6 +889,8 @@ async function saveProjectionAccuracy(dashboard: Dashboard): Promise<void> {
             set: {
               scoring: dbRow.scoring,
               vegasProjection: dbRow.vegasProjection,
+              // Keep a saved First Down projection when this build has no First Down board.
+              ...(dbRow.firstDownProjection !== null ? { firstDownProjection: dbRow.firstDownProjection } : {}),
               capturedAt: dbRow.capturedAt,
             },
           });
@@ -1836,7 +1843,7 @@ export async function buildUserDashboard(
   // Projection-accuracy telemetry is best-effort: a failed write must not
   // fail the user-facing build (the original action let it throw).
   try {
-    await saveProjectionAccuracy(dashboard);
+    await saveProjectionAccuracy(dashboard, firstDownProjectionSnapshot);
   } catch (error) {
     console.error("[dashboard-build] saveProjectionAccuracy failed", error);
   }

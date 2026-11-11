@@ -4,10 +4,12 @@
  * No new Vercel function.
  */
 
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, lt } from "drizzle-orm";
 import { readGlobalDashboardSnapshot } from "./dashboard-build.js";
 import { db, schema } from "./db.js";
 import { scoreProjectedPlayerStats } from "./fantasy-scoring.js";
+import { firstDownLookup } from "./first-down-points.js";
+import { vegasProjectionPayloadSchema } from "./ingest-helpers.js";
 import { finalizeScoringSnapshotActuals } from "./scoring-jobs.js";
 import {
   DYNASTICAL_CUCKS_LEAGUE_ID,
@@ -120,7 +122,7 @@ async function flushAccuracyUpdates(
  * player_value_snapshots. Also copies finals onto scoring_snapshots.
  */
 export async function finalizeProjectionAccuracy(
-  opts: { season?: number; week?: number } = {},
+  opts: { season?: number; week?: number; /** Only grade rows that have no actual yet (a backfill). */ onlyMissing?: boolean } = {},
 ): Promise<FinalizeAccuracyResult> {
   let season = opts.season;
   let week = opts.week;
@@ -138,6 +140,7 @@ export async function finalizeProjectionAccuracy(
       and(
         eq(schema.projectionAccuracy.season, season),
         eq(schema.projectionAccuracy.week, week),
+        opts.onlyMissing ? isNull(schema.projectionAccuracy.actualScore) : undefined,
       ),
     )
     .limit(2_000);
@@ -238,5 +241,126 @@ export async function finalizeProjectionAccuracy(
     skipped,
     errors,
     snapshotsUpdated: snapshots.updated,
+  };
+}
+
+
+export type BackfillAccuracyResult = {
+  ok: boolean;
+  job: "finalize-accuracy-backfill";
+  season: number;
+  /** Weeks graded or filled in this call, oldest first. */
+  weeksProcessed: number[];
+  /** Weeks that still have rows without an actual; call again to continue. */
+  weeksRemaining: number[];
+  actualsGraded: number;
+  firstDownFilled: number;
+  errors: number;
+  /** True when no week before the current one is waiting to be graded. */
+  done: boolean;
+};
+
+/** Start no new week once this much of the budget is spent: one week's Sleeper loads take 10-30 seconds. */
+const BACKFILL_BUDGET_MS = 35_000;
+
+/**
+ * Fills First Down's projection into rows saved before it was recorded, from the
+ * First Down snapshot stored for the same week. Returns how many rows it filled.
+ */
+export async function fillFirstDownProjections(season: number, week: number): Promise<number> {
+  const snapshotRows = await db
+    .select()
+    .from(schema.vegasProjectionSnapshots)
+    .where(and(eq(schema.vegasProjectionSnapshots.season, season), eq(schema.vegasProjectionSnapshots.week, week)));
+  let snapshot: ReturnType<typeof vegasProjectionPayloadSchema.parse> | null = null;
+  for (const row of snapshotRows.sort((a, b) => b.builtAt.getTime() - a.builtAt.getTime())) {
+    try {
+      const payload = vegasProjectionPayloadSchema.parse(JSON.parse(row.payload));
+      if (payload.source === "first_down") {
+        snapshot = payload;
+        break;
+      }
+    } catch {
+      continue;
+    }
+  }
+  if (!snapshot) return 0;
+  const lookup = firstDownLookup(snapshot);
+  const rows = await db
+    .select()
+    .from(schema.projectionAccuracy)
+    .where(and(eq(schema.projectionAccuracy.season, season), eq(schema.projectionAccuracy.week, week), isNull(schema.projectionAccuracy.firstDownProjection)))
+    .limit(2_000);
+  const updates = rows.flatMap((row) => {
+    const points = lookup({ leagueId: row.leagueId, name: row.playerName, position: row.position });
+    return points === null ? [] : [{ id: row.id, firstDownProjection: Math.round(points * 100) }];
+  });
+  for (let index = 0; index < updates.length; index += UPSERT_CHUNK) {
+    await Promise.all(
+      updates.slice(index, index + UPSERT_CHUNK).map((update) =>
+        db.update(schema.projectionAccuracy).set({ firstDownProjection: update.firstDownProjection }).where(eq(schema.projectionAccuracy.id, update.id)),
+      ),
+    );
+  }
+  return updates.length;
+}
+
+/**
+ * Catches up every finished week of the season: grades rows that never got an
+ * actual and fills in First Down's projection. Oldest week first, within a time
+ * budget, so a call that runs out of time can simply be repeated.
+ */
+export async function backfillProjectionAccuracy(opts: { season?: number; budgetMs?: number } = {}): Promise<BackfillAccuracyResult> {
+  const startedAt = Date.now();
+  const budgetMs = opts.budgetMs ?? BACKFILL_BUDGET_MS;
+  const state = await readNflState(true);
+  const season = opts.season ?? state.season;
+  // The current week is still being played; the Tuesday job grades it once it is over.
+  const finishedBefore = season === state.season ? state.week : 19;
+
+  const weekRows = await db
+    .selectDistinct({ week: schema.projectionAccuracy.week })
+    .from(schema.projectionAccuracy)
+    .where(and(eq(schema.projectionAccuracy.season, season), lt(schema.projectionAccuracy.week, finishedBefore)))
+    .orderBy(asc(schema.projectionAccuracy.week));
+  const weeks = weekRows.map((row) => row.week);
+
+  const weeksProcessed: number[] = [];
+  let actualsGraded = 0;
+  let firstDownFilled = 0;
+  let errors = 0;
+  for (const week of weeks) {
+    if (Date.now() - startedAt > budgetMs) break;
+    try {
+      firstDownFilled += await fillFirstDownProjections(season, week);
+      const missing = await db
+        .select({ id: schema.projectionAccuracy.id })
+        .from(schema.projectionAccuracy)
+        .where(and(eq(schema.projectionAccuracy.season, season), eq(schema.projectionAccuracy.week, week), isNull(schema.projectionAccuracy.actualScore)))
+        .limit(1);
+      if (missing.length > 0) {
+        const result = await finalizeProjectionAccuracy({ season, week, onlyMissing: true });
+        actualsGraded += result.updated;
+        errors += result.errors;
+      }
+      weeksProcessed.push(week);
+    } catch (error) {
+      console.error("[finalize-accuracy] backfill failed for week", week, error instanceof Error ? error.message : error);
+      errors += 1;
+    }
+  }
+
+  const unprocessed = weeks.filter((week) => !weeksProcessed.includes(week));
+  return {
+    ok: errors === 0,
+    job: "finalize-accuracy-backfill",
+    season,
+    weeksProcessed,
+    weeksRemaining: unprocessed,
+    actualsGraded,
+    firstDownFilled,
+    errors,
+    // Rows left without an actual after grading are players who didn't play (no stat line), so only unprocessed weeks count.
+    done: unprocessed.length === 0,
   };
 }
