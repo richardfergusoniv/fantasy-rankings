@@ -10,6 +10,7 @@ import {
   toolLinkSearch,
   waiversSearchPreservingContext,
   type DashboardUrlState,
+  opensOnMonitor,
 } from "./dashboard-url";
 
 function state(patch: Partial<DashboardUrlState> = {}): DashboardUrlState {
@@ -218,5 +219,19 @@ describe("dashboard URL state", () => {
       expect(toolLinkSearch(state({ matchup: final }), { tab: "monitor", gameLinesTeam: "CAR" })).toBe("?tab=monitor&gt=CAR");
       expect(CLEARED_TOOL_SELECTIONS.matchup).toBeNull();
     });
+  });
+});
+
+describe("opensOnMonitor", () => {
+  it("opens on Monitor for the plain address or a league-only link", () => {
+    expect(opensOnMonitor("")).toBe(true);
+    expect(opensOnMonitor("?league=123")).toBe(true);
+  });
+
+  it("goes where a link points, including an explicit Matchup tab", () => {
+    expect(opensOnMonitor("?tab=team&league=123")).toBe(false);
+    expect(opensOnMonitor("?tab=waivers")).toBe(false);
+    expect(opensOnMonitor("?player=4046")).toBe(false);
+    expect(opensOnMonitor("?mu=KC.LV.vs.pregame")).toBe(false);
   });
 });

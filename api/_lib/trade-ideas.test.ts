@@ -3,6 +3,7 @@ import { toTradeIdea } from "./trade-ideas.js";
 
 const suggestion = (over: Record<string, unknown> = {}) => ({
   partner: "Taco Tuesday",
+  partnerRosterId: 7,
   give: [{ playerId: "g1", name: "D. Mercer", position: "RB", value: 5200, teamName: "Me" }],
   get: [{ playerId: "t1", name: "A. Whitfield", position: "WR", value: 5000, teamName: "Taco Tuesday" }],
   giveTotal: 5200, getTotal: 5000, primaryLabel: "Good for you", primaryScore: 71,
@@ -20,7 +21,7 @@ const suggestion = (over: Record<string, unknown> = {}) => ({
 
 describe("toTradeIdea", () => {
   it("keeps only what the card and sheet show", () => {
-    const idea = toTradeIdea(suggestion(), 7);
+    const idea = toTradeIdea(suggestion());
     expect(idea.partnerRosterId).toBe(7);
     expect(idea.give).toEqual([{ playerId: "g1", name: "D. Mercer", position: "RB", value: 5200 }]);
     expect(idea.verdict).toBe("Good for you");
@@ -31,11 +32,16 @@ describe("toTradeIdea", () => {
     expect(idea.injuryExposure).toEqual({ designatedPlayers: ["A. Whitfield"], absentPlayers: [] });
   });
 
+  it("keeps the roster id the finder worked from when two teams share a name", () => {
+    expect(toTradeIdea(suggestion({ partner: "Same Name", partnerRosterId: 3 })).partnerRosterId).toBe(3);
+    expect(toTradeIdea(suggestion({ partner: "Same Name", partnerRosterId: 9 })).partnerRosterId).toBe(9);
+  });
+
   it("handles missing rest-of-season and injury data", () => {
     const base = suggestion() as unknown as { utility: { yourUtilityDelta: Record<string, unknown>; partnerUtilityDelta: Record<string, unknown> } };
     base.utility.yourUtilityDelta.restOfSeason = null;
     base.utility.partnerUtilityDelta.restOfSeason = undefined;
-    const idea = toTradeIdea({ ...base, injuryExposure: null } as never, null);
+    const idea = toTradeIdea({ ...base, partnerRosterId: null, injuryExposure: null } as never);
     expect(idea.restOfSeason).toBeNull();
     expect(idea.partnerRestOfSeason).toBeNull();
     expect(idea.injuryExposure).toBeNull();

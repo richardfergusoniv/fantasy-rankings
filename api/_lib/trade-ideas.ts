@@ -47,12 +47,12 @@ export type TradeIdeasResponse = { leagueId: string; needs: string[]; ideas: Tra
 type Suggestion = Extract<Awaited<ReturnType<typeof toolSuggestTrades>>, { ok: true }>["suggestions"][number];
 
 /** Trims a finder suggestion to what the card and its sheet show. */
-export function toTradeIdea(suggestion: Suggestion, partnerRosterId: number | null): TradeIdea {
+export function toTradeIdea(suggestion: Suggestion): TradeIdea {
   const ros = suggestion.utility.yourUtilityDelta.restOfSeason ?? null;
   const partnerRos = suggestion.utility.partnerUtilityDelta.restOfSeason ?? null;
   const asset = (a: Suggestion["give"][number]): TradeIdeaAsset => ({ playerId: a.playerId, name: a.name, position: a.position, value: a.value });
   return {
-    partnerRosterId,
+    partnerRosterId: suggestion.partnerRosterId,
     partner: suggestion.partner,
     give: suggestion.give.map(asset),
     get: suggestion.get.map(asset),
@@ -97,12 +97,10 @@ export async function handleTradeIdeas(req: Request): Promise<Response> {
     const result = await toolSuggestTrades(ctx, { leagueId: parsed.data.leagueId, limit: IDEA_LIMIT });
     if (!result.ok) return json({ ok: false, error: result.error }, 404);
 
-    const league = cached.dashboard.leagues.find((item) => item.id === parsed.data.leagueId);
-    const rosterIdByTeamName = new Map((league?.tradeTeams ?? []).map((team) => [team.teamName, team.rosterId] as const));
     const body: TradeIdeasResponse = {
       leagueId: parsed.data.leagueId,
       needs: [...result.myNeeds],
-      ideas: result.suggestions.map((suggestion) => toTradeIdea(suggestion, rosterIdByTeamName.get(suggestion.partner) ?? null)),
+      ideas: result.suggestions.map(toTradeIdea),
     };
     return json(body);
   } catch (err) {

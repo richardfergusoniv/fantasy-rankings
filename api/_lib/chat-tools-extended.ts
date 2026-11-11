@@ -1512,6 +1512,8 @@ export async function toolSuggestTrades(
   };
   const ideas: Array<{
     partner: string;
+    /** The partner roster the idea was worked out for (team names are not unique). */
+    partnerRosterId: number;
     give: Asset[];
     get: Asset[];
     giveTotal: number;
@@ -1836,6 +1838,7 @@ export async function toolSuggestTrades(
           : move.seasonLong;
     ideas.push({
       partner: partner.teamName,
+      partnerRosterId: partner.rosterId,
       give,
       get,
       giveTotal,

@@ -46,7 +46,7 @@ import type { ChartDataset, DraftPosition, DraftRoom, RankingHorizon, RankingPos
 import { withStreamedAnalytics } from "./dashboard-analytics";
 import { isSectionWaiting, sectionBuildFailed, shouldShowProgressiveShell } from "./dashboard-loading";
 import { FeatureErrorBoundary } from "./error-boundary";
-import { CLEARED_TOOL_SELECTIONS, DEFAULT_DASHBOARD_TAB, effectiveTradeMode, serializeDashboardSearch, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
+import { CLEARED_TOOL_SELECTIONS, effectiveTradeMode, opensOnMonitor, serializeDashboardSearch, toolLinkSearch, waiversSearchPreservingContext } from "./dashboard-url";
 import { createPlayerResolver, type DashboardPlayerRow, type PlayerLinkResolver } from "./tool-player-link";
 import { formatRecord, LeagueTeamCard } from "./league-team-card";
 import { leaguePowerTeamForPlayer } from "./league-roster";
@@ -685,10 +685,7 @@ export function App() {
   const [failedResyncAsOf, setFailedResyncAsOf] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // The app opens on Monitor (every league at a glance) unless the link points at a specific screen or player.
-  const [showMonitor, setShowMonitor] = useState(() => {
-    const { tab: urlTab, playerId, matchup } = dashboardUrl.state;
-    return urlTab === DEFAULT_DASHBOARD_TAB && !playerId && !matchup;
-  });
+  const [showMonitor, setShowMonitor] = useState(() => opensOnMonitor(window.location.search));
   const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
   const [browserViewerId, setBrowserViewerId] = useState<string | null | undefined>(undefined);
   // Tagged with the Sleeper account it was read for: after an account switch
