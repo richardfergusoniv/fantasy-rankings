@@ -686,6 +686,13 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // The app opens on Monitor (every league at a glance) unless the link points at a specific screen or player.
   const [showMonitor, setShowMonitor] = useState(() => opensOnMonitor(window.location.search));
+  // Monitor has no history entry of its own, so Back and Forward must leave it and show the screen the browser returns to.
+  useEffect(() => {
+    if (!showMonitor) return;
+    const leaveMonitor = () => setShowMonitor(false);
+    window.addEventListener("popstate", leaveMonitor);
+    return () => window.removeEventListener("popstate", leaveMonitor);
+  }, [showMonitor]);
   const [selectedLeagueId, setSelectedLeagueId] = useState(() => dashboardUrl.state.league ?? localStorage.getItem("fantasy-rankings-league") ?? "");
   const [browserViewerId, setBrowserViewerId] = useState<string | null | undefined>(undefined);
   // Tagged with the Sleeper account it was read for: after an account switch

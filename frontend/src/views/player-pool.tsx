@@ -938,7 +938,8 @@ export function PlayerPool({ dashboard, league, availableOnly, onOpenMatchup, on
   const visibleRows = rows.slice(0, visibleRowCount);
   // Tiers come from the whole list, so paging in more rows never moves a tier line.
   const tierGroups = useMemo(() => {
-    const tiers = assignTiers(rows.map((row) => row.projection));
+    // Tiers use the value the list is ranked by (the projection, or the final score once a game is over), never a live game's points so far: a player mid-game would otherwise look like a cliff.
+    const tiers = assignTiers(rows.map((row) => ("sortProjection" in row ? row.sortProjection : row.projection)));
     return groupByTier<(typeof visibleRows)[number]>(visibleRows, tiers);
   }, [rows, visibleRowCount]);
   // One scale for every range bar in the list, so bars compare across rows.
