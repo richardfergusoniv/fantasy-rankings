@@ -835,6 +835,8 @@ export function App() {
       queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "dashboard-section") });
       queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "projected-standings") });
       queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "league-weekly-performance") });
+      // Trade ideas are worked out from the dashboard, so they are fetched again once the new one is in place.
+      queryClient.invalidateQueries({ queryKey: personalQueryKey(identity, "trade-ideas") });
     },
     onError: async (error: unknown, _variables, owner) => {
       // A stale 401 from the previous viewer's token must not sign out the new one.
@@ -1175,8 +1177,6 @@ export function App() {
     else {
       refresh.mutate();
       queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "player-news") });
-      // Trade ideas are worked out from the dashboard, so they are fetched again after a refresh.
-      queryClient.invalidateQueries({ queryKey: personalQueryKey(viewer, "trade-ideas") });
     }
   };
 

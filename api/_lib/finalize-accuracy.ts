@@ -13,6 +13,8 @@ import { vegasProjectionPayloadSchema } from "./ingest-helpers.js";
 import { finalizeScoringSnapshotActuals } from "./scoring-jobs.js";
 import {
   DYNASTICAL_CUCKS_LEAGUE_ID,
+  SLEEPER_BASE,
+  fetchJsonWithRetry,
   loadSleeperPlayerWeeklySeason,
   sleeperActualStats,
   type SleeperWeeklyStatRow,
@@ -160,6 +162,23 @@ export async function finalizeProjectionAccuracy(
         settingsByLeague.set(league.id, league.scoringSettings);
       }
     }
+  }
+
+  // The snapshot holds only the owner's leagues, but accuracy rows are saved for every viewer's leagues:
+  // a backfill reads the rest from Sleeper so one outside league can't block every later week.
+  if (opts.onlyMissing) {
+    const outside = [...new Set(rows.map((row) => row.leagueId))].filter(
+      (leagueId) => leagueId !== DYNASTICAL_CUCKS_LEAGUE_ID && !settingsByLeague.has(leagueId),
+    );
+    await mapPool(outside, WEEKLY_FETCH_CONCURRENCY, async (leagueId) => {
+      try {
+        const league = await fetchJsonWithRetry<{ scoring_settings?: Record<string, number> | null }>(`${SLEEPER_BASE}/league/${encodeURIComponent(leagueId)}`);
+        if (league.scoring_settings && Object.keys(league.scoring_settings).length > 0) settingsByLeague.set(leagueId, league.scoring_settings);
+      } catch {
+        // Left out: its rows count as errors below and the week is tried again next call.
+      }
+      return null;
+    });
   }
 
   let updated = 0;
