@@ -418,7 +418,9 @@ export async function backfillProjectionAccuracy(opts: { season?: number; budget
         errors += result.errors;
         completed = backfillWeekCompleted({ errors: result.errors, truncated: fill.truncated || result.truncated === true, snapshotsOk: result.snapshotsOk });
       } else {
-        completed = backfillWeekCompleted({ errors: 0, truncated: fill.truncated });
+        // Every projection is graded, but an earlier call may have failed to write finals onto the snapshots.
+        const snapshots = await finalizeScoringSnapshotActuals({ season, week }).catch(() => ({ ok: false, scanned: 0, updated: 0 }));
+        completed = backfillWeekCompleted({ errors: 0, truncated: fill.truncated, snapshotsOk: snapshots.ok });
       }
     } catch (error) {
       console.error("[finalize-accuracy] backfill failed for week", week, error instanceof Error ? error.message : error);
