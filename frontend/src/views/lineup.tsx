@@ -28,6 +28,9 @@ import { formatPercent } from "../lib/format-number";
 import { teamOutlook, winPercent, winProbability } from "./win-probability";
 import { AdvantageList } from "./advantage-list";
 import { advantageRows, rankStartersBySlot } from "./matchup-advantage";
+import { AssistantCard, AssistantFacts, AssistantSheet, AssistantTable } from "../components/assistant-card";
+import { lineupAssistantAnswer, type LineupAssistantAnswer } from "./lineup-assistant";
+import { startSitFactors, type FactorInput } from "./start-sit-verdict";
 
 export {
   isOptimizedLineupChanged,
@@ -110,6 +113,64 @@ export function forecastTotal(players: RosterPlayer[], now = Date.now()): number
   return sumLiveForecast(players, now);
 }
 
+const swapFactorInput = (player: RosterPlayer): FactorInput => ({
+  projection: player.projection,
+  vegasProjection: null,
+  sleeperProjection: null,
+  bookRange: player.projectionRange ?? null,
+  season: null,
+  injuryStatus: player.injuryStatus,
+  isBye: player.isBye,
+  opponent: player.opponent ? `${player.isAway ? "@" : "vs"} ${player.opponent}` : null,
+  matchupRank: null,
+  targetShare: null,
+  snapShare: null,
+  opportunityShare: null,
+});
+
+function LineupAssistant({ answer, week, onAsk }: { answer: LineupAssistantAnswer; week: number; onAsk?: (question: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const count = answer.swaps.length;
+  const headline = `${count} ${count === 1 ? "change" : "changes"}`;
+  const gain = `+${answer.gain.toFixed(1)} pts`;
+  return (
+    <>
+      <AssistantCard eyebrow="lineup" onOpen={() => setOpen(true)} label={`${headline}, ${gain}`}>
+        <span className="assistant-card-answer">
+          <strong>{headline}</strong>
+          <span className="assistant-card-chance">{gain}</span>
+        </span>
+      </AssistantCard>
+      <AssistantSheet
+        open={open}
+        onOpenChange={setOpen}
+        title={`Lineup: ${headline}`}
+        description={`Week ${week}. Change these in Sleeper. Players whose games have started can't move.`}
+        question="Which lineup changes should I make this week, and why?"
+        onAsk={(question) => onAsk?.(question)}
+      >
+        <AssistantFacts
+          title="The result"
+          facts={[
+            { label: "Points added", value: gain },
+            ...(answer.winBefore !== null && answer.winAfter !== null
+              ? [{ label: "Win chance", value: `${formatPercent(answer.winBefore)} → ${formatPercent(answer.winAfter)}` }]
+              : []),
+          ]}
+        />
+        {answer.swaps.map((swap) => (
+          <AssistantTable
+            key={`${swap.slot}-${swap.playerIn.playerId}`}
+            title={`${swap.slot}: start ${swap.playerIn.name}, bench ${swap.playerOut.name} (+${swap.gain.toFixed(1)})`}
+            columns={[swap.playerIn.name, swap.playerOut.name]}
+            rows={startSitFactors(swapFactorInput(swap.playerIn), swapFactorInput(swap.playerOut))}
+          />
+        ))}
+      </AssistantSheet>
+    </>
+  );
+}
+
 export function Lineup({
   league,
   dashboard,
@@ -118,6 +179,7 @@ export function Lineup({
   onComparePlayers,
   linkedPlayerId,
   onOpenLinkedPlayer,
+  onAsk,
 }: {
   league: League;
   dashboard: Dashboard;
@@ -125,6 +187,8 @@ export function Lineup({
   onOpenLeagueTeam?: (rosterId: number) => void;
   /** Advantage row: open Comparison with your starter and theirs. */
   onComparePlayers?: (mine: string, theirs: string) => void;
+  /** Hands a question to the Ask sheet (the Assistant card's follow-up). */
+  onAsk?: (question: string) => void;
 } & PlayerLink) {
   const [mode, setMode] = useState<"current" | "optimized" | "advantage">("current");
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -158,6 +222,7 @@ export function Lineup({
   const myOutlook = useMemo(() => teamOutlook(mine, nowMs), [mine, nowMs]);
   const theirOutlook = useMemo(() => (theirs ? teamOutlook(theirs, nowMs) : null), [theirs, nowMs]);
   const myWinPercent = myOutlook && theirOutlook ? winPercent(winProbability(myOutlook, theirOutlook)) : null;
+  const assistantAnswer = useMemo(() => lineupAssistantAnswer(league, nowMs), [league, nowMs]);
   const lineupChanged = isOptimizedLineupChanged(
     optimized.starters.map((starter) => starter.playerId),
     league.starters.map((starter) => starter.playerId),
@@ -230,6 +295,8 @@ export function Lineup({
         label="Your lineup version"
         options={[{ value: "current", label: "Current" }, { value: "optimized", label: "Optimized" }, { value: "advantage", label: "Advantage" }]}
       />
+
+      {assistantAnswer ? <LineupAssistant answer={assistantAnswer} week={dashboard.week} onAsk={onAsk} /> : null}
 
       <Card className="matchup-score gap-0 py-0 shadow-sm" aria-label="Head-to-head score">
         <div className="score-team mine">
