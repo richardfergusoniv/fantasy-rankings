@@ -39,3 +39,7 @@
 .assistant-card-trade small { color: var(--dim); font-size: var(--type-caption); }
 .assistant-card-trade strong { font-size: var(--type-body); font-weight: 700; overflow-wrap: anywhere; }
 .trade-idea .trade-idea-load { min-height: 44px; border: 0; border-radius: var(--radius); background: var(--action); color: var(--on-accent); font: inherit; font-size: var(--type-control); font-weight: 700; cursor: pointer; }
+
+/* Inside the Comparison board the card is a plain answer row between the player header and the tabs, without a second border. */
+.comparison-board > .assistant-card { margin: 12px 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.comparison-board > .assistant-card:hover { background: transparent; }

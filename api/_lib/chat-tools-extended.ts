@@ -2,6 +2,7 @@
  * Additional read-only chat tools: news, advanced, projections, value history,
  * lineup/waiver/trade suggestions, and draft info. Prefer dashboard + source_cache.
  */
+import { positionsByNeed, starterFloors, upgradesStarter, type SkillPosition } from "./trade-needs.js";
 import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Dashboard } from "./dashboard-schemas.js";
@@ -1476,15 +1477,9 @@ export async function toolSuggestTrades(
     ? league.powerRankingsSeasonLong
     : league.powerRankingsWeek;
   const myPower = power.find((row) => row.isUser) ?? null;
-  const skillPositions = ["QB", "RB", "WR", "TE"] as const;
-
-  const myNeeds = myPower
-    ? [...skillPositions].sort((a, b) => myPower.positionValues[a] - myPower.positionValues[b])
-    : (["RB", "WR"] as const);
-
-  const mySurplus = myPower
-    ? [...skillPositions].sort((a, b) => myPower.positionValues[b] - myPower.positionValues[a])
-    : (["WR", "RB"] as const);
+  // Needs are ranked against the league average at each position: raw totals would always call tight end the biggest need.
+  const myNeeds: readonly SkillPosition[] = myPower ? positionsByNeed(myPower, power) : (["RB", "WR"] as const);
+  const mySurplus: readonly SkillPosition[] = myPower ? [...myNeeds].reverse() : (["WR", "RB"] as const);
 
   type Asset = { playerId: string; name: string; position: string; value: number; teamName: string };
   const myAssets: Asset[] = me.players
@@ -1501,6 +1496,12 @@ export async function toolSuggestTrades(
     })
     .filter((row): row is Asset => row != null)
     .sort((a, b) => b.value - a.value);
+
+  const myStarterFloors = starterFloors(me.players.map((player) => ({
+    position: player.position,
+    isStarter: player.isStarter,
+    value: valueById.get(player.playerId)?.value ?? null,
+  })));
 
   type RosDelta = {
     pointsDelta: number;
@@ -1573,9 +1574,7 @@ export async function toolSuggestTrades(
 
   for (const partner of league.tradeTeams.filter((team) => !team.isUser)) {
     const partnerPower = power.find((row) => row.rosterId === partner.rosterId) ?? null;
-    const partnerNeeds = partnerPower
-      ? [...skillPositions].sort((a, b) => partnerPower.positionValues[a] - partnerPower.positionValues[b])
-      : mySurplus;
+    const partnerNeeds: readonly SkillPosition[] = partnerPower ? positionsByNeed(partnerPower, power) : mySurplus;
     const theirAssets: Asset[] = partner.players
       .map((player) => {
         const asset = valueById.get(player.playerId);
@@ -1594,8 +1593,9 @@ export async function toolSuggestTrades(
     const givePool = myAssets.filter(
       (asset) => asset.position === mySurplus[0] || asset.position === partnerNeeds[0],
     );
+    // Only players who would start for me: a backup at a needed position changes nothing in the lineup.
     const getPool = theirAssets.filter(
-      (asset) => asset.position === myNeeds[0] || asset.position === myNeeds[1],
+      (asset) => (asset.position === myNeeds[0] || asset.position === myNeeds[1]) && upgradesStarter(asset, myStarterFloors),
     );
     let best: {
       give: Asset;
