@@ -449,7 +449,7 @@ export function DraftCenter({
     )
   ) : (
     <div className="empty-inline">
-      {draftIsFinal && effectiveDraftPosition === "ALL" && !query.trim()
+      {draftIsFinal && effectiveDraftPosition === "ALL" && !query
         ? "This league’s draft is complete, so there is nothing left to pick."
         : "No available players match these filters."}
     </div>
