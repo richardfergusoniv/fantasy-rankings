@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tradeIdeaTitle, tradeIdeaDetails } from "./trade-idea-details";
+import { tradeIdeaTitle, tradeIdeaDetails, valueEdge, verdictLabel } from "./trade-idea-details";
 import type { TradeIdea } from "../../../api/_lib/trade-ideas";
 
 const idea = (over: Partial<TradeIdea> = {}): TradeIdea => ({
@@ -49,5 +49,30 @@ describe("tradeIdeaTitle", () => {
   it("joins last names, dropping suffixes", () => {
     expect(tradeIdeaTitle({ give: [asset("Khalil Shakir")], get: [asset("James Cook III")] })).toBe("Shakir → Cook");
     expect(tradeIdeaTitle({ give: [asset("Khalil Shakir"), asset("Chris Bell")], get: [asset("Kyle Pitts Sr.")] })).toBe("Shakir + Bell → Pitts");
+  });
+});
+
+describe("valueEdge", () => {
+  it("highlights the higher side only when the gap is over 1%", () => {
+    expect(valueEdge(8000, 8800)).toBe(1);
+    expect(valueEdge(8800, 8000)).toBe(0);
+  });
+
+  it("leaves a near tie unmarked", () => {
+    expect(valueEdge(8631, 8629)).toBeNull();
+    expect(valueEdge(5000, 5000)).toBeNull();
+    expect(valueEdge(0, 0)).toBeNull();
+  });
+});
+
+describe("verdictLabel", () => {
+  it("shows the rounded score", () => {
+    expect(verdictLabel("Accept", 12.4)).toBe("Accept (12)");
+    expect(verdictLabel("Decline", -7.6)).toBe("Decline (-8)");
+  });
+
+  it("drops a score that rounds to zero instead of showing -0", () => {
+    expect(verdictLabel("Lean accept", -0.3)).toBe("Lean accept");
+    expect(verdictLabel("Lean accept", 0.2)).toBe("Lean accept");
   });
 });

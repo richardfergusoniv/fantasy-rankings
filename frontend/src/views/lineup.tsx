@@ -135,7 +135,7 @@ function LineupAssistant({ answer, week, onAsk }: { answer: LineupAssistantAnswe
   const gain = `+${answer.gain.toFixed(1)} pts`;
   return (
     <>
-      <AssistantCard eyebrow="lineup" onOpen={() => setOpen(true)} label={`${headline}, ${gain}`}>
+      <AssistantCard eyebrow="Lineup" onOpen={() => setOpen(true)} label={`${headline}, ${gain}`}>
         <span className="assistant-card-answer">
           <strong>{headline}</strong>
           <span className="assistant-card-chance">{gain}</span>
@@ -149,6 +149,19 @@ function LineupAssistant({ answer, week, onAsk }: { answer: LineupAssistantAnswe
         question="Which lineup changes should I make this week, and why?"
         onAsk={(question) => onAsk?.(question)}
       >
+        {answer.swaps.map((swap) => {
+          const emptySlot = swap.playerOut.playerId === "0";
+          const outName = emptySlot ? "Empty slot" : swap.playerOut.name;
+          return (
+            <AssistantTable
+              leadCaption
+              key={`${swap.slot}-${swap.playerIn.playerId}`}
+              title={emptySlot ? `${swap.slot}: start ${swap.playerIn.name} (+${swap.gain.toFixed(1)})` : `${swap.slot}: start ${swap.playerIn.name}, bench ${swap.playerOut.name} (+${swap.gain.toFixed(1)})`}
+              columns={[swap.playerIn.name, outName]}
+              rows={startSitFactors(swapFactorInput(swap.playerIn), swapFactorInput(swap.playerOut))}
+            />
+          );
+        })}
         <AssistantFacts
           title="The result"
           facts={[
@@ -164,18 +177,6 @@ function LineupAssistant({ answer, week, onAsk }: { answer: LineupAssistantAnswe
             facts={answer.slotMoves.map((move) => ({ label: move.player.name, value: `${move.from} → ${move.to}` }))}
           />
         ) : null}
-        {answer.swaps.map((swap) => {
-          const emptySlot = swap.playerOut.playerId === "0";
-          const outName = emptySlot ? "Empty slot" : swap.playerOut.name;
-          return (
-            <AssistantTable
-              key={`${swap.slot}-${swap.playerIn.playerId}`}
-              title={emptySlot ? `${swap.slot}: start ${swap.playerIn.name} (+${swap.gain.toFixed(1)})` : `${swap.slot}: start ${swap.playerIn.name}, bench ${swap.playerOut.name} (+${swap.gain.toFixed(1)})`}
-              columns={[swap.playerIn.name, outName]}
-              rows={startSitFactors(swapFactorInput(swap.playerIn), swapFactorInput(swap.playerOut))}
-            />
-          );
-        })}
       </AssistantSheet>
     </>
   );
