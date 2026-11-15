@@ -8,9 +8,11 @@ import type { FactorEdge } from "../views/start-sit-verdict";
  * card is one button: tapping it opens the sheet with everything behind the
  * answer. Keep the card to the answer itself; reasons live in the sheet.
  */
-export function AssistantCard({ eyebrow, onOpen, label, children }: {
+export function AssistantCard({ eyebrow, onOpen, label, more = "Details", children }: {
   /** Names the kind of answer, e.g. "Start". */
   eyebrow: string;
+  /** The link text in the corner. */
+  more?: string;
   onOpen: () => void;
   /** Spoken name for the button: the answer in a sentence. */
   label: string;
@@ -20,7 +22,7 @@ export function AssistantCard({ eyebrow, onOpen, label, children }: {
     <button type="button" className="assistant-card" onClick={onOpen} aria-haspopup="dialog" aria-label={`${label}. Show details`}>
       <span className="assistant-card-top">
         <span className="assistant-card-eyebrow">Assistant · {eyebrow}</span>
-        <span className="assistant-card-more" aria-hidden="true">Details ›</span>
+        <span className="assistant-card-more" aria-hidden="true">{more} ›</span>
       </span>
       {children}
     </button>
@@ -74,8 +76,10 @@ export function AssistantFacts({ title, facts }: { title: string; facts: Readonl
 }
 
 /** The detail sheet behind an Assistant card. "Ask a follow-up" is the only thing that calls the chat. */
-export function AssistantSheet({ open, onOpenChange, title, description, question, onAsk, children }: {
+export function AssistantSheet({ open, onOpenChange, title, description, question, onAsk, before, children }: {
   open: boolean;
+  /** Shown above the title, e.g. a link back to a list. */
+  before?: ReactNode;
   onOpenChange: (open: boolean) => void;
   title: string;
   description: string;
@@ -88,6 +92,7 @@ export function AssistantSheet({ open, onOpenChange, title, description, questio
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="assistant-sheet">
         <DialogCloseButton label="Close details" />
+        {before}
         <DialogTitle className="assistant-sheet-title">{title}</DialogTitle>
         {/* Read by screen readers only: the sheet shows no helper text. */}
         <DialogDescription className="sr-only">{description}</DialogDescription>

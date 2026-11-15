@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tradeIdeaDetails } from "./trade-idea-details";
+import { tradeIdeaTitle, tradeIdeaDetails } from "./trade-idea-details";
 import type { TradeIdea } from "../../../api/_lib/trade-ideas";
 
 const idea = (over: Partial<TradeIdea> = {}): TradeIdea => ({
@@ -41,5 +41,13 @@ describe("tradeIdeaDetails", () => {
     const { yours, theirs } = tradeIdeaDetails(idea({ restOfSeason: null, injuryExposure: null, partnerRestOfSeason: null }));
     expect(yours.some((r) => r.label === "Rest-of-season points" || r.label === "Injury designations")).toBe(false);
     expect(theirs).toHaveLength(1);
+  });
+});
+
+describe("tradeIdeaTitle", () => {
+  const asset = (name: string) => ({ playerId: name, name, position: "WR", value: 1 });
+  it("joins last names, dropping suffixes", () => {
+    expect(tradeIdeaTitle({ give: [asset("Khalil Shakir")], get: [asset("James Cook III")] })).toBe("Shakir → Cook");
+    expect(tradeIdeaTitle({ give: [asset("Khalil Shakir"), asset("Chris Bell")], get: [asset("Kyle Pitts Sr.")] })).toBe("Shakir + Bell → Pitts");
   });
 });
