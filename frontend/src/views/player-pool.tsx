@@ -582,7 +582,7 @@ function WaiverAssistant({ answer, week, onAsk }: { answer: NonNullable<ReturnTy
   const sentence = `${answer.label}: add ${answer.add.name}${answer.drop ? `, drop ${answer.drop.name}` : ""}${answer.bid ? `, bid ${answer.bid}` : ""}`;
   return (
     <>
-      <AssistantCard eyebrow="best move" onOpen={() => setOpen(true)} label={sentence}>
+      <AssistantCard eyebrow="Best move" onOpen={() => setOpen(true)} label={sentence}>
         <span className="assistant-card-answer">
           <strong>+ {answer.add.name} <span className="assistant-card-position">{answer.add.position}</span></strong>
           {answer.bid ? <span className="assistant-card-chance">{answer.bid}</span> : null}
