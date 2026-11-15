@@ -17,7 +17,10 @@ import {
   settleSavedChartViewMutation,
 } from "./chart-view-cache";
 import { useViewerIdentity } from "./viewer-scope";
-import { formatDecimal, formatPercent, formatPoints, formatWhole } from "./lib/format-number";
+import { formatDecimal, formatPercent, formatPoints } from "./lib/format-number";
+import { metricDisplay } from "./lib/metric-display";
+
+export { metricDisplay };
 import { ChartDialog } from "./chart-dialog";
 import { MatchupTag, SegmentedControl, shortLeagueName } from "./shared";
 import {
@@ -817,13 +820,6 @@ function PercentileCutoffSelect({ axis, value, onChange }: { axis: "X" | "Y"; va
       </select>
     </label>
   );
-}
-
-export function metricDisplay(value: number, metric: Metric): string {
-  if (metric.unit === "%") return formatPercent(value);
-  // Ranks stay whole; analytics values are per-game averages / fractional → two decimals.
-  if (metric.key.endsWith("Rank")) return formatWhole(value);
-  return `${formatDecimal(value, 2)}${metric.unit ?? ""}`;
 }
 
 function ordinalSuffix(value: number): string {

@@ -1006,13 +1006,15 @@
   line-height: 1.05;
 }
 .game-board-implied > strong.is-leading {
-  color: var(--action);
+  color: var(--winner);
 }
 /* Spread and Total side by side, small, so the middle column stays narrow between the teams. */
 .game-board-market {
   display: grid;
   grid-auto-flow: column;
-  align-self: center;
+  /* Sits on the same line as the "Implied" caption and totals, not floating between the names. */
+  align-self: end;
+  padding-bottom: 2px;
   justify-items: center;
   gap: 10px;
   text-align: center;
@@ -1021,9 +1023,7 @@
   display: grid;
   gap: 1px;
 }
-.game-board-market dt {
-  font-size: 11px;
-}
+
 .game-board-market dd {
   font-size: var(--type-caption);
   font-weight: 700;

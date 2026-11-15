@@ -1,6 +1,8 @@
 /* Matchup lineup, bench, score line and matchup reference tags. */
 .lineup-mode-toggle { margin: 0 0 8px; }
 
+/* The lineup Assistant card sits above the score card with the standard 8px between boxes. */
+.assistant-card + .matchup-score { margin-top: 8px; }
 .matchup-score { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); align-items: stretch; }
 .score-team { min-width: 0; padding: 10px 12px 9px; }
 .score-team.theirs { text-align: right; }
@@ -28,6 +30,8 @@
   cursor: pointer;
 }
 .score-team.theirs .matchup-score-team-open { margin-left: auto; }
+/* The team name pills are 18px tall; stretch the tap target to 44px without changing how they look. */
+.score-team .matchup-score-team-open::after { content: ""; position: absolute; inset: -13px -8px; }
 .matchup-score-team-open:focus-visible {
   outline: 2px solid var(--link);
   outline-offset: 2px;
