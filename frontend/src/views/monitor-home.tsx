@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import type { Dashboard, PlayerNews, PlayerNewsItem } from "../dashboard-types";
 import { newsItemTimeLabel } from "../news-time";
 import { monitorNews } from "./monitor-news";
@@ -77,13 +76,8 @@ export function MonitorHome({ dashboard, news, onOpenLeague, onOpenNews }: {
     })).map((row) => ({ ...row, issues: row.summary.issues })),
   ), [dashboard.leagues, nowMs]);
   const topNews = useMemo(() => monitorNews(news, dashboard.leagues, nowMs), [news, dashboard.leagues, nowMs]);
-  const attention = rows.filter((row) => row.issues.length > 0).length;
   return (
-    <section className="league-monitor" aria-labelledby="league-monitor-title">
-      <Card className="league-monitor-intro gap-0 py-0 shadow-sm">
-        <h2 id="league-monitor-title">Monitor</h2>
-        <span>{attention === 0 ? "Every lineup is set" : `${attention} of ${rows.length} ${attention === 1 ? "league needs" : "leagues need"} attention`}</span>
-      </Card>
+    <section className="league-monitor" aria-label="Monitor">
       <div className="league-monitor-list">
         {rows.map(({ league, summary }) => (
           <LeagueRow

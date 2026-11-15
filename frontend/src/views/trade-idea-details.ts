@@ -5,6 +5,14 @@ const signed = (value: number, digits = 1) => `${value > 0 ? "+" : value < 0 ? "
 const whole = (value: number) => Math.round(value).toLocaleString("en-US");
 const names = (assets: ReadonlyArray<{ name: string }>) => assets.map((asset) => asset.name).join(", ");
 
+const lastName = (name: string) => name.replace(/\s+(Jr\.|Sr\.|II|III|IV|V)$/, "").split(" ").slice(-1)[0] ?? name;
+
+/** Short name for an idea in the list and the sheet title: "Shakir → Stevenson", "Shakir + Bell → Hampton". */
+export function tradeIdeaTitle(idea: Pick<TradeIdea, "give" | "get">): string {
+  const side = (assets: ReadonlyArray<{ name: string }>) => assets.map((asset) => lastName(asset.name)).join(" + ");
+  return `${side(idea.give)} → ${side(idea.get)}`;
+}
+
 export type TradeIdeaDetails = {
   /** You give / You get, side by side. */
   compare: Array<{ label: string; values: [string, string]; edge?: FactorEdge }>;
