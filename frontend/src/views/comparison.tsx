@@ -497,7 +497,7 @@ function ComparisonAssistant({ answer, names, week, onAsk }: {
   const sentence = winner && other ? `Start ${winner} over ${other}, ${verdict.chance}% to outscore` : `${names[0]} and ${names[1]} are a coin flip`;
   return (
     <>
-      <AssistantCard eyebrow={winner ? "start" : "start/sit"} onOpen={() => setOpen(true)} label={sentence}>
+      <AssistantCard eyebrow={winner ? "Start" : "Start/sit"} onOpen={() => setOpen(true)} label={sentence}>
         <span className="assistant-card-answer">
           <strong>{headline}</strong>
           <span className="assistant-card-chance">{winner ? `${verdict.chance}%` : "50%"}</span>

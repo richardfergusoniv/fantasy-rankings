@@ -13,6 +13,19 @@ export function tradeIdeaTitle(idea: Pick<TradeIdea, "give" | "get">): string {
   return `${side(idea.give)} → ${side(idea.get)}`;
 }
 
+/** Which side of the value comparison to highlight: none when the two are within 1% of each other. */
+export function valueEdge(give: number, get: number): FactorEdge {
+  const larger = Math.max(Math.abs(give), Math.abs(get));
+  if (larger === 0 || Math.abs(get - give) / larger < 0.01) return null;
+  return get > give ? 1 : 0;
+}
+
+/** "Lean accept (3)"; a score that rounds to zero is left off rather than shown as "-0". */
+export function verdictLabel(verdict: string, score: number): string {
+  const rounded = Math.round(score);
+  return rounded === 0 ? verdict : `${verdict} (${rounded})`;
+}
+
 export type TradeIdeaDetails = {
   /** You give / You get, side by side. */
   compare: Array<{ label: string; values: [string, string]; edge?: FactorEdge }>;
@@ -27,10 +40,10 @@ export function tradeIdeaDetails(idea: TradeIdea): TradeIdeaDetails {
   const compare: TradeIdeaDetails["compare"] = [
     { label: "Players", values: [names(idea.give), names(idea.get)] },
     { label: "Positions", values: [idea.give.map((a) => a.position).join(", "), idea.get.map((a) => a.position).join(", ")] },
-    { label: "Season-long value", values: [whole(idea.giveTotal), whole(idea.getTotal)], edge: idea.getTotal === idea.giveTotal ? null : idea.getTotal > idea.giveTotal ? 1 : 0 },
+    { label: "Season-long value", values: [whole(idea.giveTotal), whole(idea.getTotal)], edge: valueEdge(idea.giveTotal, idea.getTotal) },
   ];
   const yours: TradeIdeaDetails["yours"] = [
-    { label: "Verdict", value: `${idea.verdict} (${idea.verdictScore.toFixed(0)})` },
+    { label: "Verdict", value: verdictLabel(idea.verdict, idea.verdictScore) },
     { label: "Lineup this week", value: `${idea.week.lineupBefore.toFixed(1)} → ${idea.week.lineupAfter.toFixed(1)} (${signed(idea.week.lineupAfter - idea.week.lineupBefore)})` },
     { label: "Starter value", value: `${whole(idea.seasonLong.starterValueBefore)} → ${whole(idea.seasonLong.starterValueAfter)}` },
     { label: "Power rank", value: `#${idea.seasonLong.powerRankBefore} → #${idea.seasonLong.powerRankAfter}` },
