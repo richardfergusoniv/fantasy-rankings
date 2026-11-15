@@ -6,7 +6,7 @@
 .draft-source-warning strong { color: var(--warning); }
 .draft-source-warning ul { margin: 0; padding-left: 18px; }
 .draft-source-warning li + li { margin-top: 3px; }
-.draft-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.draft-controls { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 10px; }
 .draft-controls > label { grid-column: 1 / -1; min-width: 0; }
 .draft-controls .position-tabs { min-width: 0; }
 .draft-my-team { display: grid; gap: 12px; }
@@ -115,7 +115,7 @@ a[href].player-news-item { color: inherit; text-decoration: none; }
 
 @media (min-width: 760px) {
   .draft-center { max-width: var(--content-width); }
-  .draft-controls { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr) auto; }
+  .draft-controls { grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); }
   .draft-controls > label { grid-column: auto; }
   .draft-row { grid-template-columns: minmax(0, 1fr) 48px 80px 96px; }
   .draft-row.draft-my-team-row { grid-template-columns: minmax(0, 1fr) 72px; }

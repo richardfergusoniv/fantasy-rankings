@@ -117,15 +117,15 @@ function TeamStatsLineChart({
           <CartesianGrid stroke="var(--border)" strokeDasharray="2 5" vertical={false} />
           <XAxis
             dataKey="week"
-            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tick={{ fill: "var(--dim)", fontSize: 12 }}
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
-            label={{ value: "Week", position: "insideBottom", offset: -12, fill: "var(--text)", fontSize: 10, fontWeight: 700 }}
+            label={{ value: "Week", position: "insideBottom", offset: -12, fill: "var(--text)", fontSize: 12, fontWeight: 700 }}
           />
           <YAxis
             domain={isSnaps ? [0, 100] : ["auto", "auto"]}
             width={40}
-            tick={{ fill: "var(--dim)", fontSize: 10 }}
+            tick={{ fill: "var(--dim)", fontSize: 12 }}
             tickLine={false}
             axisLine={false}
             label={{
@@ -133,7 +133,7 @@ function TeamStatsLineChart({
               angle: -90,
               position: "insideLeft",
               fill: "var(--text)",
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: 700,
             }}
           />

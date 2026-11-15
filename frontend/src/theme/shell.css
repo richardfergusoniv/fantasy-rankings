@@ -34,6 +34,15 @@ span.ticker-item:active { background: transparent; }
 }
 .week-line { display: flex; align-items: center; justify-content: space-between; min-height: 44px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .week-line > div { white-space: nowrap; }
+.week-line > .week-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Phones: the five header buttons and the week need 393px at full size. Slim the buttons first, then drop "NFL 2026 · " so the row never runs wider than the screen. */
+@media (max-width: 420px) {
+  .week-actions .refresh-button, .week-actions .theme-toggle, .week-actions .account-button, .week-actions .ask-button { width: 40px; }
+  .week-actions .all-leagues-button { padding: 0 8px; }
+}
+@media (max-width: 389px) {
+  .week-season { display: none; }
+}
 .data-notes { margin: -2px 0 6px; font-size: var(--type-caption); font-weight: 500; white-space: normal; }
 .data-notes summary { color: var(--warning); cursor: pointer; }
 .data-notes ul { margin: 6px 0 4px; padding-left: 18px; font-weight: 400; }
@@ -60,7 +69,7 @@ span.ticker-item:active { background: transparent; }
 @keyframes refreshPulse { 50% { opacity: .25; } }
 
 .league-picker { position: relative; display: flex; align-items: center; min-height: 44px; }
-.league-picker select { width: 100%; padding: 0 28px 0 0; overflow: hidden; border: 0; background-color: transparent; color: var(--text); font-size: var(--type-display); line-height: 1.1; font-weight: 700; letter-spacing: -.025em; text-overflow: ellipsis; cursor: pointer; }
+.league-picker select { align-self: stretch; width: 100%; padding: 0 28px 0 0; overflow: hidden; border: 0; background-color: transparent; color: var(--text); font-size: var(--type-display); line-height: 1.1; font-weight: 700; letter-spacing: -.025em; text-overflow: ellipsis; cursor: pointer; }
 
 /* Mobile bottom bar: equal-width columns across the full visual width.
    Use 100vw (not left/right:0 alone) so a classic scrollbar gutter does not

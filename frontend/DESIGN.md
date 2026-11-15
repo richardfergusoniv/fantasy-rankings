@@ -34,6 +34,8 @@ Three jobs, three looks (`theme/badges.css`). One meaning per color.
 - `--radius` is 12px; `sm`/`md`/`xl` derive from it. Small tags, chips and skeleton lines use `--radius-xs` (4px, derived from `--radius`); never write a bare `4px` radius. Flat list rows, dividers and full-bleed frames use `0` on purpose.
 - 4px spacing steps. Touch targets default to 44px; tab tracks are 40px with 36px buttons, and toolbar pills and compact filters are 32px.
 - Row heights: Matchup rows 72px (`--player-box-height`), Power rows 50px, Rankings / Waivers / Draft board rows 56px.
+- The header row (week, All leagues, Ask, account, theme, refresh) must fit a 320px phone: icon buttons are 40px wide up to 420px, and below 390px the row drops "NFL 2026 · " and keeps "Week 10". Taps stay 44px tall.
+- Numbers: market value and yardage are whole numbers everywhere (`lib/metric-display.ts`); per-game and rate stats keep two decimals. Boxes sit 8px apart, never touching.
 - On desktop the shell is the content width plus 32px gutters, so the ticker, header, tabs and views share one left and right edge.
 - One primary layout breakpoint at 760px, with additional responsive rules at max-width 420px and max-width 759px.
 - On desktop, the page tabs, sub-tabs and every view share one content width (`--content-width`), so they end at the same right edge.

@@ -1330,7 +1330,7 @@ export function App() {
         <SafeAreaTopScrim backgroundColor="var(--bg)" />
         <div role="region" aria-label="League and week" className="league-sticky">
           <div className="week-line">
-            <div><span className="live-dot" /> NFL {dashboard.season} · Week {dashboard.week}</div>
+            <div className="week-label"><span className="live-dot" /><span className="week-season">NFL {dashboard.season} · </span>Week {dashboard.week}</div>
             <div className="week-actions">
               {supabase ? <AccountMenu /> : null}
               <ThemeToggle />
@@ -1491,7 +1491,7 @@ export function App() {
             onNews={setTickerNews}
           />
           <div className="week-line">
-            <div><span className="live-dot" /> NFL {dashboard.season} · Week {dashboard.week}</div>
+            <div className="week-label"><span className="live-dot" /><span className="week-season">NFL {dashboard.season} · </span>Week {dashboard.week}</div>
             <div className="week-actions">
             <button type="button" className="all-leagues-button" onClick={() => setShowMonitor(true)}>All leagues</button>
             <AskButton buttonRef={askButtonRef} onClick={() => setAskOpen(true)} />

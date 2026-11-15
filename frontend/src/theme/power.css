@@ -223,7 +223,7 @@ button.power-stack-row:active { background: var(--surface-2); }
 .is-user .proj-odds strong { color: var(--roster-highlight); }
 
 /* Your next games: one line per week; the opponent opens the preview card. */
-.power-team .proj-game-open { display: block; max-width: 100%; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--link); font: inherit; font-size: var(--type-body); font-weight: 600; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.power-team .proj-game-open { display: block; max-width: 100%; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--link); font: inherit; font-size: var(--type-body); font-weight: 600; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;  line-height: 32px;}
 .power-team .proj-game-open:hover { text-decoration: underline; }
 .power-team .proj-game-open:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .proj-game { grid-template-columns: 44px minmax(0, 1fr) 64px; }
