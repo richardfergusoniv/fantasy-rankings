@@ -1,7 +1,9 @@
+import { optimizeValueTradeRoster } from "./lineup-optimizer.js";
+
 /**
  * Position needs for the trade finder. A position's raw lineup value is not comparable across
  * positions (tight ends always total the least), so needs are ranked against the league average
- * for that position, and an incoming player must be an upgrade on a starter to be worth asking for.
+ * for that position, and an incoming player must earn a starting spot to be worth asking for.
  */
 
 export const SKILL_POSITIONS = ["QB", "RB", "WR", "TE"] as const;
@@ -18,18 +20,23 @@ export function positionsByNeed(row: { positionValues: PositionValues }, league:
   return [...SKILL_POSITIONS].sort((a, b) => relative(a) - relative(b));
 }
 
-/** Lowest-valued starter at each position; a position with no starter has no floor. */
-export function starterFloors(players: Array<{ position: string; isStarter: boolean; value: number | null }>): Map<string, number> {
-  const floors = new Map<string, number>();
-  for (const player of players) {
-    if (!player.isStarter || player.value == null) continue;
-    floors.set(player.position, Math.min(floors.get(player.position) ?? Number.POSITIVE_INFINITY, player.value));
-  }
-  return floors;
-}
+type RosterPlayer = { playerId: string; position: string };
 
-/** True when the player would take a starting spot: he is worth more than the weakest starter at his position. */
-export function upgradesStarter(asset: { position: string; value: number }, floors: Map<string, number>): boolean {
-  const floor = floors.get(asset.position);
-  return floor === undefined || asset.value > floor;
+/**
+ * Whether a player would start for this roster: adding him raises the value of the best lineup the
+ * league's slots allow. Flex slots count, so a tight end who would start at FLEX qualifies even when
+ * the starting tight end is better. Answers are cached per player.
+ */
+export function startsForRoster(roster: RosterPlayer[], slots: string[], valueById: ReadonlyMap<string, number>): (player: RosterPlayer) => boolean {
+  const asOptimizable = (player: RosterPlayer) => ({ playerId: player.playerId, position: player.position, lineupSlot: null, isStarter: false, projection: null, actual: null });
+  const base = roster.map(asOptimizable);
+  const baseScore = optimizeValueTradeRoster(base, slots, valueById).score;
+  const cache = new Map<string, boolean>();
+  return (player) => {
+    const known = cache.get(player.playerId);
+    if (known !== undefined) return known;
+    const starts = optimizeValueTradeRoster([...base, asOptimizable(player)], slots, valueById).score > baseScore;
+    cache.set(player.playerId, starts);
+    return starts;
+  };
 }

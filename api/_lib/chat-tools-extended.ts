@@ -2,7 +2,7 @@
  * Additional read-only chat tools: news, advanced, projections, value history,
  * lineup/waiver/trade suggestions, and draft info. Prefer dashboard + source_cache.
  */
-import { positionsByNeed, starterFloors, upgradesStarter, type SkillPosition } from "./trade-needs.js";
+import { positionsByNeed, startsForRoster, type SkillPosition } from "./trade-needs.js";
 import { and, asc, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Dashboard } from "./dashboard-schemas.js";
@@ -1497,11 +1497,12 @@ export async function toolSuggestTrades(
     .filter((row): row is Asset => row != null)
     .sort((a, b) => b.value - a.value);
 
-  const myStarterFloors = starterFloors(me.players.map((player) => ({
-    position: player.position,
-    isStarter: player.isStarter,
-    value: valueById.get(player.playerId)?.value ?? null,
-  })));
+  // Only players who would start for me count: a backup changes nothing in the lineup. Flex slots count too.
+  const startsForMe = startsForRoster(
+    me.players,
+    league.tradeStarterSlots.length > 0 ? league.tradeStarterSlots : league.starters.map((p) => p.lineupSlot ?? p.position),
+    seasonLongValueById,
+  );
 
   type RosDelta = {
     pointsDelta: number;
@@ -1593,9 +1594,8 @@ export async function toolSuggestTrades(
     const givePool = myAssets.filter(
       (asset) => asset.position === mySurplus[0] || asset.position === partnerNeeds[0],
     );
-    // Only players who would start for me: a backup at a needed position changes nothing in the lineup.
     const getPool = theirAssets.filter(
-      (asset) => (asset.position === myNeeds[0] || asset.position === myNeeds[1]) && upgradesStarter(asset, myStarterFloors),
+      (asset) => (asset.position === myNeeds[0] || asset.position === myNeeds[1]) && startsForMe(asset),
     );
     let best: {
       give: Asset;
