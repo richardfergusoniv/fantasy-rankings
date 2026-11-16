@@ -1,8 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { waiverBidsFor, waiverCacheFor } from "./waiver-suggestions.js";
 import { BUILTIN_SCORING_WEIGHTS } from "./scoring/weights.js";
 import { leagueSchema } from "./dashboard-schemas.js";
 import { baseDashboard } from "./test-fixtures.js";
+
+// The shared fixtures hold games on 2026-11-15; pin "now" before kickoff so the lineup
+// optimizer doesn't lock them as already started once that date has passed.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-14T12:00:00.000Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 function gradedLeague() {
   const dashboard = baseDashboard();
