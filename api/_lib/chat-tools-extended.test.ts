@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { scoreWaiverSuggestions, waiverBidsFor } from "./waiver-suggestions.js";
 import { BUILTIN_SCORING_WEIGHTS } from "./scoring/weights.js";
 import type { Dashboard } from "./dashboard-schemas.js";
@@ -161,6 +161,14 @@ function ctxWithDashboard(dashboard: Dashboard = baseDashboard()): ChatToolConte
 
 beforeEach(() => {
   selectResults.length = 0;
+  // The shared fixtures hold games on 2026-11-15; pin "now" before kickoff so the lineup
+  // optimizer doesn't lock them as already started once that date has passed.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-14T12:00:00.000Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("extended chat tools", () => {
