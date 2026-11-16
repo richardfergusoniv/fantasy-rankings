@@ -78,7 +78,8 @@ export function MonitorHome({ dashboard, news, onOpenLeague, onOpenNews }: {
   const topNews = useMemo(() => monitorNews(news, dashboard.leagues, nowMs), [news, dashboard.leagues, nowMs]);
   return (
     <section className="league-monitor" aria-label="Monitor">
-      <div className="league-monitor-list">
+      <div className="league-monitor-list" role="group" aria-labelledby="league-monitor-leagues-title">
+        <h3 id="league-monitor-leagues-title" className="league-monitor-heading">All leagues</h3>
         {rows.map(({ league, summary }) => (
           <LeagueRow
             key={league.id}

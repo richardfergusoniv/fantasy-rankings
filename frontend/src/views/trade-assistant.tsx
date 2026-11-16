@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { TradeIdea } from "../../../api/_lib/trade-ideas";
 import { api } from "../api";
 import { AssistantCard, AssistantFacts, AssistantSheet, AssistantTable } from "../components/assistant-card";
+import { BackGlyph, ChevronGlyph } from "../components/glyphs";
 import { tradeIdeaDetails, tradeIdeaTitle } from "./trade-idea-details";
 import { SectionError } from "../section-error";
 import { personalQueryKey, useViewerIdentity } from "../viewer-scope";
@@ -48,7 +49,7 @@ function TradeIdeasSheet({ ideas, open, onOpenChange, week, onLoad, onAsk }: {
                 <strong>{tradeIdeaTitle(idea)}</strong>
                 <VerdictChip idea={idea} />
                 <small>{positions(idea.give)} for {positions(idea.get)} · {idea.partner}</small>
-                <span className="trade-idea-chevron" aria-hidden="true">›</span>
+                <span className="trade-idea-chevron" aria-hidden="true"><ChevronGlyph /></span>
               </button>
             </li>
           ))}
@@ -63,19 +64,19 @@ function TradeIdeasSheet({ ideas, open, onOpenChange, week, onLoad, onAsk }: {
     <AssistantSheet
       open={open}
       onOpenChange={changeOpen}
-      before={<button type="button" className="trade-idea-back" onClick={() => setSelectedKey(null)}>‹ Trade ideas</button>}
+      before={<button type="button" className="trade-idea-back" onClick={() => setSelectedKey(null)}><BackGlyph />Trade ideas</button>}
+      actions={selected.partnerRosterId !== null ? (
+        <button type="button" className="trade-idea-load" onClick={() => { onLoad(selected); changeOpen(false); }}>Load in calculator</button>
+      ) : undefined}
       title={tradeIdeaTitle(selected)}
       description={`Trade ${give} to ${selected.partner} for ${get}. Week ${week}.`}
       question={`Is trading ${give} to ${selected.partner} for ${get} a good idea for me?`}
       onAsk={(question) => onAsk?.(question)}
     >
-      <p className="trade-idea-partner">with {selected.partner} · <VerdictChip idea={selected} /></p>
+      <p className="trade-idea-partner">with {selected.partner} <VerdictChip idea={selected} /></p>
       <AssistantTable title="The trade" columns={["You give", "You get"]} rows={details.compare} />
       <AssistantFacts title="Your team" facts={details.yours} />
       <AssistantFacts title={selected.partner} facts={details.theirs} />
-      {selected.partnerRosterId !== null ? (
-        <button type="button" className="trade-idea-load" onClick={() => { onLoad(selected); changeOpen(false); }}>Load in calculator</button>
-      ) : null}
     </AssistantSheet>
   );
 }

@@ -3,21 +3,26 @@
 .assistant-card:hover { background: var(--secondary); }
 .assistant-card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .assistant-card-eyebrow { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
-.assistant-card-more { color: var(--link); font-size: var(--type-caption); font-weight: 600; }
+.assistant-card-more { display: inline-flex; align-items: center; gap: 2px; color: var(--link); font-size: var(--type-caption); font-weight: 600; }
 .assistant-card-answer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .assistant-card-answer strong { overflow: hidden; font-size: var(--type-section); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .assistant-card-chance { flex: none; padding: 0 10px; min-height: var(--badge-height); display: inline-flex; align-items: center; border-radius: var(--radius-pill); background: var(--action); color: var(--on-accent); font-size: var(--type-caption); font-weight: 700; font-variant-numeric: tabular-nums; }
 .assistant-card-bar { display: flex; height: 8px; overflow: hidden; border-radius: var(--radius-xs); background: var(--border); }
 .assistant-card-bar > span { background: var(--roster-highlight); }
 
-.assistant-sheet { width: min(calc(100% - 32px), 520px); max-height: calc(100dvh - 48px); display: grid; gap: 12px; overflow-y: auto; overscroll-behavior: contain; padding: 16px; }
+/* The body scrolls; the title, any pinned actions and "Ask a follow-up" stay put, so the main action is never below the fold. */
+.assistant-sheet { width: min(calc(100% - 32px), 520px); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; gap: 12px; overflow: hidden; padding: 16px; }
+.assistant-sheet > * { flex: none; }
 .assistant-sheet-title { margin: 0; padding-right: 32px; font-size: var(--type-display); line-height: 1.1; font-weight: 700; letter-spacing: -.02em; }
-.assistant-sheet-body { display: grid; gap: 14px; }
+.assistant-sheet-body { display: grid; flex: 1 1 auto; align-content: start; gap: 14px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* On a landscape phone the pinned parts cannot fit, so the whole sheet scrolls instead of clipping them. */
+@media (max-height: 480px) { .assistant-sheet { overflow-y: auto; } .assistant-sheet-body { flex: none; overflow: visible; } }
 .assistant-sheet-ask { min-height: 44px; }
 .assistant-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .assistant-table caption { padding: 0 0 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: left; }
+.assistant-table caption.is-lead { padding-bottom: 8px; color: var(--text); font-size: var(--type-body); font-weight: 700; }
 .assistant-table thead th { padding: 0 0 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: right; }
-.assistant-table tbody th { padding: 8px 8px 8px 0; font-size: var(--type-body); font-weight: 400; text-align: left; }
+.assistant-table tbody th { padding: 8px 8px 8px 0; font-size: var(--type-body); font-weight: 400; text-align: left; white-space: nowrap; }
 .assistant-table td { padding: 8px 0 8px 12px; border-top: 1px solid var(--row-divider); text-align: right; font-size: var(--type-body); font-weight: 500; }
 .assistant-table tbody tr > th { border-top: 1px solid var(--row-divider); }
 .assistant-table td.is-edge { color: var(--winner); font-weight: 700; }
@@ -25,7 +30,7 @@
 .assistant-facts { display: grid; gap: 6px; }
 .assistant-facts h3 { margin: 0; color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
 .assistant-facts dl { display: grid; margin: 0; }
-.assistant-facts dl > div { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 12px; padding: 8px 0; border-top: 1px solid var(--row-divider); }
+.assistant-facts dl > div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 8px 0; border-top: 1px solid var(--row-divider); }
 .assistant-facts dt { font-size: var(--type-body); }
 .assistant-facts dd { margin: 0; font-size: var(--type-body); font-weight: 500; text-align: right; }
 .assistant-card-position { color: var(--dim); font-size: var(--type-caption); font-weight: 600; }
@@ -39,10 +44,10 @@
 .trade-idea-list button { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 10px; align-items: center; width: 100%; min-height: 56px; padding: 10px 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .trade-idea-list strong { overflow: hidden; font-size: var(--type-body); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .trade-idea-list small { grid-column: 1 / 3; overflow: hidden; color: var(--dim); font-size: var(--type-caption); text-overflow: ellipsis; white-space: nowrap; }
-.trade-idea-chevron { grid-row: 1 / 3; grid-column: 3; color: var(--dim); }
+.trade-idea-chevron { display: inline-flex; grid-row: 1 / 3; grid-column: 3; color: var(--dim); }
 .trade-idea-verdict { display: inline-flex; align-items: center; min-height: var(--badge-height); padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-pill); color: var(--text); font-size: var(--type-caption); font-weight: 700; white-space: nowrap; }
 .trade-idea-verdict.is-good { border-color: var(--action); background: var(--action); color: var(--on-accent); }
-.trade-idea-back { justify-self: start; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--link); font: inherit; font-size: var(--type-caption); font-weight: 600; cursor: pointer; }
+.trade-idea-back { display: inline-flex; align-items: center; gap: 2px; justify-self: start; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--link); font: inherit; font-size: var(--type-caption); font-weight: 600; cursor: pointer; }
 .trade-idea-partner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; color: var(--dim); font-size: var(--type-caption); }
 .assistant-sheet .trade-idea-load { min-height: 48px; border: 0; border-radius: var(--radius); background: var(--action); color: var(--on-accent); font: inherit; font-size: var(--type-control); font-weight: 700; cursor: pointer; }
 
