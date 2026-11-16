@@ -18,7 +18,7 @@
 
 /* Monitor: the most important news about players you roster. */
 .league-monitor-news { display: grid; gap: 8px; margin-top: 8px; }
-.league-monitor-news h3 { margin: 0; padding: 8px 2px; border-bottom: 1px solid var(--hairline); font-size: var(--type-section); font-weight: 700; letter-spacing: -.01em; }
+.league-monitor-heading, .league-monitor-news h3 { margin: 0; padding: 8px 2px; border-bottom: 1px solid var(--hairline); font-size: var(--type-section); font-weight: 700; letter-spacing: -.01em; }
 .league-monitor-news ul { display: grid; margin: 0; padding: 0; list-style: none; }
 .league-monitor-news li { border-bottom: 1px solid var(--hairline); }
 .league-monitor-news button { display: grid; gap: 2px; width: 100%; min-height: 44px; padding: 10px 2px; border: 0; background: transparent; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
