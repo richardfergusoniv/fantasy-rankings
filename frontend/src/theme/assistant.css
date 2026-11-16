@@ -13,10 +13,10 @@
 /* The body scrolls; the title, any pinned actions and "Ask a follow-up" stay put, so the main action is never below the fold. */
 .assistant-sheet { width: min(calc(100% - 32px), 520px); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; gap: 12px; overflow: hidden; padding: 16px; }
 .assistant-sheet > * { flex: none; }
-/* On a landscape phone the pinned parts cannot fit, so the whole sheet scrolls instead of clipping them. */
-@media (max-height: 480px) { .assistant-sheet { overflow-y: auto; } .assistant-sheet-body { flex: none; overflow: visible; } }
 .assistant-sheet-title { margin: 0; padding-right: 32px; font-size: var(--type-display); line-height: 1.1; font-weight: 700; letter-spacing: -.02em; }
 .assistant-sheet-body { display: grid; flex: 1 1 auto; align-content: start; gap: 14px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* On a landscape phone the pinned parts cannot fit, so the whole sheet scrolls instead of clipping them. */
+@media (max-height: 480px) { .assistant-sheet { overflow-y: auto; } .assistant-sheet-body { flex: none; overflow: visible; } }
 .assistant-sheet-ask { min-height: 44px; }
 .assistant-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .assistant-table caption { padding: 0 0 6px; color: var(--dim); font-size: var(--type-caption); font-weight: 600; text-align: left; }
