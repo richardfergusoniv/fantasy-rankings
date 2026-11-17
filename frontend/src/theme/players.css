@@ -459,8 +459,9 @@ a.tool-player-link[href] { color: inherit; text-decoration-color: color-mix(in s
 /* Media attachments on the news card modal (charts, film clips). */
 .news-card-modal .news-media { display: grid; gap: 8px; margin-top: 12px; }
 .news-card-modal .news-media .news-media-image img,
-.news-card-modal .news-media .news-media-video { display: block; width: 100%; max-height: 320px; object-fit: contain; border-radius: var(--radius); border: 1px solid var(--hairline); background: var(--surface-2); }
-.news-card-modal .news-media .news-media-image { min-height: 0; }
+.news-card-modal .news-media .news-media-video { position: relative; display: block; width: 100%; max-height: 320px; object-fit: contain; border-radius: var(--radius); border: 1px solid var(--hairline); background: var(--surface-2); }
+.news-card-modal .news-media .news-media-image { position: relative; min-height: 0; }
+.news-card-modal .news-media-shimmer { border-radius: var(--radius); }
 
 /* Rankings and Waivers: each tier is its own table. */
 .rankings-view .ranking-list { display: grid; gap: 12px; border: 0; border-radius: 0; background: transparent; overflow: visible; }

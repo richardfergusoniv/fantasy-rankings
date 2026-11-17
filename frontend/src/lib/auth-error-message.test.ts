@@ -27,8 +27,11 @@ describe("authErrorMessage", () => {
     ).toMatch(/cannot send email/i);
   });
 
-  it("maps already-registered users", () => {
-    expect(authErrorMessage(new Error("User already registered"))).toMatch(/already exists/i);
+  it("maps already-registered users to the generic fallback (no enumeration)", () => {
+    expect(authErrorMessage(new Error("User already registered"))).toBe("Something went wrong. Try again.");
+    expect(
+      authErrorMessage({ message: "User already registered", code: "user_already_exists", status: 422 }),
+    ).toBe("Something went wrong. Try again.");
   });
 
   it("maps invalid credentials", () => {

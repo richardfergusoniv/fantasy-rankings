@@ -171,6 +171,10 @@ export function ChatPanel({
 
   // An Assistant card's follow-up is asked once, the first time the panel is ready.
   const askedInitial = useRef(false);
+  // Idempotency key of the last failed send, kept so re-sending the same
+  // text reuses the key and the server replays the stored turn instead of
+  // duplicating the message or the model call.
+  const failedSendRef = useRef<{ text: string; key: string } | null>(null);
   useEffect(() => {
     if (!initialQuestion || askedInitial.current || sending || unavailable || loadingChat) return;
     askedInitial.current = true;
@@ -218,7 +222,9 @@ export function ChatPanel({
     if (!text || sending || unavailable || loadingChat) return;
     setError(null);
     if (question === undefined) setDraft("");
-    const userMessage: ChatMessage = { id: newId(), role: "user", content: text };
+    const failedSend = failedSendRef.current;
+    const clientMessageId = failedSend && failedSend.text === text ? failedSend.key : newId();
+    const userMessage: ChatMessage = { id: clientMessageId, role: "user", content: text };
     const history = historyForRequest(messages);
     if (!hasMessages) captureComposerRect();
     setMessages((prev) => [...prev, userMessage]);
@@ -228,9 +234,11 @@ export function ChatPanel({
         message: text,
         history,
         chatId: chatId ?? undefined,
+        clientMessageId,
         horizon,
         leagueId,
       });
+      failedSendRef.current = null;
       setChatId(result.chatId);
       setMessages((prev) => [
         ...prev,
@@ -239,6 +247,7 @@ export function ChatPanel({
       void queryClient.invalidateQueries({ queryKey: ["chat-list"] });
     } catch (err) {
       captureComposerRect();
+      failedSendRef.current = { text, key: clientMessageId };
       setMessages((prev) => prev.filter((item) => item.id !== userMessage.id));
       const code = err && typeof err === "object" && "code" in err
         ? String((err as { code?: string }).code ?? "")
@@ -247,6 +256,7 @@ export function ChatPanel({
         ? Number((err as { status?: number }).status)
         : 0;
       if (code === "chat_not_found") {
+        failedSendRef.current = null;
         setChatId(null);
         setMessages([]);
         void queryClient.invalidateQueries({ queryKey: ["chat-list"] });

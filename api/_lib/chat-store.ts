@@ -2,7 +2,7 @@
  * Persist Tools Chat conversations and messages (user-scoped).
  * List queries return titles only; messages load when a chat is opened.
  */
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gt } from "drizzle-orm";
 import { CHAT_MAX_HISTORY_MESSAGES, CHAT_MAX_INPUT_CHARS } from "./chat-config.js";
 import { db, schema } from "./db.js";
 
@@ -179,14 +179,91 @@ export async function deleteChatConversation(
   return true;
 }
 
+/**
+ * Look up a completed turn by the client-generated id of its user message.
+ * The user message row id IS the idempotency key (see persistChatTurn), so
+ * this is a primary-key lookup: a retried send finds the stored turn and
+ * replays its reply instead of paying for a second model call. Returns null
+ * when no such turn exists, when it belongs to a different conversation than
+ * the caller asked about, or when its assistant reply is missing.
+ */
+export async function findChatTurnByClientMessageId(args: {
+  userId: string;
+  clientMessageId: string;
+  conversationId?: string | null;
+}): Promise<{ chatId: string; title: string; userContent: string; reply: string } | null> {
+  const [userMessage] = await db
+    .select({
+      conversationId: schema.chatMessages.conversationId,
+      content: schema.chatMessages.content,
+      createdAt: schema.chatMessages.createdAt,
+    })
+    .from(schema.chatMessages)
+    .where(
+      and(
+        eq(schema.chatMessages.id, args.clientMessageId),
+        eq(schema.chatMessages.userId, args.userId),
+        eq(schema.chatMessages.role, "user"),
+      ),
+    )
+    .limit(1);
+  if (!userMessage) return null;
+  if (args.conversationId && args.conversationId !== userMessage.conversationId) return null;
+
+  const [conversation] = await db
+    .select({
+      id: schema.chatConversations.id,
+      title: schema.chatConversations.title,
+    })
+    .from(schema.chatConversations)
+    .where(
+      and(
+        eq(schema.chatConversations.id, userMessage.conversationId),
+        eq(schema.chatConversations.userId, args.userId),
+      ),
+    )
+    .limit(1);
+  if (!conversation) return null;
+
+  const [assistantMessage] = await db
+    .select({ content: schema.chatMessages.content })
+    .from(schema.chatMessages)
+    .where(
+      and(
+        eq(schema.chatMessages.conversationId, userMessage.conversationId),
+        eq(schema.chatMessages.userId, args.userId),
+        eq(schema.chatMessages.role, "assistant"),
+        gt(schema.chatMessages.createdAt, userMessage.createdAt),
+      ),
+    )
+    .orderBy(asc(schema.chatMessages.createdAt))
+    .limit(1);
+  if (!assistantMessage) return null;
+
+  return {
+    chatId: conversation.id,
+    title: conversation.title,
+    userContent: userMessage.content,
+    reply: assistantMessage.content,
+  };
+}
+
 export async function persistChatTurn(args: {
   userId: string;
   conversationId?: string | null;
   userMessage: string;
   assistantMessage: string;
+  /**
+   * Client-generated id for this composed user message, stable across
+   * retries of the same send. Stored as the user message row's primary key,
+   * which makes a duplicate store impossible and lets a retry find the
+   * original turn via findChatTurnByClientMessageId.
+   */
+  clientMessageId?: string | null;
 }): Promise<{ chatId: string; title: string }> {
   const userContent = args.userMessage.trim().slice(0, CHAT_MAX_INPUT_CHARS);
   const assistantContent = args.assistantMessage.trim();
+  const userMessageId = args.clientMessageId ?? crypto.randomUUID();
   const now = new Date();
 
   return db.transaction(async (tx) => {
@@ -209,7 +286,7 @@ export async function persistChatTurn(args: {
       }
       await tx.insert(schema.chatMessages).values([
         {
-          id: crypto.randomUUID(),
+          id: userMessageId,
           conversationId: existing.id,
           userId: args.userId,
           role: "user",
@@ -248,7 +325,7 @@ export async function persistChatTurn(args: {
     });
     await tx.insert(schema.chatMessages).values([
       {
-        id: crypto.randomUUID(),
+        id: userMessageId,
         conversationId: chatId,
         userId: args.userId,
         role: "user",

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { NewsMediaItem } from "../../api/_lib/player-news-shared";
 import { isHttpOrHttpsUrl } from "../../api/_lib/http-url";
 
@@ -22,6 +23,34 @@ export function safeNewsMediaItems(
     });
   }
   return out;
+}
+
+/**
+ * One image attachment. A shimmer block (the app's `loading-shimmer`
+ * primitive) sits behind the image inside the media box until the image
+ * loads or fails, so photos do not pop into blank space. The box itself is
+ * sized by the existing CSS, so the placeholder adds no layout shift.
+ */
+function NewsMediaImage({ item, compact }: { item: NewsMediaItem; compact: boolean }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <a
+      className={compact ? "news-media-thumb" : "news-media-image"}
+      href={item.url}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={item.alt ? `${item.alt} (opens in a new tab)` : "Open attached image in a new tab"}
+    >
+      {!loaded && <span className="loading-shimmer news-media-shimmer" aria-hidden="true" />}
+      <img
+        src={compact ? item.previewUrl ?? item.url : item.url}
+        alt={item.alt ?? ""}
+        loading="lazy"
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
+      />
+    </a>
+  );
 }
 
 /**
@@ -52,28 +81,8 @@ export function NewsMedia({
             src={item.url}
             aria-label={item.alt ?? "Video attached to this post"}
           />
-        ) : compact ? (
-          <a
-            key={`${item.url}:${index}`}
-            className="news-media-thumb"
-            href={item.url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={item.alt ? `${item.alt} (opens in a new tab)` : "Open attached image in a new tab"}
-          >
-            <img src={item.previewUrl ?? item.url} alt={item.alt ?? ""} loading="lazy" />
-          </a>
         ) : (
-          <a
-            key={`${item.url}:${index}`}
-            className="news-media-image"
-            href={item.url}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={item.alt ? `${item.alt} (opens in a new tab)` : "Open attached image in a new tab"}
-          >
-            <img src={item.url} alt={item.alt ?? ""} loading="lazy" />
-          </a>
+          <NewsMediaImage key={`${item.url}:${index}`} item={item} compact={compact} />
         ),
       )}
     </div>

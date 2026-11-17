@@ -14,6 +14,17 @@ h3,
 .power-hero > div > strong {
   letter-spacing: -0.02em;
 }
+h1,
+h2,
+h3,
+.news-card-headline,
+.section-heading h2,
+.section-heading h3,
+.bench-section summary > span:first-child,
+.news-run-heading h2,
+.power-hero > div > strong {
+  text-wrap: balance;
+}
 h1, h2, h3 { margin: 0; }
 h1, h2 { font-size: var(--type-display); font-weight: 600; }
 h3 { font-size: var(--type-section); font-weight: 600; }

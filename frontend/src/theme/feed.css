@@ -64,6 +64,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .section-loading > span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .section-loading .loading-section { margin-top: 14px; }
 .loading-shimmer { position: relative; overflow: hidden; background: var(--surface-2); }
+.news-media .news-media-shimmer { position: absolute; inset: 0; }
 .loading-shimmer::after { position: absolute; inset: 0; content: ""; background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--surface) 68%, transparent) 48%, transparent 100%); transform: translateX(-100%); animation: shimmer 1.35s ease-in-out infinite; }
 .loading-topline { width: 42%; height: 11px; border-radius: var(--radius-xs); }
 .loading-title { width: 72%; height: 22px; margin-top: 14px; border-radius: var(--radius-sm); }

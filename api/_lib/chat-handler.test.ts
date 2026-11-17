@@ -31,6 +31,7 @@ vi.mock("./chat-store.js", () => ({
     }
   },
   deleteChatConversation: vi.fn(),
+  findChatTurnByClientMessageId: vi.fn(),
   getChatConversation: vi.fn(),
   getChatRecentMessages: vi.fn(),
   listChatConversations: vi.fn(),
@@ -45,6 +46,7 @@ import { resolveViewingLeague } from "./chat-viewing-league.js";
 import { resetChatRateLimits } from "./chat-rate-limit.js";
 import {
   deleteChatConversation,
+  findChatTurnByClientMessageId,
   getChatConversation,
   getChatRecentMessages,
   listChatConversations,
@@ -59,6 +61,7 @@ const resolveViewingLeagueMock = vi.mocked(resolveViewingLeague);
 const listChatsMock = vi.mocked(listChatConversations);
 const getChatMock = vi.mocked(getChatConversation);
 const recentMessagesMock = vi.mocked(getChatRecentMessages);
+const findTurnMock = vi.mocked(findChatTurnByClientMessageId);
 const persistMock = vi.mocked(persistChatTurn);
 const deleteMock = vi.mocked(deleteChatConversation);
 
@@ -84,6 +87,8 @@ describe("api/chat handler", () => {
     listChatsMock.mockReset();
     getChatMock.mockReset();
     recentMessagesMock.mockReset();
+    findTurnMock.mockReset();
+    findTurnMock.mockResolvedValue(null);
     persistMock.mockReset();
     deleteMock.mockReset();
     listPrefsMock.mockResolvedValue([]);
@@ -189,6 +194,74 @@ describe("api/chat handler", () => {
         assistantMessage: "Your WR1 projects 18.20.",
       }),
     );
+  });
+
+  it("POST replays the stored turn for a retried send (same clientMessageId)", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    findTurnMock.mockResolvedValue({
+      chatId: "c1",
+      title: "Who is my WR1?",
+      userContent: "Who is my WR1?",
+      reply: "Your WR1 projects 18.20.",
+    });
+
+    const res = await POST(authReq("POST", { message: "Who is my WR1?", clientMessageId: "msg-1" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      reply: "Your WR1 projects 18.20.",
+      model: "deduplicated",
+      toolSteps: 0,
+      chatId: "c1",
+      title: "Who is my WR1?",
+    });
+    expect(findTurnMock).toHaveBeenCalledWith({
+      userId: "u1",
+      clientMessageId: "msg-1",
+      conversationId: null,
+    });
+    expect(runChatAgentMock).not.toHaveBeenCalled();
+    expect(persistMock).not.toHaveBeenCalled();
+  });
+
+  it("POST passes clientMessageId through to persist on a first send", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    runChatAgentMock.mockResolvedValue({
+      reply: "Your WR1 projects 18.20.",
+      model: "thinkingmachines/inkling:free",
+      toolSteps: 1,
+    });
+    persistMock.mockResolvedValue({ chatId: "c1", title: "Who is my WR1?" });
+
+    const res = await POST(authReq("POST", { message: "Who is my WR1?", clientMessageId: "msg-2" }));
+    expect(res.status).toBe(200);
+    expect(persistMock).toHaveBeenCalledWith(
+      expect.objectContaining({ clientMessageId: "msg-2" }),
+    );
+  });
+
+  it("POST ignores a stored turn whose content differs from the retried message", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    findTurnMock.mockResolvedValue({
+      chatId: "c1",
+      title: "Who is my WR1?",
+      userContent: "Who is my WR1?",
+      reply: "Your WR1 projects 18.20.",
+    });
+    runChatAgentMock.mockResolvedValue({
+      reply: "A different answer.",
+      model: "thinkingmachines/inkling:free",
+      toolSteps: 1,
+    });
+    persistMock.mockResolvedValue({ chatId: "c1", title: "Who is my WR1?" });
+
+    const res = await POST(authReq("POST", { message: "Who is my RB1?", clientMessageId: "msg-1" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ reply: "A different answer." });
+    expect(runChatAgentMock).toHaveBeenCalled();
   });
 
   it("POST puts the resolved viewing league into the system prompt and tool context", async () => {

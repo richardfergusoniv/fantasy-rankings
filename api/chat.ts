@@ -43,6 +43,7 @@ import {
 import {
   ChatStoreError,
   deleteChatConversation,
+  findChatTurnByClientMessageId,
   getChatConversation,
   getChatRecentMessages,
   listChatConversations,
@@ -70,12 +71,34 @@ const postBodySchema = z.object({
   message: z.string().min(1).max(CHAT_MAX_INPUT_CHARS),
   history: z.array(historyMessageSchema).max(CHAT_MAX_HISTORY_MESSAGES).optional().default([]),
   chatId: z.string().trim().min(1).max(80).optional(),
+  /**
+   * Idempotency key: a client-generated id for this composed message,
+   * stable across retries of the same send. Stored as the user message
+   * row's primary key, so a retry replays the stored turn.
+   */
+  clientMessageId: z.string().trim().min(1).max(80).optional(),
   /** Ranking horizon the user is viewing (ECR removed). */
   horizon: z.enum(["week", "ros", "dynasty", "season_long"]).optional(),
   /** League the user is currently viewing; resolved server-side before use. */
   leagueId: z.string().trim().min(1).max(80).optional(),
   scoringWindow: z.enum(["week", "season_long", "dynasty"]).optional(),
 });
+
+/** Replay a stored turn for a retried send (no model call, no re-store). */
+function deduplicatedTurnResponse(stored: {
+  reply: string;
+  chatId: string;
+  title: string;
+}): Response {
+  return json({
+    ok: true,
+    reply: stored.reply,
+    model: "deduplicated",
+    toolSteps: 0,
+    chatId: stored.chatId,
+    title: stored.title,
+  });
+}
 
 export async function GET(req: Request): Promise<Response> {
   try {
@@ -140,6 +163,22 @@ export async function POST(req: Request): Promise<Response> {
       return badRequest("Invalid chat payload.", parsed.error.issues);
     }
 
+    // Idempotent retry: if this composed message already has a stored turn,
+    // replay its reply instead of paying for a second model call or storing
+    // a duplicate. The stored content must match, so a reused key can never
+    // answer a different question.
+    const clientMessageId = parsed.data.clientMessageId;
+    if (clientMessageId) {
+      const stored = await findChatTurnByClientMessageId({
+        userId: viewer.userId,
+        clientMessageId,
+        conversationId: parsed.data.chatId ?? null,
+      });
+      if (stored && stored.userContent === parsed.data.message.trim()) {
+        return deduplicatedTurnResponse(stored);
+      }
+    }
+
     // Owned transcript is the source of truth for prior turns. Client-supplied
     // history is accepted by the schema for backwards compatibility but never
     // passed to the model when a chatId is set (and unused for new chats).
@@ -189,10 +228,23 @@ export async function POST(req: Request): Promise<Response> {
         conversationId: parsed.data.chatId,
         userMessage: parsed.data.message.trim(),
         assistantMessage: result.reply,
+        clientMessageId: clientMessageId ?? null,
       });
     } catch (err) {
       if (err instanceof ChatStoreError && err.code === "chat_not_found") {
         return json({ ok: false, error: "Chat not found.", code: "chat_not_found" }, 404);
+      }
+      // A concurrent twin of this same send may have won the primary-key
+      // race and stored the turn first; replay its reply rather than error.
+      if (clientMessageId) {
+        const stored = await findChatTurnByClientMessageId({
+          userId: viewer.userId,
+          clientMessageId,
+          conversationId: parsed.data.chatId ?? null,
+        }).catch(() => null);
+        if (stored && stored.userContent === parsed.data.message.trim()) {
+          return deduplicatedTurnResponse(stored);
+        }
       }
       throw err;
     }
