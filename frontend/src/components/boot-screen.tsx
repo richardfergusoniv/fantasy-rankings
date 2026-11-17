@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 /**
  * The one loading screen. The same picture shows from the first paint (a copy of this
  * markup sits in index.html) through sign-in, the app download and the first data load,
@@ -40,8 +42,9 @@ export function hasSavedSignIn(): boolean {
 
 export function BootScreen() {
   // Each stage mounts its own copy. Starting the shimmer partway through, by the page clock,
-  // keeps the sweep continuous across those swaps instead of restarting each time.
-  const offset = typeof performance === "undefined" ? 0 : Math.round(performance.now() % SWEEP_MS);
+  // keeps the sweep continuous across those swaps instead of restarting each time. Read once per
+  // mount: a re-render of the same copy must not change the delay and make the sweep jump.
+  const [offset] = useState(() => (typeof performance === "undefined" ? 0 : Math.round(performance.now() % SWEEP_MS)));
   return (
     <div className="boot-screen" role="status" aria-busy="true" aria-label="Loading" style={{ "--boot-offset": `-${offset}ms` } as React.CSSProperties}>
       <BootScreenMarkup />
