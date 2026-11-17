@@ -27,3 +27,8 @@
 .league-monitor-news strong span { color: var(--dim); font-weight: 400; }
 .league-monitor-news-text { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: var(--type-body); }
 .league-monitor-news small { color: var(--dim); font-size: var(--type-caption); }
+
+/* "All leagues" on the left, the one label for the big number on every row on the right. */
+.league-monitor-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.league-monitor-heading h3 { margin: 0; font: inherit; letter-spacing: inherit; }
+.league-monitor-heading span { color: var(--dim); font-size: var(--type-caption); font-weight: 600; letter-spacing: 0; }

@@ -79,7 +79,10 @@ export function MonitorHome({ dashboard, news, onOpenLeague, onOpenNews }: {
   return (
     <section className="league-monitor" aria-label="Monitor">
       <div className="league-monitor-list" role="group" aria-labelledby="league-monitor-leagues-title">
-        <h3 id="league-monitor-leagues-title" className="league-monitor-heading">All leagues</h3>
+        <div className="league-monitor-heading">
+          <h3 id="league-monitor-leagues-title">All leagues</h3>
+          <span>Proj. margin</span>
+        </div>
         {rows.map(({ league, summary }) => (
           <LeagueRow
             key={league.id}
