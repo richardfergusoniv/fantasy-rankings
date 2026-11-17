@@ -27,7 +27,7 @@ function LeagueRow({ name, summary, record, onOpen }: {
       type="button"
       className={`league-monitor-row${needsAttention ? " needs-attention" : ""}`}
       onClick={onOpen}
-      aria-label={`Open ${name}${needsAttention ? `, ${summary.issues.length} to fix: ${summary.issues.map((issue) => issue.label).join(", ")}` : ", lineup set"}`}
+      aria-label={`Open ${name}${summary.margin === null ? "" : `, projected margin ${marginLabel(summary.margin)}`}${win === null ? "" : `, ${formatPercent(win)} win`}${needsAttention ? `, ${summary.issues.length} to fix: ${summary.issues.map((issue) => issue.label).join(", ")}` : ", lineup set"}`}
     >
       <span className="league-monitor-title">
         <strong>{name}</strong>
