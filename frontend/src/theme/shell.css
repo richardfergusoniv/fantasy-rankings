@@ -1,5 +1,17 @@
 /* App shell: ticker, league picker, bottom bar, segmented controls and sub-tabs. */
 .app-shell { min-height: 100vh; padding-bottom: calc(70px + env(safe-area-inset-bottom)); background: var(--bg); }
+/* View transitions (withViewTransition in view-transition.ts): a tab or Draft
+   room switch cross-fades only the main content region; the root pair is
+   animation-free so the shell chrome swaps instantly. The helper never starts
+   a transition without API support or for reduced-motion users, so these
+   rules only ever style a running transition. */
+#main-content { view-transition-name: main-content; }
+::view-transition-old(root),
+::view-transition-new(root) { animation: none; }
+::view-transition-old(main-content) { animation: viewContentOut .14s ease-out both; }
+::view-transition-new(main-content) { animation: viewContentIn .18s cubic-bezier(.22,.75,.28,1) both; }
+@keyframes viewContentOut { to { opacity: 0; } }
+@keyframes viewContentIn { from { opacity: 0; } }
 /* One below .league-sticky so the sub-tabs scroll under the sticky header, not over it. */
 .control-deck { position: relative; z-index: 11; }
 .ticker-strip { height: 44px; margin: -10px -16px 6px; overflow: hidden; border-bottom: 1px solid var(--ticker-divider); background: var(--ticker-bg); color: var(--ticker-text); }
