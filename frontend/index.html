@@ -45,7 +45,19 @@
     <title>Fantasy Rankings</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- The loading screen, drawn before any script runs. Same markup as components/boot-screen.tsx (a test checks it). -->
+    <div id="root"><div class="boot-screen" id="boot-screen" role="status" aria-busy="true" aria-label="Loading" hidden><div class="boot-head"><span class="live-dot"></span><span class="boot-bar boot-bar-week"></span></div><div class="boot-body"><span class="boot-bar boot-bar-heading"></span><div class="boot-row"><span class="boot-bar boot-bar-title"></span><span class="boot-bar boot-bar-value"></span><span class="boot-bar boot-bar-sub"></span></div><div class="boot-row"><span class="boot-bar boot-bar-title"></span><span class="boot-bar boot-bar-value"></span><span class="boot-bar boot-bar-sub"></span></div><div class="boot-row"><span class="boot-bar boot-bar-title"></span><span class="boot-bar boot-bar-value"></span><span class="boot-bar boot-bar-sub"></span></div><div class="boot-row"><span class="boot-bar boot-bar-title"></span><span class="boot-bar boot-bar-value"></span><span class="boot-bar boot-bar-sub"></span></div><div class="boot-row"><span class="boot-bar boot-bar-title"></span><span class="boot-bar boot-bar-value"></span><span class="boot-bar boot-bar-sub"></span></div><div class="boot-row"><span class="boot-bar boot-bar-title"></span><span class="boot-bar boot-bar-value"></span><span class="boot-bar boot-bar-sub"></span></div></div></div></div>
+    <script>
+      // Show it only when a sign-in is saved; otherwise the sign-in page is next, not the app.
+      try {
+        for (var k = 0; k < localStorage.length; k++) {
+          if (/^sb-.*-auth-token$/.test(localStorage.key(k) || "")) {
+            document.getElementById("boot-screen").hidden = false;
+            break;
+          }
+        }
+      } catch (e) {}
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

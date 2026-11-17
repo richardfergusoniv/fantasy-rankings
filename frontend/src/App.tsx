@@ -52,6 +52,7 @@ import { formatRecord, LeagueTeamCard } from "./league-team-card";
 import { leaguePowerTeamForPlayer } from "./league-roster";
 import { PlayerDetailSheet, usePlayerCardHistory } from "./player-detail";
 import { SkipLink } from "./shared";
+import { BootScreen } from "./components/boot-screen";
 import { MonitorHome } from "./views/monitor-home";
 import { supabase } from "./supabase";
 import { personalQueryKey, snapshotViewer, useViewerIdentity } from "./viewer-scope";
@@ -550,33 +551,6 @@ function SectionLoading({ label }: { label: string }) {
       <div className="loading-shimmer loading-line" aria-hidden="true" />
       <div className="loading-shimmer loading-line" aria-hidden="true" />
     </section>
-  );
-}
-
-function ProgressiveShell({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void }) {
-  const primaryPage = primaryPageForTab(tab);
-  const pageTabs: Array<[PrimaryPage, string, Tab]> = [
-    ["team", "Matchup", "team"],
-    ["players", "Players", "rankings"],
-    ["league", "League", "power"],
-    ["draft", "Draft", "draft"],
-    ["tools", "Tools", "monitor"],
-  ];
-  return (
-    <div className="app-shell progressive-shell">
-      <SkipLink />
-      <SafeAreaTopScrim backgroundColor="var(--bg)" />
-      <div role="region" aria-label="League and week" className="league-sticky progressive-sticky">
-        <div className="week-line"><div><span className="live-dot" /> Loading latest saved week</div><button className="refresh-button" disabled aria-label="Fantasy data is loading"><RefreshIcon spinning /></button></div>
-        <label className="league-picker"><span className="sr-only">League list is loading</span><select disabled><option>Loading leagues…</option></select></label>
-      </div>
-      <header className="control-deck">
-        <nav className="primary-tabs" aria-label="Fantasy sections">
-          {pageTabs.map(([page, label, nextTab]) => <button key={page} className={primaryPage === page ? "active" : ""} onClick={() => onTab(nextTab)} aria-current={primaryPage === page ? "page" : undefined}><NavigationIcon page={page} /><span>{label}</span></button>)}
-        </nav>
-      </header>
-      <main id="main-content" tabIndex={-1}><h1 className="sr-only">Fantasy {pageTabs.find(([page]) => page === primaryPage)?.[1] ?? "dashboard"}</h1><SectionLoading label={`Loading ${primaryPage}…`} /></main>
-    </div>
   );
 }
 
@@ -1300,7 +1274,7 @@ export function App() {
     disabled: askOpen || showLoadingShell,
   });
   if (showLoadingShell) {
-    return <ProgressiveShell tab={tab} onTab={setTab} />;
+    return <BootScreen />;
   }
 
   if (!dashboard || !league) {
