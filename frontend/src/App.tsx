@@ -1302,7 +1302,7 @@ export function App() {
       <div className="app-shell">
         <SkipLink />
         <SafeAreaTopScrim backgroundColor="var(--bg)" />
-        <div role="region" aria-label="League and week" className="league-sticky">
+        <div role="region" aria-label="League and week" className="league-sticky is-monitor">
           <div className="week-line">
             <div className="week-label"><span className="live-dot" /><span className="week-season">NFL {dashboard.season} · </span>Week {dashboard.week}</div>
             <div className="week-actions">
