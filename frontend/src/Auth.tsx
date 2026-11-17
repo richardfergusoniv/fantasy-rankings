@@ -9,6 +9,7 @@ import { SkipLink } from "./shared";
 import { ThemeToggle } from "./shell/theme-toggle";
 import { authErrorMessage } from "./lib/auth-error-message";
 import { getAccessToken, isSupabaseConfigured, supabase, type Session } from "./supabase";
+import { BootScreen, hasSavedSignIn } from "./components/boot-screen";
 import { identifyPostHogUser, resetPostHog } from "./posthog";
 import { ViewerIdentityContext, clearPersonalQueries } from "./viewer-scope";
 
@@ -70,6 +71,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [savedSignIn] = useState(hasSavedSignIn);
   const [connState, setConnState] = useState<ConnectionState>({ status: "loading" });
   const [connLoading, setConnLoading] = useState(false);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
@@ -194,11 +196,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (loading) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center bg-background px-4 text-sm text-muted-foreground">
-        <p>Loading…</p>
-      </div>
-    );
+    // A saved sign-in means the app is what loads next, so show its loading screen. Without one
+    // the sign-in page is next: hold the plain background, not a skeleton of the app.
+    return savedSignIn ? <BootScreen /> : <div className="min-h-dvh bg-background" role="status" aria-busy="true" aria-label="Loading" />;
   }
 
   if (passwordRecovery && session) {
@@ -213,11 +213,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   // (e.g. a cold home-screen launch). Hold the loading screen instead of
   // flashing the connect screen at users who are already connected.
   if (connState.status === "loading") {
-    return (
-      <div className="flex min-h-dvh items-center justify-center bg-background px-4 text-sm text-muted-foreground">
-        <p>Loading…</p>
-      </div>
-    );
+    return <BootScreen />;
   }
 
   // The connection lookup failed (e.g. a backend outage). Show a retryable

@@ -45,9 +45,19 @@
 footer { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 24px; padding: 13px 2px 6px; border-top: 1px solid var(--hairline); color: var(--dim); font-size: var(--type-caption); }
 footer a { display: inline-flex; min-height: 44px; align-items: center; color: var(--link); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 
+/* The one loading screen (components/boot-screen.tsx; a copy of its markup is in index.html). */
+.boot-screen { min-height: 100dvh; padding-top: env(safe-area-inset-top, 0px); background: var(--bg); }
+.boot-head { display: flex; align-items: center; min-height: 63px; padding: 10px 16px 8px; border-bottom: 1px solid var(--hairline); }
+.boot-body { padding: 12px 16px 0; }
+.boot-bar { display: block; height: 12px; border-radius: var(--radius-xs); background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-2) 35%, color-mix(in srgb, var(--border) 55%, var(--surface-2)) 50%, var(--surface-2) 65%, var(--surface-2) 100%) 0 0 / 300% 100%; animation: boot-sweep 1.4s linear infinite; animation-delay: var(--boot-offset, 0ms); }
+.boot-bar-week { width: 108px; height: 10px; }
+.boot-bar-heading { width: 96px; height: 16px; margin: 14px 2px; }
+.boot-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 78px; padding: 10px 2px; border-top: 1px solid var(--hairline); }
+.boot-bar-title { width: 46%; height: 14px; }
+.boot-bar-value { width: 44px; height: 16px; }
+.boot-bar-sub { grid-column: 1 / -1; height: 8px; }
+@keyframes boot-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
 .loading-shell { min-height: 100vh; padding: 18px 16px; }
-.progressive-shell main { min-height: 52vh; }
-.progressive-sticky { min-height: 86px; }
 .section-loading { padding: 18px 0 8px; }
 .section-loading > span { display: block; color: var(--dim); font-size: var(--type-caption); font-weight: 700; }
 .section-loading .loading-section { margin-top: 14px; }
@@ -69,7 +79,7 @@ footer a { display: inline-flex; min-height: 44px; align-items: center; color: v
 .empty-state button { display: inline-flex; width: fit-content; min-height: 44px; align-items: center; justify-content: center; justify-self: center; gap: 7px; margin-top: 4px; border: 0; border-radius: var(--radius); background: var(--action); color: var(--on-accent); font-size: var(--type-body); font-weight: 600; cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
-  .spin, .animate-spin, .animate-pulse, .loading-shimmer::after, .player-detail-backdrop, .player-detail-sheet, .player-detail-content, .news-card-backdrop, .news-card-modal, .matchup-card-backdrop, .matchup-data-card, .trade-result-backdrop, .trade-result-card, .chart-result-backdrop, .chart-result-card, .power-team-card-backdrop, .power-team-card, .ticker-track, [data-slot="dialog-overlay"], [data-slot="dialog-content"] { animation: none; }
+  .spin, .animate-spin, .animate-pulse, .loading-shimmer::after, .boot-bar, .player-detail-backdrop, .player-detail-sheet, .player-detail-content, .news-card-backdrop, .news-card-modal, .matchup-card-backdrop, .matchup-data-card, .trade-result-backdrop, .trade-result-card, .chart-result-backdrop, .chart-result-card, .power-team-card-backdrop, .power-team-card, .ticker-track, [data-slot="dialog-overlay"], [data-slot="dialog-content"] { animation: none; }
   .segment-thumb, .matchup-row, .player-detail-sheet, .player-detail-content, .bench-section summary svg, .trade-balance-track span, .percentile-bar > i, .comparison-bar > i { transition: none; }
   .ticker-viewport { overflow-x: auto; scrollbar-width: none; }
   .ticker-viewport::-webkit-scrollbar { display: none; }
