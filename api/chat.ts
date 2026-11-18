@@ -21,6 +21,7 @@ import { resolveViewer } from "./_lib/auth.js";
 import { runChatAgent } from "./_lib/chat-agent.js";
 import {
   buildChatSystemPrompt,
+  CHAT_AGENT_DEADLINE_MS,
   CHAT_MAX_HISTORY_MESSAGES,
   CHAT_MAX_INPUT_CHARS,
   readOpenRouterApiKey,
@@ -125,7 +126,30 @@ export async function GET(req: Request): Promise<Response> {
   }
 }
 
+/**
+ * vercel.json caps this function at 60s. The agent's own deadline (55s) used to
+ * fit because nothing came before it; a retry that waits on the claim spends
+ * part of the budget first, so the agent gets what is left, and a takeover
+ * with too little left is refused up front instead of being killed mid-call.
+ */
+const FUNCTION_LIMIT_MS = 60_000;
+const FUNCTION_MARGIN_MS = 3_000;
+const MIN_AGENT_BUDGET_MS = 15_000;
+
+function turnInProgress(): Response {
+  return json(
+    {
+      ok: false,
+      error: "Still working on that message. Try again in a moment.",
+      code: "chat_turn_in_progress",
+    },
+    409,
+    { "Retry-After": "5" },
+  );
+}
+
 export async function POST(req: Request): Promise<Response> {
+  const requestStartedAt = Date.now();
   try {
     const viewer = await resolveViewer(req);
     if (!viewer) return unauthorized("Sign in required.");
@@ -199,18 +223,20 @@ export async function POST(req: Request): Promise<Response> {
         },
       );
       if (outcome.status === "replay" && found.turn) return deduplicatedTurnResponse(found.turn);
-      if (outcome.status === "busy") {
-        return json(
-          {
-            ok: false,
-            error: "Still working on that message. Try again in a moment.",
-            code: "chat_turn_in_progress",
-          },
-          409,
-          { "Retry-After": "5" },
-        );
-      }
+      if (outcome.status === "busy") return turnInProgress();
       if (outcome.status === "claimed") claim = outcome;
+    }
+
+    // What is left of the function's 60s after any claim wait.
+    const agentBudgetMs = Math.min(
+      CHAT_AGENT_DEADLINE_MS,
+      FUNCTION_LIMIT_MS - FUNCTION_MARGIN_MS - (Date.now() - requestStartedAt),
+    );
+    if (agentBudgetMs < MIN_AGENT_BUDGET_MS) {
+      // Not enough time to answer before the platform kills the request: give
+      // the claim back and let the next send start with a full budget.
+      await claim?.release(new Error("no time left after waiting on the claim"));
+      return turnInProgress();
     }
 
     let failure: unknown;
@@ -245,6 +271,7 @@ export async function POST(req: Request): Promise<Response> {
 
       const result = await runChatAgent({
         apiKey,
+        deadlineMs: agentBudgetMs,
         userMessage: parsed.data.message.trim(),
         history,
         systemPrompt,

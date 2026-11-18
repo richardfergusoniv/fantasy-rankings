@@ -345,6 +345,48 @@ describe("api/chat handler", () => {
     expect(persistMock).not.toHaveBeenCalled();
   });
 
+  it("POST hands the agent only the time left after a claim wait, not a fresh 55s", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    runChatAgentMock.mockResolvedValue({ reply: "ok", model: "m", toolSteps: 0 });
+    persistMock.mockResolvedValue({ chatId: "c1", title: "t" });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"));
+    try {
+      claimMock.mockImplementation(async () => {
+        vi.setSystemTime(new Date("2026-11-18T12:00:30Z")); // waited 30s on the original
+        return { status: "claimed", release: releaseMock };
+      });
+      const res = await POST(authReq("POST", { message: "Who is my WR1?", clientMessageId: "msg-14" }));
+      expect(res.status).toBe(200);
+      // 60s function limit - 3s margin - 30s waited
+      expect(runChatAgentMock.mock.calls[0]?.[0].deadlineMs).toBe(27_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("POST refuses a takeover with too little time left, releases the claim, and makes no model call", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-18T12:00:00Z"));
+    try {
+      claimMock.mockImplementation(async () => {
+        vi.setSystemTime(new Date("2026-11-18T12:00:48Z")); // waited 48s: 9s left
+        return { status: "claimed", release: releaseMock };
+      });
+      const res = await POST(authReq("POST", { message: "Who is my WR1?", clientMessageId: "msg-15" }));
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ code: "chat_turn_in_progress" });
+      expect(runChatAgentMock).not.toHaveBeenCalled();
+      expect(releaseMock).toHaveBeenCalledTimes(1);
+      expect(releaseMock.mock.calls[0]?.[0]).toBeInstanceOf(Error);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("POST carries on without single-flight when the lease store is unavailable", async () => {
     process.env.OPENROUTER_API_KEY = "sk-or-test";
     resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
