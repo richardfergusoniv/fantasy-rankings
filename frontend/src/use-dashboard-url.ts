@@ -19,6 +19,36 @@ function writeHistory(next: DashboardUrlState, mode: "push" | "replace", opens: 
   else window.history.replaceState(state, "", url);
 }
 
+type CommitDeps = {
+  /** The newest requested state. Updated at commit time, before any animated render. */
+  intended: { current: DashboardUrlState };
+  render: (state: DashboardUrlState) => void;
+  writeHistory: (next: DashboardUrlState, mode: "push" | "replace", opens: OpenedByPush) => void;
+  animate: (update: () => void) => void;
+};
+
+/**
+ * Apply one URL commit. The history entry and the intended state change at
+ * once, so a second commit (or Back) before an animation's callback compares
+ * against what was just asked for, not against what is still on screen. Only
+ * the render waits for the view transition, and it reads the intended state
+ * when it runs: Team, Rankings, Team in quick succession ends on Team, and a
+ * Back pressed mid-transition wins instead of being overwritten.
+ */
+export function commitDashboardUrl(patch: Partial<DashboardUrlState>, deps: CommitDeps): void {
+  const current = deps.intended.current;
+  const next = { ...current, ...patch };
+  const action = dashboardUrlHistoryMode(current, next);
+  if (action === "none") return;
+  deps.writeHistory(next, action, opensByPush(action, current, next));
+  deps.intended.current = next;
+  // Only a change of view animates: a tab switch, or a Draft room switch
+  // (the Draft subview bar is the one subview that is not itself a tab).
+  const viewChanges = next.tab !== current.tab || next.draftRoom !== current.draftRoom;
+  if (viewChanges) deps.animate(() => deps.render(deps.intended.current));
+  else deps.render(next);
+}
+
 export function useDashboardUrl() {
   const [state, setState] = useState<DashboardUrlState>(() => parseDashboardSearch(window.location.search));
   const stateRef = useRef(state);
@@ -41,26 +71,12 @@ export function useDashboardUrl() {
   }, []);
 
   const commit = useCallback((patch: Partial<DashboardUrlState>) => {
-    const current = stateRef.current;
-    const next = { ...current, ...patch };
-    if (dashboardUrlHistoryMode(current, next) === "none") return;
-    // Only a change of view animates: a tab switch, or a Draft room switch
-    // (the Draft subview bar is the one subview that is not itself a tab).
-    // Filter, selection, league and overlay commits apply as before.
-    const viewChanges = next.tab !== current.tab || next.draftRoom !== current.draftRoom;
-    const apply = () => {
-      // Recompute against the latest state: a transition callback runs a
-      // frame later, and another commit may have landed in between.
-      const latest = stateRef.current;
-      const applied = { ...latest, ...patch };
-      const action = dashboardUrlHistoryMode(latest, applied);
-      if (action === "none") return;
-      writeHistory(applied, action, opensByPush(action, latest, applied));
-      stateRef.current = applied;
-      setState(applied);
-    };
-    if (viewChanges) withViewTransition(apply);
-    else apply();
+    commitDashboardUrl(patch, {
+      intended: stateRef,
+      render: setState,
+      writeHistory,
+      animate: withViewTransition,
+    });
   }, []);
 
   /** Close an overlay: step back if opening it added a history entry, else clear it in place. */

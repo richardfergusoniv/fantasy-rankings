@@ -10,6 +10,8 @@
 ::view-transition-new(root) { animation: none; }
 ::view-transition-old(main-content) { animation: viewContentOut .14s ease-out both; }
 ::view-transition-new(main-content) { animation: viewContentIn .18s cubic-bezier(.22,.75,.28,1) both; }
+/* Taps during the short fade reach the live page instead of the snapshot overlay. */
+::view-transition { pointer-events: none; }
 @keyframes viewContentOut { to { opacity: 0; } }
 @keyframes viewContentIn { from { opacity: 0; } }
 /* One below .league-sticky so the sub-tabs scroll under the sticky header, not over it. */
