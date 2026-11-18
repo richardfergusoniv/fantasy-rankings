@@ -18,6 +18,7 @@ import { SegmentedControl } from "../shared";
 import { markDraftPlayerTaken, undoDraftPlayerTaken } from "../undo";
 import { positionFilterTabAriaLabel, positionFilterTabLabel } from "./position-filter-labels";
 import { formatWhole } from "../lib/format-number";
+import { useAnimatedDisclosure } from "../lib/use-animated-disclosure";
 import { Badge } from "@/components/ui/badge";
 import { CloseGlyph } from "../components/glyphs";
 import { DraftGradeCard } from "./draft-grade-card";
@@ -100,6 +101,7 @@ export function DraftCenter({
   // presenting veterans as eligible in an established league.
   const draftBoardMode = league.seasonLongFormat.isDynasty ? (syncedBoardMode === "startup" ? "startup" : "rookie") : "redraft";
   const isRookieBoard = draftBoardMode === "rookie";
+  const draftedElsewhereRef = useAnimatedDisclosure();
   const [mode, setMode] = useState<DraftRoom>(draftRoom ?? "board");
   const [position, setPosition] = useState<"ALL" | "QB" | "RB" | "WR" | "TE" | "K" | "DEF" | "ROOKIES">(draftPosition ?? "ALL");
   // K and DST are not on the board at all (owner, 2026-11-01): no market value, and a weekly
@@ -366,7 +368,7 @@ export function DraftCenter({
           })}
         </div>
       ) : <div className="empty-inline compact">{syncedDraft ? "Your Sleeper picks will appear here automatically." : "Add players from the board."}</div>}
-      {manualDraftedRows.length > 0 ? <details className="drafted-elsewhere disclosure"><summary>Drafted elsewhere · {manualDraftedRows.length}</summary><div className="disclosure-body"><div className="disclosure-clip">{manualDraftedRows.map((player) => <button type="button" key={player.playerId ?? player.name} onClick={() => player.playerId && setManualDraftedIds((current) => current.filter((id) => id !== player.playerId))}><span><strong>{player.name}</strong><small>{player.position}{player.team ? ` · ${player.team}` : ""}</small></span><b>Restore</b></button>)}</div></div></details> : null}
+      {manualDraftedRows.length > 0 ? <details className="drafted-elsewhere disclosure" ref={draftedElsewhereRef}><summary>Drafted elsewhere · {manualDraftedRows.length}</summary><div className="disclosure-body"><div className="disclosure-clip">{manualDraftedRows.map((player) => <button type="button" key={player.playerId ?? player.name} onClick={() => player.playerId && setManualDraftedIds((current) => current.filter((id) => id !== player.playerId))}><span><strong>{player.name}</strong><small>{player.position}{player.team ? ` · ${player.team}` : ""}</small></span><b>Restore</b></button>)}</div></div></details> : null}
     </section>
   );
 

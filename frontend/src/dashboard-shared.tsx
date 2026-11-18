@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from "react";
 import { useMinuteNow } from "./use-minute-now";
 import { CrossToolBadge, ToolLinks, type CrossToolLink, type ToolLinkItem } from "./tool-links";
 import { formatImpliedTotal } from "./lib/game-line-matchup-link";
+import { useAnimatedDisclosure } from "./lib/use-animated-disclosure";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -386,9 +387,10 @@ export function movementLabel(percent: number | null): string {
  * line so it never competes for width inside the flex header. */
 export function DashboardPartialNotes({ dashboard }: { dashboard: Dashboard }) {
   const info = useMemo(() => dashboardFreshness(dashboard, Date.now()), [dashboard]);
+  const disclosureRef = useAnimatedDisclosure();
   if (!info.partial) return null;
   return (
-    <details className="data-notes disclosure">
+    <details className="data-notes disclosure" ref={disclosureRef}>
       <summary>Part of this view is unavailable</summary>
       <div className="disclosure-body"><div className="disclosure-clip"><ul>{info.notes.map((note) => <li key={note}>{note}</li>)}</ul></div></div>
     </details>

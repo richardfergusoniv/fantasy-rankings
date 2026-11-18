@@ -542,10 +542,14 @@ a:active { color: var(--link-active); }
 
 /* Smooth disclosures: a native details whose content wrapper is a
    one-row grid animated 0fr to 1fr on the app's modal easing, so opening
-   and closing glide instead of snapping. The open attribute still drives
-   everything; the clip keeps collapsed content clipped to zero height,
-   and visibility keeps it unfocusable while closed or closing, matching
-   what a closed details guarantees today. Reduced motion stays instant. */
+   and closing glide instead of snapping. Opening is driven by the open
+   attribute alone. Closing is JS-assisted (use-animated-disclosure): a
+   native details stops rendering its content the moment open is removed,
+   so the hook holds open in place under an is-closing class while the
+   grid glides shut, then removes open. The clip keeps collapsed content
+   clipped to zero height, and visibility keeps it unfocusable while
+   closed or closing, matching what a closed details guarantees today.
+   Reduced motion stays instant. */
 .disclosure-body {
   display: grid;
   grid-template-rows: 0fr;
@@ -556,6 +560,11 @@ a:active { color: var(--link-active); }
   grid-template-rows: 1fr;
   visibility: visible;
   transition: grid-template-rows .18s cubic-bezier(.22, .75, .28, 1), visibility 0s;
+}
+.disclosure.is-closing > .disclosure-body {
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows .18s cubic-bezier(.22, .75, .28, 1), visibility 0s linear .18s;
 }
 .disclosure-clip { overflow: hidden; min-height: 0; }
 @media (prefers-reduced-motion: reduce) {
