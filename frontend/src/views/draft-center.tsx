@@ -366,7 +366,7 @@ export function DraftCenter({
           })}
         </div>
       ) : <div className="empty-inline compact">{syncedDraft ? "Your Sleeper picks will appear here automatically." : "Add players from the board."}</div>}
-      {manualDraftedRows.length > 0 ? <details className="drafted-elsewhere"><summary>Drafted elsewhere · {manualDraftedRows.length}</summary><div>{manualDraftedRows.map((player) => <button type="button" key={player.playerId ?? player.name} onClick={() => player.playerId && setManualDraftedIds((current) => current.filter((id) => id !== player.playerId))}><span><strong>{player.name}</strong><small>{player.position}{player.team ? ` · ${player.team}` : ""}</small></span><b>Restore</b></button>)}</div></details> : null}
+      {manualDraftedRows.length > 0 ? <details className="drafted-elsewhere disclosure"><summary>Drafted elsewhere · {manualDraftedRows.length}</summary><div className="disclosure-body"><div className="disclosure-clip">{manualDraftedRows.map((player) => <button type="button" key={player.playerId ?? player.name} onClick={() => player.playerId && setManualDraftedIds((current) => current.filter((id) => id !== player.playerId))}><span><strong>{player.name}</strong><small>{player.position}{player.team ? ` · ${player.team}` : ""}</small></span><b>Restore</b></button>)}</div></div></details> : null}
     </section>
   );
 

@@ -388,9 +388,9 @@ export function DashboardPartialNotes({ dashboard }: { dashboard: Dashboard }) {
   const info = useMemo(() => dashboardFreshness(dashboard, Date.now()), [dashboard]);
   if (!info.partial) return null;
   return (
-    <details className="data-notes">
+    <details className="data-notes disclosure">
       <summary>Part of this view is unavailable</summary>
-      <ul>{info.notes.map((note) => <li key={note}>{note}</li>)}</ul>
+      <div className="disclosure-body"><div className="disclosure-clip"><ul>{info.notes.map((note) => <li key={note}>{note}</li>)}</ul></div></div>
     </details>
   );
 }
