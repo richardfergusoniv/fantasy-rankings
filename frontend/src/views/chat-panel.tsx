@@ -32,6 +32,17 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Idempotency key for a sent message. The server stores it as the message
+ * row's primary key across every user, so it must be collision-proof, not
+ * just unique within this panel.
+ */
+function newMessageKey(): string {
+  return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${newId()}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+}
+
 function historyForRequest(messages: ChatMessage[]): Array<{ role: ChatRole; content: string }> {
   return messages
     .slice(-CHAT_MAX_HISTORY_MESSAGES)
@@ -174,7 +185,7 @@ export function ChatPanel({
   // Idempotency key of the last failed send, kept so re-sending the same
   // text reuses the key and the server replays the stored turn instead of
   // duplicating the message or the model call.
-  const failedSendRef = useRef<{ text: string; key: string } | null>(null);
+  const failedSendRef = useRef<{ text: string; key: string; chatId: string | null } | null>(null);
   useEffect(() => {
     if (!initialQuestion || askedInitial.current || sending || unavailable || loadingChat) return;
     askedInitial.current = true;
@@ -187,6 +198,7 @@ export function ChatPanel({
   }
 
   function startNewChat() {
+    failedSendRef.current = null;
     if (hasMessages) captureComposerRect();
     setChatId(null);
     setMessages([]);
@@ -196,6 +208,7 @@ export function ChatPanel({
 
   async function openChat(id: string) {
     if (loadingChat || sending || id === chatId) return;
+    failedSendRef.current = null;
     setLoadingChat(true);
     setError(null);
     try {
@@ -223,7 +236,11 @@ export function ChatPanel({
     setError(null);
     if (question === undefined) setDraft("");
     const failedSend = failedSendRef.current;
-    const clientMessageId = failedSend && failedSend.text === text ? failedSend.key : newId();
+    // Reuse the key only for the same text in the same conversation: a retry
+    // from New chat or another chat is a new question, not a replay.
+    const clientMessageId = failedSend && failedSend.text === text && failedSend.chatId === chatId
+      ? failedSend.key
+      : newMessageKey();
     const userMessage: ChatMessage = { id: clientMessageId, role: "user", content: text };
     const history = historyForRequest(messages);
     if (!hasMessages) captureComposerRect();
@@ -247,7 +264,7 @@ export function ChatPanel({
       void queryClient.invalidateQueries({ queryKey: ["chat-list"] });
     } catch (err) {
       captureComposerRect();
-      failedSendRef.current = { text, key: clientMessageId };
+      failedSendRef.current = { text, key: clientMessageId, chatId };
       setMessages((prev) => prev.filter((item) => item.id !== userMessage.id));
       const code = err && typeof err === "object" && "code" in err
         ? String((err as { code?: string }).code ?? "")

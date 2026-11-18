@@ -35,7 +35,7 @@ function NewsMediaImage({ item, compact }: { item: NewsMediaItem; compact: boole
   const [loaded, setLoaded] = useState(false);
   return (
     <a
-      className={compact ? "news-media-thumb" : "news-media-image"}
+      className={`${compact ? "news-media-thumb" : "news-media-image"}${loaded ? "" : " is-loading"}`}
       href={item.url}
       target="_blank"
       rel="noreferrer"

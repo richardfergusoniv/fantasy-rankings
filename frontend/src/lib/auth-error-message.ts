@@ -68,9 +68,10 @@ export function authErrorMessage(err: unknown, fallback = "Something went wrong.
     normalizedMessage.includes("user already registered") ||
     normalizedMessage.includes("already been registered")
   ) {
-    // Generic on purpose: naming the existing account would let a signup
-    // attempt probe which emails are registered.
-    return fallback;
+    // Worded so it holds whether or not the email is registered: confirming
+    // the account would let a signup attempt probe which emails exist, and a
+    // bare "Something went wrong" leaves a real owner with nowhere to go.
+    return "If you already have an account, sign in or reset your password.";
   }
 
   if (

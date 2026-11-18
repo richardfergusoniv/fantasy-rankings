@@ -27,11 +27,12 @@ describe("authErrorMessage", () => {
     ).toMatch(/cannot send email/i);
   });
 
-  it("maps already-registered users to the generic fallback (no enumeration)", () => {
-    expect(authErrorMessage(new Error("User already registered"))).toBe("Something went wrong. Try again.");
+  it("maps already-registered users to copy that neither confirms the account nor dead-ends", () => {
+    const copy = "If you already have an account, sign in or reset your password.";
+    expect(authErrorMessage(new Error("User already registered"))).toBe(copy);
     expect(
       authErrorMessage({ message: "User already registered", code: "user_already_exists", status: 422 }),
-    ).toBe("Something went wrong. Try again.");
+    ).toBe(copy);
   });
 
   it("maps invalid credentials", () => {
