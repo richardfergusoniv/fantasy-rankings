@@ -21,6 +21,7 @@ import { resolveViewer } from "./_lib/auth.js";
 import { runChatAgent } from "./_lib/chat-agent.js";
 import {
   buildChatSystemPrompt,
+  CHAT_AGENT_DEADLINE_MS,
   CHAT_MAX_HISTORY_MESSAGES,
   CHAT_MAX_INPUT_CHARS,
   readOpenRouterApiKey,
@@ -36,6 +37,7 @@ import {
   listChatPreferences,
 } from "./_lib/chat-preferences.js";
 import { checkChatRateLimit } from "./_lib/chat-rate-limit.js";
+import { chatTurnResource, claimChatTurn, type ChatTurnClaim } from "./_lib/chat-turn-claim.js";
 import {
   appendViewingLeague,
   resolveViewingLeague,
@@ -43,6 +45,7 @@ import {
 import {
   ChatStoreError,
   deleteChatConversation,
+  findChatTurnByClientMessageId,
   getChatConversation,
   getChatRecentMessages,
   listChatConversations,
@@ -70,12 +73,34 @@ const postBodySchema = z.object({
   message: z.string().min(1).max(CHAT_MAX_INPUT_CHARS),
   history: z.array(historyMessageSchema).max(CHAT_MAX_HISTORY_MESSAGES).optional().default([]),
   chatId: z.string().trim().min(1).max(80).optional(),
+  /**
+   * Idempotency key: a client-generated id for this composed message,
+   * stable across retries of the same send. Stored as the user message
+   * row's primary key, so a retry replays the stored turn.
+   */
+  clientMessageId: z.string().trim().min(1).max(80).optional(),
   /** Ranking horizon the user is viewing (ECR removed). */
   horizon: z.enum(["week", "ros", "dynasty", "season_long"]).optional(),
   /** League the user is currently viewing; resolved server-side before use. */
   leagueId: z.string().trim().min(1).max(80).optional(),
   scoringWindow: z.enum(["week", "season_long", "dynasty"]).optional(),
 });
+
+/** Replay a stored turn for a retried send (no model call, no re-store). */
+function deduplicatedTurnResponse(stored: {
+  reply: string;
+  chatId: string;
+  title: string;
+}): Response {
+  return json({
+    ok: true,
+    reply: stored.reply,
+    model: "deduplicated",
+    toolSteps: 0,
+    chatId: stored.chatId,
+    title: stored.title,
+  });
+}
 
 export async function GET(req: Request): Promise<Response> {
   try {
@@ -101,7 +126,30 @@ export async function GET(req: Request): Promise<Response> {
   }
 }
 
+/**
+ * vercel.json caps this function at 60s. The agent's own deadline (55s) used to
+ * fit because nothing came before it; a retry that waits on the claim spends
+ * part of the budget first, so the agent gets what is left, and a takeover
+ * with too little left is refused up front instead of being killed mid-call.
+ */
+const FUNCTION_LIMIT_MS = 60_000;
+const FUNCTION_MARGIN_MS = 3_000;
+const MIN_AGENT_BUDGET_MS = 15_000;
+
+function turnInProgress(): Response {
+  return json(
+    {
+      ok: false,
+      error: "Still working on that message. Try again in a moment.",
+      code: "chat_turn_in_progress",
+    },
+    409,
+    { "Retry-After": "5" },
+  );
+}
+
 export async function POST(req: Request): Promise<Response> {
+  const requestStartedAt = Date.now();
   try {
     const viewer = await resolveViewer(req);
     if (!viewer) return unauthorized("Sign in required.");
@@ -140,71 +188,145 @@ export async function POST(req: Request): Promise<Response> {
       return badRequest("Invalid chat payload.", parsed.error.issues);
     }
 
-    // Owned transcript is the source of truth for prior turns. Client-supplied
-    // history is accepted by the schema for backwards compatibility but never
-    // passed to the model when a chatId is set (and unused for new chats).
-    let history: Array<{ role: "user" | "assistant"; content: string }> = [];
-    if (parsed.data.chatId) {
-      const recent = await getChatRecentMessages(
-        viewer.userId,
-        parsed.data.chatId,
-        CHAT_MAX_HISTORY_MESSAGES,
-      );
-      if (!recent) {
-        return json({ ok: false, error: "Chat not found.", code: "chat_not_found" }, 404);
+    // Idempotent retry: if this composed message already has a stored turn,
+    // replay its reply instead of paying for a second model call or storing
+    // a duplicate. The stored content must match, so a reused key can never
+    // answer a different question.
+    const clientMessageId = parsed.data.clientMessageId;
+    if (clientMessageId) {
+      const stored = await findChatTurnByClientMessageId({
+        userId: viewer.userId,
+        clientMessageId,
+        conversationId: parsed.data.chatId ?? null,
+      });
+      if (stored && stored.userContent === parsed.data.message.trim()) {
+        return deduplicatedTurnResponse(stored);
       }
-      history = recent;
     }
 
-    const scoringWindow = parsed.data.scoringWindow
-      ?? scoringWindowFromHorizon(parsed.data.horizon);
-    const preferences = await listChatPreferences(viewer.userId);
-    const viewingLeague = await resolveViewingLeague(viewer.sleeperUserId, parsed.data.leagueId);
-    const systemPrompt = appendViewingLeague(
-      appendChatPreferences(
-        buildChatSystemPrompt(scoringWindow),
-        preferences,
-      ),
-      viewingLeague,
+    // Single-flight: a retry that arrives while the original request is still
+    // running must not start a second model call. One request per key claims it;
+    // the others wait for its stored turn and replay it.
+    let claim: Extract<ChatTurnClaim, { status: "claimed" }> | null = null;
+    if (clientMessageId) {
+      const found: { turn: Awaited<ReturnType<typeof findChatTurnByClientMessageId>> } = { turn: null };
+      const outcome = await claimChatTurn(
+        chatTurnResource(viewer.userId, clientMessageId),
+        async () => {
+          const stored = await findChatTurnByClientMessageId({
+            userId: viewer.userId,
+            clientMessageId,
+            conversationId: parsed.data.chatId ?? null,
+          });
+          found.turn = stored && stored.userContent === parsed.data.message.trim() ? stored : null;
+          return found.turn !== null;
+        },
+      );
+      if (outcome.status === "replay" && found.turn) return deduplicatedTurnResponse(found.turn);
+      if (outcome.status === "busy") return turnInProgress();
+      if (outcome.status === "claimed") claim = outcome;
+    }
+
+    // What is left of the function's 60s after any claim wait.
+    const agentBudgetMs = Math.min(
+      CHAT_AGENT_DEADLINE_MS,
+      FUNCTION_LIMIT_MS - FUNCTION_MARGIN_MS - (Date.now() - requestStartedAt),
     );
+    if (agentBudgetMs < MIN_AGENT_BUDGET_MS) {
+      // Not enough time to answer before the platform kills the request: give
+      // the claim back and let the next send start with a full budget.
+      await claim?.release(new Error("no time left after waiting on the claim"));
+      return turnInProgress();
+    }
 
-    const result = await runChatAgent({
-      apiKey,
-      userMessage: parsed.data.message.trim(),
-      history,
-      systemPrompt,
-      scoringWindow,
-      ctx: {
-        userId: viewer.userId,
-        sleeperUserId: viewer.sleeperUserId,
-        scoringWindow,
-        defaultLeagueId: viewingLeague?.id,
-      },
-    });
-
-    let saved: { chatId: string; title: string };
+    let failure: unknown;
     try {
-      saved = await persistChatTurn({
-        userId: viewer.userId,
-        conversationId: parsed.data.chatId,
+      // Owned transcript is the source of truth for prior turns. Client-supplied
+      // history is accepted by the schema for backwards compatibility but never
+      // passed to the model when a chatId is set (and unused for new chats).
+      let history: Array<{ role: "user" | "assistant"; content: string }> = [];
+      if (parsed.data.chatId) {
+        const recent = await getChatRecentMessages(
+          viewer.userId,
+          parsed.data.chatId,
+          CHAT_MAX_HISTORY_MESSAGES,
+        );
+        if (!recent) {
+          return json({ ok: false, error: "Chat not found.", code: "chat_not_found" }, 404);
+        }
+        history = recent;
+      }
+
+      const scoringWindow = parsed.data.scoringWindow
+        ?? scoringWindowFromHorizon(parsed.data.horizon);
+      const preferences = await listChatPreferences(viewer.userId);
+      const viewingLeague = await resolveViewingLeague(viewer.sleeperUserId, parsed.data.leagueId);
+      const systemPrompt = appendViewingLeague(
+        appendChatPreferences(
+          buildChatSystemPrompt(scoringWindow),
+          preferences,
+        ),
+        viewingLeague,
+      );
+
+      const result = await runChatAgent({
+        apiKey,
+        deadlineMs: agentBudgetMs,
         userMessage: parsed.data.message.trim(),
-        assistantMessage: result.reply,
+        history,
+        systemPrompt,
+        scoringWindow,
+        ctx: {
+          userId: viewer.userId,
+          sleeperUserId: viewer.sleeperUserId,
+          scoringWindow,
+          defaultLeagueId: viewingLeague?.id,
+        },
+      });
+
+      let saved: { chatId: string; title: string };
+      try {
+        saved = await persistChatTurn({
+          userId: viewer.userId,
+          conversationId: parsed.data.chatId,
+          userMessage: parsed.data.message.trim(),
+          assistantMessage: result.reply,
+          clientMessageId: clientMessageId ?? null,
+        });
+      } catch (err) {
+        if (err instanceof ChatStoreError && err.code === "chat_not_found") {
+          return json({ ok: false, error: "Chat not found.", code: "chat_not_found" }, 404);
+        }
+        // A concurrent twin of this same send may have won the primary-key
+        // race and stored the turn first; replay its reply rather than error.
+        if (clientMessageId) {
+          const stored = await findChatTurnByClientMessageId({
+            userId: viewer.userId,
+            clientMessageId,
+            conversationId: parsed.data.chatId ?? null,
+          }).catch(() => null);
+          if (stored && stored.userContent === parsed.data.message.trim()) {
+            return deduplicatedTurnResponse(stored);
+          }
+        }
+        throw err;
+      }
+
+      return json({
+        ok: true,
+        reply: result.reply,
+        model: result.model,
+        toolSteps: result.toolSteps,
+        chatId: saved.chatId,
+        title: saved.title,
       });
     } catch (err) {
-      if (err instanceof ChatStoreError && err.code === "chat_not_found") {
-        return json({ ok: false, error: "Chat not found.", code: "chat_not_found" }, 404);
-      }
+      failure = err;
       throw err;
+    } finally {
+      // Hand the key back: a failed turn frees it for an immediate retry.
+      await claim?.release(failure);
     }
-
-    return json({
-      ok: true,
-      reply: result.reply,
-      model: result.model,
-      toolSteps: result.toolSteps,
-      chatId: saved.chatId,
-      title: saved.title,
-    });
   } catch (err) {
     if (err instanceof OpenRouterError || err instanceof ChatAgentTimeoutError) {
       if (err instanceof OpenRouterError) {

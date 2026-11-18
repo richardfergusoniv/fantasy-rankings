@@ -27,8 +27,12 @@ describe("authErrorMessage", () => {
     ).toMatch(/cannot send email/i);
   });
 
-  it("maps already-registered users", () => {
-    expect(authErrorMessage(new Error("User already registered"))).toMatch(/already exists/i);
+  it("maps already-registered users to copy that neither confirms the account nor dead-ends", () => {
+    const copy = "If you already have an account, sign in or reset your password.";
+    expect(authErrorMessage(new Error("User already registered"))).toBe(copy);
+    expect(
+      authErrorMessage({ message: "User already registered", code: "user_already_exists", status: 422 }),
+    ).toBe(copy);
   });
 
   it("maps invalid credentials", () => {

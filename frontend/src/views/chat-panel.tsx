@@ -32,6 +32,17 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Idempotency key for a sent message. The server stores it as the message
+ * row's primary key across every user, so it must be collision-proof, not
+ * just unique within this panel.
+ */
+function newMessageKey(): string {
+  return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${newId()}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+}
+
 function historyForRequest(messages: ChatMessage[]): Array<{ role: ChatRole; content: string }> {
   return messages
     .slice(-CHAT_MAX_HISTORY_MESSAGES)
@@ -171,6 +182,10 @@ export function ChatPanel({
 
   // An Assistant card's follow-up is asked once, the first time the panel is ready.
   const askedInitial = useRef(false);
+  // Idempotency key of the last failed send, kept so re-sending the same
+  // text reuses the key and the server replays the stored turn instead of
+  // duplicating the message or the model call.
+  const failedSendRef = useRef<{ text: string; key: string; chatId: string | null } | null>(null);
   useEffect(() => {
     if (!initialQuestion || askedInitial.current || sending || unavailable || loadingChat) return;
     askedInitial.current = true;
@@ -183,6 +198,7 @@ export function ChatPanel({
   }
 
   function startNewChat() {
+    failedSendRef.current = null;
     if (hasMessages) captureComposerRect();
     setChatId(null);
     setMessages([]);
@@ -192,6 +208,7 @@ export function ChatPanel({
 
   async function openChat(id: string) {
     if (loadingChat || sending || id === chatId) return;
+    failedSendRef.current = null;
     setLoadingChat(true);
     setError(null);
     try {
@@ -218,7 +235,13 @@ export function ChatPanel({
     if (!text || sending || unavailable || loadingChat) return;
     setError(null);
     if (question === undefined) setDraft("");
-    const userMessage: ChatMessage = { id: newId(), role: "user", content: text };
+    const failedSend = failedSendRef.current;
+    // Reuse the key only for the same text in the same conversation: a retry
+    // from New chat or another chat is a new question, not a replay.
+    const clientMessageId = failedSend && failedSend.text === text && failedSend.chatId === chatId
+      ? failedSend.key
+      : newMessageKey();
+    const userMessage: ChatMessage = { id: clientMessageId, role: "user", content: text };
     const history = historyForRequest(messages);
     if (!hasMessages) captureComposerRect();
     setMessages((prev) => [...prev, userMessage]);
@@ -228,9 +251,11 @@ export function ChatPanel({
         message: text,
         history,
         chatId: chatId ?? undefined,
+        clientMessageId,
         horizon,
         leagueId,
       });
+      failedSendRef.current = null;
       setChatId(result.chatId);
       setMessages((prev) => [
         ...prev,
@@ -239,6 +264,7 @@ export function ChatPanel({
       void queryClient.invalidateQueries({ queryKey: ["chat-list"] });
     } catch (err) {
       captureComposerRect();
+      failedSendRef.current = { text, key: clientMessageId, chatId };
       setMessages((prev) => prev.filter((item) => item.id !== userMessage.id));
       const code = err && typeof err === "object" && "code" in err
         ? String((err as { code?: string }).code ?? "")
@@ -247,6 +273,7 @@ export function ChatPanel({
         ? Number((err as { status?: number }).status)
         : 0;
       if (code === "chat_not_found") {
+        failedSendRef.current = null;
         setChatId(null);
         setMessages([]);
         void queryClient.invalidateQueries({ queryKey: ["chat-list"] });
@@ -267,6 +294,11 @@ export function ChatPanel({
       }
       if (code === "chat_upstream_unavailable") {
         setError("The chat model is busy. Try again shortly.");
+        return;
+      }
+      if (code === "chat_turn_in_progress") {
+        // The first attempt is still running. The kept key makes the next send replay its answer.
+        setError("Still working on that message. Send it again in a moment.");
         return;
       }
       if (status === 429 || code === "rate_limited") {

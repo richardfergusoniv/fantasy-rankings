@@ -227,6 +227,8 @@ export const api = {
     message: string;
     history?: Array<{ role: "user" | "assistant"; content: string }>;
     chatId?: string;
+    /** Idempotency key for this composed message, stable across retries. */
+    clientMessageId?: string;
     horizon?: "week" | "ros" | "dynasty" | null;
     /** League the user is viewing, so the model defaults team questions to it. */
     leagueId?: string | null;
@@ -248,6 +250,7 @@ export const api = {
         message: args.message,
         history: args.history ?? [],
         chatId: args.chatId,
+        clientMessageId: args.clientMessageId,
         horizon: args.horizon ?? "week",
         leagueId: args.leagueId ?? undefined,
       }),
