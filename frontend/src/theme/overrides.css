@@ -422,7 +422,10 @@ a:active { color: var(--link-active); }
    buttons) dip to scale(.97) while pressed, on the app's short ease-out.
    Scoped to those primitives only: never the player sheet or any surface
    whose transform is driven by drag gestures, and no target here carries
-   a resting transform the scale would clobber. Segmented buttons take
+   a resting transform the scale would clobber. Not .proj-team-open: its
+   ::after stretches the hit target over the whole row, and any transform
+   on the button makes the button the pseudo-element's containing block, so
+   the target would shrink to the name while pressed. Segmented buttons take
    the same transform through their own transition in shell.css; the
    shared Button primitive keeps its color transitions via the longhand
    rule below. Nothing presses under reduced motion. */
@@ -447,7 +450,6 @@ a:active { color: var(--link-active); }
   .list-pagination-row button,
   .matchup-player-open,
   .assistant-card,
-  .proj-team-open,
   .proj-game-open,
   .draft-better-open,
   .search-clear,
@@ -497,7 +499,6 @@ a:active { color: var(--link-active); }
   .list-pagination-row button:active:not(:disabled),
   .matchup-player-open:active:not(:disabled),
   .assistant-card:active:not(:disabled),
-  .proj-team-open:active:not(:disabled),
   .proj-game-open:active:not(:disabled),
   .draft-better-open:active:not(:disabled),
   .search-clear:active:not(:disabled),
