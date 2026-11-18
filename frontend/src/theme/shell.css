@@ -186,7 +186,7 @@ span.ticker-item:active { background: transparent; }
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
-  transition: color .12s ease-out;
+  transition: color .12s ease-out, transform .12s ease-out;
 }
 .segmented-control button.active { color: var(--text); }
 /* Page-level in-page tabs (Matchup, League scope, Draft Board/My Team). */
