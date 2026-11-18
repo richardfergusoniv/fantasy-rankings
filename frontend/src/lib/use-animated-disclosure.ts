@@ -15,6 +15,12 @@ type DisclosureDetails = {
 type DisclosureTransitionEvent = { propertyName: string; target: unknown };
 
 type DisclosureBody = {
+  /**
+   * The identity a native transitionend carries as its target: the body
+   * element itself, not this adapter. The controller compares event targets
+   * against it, so it must be the real element, never the wrapper.
+   */
+  element: unknown;
   addEventListener: (type: "transitionend", listener: (event: DisclosureTransitionEvent) => void) => void;
   removeEventListener: (type: "transitionend", listener: (event: DisclosureTransitionEvent) => void) => void;
 };
@@ -52,7 +58,7 @@ export function createAnimatedDisclosureClose({ details, body, reducedMotion }: 
   }
 
   function onTransitionEnd(event: DisclosureTransitionEvent) {
-    if (event.target === body && event.propertyName === "grid-template-rows") finish();
+    if (event.target === body.element && event.propertyName === "grid-template-rows") finish();
   }
 
   function cancel() {
@@ -104,6 +110,7 @@ export function useAnimatedDisclosure() {
     const close = createAnimatedDisclosureClose({
       details,
       body: {
+        element: bodyEl,
         addEventListener: (type, listener) => bodyEl.addEventListener(type, listener),
         removeEventListener: (type, listener) => bodyEl.removeEventListener(type, listener),
       },

@@ -15,6 +15,13 @@ class FakeClassList {
 type TransitionListener = (event: { propertyName: string; target: unknown }) => void;
 
 class FakeBody {
+  /**
+   * Stands in for the DOM element a native transitionend targets. It is a
+   * distinct object from the FakeBody adapter on purpose: a real event's
+   * target is the element, never the wrapper the listener registered
+   * through, and the controller must finish on the element's events.
+   */
+  readonly element = {};
   private listeners = new Set<TransitionListener>();
   addEventListener = (_type: "transitionend", listener: TransitionListener) => {
     this.listeners.add(listener);
@@ -22,7 +29,7 @@ class FakeBody {
   removeEventListener = (_type: "transitionend", listener: TransitionListener) => {
     this.listeners.delete(listener);
   };
-  fireTransitionEnd(propertyName: string, target: unknown = this) {
+  fireTransitionEnd(propertyName: string, target: unknown = this.element) {
     for (const listener of [...this.listeners]) listener({ propertyName, target });
   }
   get listenerCount() {
