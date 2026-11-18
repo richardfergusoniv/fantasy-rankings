@@ -415,3 +415,167 @@ a:active { color: var(--link-active); }
   /* Desktop rankings table: player | book range | 30-day move | projection. */
   .rankings-view .ranking-row { grid-template-columns: minmax(0, 1fr) 200px 72px 62px; }
 }
+
+/* Micro-interactions: press scale, shake on error, smooth disclosures.
+   Press feedback: the shared interactive primitives (tab and segmented
+   triggers, header and icon buttons, full-width row buttons, action
+   buttons) dip to scale(.97) while pressed, on the app's short ease-out.
+   Scoped to those primitives only: never the player sheet or any surface
+   whose transform is driven by drag gestures, and no target here carries
+   a resting transform the scale would clobber. Not .proj-team-open: its
+   ::after stretches the hit target over the whole row, and any transform
+   on the button makes the button the pseudo-element's containing block, so
+   the target would shrink to the name while pressed. Segmented buttons take
+   the same transform through their own transition in shell.css; the
+   shared Button primitive keeps its color transitions via the longhand
+   rule below. Nothing presses under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .primary-tabs button,
+  .refresh-button,
+  .theme-toggle,
+  .account-button,
+  .ask-button,
+  .draft-icon-button,
+  .ranking-row-button,
+  .player-search-result,
+  button.power-stack-row,
+  .power-row-toggle,
+  .trade-history-row,
+  .trade-picker-row,
+  .advantage-row-open,
+  .advanced-player-results > button,
+  .comparison-pick-results > button,
+  .trade-side-search-results > button,
+  .draft-row button.draft-player-open,
+  .list-pagination-row button,
+  .matchup-player-open,
+  .assistant-card,
+  .proj-game-open,
+  .draft-better-open,
+  .search-clear,
+  .comparison-pick-clear,
+  .comparison-pick-swap,
+  button.matchup-team-title,
+  .all-leagues-button,
+  .trade-calculate-button,
+  .empty-state button,
+  .integration-row form button,
+  button.trade-add-player,
+  .saved-view-actions button,
+  .saved-view-form button,
+  .trade-picker-header button,
+  .trade-pagination button,
+  .row-toggle-state,
+  .remove-asset,
+  .news-card-header button,
+  .matchup-data-header button,
+  .power-team-card-header button,
+  .chart-result-header-actions > button {
+    transition: transform .12s ease-out;
+  }
+  [data-slot="button"] {
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, transform;
+    transition-duration: .15s, .15s, .15s, .15s, .15s, .15s, .15s, .12s;
+    transition-timing-function: ease-out;
+  }
+  .primary-tabs button:active:not(:disabled),
+  .segmented-control button:active:not(:disabled),
+  .refresh-button:active:not(:disabled),
+  .theme-toggle:active:not(:disabled),
+  .account-button:active:not(:disabled),
+  .ask-button:active:not(:disabled),
+  .draft-icon-button:active:not(:disabled),
+  .ranking-row-button:active:not(:disabled),
+  .player-search-result:active:not(:disabled),
+  button.power-stack-row:active:not(:disabled),
+  .power-row-toggle:active:not(:disabled),
+  .trade-history-row:active:not(:disabled),
+  .trade-picker-row:active:not(:disabled),
+  .advantage-row-open:active:not(:disabled),
+  .advanced-player-results > button:active:not(:disabled),
+  .comparison-pick-results > button:active:not(:disabled),
+  .trade-side-search-results > button:active:not(:disabled),
+  .draft-row button.draft-player-open:active:not(:disabled),
+  .list-pagination-row button:active:not(:disabled),
+  .matchup-player-open:active:not(:disabled),
+  .assistant-card:active:not(:disabled),
+  .proj-game-open:active:not(:disabled),
+  .draft-better-open:active:not(:disabled),
+  .search-clear:active:not(:disabled),
+  .comparison-pick-clear:active:not(:disabled),
+  .comparison-pick-swap:active:not(:disabled),
+  button.matchup-team-title:active:not(:disabled),
+  .all-leagues-button:active:not(:disabled),
+  .trade-calculate-button:active:not(:disabled),
+  .empty-state button:active:not(:disabled),
+  .integration-row form button:active:not(:disabled),
+  button.trade-add-player:active:not(:disabled),
+  .saved-view-actions button:active:not(:disabled),
+  .saved-view-form button:active:not(:disabled),
+  .trade-picker-header button:active:not(:disabled),
+  .trade-pagination button:active:not(:disabled),
+  .row-toggle-state:active:not(:disabled),
+  .remove-asset:active:not(:disabled),
+  .news-card-header button:active:not(:disabled),
+  .matchup-data-header button:active:not(:disabled),
+  .power-team-card-header button:active:not(:disabled),
+  .chart-result-header-actions > button:active:not(:disabled),
+  [data-slot="button"]:active:not(:disabled) {
+    transform: scale(.97);
+  }
+}
+
+/* Shake on error: applied to a form's error line while the error is set.
+   The Auth forms key the line by a failure counter, so each new failure
+   remounts it and the shake replays; the chat error line remounts on
+   every failed send because sending clears the error first. */
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+.error-shake { animation: errorShake .3s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .error-shake { animation: none; }
+}
+
+/* Smooth disclosures: a native details whose content wrapper is a
+   one-row grid animated 0fr to 1fr on the app's modal easing, so opening
+   and closing glide instead of snapping. Opening is driven by the open
+   attribute alone. Closing is JS-assisted (use-animated-disclosure): a
+   native details stops rendering its content the moment open is removed,
+   so the hook holds open in place under an is-closing class while the
+   grid glides shut, then removes open. The clip keeps collapsed content
+   clipped to zero height, and visibility keeps it unfocusable while
+   closed or closing, matching what a closed details guarantees today.
+   Reduced motion stays instant. */
+.disclosure-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows .18s cubic-bezier(.22, .75, .28, 1), visibility 0s linear .18s;
+}
+.disclosure[open] > .disclosure-body {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition: grid-template-rows .18s cubic-bezier(.22, .75, .28, 1), visibility 0s;
+}
+.disclosure.is-closing > .disclosure-body {
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows .18s cubic-bezier(.22, .75, .28, 1), visibility 0s linear .18s;
+}
+/* A details with open starts collapsed when it first renders, so opening glides too. */
+@starting-style {
+  .disclosure[open] > .disclosure-body { grid-template-rows: 0fr; }
+}
+.disclosure-clip { overflow: hidden; min-height: 0; }
+/* The clip would cut off the usual outside focus ring; draw it inside instead. */
+.disclosure-clip :focus-visible { outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .disclosure-body,
+  .disclosure[open] > .disclosure-body,
+  .disclosure.is-closing > .disclosure-body { transition: none; }
+}

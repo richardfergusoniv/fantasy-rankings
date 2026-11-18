@@ -294,6 +294,9 @@ function UpdatePassword({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Bumped on every failed submit; the error line is keyed by it, so a
+  // repeated failure remounts the line and its shake animation replays.
+  const [errorCount, setErrorCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const passwordRef = useRef<HTMLInputElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
@@ -308,11 +311,13 @@ function UpdatePassword({ onDone }: { onDone: () => void }) {
     event.preventDefault();
     if (!password) {
       setError("Enter a new password.");
+      setErrorCount((count) => count + 1);
       passwordRef.current?.focus();
       return;
     }
     if (password !== confirm) {
       setError("Passwords do not match.");
+      setErrorCount((count) => count + 1);
       return;
     }
     if (!supabase) return;
@@ -324,7 +329,10 @@ function UpdatePassword({ onDone }: { onDone: () => void }) {
       onDone();
     } catch (err) {
       setError(authErrorMessage(err));
-      errorRef.current?.focus();
+      setErrorCount((count) => count + 1);
+      // The keyed error line remounts with the new count; focus it once
+      // the fresh node is in place.
+      requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
       setBusy(false);
     }
@@ -366,7 +374,7 @@ function UpdatePassword({ onDone }: { onDone: () => void }) {
                 onChange={(e) => setConfirm(e.target.value)}
               />
             </div>
-            {error ? <p ref={errorRef} tabIndex={-1} className="text-sm text-[var(--danger-text)]" aria-live="polite">{error}</p> : null}
+            {error ? <p key={errorCount} ref={errorRef} tabIndex={-1} className="error-shake text-sm text-[var(--danger-text)]" aria-live="polite">{error}</p> : null}
             <Button type="submit" disabled={busy} aria-busy={busy}>
               {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
               Save password
@@ -385,6 +393,9 @@ function AuthScreen({ initialNotice }: { initialNotice?: string | null }) {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped on every failed submit; the error lines are keyed by it, so a
+  // repeated failure remounts them and the shake animation replays.
+  const [errorCount, setErrorCount] = useState(0);
   const [notice, setNotice] = useState<string | null>(initialNotice ?? null);
   const [busy, setBusy] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
@@ -408,6 +419,7 @@ function AuthScreen({ initialNotice }: { initialNotice?: string | null }) {
     setEmailError(nextEmailError);
     setPasswordError(nextPasswordError);
     setError(null);
+    if (nextEmailError || nextPasswordError) setErrorCount((count) => count + 1);
     if (nextEmailError) {
       emailRef.current?.focus();
       return;
@@ -435,7 +447,10 @@ function AuthScreen({ initialNotice }: { initialNotice?: string | null }) {
       }
     } catch (err) {
       setError(authErrorMessage(err));
-      errorRef.current?.focus();
+      setErrorCount((count) => count + 1);
+      // The keyed error line remounts with the new count; focus it once
+      // the fresh node is in place.
+      requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
       setBusy(false);
     }
@@ -445,6 +460,7 @@ function AuthScreen({ initialNotice }: { initialNotice?: string | null }) {
     const nextEmail = email.trim();
     if (!nextEmail) {
       setEmailError("Enter your email address.");
+      setErrorCount((count) => count + 1);
       emailRef.current?.focus();
       return;
     }
@@ -460,7 +476,8 @@ function AuthScreen({ initialNotice }: { initialNotice?: string | null }) {
       setNotice("Check your email for a password reset link.");
     } catch (err) {
       setError(authErrorMessage(err));
-      errorRef.current?.focus();
+      setErrorCount((count) => count + 1);
+      requestAnimationFrame(() => errorRef.current?.focus());
     } finally {
       setBusy(false);
     }
@@ -497,7 +514,7 @@ function AuthScreen({ initialNotice }: { initialNotice?: string | null }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-              {emailError ? <p id="auth-email-error" className="text-sm text-[var(--danger-text)]" aria-live="polite">{emailError}</p> : null}
+              {emailError ? <p key={errorCount} id="auth-email-error" className="error-shake text-sm text-[var(--danger-text)]" aria-live="polite">{emailError}</p> : null}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="auth-password">Password</Label>
@@ -514,9 +531,9 @@ function AuthScreen({ initialNotice }: { initialNotice?: string | null }) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              {passwordError ? <p id="auth-password-error" className="text-sm text-[var(--danger-text)]" aria-live="polite">{passwordError}</p> : null}
+              {passwordError ? <p key={errorCount} id="auth-password-error" className="error-shake text-sm text-[var(--danger-text)]" aria-live="polite">{passwordError}</p> : null}
             </div>
-            {error ? <p ref={errorRef} tabIndex={-1} className="text-sm text-[var(--danger-text)]" aria-live="polite">{error}</p> : null}
+            {error ? <p key={errorCount} ref={errorRef} tabIndex={-1} className="error-shake text-sm text-[var(--danger-text)]" aria-live="polite">{error}</p> : null}
             {notice ? <p className="text-sm text-[var(--stat-strength-readable)]" aria-live="polite">{notice}</p> : null}
             <Button type="submit" disabled={busy} aria-busy={busy}>
               {busy ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}

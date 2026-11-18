@@ -369,7 +369,7 @@ export function ChatPanel({
             </div>
           ))}
           {sending ? <p className="chat-status">Thinking…</p> : null}
-          {error ? <p className="chat-error" role="alert">{error}</p> : null}
+          {error ? <p className="chat-error error-shake" role="alert">{error}</p> : null}
           <div ref={bottomRef} />
         </div>
         <form
