@@ -296,6 +296,11 @@ export function ChatPanel({
         setError("The chat model is busy. Try again shortly.");
         return;
       }
+      if (code === "chat_turn_in_progress") {
+        // The first attempt is still running. The kept key makes the next send replay its answer.
+        setError("Still working on that message. Send it again in a moment.");
+        return;
+      }
       if (status === 429 || code === "rate_limited") {
         setError("Too many questions. Try again in a few minutes.");
         return;

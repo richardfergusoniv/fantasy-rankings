@@ -38,10 +38,16 @@ vi.mock("./chat-store.js", () => ({
   persistChatTurn: vi.fn(),
 }));
 
+vi.mock("./chat-turn-claim.js", () => ({
+  chatTurnResource: (userId: string, key: string) => `chat-turn:${userId}:${key}`,
+  claimChatTurn: vi.fn(),
+}));
+
 import { resolveViewer } from "./auth.js";
 import { runChatAgent } from "./chat-agent.js";
 import { CHAT_MAX_HISTORY_MESSAGES } from "./chat-config.js";
 import { listChatPreferences } from "./chat-preferences.js";
+import { claimChatTurn } from "./chat-turn-claim.js";
 import { resolveViewingLeague } from "./chat-viewing-league.js";
 import { resetChatRateLimits } from "./chat-rate-limit.js";
 import {
@@ -62,6 +68,8 @@ const listChatsMock = vi.mocked(listChatConversations);
 const getChatMock = vi.mocked(getChatConversation);
 const recentMessagesMock = vi.mocked(getChatRecentMessages);
 const findTurnMock = vi.mocked(findChatTurnByClientMessageId);
+const claimMock = vi.mocked(claimChatTurn);
+const releaseMock = vi.fn(async (_error?: unknown) => undefined);
 const persistMock = vi.mocked(persistChatTurn);
 const deleteMock = vi.mocked(deleteChatConversation);
 
@@ -89,6 +97,9 @@ describe("api/chat handler", () => {
     recentMessagesMock.mockReset();
     findTurnMock.mockReset();
     findTurnMock.mockResolvedValue(null);
+    releaseMock.mockReset();
+    claimMock.mockReset();
+    claimMock.mockResolvedValue({ status: "claimed", release: releaseMock });
     persistMock.mockReset();
     deleteMock.mockReset();
     listPrefsMock.mockResolvedValue([]);
@@ -262,6 +273,99 @@ describe("api/chat handler", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ reply: "A different answer." });
     expect(runChatAgentMock).toHaveBeenCalled();
+  });
+
+  it("POST claims the key before the model call and releases it after the turn is stored", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    runChatAgentMock.mockResolvedValue({ reply: "ok", model: "m", toolSteps: 0 });
+    persistMock.mockResolvedValue({ chatId: "c1", title: "t" });
+    const order: string[] = [];
+    claimMock.mockImplementation(async () => {
+      order.push("claim");
+      return { status: "claimed", release: async (error?: unknown) => { order.push(`release:${error === undefined ? "ok" : "error"}`); } };
+    });
+    runChatAgentMock.mockImplementation(async () => {
+      order.push("model");
+      return { reply: "ok", model: "m", toolSteps: 0 };
+    });
+    persistMock.mockImplementation(async () => {
+      order.push("persist");
+      return { chatId: "c1", title: "t" };
+    });
+
+    const res = await POST(authReq("POST", { message: "Who is my WR1?", clientMessageId: "msg-9" }));
+    expect(res.status).toBe(200);
+    expect(order).toEqual(["claim", "model", "persist", "release:ok"]);
+    expect(claimMock).toHaveBeenCalledWith("chat-turn:u1:msg-9", expect.any(Function));
+  });
+
+  it("POST releases the claim with the error when the model call fails, so a retry can start at once", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    runChatAgentMock.mockRejectedValue(new Error("boom"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const res = await POST(authReq("POST", { message: "Who is my WR1?", clientMessageId: "msg-10" }));
+    expect(res.status).toBe(500);
+    expect(releaseMock).toHaveBeenCalledTimes(1);
+    expect(releaseMock.mock.calls[0]?.[0]).toBeInstanceOf(Error);
+    expect(persistMock).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("POST replays the original's stored turn when the claim reports it finished while waiting", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    // The stored turn is not there on the first look, then appears while the retry waits.
+    findTurnMock.mockResolvedValueOnce(null);
+    claimMock.mockImplementation(async (_resource, turnStored) => {
+      findTurnMock.mockResolvedValue({ chatId: "c1", title: "Who is my WR1?", userContent: "Who is my WR1?", reply: "Your WR1 projects 18.20." });
+      await turnStored();
+      return { status: "replay" };
+    });
+
+    const res = await POST(authReq("POST", { message: "Who is my WR1?", clientMessageId: "msg-11" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ reply: "Your WR1 projects 18.20.", model: "deduplicated" });
+    expect(runChatAgentMock).not.toHaveBeenCalled();
+    expect(persistMock).not.toHaveBeenCalled();
+  });
+
+  it("POST answers 409 chat_turn_in_progress, with no second model call, when the original is still running", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    claimMock.mockResolvedValue({ status: "busy" });
+
+    const res = await POST(authReq("POST", { message: "Who is my WR1?", clientMessageId: "msg-12" }));
+    expect(res.status).toBe(409);
+    expect(res.headers.get("Retry-After")).toBe("5");
+    expect(await res.json()).toMatchObject({ ok: false, code: "chat_turn_in_progress" });
+    expect(runChatAgentMock).not.toHaveBeenCalled();
+    expect(persistMock).not.toHaveBeenCalled();
+  });
+
+  it("POST carries on without single-flight when the lease store is unavailable", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    runChatAgentMock.mockResolvedValue({ reply: "ok", model: "m", toolSteps: 0 });
+    persistMock.mockResolvedValue({ chatId: "c1", title: "t" });
+    claimMock.mockResolvedValue({ status: "unavailable" });
+
+    const res = await POST(authReq("POST", { message: "Who is my WR1?", clientMessageId: "msg-13" }));
+    expect(res.status).toBe(200);
+    expect(runChatAgentMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("POST without a clientMessageId never claims", async () => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test";
+    resolveViewerMock.mockResolvedValue({ userId: "u1", sleeperUserId: "s1" });
+    runChatAgentMock.mockResolvedValue({ reply: "ok", model: "m", toolSteps: 0 });
+    persistMock.mockResolvedValue({ chatId: "c1", title: "t" });
+
+    const res = await POST(authReq("POST", { message: "Who is my WR1?" }));
+    expect(res.status).toBe(200);
+    expect(claimMock).not.toHaveBeenCalled();
   });
 
   it("POST puts the resolved viewing league into the system prompt and tool context", async () => {
