@@ -568,5 +568,7 @@ a:active { color: var(--link-active); }
 }
 .disclosure-clip { overflow: hidden; min-height: 0; }
 @media (prefers-reduced-motion: reduce) {
-  .disclosure-body { transition: none; }
+  .disclosure-body,
+  .disclosure[open] > .disclosure-body,
+  .disclosure.is-closing > .disclosure-body { transition: none; }
 }
