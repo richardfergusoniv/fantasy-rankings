@@ -26,9 +26,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Audit dependencies
-        # Blocking on high/critical advisories. Document accepted
-        # dev-only exceptions in the PR that introduces them.
-        run: npm audit --audit-level=high
+        # Blocking on high/critical advisories. Accepted exceptions live in
+        # scripts/check-audit.mjs, each with a reason.
+        run: node scripts/check-audit.mjs
       - run: npm run build
       - run: npm run typecheck
       - run: npm run lint
