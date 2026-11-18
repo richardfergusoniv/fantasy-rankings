@@ -23,6 +23,11 @@ type DisclosureBody = {
   element: unknown;
   addEventListener: (type: "transitionend", listener: (event: DisclosureTransitionEvent) => void) => void;
   removeEventListener: (type: "transitionend", listener: (event: DisclosureTransitionEvent) => void) => void;
+  /**
+   * Make the body unfocusable while it glides shut, so a Tab pressed right
+   * after closing cannot land on a control that is about to disappear.
+   */
+  setInert: (inert: boolean) => void;
 };
 
 /**
@@ -54,6 +59,7 @@ export function createAnimatedDisclosureClose({ details, body, reducedMotion }: 
     closing = false;
     stopWatching();
     details.classList.remove("is-closing");
+    body.setInert(false);
     details.open = false;
   }
 
@@ -66,6 +72,7 @@ export function createAnimatedDisclosureClose({ details, body, reducedMotion }: 
     closing = false;
     stopWatching();
     details.classList.remove("is-closing");
+    body.setInert(false);
   }
 
   return {
@@ -76,13 +83,21 @@ export function createAnimatedDisclosureClose({ details, body, reducedMotion }: 
      * instant reduced-motion close).
      */
     requestToggle(): boolean {
-      if (!details.open || reducedMotion()) return false;
+      if (reducedMotion()) {
+        // Reduced motion switched on mid-close: drop the pending close (and its
+        // timer, which would otherwise shut a re-opened disclosure) and let the
+        // native toggle run instantly.
+        cancel();
+        return false;
+      }
+      if (!details.open) return false;
       if (closing) {
         cancel();
         return true;
       }
       closing = true;
       details.classList.add("is-closing");
+      body.setInert(true);
       body.addEventListener("transitionend", onTransitionEnd);
       timer = setTimeout(finish, DISCLOSURE_CLOSE_FALLBACK_MS);
       return true;
@@ -113,6 +128,9 @@ export function useAnimatedDisclosure() {
         element: bodyEl,
         addEventListener: (type, listener) => bodyEl.addEventListener(type, listener),
         removeEventListener: (type, listener) => bodyEl.removeEventListener(type, listener),
+        setInert: (inert) => {
+          bodyEl.inert = inert;
+        },
       },
       reducedMotion: () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     });

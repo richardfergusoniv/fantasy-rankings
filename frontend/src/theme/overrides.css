@@ -566,7 +566,13 @@ a:active { color: var(--link-active); }
   visibility: hidden;
   transition: grid-template-rows .18s cubic-bezier(.22, .75, .28, 1), visibility 0s linear .18s;
 }
+/* A details with open starts collapsed when it first renders, so opening glides too. */
+@starting-style {
+  .disclosure[open] > .disclosure-body { grid-template-rows: 0fr; }
+}
 .disclosure-clip { overflow: hidden; min-height: 0; }
+/* The clip would cut off the usual outside focus ring; draw it inside instead. */
+.disclosure-clip :focus-visible { outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) {
   .disclosure-body,
   .disclosure[open] > .disclosure-body,

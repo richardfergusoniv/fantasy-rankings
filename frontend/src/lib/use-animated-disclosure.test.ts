@@ -22,6 +22,10 @@ class FakeBody {
    * through, and the controller must finish on the element's events.
    */
   readonly element = {};
+  inert = false;
+  setInert = (inert: boolean) => {
+    this.inert = inert;
+  };
   private listeners = new Set<TransitionListener>();
   addEventListener = (_type: "transitionend", listener: TransitionListener) => {
     this.listeners.add(listener);
@@ -106,6 +110,36 @@ describe("createAnimatedDisclosureClose", () => {
     expect(close.requestToggle()).toBe(false);
     expect(details.classList.contains("is-closing")).toBe(false);
     expect(details.open).toBe(true);
+  });
+
+  it("makes the body unfocusable while closing, and focusable again after", () => {
+    const { body, close } = setup();
+    close.requestToggle();
+    expect(body.inert).toBe(true);
+    body.fireTransitionEnd("grid-template-rows");
+    expect(body.inert).toBe(false);
+    close.requestToggle();
+    close.requestToggle();
+    expect(body.inert).toBe(false);
+  });
+
+  it("drops a pending close when reduced motion turns on mid-close", () => {
+    vi.useFakeTimers();
+    let reduced = false;
+    const details = { open: true, classList: new FakeClassList() };
+    const body = new FakeBody();
+    const close = createAnimatedDisclosureClose({ details, body, reducedMotion: () => reduced });
+    expect(close.requestToggle()).toBe(true);
+    reduced = true;
+    // This activation closes natively; the next one re-opens natively.
+    expect(close.requestToggle()).toBe(false);
+    details.open = false;
+    expect(close.requestToggle()).toBe(false);
+    details.open = true;
+    vi.advanceTimersByTime(DISCLOSURE_CLOSE_FALLBACK_MS * 2);
+    expect(details.open).toBe(true);
+    expect(details.classList.contains("is-closing")).toBe(false);
+    expect(body.listenerCount).toBe(0);
   });
 
   it("dispose mid-close cancels the pending close", () => {
