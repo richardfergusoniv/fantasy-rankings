@@ -11,9 +11,18 @@
  * - Session recording is disabled outright. Event properties are scrubbed
  *   of anything credential-shaped before they leave the browser, including
  *   credentials embedded inside URL or error-message strings.
+ * - All traffic goes to the first-party "/ingest" path on this app's own
+ *   domain; vercel.json rewrites proxy it to PostHog. Tracker blocklists
+ *   (VPN DNS filtering, browser shields) list PostHog's own hosts, which
+ *   silently starved client capture for six weeks in late 2026: the SDK's
+ *   config, flags, and event requests never left the browser and every
+ *   failure was a no-op by design. First-party delivery removes that whole
+ *   class of failure, and the app_session_started heartbeat below makes any
+ *   recurrence visible (the daily audit flags a zero-client-events day).
  */
 
-const POSTHOG_HOST = "https://us.i.posthog.com";
+const POSTHOG_HOST = "https://us.posthog.com";
+const POSTHOG_API_HOST = "/ingest";
 
 type PostHogClient = typeof import("posthog-js").default;
 
@@ -48,7 +57,8 @@ function loadPostHog(): Promise<PostHogClient | null> {
       if (!key) return null;
       const { default: posthog } = await import("posthog-js");
       posthog.init(key, {
-        api_host: POSTHOG_HOST,
+        api_host: POSTHOG_API_HOST,
+        ui_host: POSTHOG_HOST,
         person_profiles: "identified_only",
         // Anonymous browsers must not send events at all: start opted out and
         // opt in only once a user is identified (see identifyPostHogUser).
@@ -80,6 +90,8 @@ export function initPostHog(): void {
   void loadPostHog();
 }
 
+let sessionStartedCaptured = false;
+
 export function identifyPostHogUser(sleeperUserId: string, sleeperUsername?: string): void {
   void loadPostHog().then((posthog) => {
     if (!posthog) return;
@@ -89,6 +101,13 @@ export function identifyPostHogUser(sleeperUserId: string, sleeperUsername?: str
       sleeperUserId,
       sleeperUsername ? { sleeper_username: sleeperUsername } : undefined,
     );
+    // One heartbeat per page load: positive proof that client capture is
+    // alive end to end. The daily audit treats a day with zero client
+    // events as an incident, so a silent capture failure cannot hide again.
+    if (!sessionStartedCaptured) {
+      sessionStartedCaptured = true;
+      posthog.capture("app_session_started");
+    }
   });
 }
 

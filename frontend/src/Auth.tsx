@@ -181,12 +181,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
   // sign-out so the next user on this browser starts clean.
   const connection = connState.status === "connected" ? connState.connection : null;
 
+  // The reset branch must run only on a real sign-out. This effect also
+  // fires during the initial load, when the session is still null; resetting
+  // there races the identify that follows once the session lands, and a
+  // late-resolving reset re-asserts the opted-out default over it.
+  const hadSessionRef = useRef(false);
+
   useEffect(() => {
     if (connection?.sleeperUserId) {
+      hadSessionRef.current = true;
       identifyPostHogUser(connection.sleeperUserId, connection.sleeperUsername);
     } else if (session) {
+      hadSessionRef.current = true;
       identifyPostHogUser(session.user.id);
-    } else {
+    } else if (hadSessionRef.current) {
+      hadSessionRef.current = false;
       resetPostHog();
     }
   }, [connection, session]);
